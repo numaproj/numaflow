@@ -28,8 +28,8 @@ use crate::metrics::{
 };
 use crate::pipeline::forwarder::reduce_forwarder::ReduceForwarder;
 use crate::pipeline::forwarder::source_forwarder;
-use crate::pipeline::isb::jetstream::reader::{ISBReaderConfig, JetStreamReader};
-use crate::pipeline::isb::jetstream::writer::{ISBWriterConfig, JetstreamWriter};
+use crate::pipeline::isb::jetstream::reader::{ISBReaderComponents, JetStreamReader};
+use crate::pipeline::isb::jetstream::writer::{ISBWriterComponents, JetstreamWriter};
 use crate::reduce::pbq::{PBQBuilder, WAL};
 use crate::reduce::reducer::aligned::reducer::AlignedReducer;
 use crate::reduce::reducer::aligned::windower::AlignedWindowManager;
@@ -146,17 +146,19 @@ async fn start_source_forwarder(
 
     let tracker_handle = TrackerHandle::new(serving_callback_handler);
 
-    let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
-        config: config.to_vertex_config.clone(),
-        js_ctx: js_context,
-        paf_concurrency: config.writer_concurrency,
+    let context = PipelineContext {
+        cln_token: cln_token.clone(),
+        js_context: &js_context,
+        config: &config,
         tracker_handle: tracker_handle.clone(),
-        cancel_token: cln_token.clone(),
-        watermark_handle: source_watermark_handle.clone().map(WatermarkHandle::Source),
-        vertex_type: config.vertex_type,
-        isb_config: config.isb_config.clone(),
-    });
+    };
 
+    let writer_components = ISBWriterComponents::new(
+        source_watermark_handle.clone().map(WatermarkHandle::Source),
+        &context,
+    );
+
+    let buffer_writer = JetstreamWriter::new(writer_components);
     let transformer = create_components::create_transformer(
         config.batch_size,
         config.graceful_shutdown_time,
@@ -247,17 +249,6 @@ async fn start_map_forwarder(
         .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
         .reader_config;
 
-    let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
-        config: config.to_vertex_config.clone(),
-        js_ctx: js_context.clone(),
-        paf_concurrency: config.writer_concurrency,
-        tracker_handle: tracker_handle.clone(),
-        cancel_token: cln_token.clone(),
-        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
-        vertex_type: config.vertex_type,
-        isb_config: config.isb_config.clone(),
-    });
-
     let context = PipelineContext {
         cln_token: cln_token.clone(),
         js_context: &js_context,
@@ -265,7 +256,12 @@ async fn start_map_forwarder(
         tracker_handle,
     };
 
-    // 2. Clean dispatch logic
+    let writer_components = ISBWriterComponents::new(
+        watermark_handle.clone().map(WatermarkHandle::ISB),
+        &context,
+    );
+
+    let buffer_writer = JetstreamWriter::new(writer_components);
     let (forwarder_tasks, mapper_handle) = if let Some(_rl_config) = &config.rate_limit {
         if should_use_redis_rate_limiter(&config) {
             let redis_config = build_redis_rate_limiter_config(&config, cln_token.clone()).await?;
@@ -370,22 +366,18 @@ async fn run_all_map_streams<C: NumaflowTypeConfig>(
         }
 
         // This helper is now defined inside this generic context
+        let reader_components = ISBReaderComponents::new(
+            stream,
+            reader_config.clone(),
+            watermark_handle.clone(),
+            context,
+        );
+
         let (task, reader) = run_map_forwarder_for_stream::<C>(
-            ISBReaderConfig {
-                vertex_type: context.config.vertex_type.to_string(),
-                stream,
-                js_ctx: context.js_context.clone(),
-                config: reader_config.clone(),
-                tracker_handle: context.tracker_handle.clone(),
-                batch_size: context.config.batch_size,
-                read_timeout: context.config.read_timeout,
-                watermark_handle: watermark_handle.clone(),
-                isb_config: context.config.isb_config.clone(),
-            },
+            reader_components,
             mapper,
             buffer_writer.clone(),
             rate_limiter.clone(),
-            context.cln_token.clone(),
         )
         .await?;
 
@@ -409,13 +401,13 @@ async fn run_all_map_streams<C: NumaflowTypeConfig>(
 /// Generic worker function for map forwarder. It's generic over `C` to correctly type the
 /// components it creates, like JetStreamReader<C> and MapForwarder<C>.
 async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig>(
-    isb_reader_config: ISBReaderConfig,
+    reader_components: ISBReaderComponents,
     mapper: crate::mapper::map::MapHandle,
     buffer_writer: JetstreamWriter,
     rate_limiter: C::RateLimiter,
-    cln_token: CancellationToken,
 ) -> Result<(tokio::task::JoinHandle<Result<()>>, JetStreamReader<C>)> {
-    let buffer_reader = JetStreamReader::<C>::new(isb_reader_config, rate_limiter).await?;
+    let cln_token = reader_components.cln_token.clone();
+    let buffer_reader = JetStreamReader::<C>::new(reader_components, rate_limiter).await?;
 
     let forwarder = forwarder::map_forwarder::MapForwarder::<C>::new(
         buffer_reader.clone(),
@@ -600,29 +592,26 @@ async fn start_aligned_reduce_forwarder(
         .cloned()
         .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
 
-    let isb_reader_config = ISBReaderConfig {
-        vertex_type: config.vertex_type.to_string(),
-        stream,
-        js_ctx: js_context.clone(),
-        config: reader_config.clone(),
+    let context = PipelineContext {
+        cln_token: cln_token.clone(),
+        js_context: &js_context,
+        config: &config,
         tracker_handle: tracker_handle.clone(),
-        batch_size: config.batch_size,
-        read_timeout: config.read_timeout,
-        watermark_handle: watermark_handle.clone(),
-        isb_config: config.isb_config.clone(),
     };
 
-    // Create buffer writer
-    let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
-        config: config.to_vertex_config.clone(),
-        js_ctx: js_context.clone(),
-        paf_concurrency: config.writer_concurrency,
-        tracker_handle: tracker_handle.clone(),
-        cancel_token: cln_token.clone(),
-        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
-        vertex_type: config.vertex_type,
-        isb_config: config.isb_config.clone(),
-    });
+    let reader_components = ISBReaderComponents::new(
+        stream,
+        reader_config.clone(),
+        watermark_handle.clone(),
+        &context,
+    );
+
+    let writer_components = ISBWriterComponents::new(
+        watermark_handle.clone().map(WatermarkHandle::ISB),
+        &context,
+    );
+
+    let buffer_writer = JetstreamWriter::new(writer_components);
 
     // Create WAL if configured
     let (wal, gc_wal) = if let Some(storage_config) = &reduce_vtx_config.wal_storage_config {
@@ -721,7 +710,7 @@ async fn start_aligned_reduce_forwarder(
 
             run_reduce_forwarder::<WithRedisRateLimiter>(
                 &context,
-                isb_reader_config,
+                reader_components.clone(),
                 reducer,
                 wal,
                 redis_config.throttling_config,
@@ -733,7 +722,7 @@ async fn start_aligned_reduce_forwarder(
 
             run_reduce_forwarder::<WithInMemoryRateLimiter>(
                 &context,
-                isb_reader_config,
+                reader_components.clone(),
                 reducer,
                 wal,
                 in_mem_config.throttling_config,
@@ -745,7 +734,7 @@ async fn start_aligned_reduce_forwarder(
 
         run_reduce_forwarder::<WithoutRateLimiter>(
             &context,
-            isb_reader_config,
+            reader_components,
             reducer,
             wal,
             noop_config.throttling_config,
@@ -802,28 +791,26 @@ async fn start_unaligned_reduce_forwarder(
         .cloned()
         .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
 
-    let isb_reader_config = ISBReaderConfig {
-        vertex_type: config.vertex_type.to_string(),
-        stream,
-        js_ctx: js_context.clone(),
-        config: reader_config.clone(),
+    let context = PipelineContext {
+        cln_token: cln_token.clone(),
+        js_context: &js_context,
+        config: &config,
         tracker_handle: tracker_handle.clone(),
-        batch_size: config.batch_size,
-        read_timeout: config.read_timeout,
-        watermark_handle: watermark_handle.clone(),
-        isb_config: config.isb_config.clone(),
     };
 
-    let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
-        config: config.to_vertex_config.clone(),
-        js_ctx: js_context.clone(),
-        paf_concurrency: config.writer_concurrency,
-        tracker_handle: tracker_handle.clone(),
-        cancel_token: cln_token.clone(),
-        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
-        vertex_type: config.vertex_type,
-        isb_config: config.isb_config.clone(),
-    });
+    let reader_components = ISBReaderComponents::new(
+        stream,
+        reader_config.clone(),
+        watermark_handle.clone(),
+        &context,
+    );
+
+    let writer_components = ISBWriterComponents::new(
+        watermark_handle.clone().map(WatermarkHandle::ISB),
+        &context,
+    );
+
+    let buffer_writer = JetstreamWriter::new(writer_components);
 
     // Create WAL if configured (use Unaligned WindowKind for unaligned reducers)
     let (wal, gc_wal) = if let Some(storage_config) = &reduce_vtx_config.wal_storage_config {
@@ -920,7 +907,7 @@ async fn start_unaligned_reduce_forwarder(
 
             run_reduce_forwarder::<WithRedisRateLimiter>(
                 &context,
-                isb_reader_config,
+                reader_components.clone(),
                 reducer,
                 wal,
                 redis_config.throttling_config,
@@ -932,7 +919,7 @@ async fn start_unaligned_reduce_forwarder(
 
             run_reduce_forwarder::<WithInMemoryRateLimiter>(
                 &context,
-                isb_reader_config,
+                reader_components.clone(),
                 reducer,
                 wal,
                 in_mem_config.throttling_config,
@@ -944,7 +931,7 @@ async fn start_unaligned_reduce_forwarder(
 
         run_reduce_forwarder::<WithoutRateLimiter>(
             &context,
-            isb_reader_config,
+            reader_components,
             reducer,
             wal,
             noop_config.throttling_config,
@@ -959,12 +946,12 @@ async fn start_unaligned_reduce_forwarder(
 /// Generic helper function that handles reduce forwarder for a given TypeConfig.
 async fn run_reduce_forwarder<C: NumaflowTypeConfig>(
     context: &PipelineContext<'_>,
-    isb_reader_config: ISBReaderConfig,
+    reader_components: ISBReaderComponents,
     reducer: Reducer,
     wal: Option<WAL>,
     rate_limiter: C::RateLimiter,
 ) -> Result<()> {
-    let buffer_reader = JetStreamReader::<C>::new(isb_reader_config, rate_limiter).await?;
+    let buffer_reader = JetStreamReader::<C>::new(reader_components, rate_limiter).await?;
 
     // Create lag reader with the single buffer reader (reduce only reads from one stream)
     let pending_reader = shared::metrics::create_pending_reader(
@@ -1151,21 +1138,17 @@ async fn run_all_sink_streams<C: NumaflowTypeConfig>(
         }
 
         // This helper is now defined inside this generic context
+        let reader_components = ISBReaderComponents::new(
+            stream,
+            reader_config.clone(),
+            watermark_handle.clone(),
+            context,
+        );
+
         let (task, reader) = run_sink_forwarder_for_stream_with_reader::<C>(
-            ISBReaderConfig {
-                vertex_type: context.config.vertex_type.to_string(),
-                stream,
-                js_ctx: context.js_context.clone(),
-                config: reader_config.clone(),
-                tracker_handle: context.tracker_handle.clone(),
-                batch_size: context.config.batch_size,
-                read_timeout: context.config.read_timeout,
-                watermark_handle: watermark_handle.clone(),
-                isb_config: context.config.isb_config.clone(),
-            },
+            reader_components,
             sink_writer,
             rate_limiter.clone(),
-            context.cln_token.clone(),
         )
         .await?;
 
@@ -1188,13 +1171,13 @@ async fn run_all_sink_streams<C: NumaflowTypeConfig>(
 
 /// Generic worker function for sink forwarder that returns both task and reader.
 async fn run_sink_forwarder_for_stream_with_reader<C: NumaflowTypeConfig>(
-    isb_reader_config: ISBReaderConfig,
+    reader_components: ISBReaderComponents,
     sink_writer: SinkWriter,
     rate_limiter: C::RateLimiter,
-    cln_token: CancellationToken,
 ) -> Result<(tokio::task::JoinHandle<Result<()>>, JetStreamReader<C>)> {
     // The reader is constructed with the concrete rate limiter
-    let buffer_reader = JetStreamReader::<C>::new(isb_reader_config, rate_limiter).await?;
+    let cln_token = reader_components.cln_token.clone();
+    let buffer_reader = JetStreamReader::<C>::new(reader_components, rate_limiter).await?;
 
     let forwarder =
         forwarder::sink_forwarder::SinkForwarder::<C>::new(buffer_reader.clone(), sink_writer)

@@ -35,9 +35,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 use tracing::{error, info};
 
-/// Configuration for creating a JetStreamReader
+/// Components needed to create a JetStreamReader, with reduced duplication
 #[derive(Clone)]
-pub(crate) struct ISBReaderConfig {
+pub(crate) struct ISBReaderComponents {
     pub vertex_type: String,
     pub stream: Stream,
     pub js_ctx: Context,
@@ -47,6 +47,30 @@ pub(crate) struct ISBReaderConfig {
     pub read_timeout: Duration,
     pub watermark_handle: Option<ISBWatermarkHandle>,
     pub isb_config: Option<ISBConfig>,
+    pub cln_token: CancellationToken,
+}
+
+impl ISBReaderComponents {
+    /// Create ISBReaderComponents from minimal components and pipeline context
+    pub fn new(
+        stream: Stream,
+        reader_config: BufferReaderConfig,
+        watermark_handle: Option<ISBWatermarkHandle>,
+        context: &crate::pipeline::PipelineContext<'_>,
+    ) -> Self {
+        Self {
+            vertex_type: context.config.vertex_type.to_string(),
+            stream,
+            js_ctx: context.js_context.clone(),
+            config: reader_config,
+            tracker_handle: context.tracker_handle.clone(),
+            batch_size: context.config.batch_size,
+            read_timeout: context.config.read_timeout,
+            watermark_handle,
+            isb_config: context.config.isb_config.clone(),
+            cln_token: context.cln_token.clone(),
+        }
+    }
 }
 
 const ACK_RETRY_INTERVAL: u64 = 100;
@@ -184,14 +208,14 @@ impl JSWrappedMessage {
 
 impl<C: NumaflowTypeConfig> JetStreamReader<C> {
     pub(crate) async fn new(
-        reader_config: ISBReaderConfig,
+        reader_components: ISBReaderComponents,
         rate_limiter: C::RateLimiter,
     ) -> Result<Self> {
-        let mut buffer_config = reader_config.config;
+        let mut buffer_config = reader_components.config;
 
-        let mut consumer: PullConsumer = reader_config
+        let mut consumer: PullConsumer = reader_components
             .js_ctx
-            .get_consumer_from_stream(&reader_config.stream.name, &reader_config.stream.name)
+            .get_consumer_from_stream(&reader_components.stream.name, &reader_components.stream.name)
             .await
             .map_err(|e| Error::ISB(format!("Failed to get consumer for stream {e}")))?;
 
@@ -215,15 +239,15 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
         );
 
         Ok(Self {
-            vertex_type: reader_config.vertex_type,
-            stream: reader_config.stream,
+            vertex_type: reader_components.vertex_type,
+            stream: reader_components.stream,
             config: buffer_config,
             consumer,
-            tracker_handle: reader_config.tracker_handle,
-            batch_size: reader_config.batch_size,
-            read_timeout: reader_config.read_timeout,
-            watermark_handle: reader_config.watermark_handle,
-            compression_type: reader_config
+            tracker_handle: reader_components.tracker_handle,
+            batch_size: reader_components.batch_size,
+            read_timeout: reader_components.read_timeout,
+            watermark_handle: reader_components.watermark_handle,
+            compression_type: reader_components
                 .isb_config
                 .map(|c| c.compression.compress_type),
             rate_limiter,
@@ -723,7 +747,7 @@ mod tests {
         };
         let tracker = TrackerHandle::new(None);
         let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> = JetStreamReader::new(
-            ISBReaderConfig {
+            ISBReaderComponents {
                 vertex_type: "Map".to_string(),
                 stream: stream.clone(),
                 js_ctx: context.clone(),
@@ -733,6 +757,7 @@ mod tests {
                 read_timeout: Duration::from_millis(100),
                 watermark_handle: None,
                 isb_config: None,
+                cln_token: CancellationToken::new(),
             },
             numaflow_throttling::NoOpRateLimiter,
         )
@@ -833,7 +858,7 @@ mod tests {
             ..Default::default()
         };
         let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> = JetStreamReader::new(
-            ISBReaderConfig {
+            ISBReaderComponents {
                 vertex_type: "Map".to_string(),
                 stream: js_stream.clone(),
                 js_ctx: context.clone(),
@@ -843,6 +868,7 @@ mod tests {
                 read_timeout: Duration::from_millis(100),
                 watermark_handle: None,
                 isb_config: None,
+                cln_token: CancellationToken::new(),
             },
             numaflow_throttling::NoOpRateLimiter,
         )
@@ -988,7 +1014,7 @@ mod tests {
         };
         let tracker = TrackerHandle::new(None);
         let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> = JetStreamReader::new(
-            ISBReaderConfig {
+            ISBReaderComponents {
                 vertex_type: "Map".to_string(),
                 stream: stream.clone(),
                 js_ctx: context.clone(),
@@ -998,6 +1024,7 @@ mod tests {
                 read_timeout: Duration::from_millis(100),
                 watermark_handle: None,
                 isb_config: Some(isb_config.clone()),
+                cln_token: CancellationToken::new(),
             },
             numaflow_throttling::NoOpRateLimiter,
         )

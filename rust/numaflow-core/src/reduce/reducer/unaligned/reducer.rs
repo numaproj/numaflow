@@ -784,7 +784,7 @@ mod tests {
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::config::pipeline::{ToVertexConfig, VertexType};
     use crate::message::{Message, MessageID, Offset, StringOffset};
-    use crate::pipeline::isb::jetstream::writer::{ISBWriterConfig, JetstreamWriter};
+    use crate::pipeline::isb::jetstream::writer::{ISBWriterComponents, JetstreamWriter};
     use crate::reduce::reducer::unaligned::user_defined::accumulator::UserDefinedAccumulator;
     use crate::reduce::reducer::unaligned::user_defined::session::UserDefinedSessionReduce;
     use crate::reduce::reducer::unaligned::windower::session::SessionWindowManager;
@@ -984,7 +984,7 @@ mod tests {
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
         let tracker_handle = TrackerHandle::new(None);
-        let js_writer = JetstreamWriter::new(ISBWriterConfig {
+        let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
@@ -1002,7 +1002,8 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
             isb_config: None,
-        });
+        };
+        let js_writer = JetstreamWriter::new(writer_components);
 
         // Create the UnalignedReducer
         let reducer = UnalignedReducer::new(
@@ -1209,7 +1210,7 @@ mod tests {
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
         let tracker_handle = TrackerHandle::new(None);
-        let js_writer = JetstreamWriter::new(ISBWriterConfig {
+        let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
@@ -1227,7 +1228,8 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
             isb_config: None,
-        });
+        };
+        let js_writer = JetstreamWriter::new(writer_components);
 
         // Create the UnalignedReducer
         let reducer = UnalignedReducer::new(
@@ -1491,7 +1493,7 @@ mod tests {
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
         let tracker_handle = TrackerHandle::new(None);
-        let js_writer = JetstreamWriter::new(ISBWriterConfig {
+        let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
@@ -1509,7 +1511,8 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
             isb_config: None,
-        });
+        };
+        let js_writer = JetstreamWriter::new(writer_components);
 
         // Create the UnalignedReducer
         let reducer = UnalignedReducer::new(
@@ -1693,7 +1696,7 @@ mod tests {
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
         let tracker_handle = TrackerHandle::new(None);
-        let js_writer = JetstreamWriter::new(ISBWriterConfig {
+        let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
@@ -1711,7 +1714,8 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
             isb_config: None,
-        });
+        };
+        let js_writer = JetstreamWriter::new(writer_components);
 
         // Create the UnalignedReducer
         let reducer = UnalignedReducer::new(
@@ -1927,7 +1931,7 @@ mod tests {
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
         let tracker_handle = TrackerHandle::new(None);
-        let js_writer = JetstreamWriter::new(ISBWriterConfig {
+        let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
@@ -1945,7 +1949,8 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
             isb_config: None,
-        });
+        };
+        let js_writer = JetstreamWriter::new(writer_components);
 
         // Create the UnalignedReducer
         let reducer = UnalignedReducer::new(

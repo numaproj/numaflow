@@ -237,19 +237,21 @@ mod tests {
             ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
-        use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
+        use crate::pipeline::isb::jetstream::reader::ISBReaderComponents;
+        let reader_components = ISBReaderComponents {
+            vertex_type: "test".to_string(),
+            stream: stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker.clone(),
+            batch_size: 500,
+            read_timeout: Duration::from_millis(100),
+            watermark_handle: None,
+            isb_config: None,
+            cln_token: CancellationToken::new(),
+        };
         let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> = JetStreamReader::new(
-            ISBReaderConfig {
-                vertex_type: "test".to_string(),
-                stream: stream.clone(),
-                js_ctx: context.clone(),
-                config: buf_reader_config,
-                tracker_handle: tracker.clone(),
-                batch_size: 500,
-                read_timeout: Duration::from_millis(100),
-                watermark_handle: None,
-                isb_config: None,
-            },
+            reader_components,
             numaflow_throttling::NoOpRateLimiter,
         )
         .await
@@ -355,19 +357,21 @@ mod tests {
             ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
-        use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
+        use crate::pipeline::isb::jetstream::reader::ISBReaderComponents;
+        let reader_components = ISBReaderComponents {
+            vertex_type: "test".to_string(),
+            stream: stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker.clone(),
+            batch_size: 500,
+            read_timeout: Duration::from_millis(100),
+            watermark_handle: None,
+            isb_config: None,
+            cln_token: CancellationToken::new(),
+        };
         let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> = JetStreamReader::new(
-            ISBReaderConfig {
-                vertex_type: "test".to_string(),
-                stream: stream.clone(),
-                js_ctx: context.clone(),
-                config: buf_reader_config,
-                tracker_handle: tracker.clone(),
-                batch_size: 500,
-                read_timeout: Duration::from_millis(100),
-                watermark_handle: None,
-                isb_config: None,
-            },
+            reader_components,
             numaflow_throttling::NoOpRateLimiter,
         )
         .await
@@ -594,19 +598,21 @@ mod tests {
             ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
-        use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
+        use crate::pipeline::isb::jetstream::reader::ISBReaderComponents;
+        let reader_components = ISBReaderComponents {
+            vertex_type: "test".to_string(),
+            stream: stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker.clone(),
+            batch_size: 500,
+            read_timeout: Duration::from_millis(100),
+            watermark_handle: None,
+            isb_config: None,
+            cln_token: CancellationToken::new(),
+        };
         let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> = JetStreamReader::new(
-            ISBReaderConfig {
-                vertex_type: "test".to_string(),
-                stream: stream.clone(),
-                js_ctx: context.clone(),
-                config: buf_reader_config,
-                tracker_handle: tracker.clone(),
-                batch_size: 500,
-                read_timeout: Duration::from_millis(100),
-                watermark_handle: None,
-                isb_config: None,
-            },
+            reader_components,
             numaflow_throttling::NoOpRateLimiter,
         )
         .await
