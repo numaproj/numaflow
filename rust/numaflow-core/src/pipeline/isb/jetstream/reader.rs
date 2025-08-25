@@ -74,7 +74,7 @@ pub(crate) struct JetStreamReader<C: NumaflowTypeConfig> {
     watermark_handle: Option<ISBWatermarkHandle>,
     vertex_type: String,
     compression_type: Option<CompressionType>,
-    rate_limiter: Option<C::RateLimiter>,
+    rate_limiter: C::RateLimiter,
 }
 
 /// JSWrappedMessage is a wrapper around the JetStream message that includes the
@@ -185,7 +185,7 @@ impl JSWrappedMessage {
 impl<C: NumaflowTypeConfig> JetStreamReader<C> {
     pub(crate) async fn new(
         reader_config: ISBReaderConfig,
-        rate_limiter: Option<C::RateLimiter>,
+        rate_limiter: C::RateLimiter,
     ) -> Result<Self> {
         let mut buffer_config = reader_config.config;
 
@@ -331,19 +331,14 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
             .await
             .map_err(|e| Error::ISB(format!("Failed to acquire semaphore permit: {e}")))?;
 
-        // Apply rate limiting if configured
-        let effective_batch_size = if let Some(rate_limiter) = &self.rate_limiter {
-            // Try to acquire tokens from the rate limiter
-            let tokens_acquired = rate_limiter.acquire_n(Some(batch_size), None).await;
-            if tokens_acquired == 0 {
-                // No tokens available, return empty batch
-                return Ok(vec![]);
-            }
-            // Use the number of tokens acquired as the effective batch size
-            std::cmp::min(tokens_acquired, batch_size)
-        } else {
-            batch_size
-        };
+        // Apply rate limiting
+        let tokens_acquired = self.rate_limiter.acquire_n(Some(batch_size), None).await;
+        if tokens_acquired == 0 {
+            // No tokens available, return empty batch
+            return Ok(vec![]);
+        }
+        // Use the number of tokens acquired as the effective batch size
+        let effective_batch_size = std::cmp::min(tokens_acquired, batch_size);
 
         let start = Instant::now();
         let jetstream_messages = match self
@@ -739,7 +734,7 @@ mod tests {
                 watermark_handle: None,
                 isb_config: None,
             },
-            None,
+            numaflow_throttling::NoOpRateLimiter,
         )
         .await
         .unwrap();
@@ -849,7 +844,7 @@ mod tests {
                 watermark_handle: None,
                 isb_config: None,
             },
-            None,
+            numaflow_throttling::NoOpRateLimiter,
         )
         .await
         .unwrap();
@@ -1004,7 +999,7 @@ mod tests {
                 watermark_handle: None,
                 isb_config: Some(isb_config.clone()),
             },
-            None,
+            numaflow_throttling::NoOpRateLimiter,
         )
         .await
         .unwrap();

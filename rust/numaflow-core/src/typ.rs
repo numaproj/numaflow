@@ -13,12 +13,12 @@ use numaflow_throttling::{NoOpRateLimiter, RateLimit, RateLimiter, WithDistribut
 use tokio_util::sync::CancellationToken;
 
 pub trait NumaflowTypeConfig: Send + Sync + Clone + 'static {
-    type RateLimiter: RateLimiter + Clone + Send + Sync + 'static;
+    type RateLimiter: RateLimiter + Clone + Sync + 'static;
 }
 
 #[derive(Clone)]
 pub struct WithRedisRateLimiter {
-    pub throttling_config: Option<RateLimit<WithDistributedState<RedisStore>>>,
+    pub throttling_config: RateLimit<WithDistributedState<RedisStore>>,
 }
 impl NumaflowTypeConfig for WithRedisRateLimiter {
     type RateLimiter = RateLimit<WithDistributedState<RedisStore>>;
@@ -26,7 +26,7 @@ impl NumaflowTypeConfig for WithRedisRateLimiter {
 
 #[derive(Clone)]
 pub struct WithInMemoryRateLimiter {
-    pub throttling_config: Option<RateLimit<WithDistributedState<InMemoryStore>>>,
+    pub throttling_config: RateLimit<WithDistributedState<InMemoryStore>>,
 }
 impl NumaflowTypeConfig for WithInMemoryRateLimiter {
     type RateLimiter = RateLimit<WithDistributedState<InMemoryStore>>;
@@ -34,7 +34,7 @@ impl NumaflowTypeConfig for WithInMemoryRateLimiter {
 
 #[derive(Clone)]
 pub struct WithoutRateLimiter {
-    pub throttling_config: Option<NoOpRateLimiter>,
+    pub throttling_config: NoOpRateLimiter,
 }
 impl NumaflowTypeConfig for WithoutRateLimiter {
     type RateLimiter = NoOpRateLimiter;
@@ -72,7 +72,7 @@ pub async fn build_redis_rate_limiter_config(
 ) -> Result<WithRedisRateLimiter> {
     let limiter = build_redis_rate_limiter(config, cln_token).await?;
     Ok(WithRedisRateLimiter {
-        throttling_config: Some(limiter),
+        throttling_config: limiter,
     })
 }
 
@@ -98,7 +98,7 @@ pub async fn build_in_memory_rate_limiter_config(
 ) -> Result<WithInMemoryRateLimiter> {
     let limiter = build_in_memory_rate_limiter(config, cln_token).await?;
     Ok(WithInMemoryRateLimiter {
-        throttling_config: Some(limiter),
+        throttling_config: limiter,
     })
 }
 
@@ -108,7 +108,7 @@ pub async fn build_noop_rate_limiter_config(
     _cln_token: CancellationToken,
 ) -> Result<WithoutRateLimiter> {
     Ok(WithoutRateLimiter {
-        throttling_config: Some(NoOpRateLimiter),
+        throttling_config: NoOpRateLimiter,
     })
 }
 

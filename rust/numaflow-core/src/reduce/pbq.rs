@@ -250,7 +250,7 @@ mod tests {
                 watermark_handle: None,
                 isb_config: None,
             },
-            None,
+            numaflow_throttling::NoOpRateLimiter,
         )
         .await
         .unwrap();
@@ -368,7 +368,7 @@ mod tests {
                 watermark_handle: None,
                 isb_config: None,
             },
-            None,
+            numaflow_throttling::NoOpRateLimiter,
         )
         .await
         .unwrap();
@@ -607,7 +607,7 @@ mod tests {
                 watermark_handle: None,
                 isb_config: None,
             },
-            None,
+            numaflow_throttling::NoOpRateLimiter,
         )
         .await
         .unwrap();
