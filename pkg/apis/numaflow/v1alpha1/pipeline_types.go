@@ -428,6 +428,9 @@ func (p Pipeline) GetPipelineLimits() PipelineLimits {
 		if x.ReadTimeout != nil {
 			limits.ReadTimeout = x.ReadTimeout
 		}
+		if x.RateLimit != nil {
+			limits.RateLimit = x.RateLimit
+		}
 	}
 	return limits
 }
