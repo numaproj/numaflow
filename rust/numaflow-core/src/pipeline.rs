@@ -41,11 +41,10 @@ use crate::reduce::reducer::unaligned::windower::accumulator::AccumulatorWindowM
 use crate::reduce::reducer::unaligned::windower::session::SessionWindowManager;
 use crate::reduce::reducer::user_defined::UserDefinedReduce;
 use crate::reduce::reducer::{Reducer, WindowManager};
-use crate::reduce::wal::segment::WalType;
-use crate::reduce::wal::segment::append::AppendOnlyWal;
-use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
+use crate::reduce::wal::segment::compactor::WindowKind;
 use crate::shared::create_components;
 
+use crate::shared::create_components::create_wal_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::sink::SinkWriter;
 use crate::sink::serve::ServingStore;
@@ -65,7 +64,7 @@ mod forwarder;
 pub(crate) mod isb;
 
 /// PipelineContext holds common, read-only data to reduce parameter passing between functions
-struct PipelineContext<'a> {
+pub(crate) struct PipelineContext<'a> {
     cln_token: CancellationToken,
     js_context: &'a Context,
     config: &'a PipelineConfig,
@@ -256,10 +255,8 @@ async fn start_map_forwarder(
         tracker_handle,
     };
 
-    let writer_components = ISBWriterComponents::new(
-        watermark_handle.clone().map(WatermarkHandle::ISB),
-        &context,
-    );
+    let writer_components =
+        ISBWriterComponents::new(watermark_handle.clone().map(WatermarkHandle::ISB), &context);
 
     let buffer_writer = JetstreamWriter::new(writer_components);
     let (forwarder_tasks, mapper_handle) = if let Some(_rl_config) = &config.rate_limit {
@@ -606,57 +603,17 @@ async fn start_aligned_reduce_forwarder(
         &context,
     );
 
-    let writer_components = ISBWriterComponents::new(
-        watermark_handle.clone().map(WatermarkHandle::ISB),
-        &context,
-    );
+    let writer_components =
+        ISBWriterComponents::new(watermark_handle.clone().map(WatermarkHandle::ISB), &context);
 
     let buffer_writer = JetstreamWriter::new(writer_components);
 
     // Create WAL if configured
-    let (wal, gc_wal) = if let Some(storage_config) = &reduce_vtx_config.wal_storage_config {
-        let wal_path = storage_config.path.clone();
-
-        let append_only_wal = AppendOnlyWal::new(
-            WalType::Data,
-            wal_path.clone(),
-            storage_config.max_file_size_mb,
-            storage_config.flush_interval_ms,
-            storage_config.channel_buffer_size,
-            storage_config.max_segment_age_secs,
-        )
-        .await?;
-
-        let compactor = Compactor::new(
-            wal_path.clone(),
-            WindowKind::Aligned,
-            storage_config.max_file_size_mb,
-            storage_config.flush_interval_ms,
-            storage_config.channel_buffer_size,
-            storage_config.max_segment_age_secs,
-        )
-        .await?;
-
-        let gc_wal = AppendOnlyWal::new(
-            WalType::Gc,
-            wal_path,
-            storage_config.max_file_size_mb,
-            storage_config.flush_interval_ms,
-            storage_config.channel_buffer_size,
-            storage_config.max_segment_age_secs,
-        )
-        .await?;
-
-        (
-            Some(WAL {
-                append_only_wal,
-                compactor,
-            }),
-            Some(gc_wal),
-        )
-    } else {
-        (None, None)
-    };
+    let (wal, gc_wal) = create_wal_components(
+        reduce_vtx_config.wal_storage_config.as_ref(),
+        WindowKind::Aligned,
+    )
+    .await?;
 
     // Create PBQ
     // Create user-defined aligned reducer client
@@ -805,57 +762,17 @@ async fn start_unaligned_reduce_forwarder(
         &context,
     );
 
-    let writer_components = ISBWriterComponents::new(
-        watermark_handle.clone().map(WatermarkHandle::ISB),
-        &context,
-    );
+    let writer_components =
+        ISBWriterComponents::new(watermark_handle.clone().map(WatermarkHandle::ISB), &context);
 
     let buffer_writer = JetstreamWriter::new(writer_components);
 
     // Create WAL if configured (use Unaligned WindowKind for unaligned reducers)
-    let (wal, gc_wal) = if let Some(storage_config) = &reduce_vtx_config.wal_storage_config {
-        let wal_path = storage_config.path.clone();
-
-        let append_only_wal = AppendOnlyWal::new(
-            WalType::Data,
-            wal_path.clone(),
-            storage_config.max_file_size_mb,
-            storage_config.flush_interval_ms,
-            storage_config.channel_buffer_size,
-            storage_config.max_segment_age_secs,
-        )
-        .await?;
-
-        let compactor = Compactor::new(
-            wal_path.clone(),
-            WindowKind::Unaligned,
-            storage_config.max_file_size_mb,
-            storage_config.flush_interval_ms,
-            storage_config.channel_buffer_size,
-            storage_config.max_segment_age_secs,
-        )
-        .await?;
-
-        let gc_wal = AppendOnlyWal::new(
-            WalType::Gc,
-            wal_path,
-            storage_config.max_file_size_mb,
-            storage_config.flush_interval_ms,
-            storage_config.channel_buffer_size,
-            storage_config.max_segment_age_secs,
-        )
-        .await?;
-
-        (
-            Some(crate::reduce::pbq::WAL {
-                append_only_wal,
-                compactor,
-            }),
-            Some(gc_wal),
-        )
-    } else {
-        (None, None)
-    };
+    let (wal, gc_wal) = create_wal_components(
+        reduce_vtx_config.wal_storage_config.as_ref(),
+        WindowKind::Unaligned,
+    )
+    .await?;
 
     // Create user-defined unaligned reducer client
     let reducer_client =
