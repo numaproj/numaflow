@@ -108,6 +108,6 @@ sideInputFileName -> "/var/numaflow/side-inputs/sideInputName"
 ```
 
 Here are some examples of watching the side input filesystem for changes in
-[Golang](https://github.com/numaproj/numaflow-go/blob/main/pkg/sideinput/examples/simple_sideinput/udf/main.go),
+[Golang](https://github.com/numaproj/numaflow-go/blob/main/examples/sideinput/simple_sideinput/udf/main.go),
 [Python](https://github.com/numaproj/numaflow-python/blob/main/examples/sideinput/simple_sideinput/udf/example.py) and
 [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sideinput/udf).

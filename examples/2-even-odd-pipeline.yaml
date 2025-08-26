@@ -12,7 +12,7 @@ spec:
         min: 1
       udf:
         container:
-          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
+          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/examples/mapper/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
     - name: even-sink
       scale:

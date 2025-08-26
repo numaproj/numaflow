@@ -249,7 +249,7 @@ kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/main/examp
 
 ### Additional Notes
 
-The source code for the `even-odd` [user-defined function](user-guide/user-defined-functions/user-defined-functions.md) is available [here](https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd). You can also replace the [Log](./user-guide/sinks/log.md) Sink with other sinks, such as [Kafka](./user-guide/sinks/kafka.md), to forward data to Kafka topics.
+The source code for the `even-odd` [user-defined function](user-guide/user-defined-functions/user-defined-functions.md) is available [here](https://github.com/numaproj/numaflow-go/tree/main/examples/mapper/even_odd). You can also replace the [Log](./user-guide/sinks/log.md) Sink with other sinks, such as [Kafka](./user-guide/sinks/kafka.md), to forward data to Kafka topics.
 
 ## Creating a MonoVertex
 

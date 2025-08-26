@@ -88,7 +88,7 @@ type ServingStorer interface {
 // PutDatum, GetDatum, StoredResult provide necessary details
 ```
 
-A Golang example can be found [here](https://github.com/numaproj/numaflow-go/tree/main/pkg/servingstore).
+A Golang example can be found [here](https://github.com/numaproj/numaflow-go/tree/main/examples/servingstore).
 
 ### User-Defined Sink Implementation for Serving
 
@@ -112,7 +112,7 @@ func (l *serveSink) Sink(ctx context.Context, datumStreamCh <-chan sinksdk.Datum
 	return result
 }
 ```
-A complete example can be found [here](https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/serve).
+A complete example can be found [here](https://github.com/numaproj/numaflow-go/tree/main/examples/sinker/serve).
 
 Using `ResponseServe` ensures the result is correctly stored and available via the API endpoints.
 

@@ -141,7 +141,7 @@ Response.serve(id, serve_response)
 
 For more detailed examples and implementation patterns, check out the official SDK repositories:
 
-- **[Golang SDK Examples](https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/)**
+- **[Golang SDK Examples](https://github.com/numaproj/numaflow-go/tree/main/examples/sinker)**
 - **[Java SDK Examples](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple/)**
 - **[Python SDK Examples](https://github.com/numaproj/numaflow-python/tree/main/examples/sink/)**
 

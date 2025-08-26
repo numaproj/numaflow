@@ -15,7 +15,7 @@ spec:
       sink:
         udsink:
           container:
-            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/examples/sinker/redis_sink
             image: quay.io/numaio/numaflow-go/redis-sink:stable
             imagePullPolicy: Always
             env:

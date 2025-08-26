@@ -17,14 +17,14 @@ spec:
         disabled: true # don't scale this beyond one Pod since it doesn't make sense for this container
       udf:
         container:
-          # This will try each message up to 3 times before continuing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/retry
+          # This will try each message up to 3 times before continuing, see https://github.com/numaproj/numaflow-go/tree/main/examples/mapper/retry
           image: quay.io/numaio/numaflow-go/map-retry:stable
           imagePullPolicy: IfNotPresent
     - name: out
       sink:
         udsink:
           container:
-            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/examples/sinker/redis_sink
             image: quay.io/numaio/numaflow-go/redis-sink:stable
             imagePullPolicy: IfNotPresent
             env:

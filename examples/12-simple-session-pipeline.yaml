@@ -22,7 +22,7 @@ spec:
       partitions: 1
       udf:
         container:
-          # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sessionreducer/examples/counter
+          # see https://github.com/numaproj/numaflow-go/tree/main/examples/sessionreducer/counter
           # computes the count of even numbers and odd numbers in a session
           image: quay.io/numaio/numaflow-go/session-counter:stable
           imagePullPolicy: Always
