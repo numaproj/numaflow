@@ -24,7 +24,7 @@ spec:
       partitions: 1
       udf:
         container:
-          # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sessionreducer/examples/counter
+          # see https://github.com/numaproj/numaflow-go/tree/main/examples/sessionreducer/counter
           image: quay.io/numaio/numaflow-go/session-counter:stable
           imagePullPolicy: Always
         groupBy:
@@ -42,7 +42,7 @@ spec:
       sink:
         udsink:
           container:
-            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/examples/sinker/redis_sink
             image: quay.io/numaio/numaflow-go/redis-sink:stable
             imagePullPolicy: Always
             env:

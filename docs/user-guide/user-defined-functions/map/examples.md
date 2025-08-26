@@ -112,7 +112,7 @@ View the UI for a pipeline at https://localhost:8443/.
 
 ![Numaflow UI](../../../assets/quick-start/ui-advanced-pipeline.png)
 
-The source code of the `even-odd` [user-defined function](../user-defined-functions.md) can be found [here](https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd). You also can replace the [Log](../../sinks/log.md) Sink with some other sinks like [Kafka](../../sinks/kafka.md) to forward the data to Kafka topics.
+The source code of the `even-odd` [user-defined function](../user-defined-functions.md) can be found [here](https://github.com/numaproj/numaflow-go/tree/main/examples/mapper/even_odd). You also can replace the [Log](../../sinks/log.md) Sink with some other sinks like [Kafka](../../sinks/kafka.md) to forward the data to Kafka topics.
 
 The pipeline can be deleted by
 

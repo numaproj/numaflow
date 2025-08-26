@@ -78,7 +78,7 @@ Note: Streaming mode is by default enabled for session windows.
 
 Check the links below to see the UDF examples for different languages. Currently, we have the SDK support for Golang and Java.
 
-- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/sessionreducer)
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/examples/sessionreducer)
 - [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reducesession/counter)
 
 
