@@ -46,21 +46,133 @@ spec:
           metadata:
             type: object
           spec:
-            additionalProperties: true
             properties:
+              affinity:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              automountServiceAccountToken:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              containerTemplate:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              daemonTemplate:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              dnsConfig:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              dnsPolicy:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              imagePullSecrets:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              initContainers:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              lifecycle:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              limits:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              metadata:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              nodeSelector:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              priority:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              priorityClassName:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
               replicas:
                 default: 1
                 format: int32
                 type: integer
+              resourceClaims:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              runtimeClassName:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              scale:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              securityContext:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              serviceAccountName:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              sidecars:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              sink:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              source:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              tolerations:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              updateStrategy:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              volumes:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
             type: object
           status:
-            additionalProperties: true
             properties:
+              conditions:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              currentHash:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              desiredReplicas:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              lastScaledAt:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              lastUpdated:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              message:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              observedGeneration:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              phase:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              readyReplicas:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              reason:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
               replicas:
                 format: int32
                 type: integer
               selector:
                 type: string
+              updateHash:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              updatedReadyReplicas:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              updatedReplicas:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
             type: object
         required:
         - spec

@@ -76,36 +76,23 @@ func updateStatus(statusObj obj, filename string) obj {
 	// For the "monovertices" and "vertices" CRDs, there are fields which are referenced in the subresources.scale section, so those should be defined still.
 	if strings.HasSuffix(filename, "_monovertices.yaml") || strings.HasSuffix(filename, "_vertices.yaml") {
 
-		// keep only the "selector" and "replicas" fields and set additionalProperties: true
-		newStatusObj := obj{
-			"type":                 "object",
-			"additionalProperties": true,
-		}
-
+		// Keep all status fields, but replace non-preserved ones with x-kubernetes-preserve-unknown-fields
 		if statusProperties, exists := statusObj["properties"]; exists {
 			statusPropsObj = statusProperties.(obj)
 
-			// Create new properties with only selector and replicas if they exist
-			newProps := make(obj)
-			if selector, hasSelector := statusPropsObj["selector"]; hasSelector {
-				newProps["selector"] = selector
-			}
-			if replicas, hasReplicas := statusPropsObj["replicas"]; hasReplicas {
-				newProps["replicas"] = replicas
-			}
-
-			// Only add properties if we have any to add
-			if len(newProps) > 0 {
-				newStatusObj["properties"] = newProps
+			// Replace each field except "selector" and "replicas" with preserve-unknown-fields
+			for statusField := range statusPropsObj {
+				if statusField != "selector" && statusField != "replicas" {
+					statusPropsObj[statusField] = obj{"type": "object", "x-kubernetes-preserve-unknown-fields": true}
+				}
 			}
 		}
 
-		return newStatusObj
+		return statusObj
 	} else {
-		statusPropsObj = obj{"type": "object", "x-kubernetes-preserve-unknown-fields": true}
+		return obj{"type": "object", "x-kubernetes-preserve-unknown-fields": true}
 	}
 
-	return statusPropsObj
 }
 
 // Update the "spec" fields
@@ -115,31 +102,21 @@ func updateSpec(specObj obj, filename string) obj {
 
 	if strings.HasSuffix(filename, "_monovertices.yaml") || strings.HasSuffix(filename, "_vertices.yaml") {
 
-		// keep only the "replicas" field and set additionalProperties: true
-		newSpecObj := obj{
-			"type":                 "object",
-			"additionalProperties": true,
-		}
-
+		// Keep all spec fields, but replace non-preserved ones with x-kubernetes-preserve-unknown-fields
 		if specProperties, exists := specObj["properties"]; exists {
 			specPropsObj = specProperties.(obj)
 
-			// Create new properties with only replicas if it exists
-			newProps := make(obj)
-			if replicas, hasReplicas := specPropsObj["replicas"]; hasReplicas {
-				newProps["replicas"] = replicas
-			}
-
-			// Only add properties if we have any to add
-			if len(newProps) > 0 {
-				newSpecObj["properties"] = newProps
+			// Replace each field except "replicas" with preserve-unknown-fields
+			for specField := range specPropsObj {
+				if specField != "replicas" {
+					specPropsObj[specField] = obj{"type": "object", "x-kubernetes-preserve-unknown-fields": true}
+				}
 			}
 		}
 
-		return newSpecObj
+		return specObj
 	} else {
-		specPropsObj = obj{"type": "object", "x-kubernetes-preserve-unknown-fields": true}
+		return obj{"type": "object", "x-kubernetes-preserve-unknown-fields": true}
 	}
 
-	return specPropsObj
 }
