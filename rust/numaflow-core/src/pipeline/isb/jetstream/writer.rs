@@ -291,7 +291,14 @@ impl JetstreamWriter {
                     }
                 }
 
+                // pafs is empty means message should not be written to any stream, so we can delete
+                // and continue
                 if pafs.is_empty() {
+                    // delete the entry from tracker
+                    self.tracker_handle
+                        .delete(message.offset)
+                        .await
+                        .expect("Failed to delete offset from tracker");
                     continue;
                 }
 
