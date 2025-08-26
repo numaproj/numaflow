@@ -106,6 +106,12 @@ spec:
             type: object
             x-kubernetes-preserve-unknown-fields: true
           status:
+            properties:
+              replicas:
+                format: int32
+                type: integer
+              selector:
+                type: string
             type: object
             x-kubernetes-preserve-unknown-fields: true
         required:
@@ -297,6 +303,12 @@ spec:
             type: object
             x-kubernetes-preserve-unknown-fields: true
           status:
+            properties:
+              replicas:
+                format: int32
+                type: integer
+              selector:
+                type: string
             type: object
             x-kubernetes-preserve-unknown-fields: true
         required:
