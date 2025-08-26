@@ -18,6 +18,7 @@ package main
 
 import (
 	"os"
+	"strings"
 
 	"sigs.k8s.io/yaml"
 )
@@ -44,8 +45,13 @@ func cleanCRD(filename string) {
 	version := versions[0].(obj)
 	properties := version["schema"].(obj)["openAPIV3Schema"].(obj)["properties"].(obj)
 	for k := range properties {
-		if k == "spec" || k == "status" {
-			properties[k] = obj{"type": "object", "x-kubernetes-preserve-unknown-fields": true}
+		if k == "status" {
+			statusObj := properties[k].(obj)
+			properties[k] = updateStatus(statusObj, filename)
+		}
+		if k == "spec" {
+			specObj := properties[k].(obj)
+			properties[k] = updateSpec(specObj, filename)
 		}
 		if k == "apiVersion" || k == "kind" {
 			o := properties[k].(obj)
@@ -60,4 +66,58 @@ func cleanCRD(filename string) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+// Update the "status" fields
+// We can remove all subfields which are not referenced elsewhere in the CRD
+func updateStatus(statusObj obj, filename string) obj {
+	var statusPropsObj obj
+
+	// For the "monovertices" and "vertices" CRDs, there are fields which are referenced in the subresources.scale section, so those should be defined still.
+	/*if strings.HasSuffix(filename, "_monovertices.yaml") || strings.HasSuffix(filename, "_vertices.yaml") {
+
+
+
+		return newStatusObj
+	} else {*/
+	statusPropsObj = obj{"type": "object", "x-kubernetes-preserve-unknown-fields": true}
+	//}
+
+	return statusPropsObj
+}
+
+// Update the "spec" fields
+// We can remove all subfields which are not referenced elsewhere in the CRD
+func updateSpec(specObj obj, filename string) obj {
+	var specPropsObj obj
+
+	if strings.HasSuffix(filename, "_monovertices.yaml") || strings.HasSuffix(filename, "_vertices.yaml") {
+
+		// keep only the "replicas" field and set additionalProperties: true
+		newSpecObj := obj{
+			"type":                                 "object",
+			"x-kubernetes-preserve-unknown-fields": true,
+		}
+
+		if specProperties, exists := specObj["properties"]; exists {
+			specPropsObj = specProperties.(obj)
+
+			// Create new properties with only replicas if it exists
+			newProps := make(obj)
+			if replicas, hasReplicas := specPropsObj["replicas"]; hasReplicas {
+				newProps["replicas"] = replicas
+			}
+
+			// Only add properties if we have any to add
+			if len(newProps) > 0 {
+				newSpecObj["properties"] = newProps
+			}
+		}
+
+		return newSpecObj
+	} else {
+		specPropsObj = obj{"type": "object", "x-kubernetes-preserve-unknown-fields": true}
+	}
+
+	return specPropsObj
 }
