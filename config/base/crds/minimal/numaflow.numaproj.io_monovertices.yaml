@@ -48,6 +48,12 @@ spec:
           spec:
             type: object
             x-kubernetes-preserve-unknown-fields: true
+            properties:
+              replicas:
+                format: int32
+                type: integer
+              selector:
+                type: string
           status:
             type: object
             x-kubernetes-preserve-unknown-fields: true
