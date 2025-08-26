@@ -81,9 +81,14 @@ func updateStatus(statusObj obj, filename string) obj {
 			statusPropsObj = statusProperties.(obj)
 
 			// Replace each field except "selector" and "replicas" with preserve-unknown-fields
+			// but only if the field is of type="object"
 			for statusField := range statusPropsObj {
 				if statusField != "selector" && statusField != "replicas" {
-					statusPropsObj[statusField] = obj{"type": "object", "x-kubernetes-preserve-unknown-fields": true}
+					if fieldObj, ok := statusPropsObj[statusField].(obj); ok {
+						if fieldType, hasType := fieldObj["type"]; hasType && fieldType == "object" {
+							statusPropsObj[statusField] = obj{"type": "object", "x-kubernetes-preserve-unknown-fields": true}
+						}
+					}
 				}
 			}
 		}
@@ -107,9 +112,14 @@ func updateSpec(specObj obj, filename string) obj {
 			specPropsObj = specProperties.(obj)
 
 			// Replace each field except "replicas" with preserve-unknown-fields
+			// but only if the field is of type="object"
 			for specField := range specPropsObj {
 				if specField != "replicas" {
-					specPropsObj[specField] = obj{"type": "object", "x-kubernetes-preserve-unknown-fields": true}
+					if fieldObj, ok := specPropsObj[specField].(obj); ok {
+						if fieldType, hasType := fieldObj["type"]; hasType && fieldType == "object" {
+							specPropsObj[specField] = obj{"type": "object", "x-kubernetes-preserve-unknown-fields": true}
+						}
+					}
 				}
 			}
 		}
