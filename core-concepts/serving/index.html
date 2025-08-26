@@ -2854,7 +2854,7 @@ container must implement a specific gRPC interface (defined in the Numaflow SDKs
 <span class="p">}</span>
 <span class="c1">// PutDatum, GetDatum, StoredResult provide necessary details</span>
 </code></pre></div>
-<p>A Golang example can be found <a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/servingstore">here</a>.</p>
+<p>A Golang example can be found <a href="https://github.com/numaproj/numaflow-go/tree/main/examples/servingstore">here</a>.</p>
 <h3 id="user-defined-sink-implementation-for-serving">User-Defined Sink Implementation for Serving<a class="headerlink" href="#user-defined-sink-implementation-for-serving" title="Permanent link">&para;</a></h3>
 <p>The User Defined Sink (UDSink) in a <code>ServingPipeline</code>'s pipeline (<code>spec.pipeline.vertices[].sink.udsink</code>) must signal the
 final response payload for the original HTTP request. Use the <strong><code>ResponseServe(requestID, resultBytes)</code></strong> function (or 
@@ -2873,7 +2873,7 @@ SDK equivalent) in your sink code.</p>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">result</span>
 <span class="p">}</span>
 </code></pre></div>
-A complete example can be found <a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/serve">here</a>.</p>
+A complete example can be found <a href="https://github.com/numaproj/numaflow-go/tree/main/examples/sinker/serve">here</a>.</p>
 <p>Using <code>ResponseServe</code> ensures the result is correctly stored and available via the API endpoints.</p>
 <h2 id="api-endpoints">API Endpoints<a class="headerlink" href="#api-endpoints" title="Permanent link">&para;</a></h2>
 <p>The <code>ServingPipeline</code> exposes the following endpoints:</p>

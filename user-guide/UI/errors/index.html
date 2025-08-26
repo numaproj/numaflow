@@ -2763,7 +2763,7 @@
 <p><img alt="High-Level Architecture" src="../../../assets/errors/errors-architecture.png" /></p>
 <hr />
 <h2 id="simulating-an-error-in-the-transformer">Simulating an Error in the Transformer<a class="headerlink" href="#simulating-an-error-in-the-transformer" title="Permanent link">&para;</a></h2>
-<p>To simulate an error, we will introduce a panic in the Go SDK for the transformer by modifying the <code>Transform</code> function. You can find the relevant code <a href="https://github.com/numaproj/numaflow-go/blob/main/pkg/sourcetransformer/examples/assign_event_time/main.go">here</a>.</p>
+<p>To simulate an error, we will introduce a panic in the Go SDK for the transformer by modifying the <code>Transform</code> function. You can find the relevant code <a href="https://github.com/numaproj/numaflow-go/blob/main/examples/sourcetransformer/assign_event_time/main.go">here</a>.</p>
 <p>Below is the modified code snippet:</p>
 <div class="highlight"><pre><span></span><code><span class="c1">// AssignEventTime is a source transformer that assigns event time to the message.</span>
 <span class="kd">type</span><span class="w"> </span><span class="nx">AssignEventTime</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
