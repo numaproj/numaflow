@@ -46,8 +46,7 @@ func cleanCRD(filename string) {
 	properties := version["schema"].(obj)["openAPIV3Schema"].(obj)["properties"].(obj)
 	for k := range properties {
 		if k == "status" {
-			statusObj := properties[k].(obj)
-			properties[k] = updateStatusProperties(statusObj, filename)
+			properties[k] = obj{"type": "object", "x-kubernetes-preserve-unknown-fields": true}
 		}
 		if k == "spec" {
 			specObj := properties[k].(obj)
@@ -68,52 +67,13 @@ func cleanCRD(filename string) {
 	}
 }
 
-// Update the "status.properties" object
-// We can remove all subfields which are not referenced elsewhere in the CRD
-func updateStatusProperties(statusObj obj, filename string) obj {
-	var statusPropsObj obj
-
-	// For the "monovertices" and "vertices" CRDs, there are fields which are referenced in the subresources.scale section, so those should be defined still.
-	if strings.HasSuffix(filename, "_monovertices.yaml") || strings.HasSuffix(filename, "_vertices.yaml") {
-
-		// keep only the "replicas" and "selector" fields defined
-		newStatusObj := obj{
-			"type":                                 "object",
-			"x-kubernetes-preserve-unknown-fields": true,
-		}
-
-		if statusProperties, exists := statusObj["properties"]; exists {
-			statusPropsObj = statusProperties.(obj)
-
-			// Create new properties with only replicas if it exists
-			newProps := make(obj)
-			if replicas, hasReplicas := statusPropsObj["replicas"]; hasReplicas {
-				newProps["replicas"] = replicas
-			}
-			if replicas, hasReplicas := statusPropsObj["selector"]; hasReplicas {
-				newProps["selector"] = replicas
-			}
-
-			// Only add properties if we have any to add
-			if len(newProps) > 0 {
-				newStatusObj["properties"] = newProps
-			}
-		}
-
-		return newStatusObj
-	} else {
-		statusPropsObj = obj{"type": "object", "x-kubernetes-preserve-unknown-fields": true}
-	}
-
-	return statusPropsObj
-}
-
 // Update the "spec.properties" object
 // We can remove all subfields which are not referenced elsewhere in the CRD
 func updateSpecProperties(specObj obj, filename string) obj {
 	var specPropsObj obj
 
-	// For the "monovertices" and "vertices" CRDs, there are fields which are referenced in the subresources.scale section, so those should be defined still.
+	// For the "monovertices" and "vertices" CRDs, the spec.replicas field referenced in the subresources.scale section
+	// needs to be defined and defaulted to 1, to prevent nil error in HPA
 	if strings.HasSuffix(filename, "_monovertices.yaml") || strings.HasSuffix(filename, "_vertices.yaml") {
 
 		// keep only the "replicas" field defined
