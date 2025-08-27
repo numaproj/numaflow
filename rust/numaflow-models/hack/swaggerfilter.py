@@ -33,6 +33,7 @@ def main():
 
         if k in [
             "io.numaproj.numaflow.v1alpha1.Blackhole",
+            "io.numaproj.numaflow.v1alpha1.RateLimiterInMemoryStore",
             "io.numaproj.numaflow.v1alpha1.Log",
             "io.numaproj.numaflow.v1alpha1.NoStore",
             "io.numaproj.numaflow.v1alpha1.ServeSink",

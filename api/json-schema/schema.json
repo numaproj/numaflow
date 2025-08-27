@@ -21717,25 +21717,31 @@
     },
     "io.numaproj.numaflow.v1alpha1.RateLimit": {
       "properties": {
-        "burst": {
-          "format": "int64",
-          "type": "integer"
-        },
-        "duration": {
-          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
-        },
         "max": {
+          "description": "Max is the maximum TPS that this vertex can process give a distributed `Store` is configured. Otherwise, it will be the maximum TPS for a single replica.",
           "format": "int64",
           "type": "integer"
+        },
+        "min": {
+          "description": "Minimum TPS allowed during initial bootup. This value will be distributed across all the replicas if a distributed `Store` is configured. Otherwise, it will be the minimum TPS for a single replica.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "rampUpDuration": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "RampUpDuration is the duration to reach the maximum TPS from the minimum TPS. The min unit of ramp up is 1 in 1 second."
         },
         "store": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Store",
-          "description": "Store is used to define the store for the rate limit."
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterStore",
+          "description": "Store is used to define the Distributed Store for the rate limiting. We also support in-memory store if no store is configured. This means that every replica will have its own rate limit and the actual TPS will be the sum of all the replicas."
         }
       },
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.RedisStore": {
+    "io.numaproj.numaflow.v1alpha1.RateLimiterInMemoryStore": {
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.RateLimiterRedisStore": {
       "properties": {
         "url": {
           "description": "URL of the persistent store to write the rate limit data.",
@@ -21745,6 +21751,19 @@
       "required": [
         "url"
       ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.RateLimiterStore": {
+      "properties": {
+        "inMemoryStore": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterInMemoryStore",
+          "description": "InMemoryStore is used to define the in-memory store for the rate limit."
+        },
+        "redisStore": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterRedisStore",
+          "description": "RedisStore is used to define the redis store for the rate limit."
+        }
+      },
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.RetryStrategy": {
@@ -22453,15 +22472,6 @@
           "type": "array",
           "x-kubernetes-patch-merge-key": "type",
           "x-kubernetes-patch-strategy": "merge"
-        }
-      },
-      "type": "object"
-    },
-    "io.numaproj.numaflow.v1alpha1.Store": {
-      "properties": {
-        "redisStore": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisStore",
-          "description": "RedisStore is used to define the redis store for the rate limit."
         }
       },
       "type": "object"

@@ -133,19 +133,21 @@ spec:
                         type: integer
                       rateLimit:
                         properties:
-                          burst:
-                            default: 1
-                            format: int64
-                            type: integer
-                          duration:
-                            default: 1s
-                            type: string
                           max:
                             default: 10
                             format: int64
                             type: integer
+                          min:
+                            default: 1
+                            format: int64
+                            type: integer
+                          rampUpDuration:
+                            default: 1s
+                            type: string
                           store:
                             properties:
+                              inMemoryStore:
+                                type: object
                               redisStore:
                                 properties:
                                   url:
@@ -7010,19 +7012,21 @@ spec:
                               type: integer
                             rateLimit:
                               properties:
-                                burst:
-                                  default: 1
-                                  format: int64
-                                  type: integer
-                                duration:
-                                  default: 1s
-                                  type: string
                                 max:
                                   default: 10
                                   format: int64
                                   type: integer
+                                min:
+                                  default: 1
+                                  format: int64
+                                  type: integer
+                                rampUpDuration:
+                                  default: 1s
+                                  type: string
                                 store:
                                   properties:
+                                    inMemoryStore:
+                                      type: object
                                     redisStore:
                                       properties:
                                         url:

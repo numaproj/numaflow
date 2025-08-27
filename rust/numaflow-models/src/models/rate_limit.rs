@@ -18,22 +18,24 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RateLimit {
-    #[serde(rename = "burst", skip_serializing_if = "Option::is_none")]
-    pub burst: Option<i64>,
-    #[serde(rename = "duration", skip_serializing_if = "Option::is_none")]
-    pub duration: Option<kube::core::Duration>,
+    /// Max is the maximum TPS that this vertex can process give a distributed `Store` is configured. Otherwise, it will be the maximum TPS for a single replica.
     #[serde(rename = "max", skip_serializing_if = "Option::is_none")]
     pub max: Option<i64>,
+    /// Minimum TPS allowed during initial bootup. This value will be distributed across all the replicas if a distributed `Store` is configured. Otherwise, it will be the minimum TPS for a single replica.
+    #[serde(rename = "min", skip_serializing_if = "Option::is_none")]
+    pub min: Option<i64>,
+    #[serde(rename = "rampUpDuration", skip_serializing_if = "Option::is_none")]
+    pub ramp_up_duration: Option<kube::core::Duration>,
     #[serde(rename = "store", skip_serializing_if = "Option::is_none")]
-    pub store: Option<Box<crate::models::Store>>,
+    pub store: Option<Box<crate::models::RateLimiterStore>>,
 }
 
 impl RateLimit {
     pub fn new() -> RateLimit {
         RateLimit {
-            burst: None,
-            duration: None,
             max: None,
+            min: None,
+            ramp_up_duration: None,
             store: None,
         }
     }

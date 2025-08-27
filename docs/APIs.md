@@ -8927,18 +8927,12 @@ Description
 
 <td>
 
-</td>
+<p>
 
-</tr>
-
-<tr>
-
-<td>
-
-<code>burst</code></br> <em> uint64 </em>
-</td>
-
-<td>
+Max is the maximum TPS that this vertex can process give a distributed
+<code>Store</code> is configured. Otherwise, it will be the maximum TPS
+for a single replica.
+</p>
 
 </td>
 
@@ -8948,12 +8942,39 @@ Description
 
 <td>
 
-<code>duration</code></br> <em>
+<code>min</code></br> <em> uint64 </em>
+</td>
+
+<td>
+
+<p>
+
+Minimum TPS allowed during initial bootup. This value will be
+distributed across all the replicas if a distributed <code>Store</code>
+is configured. Otherwise, it will be the minimum TPS for a single
+replica.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>rampUpDuration</code></br> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
 
 <td>
+
+<p>
+
+RampUpDuration is the duration to reach the maximum TPS from the minimum
+TPS. The min unit of ramp up is 1 in 1 second.
+</p>
 
 </td>
 
@@ -8964,7 +8985,8 @@ Kubernetes meta/v1.Duration </a> </em>
 <td>
 
 <code>store</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Store"> Store </a> </em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterStore">
+RateLimiterStore </a> </em>
 </td>
 
 <td>
@@ -8972,7 +8994,10 @@ Kubernetes meta/v1.Duration </a> </em>
 <em>(Optional)</em>
 <p>
 
-Store is used to define the store for the rate limit.
+Store is used to define the Distributed Store for the rate limiting. We
+also support in-memory store if no store is configured. This means that
+every replica will have its own rate limit and the actual TPS will be
+the sum of all the replicas.
 </p>
 
 </td>
@@ -8983,15 +9008,30 @@ Store is used to define the store for the rate limit.
 
 </table>
 
-<h3 id="numaflow.numaproj.io/v1alpha1.RedisStore">
+<h3 id="numaflow.numaproj.io/v1alpha1.RateLimiterInMemoryStore">
 
-RedisStore
+RateLimiterInMemoryStore
 </h3>
 
 <p>
 
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.Store">Store</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterStore">RateLimiterStore</a>)
+</p>
+
+<p>
+
+</p>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.RateLimiterRedisStore">
+
+RateLimiterRedisStore
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterStore">RateLimiterStore</a>)
 </p>
 
 <p>
@@ -9032,6 +9072,89 @@ Description
 <p>
 
 URL of the persistent store to write the rate limit data.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.RateLimiterStore">
+
+RateLimiterStore
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimit">RateLimit</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>redisStore</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterRedisStore">
+RateLimiterRedisStore </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+RedisStore is used to define the redis store for the rate limit.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>inMemoryStore</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterInMemoryStore">
+RateLimiterInMemoryStore </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+InMemoryStore is used to define the in-memory store for the rate limit.
 </p>
 
 </td>
@@ -11677,68 +11800,6 @@ Description
 
 Conditions are the latest available observations of a resource’s current
 state.
-</p>
-
-</td>
-
-</tr>
-
-</tbody>
-
-</table>
-
-<h3 id="numaflow.numaproj.io/v1alpha1.Store">
-
-Store
-</h3>
-
-<p>
-
-(<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.RateLimit">RateLimit</a>)
-</p>
-
-<p>
-
-</p>
-
-<table>
-
-<thead>
-
-<tr>
-
-<th>
-
-Field
-</th>
-
-<th>
-
-Description
-</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-<tr>
-
-<td>
-
-<code>redisStore</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.RedisStore"> RedisStore </a>
-</em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-<p>
-
-RedisStore is used to define the redis store for the rate limit.
 </p>
 
 </td>

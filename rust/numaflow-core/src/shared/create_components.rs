@@ -790,7 +790,7 @@ where
     let bounds = TokenCalcBounds::new(
         rate_limit_config.max,
         rate_limit_config.min,
-        rate_limit_config.duration,
+        rate_limit_config.ramp_up_duration,
     );
 
     let refresh_interval = Duration::from_millis(100);
