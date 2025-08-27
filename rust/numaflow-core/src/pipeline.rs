@@ -54,8 +54,8 @@ use crate::tracker::TrackerHandle;
 use crate::transformer::Transformer;
 use crate::typ::{
     NumaflowTypeConfig, WithInMemoryRateLimiter, WithRedisRateLimiter, WithoutRateLimiter,
-    build_in_memory_rate_limiter_config, build_noop_rate_limiter_config,
-    build_redis_rate_limiter_config, should_use_redis_rate_limiter,
+    build_in_memory_rate_limiter_config, build_redis_rate_limiter_config,
+    should_use_redis_rate_limiter,
 };
 use crate::watermark::WatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
@@ -180,7 +180,7 @@ async fn start_source_forwarder(
                 transformer,
                 source_watermark_handle,
                 buffer_writer,
-                redis_config.throttling_config,
+                Some(redis_config.throttling_config),
             )
             .await?
         } else {
@@ -193,20 +193,18 @@ async fn start_source_forwarder(
                 transformer,
                 source_watermark_handle,
                 buffer_writer,
-                in_mem_config.throttling_config,
+                Some(in_mem_config.throttling_config),
             )
             .await?
         }
     } else {
-        let noop_config = build_noop_rate_limiter_config().await?;
-
         run_source_forwarder::<WithoutRateLimiter>(
             &context,
             &source_config,
             transformer,
             source_watermark_handle,
             buffer_writer,
-            noop_config.throttling_config,
+            None,
         )
         .await?
     };
@@ -272,7 +270,7 @@ async fn start_map_forwarder(
                 reader_config,
                 buffer_writer,
                 watermark_handle.clone(),
-                redis_config.throttling_config,
+                Some(redis_config.throttling_config),
             )
             .await?
         } else {
@@ -284,19 +282,18 @@ async fn start_map_forwarder(
                 reader_config,
                 buffer_writer,
                 watermark_handle.clone(),
-                in_mem_config.throttling_config,
+                Some(in_mem_config.throttling_config),
             )
             .await?
         }
     } else {
-        let noop_config = build_noop_rate_limiter_config().await?;
         run_all_map_forwarders::<WithoutRateLimiter>(
             &context,
             &map_vtx_config,
             reader_config,
             buffer_writer,
             watermark_handle.clone(),
-            noop_config.throttling_config,
+            None,
         )
         .await?
     };
@@ -337,7 +334,7 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
     reader_config: &BufferReaderConfig,
     buffer_writer: JetstreamWriter,
     watermark_handle: Option<crate::watermark::isb::ISBWatermarkHandle>,
-    rate_limiter: C::RateLimiter,
+    rate_limiter: Option<C::RateLimiter>,
 ) -> Result<(
     Vec<tokio::task::JoinHandle<Result<()>>>,
     crate::mapper::map::MapHandle,
@@ -398,7 +395,7 @@ async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig>(
     reader_components: ISBReaderComponents,
     mapper: crate::mapper::map::MapHandle,
     buffer_writer: JetstreamWriter,
-    rate_limiter: C::RateLimiter,
+    rate_limiter: Option<C::RateLimiter>,
 ) -> Result<(tokio::task::JoinHandle<Result<()>>, JetStreamReader<C>)> {
     let cln_token = reader_components.cln_token.clone();
     let buffer_reader = JetStreamReader::<C>::new(reader_components, rate_limiter).await?;
@@ -667,7 +664,7 @@ async fn start_aligned_reduce_forwarder(
                 reader_components.clone(),
                 reducer,
                 wal,
-                redis_config.throttling_config,
+                Some(redis_config.throttling_config),
             )
             .await?
         } else {
@@ -679,21 +676,13 @@ async fn start_aligned_reduce_forwarder(
                 reader_components.clone(),
                 reducer,
                 wal,
-                in_mem_config.throttling_config,
+                Some(in_mem_config.throttling_config),
             )
             .await?
         }
     } else {
-        let noop_config = build_noop_rate_limiter_config().await?;
-
-        run_reduce_forwarder::<WithoutRateLimiter>(
-            &context,
-            reader_components,
-            reducer,
-            wal,
-            noop_config.throttling_config,
-        )
-        .await?
+        run_reduce_forwarder::<WithoutRateLimiter>(&context, reader_components, reducer, wal, None)
+            .await?
     };
 
     info!("Aligned reduce forwarder has stopped successfully");
@@ -824,7 +813,7 @@ async fn start_unaligned_reduce_forwarder(
                 reader_components.clone(),
                 reducer,
                 wal,
-                redis_config.throttling_config,
+                Some(redis_config.throttling_config),
             )
             .await?
         } else {
@@ -836,21 +825,13 @@ async fn start_unaligned_reduce_forwarder(
                 reader_components.clone(),
                 reducer,
                 wal,
-                in_mem_config.throttling_config,
+                Some(in_mem_config.throttling_config),
             )
             .await?
         }
     } else {
-        let noop_config = build_noop_rate_limiter_config().await?;
-
-        run_reduce_forwarder::<WithoutRateLimiter>(
-            &context,
-            reader_components,
-            reducer,
-            wal,
-            noop_config.throttling_config,
-        )
-        .await?
+        run_reduce_forwarder::<WithoutRateLimiter>(&context, reader_components, reducer, wal, None)
+            .await?
     };
 
     info!("Unaligned reduce forwarder has stopped successfully");
@@ -863,7 +844,7 @@ async fn run_reduce_forwarder<C: NumaflowTypeConfig>(
     reader_components: ISBReaderComponents,
     reducer: Reducer,
     wal: Option<WAL>,
-    rate_limiter: C::RateLimiter,
+    rate_limiter: Option<C::RateLimiter>,
 ) -> Result<()> {
     let buffer_reader = JetStreamReader::<C>::new(reader_components, rate_limiter).await?;
 
@@ -892,7 +873,7 @@ async fn run_source_forwarder<C: NumaflowTypeConfig>(
     transformer: Option<Transformer>,
     source_watermark_handle: Option<SourceWatermarkHandle>,
     buffer_writer: JetstreamWriter,
-    rate_limiter: C::RateLimiter,
+    rate_limiter: Option<C::RateLimiter>,
 ) -> Result<()> {
     let source = create_components::create_source::<C>(
         context.config.batch_size,
@@ -1009,7 +990,7 @@ async fn start_sink_forwarder(
                 reader_config,
                 watermark_handle.clone(),
                 serving_store,
-                redis_config.throttling_config,
+                Some(redis_config.throttling_config),
             )
             .await?
         } else {
@@ -1022,20 +1003,18 @@ async fn start_sink_forwarder(
                 reader_config,
                 watermark_handle.clone(),
                 serving_store,
-                in_mem_config.throttling_config,
+                Some(in_mem_config.throttling_config),
             )
             .await?
         }
     } else {
-        let noop_config = build_noop_rate_limiter_config().await?;
-
         run_all_sink_forwarders::<WithoutRateLimiter>(
             &context,
             &sink,
             reader_config,
             watermark_handle.clone(),
             serving_store,
-            noop_config.throttling_config,
+            None,
         )
         .await?
     };
@@ -1074,7 +1053,7 @@ async fn run_all_sink_forwarders<C: NumaflowTypeConfig>(
     reader_config: &BufferReaderConfig,
     watermark_handle: Option<crate::watermark::isb::ISBWatermarkHandle>,
     serving_store: Option<ServingStore>,
-    rate_limiter: C::RateLimiter,
+    rate_limiter: Option<C::RateLimiter>,
 ) -> Result<(Vec<tokio::task::JoinHandle<Result<()>>>, SinkWriter)> {
     let mut forwarder_tasks = vec![];
     let mut isb_lag_readers: Vec<JetStreamReader<C>> = vec![];
@@ -1133,7 +1112,7 @@ async fn run_all_sink_forwarders<C: NumaflowTypeConfig>(
 async fn run_sink_forwarder_for_stream<C: NumaflowTypeConfig>(
     reader_components: ISBReaderComponents,
     sink_writer: SinkWriter,
-    rate_limiter: C::RateLimiter,
+    rate_limiter: Option<C::RateLimiter>,
 ) -> Result<(tokio::task::JoinHandle<Result<()>>, JetStreamReader<C>)> {
     let cln_token = reader_components.cln_token.clone();
     let buffer_reader = JetStreamReader::<C>::new(reader_components, rate_limiter).await?;
@@ -1736,7 +1715,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fence_guard_creation_and_cleanup() {
-        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let tmp_dir = TempDir::new().unwrap();
         let fence_file_path = tmp_dir.path().join("test-fence-file");
 
         // Verify file doesn't exist initially
@@ -1759,7 +1738,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_wait_for_fence_availability_timeout() {
-        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let tmp_dir = TempDir::new().unwrap();
         let fence_file_path = tmp_dir.path().join("persistent-fence");
 
         // Create the fence file and keep it

@@ -265,7 +265,7 @@ mod tests {
             true,
             Some(transformer),
             None,
-            numaflow_throttling::NoOpRateLimiter,
+            None,
         );
 
         let sink_writer = SinkWriterBuilder::new(
@@ -403,7 +403,7 @@ mod tests {
             true,
             Some(transformer),
             None,
-            numaflow_throttling::NoOpRateLimiter,
+            None,
         );
 
         let sink_writer = SinkWriterBuilder::new(

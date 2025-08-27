@@ -10,8 +10,8 @@ use crate::sink::SinkWriter;
 use crate::source::Source;
 use crate::tracker::TrackerHandle;
 use crate::typ::{
-    build_in_memory_rate_limiter_config, build_noop_rate_limiter_config,
-    build_redis_rate_limiter_config, should_use_redis_rate_limiter,
+    build_in_memory_rate_limiter_config, build_redis_rate_limiter_config,
+    should_use_redis_rate_limiter,
 };
 use crate::{metrics, shared};
 
@@ -34,7 +34,7 @@ pub(crate) async fn start_forwarder(
             run_monovertex_forwarder::<crate::typ::WithRedisRateLimiter>(
                 config,
                 cln_token,
-                redis_config.throttling_config,
+                Some(redis_config.throttling_config),
             )
             .await
         } else {
@@ -43,18 +43,12 @@ pub(crate) async fn start_forwarder(
             run_monovertex_forwarder::<crate::typ::WithInMemoryRateLimiter>(
                 config,
                 cln_token,
-                in_mem_config.throttling_config,
+                Some(in_mem_config.throttling_config),
             )
             .await
         }
     } else {
-        let noop_config = build_noop_rate_limiter_config().await?;
-        run_monovertex_forwarder::<crate::typ::WithoutRateLimiter>(
-            config,
-            cln_token,
-            noop_config.throttling_config,
-        )
-        .await
+        run_monovertex_forwarder::<crate::typ::WithoutRateLimiter>(config, cln_token, None).await
     }
 }
 
@@ -62,7 +56,7 @@ pub(crate) async fn start_forwarder(
 async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
     config: &MonovertexConfig,
     cln_token: CancellationToken,
-    rate_limiter: C::RateLimiter,
+    rate_limiter: Option<C::RateLimiter>,
 ) -> error::Result<()> {
     let tracker_handle = TrackerHandle::new(None);
 

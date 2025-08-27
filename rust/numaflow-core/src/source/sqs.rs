@@ -199,7 +199,7 @@ pub mod tests {
             true,
             None,
             None,
-            numaflow_throttling::NoOpRateLimiter,
+            None,
         );
 
         let cln_token = CancellationToken::new();

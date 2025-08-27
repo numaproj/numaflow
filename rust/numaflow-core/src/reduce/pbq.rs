@@ -251,9 +251,7 @@ mod tests {
             cln_token: CancellationToken::new(),
         };
         let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> =
-            JetStreamReader::new(reader_components, numaflow_throttling::NoOpRateLimiter)
-                .await
-                .unwrap();
+            JetStreamReader::new(reader_components, None).await.unwrap();
 
         let reader_cancel_token = CancellationToken::new();
 
@@ -369,9 +367,7 @@ mod tests {
             cln_token: CancellationToken::new(),
         };
         let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> =
-            JetStreamReader::new(reader_components, numaflow_throttling::NoOpRateLimiter)
-                .await
-                .unwrap();
+            JetStreamReader::new(reader_components, None).await.unwrap();
 
         // Create WAL components
         let append_only_wal = AppendOnlyWal::new(
@@ -608,9 +604,7 @@ mod tests {
             cln_token: CancellationToken::new(),
         };
         let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> =
-            JetStreamReader::new(reader_components, numaflow_throttling::NoOpRateLimiter)
-                .await
-                .unwrap();
+            JetStreamReader::new(reader_components, None).await.unwrap();
 
         // Create new WAL components for PBQ
         let append_only_wal =

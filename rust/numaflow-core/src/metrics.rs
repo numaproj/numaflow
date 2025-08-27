@@ -1512,7 +1512,7 @@ mod tests {
             true,
             None,
             None,
-            numaflow_throttling::NoOpRateLimiter,
+            None,
         );
 
         let sink_writer = SinkWriterBuilder::new(

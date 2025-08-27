@@ -251,7 +251,7 @@ pub mod tests {
                 true,
                 None,
                 None,
-                numaflow_throttling::NoOpRateLimiter,
+                None,
             ),
             source_handle,
             src_shutdown_tx,

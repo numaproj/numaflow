@@ -202,7 +202,7 @@ pub(crate) struct Source<C: crate::typ::NumaflowTypeConfig> {
     transformer: Option<Transformer>,
     watermark_handle: Option<SourceWatermarkHandle>,
     health_checker: Option<SourceClient<Channel>>,
-    rate_limiter: C::RateLimiter,
+    rate_limiter: Option<C::RateLimiter>,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
@@ -214,7 +214,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         read_ahead: bool,
         transformer: Option<Transformer>,
         watermark_handle: Option<SourceWatermarkHandle>,
-        rate_limiter: C::RateLimiter,
+        rate_limiter: Option<C::RateLimiter>,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(batch_size);
         let mut health_checker = None;
@@ -393,17 +393,17 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     .await
                     .expect("acquiring permit should not fail");
 
-                // Apply rate limiting before reading.
+                // Apply rate limiting before reading if configured.
                 // In source, we rate limit the `read` method invocations,
                 // and not the number of messages read. It just removes a single token per read.
                 // To throttle the number of messages read, make sure that `read_batch_size` is set to
                 // appropriate value.
-                let acquired = self
-                    .rate_limiter
-                    .acquire_n(Some(1), Some(Duration::from_secs(1)))
-                    .await;
-
-                if acquired == 0 {
+                if let Some(ref rate_limiter) = self.rate_limiter
+                    && rate_limiter
+                        .acquire_n(Some(1), Some(Duration::from_secs(1)))
+                        .await
+                        == 0
+                {
                     continue;
                 }
 
@@ -841,7 +841,7 @@ mod tests {
             true,
             None,
             None,
-            numaflow_throttling::NoOpRateLimiter,
+            None,
         );
 
         let sender = source.sender.clone();

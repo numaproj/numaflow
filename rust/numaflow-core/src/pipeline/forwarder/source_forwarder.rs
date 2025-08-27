@@ -232,7 +232,7 @@ mod tests {
             true,
             Some(transformer),
             None,
-            numaflow_throttling::NoOpRateLimiter,
+            None,
         );
 
         // create a js writer

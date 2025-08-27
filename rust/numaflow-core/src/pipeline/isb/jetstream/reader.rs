@@ -97,7 +97,7 @@ pub(crate) struct JetStreamReader<C: NumaflowTypeConfig> {
     watermark_handle: Option<ISBWatermarkHandle>,
     vertex_type: String,
     compression_type: Option<CompressionType>,
-    rate_limiter: C::RateLimiter,
+    rate_limiter: Option<C::RateLimiter>,
 }
 
 /// JSWrappedMessage is a wrapper around the JetStream message that includes the
@@ -208,7 +208,7 @@ impl JSWrappedMessage {
 impl<C: NumaflowTypeConfig> JetStreamReader<C> {
     pub(crate) async fn new(
         reader_components: ISBReaderComponents,
-        rate_limiter: C::RateLimiter,
+        rate_limiter: Option<C::RateLimiter>,
     ) -> Result<Self> {
         let mut buffer_config = reader_components.config;
 
@@ -357,17 +357,20 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
             .await
             .map_err(|e| Error::ISB(format!("Failed to acquire semaphore permit: {e}")))?;
 
-        // Apply rate limiting
-        let tokens_acquired = self
-            .rate_limiter
-            .acquire_n(Some(batch_size), Some(Duration::from_secs(1))) // rate-limiter refill granularity is 1 second.
-            .await;
-        if tokens_acquired == 0 {
-            // No tokens available, return empty batch
+        // Apply rate limiting if configured.
+        let effective_batch_size = match &self.rate_limiter {
+            Some(rate_limiter) => {
+                let tokens_acquired = rate_limiter
+                    .acquire_n(Some(batch_size), Some(Duration::from_secs(1)))
+                    .await;
+                std::cmp::min(tokens_acquired, batch_size)
+            }
+            None => batch_size,
+        };
+
+        if batch_size == 0 {
             return Ok(vec![]);
         }
-        // Use the number of tokens acquired as the effective batch size
-        let effective_batch_size = std::cmp::min(tokens_acquired, batch_size);
 
         let start = Instant::now();
         let jetstream_messages = match self
@@ -659,7 +662,7 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
     }
 }
 
-impl<C: crate::typ::NumaflowTypeConfig> fmt::Display for JetStreamReader<C> {
+impl<C: NumaflowTypeConfig> fmt::Display for JetStreamReader<C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -764,7 +767,7 @@ mod tests {
                 isb_config: None,
                 cln_token: CancellationToken::new(),
             },
-            numaflow_throttling::NoOpRateLimiter,
+            None,
         )
         .await
         .unwrap();
@@ -875,7 +878,7 @@ mod tests {
                 isb_config: None,
                 cln_token: CancellationToken::new(),
             },
-            numaflow_throttling::NoOpRateLimiter,
+            None,
         )
         .await
         .unwrap();
@@ -1031,7 +1034,7 @@ mod tests {
                 isb_config: Some(isb_config.clone()),
                 cln_token: CancellationToken::new(),
             },
-            numaflow_throttling::NoOpRateLimiter,
+            None,
         )
         .await
         .unwrap();
@@ -1135,7 +1138,7 @@ mod tests {
             let test_data = b"Hello, World! This is a test message for gzip compression.";
 
             // Compress the data with gzip
-            let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::default());
+            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
             encoder.write_all(test_data).unwrap();
             let compressed_data = encoder.finish().unwrap();
 
@@ -1185,7 +1188,7 @@ mod tests {
         #[test]
         fn test_decompress_empty_payload_gzip() {
             // Create an empty gzip stream
-            let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::default());
+            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
             encoder.write_all(&[]).unwrap();
             let compressed_data = encoder.finish().unwrap();
 
@@ -1241,7 +1244,7 @@ mod tests {
             let test_data = b"Hello, World! This is a test message for gzip compression.";
 
             // Compress the data with gzip
-            let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::default());
+            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
             encoder.write_all(test_data).unwrap();
             let mut compressed_data = encoder.finish().unwrap();
 

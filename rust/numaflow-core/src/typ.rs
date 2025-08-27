@@ -33,9 +33,7 @@ impl NumaflowTypeConfig for WithInMemoryRateLimiter {
 }
 
 #[derive(Clone)]
-pub struct WithoutRateLimiter {
-    pub throttling_config: NoOpRateLimiter,
-}
+pub struct WithoutRateLimiter {}
 impl NumaflowTypeConfig for WithoutRateLimiter {
     type RateLimiter = NoOpRateLimiter;
 }
@@ -94,13 +92,6 @@ pub async fn build_in_memory_rate_limiter_config(
     let limiter = build_in_memory_rate_limiter(rate_limit_config, cln_token).await?;
     Ok(WithInMemoryRateLimiter {
         throttling_config: limiter,
-    })
-}
-
-/// Build a no-op rate limiter configuration.
-pub async fn build_noop_rate_limiter_config() -> Result<WithoutRateLimiter> {
-    Ok(WithoutRateLimiter {
-        throttling_config: NoOpRateLimiter,
     })
 }
 
