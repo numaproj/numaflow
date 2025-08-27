@@ -9,7 +9,7 @@ You can build your own UDF in multiple languages.
 Check the links below to see the UDF examples for different languages.
 
 - [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/map/)
-- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/)
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/examples/mapper/)
 - [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/map/)
 
 After building a docker image for the written UDF, specify the image as below in the vertex spec.
@@ -44,7 +44,7 @@ spec:
 Check the links below to see the UDF examples in streaming mode for different languages.
 
 - [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/mapstream/flatmap_stream/)
-- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/mapstreamer/examples/flatmap_stream/)
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/examples/mapstreamer/flatmap_stream/)
 - [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/mapstream/flatmapstream/)
 
 ### Batch Map Mode
@@ -67,7 +67,7 @@ every input data item, there should be a corresponding response in the BatchResp
 Check the links below to see the UDF examples in batch mode for different languages.
 
 - [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/batchmap/)
-- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/batchmapper/examples/)
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/examples/batchmapper/)
 - [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/batchmap/)
 - [Rust](https://github.com/numaproj/numaflow-rs/tree/main/examples/batchmap-cat/)
 

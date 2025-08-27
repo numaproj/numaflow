@@ -19,7 +19,7 @@ spec:
     - name: compute-sum
       udf:
         container:
-          # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
+          # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/examples/reducer/sum
           image: quay.io/numaio/numaflow-go/reduce-sum:stable
         groupBy:
           window:
@@ -29,7 +29,7 @@ spec:
           storage:
             persistentVolumeClaim:
               volumeSize: 10Gi
-              accessMode: ReadWriteOnce
+              accessMode: ReadWriteOncePod
     - name: sink
       sink:
         # A simple log printing sink

@@ -1,0 +1,55 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: stream-sorter-rs
+spec:
+  limits:
+    readBatchSize: 1
+  vertices:
+    - name: input-one
+      scale:
+        min: 1
+      source:
+        http: {}
+    - name: input-two
+      scale:
+        min: 1
+      source:
+        http: {}
+    - name: accum
+      udf:
+        container:
+          # sort the incoming stream 
+          image: quay.io/numaio/numaflow-rs/stream-sorter:stable
+        groupBy:
+          window:
+            accumulator:
+              timeout: 10s
+          keyed: true
+          storage:
+            persistentVolumeClaim:
+              volumeSize: 1Gi
+    - name: sink
+      scale:
+        min: 1
+      sink:
+        udsink:
+          container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/examples/sinker/redis_sink
+            image: quay.io/numaio/numaflow-go/redis-sink:stable
+            imagePullPolicy: Always
+            env:
+              - name: SINK_HASH_KEY
+                # The key is set in the format of "pipeline_name-vertex_name"
+                value: "stream-sorter-rs-sink"
+              - name: MESSAGE_COUNT
+                value: "100"
+              - name: CHECK_ORDER
+                value: "true"
+  edges:
+    - from: input-one
+      to: accum
+    - from: input-two
+      to: accum
+    - from: accum
+      to: sink

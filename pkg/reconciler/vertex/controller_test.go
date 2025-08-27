@@ -44,41 +44,39 @@ import (
 )
 
 const (
-	testNamespace          = "test-ns"
-	testVertexSpecName     = "p1"
-	testPipelineName       = "test-pl"
-	testVertexName         = testPipelineName + "-" + testVertexSpecName
-	testVersion            = "6.2.6"
-	testImage              = "test-image"
-	testSImage             = "test-s-image"
-	testRedisExporterImage = "test-r-exporter-image"
-	testFlowImage          = "test-d-iamge"
+	testNamespace      = "test-ns"
+	testVertexSpecName = "p1"
+	testPipelineName   = "test-pl"
+	testVertexName     = testPipelineName + "-" + testVertexSpecName
+	testVersion        = "6.2.6"
+	testNatsImage      = "my-n-image"
+	testExporterImage  = "my-e-image"
+	testReloaderImage  = "test-re-iamge"
+	testFlowImage      = "test-d-iamge"
 )
 
 var (
-	testNativeRedisIsbSvc = &dfv1.InterStepBufferService{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: testNamespace,
-			Name:      dfv1.DefaultISBSvcName,
-		},
-		Spec: dfv1.InterStepBufferServiceSpec{
-			Redis: &dfv1.RedisBufferService{
-				Native: &dfv1.NativeRedis{
-					Version: testVersion,
+	fakeGlobalISBSvcConfig = &reconciler.ISBSvcConfig{
+		JetStream: &reconciler.JetStreamConfig{
+			Versions: []reconciler.JetStreamVersion{
+				{
+					Version:              testVersion,
+					NatsImage:            testNatsImage,
+					MetricsExporterImage: testExporterImage,
+					ConfigReloaderImage:  testReloaderImage,
 				},
 			},
 		},
 	}
 
-	fakeGlobalISBSvcConfig = &reconciler.ISBSvcConfig{
-		Redis: &reconciler.RedisConfig{
-			Versions: []reconciler.RedisVersion{
-				{
-					Version:            testVersion,
-					RedisImage:         testImage,
-					SentinelImage:      testSImage,
-					RedisExporterImage: testRedisExporterImage,
-				},
+	testJetStreamIsbSvc = &dfv1.InterStepBufferService{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: testNamespace,
+			Name:      "default",
+		},
+		Spec: dfv1.InterStepBufferServiceSpec{
+			JetStream: &dfv1.JetStreamBufferService{
+				Version: testVersion,
 			},
 		},
 	}
@@ -117,22 +115,24 @@ var (
 	}
 
 	fakeIsbSvcConfig = dfv1.BufferServiceConfig{
-		Redis: &dfv1.RedisConfig{
-			URL:         "xxx",
-			SentinelURL: "xxxxxxx",
-			User:        "test-user",
-			MasterName:  "mymaster",
-			Password: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: "test-name",
+		JetStream: &dfv1.JetStreamConfig{
+			URL:        "xxx",
+			TLSEnabled: false,
+			Auth: &dfv1.NatsAuth{
+				Basic: &dfv1.BasicAuth{
+					User: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "test-uname",
+						},
+						Key: "test-ukey",
+					},
+					Password: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "test-name",
+						},
+						Key: "test-key",
+					},
 				},
-				Key: "test-key",
-			},
-			SentinelPassword: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: "test-name",
-				},
-				Key: "test-key",
 			},
 		},
 	}
@@ -244,12 +244,10 @@ func Test_BuildPodSpec(t *testing.T) {
 		for _, e := range spec.Containers[0].Env {
 			envNames = append(envNames, e.Name)
 		}
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisPassword)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelPassword)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelURL)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcSentinelMaster)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcJetStreamURL)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcJetStreamTLSEnabled)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcJetStreamUser)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcJetStreamPassword)
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
 		assert.Contains(t, argStr, strings.Join(testObj.OwnedBuffers(), ","))
@@ -315,12 +313,10 @@ func Test_BuildPodSpec(t *testing.T) {
 		for _, e := range spec.Containers[0].Env {
 			envNames = append(envNames, e.Name)
 		}
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisPassword)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelURL)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelPassword)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcSentinelMaster)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcJetStreamURL)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcJetStreamTLSEnabled)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcJetStreamUser)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcJetStreamPassword)
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
 		assert.Contains(t, argStr, strings.Join(testObj.OwnedBuffers(), ","))
@@ -377,12 +373,10 @@ func Test_BuildPodSpec(t *testing.T) {
 		for _, e := range spec.Containers[0].Env {
 			envNames = append(envNames, e.Name)
 		}
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisPassword)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelURL)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcSentinelMaster)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelPassword)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcJetStreamURL)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcJetStreamTLSEnabled)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcJetStreamUser)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcJetStreamPassword)
 		argStr := strings.Join(spec.InitContainers[0].Args, " ")
 		assert.Contains(t, argStr, "--buffers=")
 		assert.Contains(t, argStr, strings.Join(testObj.OwnedBuffers(), ","))
@@ -457,7 +451,7 @@ func Test_reconcile(t *testing.T) {
 	t.Run("test isbsvc unhealthy", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		r := fakeReconciler(t, cl)
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		err := cl.Create(context.TODO(), testIsbSvc)
 		assert.Nil(t, err)
@@ -481,7 +475,7 @@ func Test_reconcile(t *testing.T) {
 	t.Run("test reconcile source", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
 		err := cl.Create(ctx, testIsbSvc)
@@ -526,7 +520,7 @@ func Test_reconcile(t *testing.T) {
 	t.Run("test reconcile sink", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
 		err := cl.Create(ctx, testIsbSvc)
@@ -551,7 +545,7 @@ func Test_reconcile(t *testing.T) {
 	t.Run("test reconcile udf", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
 		err := cl.Create(ctx, testIsbSvc)
@@ -581,7 +575,7 @@ func Test_reconcile(t *testing.T) {
 	t.Run("test reconcile reduce udf", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
 		err := cl.Create(ctx, testIsbSvc)
@@ -605,7 +599,7 @@ func Test_reconcile(t *testing.T) {
 				},
 				Storage: &dfv1.PBQStorage{
 					PersistentVolumeClaim: &dfv1.PersistenceStrategy{
-						AccessMode: ptr.To[corev1.PersistentVolumeAccessMode](corev1.ReadWriteOnce),
+						AccessMode: ptr.To[corev1.PersistentVolumeAccessMode](corev1.ReadWriteOncePod),
 					},
 				},
 			},
@@ -629,7 +623,7 @@ func Test_reconcile(t *testing.T) {
 	t.Run("test reconcile vertex with customization", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
 		err := cl.Create(ctx, testIsbSvc)
@@ -682,7 +676,7 @@ func Test_reconcile(t *testing.T) {
 	t.Run("test reconcile udf with side inputs", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
 		err := cl.Create(ctx, testIsbSvc)
@@ -725,7 +719,7 @@ func Test_reconcile(t *testing.T) {
 	t.Run("test reconcile rolling update", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
 		err := cl.Create(ctx, testIsbSvc)
@@ -801,7 +795,7 @@ func Test_reconcileEvents(t *testing.T) {
 	t.Run("test reconcile - events", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
 		err := cl.Create(ctx, testIsbSvc)

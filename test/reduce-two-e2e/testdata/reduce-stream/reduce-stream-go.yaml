@@ -14,14 +14,14 @@ spec:
         min: 1
       udf:
         container:
-          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
+          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/examples/mapper/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
           imagePullPolicy: IfNotPresent
     - name: compute-sum
       partitions: 2
       udf:
         container:
-          # compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducestreamer/examples/sum
+          # compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/examples/reducestreamer/sum
           image: quay.io/numaio/numaflow-go/reduce-stream-sum:stable
           imagePullPolicy: IfNotPresent
         groupBy:
@@ -39,7 +39,7 @@ spec:
       sink:
         udsink:
           container:
-            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/examples/sinker/redis_sink
             image: quay.io/numaio/numaflow-go/redis-sink:stable
             imagePullPolicy: IfNotPresent
             env:

@@ -7,6 +7,7 @@ edition = "2024"
 backoff.workspace = true
 async-nats.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
 bytes.workspace = true

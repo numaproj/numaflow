@@ -38,43 +38,18 @@ import (
 )
 
 const (
-	testISBSvcName         = "test-isb-svc"
-	testNamespace          = "test-ns"
-	testVersion            = "6.2.6"
-	testImage              = "test-image"
-	testSImage             = "test-s-image"
-	testRedisExporterImage = "test-r-exporter-image"
-	testJSImage            = "test-nats-image"
-	testJSReloaderImage    = "test-nats-rl-image"
-	testJSMetricsImage     = "test-nats-m-image"
+	testISBSvcName      = "test-isb-svc"
+	testNamespace       = "test-ns"
+	testVersion         = "6.2.6"
+	testImage           = "test-image"
+	testSImage          = "test-s-image"
+	testJSImage         = "test-nats-image"
+	testJSReloaderImage = "test-nats-rl-image"
+	testJSMetricsImage  = "test-nats-m-image"
 )
 
 var (
-	nativeRedisIsbs = &dfv1.InterStepBufferService{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: testNamespace,
-			Name:      testISBSvcName,
-		},
-		Spec: dfv1.InterStepBufferServiceSpec{
-			Redis: &dfv1.RedisBufferService{
-				Native: &dfv1.NativeRedis{
-					Version: testVersion,
-				},
-			},
-		},
-	}
-
 	fakeGlobalISBSvcConfig = &reconciler.ISBSvcConfig{
-		Redis: &reconciler.RedisConfig{
-			Versions: []reconciler.RedisVersion{
-				{
-					Version:            testVersion,
-					RedisImage:         testImage,
-					SentinelImage:      testSImage,
-					RedisExporterImage: testRedisExporterImage,
-				},
-			},
-		},
 		JetStream: &reconciler.JetStreamConfig{
 			Versions: []reconciler.JetStreamVersion{
 				{
@@ -112,48 +87,6 @@ func Test_NewReconciler(t *testing.T) {
 	r := NewReconciler(cl, kubeClient, scheme.Scheme, reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig), zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 	_, ok := r.(*interStepBufferServiceReconciler)
 	assert.True(t, ok)
-}
-
-func TestReconcileNativeRedis(t *testing.T) {
-	t.Run("native redis isb svc installation", func(t *testing.T) {
-		testIsb := nativeRedisIsbs.DeepCopy()
-		ctx := context.TODO()
-		cl := fake.NewClientBuilder().Build()
-		r := &interStepBufferServiceReconciler{
-			client:     cl,
-			kubeClient: k8sfake.NewSimpleClientset(),
-			scheme:     scheme.Scheme,
-			config:     reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
-			logger:     zaptest.NewLogger(t).Sugar(),
-			recorder:   record.NewFakeRecorder(64),
-		}
-		err := r.reconcile(ctx, testIsb)
-		assert.NoError(t, err)
-		testIsb.Status.MarkChildrenResourceHealthy("RolloutFinished", "All service healthy")
-		assert.True(t, testIsb.Status.IsHealthy())
-		assert.NotNil(t, testIsb.Status.Config.Redis)
-		assert.NotEmpty(t, testIsb.Status.Config.Redis.SentinelURL)
-		assert.NotEmpty(t, testIsb.Status.Config.Redis.User)
-		assert.NotNil(t, testIsb.Status.Config.Redis.SentinelPassword)
-		assert.NotNil(t, testIsb.Status.Config.Redis.Password)
-		sts := &appv1.StatefulSetList{}
-		selector, _ := labels.Parse(dfv1.KeyComponent + "=" + "isbsvc")
-		err = r.client.List(ctx, sts, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
-		assert.NoError(t, err)
-		assert.Equal(t, 1, len(sts.Items))
-		secrets := &corev1.SecretList{}
-		err = r.client.List(ctx, secrets, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
-		assert.NoError(t, err)
-		assert.Equal(t, 1, len(secrets.Items))
-		svcs := &corev1.ServiceList{}
-		err = r.client.List(ctx, svcs, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
-		assert.NoError(t, err)
-		assert.Equal(t, 2, len(svcs.Items))
-		cms := &corev1.ConfigMapList{}
-		err = r.client.List(ctx, cms, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
-		assert.NoError(t, err)
-		assert.Equal(t, 3, len(cms.Items))
-	})
 }
 
 func TestReconcileJetStream(t *testing.T) {
@@ -200,13 +133,6 @@ func TestReconcileJetStream(t *testing.T) {
 }
 
 func TestNeedsUpdate(t *testing.T) {
-	t.Run("needs redis update", func(t *testing.T) {
-		testIsbs := nativeRedisIsbs.DeepCopy()
-		controllerutil.AddFinalizer(testIsbs, finalizerName)
-		assert.True(t, contains(testIsbs.Finalizers, finalizerName))
-		controllerutil.RemoveFinalizer(testIsbs, finalizerName)
-		assert.False(t, contains(testIsbs.Finalizers, finalizerName))
-	})
 
 	t.Run("needs jetstream update", func(t *testing.T) {
 		testIsbs := jetStreamIsbs.DeepCopy()

@@ -45,7 +45,6 @@ type ISBSvcType string
 
 const (
 	ISBSvcTypeUnknown   ISBSvcType = ""
-	ISBSvcTypeRedis     ISBSvcType = "redis"
 	ISBSvcTypeJetStream ISBSvcType = "jetstream"
 )
 
@@ -69,9 +68,7 @@ type InterStepBufferService struct {
 }
 
 func (isbs InterStepBufferService) GetType() ISBSvcType {
-	if isbs.Spec.Redis != nil {
-		return ISBSvcTypeRedis
-	} else if isbs.Spec.JetStream != nil {
+	if isbs.Spec.JetStream != nil {
 		return ISBSvcTypeJetStream
 	}
 	return ISBSvcTypeUnknown
@@ -87,12 +84,10 @@ type InterStepBufferServiceList struct {
 }
 
 type InterStepBufferServiceSpec struct {
-	Redis     *RedisBufferService     `json:"redis,omitempty" protobuf:"bytes,1,opt,name=redis"`
 	JetStream *JetStreamBufferService `json:"jetstream,omitempty" protobuf:"bytes,2,opt,name=jetstream"`
 }
 
 type BufferServiceConfig struct {
-	Redis     *RedisConfig     `json:"redis,omitempty" protobuf:"bytes,1,opt,name=redis"`
 	JetStream *JetStreamConfig `json:"jetstream,omitempty" protobuf:"bytes,2,opt,name=jetstream"`
 }
 

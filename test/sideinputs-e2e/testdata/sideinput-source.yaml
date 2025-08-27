@@ -6,7 +6,7 @@ spec:
   sideInputs:
     - name: myticker
       container:
-        # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sideinput/examples/sideinput_function
+        # see https://github.com/numaproj/numaflow-go/tree/main/examples/sideinput/sideinput_function
         image: quay.io/numaio/numaflow-go/sideinput-function:stable
         imagePullPolicy: IfNotPresent
       trigger:
@@ -19,7 +19,7 @@ spec:
       source:
         udsource:
           container:
-            # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sideinput/examples/simple_source_with_sideinput
+            # see https://github.com/numaproj/numaflow-go/tree/main/examples/sideinput/simple_source_with_sideinput
             image: quay.io/numaio/numaflow-go/simple-source-with-sideinput:stable
             imagePullPolicy: IfNotPresent
       sideInputs:
@@ -28,7 +28,7 @@ spec:
       sink:
         udsink:
           container:
-            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/examples/sinker/redis_sink
             image: quay.io/numaio/numaflow-go/redis-sink:stable
             imagePullPolicy: IfNotPresent
             env:

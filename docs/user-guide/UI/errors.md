@@ -16,7 +16,7 @@ In this guide, we will simulate a panic in a transformer and demonstrate how the
 
 ## Simulating an Error in the Transformer
 
-To simulate an error, we will introduce a panic in the Go SDK for the transformer by modifying the `Transform` function. You can find the relevant code [here](https://github.com/numaproj/numaflow-go/blob/main/pkg/sourcetransformer/examples/assign_event_time/main.go).
+To simulate an error, we will introduce a panic in the Go SDK for the transformer by modifying the `Transform` function. You can find the relevant code [here](https://github.com/numaproj/numaflow-go/blob/main/examples/sourcetransformer/assign_event_time/main.go).
 
 Below is the modified code snippet:
 

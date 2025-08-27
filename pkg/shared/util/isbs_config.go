@@ -36,45 +36,7 @@ func GetIsbSvcEnvVars(isbSvcConfig dfv1.BufferServiceConfig) (dfv1.ISBSvcType, [
 		},
 	}
 	isbSvcType := dfv1.ISBSvcTypeUnknown
-	if x := isbSvcConfig.Redis; x != nil {
-		if x.URL != "" {
-			env = append(env, corev1.EnvVar{Name: dfv1.EnvISBSvcRedisURL, Value: x.URL})
-		}
-		if x.SentinelURL != "" {
-			env = append(env, corev1.EnvVar{Name: dfv1.EnvISBSvcRedisSentinelURL, Value: x.SentinelURL})
-		}
-		if x.MasterName != "" {
-			env = append(env, corev1.EnvVar{Name: dfv1.EnvISBSvcSentinelMaster, Value: x.MasterName})
-		}
-		if x.User != "" {
-			env = append(env, corev1.EnvVar{Name: dfv1.EnvISBSvcRedisUser, Value: x.User})
-		}
-		if x.Password != nil {
-			env = append(env, corev1.EnvVar{
-				Name: dfv1.EnvISBSvcRedisPassword, ValueFrom: &corev1.EnvVarSource{
-					SecretKeyRef: &corev1.SecretKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: x.Password.Name,
-						},
-						Key: x.Password.Key,
-					},
-				},
-			})
-		}
-		if x.SentinelPassword != nil {
-			env = append(env, corev1.EnvVar{
-				Name: dfv1.EnvISBSvcRedisSentinelPassword, ValueFrom: &corev1.EnvVarSource{
-					SecretKeyRef: &corev1.SecretKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: x.SentinelPassword.Name,
-						},
-						Key: x.SentinelPassword.Key,
-					},
-				},
-			})
-		}
-		isbSvcType = dfv1.ISBSvcTypeRedis
-	} else if x := isbSvcConfig.JetStream; x != nil {
+	if x := isbSvcConfig.JetStream; x != nil {
 		env = append(env, corev1.EnvVar{Name: dfv1.EnvISBSvcJetStreamURL, Value: x.URL})
 		env = append(env, corev1.EnvVar{Name: dfv1.EnvISBSvcJetStreamTLSEnabled, Value: strconv.FormatBool(x.TLSEnabled)})
 		if x.Auth != nil && x.Auth.Basic != nil && x.Auth.Basic.User != nil && x.Auth.Basic.Password != nil {

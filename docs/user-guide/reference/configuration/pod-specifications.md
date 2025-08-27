@@ -34,4 +34,3 @@ Or in the `MonoVertex` spec under:
 Or in `InterStepBufferService` spec at:
 
 - `spec.jetstream`
-- `spec.redis.native`

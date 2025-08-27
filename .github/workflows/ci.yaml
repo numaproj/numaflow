@@ -60,17 +60,6 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    services:
-      redis:
-        image: redis:6.2
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - name: Start JetStream
         run: docker run -d -p 4222:4222 nats:latest -js
@@ -80,6 +69,9 @@ jobs:
 
       - name: Start Kafka container
         run: docker run -d -p 9092:9092 --name kafka-broker apache/kafka:4.0.0
+
+      - name: Start Redis standalone container
+        run: docker run -d -p 6379:6379 --name redis-server redis:8-alpine
 
       - name: Set up Go 1.x
         uses: actions/setup-go@v5
@@ -100,7 +92,7 @@ jobs:
         run: go mod download -x
 
       - name: Test Go
-        run: make test-coverage-with-isb
+        run: make test-coverage
 
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1

@@ -26,7 +26,7 @@ Welcome to Numaflow! A Kubernetes-native, serverless platform for running scalab
 
 ## Roadmap
 
-- Make Rust code the primary for data-plane (1.6)
+- Metadata propagation and Open Telemetry Tracing, Deprecate `monitor` container (1.7)
 
 ## Demo
 

@@ -16,7 +16,7 @@ spec:
         min: 1
       udf:
         container:
-          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
+          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/examples/mapper/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
     - name: keyed-fixed-sum
       partitions: 2
@@ -32,7 +32,7 @@ spec:
           storage:
             persistentVolumeClaim:
               volumeSize: 2Gi
-              accessMode: ReadWriteOnce
+              accessMode: ReadWriteOncePod
     - name: non-keyed-fixed-sum
       udf:
         container:
@@ -46,7 +46,7 @@ spec:
           storage:
             persistentVolumeClaim:
               volumeSize: 2Gi
-              accessMode: ReadWriteOnce
+              accessMode: ReadWriteOncePod
     - name: non-keyed-sliding-sum
       udf:
         container:
@@ -61,7 +61,7 @@ spec:
           storage:
             persistentVolumeClaim:
               volumeSize: 2Gi
-              accessMode: ReadWriteOnce
+              accessMode: ReadWriteOncePod
     - name: sink
       scale:
         min: 1

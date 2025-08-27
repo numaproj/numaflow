@@ -22,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
-	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
@@ -629,7 +628,7 @@ func hasValidSinkRetryStrategy(s dfv1.Sink) error {
 
 		// If cap is provided but interval isn't, cap must be greater than or equal to default interval value
 		if s.RetryStrategy.BackOff.Cap != nil && s.RetryStrategy.BackOff.Interval == nil {
-			if s.RetryStrategy.BackOff.Cap.Duration < v1alpha1.DefaultRetryInterval {
+			if s.RetryStrategy.BackOff.Cap.Duration < dfv1.DefaultRetryInterval {
 				return fmt.Errorf("cap in backoff strategy cannot be less than default interval value, if interval is not provided")
 			}
 		}

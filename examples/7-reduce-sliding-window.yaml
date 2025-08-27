@@ -23,7 +23,7 @@ spec:
         max: 1
       udf:
         container:
-          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
+          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/examples/mapper/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
     - name: reduce-sliding
       partitions: 2
@@ -40,7 +40,7 @@ spec:
           storage:
             persistentVolumeClaim:
               volumeSize: 10Gi
-              accessMode: ReadWriteOnce
+              accessMode: ReadWriteOncePod
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG

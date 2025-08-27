@@ -112,7 +112,7 @@ func TestGetDaemonSvcObj(t *testing.T) {
 
 func TestGetDaemonDeploy(t *testing.T) {
 	req := GetDaemonDeploymentReq{
-		ISBSvcType: ISBSvcTypeRedis,
+		ISBSvcType: ISBSvcTypeJetStream,
 		Image:      testFlowImage,
 		PullPolicy: corev1.PullIfNotPresent,
 		Env: []corev1.EnvVar{

@@ -54,10 +54,10 @@ pub struct JetStreamBufferService {
     pub node_selector: Option<::std::collections::HashMap<String, String>>,
     #[serde(rename = "persistence", skip_serializing_if = "Option::is_none")]
     pub persistence: Option<Box<crate::models::PersistenceStrategy>>,
-    /// The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
+    /// The priority value. Various system components use this field to find the priority of the pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
     #[serde(rename = "priority", skip_serializing_if = "Option::is_none")]
     pub priority: Option<i32>,
-    /// If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
+    /// If specified, indicates the pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
     #[serde(rename = "priorityClassName", skip_serializing_if = "Option::is_none")]
     pub priority_class_name: Option<String>,
     #[serde(

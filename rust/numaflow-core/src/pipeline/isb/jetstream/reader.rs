@@ -5,8 +5,7 @@ use std::time::Duration;
 
 use crate::Result;
 use crate::config::get_vertex_name;
-use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
-use crate::config::pipeline::isb_config::{CompressionType, ISBConfig};
+use crate::config::pipeline::isb::{BufferReaderConfig, CompressionType, ISBConfig, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
 use crate::metrics::{
@@ -575,21 +574,27 @@ impl JetStreamReader {
                     _ => msg.ack_with(ack_kind).await,
                 };
 
-                if result.is_err() && cancel_token.is_cancelled() {
-                    error!(
-                        ?result,
-                        ?offset,
-                        "Cancellation token received, stopping the {:?} retry loop",
-                        ack_kind
-                    );
-                    return Ok(());
-                }
-
                 result.map_err(|e| {
                     Error::Connection(format!("Failed to send {ack_kind:?} to Jetstream: {e}"))
                 })
             },
-            |_: &Error| true,
+            |e: &Error| {
+                if cancel_token.is_cancelled() {
+                    error!(
+                        ?e,
+                        ?offset,
+                        "Cancellation token received, stopping the {ack_kind:?} retry loop",
+                    );
+                    return false;
+                }
+
+                warn!(
+                    ?e,
+                    ?offset,
+                    "Failed to send {ack_kind:?} Ack to Jetstream for message, retrying...",
+                );
+                true
+            },
         )
         .await;
     }
@@ -949,7 +954,7 @@ mod tests {
 
         // Create ISB config with gzip compression
         let isb_config = ISBConfig {
-            compression: crate::config::pipeline::isb_config::Compression {
+            compression: crate::config::pipeline::isb::Compression {
                 compress_type: CompressionType::Gzip,
             },
         };
@@ -1040,7 +1045,7 @@ mod tests {
     // Unit tests for the decompress function
     mod decompress_tests {
         use super::*;
-        use crate::config::pipeline::isb_config::CompressionType;
+        use crate::config::pipeline::isb::CompressionType;
         use flate2::write::GzEncoder;
         use lz4::EncoderBuilder;
         use std::io::Write;

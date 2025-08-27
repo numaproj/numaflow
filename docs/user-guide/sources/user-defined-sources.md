@@ -10,7 +10,7 @@ You can build your own user-defined sources in multiple languages.
 
 Check the links below to see the examples for different languages.
 
-- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/sourcer/examples/simple_source/)
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/examples/sourcer/simple_source/)
 - [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/source/simple/)
 - [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/source/simple_source)
 

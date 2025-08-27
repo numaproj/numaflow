@@ -15,7 +15,7 @@ spec:
         min: 1
       udf:
         container:
-          # Split input message into an array with comma, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapstreamer/examples/flatmap_stream
+          # Split input message into an array with comma, see https://github.com/numaproj/numaflow-go/tree/main/examples/mapstreamer/flatmap_stream
           image: quay.io/numaio/numaflow-go/map-flatmap-stream:stable
           imagePullPolicy: IfNotPresent
     - name: go-udsink
@@ -24,7 +24,7 @@ spec:
       sink:
         udsink:
           container:
-            # https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/log
+            # https://github.com/numaproj/numaflow-go/tree/main/examples/sinker/log
             image: quay.io/numaio/numaflow-go/sink-log:stable
             imagePullPolicy: IfNotPresent
     - name: go-udsink-2
@@ -33,7 +33,7 @@ spec:
       sink:
         udsink:
           container:
-            # https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/log
+            # https://github.com/numaproj/numaflow-go/tree/main/examples/sinker/log
             image: quay.io/numaio/numaflow-go/sink-log:stable
             imagePullPolicy: IfNotPresent
     - name: python-split
