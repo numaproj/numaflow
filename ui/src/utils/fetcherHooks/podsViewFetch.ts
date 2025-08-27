@@ -106,7 +106,8 @@ export const usePodsViewFetch = (
               containerSpecMap,
             };
           });
-          setPods(pList);
+          setPods(pList || []); // Ensure we always set an array
+          setPodsErr(undefined); // Clear any previous errors
         } else if (json?.errMsg) {
           setPodsErr([
             {
@@ -117,6 +118,10 @@ export const usePodsViewFetch = (
               },
             },
           ]);
+        } else {
+          // No data and no error means no pods
+          setPods([]);
+          setPodsErr(undefined);
         }
       } else {
         setPodsErr([
@@ -155,7 +160,7 @@ export const usePodsViewFetch = (
   }, [pods]);
 
   // call to get pods details (metrics)
-  // to do: deprecate this and gather all metrics from pods-info
+  // TODO: deprecate this and gather all metrics from pods-info
   const fetchPodDetails = async () => {
     try {
       const response = await fetch(
