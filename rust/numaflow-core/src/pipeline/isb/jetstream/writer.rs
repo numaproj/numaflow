@@ -242,7 +242,11 @@ impl JetstreamWriter {
                     pipeline_metrics()
                         .forwarder
                         .udf_drop_total
-                        .get_or_create(pipeline_metric_labels(self.vertex_type.as_str()))
+                        .get_or_create(&pipeline_drop_metric_labels(
+                            self.vertex_type.as_str(),
+                            "n/a",
+                            "to_drop",
+                        ))
                         .inc();
                     continue;
                 }
@@ -292,8 +296,25 @@ impl JetstreamWriter {
                 }
 
                 // pafs is empty means message should not be written to any stream, so we can delete
-                // and continue
+                // and continue. The `to_drop()` case is already handled above.
+                // NOTE: PAFs can be empty during following scenarios:
+                //  1. Conditional forwarding conditions are not met.
                 if pafs.is_empty() {
+                    debug!(
+                        tags = ?message.tags,
+                        "message will be dropped because conditional forwarding rules are not met"
+                    );
+
+                    pipeline_metrics()
+                        .forwarder
+                        .udf_drop_total
+                        .get_or_create(&pipeline_drop_metric_labels(
+                            self.vertex_type.as_str(),
+                            "n/a",
+                            "forwarding-rules-not-met",
+                        ))
+                        .inc();
+
                     // delete the entry from tracker
                     self.tracker_handle
                         .delete(message.offset)
