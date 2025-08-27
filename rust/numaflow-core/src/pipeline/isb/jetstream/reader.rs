@@ -363,14 +363,16 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                 let tokens_acquired = rate_limiter
                     .acquire_n(Some(batch_size), Some(Duration::from_secs(1)))
                     .await;
-                std::cmp::min(tokens_acquired, batch_size)
+                let effective_batch_size = std::cmp::min(tokens_acquired, batch_size);
+                // return early if we don't have any tokens.
+                if effective_batch_size == 0 {
+                    return Ok(vec![]);
+                }
+
+                effective_batch_size
             }
             None => batch_size,
         };
-
-        if batch_size == 0 {
-            return Ok(vec![]);
-        }
 
         let start = Instant::now();
         let jetstream_messages = match self
