@@ -992,6 +992,8 @@ pub(crate) fn pipeline_metric_labels(vertex_type: &str) -> &'static Vec<(String,
     })
 }
 
+/// drop metric labels which can be due to buffer-full and retry strategy,
+/// or due to conditional forwarding rules not being met, or user setting "to_drop"
 pub(crate) fn pipeline_drop_metric_labels(
     vertex_type: &str,
     partition_name: &str,
