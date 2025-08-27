@@ -113,6 +113,7 @@ func updateStatusProperties(statusObj obj, filename string) obj {
 func updateSpecProperties(specObj obj, filename string) obj {
 	var specPropsObj obj
 
+	// For the "monovertices" and "vertices" CRDs, there are fields which are referenced in the subresources.scale section, so those should be defined still.
 	if strings.HasSuffix(filename, "_monovertices.yaml") || strings.HasSuffix(filename, "_vertices.yaml") {
 
 		// keep only the "replicas" field defined
