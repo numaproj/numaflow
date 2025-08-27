@@ -474,7 +474,7 @@ func TestMonoVertex_GetServiceObjs(t *testing.T) {
 		},
 	}
 
-	t.Run("verify service objects", func(t *testing.T) {
+	t.Run("verify default service objects", func(t *testing.T) {
 		services := mv.GetServiceObjs()
 		assert.Equal(t, 1, len(services), "Expected 1 service object")
 
@@ -496,6 +496,51 @@ func TestMonoVertex_GetServiceObjs(t *testing.T) {
 		for port, name := range expectedPorts {
 			assert.Equal(t, name, foundPorts[port], "Port name mismatch for port %d", port)
 		}
+	})
+
+	t.Run("verify HTTP source without service", func(t *testing.T) {
+		mvCopy := mv.DeepCopy()
+		mvCopy.Spec.Source = &Source{
+			HTTP: &HTTPSource{},
+		}
+		services := mvCopy.GetServiceObjs()
+		assert.Equal(t, 1, len(services), "Expected 1 service object (headless only)")
+		assert.Equal(t, services[0].Name, mvCopy.GetHeadlessServiceName())
+		assert.Equal(t, 2, len(services[0].Spec.Ports))
+
+		// Verify headless service ports
+		ports := map[int32]bool{
+			MonoVertexMetricsPort: false,
+			MonoVertexMonitorPort: false,
+		}
+		for _, port := range services[0].Spec.Ports {
+			ports[port.Port] = true
+		}
+		assert.True(t, ports[MonoVertexMetricsPort], "Metrics port is missing")
+		assert.True(t, ports[MonoVertexMonitorPort], "Monitor port is missing")
+		assert.Equal(t, "None", services[0].Spec.ClusterIP)
+	})
+
+	t.Run("verify HTTP source with service enabled", func(t *testing.T) {
+		mvCopy := mv.DeepCopy()
+		mvCopy.Spec.Source = &Source{
+			HTTP: &HTTPSource{
+				Service: true,
+			},
+		}
+		services := mvCopy.GetServiceObjs()
+		assert.Equal(t, 2, len(services), "Expected 2 service objects (headless + HTTP)")
+
+		// First service should be headless
+		assert.Equal(t, services[0].Name, mvCopy.GetHeadlessServiceName())
+		assert.Equal(t, "None", services[0].Spec.ClusterIP)
+
+		// Second service should be the HTTP service
+		assert.Equal(t, services[1].Name, mvCopy.Name)
+		assert.Equal(t, 1, len(services[1].Spec.Ports))
+		assert.Equal(t, VertexHTTPSPort, int(services[1].Spec.Ports[0].Port))
+		assert.Equal(t, VertexHTTPSPortName, services[1].Spec.Ports[0].Name)
+		assert.NotEqual(t, "None", services[1].Spec.ClusterIP)
 	})
 }
 
