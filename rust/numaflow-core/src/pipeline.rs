@@ -44,7 +44,7 @@ use crate::reduce::reducer::{Reducer, WindowManager};
 use crate::reduce::wal::segment::compactor::WindowKind;
 use crate::shared::create_components;
 
-use crate::shared::create_components::create_wal_components;
+use crate::reduce::wal::create_wal_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::sink::SinkWriter;
 use crate::sink::serve::ServingStore;

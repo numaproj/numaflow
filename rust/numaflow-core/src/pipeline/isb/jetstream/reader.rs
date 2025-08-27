@@ -358,7 +358,10 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
             .map_err(|e| Error::ISB(format!("Failed to acquire semaphore permit: {e}")))?;
 
         // Apply rate limiting
-        let tokens_acquired = self.rate_limiter.acquire_n(Some(batch_size), None).await;
+        let tokens_acquired = self
+            .rate_limiter
+            .acquire_n(Some(batch_size), Some(Duration::from_secs(1))) // rate-limiter refill granularity is 1 second.
+            .await;
         if tokens_acquired == 0 {
             // No tokens available, return empty batch
             return Ok(vec![]);

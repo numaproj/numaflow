@@ -12,7 +12,7 @@ pub(crate) struct RateLimitConfig {
     pub(crate) min: usize,
     /// Ramp up duration in seconds with minimum of 1 per second.
     pub(crate) ramp_up_duration: std::time::Duration,
-    pub(crate) store: Option<Box<numaflow_models::models::Store>>,
+    pub(crate) store: Option<Box<numaflow_models::models::RateLimiterStore>>,
 }
 
 impl Default for RateLimitConfig {

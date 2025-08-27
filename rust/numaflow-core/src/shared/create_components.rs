@@ -1,7 +1,6 @@
 use std::time::Duration;
 
-use crate::config::components::ratelimit::RateLimitConfig;
-use crate::config::components::reduce::{StorageConfig, UnalignedWindowType};
+use crate::config::components::reduce::UnalignedWindowType;
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
@@ -13,15 +12,11 @@ use crate::config::pipeline::{
 };
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
-use crate::reduce::pbq::WAL;
 use crate::reduce::reducer::WindowManager;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
 use crate::reduce::reducer::unaligned::user_defined::accumulator::UserDefinedAccumulator;
 use crate::reduce::reducer::unaligned::user_defined::session::UserDefinedSessionReduce;
-use crate::reduce::wal::segment::WalType;
-use crate::reduce::wal::segment::append::AppendOnlyWal;
-use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
 use crate::shared::grpc;
 use crate::shared::grpc::{create_rpc_channel, wait_until_source_ready};
 use crate::sink::serve::ServingStore;
@@ -53,8 +48,6 @@ use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use numaflow_shared::server_info::{ContainerType, Protocol, sdk_server_info};
 use numaflow_sqs::sink::SqsSinkBuilder;
-use numaflow_throttling::state::OptimisticValidityUpdateSecs;
-use numaflow_throttling::{RateLimit, TokenCalcBounds, WithDistributedState};
 use std::path::PathBuf;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
@@ -775,89 +768,6 @@ pub async fn create_edge_watermark_handle(
             Ok(Some(handle))
         }
         _ => Ok(None),
-    }
-}
-
-/// Creates rate limiter for a given store and rate limit configuration.
-pub async fn create_rate_limiter<S>(
-    rate_limit_config: &RateLimitConfig,
-    store: S,
-    cancel_token: CancellationToken,
-) -> error::Result<RateLimit<WithDistributedState<S>>>
-where
-    S: numaflow_throttling::state::Store + Send + Sync + 'static,
-{
-    let bounds = TokenCalcBounds::new(
-        rate_limit_config.max,
-        rate_limit_config.min,
-        rate_limit_config.ramp_up_duration,
-    );
-
-    let refresh_interval = Duration::from_millis(100);
-    let runway_update = OptimisticValidityUpdateSecs::default();
-
-    RateLimit::<WithDistributedState<S>>::new(
-        bounds,
-        store,
-        rate_limit_config.processor_id,
-        cancel_token,
-        refresh_interval,
-        runway_update,
-    )
-    .await
-    .map_err(|e| Error::Config(format!("Failed to create rate limiter: {}", e)))
-}
-
-/// Create WAL components for reduce operations
-///
-/// This function creates both the main WAL and GC WAL if storage is configured.
-/// The only difference between aligned and unaligned reducers is the WindowKind.
-pub(crate) async fn create_wal_components(
-    storage_config: Option<&StorageConfig>,
-    window_kind: WindowKind,
-) -> crate::Result<(Option<WAL>, Option<AppendOnlyWal>)> {
-    if let Some(storage_config) = storage_config {
-        let wal_path = storage_config.path.clone();
-
-        let append_only_wal = AppendOnlyWal::new(
-            WalType::Data,
-            wal_path.clone(),
-            storage_config.max_file_size_mb,
-            storage_config.flush_interval_ms,
-            storage_config.channel_buffer_size,
-            storage_config.max_segment_age_secs,
-        )
-        .await?;
-
-        let compactor = Compactor::new(
-            wal_path.clone(),
-            window_kind,
-            storage_config.max_file_size_mb,
-            storage_config.flush_interval_ms,
-            storage_config.channel_buffer_size,
-            storage_config.max_segment_age_secs,
-        )
-        .await?;
-
-        let gc_wal = AppendOnlyWal::new(
-            WalType::Gc,
-            wal_path,
-            storage_config.max_file_size_mb,
-            storage_config.flush_interval_ms,
-            storage_config.channel_buffer_size,
-            storage_config.max_segment_age_secs,
-        )
-        .await?;
-
-        Ok((
-            Some(WAL {
-                append_only_wal,
-                compactor,
-            }),
-            Some(gc_wal),
-        ))
-    } else {
-        Ok((None, None))
     }
 }
 

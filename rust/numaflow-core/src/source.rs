@@ -393,7 +393,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     .await
                     .expect("acquiring permit should not fail");
 
-                // Apply rate limiting before reading
+                // Apply rate limiting before reading.
+                // In source, we rate limit the `read` method invocations,
+                // and not the number of messages read. It just removes a single token per read.
+                // To throttle the number of messages read, make sure that `read_batch_size` is set to
+                // appropriate value.
                 let acquired = self
                     .rate_limiter
                     .acquire_n(Some(1), Some(Duration::from_secs(1)))
