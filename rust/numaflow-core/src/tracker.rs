@@ -11,14 +11,15 @@
 //!   - The oldest Watermark is tracked
 //!   - Callbacks for Serving is triggered in the tracker.
 
-use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
-
 use chrono::{DateTime, Utc};
 use serving::callback::CallbackHandler;
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::{mpsc, oneshot};
-use tracing::error;
+use tokio_util::sync::CancellationToken;
+use tracing::{error, info};
 
 use crate::Result;
 use crate::error::Error;
@@ -85,6 +86,8 @@ struct Tracker {
     entries: HashMap<u16, BTreeMap<Offset, TrackerEntry>>,
     receiver: mpsc::Receiver<ActorMessage>,
     serving_callback_handler: Option<CallbackHandler>,
+    processed_msg_count: Arc<AtomicUsize>,
+    cln_token: CancellationToken,
 }
 
 #[derive(Debug)]
@@ -142,6 +145,7 @@ impl Drop for Tracker {
         if total_entries > 0 {
             error!("Tracker dropped with non-empty entries: {:?}", self.entries);
         }
+        self.cln_token.cancel();
     }
 }
 
@@ -151,10 +155,25 @@ impl Tracker {
         receiver: mpsc::Receiver<ActorMessage>,
         serving_callback_handler: Option<CallbackHandler>,
     ) -> Self {
+        let processed_msg_count = Arc::new(AtomicUsize::new(0));
+        let cln_token = CancellationToken::new();
+
+        // spawn a task to log the number of processed messages every second, cln_token is used to
+        // stop the task when the tracker is dropped.
+        tokio::spawn({
+            let processed_msg_count = Arc::clone(&processed_msg_count);
+            let cln_token = cln_token.clone();
+            async move {
+                Self::log_processed_msg_count(processed_msg_count, cln_token).await;
+            }
+        });
+
         Self {
             entries: HashMap::new(),
             receiver,
             serving_callback_handler,
+            processed_msg_count,
+            cln_token,
         }
     }
 
@@ -162,6 +181,24 @@ impl Tracker {
     async fn run(mut self) {
         while let Some(message) = self.receiver.recv().await {
             self.handle_message(message).await;
+        }
+    }
+
+    /// Logs the number of processed messages every second.
+    async fn log_processed_msg_count(
+        processed_msg_count: Arc<AtomicUsize>,
+        cln_token: CancellationToken,
+    ) {
+        loop {
+            tokio::select! {
+                _ = cln_token.cancelled() => {
+                    break;
+                }
+                _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {
+                    info!("Processed {} messages in {}", processed_msg_count.load(Ordering::Relaxed), Utc::now().timestamp());
+                    processed_msg_count.store(0, Ordering::Relaxed);
+                }
+            }
         }
     }
 
@@ -365,6 +402,7 @@ impl Tracker {
         } = entry;
 
         ack_send.send(ReadAck::Ack).expect("Failed to send ack");
+        self.processed_msg_count.fetch_add(1, Ordering::Relaxed);
 
         let Some(ref callback_handler) = self.serving_callback_handler else {
             return;
