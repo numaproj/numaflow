@@ -53,7 +53,9 @@ pub async fn build_redis_rate_limiter(
     let redis_url = redis_store_config.url.clone();
     let store = RedisStore::new(
         rate_limit_config.key_prefix,
-        RedisMode::SingleUrl { url: redis_url },
+        RedisMode::SingleUrl {
+            url: redis_url.unwrap(),
+        },
     )
     .await
     .map_err(|e| error::Error::Config(format!("Failed to create Redis store: {}", e)))?;

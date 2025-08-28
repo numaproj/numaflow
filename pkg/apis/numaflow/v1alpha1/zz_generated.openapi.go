@@ -98,6 +98,8 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterInMemoryStore":         schema_pkg_apis_numaflow_v1alpha1_RateLimiterInMemoryStore(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRedisStore":            schema_pkg_apis_numaflow_v1alpha1_RateLimiterRedisStore(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterStore":                 schema_pkg_apis_numaflow_v1alpha1_RateLimiterStore(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisAuth":                        schema_pkg_apis_numaflow_v1alpha1_RedisAuth(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisSentinelConfig":              schema_pkg_apis_numaflow_v1alpha1_RedisSentinelConfig(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy":                    schema_pkg_apis_numaflow_v1alpha1_RetryStrategy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RollingUpdateStrategy":            schema_pkg_apis_numaflow_v1alpha1_RollingUpdateStrategy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL":                             schema_pkg_apis_numaflow_v1alpha1_SASL(ref),
@@ -4325,17 +4327,40 @@ func schema_pkg_apis_numaflow_v1alpha1_RateLimiterRedisStore(ref common.Referenc
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"url": {
+					"mode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "URL of the persistent store to write the rate limit data.",
+							Description: "Choose how to connect to Redis. - Single: use a single URL (redis://... or rediss://...) - Sentinel: discover the node via Redis Sentinel",
+							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
+					"url": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SINGLE MODE: Full connection URL, e.g. redis://host:6379/0 or rediss://host:port/0 Mutually exclusive with .sentinel",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"sentinel": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SENTINEL MODE: Settings to reach Sentinel and the selected Redis node Mutually exclusive with .url",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisSentinelConfig"),
+						},
+					},
+					"db": {
+						SchemaProps: spec.SchemaProps{
+							Description: "COMMON: Optional DB index (default 0)",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
-				Required: []string{"url"},
+				Required: []string{"mode"},
 			},
 		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisSentinelConfig"},
 	}
 }
 
@@ -4362,6 +4387,100 @@ func schema_pkg_apis_numaflow_v1alpha1_RateLimiterStore(ref common.ReferenceCall
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterInMemoryStore", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRedisStore"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_RedisAuth(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"username": {
+						SchemaProps: spec.SchemaProps{
+							Description: "For Redis 6+ ACLs. If Username omitted, password-only is also supported.",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+					"password": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/core/v1.SecretKeySelector"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_RedisSentinelConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"masterName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Required Sentinel \"service name\" (aka master name) from sentinel.conf",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"endpoints": {
+						SchemaProps: spec.SchemaProps{
+							Description: "At least one Sentinel endpoint; 2–3 recommended. Use host:port pairs. Example: [\"sentinel-0.redis.svc:26379\", \"sentinel-1.redis.svc:26379\"]",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"role": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Which server type to target: Master for writes, Replica for read-only scaling.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"sentinelAuth": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Auth to talk to the Sentinel daemons (control-plane). Optional.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisAuth"),
+						},
+					},
+					"redisAuth": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Auth to talk to the Redis data nodes (data-plane). Optional.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisAuth"),
+						},
+					},
+					"sentinelTLS": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TLS for Sentinel connections (if your Sentinels expose TLS).",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"),
+						},
+					},
+					"redisTLS": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TLS for Redis data nodes (redis). Often enabled even if Sentinel is plaintext.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"),
+						},
+					},
+				},
+				Required: []string{"masterName", "endpoints"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisAuth", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS"},
 	}
 }
 

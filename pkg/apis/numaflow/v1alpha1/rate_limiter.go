@@ -1,0 +1,105 @@
+package v1alpha1
+
+import (
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+type RateLimit struct {
+	// Max is the maximum TPS that this vertex can process give a distributed `Store` is configured. Otherwise, it will
+	// be the maximum TPS for a single replica.
+	// +kubebuilder:default=10
+	Max *uint64 `json:"max,omitempty" protobuf:"varint,1,opt,name=max"`
+	// Minimum TPS allowed during initial bootup. This value will be distributed across all the replicas if a distributed
+	// `Store` is configured. Otherwise, it will be the minimum TPS for a single replica.
+	// +kubebuilder:default=1
+	Min *uint64 `json:"min,omitempty" protobuf:"varint,2,opt,name=min"`
+	// RampUpDuration is the duration to reach the maximum TPS from the minimum TPS. The min unit of ramp up is 1 in
+	// 1 second.
+	// +kubebuilder:default= "1s"
+	RampUpDuration *metav1.Duration `json:"rampUpDuration,omitempty" protobuf:"bytes,3,opt,name=rampUpDuration"`
+	// Store is used to define the Distributed Store for the rate limiting. We also support in-memory store if no store
+	// is configured. This means that every replica will have its own rate limit and the actual TPS will be the sum of all
+	// the replicas.
+	// +optional
+	RateLimiterStore *RateLimiterStore `json:"store,omitempty" protobuf:"bytes,4,opt,name=store"`
+}
+
+type RateLimiterStore struct {
+	// RedisStore is used to define the redis store for the rate limit.
+	// +optional
+	RateLimiterRedisStore *RateLimiterRedisStore `json:"redisStore,omitempty" protobuf:"bytes,1,opt,name=redisStore"`
+	// InMemoryStore is used to define the in-memory store for the rate limit.
+	// +optional
+	RateLimiterInMemoryStore *RateLimiterInMemoryStore `json:"inMemoryStore,omitempty" protobuf:"bytes,2,opt,name=inMemoryStore"`
+}
+
+type RateLimiterInMemoryStore struct{}
+
+type RateLimiterRedisStore struct {
+	// Choose how to connect to Redis.
+	// - Single: use a single URL (redis://... or rediss://...)
+	// - Sentinel: discover the node via Redis Sentinel
+	// +kubebuilder:validation:Enum=Single;Sentinel
+	Mode string `json:"mode" protobuf:"bytes,1,opt,name=mode"`
+
+	// SINGLE MODE: Full connection URL, e.g. redis://host:6379/0 or rediss://host:port/0
+	// Mutually exclusive with .sentinel
+	// +optional
+	URL *string `json:"url,omitempty" protobuf:"bytes,2,opt,name=url"`
+
+	// SENTINEL MODE: Settings to reach Sentinel and the selected Redis node
+	// Mutually exclusive with .url
+	// +optional
+	Sentinel *RedisSentinelConfig `json:"sentinel,omitempty" protobuf:"bytes,3,opt,name=sentinel"`
+
+	// COMMON: Optional DB index (default 0)
+	// +optional
+	// +kubebuilder:default=0
+	DB *int32 `json:"db,omitempty" protobuf:"varint,4,opt,name=db"`
+}
+
+// Enforce shape with CEL: if Mode == "Single" then URL required and Sentinel must be null;
+// if Mode == "Sentinel" then Sentinel required and URL must be null.
+// +kubebuilder:validation:XValidation:rule="self.mode == 'Single' ? has(self.url) && !has(self.sentinel) : true",message="mode=Single requires .url and forbids .sentinel"
+// +kubebuilder:validation:XValidation:rule="self.mode == 'Sentinel' ? has(self.sentinel) && !has(self.url) : true",message="mode=Sentinel requires .sentinel and forbids .url"
+
+type RedisSentinelConfig struct {
+	// Required Sentinel "service name" (aka master name) from sentinel.conf
+	// +kubebuilder:validation:MinLength=1
+	MasterName string `json:"masterName" protobuf:"bytes,1,opt,name=masterName"`
+
+	// At least one Sentinel endpoint; 2–3 recommended. Use host:port pairs.
+	// Example: ["sentinel-0.redis.svc:26379", "sentinel-1.redis.svc:26379"]
+	// +kubebuilder:validation:MinItems=1
+	Endpoints []string `json:"endpoints" protobuf:"bytes,2,rep,name=endpoints"`
+
+	// Which server type to target: Master for writes, Replica for read-only scaling.
+	// +kubebuilder:default=Master
+	// +kubebuilder:validation:Enum=Master;Replica
+	Role string `json:"role,omitempty" protobuf:"bytes,3,opt,name=role"`
+
+	// Auth to talk to the Sentinel daemons (control-plane). Optional.
+	// +optional
+	SentinelAuth *RedisAuth `json:"sentinelAuth,omitempty" protobuf:"bytes,4,opt,name=sentinelAuth"`
+
+	// Auth to talk to the Redis data nodes (data-plane). Optional.
+	// +optional
+	RedisAuth *RedisAuth `json:"redisAuth,omitempty" protobuf:"bytes,5,opt,name=redisAuth"`
+
+	// TLS for Sentinel connections (if your Sentinels expose TLS).
+	// +optional
+	SentinelTLS *TLS `json:"sentinelTLS,omitempty" protobuf:"bytes,6,opt,name=sentinelTLS"`
+
+	// TLS for Redis data nodes (redis). Often enabled even if Sentinel is plaintext.
+	// +optional
+	RedisTLS *TLS `json:"redisTLS,omitempty" protobuf:"bytes,7,opt,name=redisTLS"`
+}
+
+type RedisAuth struct {
+	// For Redis 6+ ACLs. If Username omitted, password-only is also supported.
+	// +optional
+	Username *corev1.SecretKeySelector `json:"username,omitempty" protobuf:"bytes,1,opt,name=username"`
+	// +optional
+	Password *corev1.SecretKeySelector `json:"password,omitempty" protobuf:"bytes,2,opt,name=password"`
+}

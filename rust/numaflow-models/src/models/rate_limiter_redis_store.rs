@@ -18,13 +18,26 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RateLimiterRedisStore {
-    /// URL of the persistent store to write the rate limit data.
-    #[serde(rename = "url")]
-    pub url: String,
+    /// COMMON: Optional DB index (default 0)
+    #[serde(rename = "db", skip_serializing_if = "Option::is_none")]
+    pub db: Option<i32>,
+    /// Choose how to connect to Redis. - Single: use a single URL (redis://... or rediss://...) - Sentinel: discover the node via Redis Sentinel
+    #[serde(rename = "mode")]
+    pub mode: String,
+    #[serde(rename = "sentinel", skip_serializing_if = "Option::is_none")]
+    pub sentinel: Option<Box<crate::models::RedisSentinelConfig>>,
+    /// SINGLE MODE: Full connection URL, e.g. redis://host:6379/0 or rediss://host:port/0 Mutually exclusive with .sentinel
+    #[serde(rename = "url", skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
 }
 
 impl RateLimiterRedisStore {
-    pub fn new(url: String) -> RateLimiterRedisStore {
-        RateLimiterRedisStore { url }
+    pub fn new(mode: String) -> RateLimiterRedisStore {
+        RateLimiterRedisStore {
+            db: None,
+            mode,
+            sentinel: None,
+            url: None,
+        }
     }
 }
