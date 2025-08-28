@@ -710,9 +710,9 @@ func Test_copyVertexLimits(t *testing.T) {
 		copyVertexLimits(pl, v)
 		assert.NotNil(t, v.Limits.RateLimit)
 		assert.Equal(t, vertexMaxTPS, *v.Limits.RateLimit.Max)
-		assert.Equal(t, pipelineMinTPS, *v.Limits.RateLimit.Min) // Should inherit from pipeline
+		assert.Equal(t, pipelineMinTPS, *v.Limits.RateLimit.Min)                    // Should inherit from pipeline
 		assert.Equal(t, 30*time.Second, v.Limits.RateLimit.RampUpDuration.Duration) // Should inherit from pipeline
-		assert.NotNil(t, v.Limits.RateLimit.RateLimiterStore) // Should inherit from pipeline
+		assert.NotNil(t, v.Limits.RateLimit.RateLimiterStore)                       // Should inherit from pipeline
 		assert.Equal(t, redisURL, *v.Limits.RateLimit.RateLimiterStore.RateLimiterRedisStore.URL)
 	})
 

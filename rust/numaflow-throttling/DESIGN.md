@@ -17,7 +17,9 @@ level.
 * `to_drop` need not (optional) affect the throttle limit (rationale: to_drop might not hit the critical resource)
 * Throughput should not be affected if DT is not enabled
 * Should support external store (e.g., Redis, etc.)
-* Users might combine DT with libraries like [bucket4j](https://github.com/bucket4j/bucket4j), [pyratelimiter](https://pyratelimiter.readthedocs.io/en/latest/), etc.
+* Users might combine DT with libraries
+  like [bucket4j](https://github.com/bucket4j/bucket4j), [pyratelimiter](https://pyratelimiter.readthedocs.io/en/latest/),
+  etc.
 * Avoid querying external store for every message (use background task).
 * Optionally remove external store (use pod count to throttle)
 
@@ -36,12 +38,14 @@ level.
 ## Open Issues
 
 * What should happen if the external store is unavailable?
-* How to distribute the initial burst tokens?
 
 ## Closed Issues
 
 * Use Background thread to update the current token which is dependent on the pool-size
 * Total tokens are distributed across all the pods in the vertex, to detect dead pods, we use stale heartbeats
+* The initial tokens are evenly distributed across all the pods in the vertex by dividing it by the pool-size. This will
+  not cause any issues because for a new pod to join, it has to wait for the pool-size to be agreed upon. By that time
+  all the consumers will be using the new pool-size.
 
 # Design Details
 
@@ -53,8 +57,8 @@ To achieve high TPS, during happy path the decisions are made locally and all th
 * Local store (using pool-size) will have enough information to decide if the request should be throttled or not.
 * Local store if not updated by the background thread will be considered as unavailable and will be forced to query the
   external store. This should not happen during happy path.
-* Background thread will update the local store (from the external store) every X ms and there will be at least Y seconds
-* worth of data in the local store.
+* Background thread will update the local store (from the external store) every X ms and there will be at least Y
+  seconds worth of data in the local store.
 
 ### Consensus on Active Candidates (consumers of tokens)
 
@@ -88,4 +92,30 @@ size), while automatically removing any processors that have gone silent.
 
 The reason for sending the fake pool size is to be on the conservative side but wants everyone to make progress and
 AGREE.
- 
+
+#### Consensus Flow
+
+```mermaid
+flowchart TD
+    A[New Processor Starts] --> B[Register with Store]
+    B --> C[Report Initial Pool Size]
+    C --> D[Store Updates]
+    D --> E[Update Heartbeat Timestamp]
+    E --> F[Update Reported Pool Size]
+    F --> G[Clean Up Stale Processors]
+    G --> H[Remove processors with<br/>heartbeat > X seconds old]
+    H --> I[Check for Agreement]
+    I --> J{All active processors<br/>report same pool size?}
+    J -->|Yes| K{Pool size ==<br/>active count?}
+    J -->|No| L[Return DISAGREE<br/>with max reported size]
+    K -->|Yes| M[Return AGREE<br/>with consensus value]
+    K -->|No| L
+    M --> N[Consumer: Use agreed pool size]
+    L --> O{Current pool size<br/>vs reported size}
+    O -->|Smaller| P[Use larger pool size<br/>Report smaller size back]
+    O -->|Larger| P
+    P --> Q[Continue processing]
+    N --> Q
+    Q --> R[Wait for next sync cycle]
+    R --> C
+```
