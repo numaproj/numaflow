@@ -2,13 +2,15 @@
 
 use crate::config::components::ratelimit::RateLimitConfig;
 use crate::error::Error;
+use crate::shared::create_components::get_secret_from_volume;
 use crate::{Result, error};
 use numaflow_throttling::state::OptimisticValidityUpdateSecs;
 use numaflow_throttling::state::store::in_memory_store::InMemoryStore;
-use numaflow_throttling::state::store::redis_store::{RedisMode, RedisStore};
+use numaflow_throttling::state::store::redis_store::{RedisAuth, RedisMode, RedisStore};
 use numaflow_throttling::{
     NoOpRateLimiter, RateLimit, RateLimiter, TokenCalcBounds, WithDistributedState,
 };
+use redis::TlsMode;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
@@ -49,16 +51,12 @@ pub async fn build_redis_rate_limiter(
         .and_then(|s| s.redis_store.as_ref())
         .ok_or_else(|| error::Error::Config("Redis store config is required".to_string()))?;
 
-    // Create Redis store with the configured URL
-    let redis_url = redis_store_config.url.clone();
-    let store = RedisStore::new(
-        rate_limit_config.key_prefix,
-        RedisMode::SingleUrl {
-            url: redis_url.unwrap(),
-        },
-    )
-    .await
-    .map_err(|e| error::Error::Config(format!("Failed to create Redis store: {}", e)))?;
+    // Create Redis mode based on configuration
+    let redis_mode = create_redis_mode(redis_store_config)?;
+
+    let store = RedisStore::new(rate_limit_config.key_prefix, redis_mode)
+        .await
+        .map_err(|e| error::Error::Config(format!("Failed to create Redis store: {}", e)))?;
 
     let limiter = create_rate_limiter(rate_limit_config, store, cln_token).await?;
     Ok(limiter)
@@ -134,4 +132,92 @@ where
     )
     .await
     .map_err(|e| Error::Config(format!("Failed to create rate limiter: {}", e)))
+}
+
+/// Create RedisMode from the rate limiter Redis store configuration using builder pattern
+fn create_redis_mode(
+    redis_store_config: &numaflow_models::models::RateLimiterRedisStore,
+) -> Result<RedisMode> {
+    match redis_store_config.mode.as_str() {
+        "single" => {
+            let url = redis_store_config
+                .url
+                .as_ref()
+                .ok_or_else(|| Error::Config("URL is required for Single mode".to_string()))?
+                .clone();
+
+            let mut builder = RedisMode::single_url(url);
+
+            if let Some(db) = redis_store_config.db {
+                builder = builder.db(db);
+            }
+
+            builder
+                .build()
+                .map_err(|e| Error::Config(format!("Failed to create Single Redis mode: {}", e)))
+        }
+        "sentinel" => {
+            let sentinel_config = redis_store_config.sentinel.as_ref().ok_or_else(|| {
+                Error::Config("Sentinel config is required for Sentinel mode".to_string())
+            })?;
+
+            let mut builder = RedisMode::sentinel(
+                sentinel_config.master_name.clone(),
+                sentinel_config.endpoints.clone(),
+            );
+
+            if let Some(role) = &sentinel_config.role {
+                builder = builder.role(role.clone());
+            }
+
+            if let Some(sentinel_auth) = &sentinel_config.sentinel_auth {
+                let auth = parse_redis_auth(sentinel_auth.as_ref())?;
+                builder = builder.sentinel_auth(auth);
+            }
+
+            if let Some(redis_auth) = &sentinel_config.redis_auth {
+                let auth = parse_redis_auth(redis_auth.as_ref())?;
+                builder = builder.redis_auth(auth);
+            }
+
+            if sentinel_config.sentinel_tls.is_some() {
+                builder = builder.sentinel_tls(TlsMode::Secure);
+            }
+
+            if sentinel_config.redis_tls.is_some() {
+                builder = builder.redis_tls(TlsMode::Secure);
+            }
+
+            if let Some(db) = redis_store_config.db {
+                builder = builder.db(db);
+            }
+
+            builder
+                .build()
+                .map_err(|e| Error::Config(format!("Failed to create Sentinel Redis mode: {}", e)))
+        }
+        _ => Err(Error::Config(format!(
+            "Unsupported Redis mode: {}",
+            redis_store_config.mode
+        ))),
+    }
+}
+
+/// Parse Redis authentication from the CRD model
+fn parse_redis_auth(auth: &numaflow_models::models::RedisAuth) -> Result<RedisAuth> {
+    let username = auth
+        .username
+        .as_ref()
+        .map(|secret_ref| get_secret_from_volume(&secret_ref.name, &secret_ref.key))
+        .transpose()
+        .map_err(|e| Error::Config(format!("Failed to get username secret: {}", e)))?;
+
+    let password = auth
+        .password
+        .as_ref()
+        .map(|secret_ref| get_secret_from_volume(&secret_ref.name, &secret_ref.key))
+        .transpose()
+        .map_err(|e| Error::Config(format!("Failed to get password secret: {}", e)))?;
+
+    Ok(RedisAuth { username, password })
 }

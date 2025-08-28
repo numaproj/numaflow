@@ -1,7 +1,8 @@
 use crate::state::Consensus;
 use crate::state::store::Store;
-use redis::sentinel::{SentinelClient, SentinelNodeConnectionInfo, SentinelServerType};
-use redis::{Client, RedisError, Script};
+use redis::TlsMode;
+use redis::sentinel::{SentinelClientBuilder, SentinelServerType};
+use redis::{Client, ConnectionAddr, IntoConnectionInfo, RedisError, Script};
 use tokio_util::sync::CancellationToken;
 
 // Embed Lua scripts at compile time
@@ -23,12 +24,134 @@ pub struct RedisStore {
 pub enum RedisMode {
     SingleUrl {
         url: String,
+        db: Option<i32>,
     },
     Sentinel {
-        sentinel_urls: Vec<String>,
         master_name: String,
-        sentinel_conn_info: Option<SentinelNodeConnectionInfo>,
+        endpoints: Vec<String>,
+        role: Option<String>,
+        sentinel_auth: Option<RedisAuth>,
+        redis_auth: Option<RedisAuth>,
+        sentinel_tls: Option<TlsMode>,
+        redis_tls: Option<TlsMode>,
+        db: Option<i32>,
     },
+}
+
+#[derive(Clone, Debug)]
+pub struct RedisAuth {
+    pub username: Option<String>,
+    pub password: Option<String>,
+}
+
+impl RedisMode {
+    /// Create a builder for Single URL mode with mandatory URL
+    pub fn single_url(url: String) -> SingleUrlBuilder {
+        SingleUrlBuilder::new(url)
+    }
+
+    /// Create a builder for Sentinel mode with mandatory master name and endpoints
+    pub fn sentinel(master_name: String, endpoints: Vec<String>) -> SentinelBuilder {
+        SentinelBuilder::new(master_name, endpoints)
+    }
+}
+
+/// Builder for Single URL Redis mode
+pub struct SingleUrlBuilder {
+    url: String,
+    db: Option<i32>,
+}
+
+impl SingleUrlBuilder {
+    fn new(url: String) -> Self {
+        Self { url, db: None }
+    }
+
+    pub fn db(mut self, db: i32) -> Self {
+        self.db = Some(db);
+        self
+    }
+
+    pub fn build(self) -> Result<RedisMode, String> {
+        Ok(RedisMode::SingleUrl {
+            url: self.url,
+            db: self.db,
+        })
+    }
+}
+
+/// Builder for Sentinel Redis mode
+pub struct SentinelBuilder {
+    master_name: String,
+    endpoints: Vec<String>,
+    role: Option<String>,
+    sentinel_auth: Option<RedisAuth>,
+    redis_auth: Option<RedisAuth>,
+    sentinel_tls: Option<TlsMode>,
+    redis_tls: Option<TlsMode>,
+    db: Option<i32>,
+}
+
+impl SentinelBuilder {
+    fn new(master_name: String, endpoints: Vec<String>) -> Self {
+        Self {
+            master_name,
+            endpoints,
+            role: None,
+            sentinel_auth: None,
+            redis_auth: None,
+            sentinel_tls: None,
+            redis_tls: None,
+            db: None,
+        }
+    }
+
+    pub fn role(mut self, role: String) -> Self {
+        self.role = Some(role);
+        self
+    }
+
+    pub fn sentinel_auth(mut self, auth: RedisAuth) -> Self {
+        self.sentinel_auth = Some(auth);
+        self
+    }
+
+    pub fn redis_auth(mut self, auth: RedisAuth) -> Self {
+        self.redis_auth = Some(auth);
+        self
+    }
+
+    pub fn sentinel_tls(mut self, tls_mode: TlsMode) -> Self {
+        self.sentinel_tls = Some(tls_mode);
+        self
+    }
+
+    pub fn redis_tls(mut self, tls_mode: TlsMode) -> Self {
+        self.redis_tls = Some(tls_mode);
+        self
+    }
+
+    pub fn db(mut self, db: i32) -> Self {
+        self.db = Some(db);
+        self
+    }
+
+    pub fn build(self) -> Result<RedisMode, String> {
+        if self.endpoints.is_empty() {
+            return Err("At least one endpoint is required for Sentinel mode".to_string());
+        }
+
+        Ok(RedisMode::Sentinel {
+            master_name: self.master_name,
+            endpoints: self.endpoints,
+            role: self.role,
+            sentinel_auth: self.sentinel_auth,
+            redis_auth: self.redis_auth,
+            sentinel_tls: self.sentinel_tls,
+            redis_tls: self.redis_tls,
+            db: self.db,
+        })
+    }
 }
 
 impl RedisStore {
@@ -63,29 +186,91 @@ impl RedisStore {
     /// Connect via redis-rs using async and ConnectionManager.
     async fn make_client(mode: RedisMode) -> Result<redis::aio::ConnectionManager, RedisError> {
         match mode {
-            RedisMode::SingleUrl { url } => {
-                // Plain single-instance
-                let client = Client::open(url.as_str())?;
+            RedisMode::SingleUrl { url, db } => {
+                // Parse the URL and modify the DB if specified
+                let mut connection_info = url.into_connection_info()?;
+                if let Some(db_index) = db {
+                    connection_info.redis.db = db_index as i64;
+                }
+
+                let client = Client::open(connection_info)?;
                 let mgr = client.get_connection_manager().await?;
                 Ok(mgr)
             }
             RedisMode::Sentinel {
-                sentinel_urls,
                 master_name,
-                sentinel_conn_info: sentinel_auth,
+                endpoints,
+                role,
+                sentinel_auth,
+                redis_auth,
+                sentinel_tls,
+                redis_tls,
+                db,
             } => {
-                // Build SentinelClient: wraps sentinel discovery and connection
-                let mut sentinel_client = SentinelClient::build(
-                    sentinel_urls.clone(),
-                    master_name.clone(),
-                    sentinel_auth,
-                    SentinelServerType::Master,
-                )?;
+                // Determine server type
+                let server_type = match role.as_deref() {
+                    Some("Replica") => SentinelServerType::Replica,
+                    _ => SentinelServerType::Master, // Default to Master
+                };
 
-                // Get a Client to the master
-                let master_client = sentinel_client.async_get_client().await?;
+                // Convert string endpoints to ConnectionAddr
+                let sentinel_addrs: Result<Vec<ConnectionAddr>, _> = endpoints
+                    .iter()
+                    .map(|endpoint| {
+                        endpoint
+                            .as_str()
+                            .into_connection_info()
+                            .map(|info| info.addr)
+                    })
+                    .collect();
+                let sentinel_addrs = sentinel_addrs?;
 
-                let mgr = master_client.get_connection_manager().await?;
+                // Build SentinelClient using builder pattern
+                let mut builder =
+                    SentinelClientBuilder::new(sentinel_addrs, master_name, server_type)?;
+
+                // Apply sentinel authentication if provided
+                if let Some(auth) = sentinel_auth {
+                    if let Some(username) = auth.username {
+                        builder = builder.set_client_to_sentinel_username(username);
+                    }
+                    if let Some(password) = auth.password {
+                        builder = builder.set_client_to_sentinel_password(password);
+                    }
+                }
+
+                // Apply sentinel TLS if provided
+                if let Some(tls_mode) = sentinel_tls {
+                    builder = builder.set_client_to_sentinel_tls_mode(tls_mode);
+                }
+
+                // Apply Redis data node authentication if provided
+                if let Some(auth) = redis_auth {
+                    if let Some(username) = auth.username {
+                        builder = builder.set_client_to_redis_username(username);
+                    }
+                    if let Some(password) = auth.password {
+                        builder = builder.set_client_to_redis_password(password);
+                    }
+                }
+
+                // Apply Redis data node TLS if provided
+                if let Some(tls_mode) = redis_tls {
+                    builder = builder.set_client_to_redis_tls_mode(tls_mode);
+                }
+
+                // Apply database selection if provided
+                if let Some(db_index) = db {
+                    builder = builder.set_client_to_redis_db(db_index as i64);
+                }
+
+                // Build the sentinel client
+                let mut sentinel_client = builder.build()?;
+
+                // Get a Client to the target server
+                let target_client = sentinel_client.async_get_client().await?;
+
+                let mgr = target_client.get_connection_manager().await?;
                 Ok(mgr)
             }
         }
@@ -218,6 +403,87 @@ impl Store for RedisStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_redis_mode_single_url_builder() {
+        let redis_mode = RedisMode::single_url("redis://localhost:6379".to_string())
+            .db(1)
+            .build()
+            .unwrap();
+
+        match redis_mode {
+            RedisMode::SingleUrl { url, db } => {
+                assert_eq!(url, "redis://localhost:6379");
+                assert_eq!(db, Some(1));
+            }
+            _ => panic!("Expected SingleUrl mode"),
+        }
+    }
+
+    #[test]
+    fn test_redis_mode_sentinel_builder() {
+        let redis_mode = RedisMode::sentinel(
+            "mymaster".to_string(),
+            vec!["sentinel1:26379".to_string(), "sentinel2:26379".to_string()],
+        )
+        .role("Master".to_string())
+        .db(2)
+        .build()
+        .unwrap();
+
+        match redis_mode {
+            RedisMode::Sentinel {
+                master_name,
+                endpoints,
+                role,
+                db,
+                ..
+            } => {
+                assert_eq!(master_name, "mymaster");
+                assert_eq!(endpoints, vec!["sentinel1:26379", "sentinel2:26379"]);
+                assert_eq!(role, Some("Master".to_string()));
+                assert_eq!(db, Some(2));
+            }
+            _ => panic!("Expected Sentinel mode"),
+        }
+    }
+
+    #[test]
+    fn test_redis_mode_sentinel_builder_with_auth() {
+        let sentinel_auth = RedisAuth {
+            username: Some("sentinel_user".to_string()),
+            password: Some("sentinel_pass".to_string()),
+        };
+
+        let redis_auth = RedisAuth {
+            username: Some("redis_user".to_string()),
+            password: Some("redis_pass".to_string()),
+        };
+
+        let redis_mode =
+            RedisMode::sentinel("mymaster".to_string(), vec!["sentinel1:26379".to_string()])
+                .sentinel_auth(sentinel_auth.clone())
+                .redis_auth(redis_auth.clone())
+                .sentinel_tls(TlsMode::Secure)
+                .build()
+                .unwrap();
+
+        match redis_mode {
+            RedisMode::Sentinel {
+                master_name,
+                sentinel_auth: s_auth,
+                redis_auth: r_auth,
+                sentinel_tls,
+                ..
+            } => {
+                assert_eq!(master_name, "mymaster");
+                assert_eq!(s_auth.unwrap().username, Some("sentinel_user".to_string()));
+                assert_eq!(r_auth.unwrap().username, Some("redis_user".to_string()));
+                assert!(sentinel_tls.is_some()); // Just check that TLS is configured
+            }
+            _ => panic!("Expected Sentinel mode"),
+        }
+    }
 
     #[test]
     fn test_script_constants_are_valid() {

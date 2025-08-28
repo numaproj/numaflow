@@ -4097,8 +4097,8 @@ spec:
                                 type: integer
                               mode:
                                 enum:
-                                - Single
-                                - Sentinel
+                                - single
+                                - sentinel
                                 type: string
                               sentinel:
                                 properties:
@@ -4184,10 +4184,10 @@ spec:
                                         x-kubernetes-map-type: atomic
                                     type: object
                                   role:
-                                    default: Master
+                                    default: master
                                     enum:
-                                    - Master
-                                    - Replica
+                                    - master
+                                    - replica
                                     type: string
                                   sentinelAuth:
                                     properties:
@@ -8776,8 +8776,8 @@ spec:
                                 type: integer
                               mode:
                                 enum:
-                                - Single
-                                - Sentinel
+                                - single
+                                - sentinel
                                 type: string
                               sentinel:
                                 properties:
@@ -8863,10 +8863,10 @@ spec:
                                         x-kubernetes-map-type: atomic
                                     type: object
                                   role:
-                                    default: Master
+                                    default: master
                                     enum:
-                                    - Master
-                                    - Replica
+                                    - master
+                                    - replica
                                     type: string
                                   sentinelAuth:
                                     properties:
@@ -15838,8 +15838,8 @@ spec:
                                       type: integer
                                     mode:
                                       enum:
-                                      - Single
-                                      - Sentinel
+                                      - single
+                                      - sentinel
                                       type: string
                                     sentinel:
                                       properties:
@@ -15925,10 +15925,10 @@ spec:
                                               x-kubernetes-map-type: atomic
                                           type: object
                                         role:
-                                          default: Master
+                                          default: master
                                           enum:
-                                          - Master
-                                          - Replica
+                                          - master
+                                          - replica
                                           type: string
                                         sentinelAuth:
                                           properties:
@@ -21115,8 +21115,8 @@ spec:
                                     type: integer
                                   mode:
                                     enum:
-                                    - Single
-                                    - Sentinel
+                                    - single
+                                    - sentinel
                                     type: string
                                   sentinel:
                                     properties:
@@ -21202,10 +21202,10 @@ spec:
                                             x-kubernetes-map-type: atomic
                                         type: object
                                       role:
-                                        default: Master
+                                        default: master
                                         enum:
-                                        - Master
-                                        - Replica
+                                        - master
+                                        - replica
                                         type: string
                                       sentinelAuth:
                                         properties:
@@ -28178,8 +28178,8 @@ spec:
                                           type: integer
                                         mode:
                                           enum:
-                                          - Single
-                                          - Sentinel
+                                          - single
+                                          - sentinel
                                           type: string
                                         sentinel:
                                           properties:
@@ -28265,10 +28265,10 @@ spec:
                                                   x-kubernetes-map-type: atomic
                                               type: object
                                             role:
-                                              default: Master
+                                              default: master
                                               enum:
-                                              - Master
-                                              - Replica
+                                              - master
+                                              - replica
                                               type: string
                                             sentinelAuth:
                                               properties:
@@ -35271,8 +35271,8 @@ spec:
                                       type: integer
                                     mode:
                                       enum:
-                                      - Single
-                                      - Sentinel
+                                      - single
+                                      - sentinel
                                       type: string
                                     sentinel:
                                       properties:
@@ -35358,10 +35358,10 @@ spec:
                                               x-kubernetes-map-type: atomic
                                           type: object
                                         role:
-                                          default: Master
+                                          default: master
                                           enum:
-                                          - Master
-                                          - Replica
+                                          - master
+                                          - replica
                                           type: string
                                         sentinelAuth:
                                           properties:
@@ -35507,8 +35507,8 @@ spec:
                                       type: integer
                                     mode:
                                       enum:
-                                      - Single
-                                      - Sentinel
+                                      - single
+                                      - sentinel
                                       type: string
                                     sentinel:
                                       properties:
@@ -35594,10 +35594,10 @@ spec:
                                               x-kubernetes-map-type: atomic
                                           type: object
                                         role:
-                                          default: Master
+                                          default: master
                                           enum:
-                                          - Master
-                                          - Replica
+                                          - master
+                                          - replica
                                           type: string
                                         sentinelAuth:
                                           properties:
@@ -36693,8 +36693,8 @@ spec:
                                 type: integer
                               mode:
                                 enum:
-                                - Single
-                                - Sentinel
+                                - single
+                                - sentinel
                                 type: string
                               sentinel:
                                 properties:
@@ -36780,10 +36780,10 @@ spec:
                                         x-kubernetes-map-type: atomic
                                     type: object
                                   role:
-                                    default: Master
+                                    default: master
                                     enum:
-                                    - Master
-                                    - Replica
+                                    - master
+                                    - replica
                                     type: string
                                   sentinelAuth:
                                     properties:
@@ -40589,8 +40589,8 @@ spec:
                                       type: integer
                                     mode:
                                       enum:
-                                      - Single
-                                      - Sentinel
+                                      - single
+                                      - sentinel
                                       type: string
                                     sentinel:
                                       properties:
@@ -40676,10 +40676,10 @@ spec:
                                               x-kubernetes-map-type: atomic
                                           type: object
                                         role:
-                                          default: Master
+                                          default: master
                                           enum:
-                                          - Master
-                                          - Replica
+                                          - master
+                                          - replica
                                           type: string
                                         sentinelAuth:
                                           properties:
@@ -40825,8 +40825,8 @@ spec:
                                       type: integer
                                     mode:
                                       enum:
-                                      - Single
-                                      - Sentinel
+                                      - single
+                                      - sentinel
                                       type: string
                                     sentinel:
                                       properties:
@@ -40912,10 +40912,10 @@ spec:
                                               x-kubernetes-map-type: atomic
                                           type: object
                                         role:
-                                          default: Master
+                                          default: master
                                           enum:
-                                          - Master
-                                          - Replica
+                                          - master
+                                          - replica
                                           type: string
                                         sentinelAuth:
                                           properties:

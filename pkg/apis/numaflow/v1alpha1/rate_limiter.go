@@ -40,7 +40,7 @@ type RateLimiterRedisStore struct {
 	// Choose how to connect to Redis.
 	// - Single: use a single URL (redis://... or rediss://...)
 	// - Sentinel: discover the node via Redis Sentinel
-	// +kubebuilder:validation:Enum=Single;Sentinel
+	// +kubebuilder:validation:Enum=single;sentinel
 	Mode string `json:"mode" protobuf:"bytes,1,opt,name=mode"`
 
 	// SINGLE MODE: Full connection URL, e.g. redis://host:6379/0 or rediss://host:port/0
@@ -75,8 +75,8 @@ type RedisSentinelConfig struct {
 	Endpoints []string `json:"endpoints" protobuf:"bytes,2,rep,name=endpoints"`
 
 	// Which server type to target: Master for writes, Replica for read-only scaling.
-	// +kubebuilder:default=Master
-	// +kubebuilder:validation:Enum=Master;Replica
+	// +kubebuilder:default=master
+	// +kubebuilder:validation:Enum=master;replica
 	Role string `json:"role,omitempty" protobuf:"bytes,3,opt,name=role"`
 
 	// Auth to talk to the Sentinel daemons (control-plane). Optional.

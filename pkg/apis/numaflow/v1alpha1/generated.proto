@@ -1406,7 +1406,7 @@ message RateLimiterRedisStore {
   // Choose how to connect to Redis.
   // - Single: use a single URL (redis://... or rediss://...)
   // - Sentinel: discover the node via Redis Sentinel
-  // +kubebuilder:validation:Enum=Single;Sentinel
+  // +kubebuilder:validation:Enum=single;sentinel
   optional string mode = 1;
 
   // SINGLE MODE: Full connection URL, e.g. redis://host:6379/0 or rediss://host:port/0
@@ -1455,8 +1455,8 @@ message RedisSentinelConfig {
   repeated string endpoints = 2;
 
   // Which server type to target: Master for writes, Replica for read-only scaling.
-  // +kubebuilder:default=Master
-  // +kubebuilder:validation:Enum=Master;Replica
+  // +kubebuilder:default=master
+  // +kubebuilder:validation:Enum=master;replica
   optional string role = 3;
 
   // Auth to talk to the Sentinel daemons (control-plane). Optional.
