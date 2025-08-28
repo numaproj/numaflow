@@ -8844,6 +8844,26 @@ Read timeout duration from the source.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>rateLimit</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimit"> RateLimit </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+RateLimit is used to define the rate limit for the mono vertex.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -10342,6 +10362,27 @@ the vertex’s limit settings
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>rateLimit</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimit"> RateLimit </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+RateLimit is used to define the rate limit for all the vertices in the
+pipeline, it could be overridden by the vertex’s limit settings.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -11433,6 +11474,292 @@ limit is crossed, futher read requests will return empty list.
 <p>
 
 Auth information
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.RateLimit">
+
+RateLimit
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexLimits">MonoVertexLimits</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineLimits">PipelineLimits</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.VertexLimits">VertexLimits</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>max</code></br> <em> uint64 </em>
+</td>
+
+<td>
+
+<p>
+
+Max is the maximum TPS that this vertex can process give a distributed
+<code>Store</code> is configured. Otherwise, it will be the maximum TPS
+for a single replica.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>min</code></br> <em> uint64 </em>
+</td>
+
+<td>
+
+<p>
+
+Minimum TPS allowed during initial bootup. This value will be
+distributed across all the replicas if a distributed <code>Store</code>
+is configured. Otherwise, it will be the minimum TPS for a single
+replica.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>rampUpDuration</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+
+<td>
+
+<p>
+
+RampUpDuration is the duration to reach the maximum TPS from the minimum
+TPS. The min unit of ramp up is 1 in 1 second.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>store</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterStore">
+RateLimiterStore </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Store is used to define the Distributed Store for the rate limiting. We
+also support in-memory store if no store is configured. This means that
+every replica will have its own rate limit and the actual TPS will be
+the sum of all the replicas.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.RateLimiterInMemoryStore">
+
+RateLimiterInMemoryStore
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterStore">RateLimiterStore</a>)
+</p>
+
+<p>
+
+</p>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.RateLimiterRedisStore">
+
+RateLimiterRedisStore
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterStore">RateLimiterStore</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>url</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+URL of the persistent store to write the rate limit data.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.RateLimiterStore">
+
+RateLimiterStore
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimit">RateLimit</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>redisStore</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterRedisStore">
+RateLimiterRedisStore </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+RedisStore is used to define the redis store for the rate limit.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>inMemoryStore</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterInMemoryStore">
+RateLimiterInMemoryStore </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+InMemoryStore is used to define the in-memory store for the rate limit.
 </p>
 
 </td>
@@ -15277,6 +15604,27 @@ overrides the settings from pipeline limits.
 BufferUsageLimit is used to define the percentage of the buffer usage
 limit, a valid value should be less than 100, for example, 85. It
 overrides the settings from pipeline limits.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>rateLimit</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimit"> RateLimit </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+RateLimit is used to define the rate limit for the vertex, it overrides
+the settings from pipeline limits.
 </p>
 
 </td>
