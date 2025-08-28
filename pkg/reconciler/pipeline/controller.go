@@ -739,6 +739,18 @@ func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.
 	if result.RateLimit == nil {
 		result.RateLimit = plLimits.RateLimit
 	}
+	if result.RateLimit != nil && result.RateLimit.Max == nil {
+		result.RateLimit.Max = plLimits.RateLimit.Max
+	}
+	if result.RateLimit != nil && result.RateLimit.Min == nil {
+		result.RateLimit.Min = plLimits.RateLimit.Min
+	}
+	if result.RateLimit != nil && result.RateLimit.RampUpDuration == nil {
+		result.RateLimit.RampUpDuration = plLimits.RateLimit.RampUpDuration
+	}
+	if result.RateLimit != nil && result.RateLimit.RateLimiterStore == nil {
+		result.RateLimit.RateLimiterStore = plLimits.RateLimit.RateLimiterStore
+	}
 	return result
 }
 
