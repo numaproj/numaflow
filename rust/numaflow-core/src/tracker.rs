@@ -189,14 +189,14 @@ impl Tracker {
         processed_msg_count: Arc<AtomicUsize>,
         cln_token: CancellationToken,
     ) {
+        let mut ticker = tokio::time::interval(tokio::time::Duration::from_secs(1));
         loop {
             tokio::select! {
                 _ = cln_token.cancelled() => {
                     break;
                 }
-                _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {
-                    info!("Processed {} messages in {}", processed_msg_count.load(Ordering::Relaxed), Utc::now().timestamp());
-                    processed_msg_count.store(0, Ordering::Relaxed);
+                _ = ticker.tick() => {
+                    info!(processed = processed_msg_count.swap(0, Ordering::Relaxed), "Processed messages per second");
                 }
             }
         }
