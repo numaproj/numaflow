@@ -29,7 +29,6 @@ pub enum RedisMode {
     Sentinel {
         master_name: String,
         endpoints: Vec<String>,
-        role: Option<String>,
         sentinel_auth: Option<RedisAuth>,
         redis_auth: Option<RedisAuth>,
         sentinel_tls: Option<TlsMode>,
@@ -84,7 +83,6 @@ impl SingleUrlBuilder {
 pub struct SentinelBuilder {
     master_name: String,
     endpoints: Vec<String>,
-    role: Option<String>,
     sentinel_auth: Option<RedisAuth>,
     redis_auth: Option<RedisAuth>,
     sentinel_tls: Option<TlsMode>,
@@ -97,18 +95,12 @@ impl SentinelBuilder {
         Self {
             master_name,
             endpoints,
-            role: None,
             sentinel_auth: None,
             redis_auth: None,
             sentinel_tls: None,
             redis_tls: None,
             db: None,
         }
-    }
-
-    pub fn role(mut self, role: String) -> Self {
-        self.role = Some(role);
-        self
     }
 
     pub fn sentinel_auth(mut self, auth: RedisAuth) -> Self {
@@ -144,7 +136,6 @@ impl SentinelBuilder {
         Ok(RedisMode::Sentinel {
             master_name: self.master_name,
             endpoints: self.endpoints,
-            role: self.role,
             sentinel_auth: self.sentinel_auth,
             redis_auth: self.redis_auth,
             sentinel_tls: self.sentinel_tls,
@@ -200,19 +191,12 @@ impl RedisStore {
             RedisMode::Sentinel {
                 master_name,
                 endpoints,
-                role,
                 sentinel_auth,
                 redis_auth,
                 sentinel_tls,
                 redis_tls,
                 db,
             } => {
-                // Determine server type
-                let server_type = match role.as_deref() {
-                    Some("Replica") => SentinelServerType::Replica,
-                    _ => SentinelServerType::Master, // Default to Master
-                };
-
                 // Convert string endpoints to ConnectionAddr
                 let sentinel_addrs: Result<Vec<ConnectionAddr>, _> = endpoints
                     .iter()
@@ -226,8 +210,11 @@ impl RedisStore {
                 let sentinel_addrs = sentinel_addrs?;
 
                 // Build SentinelClient using builder pattern
-                let mut builder =
-                    SentinelClientBuilder::new(sentinel_addrs, master_name, server_type)?;
+                let mut builder = SentinelClientBuilder::new(
+                    sentinel_addrs,
+                    master_name,
+                    SentinelServerType::Master,
+                )?;
 
                 // Apply sentinel authentication if provided
                 if let Some(auth) = sentinel_auth {
@@ -426,7 +413,6 @@ mod tests {
             "mymaster".to_string(),
             vec!["sentinel1:26379".to_string(), "sentinel2:26379".to_string()],
         )
-        .role("Master".to_string())
         .db(2)
         .build()
         .unwrap();
@@ -435,13 +421,11 @@ mod tests {
             RedisMode::Sentinel {
                 master_name,
                 endpoints,
-                role,
                 db,
                 ..
             } => {
                 assert_eq!(master_name, "mymaster");
                 assert_eq!(endpoints, vec!["sentinel1:26379", "sentinel2:26379"]);
-                assert_eq!(role, Some("Master".to_string()));
                 assert_eq!(db, Some(2));
             }
             _ => panic!("Expected Sentinel mode"),

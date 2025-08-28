@@ -4444,13 +4444,6 @@ func schema_pkg_apis_numaflow_v1alpha1_RedisSentinelConfig(ref common.ReferenceC
 							},
 						},
 					},
-					"role": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Which server type to target: Master for writes, Replica for read-only scaling.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
 					"sentinelAuth": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Auth to talk to the Sentinel daemons (control-plane). Optional.",

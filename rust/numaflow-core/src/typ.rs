@@ -166,10 +166,6 @@ fn create_redis_mode(
                 sentinel_config.endpoints.clone(),
             );
 
-            if let Some(role) = &sentinel_config.role {
-                builder = builder.role(role.clone());
-            }
-
             if let Some(sentinel_auth) = &sentinel_config.sentinel_auth {
                 let auth = parse_redis_auth(sentinel_auth.as_ref())?;
                 builder = builder.sentinel_auth(auth);
@@ -203,7 +199,7 @@ fn create_redis_mode(
     }
 }
 
-/// Parse Redis authentication from the CRD model
+/// Parse Redis authentication from the models.
 fn parse_redis_auth(auth: &numaflow_models::models::RedisAuth) -> Result<RedisAuth> {
     let username = auth
         .username

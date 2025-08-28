@@ -242,12 +242,6 @@ spec:
                                             type: object
                                             x-kubernetes-map-type: atomic
                                         type: object
-                                      role:
-                                        default: master
-                                        enum:
-                                        - master
-                                        - replica
-                                        type: string
                                       sentinelAuth:
                                         properties:
                                           password:
@@ -325,15 +319,6 @@ spec:
                                     - endpoints
                                     - masterName
                                     type: object
-                                    x-kubernetes-validations:
-                                    - message: mode=Single requires .url and forbids
-                                        .sentinel
-                                      rule: 'self.mode == ''Single'' ? has(self.url)
-                                        && !has(self.sentinel) : true'
-                                    - message: mode=Sentinel requires .sentinel and
-                                        forbids .url
-                                      rule: 'self.mode == ''Sentinel'' ? has(self.sentinel)
-                                        && !has(self.url) : true'
                                   url:
                                     type: string
                                 required:
@@ -7305,12 +7290,6 @@ spec:
                                                   type: object
                                                   x-kubernetes-map-type: atomic
                                               type: object
-                                            role:
-                                              default: master
-                                              enum:
-                                              - master
-                                              - replica
-                                              type: string
                                             sentinelAuth:
                                               properties:
                                                 password:
@@ -7388,15 +7367,6 @@ spec:
                                           - endpoints
                                           - masterName
                                           type: object
-                                          x-kubernetes-validations:
-                                          - message: mode=Single requires .url and
-                                              forbids .sentinel
-                                            rule: 'self.mode == ''Single'' ? has(self.url)
-                                              && !has(self.sentinel) : true'
-                                          - message: mode=Sentinel requires .sentinel
-                                              and forbids .url
-                                            rule: 'self.mode == ''Sentinel'' ? has(self.sentinel)
-                                              && !has(self.url) : true'
                                         url:
                                           type: string
                                       required:

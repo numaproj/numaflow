@@ -59,11 +59,6 @@ type RateLimiterRedisStore struct {
 	DB *int32 `json:"db,omitempty" protobuf:"varint,4,opt,name=db"`
 }
 
-// Enforce shape with CEL: if Mode == "Single" then URL required and Sentinel must be null;
-// if Mode == "Sentinel" then Sentinel required and URL must be null.
-// +kubebuilder:validation:XValidation:rule="self.mode == 'Single' ? has(self.url) && !has(self.sentinel) : true",message="mode=Single requires .url and forbids .sentinel"
-// +kubebuilder:validation:XValidation:rule="self.mode == 'Sentinel' ? has(self.sentinel) && !has(self.url) : true",message="mode=Sentinel requires .sentinel and forbids .url"
-
 type RedisSentinelConfig struct {
 	// Required Sentinel "service name" (aka master name) from sentinel.conf
 	// +kubebuilder:validation:MinLength=1
@@ -73,11 +68,6 @@ type RedisSentinelConfig struct {
 	// Example: ["sentinel-0.redis.svc:26379", "sentinel-1.redis.svc:26379"]
 	// +kubebuilder:validation:MinItems=1
 	Endpoints []string `json:"endpoints" protobuf:"bytes,2,rep,name=endpoints"`
-
-	// Which server type to target: Master for writes, Replica for read-only scaling.
-	// +kubebuilder:default=master
-	// +kubebuilder:validation:Enum=master;replica
-	Role string `json:"role,omitempty" protobuf:"bytes,3,opt,name=role"`
 
 	// Auth to talk to the Sentinel daemons (control-plane). Optional.
 	// +optional

@@ -1454,11 +1454,6 @@ message RedisSentinelConfig {
   // +kubebuilder:validation:MinItems=1
   repeated string endpoints = 2;
 
-  // Which server type to target: Master for writes, Replica for read-only scaling.
-  // +kubebuilder:default=master
-  // +kubebuilder:validation:Enum=master;replica
-  optional string role = 3;
-
   // Auth to talk to the Sentinel daemons (control-plane). Optional.
   // +optional
   optional RedisAuth sentinelAuth = 4;

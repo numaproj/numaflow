@@ -21812,10 +21812,6 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS",
           "description": "TLS for Redis data nodes (redis). Often enabled even if Sentinel is plaintext."
         },
-        "role": {
-          "description": "Which server type to target: Master for writes, Replica for read-only scaling.",
-          "type": "string"
-        },
         "sentinelAuth": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisAuth",
           "description": "Auth to talk to the Sentinel daemons (control-plane). Optional."

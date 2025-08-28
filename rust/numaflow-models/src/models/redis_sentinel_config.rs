@@ -28,9 +28,6 @@ pub struct RedisSentinelConfig {
     pub redis_auth: Option<Box<crate::models::RedisAuth>>,
     #[serde(rename = "redisTLS", skip_serializing_if = "Option::is_none")]
     pub redis_tls: Option<Box<crate::models::Tls>>,
-    /// Which server type to target: Master for writes, Replica for read-only scaling.
-    #[serde(rename = "role", skip_serializing_if = "Option::is_none")]
-    pub role: Option<String>,
     #[serde(rename = "sentinelAuth", skip_serializing_if = "Option::is_none")]
     pub sentinel_auth: Option<Box<crate::models::RedisAuth>>,
     #[serde(rename = "sentinelTLS", skip_serializing_if = "Option::is_none")]
@@ -44,7 +41,6 @@ impl RedisSentinelConfig {
             master_name,
             redis_auth: None,
             redis_tls: None,
-            role: None,
             sentinel_auth: None,
             sentinel_tls: None,
         }

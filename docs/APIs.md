@@ -9384,25 +9384,6 @@ Example: \[“sentinel-0.redis.svc:26379”, “sentinel-1.redis.svc:26379”\]
 
 <td>
 
-<code>role</code></br> <em> string </em>
-</td>
-
-<td>
-
-<p>
-
-Which server type to target: Master for writes, Replica for read-only
-scaling.
-</p>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
 <code>sentinelAuth</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RedisAuth"> RedisAuth </a> </em>
 </td>
