@@ -8,13 +8,13 @@ use crate::sink::SinkWriter;
 
 /// Sink forwarder is a component which starts a streaming reader and a sink writer
 /// and manages the lifecycle of these components.
-pub(crate) struct SinkForwarder {
-    jetstream_reader: JetStreamReader,
+pub(crate) struct SinkForwarder<C: crate::typ::NumaflowTypeConfig> {
+    jetstream_reader: JetStreamReader<C>,
     sink_writer: SinkWriter,
 }
 
-impl SinkForwarder {
-    pub(crate) async fn new(jetstream_reader: JetStreamReader, sink_writer: SinkWriter) -> Self {
+impl<C: crate::typ::NumaflowTypeConfig> SinkForwarder<C> {
+    pub(crate) async fn new(jetstream_reader: JetStreamReader<C>, sink_writer: SinkWriter) -> Self {
         Self {
             jetstream_reader,
             sink_writer,

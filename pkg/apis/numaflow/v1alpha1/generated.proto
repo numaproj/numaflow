@@ -966,6 +966,10 @@ message MonoVertexLimits {
   // +kubebuilder:default= "1s"
   // +optional
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 2;
+
+  // RateLimit is used to define the rate limit for the mono vertex.
+  // +optional
+  optional RateLimit rateLimit = 3;
 }
 
 // +kubebuilder:object:root=true
@@ -1195,6 +1199,10 @@ message PipelineLimits {
   // +kubebuilder:default= "1s"
   // +optional
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 4;
+
+  // RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the vertex's limit settings.
+  // +optional
+  optional RateLimit rateLimit = 5;
 }
 
 // +kubebuilder:object:root=true
@@ -1366,6 +1374,47 @@ message PulsarSource {
   // Auth information
   // +optional
   optional PulsarAuth auth = 6;
+}
+
+message RateLimit {
+  // Max is the maximum TPS that this vertex can process give a distributed `Store` is configured. Otherwise, it will
+  // be the maximum TPS for a single replica.
+  // +kubebuilder:default=10
+  optional uint64 max = 1;
+
+  // Minimum TPS allowed during initial bootup. This value will be distributed across all the replicas if a distributed
+  // `Store` is configured. Otherwise, it will be the minimum TPS for a single replica.
+  // +kubebuilder:default=1
+  optional uint64 min = 2;
+
+  // RampUpDuration is the duration to reach the maximum TPS from the minimum TPS. The min unit of ramp up is 1 in
+  // 1 second.
+  // +kubebuilder:default= "1s"
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration rampUpDuration = 3;
+
+  // Store is used to define the Distributed Store for the rate limiting. We also support in-memory store if no store
+  // is configured. This means that every replica will have its own rate limit and the actual TPS will be the sum of all
+  // the replicas.
+  // +optional
+  optional RateLimiterStore store = 4;
+}
+
+message RateLimiterInMemoryStore {
+}
+
+message RateLimiterRedisStore {
+  // URL of the persistent store to write the rate limit data.
+  optional string url = 1;
+}
+
+message RateLimiterStore {
+  // RedisStore is used to define the redis store for the rate limit.
+  // +optional
+  optional RateLimiterRedisStore redisStore = 1;
+
+  // InMemoryStore is used to define the in-memory store for the rate limit.
+  // +optional
+  optional RateLimiterInMemoryStore inMemoryStore = 2;
 }
 
 // The RetryStrategy struct defines the configuration for handling operation retries in case of failures.
@@ -1916,6 +1965,10 @@ message VertexLimits {
   // It overrides the settings from pipeline limits.
   // +optional
   optional uint32 bufferUsageLimit = 4;
+
+  // RateLimit is used to define the rate limit for the vertex, it overrides the settings from pipeline limits.
+  // +optional
+  optional RateLimit rateLimit = 5;
 }
 
 // +kubebuilder:object:root=true

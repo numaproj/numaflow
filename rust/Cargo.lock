@@ -2466,6 +2466,7 @@ name = "numaflow-core"
 version = "0.1.0"
 dependencies = [
  "async-nats",
+ "async-trait",
  "aws-sdk-sqs",
  "aws-smithy-mocks",
  "axum",
@@ -2493,6 +2494,7 @@ dependencies = [
  "numaflow-pulsar",
  "numaflow-shared",
  "numaflow-sqs",
+ "numaflow-throttling",
  "parking_lot",
  "pep440_rs",
  "pin-project",

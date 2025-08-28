@@ -94,6 +94,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarBasicAuth":                  schema_pkg_apis_numaflow_v1alpha1_PulsarBasicAuth(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSink":                       schema_pkg_apis_numaflow_v1alpha1_PulsarSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSource":                     schema_pkg_apis_numaflow_v1alpha1_PulsarSource(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimit":                        schema_pkg_apis_numaflow_v1alpha1_RateLimit(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterInMemoryStore":         schema_pkg_apis_numaflow_v1alpha1_RateLimiterInMemoryStore(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRedisStore":            schema_pkg_apis_numaflow_v1alpha1_RateLimiterRedisStore(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterStore":                 schema_pkg_apis_numaflow_v1alpha1_RateLimiterStore(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy":                    schema_pkg_apis_numaflow_v1alpha1_RetryStrategy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RollingUpdateStrategy":            schema_pkg_apis_numaflow_v1alpha1_RollingUpdateStrategy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL":                             schema_pkg_apis_numaflow_v1alpha1_SASL(ref),
@@ -3100,11 +3104,17 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexLimits(ref common.ReferenceCall
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
+					"rateLimit": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RateLimit is used to define the rate limit for the mono vertex.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimit"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimit", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
@@ -3775,11 +3785,17 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineLimits(ref common.ReferenceCallba
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
+					"rateLimit": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the vertex's limit settings.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimit"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimit", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
@@ -4250,6 +4266,102 @@ func schema_pkg_apis_numaflow_v1alpha1_PulsarSource(ref common.ReferenceCallback
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_RateLimit(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"max": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Max is the maximum TPS that this vertex can process give a distributed `Store` is configured. Otherwise, it will be the maximum TPS for a single replica.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"min": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Minimum TPS allowed during initial bootup. This value will be distributed across all the replicas if a distributed `Store` is configured. Otherwise, it will be the minimum TPS for a single replica.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"rampUpDuration": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RampUpDuration is the duration to reach the maximum TPS from the minimum TPS. The min unit of ramp up is 1 in 1 second.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+					"store": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Store is used to define the Distributed Store for the rate limiting. We also support in-memory store if no store is configured. This means that every replica will have its own rate limit and the actual TPS will be the sum of all the replicas.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterStore"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterStore", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_RateLimiterInMemoryStore(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_RateLimiterRedisStore(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"url": {
+						SchemaProps: spec.SchemaProps{
+							Description: "URL of the persistent store to write the rate limit data.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"url"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_RateLimiterStore(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"redisStore": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RedisStore is used to define the redis store for the rate limit.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRedisStore"),
+						},
+					},
+					"inMemoryStore": {
+						SchemaProps: spec.SchemaProps{
+							Description: "InMemoryStore is used to define the in-memory store for the rate limit.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterInMemoryStore"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterInMemoryStore", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRedisStore"},
 	}
 }
 
@@ -5894,11 +6006,17 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexLimits(ref common.ReferenceCallback
 							Format:      "int64",
 						},
 					},
+					"rateLimit": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RateLimit is used to define the rate limit for the vertex, it overrides the settings from pipeline limits.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimit"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimit", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 

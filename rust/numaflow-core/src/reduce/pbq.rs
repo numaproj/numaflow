@@ -23,15 +23,15 @@ pub(crate) struct WAL {
 }
 
 /// PBQBuilder is a builder for PBQ.
-pub(crate) struct PBQBuilder {
-    isb_reader: JetStreamReader,
+pub(crate) struct PBQBuilder<C: crate::typ::NumaflowTypeConfig> {
+    isb_reader: JetStreamReader<C>,
     tracker_handle: TrackerHandle,
     wal: Option<WAL>,
 }
 
-impl PBQBuilder {
+impl<C: crate::typ::NumaflowTypeConfig> PBQBuilder<C> {
     /// Creates a new PBQBuilder.
-    pub(crate) fn new(isb_reader: JetStreamReader, tracker_handle: TrackerHandle) -> Self {
+    pub(crate) fn new(isb_reader: JetStreamReader<C>, tracker_handle: TrackerHandle) -> Self {
         Self {
             isb_reader,
             tracker_handle,
@@ -44,7 +44,7 @@ impl PBQBuilder {
         self
     }
 
-    pub(crate) fn build(self) -> PBQ {
+    pub(crate) fn build(self) -> PBQ<C> {
         PBQ {
             isb_reader: self.isb_reader,
             wal: self.wal,
@@ -55,13 +55,13 @@ impl PBQBuilder {
 
 /// PBQ is a persistent buffer queue.
 #[allow(clippy::upper_case_acronyms)]
-pub(crate) struct PBQ {
-    isb_reader: JetStreamReader,
+pub(crate) struct PBQ<C: crate::typ::NumaflowTypeConfig> {
+    isb_reader: JetStreamReader<C>,
     wal: Option<WAL>,
     tracker_handle: TrackerHandle,
 }
 
-impl PBQ {
+impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
     /// Streaming read from PBQ, returns a ReceiverStream and a JoinHandle for monitoring errors.
     pub(crate) async fn streaming_read(
         self,
@@ -133,7 +133,7 @@ impl PBQ {
 
     /// Reads from ISB and writes to WAL.
     async fn read_isb_and_write_wal(
-        isb_reader: JetStreamReader,
+        isb_reader: JetStreamReader<C>,
         append_only_wal: AppendOnlyWal,
         tracker_handle: TrackerHandle,
         tx: Sender<Message>,
@@ -237,8 +237,8 @@ mod tests {
             ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
-        use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
-        let js_reader = JetStreamReader::new(ISBReaderConfig {
+        use crate::pipeline::isb::jetstream::reader::ISBReaderComponents;
+        let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
             stream: stream.clone(),
             js_ctx: context.clone(),
@@ -248,9 +248,10 @@ mod tests {
             read_timeout: Duration::from_millis(100),
             watermark_handle: None,
             isb_config: None,
-        })
-        .await
-        .unwrap();
+            cln_token: CancellationToken::new(),
+        };
+        let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> =
+            JetStreamReader::new(reader_components, None).await.unwrap();
 
         let reader_cancel_token = CancellationToken::new();
 
@@ -352,8 +353,8 @@ mod tests {
             ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
-        use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
-        let js_reader = JetStreamReader::new(ISBReaderConfig {
+        use crate::pipeline::isb::jetstream::reader::ISBReaderComponents;
+        let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
             stream: stream.clone(),
             js_ctx: context.clone(),
@@ -363,9 +364,10 @@ mod tests {
             read_timeout: Duration::from_millis(100),
             watermark_handle: None,
             isb_config: None,
-        })
-        .await
-        .unwrap();
+            cln_token: CancellationToken::new(),
+        };
+        let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> =
+            JetStreamReader::new(reader_components, None).await.unwrap();
 
         // Create WAL components
         let append_only_wal = AppendOnlyWal::new(
@@ -588,8 +590,8 @@ mod tests {
             ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
-        use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
-        let js_reader = JetStreamReader::new(ISBReaderConfig {
+        use crate::pipeline::isb::jetstream::reader::ISBReaderComponents;
+        let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
             stream: stream.clone(),
             js_ctx: context.clone(),
@@ -599,9 +601,10 @@ mod tests {
             read_timeout: Duration::from_millis(100),
             watermark_handle: None,
             isb_config: None,
-        })
-        .await
-        .unwrap();
+            cln_token: CancellationToken::new(),
+        };
+        let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> =
+            JetStreamReader::new(reader_components, None).await.unwrap();
 
         // Create new WAL components for PBQ
         let append_only_wal =

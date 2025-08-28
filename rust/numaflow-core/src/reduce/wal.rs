@@ -1,8 +1,13 @@
 //! Write Ahead Log for both Aligned and Unaligned Reduce Operation. The WAL is to persist the data
 //! we read from the ISB and store it until the processing is complete.
 
+use crate::config::components::reduce::StorageConfig;
 use crate::message::{IntOffset, Message, Offset};
 use crate::reduce::error::Error;
+use crate::reduce::pbq::WAL;
+use crate::reduce::wal::segment::WalType;
+use crate::reduce::wal::segment::append::AppendOnlyWal;
+use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use bytes::{Bytes, BytesMut};
 use std::sync::Arc;
@@ -108,5 +113,58 @@ impl From<WalMessage> for Message {
 impl From<Message> for WalMessage {
     fn from(value: Message) -> Self {
         WalMessage { message: value }
+    }
+}
+
+/// Create WAL components for reduce operations
+///
+/// This function creates both the main WAL and GC WAL if storage is configured.
+/// The only difference between aligned and unaligned reducers is the WindowKind.
+pub(crate) async fn create_wal_components(
+    storage_config: Option<&StorageConfig>,
+    window_kind: WindowKind,
+) -> crate::Result<(Option<WAL>, Option<AppendOnlyWal>)> {
+    if let Some(storage_config) = storage_config {
+        let wal_path = storage_config.path.clone();
+
+        let append_only_wal = AppendOnlyWal::new(
+            WalType::Data,
+            wal_path.clone(),
+            storage_config.max_file_size_mb,
+            storage_config.flush_interval_ms,
+            storage_config.channel_buffer_size,
+            storage_config.max_segment_age_secs,
+        )
+        .await?;
+
+        let compactor = Compactor::new(
+            wal_path.clone(),
+            window_kind,
+            storage_config.max_file_size_mb,
+            storage_config.flush_interval_ms,
+            storage_config.channel_buffer_size,
+            storage_config.max_segment_age_secs,
+        )
+        .await?;
+
+        let gc_wal = AppendOnlyWal::new(
+            WalType::Gc,
+            wal_path,
+            storage_config.max_file_size_mb,
+            storage_config.flush_interval_ms,
+            storage_config.channel_buffer_size,
+            storage_config.max_segment_age_secs,
+        )
+        .await?;
+
+        Ok((
+            Some(WAL {
+                append_only_wal,
+                compactor,
+            }),
+            Some(gc_wal),
+        ))
+    } else {
+        Ok((None, None))
     }
 }

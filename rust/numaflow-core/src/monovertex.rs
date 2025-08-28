@@ -9,6 +9,10 @@ use crate::shared::create_components;
 use crate::sink::SinkWriter;
 use crate::source::Source;
 use crate::tracker::TrackerHandle;
+use crate::typ::{
+    build_in_memory_rate_limiter_config, build_redis_rate_limiter_config,
+    should_use_redis_rate_limiter,
+};
 use crate::{metrics, shared};
 
 /// [forwarder] orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
@@ -23,6 +27,37 @@ pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: &MonovertexConfig,
 ) -> error::Result<()> {
+    if let Some(rate_limit_config) = &config.rate_limit {
+        if should_use_redis_rate_limiter(rate_limit_config) {
+            let redis_config =
+                build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
+            run_monovertex_forwarder::<crate::typ::WithRedisRateLimiter>(
+                config,
+                cln_token,
+                Some(redis_config.throttling_config),
+            )
+            .await
+        } else {
+            let in_mem_config =
+                build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
+            run_monovertex_forwarder::<crate::typ::WithInMemoryRateLimiter>(
+                config,
+                cln_token,
+                Some(in_mem_config.throttling_config),
+            )
+            .await
+        }
+    } else {
+        run_monovertex_forwarder::<crate::typ::WithoutRateLimiter>(config, cln_token, None).await
+    }
+}
+
+/// Generic helper function that handles monovertex forwarder for a given TypeConfig.
+async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
+    config: &MonovertexConfig,
+    cln_token: CancellationToken,
+    rate_limiter: Option<C::RateLimiter>,
+) -> error::Result<()> {
     let tracker_handle = TrackerHandle::new(None);
 
     let transformer = create_components::create_transformer(
@@ -34,7 +69,7 @@ pub(crate) async fn start_forwarder(
     )
     .await?;
 
-    let source = create_components::create_source(
+    let source = create_components::create_source::<C>(
         config.batch_size,
         config.read_timeout,
         &config.source_config,
@@ -42,6 +77,7 @@ pub(crate) async fn start_forwarder(
         transformer,
         None,
         cln_token.clone(),
+        rate_limiter,
     )
     .await?;
 
@@ -72,18 +108,19 @@ pub(crate) async fn start_forwarder(
     // start the metrics server
     // FIXME: what to do with the handle
     let metrics_server_handle =
-        shared::metrics::start_metrics_server(config.metrics_config.clone(), metrics_state).await;
+        shared::metrics::start_metrics_server::<C>(config.metrics_config.clone(), metrics_state)
+            .await;
 
-    start(config.clone(), source, sink_writer, cln_token).await?;
+    start::<C>(config.clone(), source, sink_writer, cln_token).await?;
 
     // abort the metrics server
     metrics_server_handle.abort();
     Ok(())
 }
 
-async fn start(
+async fn start<C: crate::typ::NumaflowTypeConfig>(
     mvtx_config: MonovertexConfig,
-    source: Source,
+    source: Source<C>,
     sink: SinkWriter,
     cln_token: CancellationToken,
 ) -> error::Result<()> {
@@ -92,7 +129,7 @@ async fn start(
     // only check the pending and lag for source for pod_id = 0
     let _pending_reader_handle: Option<PendingReaderTasks> = if mvtx_config.replica == 0 {
         // start the pending reader to publish pending metrics
-        let pending_reader = shared::metrics::create_pending_reader(
+        let pending_reader = shared::metrics::create_pending_reader::<C>(
             &mvtx_config.metrics_config,
             LagReader::Source(Box::new(source.clone())),
         )
@@ -102,7 +139,7 @@ async fn start(
         None
     };
 
-    let forwarder = forwarder::Forwarder::new(source, sink);
+    let forwarder = forwarder::Forwarder::<C>::new(source, sink);
 
     info!("Forwarder is starting...");
     // start the forwarder, it will return only on Signal

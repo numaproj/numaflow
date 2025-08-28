@@ -42,9 +42,9 @@ pub struct BufferInfo {
     pub num_pending: u64,
     pub num_ack_pending: usize,
 }
-/// Configuration for creating a JetstreamWriter
+/// Components needed to create a JetstreamWriter, with reduced duplication
 #[derive(Clone)]
-pub(crate) struct ISBWriterConfig {
+pub(crate) struct ISBWriterComponents {
     pub config: Vec<ToVertexConfig>,
     pub js_ctx: Context,
     pub paf_concurrency: usize,
@@ -53,6 +53,25 @@ pub(crate) struct ISBWriterConfig {
     pub watermark_handle: Option<WatermarkHandle>,
     pub vertex_type: VertexType,
     pub isb_config: Option<ISBConfig>,
+}
+
+impl ISBWriterComponents {
+    /// Create ISBWriterComponents from minimal components and pipeline context
+    pub fn new(
+        watermark_handle: Option<WatermarkHandle>,
+        context: &crate::pipeline::PipelineContext<'_>,
+    ) -> Self {
+        Self {
+            config: context.config.to_vertex_config.clone(),
+            js_ctx: context.js_context.clone(),
+            paf_concurrency: context.config.writer_concurrency,
+            tracker_handle: context.tracker_handle.clone(),
+            cancel_token: context.cln_token.clone(),
+            watermark_handle,
+            vertex_type: context.config.vertex_type,
+            isb_config: context.config.isb_config.clone(),
+        }
+    }
 }
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
@@ -85,8 +104,8 @@ pub(crate) struct JetstreamWriter {
 impl JetstreamWriter {
     /// Creates a JetStream Writer and a background task to make sure the Write futures (PAFs) are
     /// successful. Batch Size determines the maximum pending futures.
-    pub(crate) fn new(writer_config: ISBWriterConfig) -> Self {
-        let to_vertex_streams = writer_config
+    pub(crate) fn new(writer_components: ISBWriterComponents) -> Self {
+        let to_vertex_streams = writer_components
             .config
             .iter()
             .flat_map(|c| c.writer_config.streams.clone())
@@ -98,15 +117,15 @@ impl JetstreamWriter {
             .collect::<HashMap<_, _>>();
 
         let this = Self {
-            config: Arc::new(writer_config.config),
-            js_ctx: writer_config.js_ctx,
+            config: Arc::new(writer_components.config),
+            js_ctx: writer_components.js_ctx,
             is_full,
-            tracker_handle: writer_config.tracker_handle,
-            sem: Arc::new(Semaphore::new(writer_config.paf_concurrency)),
-            watermark_handle: writer_config.watermark_handle,
-            paf_concurrency: writer_config.paf_concurrency,
-            vertex_type: writer_config.vertex_type,
-            compression_type: writer_config
+            tracker_handle: writer_components.tracker_handle,
+            sem: Arc::new(Semaphore::new(writer_components.paf_concurrency)),
+            watermark_handle: writer_components.watermark_handle,
+            paf_concurrency: writer_components.paf_concurrency,
+            vertex_type: writer_components.vertex_type,
+            compression_type: writer_components
                 .isb_config
                 .map(|c| c.compression.compress_type),
         };
@@ -115,7 +134,8 @@ impl JetstreamWriter {
         tokio::task::spawn({
             let mut this = this.clone();
             async move {
-                this.check_stream_status(writer_config.cancel_token).await;
+                this.check_stream_status(writer_components.cancel_token)
+                    .await;
             }
         });
 
@@ -819,7 +839,7 @@ mod tests {
             .await
             .unwrap();
 
-        let writer = JetstreamWriter::new(ISBWriterConfig {
+        let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
@@ -837,7 +857,8 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::Source,
             isb_config: None,
-        });
+        };
+        let writer = JetstreamWriter::new(writer_components);
 
         let message = Message {
             typ: Default::default(),
@@ -917,7 +938,7 @@ mod tests {
             ..Default::default()
         };
 
-        let writer = JetstreamWriter::new(ISBWriterConfig {
+        let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
@@ -935,7 +956,8 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::Source,
             isb_config: None,
-        });
+        };
+        let writer = JetstreamWriter::new(writer_components);
 
         let result = writer
             .blocking_write(stream.clone(), message, cln_token.clone())
@@ -984,7 +1006,7 @@ mod tests {
 
         let cancel_token = CancellationToken::new();
 
-        let writer = JetstreamWriter::new(ISBWriterConfig {
+        let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
@@ -1002,7 +1024,8 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::MapUDF,
             isb_config: None,
-        });
+        };
+        let writer = JetstreamWriter::new(writer_components);
 
         let mut result_receivers = Vec::new();
         // Publish 10 messages successfully
@@ -1195,7 +1218,7 @@ mod tests {
             .unwrap();
 
         let cancel_token = CancellationToken::new();
-        let writer = JetstreamWriter::new(ISBWriterConfig {
+        let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
@@ -1214,7 +1237,8 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::Source,
             isb_config: None,
-        });
+        };
+        let writer = JetstreamWriter::new(writer_components);
 
         let mut js_writer = writer.clone();
         // Simulate the stream status check
@@ -1290,7 +1314,7 @@ mod tests {
             .await
             .unwrap();
 
-        let writer = JetstreamWriter::new(ISBWriterConfig {
+        let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
@@ -1309,7 +1333,8 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::Source,
             isb_config: None,
-        });
+        };
+        let writer = JetstreamWriter::new(writer_components);
 
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
         let mut ack_rxs = vec![];
@@ -1386,7 +1411,7 @@ mod tests {
             .unwrap();
 
         let cancel_token = CancellationToken::new();
-        let writer = JetstreamWriter::new(ISBWriterConfig {
+        let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
@@ -1404,7 +1429,8 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::Source,
             isb_config: None,
-        });
+        };
+        let writer = JetstreamWriter::new(writer_components);
 
         let (tx, rx) = tokio::sync::mpsc::channel(500);
         let mut ack_rxs = vec![];
@@ -1503,7 +1529,7 @@ mod tests {
         let (_, consumers2) = create_streams_and_consumers(&context, &vertex2_streams).await;
         let (_, consumers3) = create_streams_and_consumers(&context, &vertex3_streams).await;
 
-        let writer = JetstreamWriter::new(ISBWriterConfig {
+        let writer_components = ISBWriterComponents {
             config: vec![
                 ToVertexConfig {
                     name: "vertex1",
@@ -1552,7 +1578,8 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::Source,
             isb_config: None,
-        });
+        };
+        let writer = JetstreamWriter::new(writer_components);
 
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
         let mut ack_rxs = vec![];

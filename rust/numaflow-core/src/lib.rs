@@ -67,6 +67,9 @@ mod mapper;
 /// [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 mod watermark;
 
+/// Type configuration trait for Numaflow components.
+pub(crate) mod typ;
+
 /// [Reduce] is a function which "collects" a group of items and then perform some "reduction" operation
 /// on all of them, thus reducing them to a single value.
 ///

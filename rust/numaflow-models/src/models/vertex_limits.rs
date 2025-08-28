@@ -24,6 +24,8 @@ pub struct VertexLimits {
     /// BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. It overrides the settings from pipeline limits.
     #[serde(rename = "bufferUsageLimit", skip_serializing_if = "Option::is_none")]
     pub buffer_usage_limit: Option<i64>,
+    #[serde(rename = "rateLimit", skip_serializing_if = "Option::is_none")]
+    pub rate_limit: Option<Box<crate::models::RateLimit>>,
     /// Read batch size from the source or buffer. It overrides the settings from pipeline limits.
     #[serde(rename = "readBatchSize", skip_serializing_if = "Option::is_none")]
     pub read_batch_size: Option<i64>,
@@ -36,6 +38,7 @@ impl VertexLimits {
         VertexLimits {
             buffer_max_length: None,
             buffer_usage_limit: None,
+            rate_limit: None,
             read_batch_size: None,
             read_timeout: None,
         }

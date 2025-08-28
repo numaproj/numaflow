@@ -9,6 +9,8 @@ pub(crate) mod transformer;
 
 pub(crate) mod metrics;
 
+pub(crate) mod ratelimit;
+
 pub(crate) mod reduce;
 
 fn parse_kafka_auth_config(

@@ -428,6 +428,9 @@ func (p Pipeline) GetPipelineLimits() PipelineLimits {
 		if x.ReadTimeout != nil {
 			limits.ReadTimeout = x.ReadTimeout
 		}
+		if x.RateLimit != nil {
+			limits.RateLimit = x.RateLimit
+		}
 	}
 	return limits
 }
@@ -669,6 +672,45 @@ type PipelineLimits struct {
 	// +kubebuilder:default= "1s"
 	// +optional
 	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty" protobuf:"bytes,4,opt,name=readTimeout"`
+	// RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the vertex's limit settings.
+	// +optional
+	RateLimit *RateLimit `json:"rateLimit,omitempty" protobuf:"bytes,5,opt,name=rateLimit"`
+}
+
+type RateLimit struct {
+	// Max is the maximum TPS that this vertex can process give a distributed `Store` is configured. Otherwise, it will
+	// be the maximum TPS for a single replica.
+	// +kubebuilder:default=10
+	Max *uint64 `json:"max,omitempty" protobuf:"varint,1,opt,name=max"`
+	// Minimum TPS allowed during initial bootup. This value will be distributed across all the replicas if a distributed
+	// `Store` is configured. Otherwise, it will be the minimum TPS for a single replica.
+	// +kubebuilder:default=1
+	Min *uint64 `json:"min,omitempty" protobuf:"varint,2,opt,name=min"`
+	// RampUpDuration is the duration to reach the maximum TPS from the minimum TPS. The min unit of ramp up is 1 in
+	// 1 second.
+	// +kubebuilder:default= "1s"
+	RampUpDuration *metav1.Duration `json:"rampUpDuration,omitempty" protobuf:"bytes,3,opt,name=rampUpDuration"`
+	// Store is used to define the Distributed Store for the rate limiting. We also support in-memory store if no store
+	// is configured. This means that every replica will have its own rate limit and the actual TPS will be the sum of all
+	// the replicas.
+	// +optional
+	RateLimiterStore *RateLimiterStore `json:"store,omitempty" protobuf:"bytes,4,opt,name=store"`
+}
+
+type RateLimiterStore struct {
+	// RedisStore is used to define the redis store for the rate limit.
+	// +optional
+	RateLimiterRedisStore *RateLimiterRedisStore `json:"redisStore,omitempty" protobuf:"bytes,1,opt,name=redisStore"`
+	// InMemoryStore is used to define the in-memory store for the rate limit.
+	// +optional
+	RateLimiterInMemoryStore *RateLimiterInMemoryStore `json:"inMemoryStore,omitempty" protobuf:"bytes,2,opt,name=inMemoryStore"`
+}
+
+type RateLimiterInMemoryStore struct{}
+
+type RateLimiterRedisStore struct {
+	// URL of the persistent store to write the rate limit data.
+	URL *string `json:"url" protobuf:"bytes,1,opt,name=url"`
 }
 
 type PipelineStatus struct {

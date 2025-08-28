@@ -7,13 +7,13 @@ use crate::source::Source;
 
 /// Source forwarder is the orchestrator which starts streaming source, a transformer, and an isb writer
 /// and manages the lifecycle of these components.
-pub(crate) struct SourceForwarder {
-    source: Source,
+pub(crate) struct SourceForwarder<C: crate::typ::NumaflowTypeConfig> {
+    source: Source<C>,
     writer: JetstreamWriter,
 }
 
-impl SourceForwarder {
-    pub(crate) fn new(source: Source, writer: JetstreamWriter) -> Self {
+impl<C: crate::typ::NumaflowTypeConfig> SourceForwarder<C> {
+    pub(crate) fn new(source: Source<C>, writer: JetstreamWriter) -> Self {
         Self { source, writer }
     }
 
@@ -70,7 +70,7 @@ mod tests {
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::config::pipeline::{ToVertexConfig, VertexType};
     use crate::pipeline::forwarder::source_forwarder::SourceForwarder;
-    use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
+    use crate::pipeline::isb::jetstream::writer::{ISBWriterComponents, JetstreamWriter};
     use crate::shared::grpc::create_rpc_channel;
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
@@ -225,12 +225,13 @@ mod tests {
             .map_err(|e| panic!("failed to create source reader: {:?}", e))
             .unwrap();
 
-        let source = Source::new(
+        let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
             tracker_handle.clone(),
             true,
             Some(transformer),
+            None,
             None,
         );
 
@@ -265,8 +266,7 @@ mod tests {
             .await
             .unwrap();
 
-        use crate::pipeline::isb::jetstream::writer::ISBWriterConfig;
-        let writer = JetstreamWriter::new(ISBWriterConfig {
+        let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 partitions: 1,
                 writer_config: BufferWriterConfig {
@@ -284,7 +284,8 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::Source,
             isb_config: None,
-        });
+        };
+        let writer = JetstreamWriter::new(writer_components);
 
         // create the forwarder with the source, transformer, and writer
         let forwarder = SourceForwarder::new(source.clone(), writer);

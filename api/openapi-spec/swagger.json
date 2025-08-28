@@ -21062,6 +21062,10 @@
     "io.numaproj.numaflow.v1alpha1.MonoVertexLimits": {
       "type": "object",
       "properties": {
+        "rateLimit": {
+          "description": "RateLimit is used to define the rate limit for the mono vertex.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimit"
+        },
         "readBatchSize": {
           "description": "Read batch size from the source.",
           "type": "integer",
@@ -21426,6 +21430,10 @@
           "type": "integer",
           "format": "int64"
         },
+        "rateLimit": {
+          "description": "RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the vertex's limit settings.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimit"
+        },
         "readBatchSize": {
           "description": "Read batch size for all the vertices in the pipeline, can be overridden by the vertex's limit settings.",
           "type": "integer",
@@ -21690,6 +21698,57 @@
         },
         "topic": {
           "type": "string"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.RateLimit": {
+      "type": "object",
+      "properties": {
+        "max": {
+          "description": "Max is the maximum TPS that this vertex can process give a distributed `Store` is configured. Otherwise, it will be the maximum TPS for a single replica.",
+          "type": "integer",
+          "format": "int64"
+        },
+        "min": {
+          "description": "Minimum TPS allowed during initial bootup. This value will be distributed across all the replicas if a distributed `Store` is configured. Otherwise, it will be the minimum TPS for a single replica.",
+          "type": "integer",
+          "format": "int64"
+        },
+        "rampUpDuration": {
+          "description": "RampUpDuration is the duration to reach the maximum TPS from the minimum TPS. The min unit of ramp up is 1 in 1 second.",
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        },
+        "store": {
+          "description": "Store is used to define the Distributed Store for the rate limiting. We also support in-memory store if no store is configured. This means that every replica will have its own rate limit and the actual TPS will be the sum of all the replicas.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterStore"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.RateLimiterInMemoryStore": {
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.RateLimiterRedisStore": {
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "url": {
+          "description": "URL of the persistent store to write the rate limit data.",
+          "type": "string"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.RateLimiterStore": {
+      "type": "object",
+      "properties": {
+        "inMemoryStore": {
+          "description": "InMemoryStore is used to define the in-memory store for the rate limit.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterInMemoryStore"
+        },
+        "redisStore": {
+          "description": "RedisStore is used to define the redis store for the rate limit.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterRedisStore"
         }
       }
     },
@@ -22583,6 +22642,10 @@
           "description": "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. It overrides the settings from pipeline limits.",
           "type": "integer",
           "format": "int64"
+        },
+        "rateLimit": {
+          "description": "RateLimit is used to define the rate limit for the vertex, it overrides the settings from pipeline limits.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimit"
         },
         "readBatchSize": {
           "description": "Read batch size from the source or buffer. It overrides the settings from pipeline limits.",

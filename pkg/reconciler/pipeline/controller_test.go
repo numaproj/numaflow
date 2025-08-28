@@ -552,33 +552,195 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 }
 
 func Test_copyVertexLimits(t *testing.T) {
-	pl := testPipeline.DeepCopy()
-	v := pl.Spec.Vertices[0].DeepCopy()
-	copyVertexLimits(pl, v)
-	assert.NotNil(t, v.Limits)
-	assert.Equal(t, int64(dfv1.DefaultReadBatchSize), int64(*v.Limits.ReadBatchSize))
-	one := uint64(1)
-	limitJson := `{"readTimeout": "2s"}`
-	var pipelineLimit dfv1.PipelineLimits
-	err := json.Unmarshal([]byte(limitJson), &pipelineLimit)
-	assert.NoError(t, err)
-	pipelineLimit.ReadBatchSize = &one
-	pl.Spec.Limits = &pipelineLimit
-	v1 := new(dfv1.AbstractVertex)
-	copyVertexLimits(pl, v1)
-	assert.NotNil(t, v1.Limits)
-	assert.Equal(t, int64(one), int64(*v1.Limits.ReadBatchSize))
-	assert.Equal(t, "2s", v1.Limits.ReadTimeout.Duration.String())
-	two := uint64(2)
-	vertexLimitJson := `{"readTimeout": "3s"}`
-	var vertexLimit dfv1.VertexLimits
-	err = json.Unmarshal([]byte(vertexLimitJson), &vertexLimit)
-	assert.NoError(t, err)
-	v.Limits = &vertexLimit
-	v.Limits.ReadBatchSize = &two
-	copyVertexLimits(pl, v)
-	assert.Equal(t, two, *v.Limits.ReadBatchSize)
-	assert.Equal(t, "3s", v.Limits.ReadTimeout.Duration.String())
+	t.Run("basic limits copying", func(t *testing.T) {
+		pl := testPipeline.DeepCopy()
+		v := pl.Spec.Vertices[0].DeepCopy()
+		copyVertexLimits(pl, v)
+		assert.NotNil(t, v.Limits)
+		assert.Equal(t, int64(dfv1.DefaultReadBatchSize), int64(*v.Limits.ReadBatchSize))
+	})
+
+	t.Run("pipeline limits override defaults", func(t *testing.T) {
+		pl := testPipeline.DeepCopy()
+		one := uint64(1)
+		limitJson := `{"readTimeout": "2s"}`
+		var pipelineLimit dfv1.PipelineLimits
+		err := json.Unmarshal([]byte(limitJson), &pipelineLimit)
+		assert.NoError(t, err)
+		pipelineLimit.ReadBatchSize = &one
+		pl.Spec.Limits = &pipelineLimit
+		v1 := new(dfv1.AbstractVertex)
+		copyVertexLimits(pl, v1)
+		assert.NotNil(t, v1.Limits)
+		assert.Equal(t, int64(one), int64(*v1.Limits.ReadBatchSize))
+		assert.Equal(t, "2s", v1.Limits.ReadTimeout.Duration.String())
+	})
+
+	t.Run("vertex limits override pipeline limits", func(t *testing.T) {
+		pl := testPipeline.DeepCopy()
+		one := uint64(1)
+		limitJson := `{"readTimeout": "2s"}`
+		var pipelineLimit dfv1.PipelineLimits
+		err := json.Unmarshal([]byte(limitJson), &pipelineLimit)
+		assert.NoError(t, err)
+		pipelineLimit.ReadBatchSize = &one
+		pl.Spec.Limits = &pipelineLimit
+
+		v := pl.Spec.Vertices[0].DeepCopy()
+		two := uint64(2)
+		vertexLimitJson := `{"readTimeout": "3s"}`
+		var vertexLimit dfv1.VertexLimits
+		err = json.Unmarshal([]byte(vertexLimitJson), &vertexLimit)
+		assert.NoError(t, err)
+		v.Limits = &vertexLimit
+		v.Limits.ReadBatchSize = &two
+		copyVertexLimits(pl, v)
+		assert.Equal(t, two, *v.Limits.ReadBatchSize)
+		assert.Equal(t, "3s", v.Limits.ReadTimeout.Duration.String())
+	})
+
+	t.Run("rate limit from pipeline only", func(t *testing.T) {
+		pl := testPipeline.DeepCopy()
+		maxTPS := uint64(100)
+		minTPS := uint64(10)
+		rampUpDuration := &metav1.Duration{Duration: 30 * time.Second}
+		redisURL := "redis://redis-service:6379"
+
+		pipelineLimit := dfv1.PipelineLimits{
+			RateLimit: &dfv1.RateLimit{
+				Max:            &maxTPS,
+				Min:            &minTPS,
+				RampUpDuration: rampUpDuration,
+				RateLimiterStore: &dfv1.RateLimiterStore{
+					RateLimiterRedisStore: &dfv1.RateLimiterRedisStore{
+						URL: &redisURL,
+					},
+				},
+			},
+		}
+		pl.Spec.Limits = &pipelineLimit
+
+		v := new(dfv1.AbstractVertex)
+		copyVertexLimits(pl, v)
+		assert.NotNil(t, v.Limits)
+		assert.NotNil(t, v.Limits.RateLimit)
+		assert.Equal(t, maxTPS, *v.Limits.RateLimit.Max)
+		assert.Equal(t, minTPS, *v.Limits.RateLimit.Min)
+		assert.Equal(t, 30*time.Second, v.Limits.RateLimit.RampUpDuration.Duration)
+		assert.NotNil(t, v.Limits.RateLimit.RateLimiterStore)
+		assert.NotNil(t, v.Limits.RateLimit.RateLimiterStore.RateLimiterRedisStore)
+		assert.Equal(t, redisURL, *v.Limits.RateLimit.RateLimiterStore.RateLimiterRedisStore.URL)
+	})
+
+	t.Run("rate limit vertex overrides pipeline", func(t *testing.T) {
+		pl := testPipeline.DeepCopy()
+		pipelineMaxTPS := uint64(100)
+		pipelineMinTPS := uint64(10)
+		pipelineRampUp := &metav1.Duration{Duration: 30 * time.Second}
+		redisURL := "redis://redis-service:6379"
+
+		pipelineLimit := dfv1.PipelineLimits{
+			RateLimit: &dfv1.RateLimit{
+				Max:            &pipelineMaxTPS,
+				Min:            &pipelineMinTPS,
+				RampUpDuration: pipelineRampUp,
+				RateLimiterStore: &dfv1.RateLimiterStore{
+					RateLimiterRedisStore: &dfv1.RateLimiterRedisStore{
+						URL: &redisURL,
+					},
+				},
+			},
+		}
+		pl.Spec.Limits = &pipelineLimit
+
+		v := new(dfv1.AbstractVertex)
+		vertexMaxTPS := uint64(200)
+		vertexMinTPS := uint64(20)
+		vertexRampUp := &metav1.Duration{Duration: 60 * time.Second}
+
+		v.Limits = &dfv1.VertexLimits{
+			RateLimit: &dfv1.RateLimit{
+				Max:            &vertexMaxTPS,
+				Min:            &vertexMinTPS,
+				RampUpDuration: vertexRampUp,
+			},
+		}
+
+		copyVertexLimits(pl, v)
+		assert.NotNil(t, v.Limits.RateLimit)
+		assert.Equal(t, vertexMaxTPS, *v.Limits.RateLimit.Max)
+		assert.Equal(t, vertexMinTPS, *v.Limits.RateLimit.Min)
+		assert.Equal(t, 60*time.Second, v.Limits.RateLimit.RampUpDuration.Duration)
+		// Store should be inherited from pipeline since vertex didn't specify one
+		assert.NotNil(t, v.Limits.RateLimit.RateLimiterStore)
+		assert.Equal(t, redisURL, *v.Limits.RateLimit.RateLimiterStore.RateLimiterRedisStore.URL)
+	})
+
+	t.Run("rate limit partial vertex override", func(t *testing.T) {
+		pl := testPipeline.DeepCopy()
+		pipelineMaxTPS := uint64(100)
+		pipelineMinTPS := uint64(10)
+		pipelineRampUp := &metav1.Duration{Duration: 30 * time.Second}
+		redisURL := "redis://redis-service:6379"
+
+		pipelineLimit := dfv1.PipelineLimits{
+			RateLimit: &dfv1.RateLimit{
+				Max:            &pipelineMaxTPS,
+				Min:            &pipelineMinTPS,
+				RampUpDuration: pipelineRampUp,
+				RateLimiterStore: &dfv1.RateLimiterStore{
+					RateLimiterRedisStore: &dfv1.RateLimiterRedisStore{
+						URL: &redisURL,
+					},
+				},
+			},
+		}
+		pl.Spec.Limits = &pipelineLimit
+
+		v := new(dfv1.AbstractVertex)
+		vertexMaxTPS := uint64(200)
+		// Only override max, min and store should come from pipeline
+
+		v.Limits = &dfv1.VertexLimits{
+			RateLimit: &dfv1.RateLimit{
+				Max: &vertexMaxTPS,
+			},
+		}
+
+		copyVertexLimits(pl, v)
+		assert.NotNil(t, v.Limits.RateLimit)
+		assert.Equal(t, vertexMaxTPS, *v.Limits.RateLimit.Max)
+		assert.Equal(t, pipelineMinTPS, *v.Limits.RateLimit.Min)                    // Should inherit from pipeline
+		assert.Equal(t, 30*time.Second, v.Limits.RateLimit.RampUpDuration.Duration) // Should inherit from pipeline
+		assert.NotNil(t, v.Limits.RateLimit.RateLimiterStore)                       // Should inherit from pipeline
+		assert.Equal(t, redisURL, *v.Limits.RateLimit.RateLimiterStore.RateLimiterRedisStore.URL)
+	})
+
+	t.Run("rate limit with in-memory store", func(t *testing.T) {
+		pl := testPipeline.DeepCopy()
+		maxTPS := uint64(50)
+		minTPS := uint64(5)
+
+		pipelineLimit := dfv1.PipelineLimits{
+			RateLimit: &dfv1.RateLimit{
+				Max: &maxTPS,
+				Min: &minTPS,
+				RateLimiterStore: &dfv1.RateLimiterStore{
+					RateLimiterInMemoryStore: &dfv1.RateLimiterInMemoryStore{},
+				},
+			},
+		}
+		pl.Spec.Limits = &pipelineLimit
+
+		v := new(dfv1.AbstractVertex)
+		copyVertexLimits(pl, v)
+		assert.NotNil(t, v.Limits.RateLimit)
+		assert.Equal(t, maxTPS, *v.Limits.RateLimit.Max)
+		assert.Equal(t, minTPS, *v.Limits.RateLimit.Min)
+		assert.NotNil(t, v.Limits.RateLimit.RateLimiterStore)
+		assert.NotNil(t, v.Limits.RateLimit.RateLimiterStore.RateLimiterInMemoryStore)
+		assert.Nil(t, v.Limits.RateLimit.RateLimiterStore.RateLimiterRedisStore)
+	})
 }
 
 func Test_copyEdges(t *testing.T) {

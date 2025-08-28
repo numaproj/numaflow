@@ -27,8 +27,10 @@ numaflow-sqs.workspace = true
 numaflow-models.workspace = true
 numaflow-pb.workspace = true
 numaflow-shared.workspace = true
+numaflow-throttling.workspace = true
 serving.workspace = true
 backoff.workspace = true
+
 axum.workspace = true
 axum-server.workspace = true
 bytes.workspace = true
@@ -50,6 +52,7 @@ parking_lot.workspace = true
 prometheus-client.workspace = true
 pin-project.workspace = true
 kube.workspace = true
+
 hyper-util = "0.1.6"
 semver = "1.0"
 pep440_rs = "0.7.3"
@@ -57,6 +60,7 @@ rand = "0.8.5"
 flate2 = "1.1.2"
 zstd = "0.13.3"
 lz4 = "1.28.1"
+async-trait = "0.1.88"
 
 [dev-dependencies]
 tempfile = "3.11.0"
