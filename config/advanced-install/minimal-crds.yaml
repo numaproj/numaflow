@@ -98,6 +98,11 @@ spec:
           metadata:
             type: object
           spec:
+            properties:
+              replicas:
+                default: 1
+                format: int32
+                type: integer
             type: object
             x-kubernetes-preserve-unknown-fields: true
           status:
@@ -284,6 +289,11 @@ spec:
           metadata:
             type: object
           spec:
+            properties:
+              replicas:
+                default: 1
+                format: int32
+                type: integer
             type: object
             x-kubernetes-preserve-unknown-fields: true
           status:
