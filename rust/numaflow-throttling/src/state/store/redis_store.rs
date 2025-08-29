@@ -3,9 +3,11 @@ use crate::state::Consensus;
 use crate::state::store::Store;
 use numaflow_models::models::RateLimiterRedisStore;
 use numaflow_shared::get_secret_from_volume;
-use redis::TlsMode;
 use redis::sentinel::{SentinelClientBuilder, SentinelServerType};
-use redis::{Client, ConnectionAddr, IntoConnectionInfo, RedisError, Script};
+use redis::{
+    Client, ClientTlsConfig, ConnectionAddr, IntoConnectionInfo, RedisError, Script,
+    TlsCertificates,
+};
 use tokio_util::sync::CancellationToken;
 
 // Embed Lua scripts at compile time
@@ -34,8 +36,8 @@ pub enum RedisMode {
         endpoints: Vec<String>,
         sentinel_auth: Option<RedisAuth>,
         redis_auth: Option<RedisAuth>,
-        sentinel_tls: Option<TlsMode>,
-        redis_tls: Option<TlsMode>,
+        sentinel_tls: Box<Option<TlsCertificates>>,
+        redis_tls: Box<Option<TlsCertificates>>,
         db: Option<i32>,
     },
 }
@@ -53,17 +55,14 @@ impl std::fmt::Debug for RedisMode {
                 endpoints,
                 sentinel_auth,
                 redis_auth,
-                sentinel_tls,
-                redis_tls,
                 db,
+                ..
             } => f
                 .debug_struct("Sentinel")
                 .field("master_name", master_name)
                 .field("endpoints", endpoints)
                 .field("sentinel_auth", sentinel_auth)
                 .field("redis_auth", redis_auth)
-                .field("sentinel_tls", &sentinel_tls.is_some())
-                .field("redis_tls", &redis_tls.is_some())
                 .field("db", db)
                 .finish(),
         }
@@ -129,12 +128,14 @@ impl RedisMode {
                     builder = builder.redis_auth(auth);
                 }
 
-                if sentinel_config.sentinel_tls.is_some() {
-                    builder = builder.sentinel_tls(TlsMode::Secure);
+                if let Some(sentinel_tls) = &sentinel_config.sentinel_tls {
+                    let tls_config = parse_redis_tls_config(sentinel_tls.as_ref())?;
+                    builder = builder.sentinel_tls(tls_config);
                 }
 
-                if sentinel_config.redis_tls.is_some() {
-                    builder = builder.redis_tls(TlsMode::Secure);
+                if let Some(redis_tls) = &sentinel_config.redis_tls {
+                    let tls_config = parse_redis_tls_config(redis_tls.as_ref())?;
+                    builder = builder.redis_tls(tls_config);
                 }
 
                 if let Some(db) = redis_store_config.db {
@@ -183,8 +184,8 @@ pub struct SentinelBuilder {
     endpoints: Vec<String>,
     sentinel_auth: Option<RedisAuth>,
     redis_auth: Option<RedisAuth>,
-    sentinel_tls: Option<TlsMode>,
-    redis_tls: Option<TlsMode>,
+    sentinel_tls: Option<TlsCertificates>,
+    redis_tls: Option<TlsCertificates>,
     db: Option<i32>,
 }
 
@@ -211,13 +212,13 @@ impl SentinelBuilder {
         self
     }
 
-    pub fn sentinel_tls(mut self, tls_mode: TlsMode) -> Self {
-        self.sentinel_tls = Some(tls_mode);
+    pub fn sentinel_tls(mut self, tls_certificates: TlsCertificates) -> Self {
+        self.sentinel_tls = Some(tls_certificates);
         self
     }
 
-    pub fn redis_tls(mut self, tls_mode: TlsMode) -> Self {
-        self.redis_tls = Some(tls_mode);
+    pub fn redis_tls(mut self, tls_certificates: TlsCertificates) -> Self {
+        self.redis_tls = Some(tls_certificates);
         self
     }
 
@@ -236,8 +237,8 @@ impl SentinelBuilder {
             endpoints: self.endpoints,
             sentinel_auth: self.sentinel_auth,
             redis_auth: self.redis_auth,
-            sentinel_tls: self.sentinel_tls,
-            redis_tls: self.redis_tls,
+            sentinel_tls: Box::new(self.sentinel_tls),
+            redis_tls: Box::new(self.redis_tls),
             db: self.db,
         })
     }
@@ -325,8 +326,8 @@ impl RedisStore {
                 }
 
                 // Apply sentinel TLS if provided
-                if let Some(tls_mode) = sentinel_tls {
-                    builder = builder.set_client_to_sentinel_tls_mode(tls_mode);
+                if let Some(tls_certificates) = sentinel_tls.as_ref() {
+                    builder = builder.set_client_to_sentinel_certificates(tls_certificates.clone());
                 }
 
                 // Apply Redis data node authentication if provided
@@ -340,8 +341,8 @@ impl RedisStore {
                 }
 
                 // Apply Redis data node TLS if provided
-                if let Some(tls_mode) = redis_tls {
-                    builder = builder.set_client_to_redis_tls_mode(tls_mode);
+                if let Some(tls_certificates) = redis_tls.as_ref() {
+                    builder = builder.set_client_to_redis_certificates(tls_certificates.clone());
                 }
 
                 // Apply database selection if provided
@@ -424,6 +425,46 @@ fn parse_redis_auth(auth: &numaflow_models::models::RedisAuth) -> crate::Result<
         .map_err(|e| Error::RedisStore(format!("Failed to get password secret: {}", e)))?;
 
     Ok(RedisAuth { username, password })
+}
+
+/// Parse Redis TLS configuration from the models.
+fn parse_redis_tls_config(tls: &numaflow_models::models::Tls) -> crate::Result<TlsCertificates> {
+    let ca_cert = tls
+        .ca_cert_secret
+        .as_ref()
+        .map(|secret_ref| get_secret_from_volume(&secret_ref.name, &secret_ref.key))
+        .transpose()
+        .map_err(|e| Error::RedisStore(format!("Failed to get CA cert secret: {}", e)))?
+        .map(|cert| cert.into_bytes());
+
+    let client_tls = match (&tls.cert_secret, &tls.key_secret) {
+        (Some(cert_secret), Some(key_secret)) => {
+            let client_cert =
+                get_secret_from_volume(&cert_secret.name, &cert_secret.key).map_err(|e| {
+                    Error::RedisStore(format!("Failed to get client cert secret: {}", e))
+                })?;
+
+            let client_key =
+                get_secret_from_volume(&key_secret.name, &key_secret.key).map_err(|e| {
+                    Error::RedisStore(format!("Failed to get client key secret: {}", e))
+                })?;
+
+            Some(ClientTlsConfig {
+                client_cert: client_cert.into_bytes(),
+                client_key: client_key.into_bytes(),
+            })
+        }
+        (_, _) => {
+            return Err(Error::RedisStore(
+                "Invalid configuration for TLS".to_string(),
+            ));
+        }
+    };
+
+    Ok(TlsCertificates {
+        client_tls,
+        root_cert: ca_cert,
+    })
 }
 
 impl Store for RedisStore {
@@ -633,8 +674,18 @@ mod tests {
                 endpoints: vec!["sentinel1:26379".to_string()],
                 sentinel_auth: None,
                 redis_auth: None,
-                sentinel_tls: Some(Box::new(Tls::new())),
-                redis_tls: Some(Box::new(Tls::new())),
+                sentinel_tls: Some(Box::new(Tls {
+                    insecure_skip_verify: Some(true),
+                    ca_cert_secret: None,
+                    cert_secret: None,
+                    key_secret: None,
+                })),
+                redis_tls: Some(Box::new(Tls {
+                    insecure_skip_verify: Some(false),
+                    ca_cert_secret: None,
+                    cert_secret: None,
+                    key_secret: None,
+                })),
             })),
         };
 
@@ -739,11 +790,16 @@ mod tests {
             password: Some("redis_pass".to_string()),
         };
 
+        let tls_certificates = TlsCertificates {
+            client_tls: None,
+            root_cert: None,
+        };
+
         let redis_mode =
             RedisMode::sentinel("mymaster".to_string(), vec!["sentinel1:26379".to_string()])
                 .sentinel_auth(sentinel_auth.clone())
                 .redis_auth(redis_auth.clone())
-                .sentinel_tls(TlsMode::Secure)
+                .sentinel_tls(tls_certificates)
                 .build()
                 .unwrap();
 
