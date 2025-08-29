@@ -2,6 +2,7 @@ use crate::error::Error;
 use crate::state::Consensus;
 use crate::state::store::Store;
 use numaflow_models::models::RateLimiterRedisStore;
+use numaflow_shared::get_secret_from_volume;
 use redis::TlsMode;
 use redis::sentinel::{SentinelClientBuilder, SentinelServerType};
 use redis::{Client, ConnectionAddr, IntoConnectionInfo, RedisError, Script};
@@ -11,7 +12,6 @@ use tokio_util::sync::CancellationToken;
 const REGISTER_SCRIPT: &str = include_str!("lua/register.lua");
 const DEREGISTER_SCRIPT: &str = include_str!("lua/deregister.lua");
 const SYNC_POOL_SIZE_SCRIPT: &str = include_str!("lua/sync_pool_size.lua");
-const SECRET_BASE_PATH: &str = "/var/numaflow/secrets";
 
 #[derive(Clone)]
 pub struct RedisStore {
@@ -424,15 +424,6 @@ fn parse_redis_auth(auth: &numaflow_models::models::RedisAuth) -> crate::Result<
         .map_err(|e| Error::RedisStore(format!("Failed to get password secret: {}", e)))?;
 
     Ok(RedisAuth { username, password })
-}
-
-// Retrieve value from mounted secret volume
-// "/var/numaflow/secrets/${secretRef.name}/${secretRef.key}" is expected to be the file path
-pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> Result<String, String> {
-    let path = format!("{SECRET_BASE_PATH}/{name}/{key}");
-    let val = std::fs::read_to_string(path.clone())
-        .map_err(|e| format!("Reading secret from file {path}: {e:?}"))?;
-    Ok(val.trim().into())
 }
 
 impl Store for RedisStore {

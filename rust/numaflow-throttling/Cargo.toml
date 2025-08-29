@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 numaflow-models.workspace = true
+numaflow-shared.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true
 thiserror.workspace = true

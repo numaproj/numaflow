@@ -1,5 +1,7 @@
 //! This module contains the configuration for all the components of the pipeline and monovertex.
+
 use crate::Error;
+use numaflow_shared::get_secret_from_volume;
 
 pub(crate) mod source;
 
@@ -30,19 +32,16 @@ fn parse_kafka_auth_config(
                             "PLAIN mechanism requires plain auth configuration".into(),
                         ));
                     };
-                    let username = crate::shared::create_components::get_secret_from_volume(
-                        &plain.user_secret.name,
-                        &plain.user_secret.key,
-                    )
-                    .map_err(|e| Error::Config(format!("Failed to get user secret: {e:?}")))?;
+                    let username =
+                        get_secret_from_volume(&plain.user_secret.name, &plain.user_secret.key)
+                            .map_err(|e| {
+                                Error::Config(format!("Failed to get user secret: {e:?}"))
+                            })?;
                     let password = if let Some(password_secret) = plain.password_secret {
-                        crate::shared::create_components::get_secret_from_volume(
-                            &password_secret.name,
-                            &password_secret.key,
-                        )
-                        .map_err(|e| {
-                            Error::Config(format!("Failed to get password secret: {e:?}"))
-                        })?
+                        get_secret_from_volume(&password_secret.name, &password_secret.key)
+                            .map_err(|e| {
+                                Error::Config(format!("Failed to get password secret: {e:?}"))
+                            })?
                     } else {
                         return Err(Error::Config("PLAIN mechanism requires password".into()));
                     };
@@ -55,19 +54,16 @@ fn parse_kafka_auth_config(
                                 .into(),
                         ));
                     };
-                    let username = crate::shared::create_components::get_secret_from_volume(
-                        &scram.user_secret.name,
-                        &scram.user_secret.key,
-                    )
-                    .map_err(|e| Error::Config(format!("Failed to get user secret: {e:?}")))?;
+                    let username =
+                        get_secret_from_volume(&scram.user_secret.name, &scram.user_secret.key)
+                            .map_err(|e| {
+                                Error::Config(format!("Failed to get user secret: {e:?}"))
+                            })?;
                     let password = if let Some(password_secret) = scram.password_secret {
-                        crate::shared::create_components::get_secret_from_volume(
-                            &password_secret.name,
-                            &password_secret.key,
-                        )
-                        .map_err(|e| {
-                            Error::Config(format!("Failed to get password secret: {e:?}"))
-                        })?
+                        get_secret_from_volume(&password_secret.name, &password_secret.key)
+                            .map_err(|e| {
+                                Error::Config(format!("Failed to get password secret: {e:?}"))
+                            })?
                     } else {
                         return Err(Error::Config(
                             "SCRAM-SHA-256 mechanism requires password".into(),
@@ -82,19 +78,16 @@ fn parse_kafka_auth_config(
                                 .into(),
                         ));
                     };
-                    let username = crate::shared::create_components::get_secret_from_volume(
-                        &scram.user_secret.name,
-                        &scram.user_secret.key,
-                    )
-                    .map_err(|e| Error::Config(format!("Failed to get user secret: {e:?}")))?;
+                    let username =
+                        get_secret_from_volume(&scram.user_secret.name, &scram.user_secret.key)
+                            .map_err(|e| {
+                                Error::Config(format!("Failed to get user secret: {e:?}"))
+                            })?;
                     let password = if let Some(password_secret) = scram.password_secret {
-                        crate::shared::create_components::get_secret_from_volume(
-                            &password_secret.name,
-                            &password_secret.key,
-                        )
-                        .map_err(|e| {
-                            Error::Config(format!("Failed to get password secret: {e:?}"))
-                        })?
+                        get_secret_from_volume(&password_secret.name, &password_secret.key)
+                            .map_err(|e| {
+                                Error::Config(format!("Failed to get password secret: {e:?}"))
+                            })?
                     } else {
                         return Err(Error::Config(
                             "SCRAM-SHA-512 mechanism requires password".into(),
@@ -110,7 +103,7 @@ fn parse_kafka_auth_config(
                     };
                     let service_name = gssapi.service_name.clone();
                     let realm = gssapi.realm.clone();
-                    let username = crate::shared::create_components::get_secret_from_volume(
+                    let username = get_secret_from_volume(
                         &gssapi.username_secret.name,
                         &gssapi.username_secret.key,
                     )
@@ -119,28 +112,24 @@ fn parse_kafka_auth_config(
                     })?;
                     let password = if let Some(password_secret) = gssapi.password_secret {
                         Some(
-                            crate::shared::create_components::get_secret_from_volume(
-                                &password_secret.name,
-                                &password_secret.key,
-                            )
-                            .map_err(|e| {
-                                Error::Config(format!(
-                                    "Failed to get gssapi password secret: {e:?}"
-                                ))
-                            })?,
+                            get_secret_from_volume(&password_secret.name, &password_secret.key)
+                                .map_err(|e| {
+                                    Error::Config(format!(
+                                        "Failed to get gssapi password secret: {e:?}"
+                                    ))
+                                })?,
                         )
                     } else {
                         None
                     };
                     let keytab = if let Some(keytab_secret) = gssapi.keytab_secret {
                         Some(
-                            crate::shared::create_components::get_secret_from_volume(
-                                &keytab_secret.name,
-                                &keytab_secret.key,
-                            )
-                            .map_err(|e| {
-                                Error::Config(format!("Failed to get gssapi keytab secret: {e:?}"))
-                            })?,
+                            get_secret_from_volume(&keytab_secret.name, &keytab_secret.key)
+                                .map_err(|e| {
+                                    Error::Config(format!(
+                                        "Failed to get gssapi keytab secret: {e:?}"
+                                    ))
+                                })?,
                         )
                     } else {
                         None
@@ -148,7 +137,7 @@ fn parse_kafka_auth_config(
                     let kerberos_config =
                         if let Some(kerberos_config_secret) = gssapi.kerberos_config_secret {
                             Some(
-                                crate::shared::create_components::get_secret_from_volume(
+                                get_secret_from_volume(
                                     &kerberos_config_secret.name,
                                     &kerberos_config_secret.key,
                                 )
@@ -178,16 +167,16 @@ fn parse_kafka_auth_config(
                             "OAUTH mechanism requires oauth configuration".into(),
                         ));
                     };
-                    let client_id = crate::shared::create_components::get_secret_from_volume(
-                        &oauth.client_id.name,
-                        &oauth.client_id.key,
-                    )
-                    .map_err(|e| Error::Config(format!("Failed to get client id secret: {e:?}")))?;
-                    let client_secret = crate::shared::create_components::get_secret_from_volume(
-                        &oauth.client_secret.name,
-                        &oauth.client_secret.key,
-                    )
-                    .map_err(|e| Error::Config(format!("Failed to get client secret: {e:?}")))?;
+                    let client_id =
+                        get_secret_from_volume(&oauth.client_id.name, &oauth.client_id.key)
+                            .map_err(|e| {
+                                Error::Config(format!("Failed to get client id secret: {e:?}"))
+                            })?;
+                    let client_secret =
+                        get_secret_from_volume(&oauth.client_secret.name, &oauth.client_secret.key)
+                            .map_err(|e| {
+                                Error::Config(format!("Failed to get client secret: {e:?}"))
+                            })?;
                     let token_endpoint = oauth.token_endpoint.clone();
                     Some(numaflow_kafka::KafkaSaslAuth::Oauth {
                         client_id,
@@ -216,39 +205,31 @@ fn parse_kafka_auth_config(
         } else {
             let ca_cert = tls_config
                 .ca_cert_secret
-                .map(
-                    |ca_cert_secret| match crate::shared::create_components::get_secret_from_volume(
-                        &ca_cert_secret.name,
-                        &ca_cert_secret.key,
-                    ) {
+                .map(|ca_cert_secret| {
+                    match get_secret_from_volume(&ca_cert_secret.name, &ca_cert_secret.key) {
                         Ok(secret) => Ok(secret),
                         Err(e) => Err(Error::Config(format!(
                             "Failed to get CA cert secret: {e:?}"
                         ))),
-                    },
-                )
+                    }
+                })
                 .transpose()?;
 
             let tls_client_auth_certs = match tls_config.cert_secret {
                 Some(client_cert_secret) => {
-                    let client_cert = crate::shared::create_components::get_secret_from_volume(
-                        &client_cert_secret.name,
-                        &client_cert_secret.key,
-                    )
-                    .map_err(|e| {
-                        Error::Config(format!("Failed to get client cert secret: {e:?}"))
-                    })?;
+                    let client_cert =
+                        get_secret_from_volume(&client_cert_secret.name, &client_cert_secret.key)
+                            .map_err(|e| {
+                            Error::Config(format!("Failed to get client cert secret: {e:?}"))
+                        })?;
 
                     let Some(private_key_secret) = tls_config.key_secret else {
                         return Err(Error::Config("Client cert is specified for TLS authentication, but private key is not specified".into()));
                     };
 
                     let client_cert_private_key =
-                        crate::shared::create_components::get_secret_from_volume(
-                            &private_key_secret.name,
-                            &private_key_secret.key,
-                        )
-                        .map_err(|e| {
+                        get_secret_from_volume(&private_key_secret.name, &private_key_secret.key)
+                            .map_err(|e| {
                             Error::Config(format!(
                                 "Failed to get client cert private key secret: {e:?}"
                             ))
@@ -282,11 +263,8 @@ fn parse_pulsar_auth_config(
     };
 
     if let Some(token) = auth.token {
-        let secret =
-            crate::shared::create_components::get_secret_from_volume(&token.name, &token.key)
-                .map_err(|e| {
-                    Error::Config(format!("Failed to get token secret from volume: {e:?}"))
-                })?;
+        let secret = get_secret_from_volume(&token.name, &token.key)
+            .map_err(|e| Error::Config(format!("Failed to get token secret from volume: {e:?}")))?;
         return Ok(Some(numaflow_pulsar::PulsarAuth::JWT(secret)));
     }
 
@@ -294,15 +272,14 @@ fn parse_pulsar_auth_config(
         let user_secret_selector = &basic_auth
             .username
             .ok_or_else(|| Error::Config("Username can not be empty for basic auth".into()))?;
-        let username = crate::shared::create_components::get_secret_from_volume(
-            &user_secret_selector.name,
-            &user_secret_selector.key,
-        )
-        .map_err(|e| Error::Config(format!("Failed to get username secret from volume: {e:?}")))?;
+        let username =
+            get_secret_from_volume(&user_secret_selector.name, &user_secret_selector.key).map_err(
+                |e| Error::Config(format!("Failed to get username secret from volume: {e:?}")),
+            )?;
         let password_secret_selector = &basic_auth
             .password
             .ok_or_else(|| Error::Config("Password can not be empty for basic auth".into()))?;
-        let password = crate::shared::create_components::get_secret_from_volume(
+        let password = get_secret_from_volume(
             &password_secret_selector.name,
             &password_secret_selector.key,
         )
