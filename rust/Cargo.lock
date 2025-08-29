@@ -2504,7 +2504,6 @@ dependencies = [
  "pulsar",
  "rand 0.8.5",
  "rcgen",
- "redis",
  "rustls 0.23.31",
  "semver",
  "serde",
@@ -2705,6 +2704,7 @@ dependencies = [
 name = "numaflow-throttling"
 version = "0.1.0"
 dependencies = [
+ "numaflow-models",
  "redis",
  "thiserror 2.0.16",
  "tokio",

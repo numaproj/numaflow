@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+numaflow-models.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true
 thiserror.workspace = true

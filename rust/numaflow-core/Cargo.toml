@@ -61,7 +61,6 @@ flate2 = "1.1.2"
 zstd = "0.13.3"
 lz4 = "1.28.1"
 async-trait = "0.1.88"
-redis = { version = "0.32.5", features = ["sentinel", "tokio-comp", "connection-manager", "script"] }
 
 [dev-dependencies]
 tempfile = "3.11.0"
