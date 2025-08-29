@@ -234,21 +234,37 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 	} else {
 		totalPending = pending.GetValue()
 	}
-
 	desired := s.desiredReplicas(ctx, monoVtx, totalRate, totalPending)
-	log.Infof("Calculated desired replica number of MonoVertex %q is: %d.", monoVtx.Name, desired)
-	max := monoVtx.Spec.Scale.GetMaxReplicas()
-	min := monoVtx.Spec.Scale.GetMinReplicas()
-	if desired > max {
-		desired = max
-		log.Infof("Calculated desired replica number %d of MonoVertex %q is greater than max, using max %d.", desired, monoVtxName, max)
+
+	// Check if rate limiting is configured and we're hitting the limit
+	if monoVtx.Spec.Limits != nil && monoVtx.Spec.Limits.RateLimit != nil && monoVtx.Spec.Limits.RateLimit.Max != nil {
+		maxRate := float64(*monoVtx.Spec.Limits.RateLimit.Max * monoVtx.Spec.Limits.GetReadBatchSize())
+
+		if totalRate >= maxRate {
+			// Calculate desired replicas to see if we would scale up
+			current := int32(monoVtx.Status.Replicas)
+
+			// Only skip if we would be scaling up
+			if desired > current {
+				log.Infof("MonoVertex %s would scale up but is at rate limit, skip scaling up.", monoVtxName)
+				return nil
+			}
+		}
 	}
-	if desired < min {
-		desired = min
-		log.Infof("Calculated desired replica number %d of MonoVertex %q is smaller than min, using min %d.", desired, monoVtxName, min)
+
+	log.Infof("Calculated desired replica number of MonoVertex %q is: %d.", monoVtx.Name, desired)
+	maxReplicas := monoVtx.Spec.Scale.GetMaxReplicas()
+	minReplicas := monoVtx.Spec.Scale.GetMinReplicas()
+	if desired > maxReplicas {
+		desired = maxReplicas
+		log.Infof("Calculated desired replica number %d of MonoVertex %q is greater than max, using max %d.", desired, monoVtxName, maxReplicas)
+	}
+	if desired < minReplicas {
+		desired = minReplicas
+		log.Infof("Calculated desired replica number %d of MonoVertex %q is smaller than min, using min %d.", desired, monoVtxName, minReplicas)
 	}
 	current := int32(monoVtx.Status.Replicas)
-	if current > max || current < min { // Someone might have manually scaled up/down the MonoVertex
+	if current > maxReplicas || current < minReplicas { // Someone might have manually scaled up/down the MonoVertex
 		return s.patchMonoVertexReplicas(ctx, monoVtx, desired)
 	}
 	if desired < current {
