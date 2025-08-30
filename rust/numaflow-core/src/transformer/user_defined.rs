@@ -12,7 +12,8 @@ use tonic::{Request, Streaming};
 
 use crate::config::get_vertex_name;
 use crate::error::{Error, Result};
-use crate::message::{Message, MessageID, Metadata, Offset};
+use crate::message::{Message, MessageID, Offset};
+use crate::metadata::Metadata;
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 
 type ResponseSenderMap =

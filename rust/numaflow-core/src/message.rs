@@ -4,7 +4,8 @@ use std::fmt;
 use std::sync::Arc;
 
 use crate::Error;
-use crate::config::get_vertex_name;
+
+use crate::metadata::Metadata;
 use crate::shared::grpc::prost_timestamp_from_utc;
 use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
@@ -98,131 +99,6 @@ impl Default for Message {
             typ: Default::default(),
             is_late: false,
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct Metadata {
-    /// name of the previous vertex.
-    pub(crate) previous_vertex: String,
-    pub(crate) sys_metadata: HashMap<String, KeyValueGroup>,
-    pub(crate) user_metadata: HashMap<String, KeyValueGroup>,
-}
-
-impl Default for Metadata {
-    fn default() -> Self {
-        Self {
-            previous_vertex: "".to_string(),
-            sys_metadata: HashMap::new(),
-            user_metadata: HashMap::new(),
-        }
-    }
-}
-
-impl From<numaflow_pb::objects::isb::Metadata> for Metadata {
-    fn from(metadata: numaflow_pb::objects::isb::Metadata) -> Self {
-        Self {
-            previous_vertex: metadata.previous_vertex,
-            sys_metadata: metadata
-                .sys_metadata
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect(),
-            user_metadata: metadata
-                .user_metadata
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect(),
-        }
-    }
-}
-
-impl From<Metadata> for numaflow_pb::objects::isb::Metadata {
-    fn from(metadata: Metadata) -> Self {
-        Self {
-            // write the current vertex name so that next vertex knows who sent it.
-            previous_vertex: get_vertex_name().to_string(),
-            sys_metadata: metadata
-                .sys_metadata
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect(),
-            user_metadata: metadata
-                .user_metadata
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct KeyValueGroup {
-    pub(crate) group: HashMap<String, KeyValue>,
-}
-
-impl From<numaflow_pb::objects::isb::KeyValueGroup> for KeyValueGroup {
-    fn from(group: numaflow_pb::objects::isb::KeyValueGroup) -> Self {
-        Self {
-            group: group
-                .key_value
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect(),
-        }
-    }
-}
-
-impl From<KeyValueGroup> for numaflow_pb::objects::isb::KeyValueGroup {
-    fn from(group: KeyValueGroup) -> Self {
-        Self {
-            key_value: group
-                .group
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct KeyValue {
-    pub(crate) key: String,
-    pub(crate) value: Bytes,
-}
-
-impl From<numaflow_pb::objects::isb::KeyValue> for KeyValue {
-    fn from(kv: numaflow_pb::objects::isb::KeyValue) -> Self {
-        Self {
-            key: kv.key,
-            value: kv.value.into(),
-        }
-    }
-}
-
-impl From<KeyValue> for numaflow_pb::objects::isb::KeyValue {
-    fn from(kv: KeyValue) -> Self {
-        Self {
-            key: kv.key,
-            value: kv.value.to_vec(),
-        }
-    }
-}
-
-impl TryFrom<KeyValue> for BytesMut {
-    type Error = Error;
-
-    fn try_from(kv: KeyValue) -> Result<Self, Self::Error> {
-        let proto_kv = numaflow_pb::objects::isb::KeyValue {
-            key: kv.key,
-            value: kv.value.to_vec(),
-        };
-
-        let mut buf = BytesMut::new();
-        proto_kv
-            .encode(&mut buf)
-            .map_err(|e| Error::Proto(e.to_string()))?;
-        Ok(buf)
     }
 }
 
