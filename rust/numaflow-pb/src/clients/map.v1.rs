@@ -30,6 +30,9 @@ pub mod map_request {
             ::prost::alloc::string::String,
             ::prost::alloc::string::String,
         >,
+        /// Metadata is the metadata of the message
+        #[prost(message, optional, tag = "6")]
+        pub metadata: ::core::option::Option<crate::common::metadata::Metadata>,
     }
 }
 ///
@@ -71,6 +74,9 @@ pub mod map_response {
         pub value: ::prost::alloc::vec::Vec<u8>,
         #[prost(string, repeated, tag = "3")]
         pub tags: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+        /// Metadata is the metadata of the message
+        #[prost(message, optional, tag = "4")]
+        pub metadata: ::core::option::Option<crate::common::metadata::Metadata>,
     }
 }
 /// *
