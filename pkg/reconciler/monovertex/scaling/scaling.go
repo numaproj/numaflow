@@ -239,8 +239,9 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 	// Check if rate limiting is configured and we're hitting the limit
 	if monoVtx.Spec.Limits != nil && monoVtx.Spec.Limits.RateLimit != nil && monoVtx.Spec.Limits.RateLimit.Max != nil {
 		maxRate := float64(*monoVtx.Spec.Limits.RateLimit.Max * monoVtx.Spec.Limits.GetReadBatchSize())
+		currentRate := math.Ceil(totalRate)
 
-		if totalRate >= maxRate {
+		if currentRate >= maxRate {
 			// Calculate desired replicas to see if we would scale up
 			current := int32(monoVtx.Status.Replicas)
 
