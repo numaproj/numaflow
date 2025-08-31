@@ -44,6 +44,7 @@ use crate::reduce::reducer::{Reducer, WindowManager};
 use crate::reduce::wal::segment::compactor::WindowKind;
 use crate::shared::create_components;
 
+use crate::mapper::map::MapHandle;
 use crate::reduce::wal::create_wal_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::sink::SinkWriter;
@@ -260,7 +261,9 @@ async fn start_map_forwarder(
         ISBWriterComponents::new(watermark_handle.clone().map(WatermarkHandle::ISB), &context);
 
     let buffer_writer = JetstreamWriter::new(writer_components);
-    let (forwarder_tasks, mapper_handle) = if let Some(rate_limit_config) = &config.rate_limit {
+    let (forwarder_tasks, mapper_handle, _pending_reader_task) = if let Some(rate_limit_config) =
+        &config.rate_limit
+    {
         if should_use_redis_rate_limiter(rate_limit_config) {
             let redis_config =
                 build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
@@ -337,7 +340,8 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
     rate_limiter: Option<C::RateLimiter>,
 ) -> Result<(
     Vec<tokio::task::JoinHandle<Result<()>>>,
-    crate::mapper::map::MapHandle,
+    MapHandle,
+    PendingReaderTasks,
 )> {
     let mut forwarder_tasks = vec![];
     let mut isb_lag_readers: Vec<JetStreamReader<C>> = vec![];
@@ -384,9 +388,10 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
         LagReader::ISB(isb_lag_readers),
     )
     .await;
-    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+    info!("Starting pending reader");
+    let pending_reader_task = pending_reader.start(is_mono_vertex()).await;
 
-    Ok((forwarder_tasks, mapper_handle.unwrap()))
+    Ok((forwarder_tasks, mapper_handle.unwrap(), pending_reader_task))
 }
 
 /// Start a map forwarder for a single stream, returns the task handle and the reader,
@@ -894,6 +899,7 @@ async fn run_source_forwarder<C: NumaflowTypeConfig>(
             LagReader::Source(Box::new(source.clone())),
         )
         .await;
+        info!("Started pending reader");
         Some(pending_reader.start(is_mono_vertex()).await)
     } else {
         None
@@ -979,45 +985,47 @@ async fn start_sink_forwarder(
     };
 
     // 2. Clean dispatch logic
-    let (forwarder_tasks, first_sink_writer) = if let Some(rate_limit_config) = &config.rate_limit {
-        if should_use_redis_rate_limiter(rate_limit_config) {
-            let redis_config =
-                build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
+    let (forwarder_tasks, first_sink_writer, _pending_reader_task) =
+        if let Some(rate_limit_config) = &config.rate_limit {
+            if should_use_redis_rate_limiter(rate_limit_config) {
+                let redis_config =
+                    build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
 
-            run_all_sink_forwarders::<WithRedisRateLimiter>(
-                &context,
-                &sink,
-                reader_config,
-                watermark_handle.clone(),
-                serving_store,
-                Some(redis_config.throttling_config),
-            )
-            .await?
+                run_all_sink_forwarders::<WithRedisRateLimiter>(
+                    &context,
+                    &sink,
+                    reader_config,
+                    watermark_handle.clone(),
+                    serving_store,
+                    Some(redis_config.throttling_config),
+                )
+                .await?
+            } else {
+                let in_mem_config =
+                    build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone())
+                        .await?;
+
+                run_all_sink_forwarders::<WithInMemoryRateLimiter>(
+                    &context,
+                    &sink,
+                    reader_config,
+                    watermark_handle.clone(),
+                    serving_store,
+                    Some(in_mem_config.throttling_config),
+                )
+                .await?
+            }
         } else {
-            let in_mem_config =
-                build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
-
-            run_all_sink_forwarders::<WithInMemoryRateLimiter>(
+            run_all_sink_forwarders::<WithoutRateLimiter>(
                 &context,
                 &sink,
                 reader_config,
                 watermark_handle.clone(),
                 serving_store,
-                Some(in_mem_config.throttling_config),
+                None,
             )
             .await?
-        }
-    } else {
-        run_all_sink_forwarders::<WithoutRateLimiter>(
-            &context,
-            &sink,
-            reader_config,
-            watermark_handle.clone(),
-            serving_store,
-            None,
-        )
-        .await?
-    };
+        };
 
     start_metrics_server::<WithoutRateLimiter>(
         config.metrics_config.clone(),
@@ -1054,7 +1062,11 @@ async fn run_all_sink_forwarders<C: NumaflowTypeConfig>(
     watermark_handle: Option<crate::watermark::isb::ISBWatermarkHandle>,
     serving_store: Option<ServingStore>,
     rate_limiter: Option<C::RateLimiter>,
-) -> Result<(Vec<tokio::task::JoinHandle<Result<()>>>, SinkWriter)> {
+) -> Result<(
+    Vec<tokio::task::JoinHandle<Result<()>>>,
+    SinkWriter,
+    PendingReaderTasks,
+)> {
     let mut forwarder_tasks = vec![];
     let mut isb_lag_readers: Vec<JetStreamReader<C>> = vec![];
     let mut first_sink_writer = None;
@@ -1103,9 +1115,13 @@ async fn run_all_sink_forwarders<C: NumaflowTypeConfig>(
         LagReader::ISB(isb_lag_readers),
     )
     .await;
-    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+    let pending_reader_task = pending_reader.start(is_mono_vertex()).await;
 
-    Ok((forwarder_tasks, first_sink_writer.unwrap()))
+    Ok((
+        forwarder_tasks,
+        first_sink_writer.expect("one sink writer is expected"),
+        pending_reader_task,
+    ))
 }
 
 /// Starts sink forwarder for a single stream.

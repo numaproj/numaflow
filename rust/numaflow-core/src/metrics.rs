@@ -1329,7 +1329,7 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
                 }
             },
             LagReader::ISB(readers) => {
-                for reader in readers.iter_mut() {
+                for reader in readers {
                     match fetch_isb_pending(reader).await {
                         Ok(pending) => {
                             if pending != -1 {
