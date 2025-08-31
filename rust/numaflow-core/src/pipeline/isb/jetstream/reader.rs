@@ -290,9 +290,6 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                 ));
 
                 let semaphore = Arc::new(Semaphore::new(max_ack_pending));
-                let mut processed_msgs_count: usize = 0;
-                let mut last_logged_at = Instant::now();
-
                 loop {
                     if cancel_token.is_cancelled() {
                         info!(stream=?self.stream, "Cancellation token received, stopping the reader.");
@@ -313,25 +310,12 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                         continue;
                     }
 
-                    let mut batch_count = 0;
                     for message in read_messages {
                         Self::update_metrics(&labels, &message);
                         if let Err(e) = messages_tx.send(message).await {
                             error!(?e, "Failed to send message to channel");
                             break;
                         }
-                        batch_count += 1;
-                    }
-
-                    processed_msgs_count += batch_count;
-                    if last_logged_at.elapsed().as_secs() >= 1 {
-                        info!(
-                            "Processed {} messages in {:?}",
-                            processed_msgs_count,
-                            Utc::now()
-                        );
-                        processed_msgs_count = 0;
-                        last_logged_at = Instant::now();
                     }
                 }
 
