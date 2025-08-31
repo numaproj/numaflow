@@ -5,7 +5,7 @@ use numaflow_models::models::RateLimiterRedisStore;
 use redis::sentinel::{SentinelClientBuilder, SentinelServerType};
 use redis::{
     Client, ClientTlsConfig, ConnectionAddr, IntoConnectionInfo, RedisError, Script,
-    TlsCertificates,
+    TlsCertificates, TlsMode,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -35,8 +35,8 @@ pub enum RedisMode {
         endpoints: Vec<String>,
         sentinel_auth: Option<RedisAuth>,
         redis_auth: Option<RedisAuth>,
-        sentinel_tls: Box<Option<TlsCertificates>>,
-        redis_tls: Box<Option<TlsCertificates>>,
+        sentinel_tls: Box<Option<RedisTlsInfo>>,
+        redis_tls: Box<Option<RedisTlsInfo>>,
         db: Option<i32>,
     },
 }
@@ -72,6 +72,12 @@ impl std::fmt::Debug for RedisMode {
 pub struct RedisAuth {
     pub username: Option<String>,
     pub password: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct RedisTlsInfo {
+    pub is_secure: bool,
+    pub certificates: Option<TlsCertificates>,
 }
 
 impl RedisMode {
@@ -128,13 +134,13 @@ impl RedisMode {
                 }
 
                 if let Some(sentinel_tls) = &sentinel_config.sentinel_tls {
-                    let tls_config = parse_redis_tls_config(sentinel_tls.as_ref())?;
-                    builder = builder.sentinel_tls(tls_config);
+                    let tls_info = create_redis_tls_info(sentinel_tls.as_ref())?;
+                    builder = builder.sentinel_tls(tls_info);
                 }
 
                 if let Some(redis_tls) = &sentinel_config.redis_tls {
-                    let tls_config = parse_redis_tls_config(redis_tls.as_ref())?;
-                    builder = builder.redis_tls(tls_config);
+                    let tls_info = create_redis_tls_info(redis_tls.as_ref())?;
+                    builder = builder.redis_tls(tls_info);
                 }
 
                 if let Some(db) = redis_store_config.db {
@@ -183,8 +189,8 @@ pub struct SentinelBuilder {
     endpoints: Vec<String>,
     sentinel_auth: Option<RedisAuth>,
     redis_auth: Option<RedisAuth>,
-    sentinel_tls: Option<TlsCertificates>,
-    redis_tls: Option<TlsCertificates>,
+    sentinel_tls: Option<RedisTlsInfo>,
+    redis_tls: Option<RedisTlsInfo>,
     db: Option<i32>,
 }
 
@@ -211,13 +217,13 @@ impl SentinelBuilder {
         self
     }
 
-    pub fn sentinel_tls(mut self, tls_certificates: TlsCertificates) -> Self {
-        self.sentinel_tls = Some(tls_certificates);
+    pub fn sentinel_tls(mut self, tls_info: RedisTlsInfo) -> Self {
+        self.sentinel_tls = Some(tls_info);
         self
     }
 
-    pub fn redis_tls(mut self, tls_certificates: TlsCertificates) -> Self {
-        self.redis_tls = Some(tls_certificates);
+    pub fn redis_tls(mut self, tls_info: RedisTlsInfo) -> Self {
+        self.redis_tls = Some(tls_info);
         self
     }
 
@@ -324,9 +330,19 @@ impl RedisStore {
                     }
                 }
 
-                // Apply sentinel TLS if provided
-                if let Some(tls_certificates) = sentinel_tls.as_ref() {
-                    builder = builder.set_client_to_sentinel_certificates(tls_certificates.clone());
+                // Apply sentinel TLS mode and certificates if provided
+                if let Some(tls_info) = sentinel_tls.as_ref() {
+                    let tls_mode = if tls_info.is_secure {
+                        TlsMode::Secure
+                    } else {
+                        TlsMode::Insecure
+                    };
+                    builder = builder.set_client_to_sentinel_tls_mode(tls_mode);
+
+                    if let Some(tls_certificates) = &tls_info.certificates {
+                        builder =
+                            builder.set_client_to_sentinel_certificates(tls_certificates.clone());
+                    }
                 }
 
                 // Apply Redis data node authentication if provided
@@ -339,9 +355,19 @@ impl RedisStore {
                     }
                 }
 
-                // Apply Redis data node TLS if provided
-                if let Some(tls_certificates) = redis_tls.as_ref() {
-                    builder = builder.set_client_to_redis_certificates(tls_certificates.clone());
+                // Apply Redis data node TLS mode and certificates if provided
+                if let Some(tls_info) = redis_tls.as_ref() {
+                    let tls_mode = if tls_info.is_secure {
+                        TlsMode::Secure
+                    } else {
+                        TlsMode::Insecure
+                    };
+                    builder = builder.set_client_to_redis_tls_mode(tls_mode);
+
+                    if let Some(tls_certificates) = &tls_info.certificates {
+                        builder =
+                            builder.set_client_to_redis_certificates(tls_certificates.clone());
+                    }
                 }
 
                 // Apply database selection if provided
@@ -426,8 +452,24 @@ fn parse_redis_auth(auth: &numaflow_models::models::RedisAuth) -> crate::Result<
     Ok(RedisAuth { username, password })
 }
 
+/// Create RedisTlsInfo from TLS configuration
+fn create_redis_tls_info(tls: &numaflow_models::models::Tls) -> crate::Result<RedisTlsInfo> {
+    let is_secure = !tls.insecure_skip_verify.unwrap_or(false);
+    let certificates = if is_secure {
+        Some(parse_redis_tls_config(tls)?)
+    } else {
+        None
+    };
+
+    Ok(RedisTlsInfo {
+        is_secure,
+        certificates,
+    })
+}
+
 /// Parse Redis TLS configuration from the models.
 fn parse_redis_tls_config(tls: &numaflow_models::models::Tls) -> crate::Result<TlsCertificates> {
+    // Only extract certificates when secure mode is enabled
     let ca_cert = tls
         .ca_cert_secret
         .as_ref()
@@ -453,9 +495,11 @@ fn parse_redis_tls_config(tls: &numaflow_models::models::Tls) -> crate::Result<T
                 client_key: client_key.into_bytes(),
             })
         }
+        (None, None) => None,
         (_, _) => {
             return Err(Error::RedisStore(
-                "Invalid configuration for TLS".to_string(),
+                "Both cert and key secrets must be provided for client TLS authentication"
+                    .to_string(),
             ));
         }
     };
@@ -643,6 +687,7 @@ mod tests {
                 sentinel_tls,
                 redis_tls,
                 db,
+                ..
             } => {
                 assert_eq!(master_name, "mymaster");
                 assert_eq!(endpoints, vec!["sentinel1:26379", "sentinel2:26379"]);
@@ -804,16 +849,19 @@ mod tests {
             password: Some("redis_pass".to_string()),
         };
 
-        let tls_certificates = TlsCertificates {
-            client_tls: None,
-            root_cert: None,
+        let tls_info = RedisTlsInfo {
+            is_secure: true,
+            certificates: Some(TlsCertificates {
+                client_tls: None,
+                root_cert: None,
+            }),
         };
 
         let redis_mode =
             RedisMode::sentinel("mymaster".to_string(), vec!["sentinel1:26379".to_string()])
                 .sentinel_auth(sentinel_auth.clone())
                 .redis_auth(redis_auth.clone())
-                .sentinel_tls(tls_certificates)
+                .sentinel_tls(tls_info)
                 .build()
                 .unwrap();
 
@@ -853,6 +901,88 @@ mod tests {
         assert!(DEREGISTER_SCRIPT.contains(":poolsize"));
         assert!(SYNC_POOL_SIZE_SCRIPT.contains(":heartbeats"));
         assert!(SYNC_POOL_SIZE_SCRIPT.contains(":poolsize"));
+    }
+
+    #[test]
+    fn test_parse_redis_tls_config_insecure_skip_verify() {
+        use numaflow_models::models::Tls;
+
+        // Test with insecure_skip_verify = true
+        let tls_config_insecure = Tls {
+            insecure_skip_verify: Some(true),
+            ca_cert_secret: None,
+            cert_secret: None,
+            key_secret: None,
+        };
+
+        let result = parse_redis_tls_config(&tls_config_insecure).unwrap();
+        assert!(result.client_tls.is_none());
+        assert!(result.root_cert.is_none());
+
+        // Test with insecure_skip_verify = false (should require certificates for full functionality)
+        let tls_config_secure = Tls {
+            insecure_skip_verify: Some(false),
+            ca_cert_secret: None,
+            cert_secret: None,
+            key_secret: None,
+        };
+
+        let result = parse_redis_tls_config(&tls_config_secure).unwrap();
+        assert!(result.client_tls.is_none()); // No client certs provided
+        assert!(result.root_cert.is_none()); // No CA cert provided
+
+        // Test with insecure_skip_verify = None (defaults to false)
+        let tls_config_default = Tls {
+            insecure_skip_verify: None,
+            ca_cert_secret: None,
+            cert_secret: None,
+            key_secret: None,
+        };
+
+        let result = parse_redis_tls_config(&tls_config_default).unwrap();
+        assert!(result.client_tls.is_none());
+        assert!(result.root_cert.is_none());
+    }
+
+    #[test]
+    fn test_create_redis_tls_info() {
+        use numaflow_models::models::Tls;
+
+        // Test with insecure_skip_verify = true
+        let tls_config_insecure = Tls {
+            insecure_skip_verify: Some(true),
+            ca_cert_secret: None,
+            cert_secret: None,
+            key_secret: None,
+        };
+
+        let result = create_redis_tls_info(&tls_config_insecure).unwrap();
+        assert!(!result.is_secure); // Should be insecure
+        assert!(result.certificates.is_none()); // No certificates should be extracted
+
+        // Test with insecure_skip_verify = false
+        let tls_config_secure = Tls {
+            insecure_skip_verify: Some(false),
+            ca_cert_secret: None,
+            cert_secret: None,
+            key_secret: None,
+        };
+
+        let result = create_redis_tls_info(&tls_config_secure).unwrap();
+        assert!(result.is_secure); // Should be secure
+        assert!(result.certificates.is_some()); // Certificates should be extracted (even if empty)
+
+        // Test with insecure_skip_verify = None (defaults to false/secure)
+        let tls_config_default = Tls {
+            insecure_skip_verify: None,
+            ca_cert_secret: None,
+            cert_secret: None,
+            key_secret: None,
+        };
+
+        let result = create_redis_tls_info(&tls_config_default).unwrap();
+        assert!(result.is_secure); // Should default to secure
+        assert!(result.certificates.is_some()); // Certificates should be extracted
     }
 
     #[test]
