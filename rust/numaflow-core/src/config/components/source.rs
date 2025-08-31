@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::{fmt::Debug, time::Duration};
 
-use super::parse_kafka_auth_config;
+use super::{get_secret_from_volume, parse_kafka_auth_config};
 use crate::Result;
 use crate::config::get_vertex_name;
 use crate::error::Error;
@@ -15,7 +15,6 @@ use numaflow_nats::NatsAuth;
 use numaflow_nats::jetstream::{ConsumerDeliverPolicy, JetstreamSourceConfig};
 use numaflow_nats::nats::NatsSourceConfig;
 use numaflow_pulsar::{PulsarAuth, source::PulsarSourceConfig};
-use numaflow_shared::get_secret_from_volume;
 use numaflow_sqs::source::SqsSourceConfig;
 use serde::{Deserialize, Serialize};
 use tracing::warn;

@@ -22,7 +22,6 @@ use async_nats::jetstream::{
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
-use chrono::Utc;
 use flate2::read::GzDecoder;
 use numaflow_throttling::RateLimiter;
 use prost::Message as ProtoMessage;

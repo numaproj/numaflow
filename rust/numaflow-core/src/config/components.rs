@@ -1,7 +1,7 @@
 //! This module contains the configuration for all the components of the pipeline and monovertex.
 
 use crate::Error;
-use numaflow_shared::get_secret_from_volume;
+use crate::shared::create_components::get_secret_from_volume;
 
 pub(crate) mod source;
 

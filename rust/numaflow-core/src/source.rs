@@ -20,7 +20,6 @@ use crate::{
 };
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
-use chrono::Utc;
 use numaflow_kafka::source::KafkaSource;
 use numaflow_nats::jetstream::JetstreamSource;
 use numaflow_nats::nats::NatsSource;

@@ -46,7 +46,6 @@ use numaflow_pb::clients::sessionreduce::session_reduce_client::SessionReduceCli
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use numaflow_shared::get_secret_from_volume;
 use numaflow_shared::server_info::{ContainerType, Protocol, sdk_server_info};
 use numaflow_sqs::sink::SqsSinkBuilder;
 use std::path::PathBuf;
@@ -681,21 +680,17 @@ pub(crate) fn parse_tls_config(tls_config: Option<Box<Tls>>) -> Result<Option<Tl
     let ca_cert = tls_config
         .ca_cert_secret
         .map(|ca_cert_secret| {
-            crate::shared::create_components::get_secret_from_volume(
-                &ca_cert_secret.name,
-                &ca_cert_secret.key,
-            )
-            .map_err(|e| Error::Config(format!("Failed to get CA cert secret: {e:?}")))
+            get_secret_from_volume(&ca_cert_secret.name, &ca_cert_secret.key)
+                .map_err(|e| Error::Config(format!("Failed to get CA cert secret: {e:?}")))
         })
         .transpose()?;
 
     let client_auth = match tls_config.cert_secret {
         Some(client_cert_secret) => {
-            let client_cert = crate::shared::create_components::get_secret_from_volume(
-                &client_cert_secret.name,
-                &client_cert_secret.key,
-            )
-            .map_err(|e| Error::Config(format!("Failed to get client cert secret: {e:?}")))?;
+            let client_cert =
+                get_secret_from_volume(&client_cert_secret.name, &client_cert_secret.key).map_err(
+                    |e| Error::Config(format!("Failed to get client cert secret: {e:?}")),
+                )?;
 
             let Some(private_key_secret) = tls_config.key_secret else {
                 return Err(Error::Config(
@@ -703,15 +698,14 @@ pub(crate) fn parse_tls_config(tls_config: Option<Box<Tls>>) -> Result<Option<Tl
                 ));
             };
 
-            let client_cert_private_key = crate::shared::create_components::get_secret_from_volume(
-                &private_key_secret.name,
-                &private_key_secret.key,
-            )
-            .map_err(|e| {
-                Error::Config(format!(
-                    "Failed to get client cert private key secret: {e:?}"
-                ))
-            })?;
+            let client_cert_private_key =
+                get_secret_from_volume(&private_key_secret.name, &private_key_secret.key).map_err(
+                    |e| {
+                        Error::Config(format!(
+                            "Failed to get client cert private key secret: {e:?}"
+                        ))
+                    },
+                )?;
 
             Some(TlsClientAuthCerts {
                 client_cert,
@@ -726,6 +720,21 @@ pub(crate) fn parse_tls_config(tls_config: Option<Box<Tls>>) -> Result<Option<Tl
         ca_cert,
         client_auth,
     }))
+}
+
+#[cfg(test)]
+const SECRET_BASE_PATH: &str = "/tmp/numaflow";
+
+#[cfg(not(test))]
+const SECRET_BASE_PATH: &str = "/var/numaflow/secrets";
+
+// Retrieve value from mounted secret volume
+// "/var/numaflow/secrets/${secretRef.name}/${secretRef.key}" is expected to be the file path
+pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> Result<String, String> {
+    let path = format!("{SECRET_BASE_PATH}/{name}/{key}");
+    let val = std::fs::read_to_string(path.clone())
+        .map_err(|e| format!("Reading secret from file {path}: {e:?}"))?;
+    Ok(val.trim().into())
 }
 
 /// Creates an ISBWatermarkHandle if watermark is enabled in the configuration

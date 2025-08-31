@@ -2736,7 +2736,6 @@ name = "numaflow-throttling"
 version = "0.1.0"
 dependencies = [
  "numaflow-models",
- "numaflow-shared",
  "redis",
  "thiserror 2.0.16",
  "tokio",
