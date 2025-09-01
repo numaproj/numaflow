@@ -478,6 +478,13 @@ func (v Vertex) GetToBuffers() []string {
 	return r
 }
 
+func (v VertexLimits) GetReadBatchSize() int {
+	if v.ReadBatchSize != nil {
+		return int(*v.ReadBatchSize)
+	}
+	return DefaultReadBatchSize
+}
+
 func (v Vertex) getReplicas() int {
 	if v.IsReduceUDF() {
 		return v.GetPartitionCount()

@@ -7778,7 +7778,7 @@ pipeline, it could be overridden by the vertex’s limit settings. It will
 be applied to all non-source vertices. This is because for source
 vertices, the rate limit is defined by how many times the
 <code>Read</code> is called per second multiplied by the
-<code>readBatchSize</code>.
+<code>readBatchSize</code>. Reduce does not support RateLimit.
 </p>
 
 </td>

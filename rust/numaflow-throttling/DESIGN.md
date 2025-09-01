@@ -122,19 +122,4 @@ flowchart TD
 
 ## Autoscaling
 
-# min = max and rampup = 1s
-
-max sure autoscaler won't scale/add once the processing rate of vertex >= max
-
-# QBAA_400 (guaranteed quota) < QBAA_3000 (maximum quota), rampup > 1s (600 secs)
-
-it will take t sec to reach max and to have sustained processing rate.
-
-# min = 0, max = 900, rampup = 1s (meaningless)
-
-after a second, min = max = 900
-same as above
-
-# min = 0, max = 900, rampup = 900s
-
-in 900secs you will have 900 RPS 
+TODO: 

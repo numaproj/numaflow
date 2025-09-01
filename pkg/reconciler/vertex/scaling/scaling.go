@@ -315,7 +315,16 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 
 	// Check if rate limiting is configured and we're hitting the limit
 	if vertex.Spec.Limits != nil && vertex.Spec.Limits.RateLimit != nil && vertex.Spec.Limits.RateLimit.Max != nil {
-		maxRateLimit := float64(*vertex.Spec.Limits.RateLimit.Max)
+		var maxRateLimit float64
+		// For source vertices, the rate limit is defined by how many times the `Read` is called per second multiplied
+		// by the `readBatchSize`.
+		if vertex.IsASource() {
+			maxRateLimit = float64(*vertex.Spec.Limits.RateLimit.Max) * float64(vertex.Spec.Limits.GetReadBatchSize())
+		} else {
+			maxRateLimit = float64(*vertex.Spec.Limits.RateLimit.Max)
+		}
+		// Round up to the nearest integer because we don't want to scale up if we are almost at the rate limit
+		// e.g., RateLimit is 1000, current rate is 999.9, we don't want to scale up
 		currentRate := math.Ceil(totalRate)
 
 		if currentRate >= maxRateLimit {
