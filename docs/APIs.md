@@ -6232,7 +6232,7 @@ Kubernetes meta/v1.Duration </a> </em>
 <em>(Optional)</em>
 <p>
 
-Read timeout duration from the source.
+ReadTimeout is the read timeout duration from the source.
 </p>
 
 </td>
@@ -6252,7 +6252,10 @@ Read timeout duration from the source.
 <em>(Optional)</em>
 <p>
 
-RateLimit is used to define the rate limit for the mono vertex.
+RateLimit for MonoVertex defines how many messages can be read from
+Source. This is computed by number of <code>read</code> calls per second
+multiplied by the <code>readBatchSize</code>. This is how RateLimit is
+calculated for MonoVertex and for Source vertices.
 </p>
 
 </td>
@@ -7771,7 +7774,11 @@ the vertex’s limit settings
 <p>
 
 RateLimit is used to define the rate limit for all the vertices in the
-pipeline, it could be overridden by the vertex’s limit settings.
+pipeline, it could be overridden by the vertex’s limit settings. It will
+be applied to all non-source vertices. This is because for source
+vertices, the rate limit is defined by how many times the
+<code>Read</code> is called per second multiplied by the
+<code>readBatchSize</code>.
 </p>
 
 </td>
@@ -13320,7 +13327,10 @@ overrides the settings from pipeline limits.
 <p>
 
 RateLimit is used to define the rate limit for the vertex, it overrides
-the settings from pipeline limits.
+the settings from pipeline limits. For Source vertices, the rate limit
+is defined by how many times the <code>Read</code> is called per second
+multiplied by the <code>readBatchSize</code>. Pipeline level rate limit
+is not applied to Source vertices.
 </p>
 
 </td>

@@ -3102,13 +3102,13 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexLimits(ref common.ReferenceCall
 					},
 					"readTimeout": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Read timeout duration from the source.",
+							Description: "ReadTimeout is the read timeout duration from the source.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
 					"rateLimit": {
 						SchemaProps: spec.SchemaProps{
-							Description: "RateLimit is used to define the rate limit for the mono vertex.",
+							Description: "RateLimit for MonoVertex defines how many messages can be read from Source. This is computed by number of `read` calls per second multiplied by the `readBatchSize`. This is how RateLimit is calculated for MonoVertex and for Source vertices.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimit"),
 						},
 					},
@@ -3789,7 +3789,7 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineLimits(ref common.ReferenceCallba
 					},
 					"rateLimit": {
 						SchemaProps: spec.SchemaProps{
-							Description: "RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the vertex's limit settings.",
+							Description: "RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the vertex's limit settings. It will be applied to all non-source vertices. This is because for source vertices, the rate limit is defined by how many times the `Read` is called per second multiplied by the `readBatchSize`.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimit"),
 						},
 					},
@@ -6120,7 +6120,7 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexLimits(ref common.ReferenceCallback
 					},
 					"rateLimit": {
 						SchemaProps: spec.SchemaProps{
-							Description: "RateLimit is used to define the rate limit for the vertex, it overrides the settings from pipeline limits.",
+							Description: "RateLimit is used to define the rate limit for the vertex, it overrides the settings from pipeline limits. For Source vertices, the rate limit is defined by how many times the `Read` is called per second multiplied by the `readBatchSize`. Pipeline level rate limit is not applied to Source vertices.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimit"),
 						},
 					},

@@ -672,7 +672,9 @@ type PipelineLimits struct {
 	// +kubebuilder:default= "1s"
 	// +optional
 	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty" protobuf:"bytes,4,opt,name=readTimeout"`
-	// RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the vertex's limit settings.
+	// RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the
+	// vertex's limit settings. It will be applied to all non-source vertices. This is because for source vertices, the
+	// rate limit is defined by how many times the `Read` is called per second multiplied by the `readBatchSize`.
 	// +optional
 	RateLimit *RateLimit `json:"rateLimit,omitempty" protobuf:"bytes,5,opt,name=rateLimit"`
 }

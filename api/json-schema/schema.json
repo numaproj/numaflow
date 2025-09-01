@@ -21068,7 +21068,7 @@
       "properties": {
         "rateLimit": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimit",
-          "description": "RateLimit is used to define the rate limit for the mono vertex."
+          "description": "RateLimit for MonoVertex defines how many messages can be read from Source. This is computed by number of `read` calls per second multiplied by the `readBatchSize`. This is how RateLimit is calculated for MonoVertex and for Source vertices."
         },
         "readBatchSize": {
           "description": "Read batch size from the source.",
@@ -21077,7 +21077,7 @@
         },
         "readTimeout": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
-          "description": "Read timeout duration from the source."
+          "description": "ReadTimeout is the read timeout duration from the source."
         }
       },
       "type": "object"
@@ -21445,7 +21445,7 @@
         },
         "rateLimit": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimit",
-          "description": "RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the vertex's limit settings."
+          "description": "RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the vertex's limit settings. It will be applied to all non-source vertices. This is because for source vertices, the rate limit is defined by how many times the `Read` is called per second multiplied by the `readBatchSize`."
         },
         "readBatchSize": {
           "description": "Read batch size for all the vertices in the pipeline, can be overridden by the vertex's limit settings.",
@@ -22728,7 +22728,7 @@
         },
         "rateLimit": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimit",
-          "description": "RateLimit is used to define the rate limit for the vertex, it overrides the settings from pipeline limits."
+          "description": "RateLimit is used to define the rate limit for the vertex, it overrides the settings from pipeline limits. For Source vertices, the rate limit is defined by how many times the `Read` is called per second multiplied by the `readBatchSize`. Pipeline level rate limit is not applied to Source vertices."
         },
         "readBatchSize": {
           "description": "Read batch size from the source or buffer. It overrides the settings from pipeline limits.",

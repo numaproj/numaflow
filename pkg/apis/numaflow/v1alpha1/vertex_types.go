@@ -683,6 +683,8 @@ type VertexLimits struct {
 	// +optional
 	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,4,opt,name=bufferUsageLimit"`
 	// RateLimit is used to define the rate limit for the vertex, it overrides the settings from pipeline limits.
+	// For Source vertices, the rate limit is defined by how many times the `Read` is called per second multiplied by
+	// the `readBatchSize`. Pipeline level rate limit is not applied to Source vertices.
 	// +optional
 	RateLimit *RateLimit `json:"rateLimit,omitempty" protobuf:"bytes,5,opt,name=rateLimit"`
 }
