@@ -680,21 +680,17 @@ pub(crate) fn parse_tls_config(tls_config: Option<Box<Tls>>) -> Result<Option<Tl
     let ca_cert = tls_config
         .ca_cert_secret
         .map(|ca_cert_secret| {
-            crate::shared::create_components::get_secret_from_volume(
-                &ca_cert_secret.name,
-                &ca_cert_secret.key,
-            )
-            .map_err(|e| Error::Config(format!("Failed to get CA cert secret: {e:?}")))
+            get_secret_from_volume(&ca_cert_secret.name, &ca_cert_secret.key)
+                .map_err(|e| Error::Config(format!("Failed to get CA cert secret: {e:?}")))
         })
         .transpose()?;
 
     let client_auth = match tls_config.cert_secret {
         Some(client_cert_secret) => {
-            let client_cert = crate::shared::create_components::get_secret_from_volume(
-                &client_cert_secret.name,
-                &client_cert_secret.key,
-            )
-            .map_err(|e| Error::Config(format!("Failed to get client cert secret: {e:?}")))?;
+            let client_cert =
+                get_secret_from_volume(&client_cert_secret.name, &client_cert_secret.key).map_err(
+                    |e| Error::Config(format!("Failed to get client cert secret: {e:?}")),
+                )?;
 
             let Some(private_key_secret) = tls_config.key_secret else {
                 return Err(Error::Config(
@@ -702,15 +698,14 @@ pub(crate) fn parse_tls_config(tls_config: Option<Box<Tls>>) -> Result<Option<Tl
                 ));
             };
 
-            let client_cert_private_key = crate::shared::create_components::get_secret_from_volume(
-                &private_key_secret.name,
-                &private_key_secret.key,
-            )
-            .map_err(|e| {
-                Error::Config(format!(
-                    "Failed to get client cert private key secret: {e:?}"
-                ))
-            })?;
+            let client_cert_private_key =
+                get_secret_from_volume(&private_key_secret.name, &private_key_secret.key).map_err(
+                    |e| {
+                        Error::Config(format!(
+                            "Failed to get client cert private key secret: {e:?}"
+                        ))
+                    },
+                )?;
 
             Some(TlsClientAuthCerts {
                 client_cert,

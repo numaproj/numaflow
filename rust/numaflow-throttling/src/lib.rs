@@ -497,9 +497,9 @@ mod tests {
 
             let test_key_prefix =
                 Box::leak(format!("test_{}_{}", test_name, std::process::id()).into_boxed_str());
-            let redis_mode = RedisMode::SingleUrl {
-                url: redis_url.to_string(),
-            };
+            let redis_mode = RedisMode::single_url(redis_url.to_string())
+                .build()
+                .unwrap();
 
             match RedisStore::new(test_key_prefix, redis_mode).await {
                 Ok(store) => Some(store),

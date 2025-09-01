@@ -4,12 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+numaflow-models.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 trait-variant.workspace = true
-redis = { version = "0.32.5", features = ["sentinel", "tokio-comp", "connection-manager", "script"] }
+redis = { version = "0.32.5", features = ["sentinel", "tokio-comp", "connection-manager", "script", "tokio-native-tls-comp", "tls-rustls"] }
 
 [lints]
 workspace = true

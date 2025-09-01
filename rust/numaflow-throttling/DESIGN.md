@@ -119,3 +119,7 @@ flowchart TD
     Q --> R[Wait for next sync cycle]
     R --> C
 ```
+
+## Autoscaling
+
+TODO: 

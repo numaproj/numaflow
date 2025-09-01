@@ -6232,7 +6232,7 @@ Kubernetes meta/v1.Duration </a> </em>
 <em>(Optional)</em>
 <p>
 
-Read timeout duration from the source.
+ReadTimeout is the read timeout duration from the source.
 </p>
 
 </td>
@@ -6252,7 +6252,10 @@ Read timeout duration from the source.
 <em>(Optional)</em>
 <p>
 
-RateLimit is used to define the rate limit for the mono vertex.
+RateLimit for MonoVertex defines how many messages can be read from
+Source. This is computed by number of <code>read</code> calls per second
+multiplied by the <code>readBatchSize</code>. This is how RateLimit is
+calculated for MonoVertex and for Source vertices.
 </p>
 
 </td>
@@ -7771,7 +7774,11 @@ the vertex’s limit settings
 <p>
 
 RateLimit is used to define the rate limit for all the vertices in the
-pipeline, it could be overridden by the vertex’s limit settings.
+pipeline, it could be overridden by the vertex’s limit settings. It will
+be applied to all non-source vertices. This is because for source
+vertices, the rate limit is defined by how many times the
+<code>Read</code> is called per second multiplied by the
+<code>readBatchSize</code>. Reduce does not support RateLimit.
 </p>
 
 </td>
@@ -9064,14 +9071,77 @@ Description
 
 <td>
 
-<code>url</code></br> <em> string </em>
+<code>mode</code></br> <em> string </em>
 </td>
 
 <td>
 
 <p>
 
-URL of the persistent store to write the rate limit data.
+Choose how to connect to Redis. - Single: use a single URL (redis://… or
+rediss://…) - Sentinel: discover the node via Redis Sentinel
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>url</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+SINGLE MODE: Full connection URL,
+e.g. redis://host:<sup>6379</sup>⁄<sub>0</sub> or rediss://host:port/0
+Mutually exclusive with .sentinel
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>sentinel</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RedisSentinelConfig">
+RedisSentinelConfig </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+SENTINEL MODE: Settings to reach Sentinel and the selected Redis node
+Mutually exclusive with .url
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>db</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+COMMON: Optional DB index (default 0)
 </p>
 
 </td>
@@ -9155,6 +9225,243 @@ RateLimiterInMemoryStore </a> </em>
 <p>
 
 InMemoryStore is used to define the in-memory store for the rate limit.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.RedisAuth">
+
+RedisAuth
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.RedisSentinelConfig">RedisSentinelConfig</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>username</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+For Redis 6+ ACLs. If Username omitted, password-only is also supported.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>password</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.RedisSentinelConfig">
+
+RedisSentinelConfig
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterRedisStore">RateLimiterRedisStore</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>masterName</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+Required Sentinel “service name” (aka master name) from sentinel.conf
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>endpoints</code></br> <em> \[\]string </em>
+</td>
+
+<td>
+
+<p>
+
+At least one Sentinel endpoint; 2–3 recommended. Use host:port pairs.
+Example: \[“sentinel-0.redis.svc:26379”, “sentinel-1.redis.svc:26379”\]
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>sentinelAuth</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RedisAuth"> RedisAuth </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Auth to talk to the Sentinel daemons (control-plane). Optional.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>redisAuth</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RedisAuth"> RedisAuth </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Auth to talk to the Redis data nodes (data-plane). Optional.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>sentinelTLS</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.TLS"> TLS </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+TLS for Sentinel connections (if your Sentinels expose TLS).
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>redisTLS</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.TLS"> TLS </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+TLS for Redis data nodes (redis). Often enabled even if Sentinel is
+plaintext.
 </p>
 
 </td>
@@ -11821,7 +12128,8 @@ TLS
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamSource">JetStreamSource</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSink">KafkaSink</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.KafkaSource">KafkaSource</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.NatsSource">NatsSource</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.NatsSource">NatsSource</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.RedisSentinelConfig">RedisSentinelConfig</a>)
 </p>
 
 <p>
@@ -13019,7 +13327,10 @@ overrides the settings from pipeline limits.
 <p>
 
 RateLimit is used to define the rate limit for the vertex, it overrides
-the settings from pipeline limits.
+the settings from pipeline limits. For Source vertices, the rate limit
+is defined by how many times the <code>Read</code> is called per second
+multiplied by the <code>readBatchSize</code>. Pipeline level rate limit
+is not applied to Source vertices.
 </p>
 
 </td>

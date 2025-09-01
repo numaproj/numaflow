@@ -962,12 +962,14 @@ message MonoVertexLimits {
   // +optional
   optional uint64 readBatchSize = 1;
 
-  // Read timeout duration from the source.
+  // ReadTimeout is the read timeout duration from the source.
   // +kubebuilder:default= "1s"
   // +optional
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 2;
 
-  // RateLimit is used to define the rate limit for the mono vertex.
+  // RateLimit for MonoVertex defines how many messages can be read from Source. This is computed by number of
+  // `read` calls per second multiplied by the `readBatchSize`. This is how RateLimit is calculated for MonoVertex and
+  // for Source vertices.
   // +optional
   optional RateLimit rateLimit = 3;
 }
@@ -1200,7 +1202,10 @@ message PipelineLimits {
   // +optional
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 4;
 
-  // RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the vertex's limit settings.
+  // RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the
+  // vertex's limit settings. It will be applied to all non-source vertices. This is because for source vertices, the
+  // rate limit is defined by how many times the `Read` is called per second multiplied by the `readBatchSize`.
+  // Reduce does not support RateLimit.
   // +optional
   optional RateLimit rateLimit = 5;
 }
@@ -1403,8 +1408,26 @@ message RateLimiterInMemoryStore {
 }
 
 message RateLimiterRedisStore {
-  // URL of the persistent store to write the rate limit data.
-  optional string url = 1;
+  // Choose how to connect to Redis.
+  // - Single: use a single URL (redis://... or rediss://...)
+  // - Sentinel: discover the node via Redis Sentinel
+  // +kubebuilder:validation:Enum=single;sentinel
+  optional string mode = 1;
+
+  // SINGLE MODE: Full connection URL, e.g. redis://host:6379/0 or rediss://host:port/0
+  // Mutually exclusive with .sentinel
+  // +optional
+  optional string url = 2;
+
+  // SENTINEL MODE: Settings to reach Sentinel and the selected Redis node
+  // Mutually exclusive with .url
+  // +optional
+  optional RedisSentinelConfig sentinel = 3;
+
+  // COMMON: Optional DB index (default 0)
+  // +optional
+  // +kubebuilder:default=0
+  optional int32 db = 4;
 }
 
 message RateLimiterStore {
@@ -1415,6 +1438,42 @@ message RateLimiterStore {
   // InMemoryStore is used to define the in-memory store for the rate limit.
   // +optional
   optional RateLimiterInMemoryStore inMemoryStore = 2;
+}
+
+message RedisAuth {
+  // For Redis 6+ ACLs. If Username omitted, password-only is also supported.
+  // +optional
+  optional .k8s.io.api.core.v1.SecretKeySelector username = 1;
+
+  // +optional
+  optional .k8s.io.api.core.v1.SecretKeySelector password = 2;
+}
+
+message RedisSentinelConfig {
+  // Required Sentinel "service name" (aka master name) from sentinel.conf
+  // +kubebuilder:validation:MinLength=1
+  optional string masterName = 1;
+
+  // At least one Sentinel endpoint; 2–3 recommended. Use host:port pairs.
+  // Example: ["sentinel-0.redis.svc:26379", "sentinel-1.redis.svc:26379"]
+  // +kubebuilder:validation:MinItems=1
+  repeated string endpoints = 2;
+
+  // Auth to talk to the Sentinel daemons (control-plane). Optional.
+  // +optional
+  optional RedisAuth sentinelAuth = 4;
+
+  // Auth to talk to the Redis data nodes (data-plane). Optional.
+  // +optional
+  optional RedisAuth redisAuth = 5;
+
+  // TLS for Sentinel connections (if your Sentinels expose TLS).
+  // +optional
+  optional TLS sentinelTLS = 6;
+
+  // TLS for Redis data nodes (redis). Often enabled even if Sentinel is plaintext.
+  // +optional
+  optional TLS redisTLS = 7;
 }
 
 // The RetryStrategy struct defines the configuration for handling operation retries in case of failures.
@@ -1967,6 +2026,8 @@ message VertexLimits {
   optional uint32 bufferUsageLimit = 4;
 
   // RateLimit is used to define the rate limit for the vertex, it overrides the settings from pipeline limits.
+  // For Source vertices, the rate limit is defined by how many times the `Read` is called per second multiplied by
+  // the `readBatchSize`. Pipeline level rate limit is not applied to Source vertices.
   // +optional
   optional RateLimit rateLimit = 5;
 }

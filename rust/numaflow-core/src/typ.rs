@@ -40,23 +40,22 @@ impl NumaflowTypeConfig for WithoutRateLimiter {
 
 /// Build a Redis-backed rate limiter from rate limit config
 pub async fn build_redis_rate_limiter(
-    rate_limit_config: &crate::config::components::ratelimit::RateLimitConfig,
+    rate_limit_config: &RateLimitConfig,
     cln_token: CancellationToken,
 ) -> Result<RateLimit<WithDistributedState<RedisStore>>> {
     let redis_store_config = rate_limit_config
         .store
         .as_ref()
         .and_then(|s| s.redis_store.as_ref())
-        .ok_or_else(|| error::Error::Config("Redis store config is required".to_string()))?;
+        .ok_or_else(|| Error::Config("Redis store config is required".to_string()))?;
 
-    // Create Redis store with the configured URL
-    let redis_url = redis_store_config.url.clone();
-    let store = RedisStore::new(
-        rate_limit_config.key_prefix,
-        RedisMode::SingleUrl { url: redis_url },
-    )
-    .await
-    .map_err(|e| error::Error::Config(format!("Failed to create Redis store: {}", e)))?;
+    // Create Redis mode based on configuration
+    let redis_mode = RedisMode::new(redis_store_config)
+        .map_err(|e| Error::Config(format!("Failed to create Redis mode: {}", e)))?;
+
+    let store = RedisStore::new(rate_limit_config.key_prefix, redis_mode)
+        .await
+        .map_err(|e| error::Error::Config(format!("Failed to create Redis store: {}", e)))?;
 
     let limiter = create_rate_limiter(rate_limit_config, store, cln_token).await?;
     Ok(limiter)
@@ -109,7 +108,7 @@ pub async fn create_rate_limiter<S>(
     rate_limit_config: &RateLimitConfig,
     store: S,
     cancel_token: CancellationToken,
-) -> error::Result<RateLimit<WithDistributedState<S>>>
+) -> Result<RateLimit<WithDistributedState<S>>>
 where
     S: numaflow_throttling::state::Store + Sync + 'static,
 {

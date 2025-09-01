@@ -21068,7 +21068,7 @@
       "properties": {
         "rateLimit": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimit",
-          "description": "RateLimit is used to define the rate limit for the mono vertex."
+          "description": "RateLimit for MonoVertex defines how many messages can be read from Source. This is computed by number of `read` calls per second multiplied by the `readBatchSize`. This is how RateLimit is calculated for MonoVertex and for Source vertices."
         },
         "readBatchSize": {
           "description": "Read batch size from the source.",
@@ -21077,7 +21077,7 @@
         },
         "readTimeout": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
-          "description": "Read timeout duration from the source."
+          "description": "ReadTimeout is the read timeout duration from the source."
         }
       },
       "type": "object"
@@ -21445,7 +21445,7 @@
         },
         "rateLimit": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimit",
-          "description": "RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the vertex's limit settings."
+          "description": "RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the vertex's limit settings. It will be applied to all non-source vertices. This is because for source vertices, the rate limit is defined by how many times the `Read` is called per second multiplied by the `readBatchSize`. Reduce does not support RateLimit."
         },
         "readBatchSize": {
           "description": "Read batch size for all the vertices in the pipeline, can be overridden by the vertex's limit settings.",
@@ -21743,13 +21743,26 @@
     },
     "io.numaproj.numaflow.v1alpha1.RateLimiterRedisStore": {
       "properties": {
+        "db": {
+          "description": "COMMON: Optional DB index (default 0)",
+          "format": "int32",
+          "type": "integer"
+        },
+        "mode": {
+          "description": "Choose how to connect to Redis. - Single: use a single URL (redis://... or rediss://...) - Sentinel: discover the node via Redis Sentinel",
+          "type": "string"
+        },
+        "sentinel": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisSentinelConfig",
+          "description": "SENTINEL MODE: Settings to reach Sentinel and the selected Redis node Mutually exclusive with .url"
+        },
         "url": {
-          "description": "URL of the persistent store to write the rate limit data.",
+          "description": "SINGLE MODE: Full connection URL, e.g. redis://host:6379/0 or rediss://host:port/0 Mutually exclusive with .sentinel",
           "type": "string"
         }
       },
       "required": [
-        "url"
+        "mode"
       ],
       "type": "object"
     },
@@ -21764,6 +21777,54 @@
           "description": "RedisStore is used to define the redis store for the rate limit."
         }
       },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.RedisAuth": {
+      "properties": {
+        "password": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
+        },
+        "username": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "For Redis 6+ ACLs. If Username omitted, password-only is also supported."
+        }
+      },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.RedisSentinelConfig": {
+      "properties": {
+        "endpoints": {
+          "description": "At least one Sentinel endpoint; 2–3 recommended. Use host:port pairs. Example: [\"sentinel-0.redis.svc:26379\", \"sentinel-1.redis.svc:26379\"]",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "masterName": {
+          "description": "Required Sentinel \"service name\" (aka master name) from sentinel.conf",
+          "type": "string"
+        },
+        "redisAuth": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisAuth",
+          "description": "Auth to talk to the Redis data nodes (data-plane). Optional."
+        },
+        "redisTLS": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS",
+          "description": "TLS for Redis data nodes (redis). Often enabled even if Sentinel is plaintext."
+        },
+        "sentinelAuth": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisAuth",
+          "description": "Auth to talk to the Sentinel daemons (control-plane). Optional."
+        },
+        "sentinelTLS": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS",
+          "description": "TLS for Sentinel connections (if your Sentinels expose TLS)."
+        }
+      },
+      "required": [
+        "masterName",
+        "endpoints"
+      ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.RetryStrategy": {
@@ -22667,7 +22728,7 @@
         },
         "rateLimit": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimit",
-          "description": "RateLimit is used to define the rate limit for the vertex, it overrides the settings from pipeline limits."
+          "description": "RateLimit is used to define the rate limit for the vertex, it overrides the settings from pipeline limits. For Source vertices, the rate limit is defined by how many times the `Read` is called per second multiplied by the `readBatchSize`. Pipeline level rate limit is not applied to Source vertices."
         },
         "readBatchSize": {
           "description": "Read batch size from the source or buffer. It overrides the settings from pipeline limits.",

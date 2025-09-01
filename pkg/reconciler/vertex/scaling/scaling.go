@@ -312,18 +312,44 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	} else {
 		desired = s.desiredReplicas(ctx, vertex, partitionRates, partitionPending, partitionBufferLengths, partitionAvailableBufferLengths)
 	}
+
+	// Check if rate limiting is configured and we're hitting the limit
+	if vertex.Spec.Limits != nil && vertex.Spec.Limits.RateLimit != nil && vertex.Spec.Limits.RateLimit.Max != nil {
+		var maxRateLimit float64
+		// For source vertices, the rate limit is defined by how many times the `Read` is called per second multiplied
+		// by the `readBatchSize`.
+		if vertex.IsASource() {
+			maxRateLimit = float64(*vertex.Spec.Limits.RateLimit.Max) * float64(vertex.Spec.Limits.GetReadBatchSize())
+		} else {
+			maxRateLimit = float64(*vertex.Spec.Limits.RateLimit.Max)
+		}
+		// Round up to the nearest integer because we don't want to scale up if we are almost at the rate limit
+		// e.g., RateLimit is 1000, current rate is 999.9, we don't want to scale up
+		currentRate := math.Ceil(totalRate)
+
+		if currentRate >= maxRateLimit {
+			// Calculate desired replicas to see if we would scale up
+			current := int32(vertex.Status.Replicas)
+			// Only skip if we would be scaling up
+			if desired > current {
+				log.Infof("Vertex %s would scale up but is at rate limit, skip scaling up.", vertex.Name)
+				return nil
+			}
+		}
+	}
+
 	log.Infof("Calculated desired replica number of vertex %q is: %d.", vertex.Name, desired)
-	max := vertex.Spec.Scale.GetMaxReplicas()
-	min := vertex.Spec.Scale.GetMinReplicas()
-	if desired > max {
-		log.Infof("Calculated desired replica number %d of vertex %q is greater than max, using max %d.", desired, vertex.Name, max)
-		desired = max
+	maxReplicas := vertex.Spec.Scale.GetMaxReplicas()
+	minReplicas := vertex.Spec.Scale.GetMinReplicas()
+	if desired > maxReplicas {
+		log.Infof("Calculated desired replica number %d of vertex %q is greater than max, using max %d.", desired, vertex.Name, maxReplicas)
+		desired = maxReplicas
 	}
-	if desired < min {
-		log.Infof("Calculated desired replica number %d of vertex %q is smaller than min, using min %d.", desired, vertex.Name, min)
-		desired = min
+	if desired < minReplicas {
+		log.Infof("Calculated desired replica number %d of vertex %q is smaller than min, using min %d.", desired, vertex.Name, minReplicas)
+		desired = minReplicas
 	}
-	if current > max || current < min { // Someone might have manually scaled up/down the vertex
+	if current > maxReplicas || current < minReplicas { // Someone might have manually scaled up/down the vertex
 		return s.patchVertexReplicas(ctx, vertex, desired)
 	}
 	if desired < current {
@@ -342,7 +368,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		// When scaling up, need to check back pressure
 		directPressure, downstreamPressure := s.hasBackPressure(*pl, *vertex)
 		if directPressure {
-			if current > min && current > 1 { // Scale down but not to 0
+			if current > minReplicas && current > 1 { // Scale down but not to 0
 				log.Infof("Vertex %q has direct back pressure from connected vertices, decreasing one replica.", key)
 				return s.patchVertexReplicas(ctx, vertex, current-1)
 			} else {
