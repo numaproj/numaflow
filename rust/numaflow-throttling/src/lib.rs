@@ -29,6 +29,10 @@ pub trait RateLimiter {
     /// If timeout is None, it will block till the tokens are available, else returns whatever is
     /// available. If `n` is provided, it will try to acquire `n` tokens else it will acquire all the tokens.
     async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize;
+
+    /// Shutdown the rate limiter and clean up resources.
+    /// This will deregister the processor from the distributed store and stop any background tasks.
+    async fn shutdown(&self) -> Result<()>;
 }
 
 /// RateLimit is the main struct that will be used by the user to get the tokens available for the
@@ -247,6 +251,10 @@ impl RateLimiter for RateLimit<WithoutDistributedState> {
             .await
             .unwrap_or(0)
     }
+
+    async fn shutdown(&self) -> crate::Result<()> {
+        Ok(())
+    }
 }
 
 impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithDistributedState<S>> {
@@ -320,6 +328,10 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDis
         tokio::time::timeout(duration, acquisition_loop)
             .await
             .unwrap_or(0)
+    }
+
+    async fn shutdown(&self) -> crate::Result<()> {
+        self.state.0.shutdown().await
     }
 }
 
@@ -467,6 +479,11 @@ impl RateLimiter for NoOpRateLimiter {
     async fn acquire_n(&self, n: Option<usize>, _timeout: Option<Duration>) -> usize {
         // Always return the requested number of tokens (or max if not specified)
         n.unwrap_or(usize::MAX)
+    }
+
+    async fn shutdown(&self) -> crate::Result<()> {
+        // No-op for NoOpRateLimiter as there are no resources to clean up
+        Ok(())
     }
 }
 
