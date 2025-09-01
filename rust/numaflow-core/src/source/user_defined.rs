@@ -480,6 +480,7 @@ mod tests {
             )),
             keys: vec!["key1".to_string()],
             headers: HashMap::new(),
+            metadata: None,
         };
 
         let message: Result<crate::message::Message> = result.try_into();

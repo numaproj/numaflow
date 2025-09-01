@@ -26,6 +26,7 @@ impl From<Message> for session_reduce_request::Payload {
             event_time: Some(prost_timestamp_from_utc(msg.event_time)),
             watermark: msg.watermark.map(prost_timestamp_from_utc),
             headers: msg.headers.clone(),
+            metadata: msg.metadata.map(|m| m.into()),
         }
     }
 }

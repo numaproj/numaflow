@@ -21,6 +21,7 @@ option java_package = "io.numaproj.numaflow.accumulator.v1";
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
+import "common/metadata.proto";
 
 
 package accumulator.v1;
@@ -44,6 +45,8 @@ message Payload {
   google.protobuf.Timestamp watermark = 4;
   string id = 5;
   map<string, string> headers = 6;
+  // Metadata is the metadata of the message
+  common.metadata.Metadata metadata = 7;
 }
 
 // AccumulatorRequest represents a request element.

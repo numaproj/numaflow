@@ -25,10 +25,11 @@ impl Default for Metadata {
 /// Key-value group
 #[derive(Debug, Clone)]
 pub(crate) struct KeyValueGroup {
-    pub(crate) group: HashMap<String, Bytes>,
+    /// Key-value pairs
+    pub(crate) key_value: HashMap<String, Bytes>,
 }
 
-// Conversion implementations between protobuf and internal types
+// Conversion implementations between protobuf and internal type
 impl From<metadata::Metadata> for Metadata {
     fn from(metadata: metadata::Metadata) -> Self {
         Self {
@@ -69,7 +70,7 @@ impl From<Metadata> for metadata::Metadata {
 impl From<metadata::KeyValueGroup> for KeyValueGroup {
     fn from(group: metadata::KeyValueGroup) -> Self {
         Self {
-            group: group
+            key_value: group
                 .key_value
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
@@ -82,7 +83,7 @@ impl From<KeyValueGroup> for metadata::KeyValueGroup {
     fn from(group: KeyValueGroup) -> Self {
         Self {
             key_value: group
-                .group
+                .key_value
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),

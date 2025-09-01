@@ -1,5 +1,5 @@
 fn main() {
-    // Common protobuf objects (like metadata)
+    // Common protobuf objects
     build_common();
 
     // gRPC clients for UDF
@@ -21,7 +21,7 @@ fn build_client() {
         .build_client(true)
         .build_server(false)
         .out_dir("src/clients")
-        .extern_path(".metadata", "crate::common::metadata")
+        .extern_path(".common.metadata", "crate::common::metadata")
         .compile_protos(
             &[
                 "proto/source/v1/source.proto",
@@ -43,7 +43,7 @@ fn build_client() {
 fn build_objects() {
     prost_build::Config::new()
         .out_dir("src/objects")
-        .extern_path(".metadata", "crate::common::metadata")
+        .extern_path(".common.metadata", "crate::common::metadata")
         .compile_protos(
             &[
                 "proto/isb/message.proto",

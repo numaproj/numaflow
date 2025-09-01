@@ -17,7 +17,7 @@ limitations under the License.
 syntax = "proto3";
 option go_package = "github.com/numaproj/numaflow/pkg/apis/proto/common";
 
-package metadata;
+package common.metadata;
 
 // Metadata is the metadata of the message
 message Metadata {

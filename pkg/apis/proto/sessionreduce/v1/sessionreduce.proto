@@ -21,6 +21,7 @@ option java_package = "io.numaproj.numaflow.sessionreduce.v1";
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
+import "common/metadata.proto";
 
 
 package sessionreduce.v1;
@@ -66,6 +67,8 @@ message SessionReduceRequest {
     google.protobuf.Timestamp event_time = 3;
     google.protobuf.Timestamp watermark = 4;
     map<string, string> headers = 5;
+    // Metadata is the metadata of the message
+    common.metadata.Metadata metadata = 6;
   }
 
   Payload payload = 1;
@@ -79,6 +82,8 @@ message SessionReduceResponse {
     repeated string keys = 1;
     bytes value = 2;
     repeated string tags = 3;
+    // Metadata is the metadata of the message
+    common.metadata.Metadata metadata = 4;
   }
 
   Result result = 1;

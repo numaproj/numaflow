@@ -33,6 +33,7 @@ impl From<Message> for SinkRequest {
                 watermark: message.watermark.map(prost_timestamp_from_utc),
                 id: message.id.to_string(),
                 headers: message.headers,
+                metadata: message.metadata.map(|m| m.into()),
             }),
             status: None,
             handshake: None,
