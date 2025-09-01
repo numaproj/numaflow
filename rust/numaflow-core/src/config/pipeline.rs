@@ -339,13 +339,6 @@ impl PipelineConfig {
             .and_then(|limits| limits.read_batch_size.map(|x| x as u64))
             .unwrap_or(DEFAULT_BATCH_SIZE);
 
-        let rate_limit: Option<RateLimitConfig> = vertex_obj
-            .spec
-            .limits
-            .as_ref()
-            .and_then(|limits| limits.rate_limit.clone())
-            .map(RateLimitConfig::from);
-
         let timeout_in_ms = vertex_obj
             .spec
             .limits
@@ -475,6 +468,17 @@ impl PipelineConfig {
             return Err(Error::Config(
                 "Only source, sink, map, and reduce are supported".to_string(),
             ));
+        };
+
+        let rate_limit: Option<RateLimitConfig> = if vertex_type == VertexType::ReduceUDF {
+            None
+        } else {
+            vertex_obj
+                .spec
+                .limits
+                .as_ref()
+                .and_then(|limits| limits.rate_limit.clone())
+                .map(RateLimitConfig::from)
         };
 
         let js_client_config = isb::jetstream::ClientConfig {
