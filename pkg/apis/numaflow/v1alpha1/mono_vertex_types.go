@@ -540,11 +540,13 @@ type MonoVertexLimits struct {
 	// +kubebuilder:default=500
 	// +optional
 	ReadBatchSize *uint64 `json:"readBatchSize,omitempty" protobuf:"varint,1,opt,name=readBatchSize"`
-	// Read timeout duration from the source.
+	// ReadTimeout is the read timeout duration from the source.
 	// +kubebuilder:default= "1s"
 	// +optional
 	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty" protobuf:"bytes,2,opt,name=readTimeout"`
-	// RateLimit is used to define the rate limit for the mono vertex.
+	// RateLimit for MonoVertex defines how many messages can be read from Source. This is computed by number of
+	// `read` calls per second multiplied by the `readBatchSize`. This is how RateLimit is calculated for MonoVertex and
+	// for Source vertices.
 	// +optional
 	RateLimit *RateLimit `json:"rateLimit,omitempty" protobuf:"bytes,3,opt,name=rateLimit"`
 }

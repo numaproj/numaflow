@@ -1,7 +1,12 @@
+use crate::error::Error;
 use crate::state::Consensus;
 use crate::state::store::Store;
-use redis::sentinel::{SentinelClient, SentinelNodeConnectionInfo, SentinelServerType};
-use redis::{Client, RedisError, Script};
+use numaflow_models::models::RateLimiterRedisStore;
+use redis::sentinel::{SentinelClientBuilder, SentinelServerType};
+use redis::{
+    Client, ClientTlsConfig, ConnectionAddr, IntoConnectionInfo, RedisError, Script,
+    TlsCertificates, TlsMode,
+};
 use tokio_util::sync::CancellationToken;
 
 // Embed Lua scripts at compile time
@@ -23,12 +28,225 @@ pub struct RedisStore {
 pub enum RedisMode {
     SingleUrl {
         url: String,
+        db: Option<i32>,
     },
     Sentinel {
-        sentinel_urls: Vec<String>,
         master_name: String,
-        sentinel_conn_info: Option<SentinelNodeConnectionInfo>,
+        endpoints: Vec<String>,
+        sentinel_auth: Option<RedisAuth>,
+        redis_auth: Option<RedisAuth>,
+        sentinel_tls: Box<Option<RedisTlsInfo>>,
+        redis_tls: Box<Option<RedisTlsInfo>>,
+        db: Option<i32>,
     },
+}
+
+impl std::fmt::Debug for RedisMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RedisMode::SingleUrl { url, db } => f
+                .debug_struct("SingleUrl")
+                .field("url", url)
+                .field("db", db)
+                .finish(),
+            RedisMode::Sentinel {
+                master_name,
+                endpoints,
+                sentinel_auth,
+                redis_auth,
+                db,
+                ..
+            } => f
+                .debug_struct("Sentinel")
+                .field("master_name", master_name)
+                .field("endpoints", endpoints)
+                .field("sentinel_auth", sentinel_auth)
+                .field("redis_auth", redis_auth)
+                .field("db", db)
+                .finish(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct RedisAuth {
+    pub username: Option<String>,
+    pub password: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct RedisTlsInfo {
+    pub is_secure: bool,
+    pub certificates: Option<TlsCertificates>,
+}
+
+impl RedisMode {
+    /// Create a builder for Single URL mode with mandatory URL
+    pub fn single_url(url: String) -> SingleUrlBuilder {
+        SingleUrlBuilder::new(url)
+    }
+
+    /// Create a builder for Sentinel mode with mandatory master name and endpoints
+    pub fn sentinel(master_name: String, endpoints: Vec<String>) -> SentinelBuilder {
+        SentinelBuilder::new(master_name, endpoints)
+    }
+
+    /// Create RedisMode from the rate limiter Redis store configuration using builder pattern
+    pub fn new(redis_store_config: &RateLimiterRedisStore) -> crate::Result<Self> {
+        match redis_store_config.mode.as_str() {
+            "single" => {
+                let url = redis_store_config
+                    .url
+                    .as_ref()
+                    .ok_or_else(|| {
+                        Error::RedisStore("URL is required for Single mode".to_string())
+                    })?
+                    .clone();
+
+                let mut builder = RedisMode::single_url(url);
+
+                if let Some(db) = redis_store_config.db {
+                    builder = builder.db(db);
+                }
+
+                builder.build().map_err(|e| {
+                    Error::RedisStore(format!("Failed to create Single Redis mode: {}", e))
+                })
+            }
+            "sentinel" => {
+                let sentinel_config = redis_store_config.sentinel.as_ref().ok_or_else(|| {
+                    Error::RedisStore("Sentinel config is required for Sentinel mode".to_string())
+                })?;
+
+                let mut builder = RedisMode::sentinel(
+                    sentinel_config.master_name.clone(),
+                    sentinel_config.endpoints.clone(),
+                );
+
+                if let Some(sentinel_auth) = &sentinel_config.sentinel_auth {
+                    let auth = parse_redis_auth(sentinel_auth.as_ref())?;
+                    builder = builder.sentinel_auth(auth);
+                }
+
+                if let Some(redis_auth) = &sentinel_config.redis_auth {
+                    let auth = parse_redis_auth(redis_auth.as_ref())?;
+                    builder = builder.redis_auth(auth);
+                }
+
+                if let Some(sentinel_tls) = &sentinel_config.sentinel_tls {
+                    let tls_info = create_redis_tls_info(sentinel_tls.as_ref())?;
+                    builder = builder.sentinel_tls(tls_info);
+                }
+
+                if let Some(redis_tls) = &sentinel_config.redis_tls {
+                    let tls_info = create_redis_tls_info(redis_tls.as_ref())?;
+                    builder = builder.redis_tls(tls_info);
+                }
+
+                if let Some(db) = redis_store_config.db {
+                    builder = builder.db(db);
+                }
+
+                builder.build().map_err(|e| {
+                    Error::RedisStore(format!("Failed to create Sentinel Redis mode: {}", e))
+                })
+            }
+            _ => Err(Error::RedisStore(format!(
+                "Unsupported Redis mode: {}",
+                redis_store_config.mode
+            ))),
+        }
+    }
+}
+
+/// Builder for Single URL Redis mode
+pub struct SingleUrlBuilder {
+    url: String,
+    db: Option<i32>,
+}
+
+impl SingleUrlBuilder {
+    fn new(url: String) -> Self {
+        Self { url, db: None }
+    }
+
+    pub fn db(mut self, db: i32) -> Self {
+        self.db = Some(db);
+        self
+    }
+
+    pub fn build(self) -> Result<RedisMode, String> {
+        Ok(RedisMode::SingleUrl {
+            url: self.url,
+            db: self.db,
+        })
+    }
+}
+
+/// Builder for Sentinel Redis mode
+pub struct SentinelBuilder {
+    master_name: String,
+    endpoints: Vec<String>,
+    sentinel_auth: Option<RedisAuth>,
+    redis_auth: Option<RedisAuth>,
+    sentinel_tls: Option<RedisTlsInfo>,
+    redis_tls: Option<RedisTlsInfo>,
+    db: Option<i32>,
+}
+
+impl SentinelBuilder {
+    fn new(master_name: String, endpoints: Vec<String>) -> Self {
+        Self {
+            master_name,
+            endpoints,
+            sentinel_auth: None,
+            redis_auth: None,
+            sentinel_tls: None,
+            redis_tls: None,
+            db: None,
+        }
+    }
+
+    pub fn sentinel_auth(mut self, auth: RedisAuth) -> Self {
+        self.sentinel_auth = Some(auth);
+        self
+    }
+
+    pub fn redis_auth(mut self, auth: RedisAuth) -> Self {
+        self.redis_auth = Some(auth);
+        self
+    }
+
+    pub fn sentinel_tls(mut self, tls_info: RedisTlsInfo) -> Self {
+        self.sentinel_tls = Some(tls_info);
+        self
+    }
+
+    pub fn redis_tls(mut self, tls_info: RedisTlsInfo) -> Self {
+        self.redis_tls = Some(tls_info);
+        self
+    }
+
+    pub fn db(mut self, db: i32) -> Self {
+        self.db = Some(db);
+        self
+    }
+
+    pub fn build(self) -> Result<RedisMode, String> {
+        if self.endpoints.is_empty() {
+            return Err("At least one endpoint is required for Sentinel mode".to_string());
+        }
+
+        Ok(RedisMode::Sentinel {
+            master_name: self.master_name,
+            endpoints: self.endpoints,
+            sentinel_auth: self.sentinel_auth,
+            redis_auth: self.redis_auth,
+            sentinel_tls: Box::new(self.sentinel_tls),
+            redis_tls: Box::new(self.redis_tls),
+            db: self.db,
+        })
+    }
 }
 
 impl RedisStore {
@@ -63,29 +281,107 @@ impl RedisStore {
     /// Connect via redis-rs using async and ConnectionManager.
     async fn make_client(mode: RedisMode) -> Result<redis::aio::ConnectionManager, RedisError> {
         match mode {
-            RedisMode::SingleUrl { url } => {
-                // Plain single-instance
-                let client = Client::open(url.as_str())?;
+            RedisMode::SingleUrl { url, db } => {
+                // Parse the URL and modify the DB if specified
+                let mut connection_info = url.into_connection_info()?;
+                if let Some(db_index) = db {
+                    connection_info.redis.db = db_index as i64;
+                }
+
+                let client = Client::open(connection_info)?;
                 let mgr = client.get_connection_manager().await?;
                 Ok(mgr)
             }
             RedisMode::Sentinel {
-                sentinel_urls,
                 master_name,
-                sentinel_conn_info: sentinel_auth,
+                endpoints,
+                sentinel_auth,
+                redis_auth,
+                sentinel_tls,
+                redis_tls,
+                db,
             } => {
-                // Build SentinelClient: wraps sentinel discovery and connection
-                let mut sentinel_client = SentinelClient::build(
-                    sentinel_urls.clone(),
-                    master_name.clone(),
-                    sentinel_auth,
+                // Convert string endpoints to ConnectionAddr
+                let sentinel_addrs: Result<Vec<ConnectionAddr>, _> = endpoints
+                    .iter()
+                    .map(|endpoint| {
+                        endpoint
+                            .as_str()
+                            .into_connection_info()
+                            .map(|info| info.addr)
+                    })
+                    .collect();
+                let sentinel_addrs = sentinel_addrs?;
+
+                // Build SentinelClient using builder pattern
+                let mut builder = SentinelClientBuilder::new(
+                    sentinel_addrs,
+                    master_name,
                     SentinelServerType::Master,
                 )?;
 
-                // Get a Client to the master
-                let master_client = sentinel_client.async_get_client().await?;
+                // Apply sentinel authentication if provided
+                if let Some(auth) = sentinel_auth {
+                    if let Some(username) = auth.username {
+                        builder = builder.set_client_to_sentinel_username(username);
+                    }
+                    if let Some(password) = auth.password {
+                        builder = builder.set_client_to_sentinel_password(password);
+                    }
+                }
 
-                let mgr = master_client.get_connection_manager().await?;
+                // Apply sentinel TLS mode and certificates if provided
+                if let Some(tls_info) = sentinel_tls.as_ref() {
+                    let tls_mode = if tls_info.is_secure {
+                        TlsMode::Secure
+                    } else {
+                        TlsMode::Insecure
+                    };
+                    builder = builder.set_client_to_sentinel_tls_mode(tls_mode);
+
+                    if let Some(tls_certificates) = &tls_info.certificates {
+                        builder =
+                            builder.set_client_to_sentinel_certificates(tls_certificates.clone());
+                    }
+                }
+
+                // Apply Redis data node authentication if provided
+                if let Some(auth) = redis_auth {
+                    if let Some(username) = auth.username {
+                        builder = builder.set_client_to_redis_username(username);
+                    }
+                    if let Some(password) = auth.password {
+                        builder = builder.set_client_to_redis_password(password);
+                    }
+                }
+
+                // Apply Redis data node TLS mode and certificates if provided
+                if let Some(tls_info) = redis_tls.as_ref() {
+                    let tls_mode = if tls_info.is_secure {
+                        TlsMode::Secure
+                    } else {
+                        TlsMode::Insecure
+                    };
+                    builder = builder.set_client_to_redis_tls_mode(tls_mode);
+
+                    if let Some(tls_certificates) = &tls_info.certificates {
+                        builder =
+                            builder.set_client_to_redis_certificates(tls_certificates.clone());
+                    }
+                }
+
+                // Apply database selection if provided
+                if let Some(db_index) = db {
+                    builder = builder.set_client_to_redis_db(db_index as i64);
+                }
+
+                // Build the sentinel client
+                let mut sentinel_client = builder.build()?;
+
+                // Get a Client to the target server
+                let target_client = sentinel_client.async_get_client().await?;
+
+                let mgr = target_client.get_connection_manager().await?;
                 Ok(mgr)
             }
         }
@@ -135,6 +431,98 @@ impl RedisStore {
         // invoke async internally handles loading the script if the SHA is not found
         invocation.invoke_async(&mut conn).await
     }
+}
+
+/// Parse Redis authentication from the models.
+fn parse_redis_auth(auth: &numaflow_models::models::RedisAuth) -> crate::Result<RedisAuth> {
+    let username = auth
+        .username
+        .as_ref()
+        .map(|secret_ref| get_secret_from_volume(&secret_ref.name, &secret_ref.key))
+        .transpose()
+        .map_err(|e| Error::RedisStore(format!("Failed to get username secret: {}", e)))?;
+
+    let password = auth
+        .password
+        .as_ref()
+        .map(|secret_ref| get_secret_from_volume(&secret_ref.name, &secret_ref.key))
+        .transpose()
+        .map_err(|e| Error::RedisStore(format!("Failed to get password secret: {}", e)))?;
+
+    Ok(RedisAuth { username, password })
+}
+
+/// Create RedisTlsInfo from TLS configuration
+fn create_redis_tls_info(tls: &numaflow_models::models::Tls) -> crate::Result<RedisTlsInfo> {
+    let is_secure = !tls.insecure_skip_verify.unwrap_or(false);
+    let certificates = if is_secure {
+        Some(parse_redis_tls_config(tls)?)
+    } else {
+        None
+    };
+
+    Ok(RedisTlsInfo {
+        is_secure,
+        certificates,
+    })
+}
+
+/// Parse Redis TLS configuration from the models.
+fn parse_redis_tls_config(tls: &numaflow_models::models::Tls) -> crate::Result<TlsCertificates> {
+    // Only extract certificates when secure mode is enabled
+    let ca_cert = tls
+        .ca_cert_secret
+        .as_ref()
+        .map(|secret_ref| get_secret_from_volume(&secret_ref.name, &secret_ref.key))
+        .transpose()
+        .map_err(|e| Error::RedisStore(format!("Failed to get CA cert secret: {}", e)))?
+        .map(|cert| cert.into_bytes());
+
+    let client_tls = match (&tls.cert_secret, &tls.key_secret) {
+        (Some(cert_secret), Some(key_secret)) => {
+            let client_cert =
+                get_secret_from_volume(&cert_secret.name, &cert_secret.key).map_err(|e| {
+                    Error::RedisStore(format!("Failed to get client cert secret: {}", e))
+                })?;
+
+            let client_key =
+                get_secret_from_volume(&key_secret.name, &key_secret.key).map_err(|e| {
+                    Error::RedisStore(format!("Failed to get client key secret: {}", e))
+                })?;
+
+            Some(ClientTlsConfig {
+                client_cert: client_cert.into_bytes(),
+                client_key: client_key.into_bytes(),
+            })
+        }
+        (None, None) => None,
+        (_, _) => {
+            return Err(Error::RedisStore(
+                "Both cert and key secrets must be provided for client TLS authentication"
+                    .to_string(),
+            ));
+        }
+    };
+
+    Ok(TlsCertificates {
+        client_tls,
+        root_cert: ca_cert,
+    })
+}
+
+#[cfg(test)]
+const SECRET_BASE_PATH: &str = "/tmp/numaflow";
+
+#[cfg(not(test))]
+const SECRET_BASE_PATH: &str = "/var/numaflow/secrets";
+
+/// Retrieve value from mounted secret volume
+/// "/var/numaflow/secrets/${secretRef.name}/${secretRef.key}" is expected to be the file path
+pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> Result<String, String> {
+    let path = format!("{SECRET_BASE_PATH}/{name}/{key}");
+    let val = std::fs::read_to_string(path.clone())
+        .map_err(|e| format!("Reading secret from file {path}: {e:?}"))?;
+    Ok(val.trim().into())
 }
 
 impl Store for RedisStore {
@@ -218,6 +606,281 @@ impl Store for RedisStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use numaflow_models::models::{RedisSentinelConfig, Tls};
+
+    /// Comprehensive test for Redis mode creation from RateLimiterRedisStore configurations
+    #[test]
+    fn test_redis_mode_creation_comprehensive() {
+        // Test 1: Single mode with minimal configuration
+        let single_config = RateLimiterRedisStore {
+            mode: "single".to_string(),
+            url: Some("redis://localhost:6379".to_string()),
+            db: None,
+            sentinel: None,
+        };
+
+        let result = RedisMode::new(&single_config).unwrap();
+        match result {
+            RedisMode::SingleUrl { url, db } => {
+                assert_eq!(url, "redis://localhost:6379");
+                assert_eq!(db, None);
+            }
+            _ => panic!("Expected SingleUrl mode"),
+        }
+
+        // Test 2: Single mode with database specified
+        let single_config_with_db = RateLimiterRedisStore {
+            mode: "single".to_string(),
+            url: Some("redis://localhost:6379".to_string()),
+            db: Some(5),
+            sentinel: None,
+        };
+
+        let result = RedisMode::new(&single_config_with_db).unwrap();
+        match result {
+            RedisMode::SingleUrl { url, db } => {
+                assert_eq!(url, "redis://localhost:6379");
+                assert_eq!(db, Some(5));
+            }
+            _ => panic!("Expected SingleUrl mode"),
+        }
+
+        // Test 3: Single mode missing URL (should fail)
+        let single_config_no_url = RateLimiterRedisStore {
+            mode: "single".to_string(),
+            url: None,
+            db: None,
+            sentinel: None,
+        };
+
+        let result = RedisMode::new(&single_config_no_url);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("URL is required for Single mode")
+        );
+
+        // Test 4: Sentinel mode with minimal configuration
+        let sentinel_config = RateLimiterRedisStore {
+            mode: "sentinel".to_string(),
+            url: None,
+            db: None,
+            sentinel: Some(Box::new(RedisSentinelConfig {
+                master_name: "mymaster".to_string(),
+                endpoints: vec!["sentinel1:26379".to_string(), "sentinel2:26379".to_string()],
+                sentinel_auth: None,
+                redis_auth: None,
+                sentinel_tls: None,
+                redis_tls: None,
+            })),
+        };
+
+        let result = RedisMode::new(&sentinel_config).unwrap();
+        match result {
+            RedisMode::Sentinel {
+                master_name,
+                endpoints,
+                sentinel_auth,
+                redis_auth,
+                sentinel_tls,
+                redis_tls,
+                db,
+                ..
+            } => {
+                assert_eq!(master_name, "mymaster");
+                assert_eq!(endpoints, vec!["sentinel1:26379", "sentinel2:26379"]);
+                assert!(sentinel_auth.is_none());
+                assert!(redis_auth.is_none());
+                assert!(sentinel_tls.is_none());
+                assert!(redis_tls.is_none());
+                assert_eq!(db, None);
+            }
+            _ => panic!("Expected Sentinel mode"),
+        }
+
+        // Test 5: Sentinel mode with database specified
+        let sentinel_config_with_db = RateLimiterRedisStore {
+            mode: "sentinel".to_string(),
+            url: None,
+            db: Some(3),
+            sentinel: Some(Box::new(RedisSentinelConfig {
+                master_name: "mymaster".to_string(),
+                endpoints: vec!["sentinel1:26379".to_string()],
+                sentinel_auth: None,
+                redis_auth: None,
+                sentinel_tls: None,
+                redis_tls: None,
+            })),
+        };
+
+        let result = RedisMode::new(&sentinel_config_with_db).unwrap();
+        match result {
+            RedisMode::Sentinel { db, .. } => {
+                assert_eq!(db, Some(3));
+            }
+            _ => panic!("Expected Sentinel mode"),
+        }
+
+        // Test 6: Sentinel mode with TLS configurations
+        let sentinel_config_with_tls = RateLimiterRedisStore {
+            mode: "sentinel".to_string(),
+            url: None,
+            db: None,
+            sentinel: Some(Box::new(RedisSentinelConfig {
+                master_name: "mymaster".to_string(),
+                endpoints: vec!["sentinel1:26379".to_string()],
+                sentinel_auth: None,
+                redis_auth: None,
+                sentinel_tls: Some(Box::new(Tls {
+                    insecure_skip_verify: Some(true),
+                    ca_cert_secret: None,
+                    cert_secret: None,
+                    key_secret: None,
+                })),
+                redis_tls: Some(Box::new(Tls {
+                    insecure_skip_verify: Some(false),
+                    ca_cert_secret: None,
+                    cert_secret: None,
+                    key_secret: None,
+                })),
+            })),
+        };
+
+        let result = RedisMode::new(&sentinel_config_with_tls).unwrap();
+        match result {
+            RedisMode::Sentinel {
+                sentinel_tls,
+                redis_tls,
+                ..
+            } => {
+                assert!(sentinel_tls.is_some());
+                assert!(redis_tls.is_some());
+            }
+            _ => panic!("Expected Sentinel mode"),
+        }
+
+        // Test 7: Sentinel mode missing sentinel config (should fail)
+        let sentinel_config_no_sentinel = RateLimiterRedisStore {
+            mode: "sentinel".to_string(),
+            url: None,
+            db: None,
+            sentinel: None,
+        };
+
+        let result = RedisMode::new(&sentinel_config_no_sentinel);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Sentinel config is required for Sentinel mode")
+        );
+
+        // Test 8: Unsupported mode (should fail)
+        let unsupported_config = RateLimiterRedisStore {
+            mode: "cluster".to_string(),
+            url: None,
+            db: None,
+            sentinel: None,
+        };
+
+        let result = RedisMode::new(&unsupported_config);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Unsupported Redis mode: cluster")
+        );
+    }
+
+    #[test]
+    fn test_redis_mode_single_url_builder() {
+        let redis_mode = RedisMode::single_url("redis://localhost:6379".to_string())
+            .db(1)
+            .build()
+            .unwrap();
+
+        match redis_mode {
+            RedisMode::SingleUrl { url, db } => {
+                assert_eq!(url, "redis://localhost:6379");
+                assert_eq!(db, Some(1));
+            }
+            _ => panic!("Expected SingleUrl mode"),
+        }
+    }
+
+    #[test]
+    fn test_redis_mode_sentinel_builder() {
+        let redis_mode = RedisMode::sentinel(
+            "mymaster".to_string(),
+            vec!["sentinel1:26379".to_string(), "sentinel2:26379".to_string()],
+        )
+        .db(2)
+        .build()
+        .unwrap();
+
+        match redis_mode {
+            RedisMode::Sentinel {
+                master_name,
+                endpoints,
+                db,
+                ..
+            } => {
+                assert_eq!(master_name, "mymaster");
+                assert_eq!(endpoints, vec!["sentinel1:26379", "sentinel2:26379"]);
+                assert_eq!(db, Some(2));
+            }
+            _ => panic!("Expected Sentinel mode"),
+        }
+    }
+
+    #[test]
+    fn test_redis_mode_sentinel_builder_with_auth() {
+        let sentinel_auth = RedisAuth {
+            username: Some("sentinel_user".to_string()),
+            password: Some("sentinel_pass".to_string()),
+        };
+
+        let redis_auth = RedisAuth {
+            username: Some("redis_user".to_string()),
+            password: Some("redis_pass".to_string()),
+        };
+
+        let tls_info = RedisTlsInfo {
+            is_secure: true,
+            certificates: Some(TlsCertificates {
+                client_tls: None,
+                root_cert: None,
+            }),
+        };
+
+        let redis_mode =
+            RedisMode::sentinel("mymaster".to_string(), vec!["sentinel1:26379".to_string()])
+                .sentinel_auth(sentinel_auth.clone())
+                .redis_auth(redis_auth.clone())
+                .sentinel_tls(tls_info)
+                .build()
+                .unwrap();
+
+        match redis_mode {
+            RedisMode::Sentinel {
+                master_name,
+                sentinel_auth: s_auth,
+                redis_auth: r_auth,
+                sentinel_tls,
+                ..
+            } => {
+                assert_eq!(master_name, "mymaster");
+                assert_eq!(s_auth.unwrap().username, Some("sentinel_user".to_string()));
+                assert_eq!(r_auth.unwrap().username, Some("redis_user".to_string()));
+                assert!(sentinel_tls.is_some()); // Just check that TLS is configured
+            }
+            _ => panic!("Expected Sentinel mode"),
+        }
+    }
 
     #[test]
     fn test_script_constants_are_valid() {
@@ -238,6 +901,88 @@ mod tests {
         assert!(DEREGISTER_SCRIPT.contains(":poolsize"));
         assert!(SYNC_POOL_SIZE_SCRIPT.contains(":heartbeats"));
         assert!(SYNC_POOL_SIZE_SCRIPT.contains(":poolsize"));
+    }
+
+    #[test]
+    fn test_parse_redis_tls_config_insecure_skip_verify() {
+        use numaflow_models::models::Tls;
+
+        // Test with insecure_skip_verify = true
+        let tls_config_insecure = Tls {
+            insecure_skip_verify: Some(true),
+            ca_cert_secret: None,
+            cert_secret: None,
+            key_secret: None,
+        };
+
+        let result = parse_redis_tls_config(&tls_config_insecure).unwrap();
+        assert!(result.client_tls.is_none());
+        assert!(result.root_cert.is_none());
+
+        // Test with insecure_skip_verify = false (should require certificates for full functionality)
+        let tls_config_secure = Tls {
+            insecure_skip_verify: Some(false),
+            ca_cert_secret: None,
+            cert_secret: None,
+            key_secret: None,
+        };
+
+        let result = parse_redis_tls_config(&tls_config_secure).unwrap();
+        assert!(result.client_tls.is_none()); // No client certs provided
+        assert!(result.root_cert.is_none()); // No CA cert provided
+
+        // Test with insecure_skip_verify = None (defaults to false)
+        let tls_config_default = Tls {
+            insecure_skip_verify: None,
+            ca_cert_secret: None,
+            cert_secret: None,
+            key_secret: None,
+        };
+
+        let result = parse_redis_tls_config(&tls_config_default).unwrap();
+        assert!(result.client_tls.is_none());
+        assert!(result.root_cert.is_none());
+    }
+
+    #[test]
+    fn test_create_redis_tls_info() {
+        use numaflow_models::models::Tls;
+
+        // Test with insecure_skip_verify = true
+        let tls_config_insecure = Tls {
+            insecure_skip_verify: Some(true),
+            ca_cert_secret: None,
+            cert_secret: None,
+            key_secret: None,
+        };
+
+        let result = create_redis_tls_info(&tls_config_insecure).unwrap();
+        assert!(!result.is_secure); // Should be insecure
+        assert!(result.certificates.is_none()); // No certificates should be extracted
+
+        // Test with insecure_skip_verify = false
+        let tls_config_secure = Tls {
+            insecure_skip_verify: Some(false),
+            ca_cert_secret: None,
+            cert_secret: None,
+            key_secret: None,
+        };
+
+        let result = create_redis_tls_info(&tls_config_secure).unwrap();
+        assert!(result.is_secure); // Should be secure
+        assert!(result.certificates.is_some()); // Certificates should be extracted (even if empty)
+
+        // Test with insecure_skip_verify = None (defaults to false/secure)
+        let tls_config_default = Tls {
+            insecure_skip_verify: None,
+            ca_cert_secret: None,
+            cert_secret: None,
+            key_secret: None,
+        };
+
+        let result = create_redis_tls_info(&tls_config_default).unwrap();
+        assert!(result.is_secure); // Should default to secure
+        assert!(result.certificates.is_some()); // Certificates should be extracted
     }
 
     #[test]

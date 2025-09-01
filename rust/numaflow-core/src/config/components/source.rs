@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::{fmt::Debug, time::Duration};
 
-use super::parse_kafka_auth_config;
+use super::{get_secret_from_volume, parse_kafka_auth_config};
 use crate::Result;
 use crate::config::get_vertex_name;
 use crate::error::Error;
@@ -374,16 +374,6 @@ impl Default for GeneratorConfig {
     }
 }
 
-// Retrieve value from mounted secret volume
-// "/var/numaflow/secrets/${secretRef.name}/${secretRef.key}" is expected to be the file path
-pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> String {
-    let path = format!("/var/numaflow/secrets/{name}/{key}");
-    let val = std::fs::read_to_string(path.clone())
-        .map_err(|e| format!("Reading secret from file {path}: {e:?}"))
-        .expect("Failed to read secret");
-    val.trim().into()
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct AuthToken {
     /// Name of the configmap
@@ -406,7 +396,9 @@ impl TryFrom<Box<numaflow_models::models::HttpSource>> for SourceType {
 
         if let Some(auth) = value.auth {
             let auth = auth.token.unwrap();
-            let token = get_secret_from_volume(&auth.name, &auth.key);
+            let token = get_secret_from_volume(&auth.name, &auth.key).map_err(|e| {
+                Error::Config(format!("Failed to get token secret from volume: {e:?}"))
+            })?;
             http_config = http_config.token(Box::leak(token.into_boxed_str()));
         }
 
