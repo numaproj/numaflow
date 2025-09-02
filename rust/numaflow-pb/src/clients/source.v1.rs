@@ -9,7 +9,7 @@ pub struct Handshake {
 }
 ///
 /// ReadRequest is the request for reading datum stream from user defined source.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ReadRequest {
     /// Required field indicating the request.
     #[prost(message, optional, tag = "1")]
@@ -19,7 +19,7 @@ pub struct ReadRequest {
 }
 /// Nested message and enum types in `ReadRequest`.
 pub mod read_request {
-    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Request {
         /// Required field indicating the number of records to read.
         #[prost(uint64, tag = "1")]
@@ -29,6 +29,9 @@ pub mod read_request {
         /// We don't use uint64 because time.Duration takes int64 as nano seconds. Using uint64 for milli will cause overflow.
         #[prost(uint32, tag = "2")]
         pub timeout_in_ms: u32,
+        /// Metadata is the metadata of the message
+        #[prost(message, optional, tag = "3")]
+        pub metadata: ::core::option::Option<crate::common::metadata::Metadata>,
     }
 }
 ///
