@@ -1,0 +1,21 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: rate-limit-redis-mv
+spec:
+  scale:
+    min: 1
+  limits:
+    readBatchSize: 50
+    rateLimit:
+      max: 2
+      min: 1
+      rampUpDuration: 10s  # 10 seconds to ramp up from min to max
+      store:
+        inMemoryStore: {}
+  source:
+    generator:
+      rpu: 300
+      duration: 1s
+  sink:
+    blackhole: {}

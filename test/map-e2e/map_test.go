@@ -120,7 +120,7 @@ func (s *MapSuite) TestMapStreamUDFunctionAndSink() {
 		VertexPodLogContains("java-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(4))
 }
 
-func (s *MapSuite) TestRateLimitWithRedisStore() {
+func (s *MapSuite) TestPipelineRateLimitWithRedisStore() {
 	w := s.Given().Pipeline("@testdata/rate-limit-redis.yaml").
 		When().
 		CreatePipelineAndWait()
