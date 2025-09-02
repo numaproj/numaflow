@@ -18,6 +18,7 @@ package pipeline
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -740,6 +741,277 @@ func Test_copyVertexLimits(t *testing.T) {
 		assert.NotNil(t, v.Limits.RateLimit.RateLimiterStore)
 		assert.NotNil(t, v.Limits.RateLimit.RateLimiterStore.RateLimiterInMemoryStore)
 		assert.Nil(t, v.Limits.RateLimit.RateLimiterStore.RateLimiterRedisStore)
+	})
+
+	t.Run("source vertex rate limit division by read batch size", func(t *testing.T) {
+		pl := testPipeline.DeepCopy()
+		pipelineMaxTPS := uint64(1000)
+		pipelineMinTPS := uint64(100)
+		readBatchSize := uint64(50)
+
+		pipelineLimit := dfv1.PipelineLimits{
+			ReadBatchSize: &readBatchSize,
+			RateLimit: &dfv1.RateLimit{
+				Max: &pipelineMaxTPS,
+				Min: &pipelineMinTPS,
+			},
+		}
+		pl.Spec.Limits = &pipelineLimit
+
+		// Test source vertex - create rate limit struct with nil Max/Min to trigger division logic
+		sourceVertex := &dfv1.AbstractVertex{
+			Name:   "test-source",
+			Source: &dfv1.Source{},
+			Limits: &dfv1.VertexLimits{
+				RateLimit: &dfv1.RateLimit{
+					// Max and Min are nil, so they should be calculated from pipeline with division
+				},
+			},
+		}
+		copyVertexLimits(pl, sourceVertex)
+
+		// Expected: ceil(1000/50) = 20, ceil(100/50) = 2
+		expectedMaxReads := uint64(20)
+		expectedMinReads := uint64(2)
+		assert.Equal(t, expectedMaxReads, *sourceVertex.Limits.RateLimit.Max)
+		assert.Equal(t, expectedMinReads, *sourceVertex.Limits.RateLimit.Min)
+		assert.Equal(t, readBatchSize, *sourceVertex.Limits.ReadBatchSize)
+	})
+
+	t.Run("non-source vertex rate limit no division", func(t *testing.T) {
+		pl := testPipeline.DeepCopy()
+		pipelineMaxTPS := uint64(1000)
+		pipelineMinTPS := uint64(100)
+		readBatchSize := uint64(50)
+
+		pipelineLimit := dfv1.PipelineLimits{
+			ReadBatchSize: &readBatchSize,
+			RateLimit: &dfv1.RateLimit{
+				Max: &pipelineMaxTPS,
+				Min: &pipelineMinTPS,
+			},
+		}
+		pl.Spec.Limits = &pipelineLimit
+
+		// Test UDF vertex - should NOT divide by read batch size
+		udfVertex := &dfv1.AbstractVertex{
+			Name: "test-udf",
+			UDF:  &dfv1.UDF{},
+		}
+		copyVertexLimits(pl, udfVertex)
+
+		// Expected: same as pipeline limits (no division)
+		assert.Equal(t, pipelineMaxTPS, *udfVertex.Limits.RateLimit.Max)
+		assert.Equal(t, pipelineMinTPS, *udfVertex.Limits.RateLimit.Min)
+		assert.Equal(t, readBatchSize, *udfVertex.Limits.ReadBatchSize)
+
+		// Test sink vertex - should NOT divide by read batch size
+		sinkVertex := &dfv1.AbstractVertex{
+			Name: "test-sink",
+			Sink: &dfv1.Sink{},
+		}
+		copyVertexLimits(pl, sinkVertex)
+
+		// Expected: same as pipeline limits (no division)
+		assert.Equal(t, pipelineMaxTPS, *sinkVertex.Limits.RateLimit.Max)
+		assert.Equal(t, pipelineMinTPS, *sinkVertex.Limits.RateLimit.Min)
+		assert.Equal(t, readBatchSize, *sinkVertex.Limits.ReadBatchSize)
+	})
+
+	t.Run("source vertex rate limit division with fractional results", func(t *testing.T) {
+		pl := testPipeline.DeepCopy()
+		pipelineMaxTPS := uint64(100)
+		pipelineMinTPS := uint64(30)
+		readBatchSize := uint64(7) // Will cause fractional division
+
+		pipelineLimit := dfv1.PipelineLimits{
+			ReadBatchSize: &readBatchSize,
+			RateLimit: &dfv1.RateLimit{
+				Max: &pipelineMaxTPS,
+				Min: &pipelineMinTPS,
+			},
+		}
+		pl.Spec.Limits = &pipelineLimit
+
+		// Create rate limit struct with nil Max/Min to trigger division logic
+		sourceVertex := &dfv1.AbstractVertex{
+			Name:   "test-source",
+			Source: &dfv1.Source{},
+			Limits: &dfv1.VertexLimits{
+				RateLimit: &dfv1.RateLimit{
+					// Max and Min are nil, so they should be calculated from pipeline with division
+				},
+			},
+		}
+		copyVertexLimits(pl, sourceVertex)
+
+		// Expected: ceil(100/7) = 15, ceil(30/7) = 5
+		expectedMaxReads := uint64(15) // math.Ceil(100.0/7.0) = 15
+		expectedMinReads := uint64(5)  // math.Ceil(30.0/7.0) = 5
+		assert.Equal(t, expectedMaxReads, *sourceVertex.Limits.RateLimit.Max)
+		assert.Equal(t, expectedMinReads, *sourceVertex.Limits.RateLimit.Min)
+	})
+
+	t.Run("source vertex rate limit with vertex-specific read batch size", func(t *testing.T) {
+		pl := testPipeline.DeepCopy()
+		pipelineMaxTPS := uint64(200)
+		pipelineMinTPS := uint64(50)
+		pipelineReadBatchSize := uint64(10)
+		vertexReadBatchSize := uint64(25)
+
+		pipelineLimit := dfv1.PipelineLimits{
+			ReadBatchSize: &pipelineReadBatchSize,
+			RateLimit: &dfv1.RateLimit{
+				Max: &pipelineMaxTPS,
+				Min: &pipelineMinTPS,
+			},
+		}
+		pl.Spec.Limits = &pipelineLimit
+
+		sourceVertex := &dfv1.AbstractVertex{
+			Name:   "test-source",
+			Source: &dfv1.Source{},
+			Limits: &dfv1.VertexLimits{
+				ReadBatchSize: &vertexReadBatchSize, // Override pipeline read batch size
+				RateLimit: &dfv1.RateLimit{
+					// Max and Min are nil, so they should be calculated from pipeline with division
+				},
+			},
+		}
+		copyVertexLimits(pl, sourceVertex)
+
+		// Should use vertex-specific read batch size for division
+		// Expected: ceil(200/25) = 8, ceil(50/25) = 2
+		expectedMaxReads := uint64(8)
+		expectedMinReads := uint64(2)
+		assert.Equal(t, expectedMaxReads, *sourceVertex.Limits.RateLimit.Max)
+		assert.Equal(t, expectedMinReads, *sourceVertex.Limits.RateLimit.Min)
+		assert.Equal(t, vertexReadBatchSize, *sourceVertex.Limits.ReadBatchSize)
+	})
+
+	t.Run("source vertex partial rate limit override with division", func(t *testing.T) {
+		pl := testPipeline.DeepCopy()
+		pipelineMaxTPS := uint64(300)
+		pipelineMinTPS := uint64(60)
+		readBatchSize := uint64(20)
+		vertexMaxTPS := uint64(400) // Override only max
+
+		pipelineLimit := dfv1.PipelineLimits{
+			ReadBatchSize: &readBatchSize,
+			RateLimit: &dfv1.RateLimit{
+				Max: &pipelineMaxTPS,
+				Min: &pipelineMinTPS,
+			},
+		}
+		pl.Spec.Limits = &pipelineLimit
+
+		sourceVertex := &dfv1.AbstractVertex{
+			Name:   "test-source",
+			Source: &dfv1.Source{},
+			Limits: &dfv1.VertexLimits{
+				RateLimit: &dfv1.RateLimit{
+					Max: &vertexMaxTPS, // Only override max, min should come from pipeline
+				},
+			},
+		}
+		copyVertexLimits(pl, sourceVertex)
+
+		// Max should use vertex value (no division since it's already set)
+		// Min should use pipeline value with division: ceil(60/20) = 3
+		expectedMinReads := uint64(3)
+		assert.Equal(t, vertexMaxTPS, *sourceVertex.Limits.RateLimit.Max)
+		assert.Equal(t, expectedMinReads, *sourceVertex.Limits.RateLimit.Min)
+	})
+
+	t.Run("source vertex rate limit edge cases", func(t *testing.T) {
+		pl := testPipeline.DeepCopy()
+
+		// Test with batch size of 1 (no division effect)
+		pipelineMaxTPS := uint64(100)
+		pipelineMinTPS := uint64(10)
+		readBatchSize := uint64(1)
+
+		pipelineLimit := dfv1.PipelineLimits{
+			ReadBatchSize: &readBatchSize,
+			RateLimit: &dfv1.RateLimit{
+				Max: &pipelineMaxTPS,
+				Min: &pipelineMinTPS,
+			},
+		}
+		pl.Spec.Limits = &pipelineLimit
+
+		sourceVertex := &dfv1.AbstractVertex{
+			Name:   "test-source",
+			Source: &dfv1.Source{},
+			Limits: &dfv1.VertexLimits{
+				RateLimit: &dfv1.RateLimit{
+					// Max and Min are nil, so they should be calculated from pipeline with division
+				},
+			},
+		}
+		copyVertexLimits(pl, sourceVertex)
+
+		// With batch size 1: ceil(100/1) = 100, ceil(10/1) = 10
+		assert.Equal(t, pipelineMaxTPS, *sourceVertex.Limits.RateLimit.Max)
+		assert.Equal(t, pipelineMinTPS, *sourceVertex.Limits.RateLimit.Min)
+
+		// Test with very large batch size
+		largeBatchSize := uint64(1000)
+		pipelineLimit.ReadBatchSize = &largeBatchSize
+		pl.Spec.Limits = &pipelineLimit
+
+		sourceVertex2 := &dfv1.AbstractVertex{
+			Name:   "test-source-2",
+			Source: &dfv1.Source{},
+			Limits: &dfv1.VertexLimits{
+				RateLimit: &dfv1.RateLimit{
+					// Max and Min are nil, so they should be calculated from pipeline with division
+				},
+			},
+		}
+		copyVertexLimits(pl, sourceVertex2)
+
+		// With large batch size: ceil(100/1000) = 1, ceil(10/1000) = 1
+		expectedMax := uint64(1)
+		expectedMin := uint64(1)
+		assert.Equal(t, expectedMax, *sourceVertex2.Limits.RateLimit.Max)
+		assert.Equal(t, expectedMin, *sourceVertex2.Limits.RateLimit.Min)
+	})
+
+	t.Run("source vertex uses default read batch size when not specified", func(t *testing.T) {
+		pl := testPipeline.DeepCopy()
+		pipelineMaxTPS := uint64(500)
+		pipelineMinTPS := uint64(50)
+
+		// Don't specify read batch size - should use default
+		pipelineLimit := dfv1.PipelineLimits{
+			RateLimit: &dfv1.RateLimit{
+				Max: &pipelineMaxTPS,
+				Min: &pipelineMinTPS,
+			},
+		}
+		pl.Spec.Limits = &pipelineLimit
+
+		sourceVertex := &dfv1.AbstractVertex{
+			Name:   "test-source",
+			Source: &dfv1.Source{},
+			Limits: &dfv1.VertexLimits{
+				RateLimit: &dfv1.RateLimit{
+					// Max and Min are nil, so they should be calculated from pipeline with division
+				},
+			},
+		}
+		copyVertexLimits(pl, sourceVertex)
+
+		// Should use DefaultReadBatchSize for division
+		// Expected: ceil(500/500) = 1, ceil(50/500) = 1 (assuming DefaultReadBatchSize = 500)
+		defaultBatchSize := dfv1.DefaultReadBatchSize
+		expectedMaxReads := uint64(math.Ceil(float64(pipelineMaxTPS) / float64(defaultBatchSize)))
+		expectedMinReads := uint64(math.Ceil(float64(pipelineMinTPS) / float64(defaultBatchSize)))
+
+		assert.Equal(t, expectedMaxReads, *sourceVertex.Limits.RateLimit.Max)
+		assert.Equal(t, expectedMinReads, *sourceVertex.Limits.RateLimit.Min)
+		assert.Equal(t, uint64(defaultBatchSize), *sourceVertex.Limits.ReadBatchSize)
 	})
 }
 
