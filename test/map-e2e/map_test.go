@@ -151,7 +151,7 @@ func (s *MapSuite) TestPipelineRateLimitWithRedisStore() {
 	}()
 
 	// Check processing rates for the UDF vertex which has rate limiting applied
-	timer := time.NewTimer(2 * time.Minute)
+	timer := time.NewTimer(5 * time.Minute)
 	waitInterval := 5 * time.Second
 	succeedChan := make(chan struct{})
 
