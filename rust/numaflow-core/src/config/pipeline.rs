@@ -478,7 +478,13 @@ impl PipelineConfig {
                 .limits
                 .as_ref()
                 .and_then(|limits| limits.rate_limit.clone())
-                .map(RateLimitConfig::from)
+                .map(|rate_limit| {
+                    RateLimitConfig::new(
+                        batch_size as usize,
+                        vertex_type == VertexType::Source,
+                        *rate_limit,
+                    )
+                })
         };
 
         let js_client_config = isb::jetstream::ClientConfig {

@@ -84,6 +84,11 @@ impl<W> RateLimit<W> {
     pub(crate) fn compute_refill(&self) -> usize {
         let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
 
+        info!(
+            "max_ever_filled: {}, token_calc_bounds: {:?}",
+            *max_ever_filled, self.token_calc_bounds
+        );
+
         // let's make sure we do not go beyond the max
         if *max_ever_filled >= self.token_calc_bounds.max as f32 {
             self.token_calc_bounds.max
@@ -274,6 +279,11 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithDistributedState<S>
 
         let next_total_tokens = self.compute_refill();
 
+        info!(
+            "next_total_tokens: {}, token_calc_bounds: {:?}",
+            next_total_tokens, self.token_calc_bounds
+        );
+
         // Store the total tokens (division happens in get_tokens)
         self.token
             .store(next_total_tokens, std::sync::atomic::Ordering::Release);
@@ -303,6 +313,7 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDis
     async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize {
         // First attempt - try to get tokens immediately
         let tokens = self.attempt_acquire_n(n).await;
+        info!("Attempted to acquire {n:?} tokens, got {tokens} tokens.");
         if tokens > 0 {
             return tokens;
         }

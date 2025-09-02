@@ -1,4 +1,5 @@
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica, is_mono_vertex};
+use tracing::info;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct RateLimitConfig {
@@ -12,6 +13,7 @@ pub(crate) struct RateLimitConfig {
     pub(crate) min: usize,
     /// Ramp up duration in seconds with minimum of 1 per second.
     pub(crate) ramp_up_duration: std::time::Duration,
+    /// Optional store for distributed rate limiting.
     pub(crate) store: Option<Box<numaflow_models::models::RateLimiterStore>>,
 }
 
@@ -28,8 +30,12 @@ impl Default for RateLimitConfig {
     }
 }
 
-impl From<Box<numaflow_models::models::RateLimit>> for RateLimitConfig {
-    fn from(value: Box<numaflow_models::models::RateLimit>) -> Self {
+impl RateLimitConfig {
+    pub(crate) fn new(
+        batch_size: usize,
+        is_source: bool,
+        rate_limit: numaflow_models::models::RateLimit,
+    ) -> Self {
         Self {
             key_prefix: if is_mono_vertex() {
                 Box::leak(format!("{}-mv", get_vertex_name()).into_boxed_str())
@@ -41,13 +47,33 @@ impl From<Box<numaflow_models::models::RateLimit>> for RateLimitConfig {
             processor_id: Box::leak(
                 format!("{}-{}", get_vertex_name(), get_vertex_replica()).into_boxed_str(),
             ),
-            max: value.max.map(|x| x as usize).unwrap_or_default(),
-            min: value.min.map(|x| x as usize).unwrap_or_default(),
-            ramp_up_duration: value
+            max: if is_source {
+                // for source, we throttle based on number of read invocations so we divide by batch
+                // size
+                rate_limit
+                    .max
+                    .map(|x| x as usize)
+                    .unwrap_or_default()
+                    .div_ceil(batch_size)
+            } else {
+                rate_limit.max.map(|x| x as usize).unwrap_or_default()
+            },
+            min: if is_source {
+                // for source, we throttle based on number of read invocations so we divide by batch
+                // size
+                rate_limit
+                    .min
+                    .map(|x| x as usize)
+                    .unwrap_or_default()
+                    .div_ceil(batch_size)
+            } else {
+                rate_limit.min.map(|x| x as usize).unwrap_or_default()
+            },
+            ramp_up_duration: rate_limit
                 .ramp_up_duration
                 .map(std::time::Duration::from)
                 .unwrap_or_default(),
-            store: value.store,
+            store: rate_limit.store,
         }
     }
 }

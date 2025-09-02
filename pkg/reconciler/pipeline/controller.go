@@ -19,7 +19,6 @@ package pipeline
 import (
 	"context"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -712,11 +711,11 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 }
 
 func copyVertexLimits(pl *dfv1.Pipeline, v *dfv1.AbstractVertex) {
-	mergedLimits := mergeLimits(pl.GetPipelineLimits(), v.Limits, v.GetVertexType())
+	mergedLimits := mergeLimits(pl.GetPipelineLimits(), v.Limits)
 	v.Limits = &mergedLimits
 }
 
-func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits, vertexType dfv1.VertexType) dfv1.VertexLimits {
+func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.VertexLimits {
 	result := dfv1.VertexLimits{}
 	if vLimits != nil {
 		result.BufferMaxLength = vLimits.BufferMaxLength
@@ -741,24 +740,10 @@ func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits, verte
 		result.RateLimit = plLimits.RateLimit
 	}
 	if result.RateLimit != nil && result.RateLimit.Max == nil {
-		// For source vertices, the rate limit is applied at the `Read` level, so we need to divide the pipeline level rate limit
-		// by the read batch size to limit the number of `Read` calls per second.
-		if vertexType == dfv1.VertexTypeSource {
-			maxValue := uint64(math.Ceil(float64(*plLimits.RateLimit.Max) / float64(result.GetReadBatchSize())))
-			result.RateLimit.Max = &maxValue
-		} else {
-			result.RateLimit.Max = plLimits.RateLimit.Max
-		}
+		result.RateLimit.Max = plLimits.RateLimit.Max
 	}
 	if result.RateLimit != nil && result.RateLimit.Min == nil {
-		// For source vertices, the rate limit is applied at the `Read` level, so we need to divide the pipeline level rate limit
-		// by the read batch size to limit the number of `Read` calls per second.
-		if vertexType == dfv1.VertexTypeSource {
-			minValue := uint64(math.Ceil(float64(*plLimits.RateLimit.Min) / float64(result.GetReadBatchSize())))
-			result.RateLimit.Min = &minValue
-		} else {
-			result.RateLimit.Min = plLimits.RateLimit.Min
-		}
+		result.RateLimit.Min = plLimits.RateLimit.Min
 	}
 	if result.RateLimit != nil && result.RateLimit.RampUpDuration == nil {
 		result.RateLimit.RampUpDuration = plLimits.RateLimit.RampUpDuration
@@ -797,8 +782,8 @@ func copyEdges(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.CombinedEdge {
 	for _, e := range edges {
 		vFrom := pl.GetVertex(e.From)
 		vTo := pl.GetVertex(e.To)
-		fromVertexLimits := mergeLimits(pl.GetPipelineLimits(), vFrom.Limits, vFrom.GetVertexType())
-		toVertexLimits := mergeLimits(pl.GetPipelineLimits(), vTo.Limits, vTo.GetVertexType())
+		fromVertexLimits := mergeLimits(pl.GetPipelineLimits(), vFrom.Limits)
+		toVertexLimits := mergeLimits(pl.GetPipelineLimits(), vTo.Limits)
 		combinedEdge := dfv1.CombinedEdge{
 			Edge:                     e,
 			FromVertexType:           vFrom.GetVertexType(),
