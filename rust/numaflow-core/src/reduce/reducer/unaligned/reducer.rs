@@ -904,7 +904,7 @@ mod tests {
                     let keys = request.keys.clone();
                     let updated_key = format!("{}_{}", keys.join(":"), current_count);
 
-                    let mut message = accumulator::Message::from_accumulator_request(request);
+                    let mut message = accumulator::Message::from_datum(request);
                     message = message.with_keys(vec![updated_key]);
                     message = message.with_value(format!("count_{}", current_count).into_bytes());
 

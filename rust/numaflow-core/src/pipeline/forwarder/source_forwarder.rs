@@ -1,5 +1,5 @@
 use crate::config::is_mono_vertex;
-use crate::config::pipeline::{PipelineConfig, SourceVtxConfig, VertexConfig};
+use crate::config::pipeline::{PipelineConfig, SourceVtxConfig};
 use crate::error::Error;
 use crate::metrics::{
     ComponentHealthChecks, LagReader, MetricsState, PendingReaderTasks, PipelineComponents,
@@ -21,11 +21,8 @@ use crate::typ::{
 use crate::watermark::WatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{error, shared};
-use async_nats::jetstream;
-use async_nats::jetstream::{Context, consumer, stream};
+use async_nats::jetstream::Context;
 use serving::callback::CallbackHandler;
-use std::time::Duration;
-use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -226,7 +223,7 @@ mod tests {
     use crate::config::components::source::{GeneratorConfig, SourceConfig};
     use crate::config::pipeline::isb::BufferFullStrategy::RetryUntilSuccess;
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
-    use crate::config::pipeline::{ToVertexConfig, VertexType, isb};
+    use crate::config::pipeline::{ToVertexConfig, VertexConfig, VertexType, isb};
     use crate::pipeline::forwarder::source_forwarder::SourceForwarder;
     use crate::pipeline::isb::jetstream::writer::{ISBWriterComponents, JetstreamWriter};
     use crate::shared::grpc::create_rpc_channel;
@@ -245,6 +242,7 @@ mod tests {
     use tokio::sync::mpsc::Sender;
     use tokio::sync::oneshot;
     use tokio::task::JoinHandle;
+    use tokio_stream::StreamExt;
     use tokio_util::sync::CancellationToken;
 
     struct SimpleSource {
@@ -601,6 +599,9 @@ mod tests {
                 panic!("Expected source vertex config");
             };
 
+        // For this test, we don't have watermark config, so watermark handle is None
+        let source_watermark_handle = None;
+
         let cancellation_token = CancellationToken::new();
         let forwarder_task = tokio::spawn({
             let cancellation_token = cancellation_token.clone();
@@ -611,7 +612,7 @@ mod tests {
                     context,
                     pipeline_config,
                     source_vtx_config,
-                    None,
+                    source_watermark_handle,
                 )
                 .await
                 .unwrap();

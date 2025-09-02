@@ -3,7 +3,6 @@ use std::time::Duration;
 use crate::config::pipeline;
 use crate::config::pipeline::PipelineConfig;
 use crate::tracker::TrackerHandle;
-use crate::typ::NumaflowTypeConfig;
 use crate::{Result, error};
 use async_nats::jetstream::Context;
 use async_nats::{ConnectOptions, jetstream};
