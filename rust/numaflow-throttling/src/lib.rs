@@ -303,7 +303,6 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDis
     async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize {
         // First attempt - try to get tokens immediately
         let tokens = self.attempt_acquire_n(n).await;
-        info!("Attempted to acquire {n:?} tokens, got {tokens} tokens.");
         if tokens > 0 {
             return tokens;
         }

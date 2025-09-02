@@ -15,6 +15,12 @@ spec:
           url: redis://redis:6379
   vertices:
     - name: in
+      limits:
+        readBatchSize: 50
+        rateLimit:
+          max: 200
+          min: 50
+          rampUpDuration: 1s
       source:
         generator:
           rpu: 300
