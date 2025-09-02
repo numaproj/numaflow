@@ -432,13 +432,27 @@ mod tests {
             ..Default::default()
         };
 
+        // Extract the sink config from the pipeline config
+        let sink_vtx_config =
+            if let VertexConfig::Sink(ref sink_config) = pipeline_config.vertex_config {
+                sink_config.clone()
+            } else {
+                panic!("Expected sink vertex config");
+            };
+
         let cancellation_token = CancellationToken::new();
         let forwarder_task = tokio::spawn({
             let cancellation_token = cancellation_token.clone();
+            let context = context.clone();
             async move {
-                crate::pipeline::forwarder::start_forwarder(cancellation_token, pipeline_config)
-                    .await
-                    .unwrap();
+                start_sink_forwarder(
+                    cancellation_token,
+                    context,
+                    pipeline_config,
+                    sink_vtx_config,
+                )
+                .await
+                .unwrap();
             }
         });
 

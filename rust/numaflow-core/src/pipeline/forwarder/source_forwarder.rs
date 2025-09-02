@@ -1,18 +1,12 @@
-use crate::config::components::metrics::MetricsConfig;
-use crate::config::components::source::{GeneratorConfig, SourceConfig, SourceType};
 use crate::config::is_mono_vertex;
-use crate::config::pipeline::isb::BufferFullStrategy::RetryUntilSuccess;
-use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
-use crate::config::pipeline::{
-    PipelineConfig, SourceVtxConfig, ToVertexConfig, VertexConfig, VertexType, isb,
-};
+use crate::config::pipeline::{PipelineConfig, SourceVtxConfig, VertexConfig};
 use crate::error::Error;
 use crate::metrics::{
     ComponentHealthChecks, LagReader, MetricsState, PendingReaderTasks, PipelineComponents,
     WatermarkFetcherState,
 };
 use crate::pipeline::PipelineContext;
-use crate::pipeline::forwarder::start_forwarder;
+
 use crate::pipeline::isb::jetstream::writer::{ISBWriterComponents, JetstreamWriter};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
@@ -227,6 +221,19 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
+    use crate::Result;
+    use crate::config::components::metrics::MetricsConfig;
+    use crate::config::components::source::{GeneratorConfig, SourceConfig};
+    use crate::config::pipeline::isb::BufferFullStrategy::RetryUntilSuccess;
+    use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
+    use crate::config::pipeline::{ToVertexConfig, VertexType, isb};
+    use crate::pipeline::forwarder::source_forwarder::SourceForwarder;
+    use crate::pipeline::isb::jetstream::writer::{ISBWriterComponents, JetstreamWriter};
+    use crate::shared::grpc::create_rpc_channel;
+    use crate::source::user_defined::new_source;
+    use crate::source::{Source, SourceType};
+    use crate::tracker::TrackerHandle;
+    use crate::transformer::Transformer;
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
     use chrono::Utc;
@@ -239,17 +246,6 @@ mod tests {
     use tokio::sync::oneshot;
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
-
-    use crate::Result;
-    use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
-    use crate::config::pipeline::{ToVertexConfig, VertexType};
-    use crate::pipeline::forwarder::source_forwarder::SourceForwarder;
-    use crate::pipeline::isb::jetstream::writer::{ISBWriterComponents, JetstreamWriter};
-    use crate::shared::grpc::create_rpc_channel;
-    use crate::source::user_defined::new_source;
-    use crate::source::{Source, SourceType};
-    use crate::tracker::TrackerHandle;
-    use crate::transformer::Transformer;
 
     struct SimpleSource {
         num: usize,
@@ -597,13 +593,28 @@ mod tests {
             ..Default::default()
         };
 
+        // Extract the source config from the pipeline config
+        let source_vtx_config =
+            if let VertexConfig::Source(ref source_config) = pipeline_config.vertex_config {
+                source_config.clone()
+            } else {
+                panic!("Expected source vertex config");
+            };
+
         let cancellation_token = CancellationToken::new();
         let forwarder_task = tokio::spawn({
             let cancellation_token = cancellation_token.clone();
+            let context = context.clone();
             async move {
-                start_forwarder(cancellation_token, pipeline_config)
-                    .await
-                    .unwrap();
+                start_source_forwarder(
+                    cancellation_token,
+                    context,
+                    pipeline_config,
+                    source_vtx_config,
+                    None,
+                )
+                .await
+                .unwrap();
             }
         });
 

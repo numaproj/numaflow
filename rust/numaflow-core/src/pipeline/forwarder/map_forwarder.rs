@@ -1,10 +1,7 @@
 use crate::config::is_mono_vertex;
-use crate::config::pipeline::isb::BufferFullStrategy::RetryUntilSuccess;
-use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig, Stream};
-use crate::config::pipeline::map::{MapType, MapVtxConfig, UserDefinedConfig};
-use crate::config::pipeline::{
-    FromVertexConfig, PipelineConfig, ToVertexConfig, VertexConfig, VertexType, isb,
-};
+use crate::config::pipeline::PipelineConfig;
+use crate::config::pipeline::isb::BufferReaderConfig;
+use crate::config::pipeline::map::MapVtxConfig;
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
 use crate::metrics::{
@@ -12,7 +9,7 @@ use crate::metrics::{
     WatermarkFetcherState,
 };
 use crate::pipeline::PipelineContext;
-use crate::pipeline::forwarder::start_forwarder;
+
 use crate::pipeline::isb::jetstream::reader::{ISBReaderComponents, JetStreamReader};
 use crate::pipeline::isb::jetstream::writer::{ISBWriterComponents, JetstreamWriter};
 use crate::shared::create_components;
@@ -25,12 +22,9 @@ use crate::typ::{
 };
 use crate::watermark::WatermarkHandle;
 use crate::{Result, shared};
-use async_nats::jetstream;
-use async_nats::jetstream::{Context, consumer, stream};
+use async_nats::jetstream::Context;
 use futures::future::try_join_all;
-use numaflow_shared::server_info::MapMode;
 use serving::callback::CallbackHandler;
-use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
@@ -305,7 +299,17 @@ mod tests {
     use super::*;
 
     use crate::config::components::metrics::MetricsConfig;
+    use crate::config::pipeline::isb::BufferFullStrategy::RetryUntilSuccess;
+    use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig, Stream};
+    use crate::config::pipeline::map::{MapType, UserDefinedConfig};
+    use crate::config::pipeline::{
+        FromVertexConfig, ToVertexConfig, VertexConfig, VertexType, isb,
+    };
+    use async_nats::jetstream;
+    use async_nats::jetstream::{consumer, stream};
     use numaflow::map;
+    use numaflow_shared::server_info::MapMode;
+    use std::time::Duration;
     use tempfile::TempDir;
 
     struct SimpleCat;
@@ -511,11 +515,20 @@ mod tests {
             ..Default::default()
         };
 
+        // Extract the map config from the pipeline config
+        let map_vtx_config =
+            if let VertexConfig::Map(ref map_config) = pipeline_config.vertex_config {
+                map_config.clone()
+            } else {
+                panic!("Expected map vertex config");
+            };
+
         let cancellation_token = CancellationToken::new();
         let forwarder_task = tokio::spawn({
             let cancellation_token = cancellation_token.clone();
+            let context = context.clone();
             async move {
-                start_forwarder(cancellation_token, pipeline_config)
+                start_map_forwarder(cancellation_token, context, pipeline_config, map_vtx_config)
                     .await
                     .unwrap();
             }
