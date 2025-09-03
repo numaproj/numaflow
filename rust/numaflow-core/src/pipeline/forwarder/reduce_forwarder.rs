@@ -950,7 +950,8 @@ mod tests {
 
                 // Fire a message every 3 messages
                 if current_count % 3 == 0 {
-                    let mut message = numaflow::accumulator::Message::from_datum(request);
+                    let mut message =
+                        numaflow::accumulator::Message::from_accumulator_request(request);
                     message = message.with_value(format!("count_{}", current_count).into_bytes());
                     output.send(message).await.unwrap();
                 }
