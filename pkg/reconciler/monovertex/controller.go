@@ -323,7 +323,7 @@ func (mr *monoVertexReconciler) findExistingPods(ctx context.Context, monoVtx *d
 	}
 	result := make(map[string]corev1.Pod)
 	for _, pod := range pods.Items {
-		if !pod.DeletionTimestamp.IsZero() {
+		if mr.isTerminatingPod(&pod) {
 			// Ignore pods being deleted
 			continue
 		}
@@ -334,6 +334,12 @@ func (mr *monoVertexReconciler) findExistingPods(ctx context.Context, monoVtx *d
 		}
 	}
 	return result, nil
+}
+
+func (mr *monoVertexReconciler) isTerminatingPod(pod *corev1.Pod) bool {
+	// A pod is terminating if its deletion timestamp is set (i.e., non-nil)
+	// It is also terminating if its status phase is in "Failed" or "Succeeded"
+	return !pod.DeletionTimestamp.IsZero() || pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded
 }
 
 func (mr *monoVertexReconciler) cleanUpPodsFromTo(ctx context.Context, monoVtx *dfv1.MonoVertex, fromReplica, toReplica int) error {

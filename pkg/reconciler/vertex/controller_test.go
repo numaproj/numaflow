@@ -815,6 +815,61 @@ func Test_reconcileEvents(t *testing.T) {
 		events := getEvents(r)
 		assert.Contains(t, events, "Normal CreateSvcSuccess Succeeded to create service test-pl-p1-headless")
 	})
+
+	t.Run("test isTerminatingPod", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+
+		now := metav1.Now()
+		// Pod with DeletionTimestamp set
+		pod1 := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "pod1",
+				Namespace:         testNamespace,
+				DeletionTimestamp: &now,
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodRunning,
+			},
+		}
+		assert.True(t, r.isTerminatingPod(pod1), "Pod with DeletionTimestamp should be terminating")
+
+		// Pod in Failed phase
+		pod2 := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod2",
+				Namespace: testNamespace,
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodFailed,
+			},
+		}
+		assert.True(t, r.isTerminatingPod(pod2), "Pod in Failed phase should be terminating")
+
+		// Pod in Succeeded phase
+		pod3 := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod3",
+				Namespace: testNamespace,
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodSucceeded,
+			},
+		}
+		assert.True(t, r.isTerminatingPod(pod3), "Pod in Succeeded phase should be terminating")
+
+		// Pod in Running phase, no DeletionTimestamp
+		pod4 := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod4",
+				Namespace: testNamespace,
+			},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodRunning,
+			},
+		}
+		assert.False(t, r.isTerminatingPod(pod4), "Pod in Running phase with no DeletionTimestamp should not be terminating")
+	})
 }
 
 func getEvents(reconciler *vertexReconciler) []string {
