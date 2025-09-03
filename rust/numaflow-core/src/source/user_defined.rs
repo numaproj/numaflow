@@ -195,7 +195,7 @@ impl SourceReader for UserDefinedSourceRead {
             request: Some(read_request::Request {
                 num_records: self.num_records as u64,
                 timeout_in_ms: self.timeout.as_millis() as u32,
-                metadata: None
+                metadata: None,
             }),
             handshake: None,
         };
