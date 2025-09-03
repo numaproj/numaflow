@@ -275,6 +275,7 @@ $(GOPATH)/bin/golangci-lint:
 lint: $(GOPATH)/bin/golangci-lint
 	go mod tidy
 	$(GOPATH)/bin/golangci-lint run --fix --verbose --concurrency 4 --timeout 5m --enable goimports
+	cd rust && cargo fmt -- --check || (echo "Run 'cd rust && cargo fmt' to fix formatting issues" && exit 1)
 
 .PHONY: start
 start: image
