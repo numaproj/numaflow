@@ -133,6 +133,8 @@ func (s *MapSuite) TestPipelineRateLimitWithRedisStore() {
 		VertexPodLogContains("map-udf", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("out", LogSinkVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa"))
 
+	defer w.StreamVertexPodLogs("map-udf", "numa").TerminateAllPodLogs()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
