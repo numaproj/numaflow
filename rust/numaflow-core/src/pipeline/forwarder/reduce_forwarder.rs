@@ -564,6 +564,7 @@ mod tests {
         UserDefinedConfig,
     };
     use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig, Stream};
+    use crate::config::pipeline::watermark::{BucketConfig, EdgeWatermarkConfig, WatermarkConfig};
     use crate::config::pipeline::{
         FromVertexConfig, PipelineConfig, ReduceVtxConfig, ToVertexConfig, VertexConfig, VertexType,
     };
@@ -573,6 +574,7 @@ mod tests {
         wait_for_fence_availability,
     };
     use async_nats::jetstream::consumer::PullConsumer;
+    use async_nats::jetstream::kv::Config;
     use async_nats::jetstream::{self, consumer, stream};
     use bytes::BytesMut;
     use chrono::{TimeZone, Utc};
@@ -620,7 +622,7 @@ mod tests {
         }
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_aligned_reduce_forwarder() -> crate::Result<()> {
         // Set up the reducer server using default paths
@@ -929,7 +931,7 @@ mod tests {
     impl AccumulatorCounter {
         fn new() -> Self {
             Self {
-                count: std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0)),
+                count: Arc::new(std::sync::atomic::AtomicU32::new(0)),
             }
         }
     }
@@ -961,7 +963,6 @@ mod tests {
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
-    #[ignore]
     async fn test_unaligned_reduce_forwarder() -> crate::Result<()> {
         // Set up the accumulator server
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
@@ -991,6 +992,29 @@ mod tests {
         // Create input and output streams
         let input_stream = Stream::new("test_unaligned_reduce_forwarder_input", "test", 0);
         let output_stream = Stream::new("test_unaligned_reduce_forwarder_output", "test", 0);
+        let ot_bucket = "test_unaligned_reduce_forwarder_ot";
+        let hb_bucket = "test_unaligned_reduce_forwarder_hb";
+
+        let _ = js_context.delete_key_value(ot_bucket).await;
+        let _ = js_context.delete_key_value(hb_bucket).await;
+
+        js_context
+            .create_key_value(Config {
+                bucket: ot_bucket.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        js_context
+            .create_key_value(Config {
+                bucket: hb_bucket.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
 
         // Delete streams if they exist
         let _ = js_context.delete_stream(input_stream.name).await;
@@ -1089,6 +1113,16 @@ mod tests {
                 ),
             }),
             vertex_type: VertexType::ReduceUDF,
+            watermark_config: Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
+                from_vertex_config: vec![BucketConfig {
+                    vertex: "input-vertex",
+                    partitions: 1,
+                    ot_bucket,
+                    hb_bucket,
+                    delay: Some(Duration::from_millis(100)),
+                }],
+                to_vertex_config: vec![],
+            })),
             ..Default::default()
         };
 
@@ -1116,13 +1150,13 @@ mod tests {
                 keys: Arc::from(vec!["key1".into()]),
                 tags: None,
                 value: format!("value{}", i + 1).into(),
-                offset: Offset::String(StringOffset::new(i.to_string(), i)),
+                offset: Offset::String(StringOffset::new(i.to_string(), 0)),
                 event_time: base_time + chrono::Duration::seconds(((i + 1) * 10) as i64),
-                watermark: None,
+                watermark: Some(base_time + chrono::Duration::seconds(((i + 1) * 10) as i64)),
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: i.to_string().into(),
-                    index: i as i32,
+                    index: i,
                 },
                 ..Default::default()
             };
@@ -1139,7 +1173,7 @@ mod tests {
 
         // Start the unaligned reduce forwarder
         let cancellation_token = CancellationToken::new();
-        let forwarder_task = tokio::spawn({
+        let _forwarder_task = tokio::spawn({
             let cancellation_token = cancellation_token.clone();
             let js_context = js_context.clone();
             let pipeline_config = pipeline_config.clone();
@@ -1160,9 +1194,6 @@ mod tests {
             }
         });
 
-        // Wait a bit more for processing
-        tokio::time::sleep(Duration::from_millis(500)).await;
-
         // Create a consumer to read the results from output stream
         let output_consumer: PullConsumer = js_context
             .get_consumer_from_stream(&output_stream.name, &output_stream.name)
@@ -1172,20 +1203,10 @@ mod tests {
         // Try to read messages from the output stream
         let messages_result = output_consumer
             .fetch()
-            .expires(Duration::from_secs(2))
+            .max_messages(2)
+            .expires(Duration::from_secs(3))
             .messages()
             .await;
-
-        // Cancel the forwarder
-        cancellation_token.cancel();
-
-        // Wait for forwarder to complete
-        let _ = tokio::time::timeout(Duration::from_secs(5), forwarder_task).await;
-
-        // Shutdown the server
-        shutdown_tx
-            .send(())
-            .expect("failed to send shutdown signal");
 
         // Wait for server to shutdown
         let _ = tokio::time::timeout(Duration::from_millis(100), server_handle).await;
@@ -1202,10 +1223,17 @@ mod tests {
             }
             // We expect at least some output from the accumulator
             assert!(
-                result_count >= 0,
+                result_count > 0,
                 "Expected some output from unaligned reduce forwarder"
             );
+        } else {
+            panic!("Failed to read messages from output stream");
         }
+
+        // Shutdown the server
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
 
         Ok(())
     }

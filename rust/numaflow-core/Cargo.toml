@@ -8,7 +8,8 @@ nats-tests = []
 pulsar-tests = []
 sqs-tests = []
 kafka-tests = []
-all-tests = ["nats-tests", "pulsar-tests", "sqs-tests", "kafka-tests"]
+panic-tests = []
+all-tests = ["nats-tests", "pulsar-tests", "sqs-tests", "kafka-tests", "panic-tests"]
 
 [lints]
 workspace = true

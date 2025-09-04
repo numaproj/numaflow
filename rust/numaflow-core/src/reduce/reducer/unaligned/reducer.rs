@@ -1547,7 +1547,7 @@ mod tests {
                 value: format!("value{}", i + 1).into(),
                 offset: Offset::String(StringOffset::new(i.to_string(), i)),
                 event_time: base_time + chrono::Duration::seconds(((i + 1) * 10) as i64),
-                watermark: None,
+                watermark: Some(base_time + chrono::Duration::seconds((i * 10) as i64)),
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: i.to_string().into(),
@@ -1750,7 +1750,7 @@ mod tests {
                 value: format!("value_multi_{}", i + 1).into(),
                 offset: Offset::String(StringOffset::new(i.to_string(), i)),
                 event_time: base_time + chrono::Duration::seconds(((i + 1) * 10) as i64),
-                watermark: None,
+                watermark: Some(base_time + chrono::Duration::seconds((i * 10) as i64)),
                 id: MessageID {
                     vertex_name: "id-one".to_string().into(),
                     offset: i.to_string().into(),
@@ -1766,7 +1766,7 @@ mod tests {
                 value: format!("value_multi_{}", i + 1).into(),
                 offset: Offset::String(StringOffset::new(i.to_string(), i)),
                 event_time: base_time + chrono::Duration::seconds(((i + 1) * 10) as i64),
-                watermark: None,
+                watermark: Some(base_time + chrono::Duration::seconds((i * 10) as i64)),
                 id: MessageID {
                     vertex_name: "id-two".to_string().into(),
                     offset: i.to_string().into(),
