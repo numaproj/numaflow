@@ -3,7 +3,8 @@ use std::time::Duration;
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::message::Message;
-use crate::message::{MessageID, Metadata, Offset, StringOffset};
+use crate::message::{MessageID, Offset, StringOffset};
+use crate::metadata::Metadata;
 use crate::source::SourceReader;
 use numaflow_nats::nats::{NatsMessage, NatsSource, NatsSourceConfig};
 

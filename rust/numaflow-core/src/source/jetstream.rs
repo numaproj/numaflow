@@ -6,7 +6,8 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::{get_vertex_name, get_vertex_replica};
-use crate::message::{IntOffset, MessageID, Metadata, Offset};
+use crate::message::{IntOffset, MessageID, Offset};
+use crate::metadata::Metadata;
 use crate::source::SourceReader;
 use crate::{Error, Result, message::Message};
 

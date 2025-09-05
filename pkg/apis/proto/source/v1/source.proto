@@ -21,6 +21,7 @@ option java_package = "io.numaproj.numaflow.source.v1";
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/empty.proto";
+import "common/metadata.proto";
 
 package source.v1;
 
@@ -69,6 +70,8 @@ message ReadRequest {
     // uint32 can represent 2^32 milliseconds, which is about 49 days.
     // We don't use uint64 because time.Duration takes int64 as nano seconds. Using uint64 for milli will cause overflow.
     uint32 timeout_in_ms = 2;
+    // Metadata is the metadata of the message
+    common.metadata.Metadata metadata = 3;
   }
   // Required field indicating the request.
   Request request = 1;
@@ -95,6 +98,8 @@ message ReadResponse {
     // Headers are the metadata associated with the datum.
     // e.g. Kafka and Redis Stream message usually include information about the headers.
     map<string, string> headers = 5;
+    // Metadata is the metadata of the message
+    common.metadata.Metadata metadata = 6;
   }
   message Status {
     // Code to indicate the status of the response.

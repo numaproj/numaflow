@@ -13,7 +13,8 @@ use tracing::error;
 use crate::config::get_vertex_name;
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
-use crate::message::{Message, MessageID, Metadata, Offset};
+use crate::message::{Message, MessageID, Offset};
+use crate::metadata::Metadata;
 use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 use crate::shared::grpc::prost_timestamp_from_utc;
 
@@ -44,6 +45,7 @@ impl From<Message> for MapRequest {
                 event_time: Some(prost_timestamp_from_utc(message.event_time)),
                 watermark: message.watermark.map(prost_timestamp_from_utc),
                 headers: message.headers,
+                metadata: message.metadata.map(|m| m.into()),
             }),
             id: message.offset.to_string(),
             handshake: None,
