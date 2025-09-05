@@ -39,6 +39,8 @@ pub struct KafkaMessage {
     pub topic: String,
     /// The user payload.
     pub value: Bytes,
+    /// Key of the message
+    pub key: Option<String>,
     /// The partition number.
     pub partition: i32,
     /// The offset of the message.
@@ -310,6 +312,7 @@ impl KafkaActor {
                     let message = KafkaMessage {
                         topic: message.topic().to_string(),
                         value,
+                        key: message.key().map(|k| String::from_utf8_lossy(k).to_string()),
                         partition: message.partition(),
                         offset: message.offset(),
                         headers,
