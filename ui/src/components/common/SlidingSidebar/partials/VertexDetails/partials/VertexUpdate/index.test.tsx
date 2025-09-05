@@ -191,10 +191,13 @@ describe("VertexUpdate", () => {
         )
       ).toBeInTheDocument();
     });
-    // Wait for onUpdateComplete call
-    await waitFor(() => {
-      expect(mockRefresh).toHaveBeenCalledTimes(1);
-    });
+    // Wait for onUpdateComplete call (after 1000ms setTimeout)
+    await waitFor(
+      () => {
+        expect(mockRefresh).toHaveBeenCalledTimes(1);
+      },
+      { timeout: 2000 }
+    );
   });
 
   it("submit failure", async () => {
