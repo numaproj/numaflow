@@ -42,7 +42,7 @@ func (s *MonoVertexSuite) TestMonoVertexWithAllContainers() {
 	defer w.DeleteMonoVertexAndWait()
 
 	w.Expect().MonoVertexPodsRunning().MvtxDaemonPodsRunning()
-	
+
 	defer w.MonoVertexPodPortForward(8931, dfv1.MonoVertexMetricsPort).
 		MvtxDaemonPodPortForward(3232, dfv1.MonoVertexDaemonServicePort).
 		TerminateAllPodPortForwards()
