@@ -42,7 +42,7 @@ func (s *MonoVertexSuite) TestMonoVertexWithAllContainers() {
 	defer w.DeleteMonoVertexAndWait()
 
 	w.Expect().MonoVertexPodsRunning().MvtxDaemonPodsRunning()
-
+	
 	defer w.MonoVertexPodPortForward(8931, dfv1.MonoVertexMetricsPort).
 		MvtxDaemonPodPortForward(3232, dfv1.MonoVertexDaemonServicePort).
 		TerminateAllPodPortForwards()
@@ -91,6 +91,8 @@ func (s *MonoVertexSuite) TestMonoVertexRateLimitWithRedisStore() {
 	w.Expect().
 		MonoVertexPodsRunning().
 		MvtxDaemonPodsRunning()
+
+	defer w.StreamMonoVertexPodLogs("numa").TerminateAllPodLogs()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
