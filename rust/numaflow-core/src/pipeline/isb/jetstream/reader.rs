@@ -289,6 +289,10 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                 ));
 
                 let semaphore = Arc::new(Semaphore::new(max_ack_pending));
+
+                // Track consecutive empty reads to detect idle state
+                let mut consecutive_empty_reads = 0;
+
                 loop {
                     if cancel_token.is_cancelled() {
                         info!(stream=?self.stream, "Cancellation token received, stopping the reader.");
@@ -306,8 +310,25 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                         .await?;
 
                     if read_messages.is_empty() {
+                        consecutive_empty_reads += 1;
+
+                        // Send idle watermark message after two consecutive empty reads
+                        if consecutive_empty_reads >= 2 {
+                            consecutive_empty_reads = 0; // Reset counter
+
+                            if let Some(idle_wmb_message) =
+                                self.check_and_create_idle_watermark_message().await
+                                && let Err(e) = messages_tx.send(idle_wmb_message).await
+                            {
+                                error!(?e, "Failed to send idle watermark message to channel");
+                                break;
+                            }
+                        }
                         continue;
                     }
+
+                    // Reset counter when we get messages
+                    consecutive_empty_reads = 0;
 
                     for message in read_messages {
                         Self::update_metrics(&labels, &message);
@@ -644,6 +665,28 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
 
     pub(crate) fn name(&self) -> &'static str {
         self.stream.name
+    }
+
+    /// Checks for idle watermarks and creates a WMB message if an idle watermark is available.
+    /// Returns None if no idle watermark is available or if there's no watermark handle.
+    async fn check_and_create_idle_watermark_message(&mut self) -> Option<Message> {
+        let watermark_handle = self.watermark_handle.as_mut()?;
+
+        let idle_watermark = watermark_handle.fetch_head_idle_watermark().await;
+
+        // Only create a WMB message if we have a valid idle watermark (not -1)
+        if idle_watermark.timestamp_millis() == -1 {
+            return None;
+        }
+
+        // Create a WMB message with the idle watermark
+        Some(Message {
+            typ: MessageType::WMB,
+            watermark: Some(idle_watermark),
+            offset: Offset::Int(IntOffset::new(-1, self.stream.partition)), // Use -1 as a placeholder offset for idle WMB
+            event_time: idle_watermark,
+            ..Default::default()
+        })
     }
 }
 

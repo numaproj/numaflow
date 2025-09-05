@@ -215,9 +215,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
             gc_wal,
             aligned_config.window_config.allowed_lateness,
             config.graceful_shutdown_time,
-            config.read_timeout,
             reduce_vtx_config.keyed,
-            watermark_handle,
         )
         .await,
     );
@@ -366,9 +364,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
             unaligned_config.window_config.allowed_lateness,
             gc_wal,
             config.graceful_shutdown_time,
-            config.read_timeout,
             reduce_vtx_config.keyed,
-            watermark_handle,
         )
         .await,
     );

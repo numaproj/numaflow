@@ -1,6 +1,6 @@
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
-use crate::message::Message;
+use crate::message::{Message, MessageType};
 use crate::metrics::{pipeline_drop_metric_labels, pipeline_metrics};
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
@@ -8,7 +8,6 @@ use crate::reduce::reducer::aligned::windower::{
     AlignedWindowManager, AlignedWindowMessage, AlignedWindowOperation, Window,
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
-use crate::watermark::isb::ISBWatermarkHandle;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::wal::GcEvent;
@@ -374,10 +373,6 @@ pub(crate) struct AlignedReducer {
     keyed: bool,
     /// Graceful shutdown timeout duration.
     graceful_timeout: Duration,
-    idle_timeout: Duration,
-    /// Watermark handle for fetching head idle wmb to check if any windows can be closed,
-    /// when there is no data.
-    watermark_handle: Option<ISBWatermarkHandle>,
 }
 
 impl AlignedReducer {
@@ -389,9 +384,7 @@ impl AlignedReducer {
         gc_wal: Option<AppendOnlyWal>,
         allowed_lateness: Duration,
         graceful_timeout: Duration,
-        idle_timeout: Duration,
         keyed: bool,
-        watermark_handle: Option<ISBWatermarkHandle>,
     ) -> Self {
         Self {
             client,
@@ -402,8 +395,6 @@ impl AlignedReducer {
             current_watermark: DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"),
             keyed,
             graceful_timeout,
-            idle_timeout,
-            watermark_handle,
             shutting_down_on_err: false,
             final_result: Ok(()),
         }
@@ -467,14 +458,26 @@ impl AlignedReducer {
                         self.handle_error(err, &cln_token);
                     }
 
-                    // read input messages with timeout
-                    read_msg = tokio::time::timeout(self.idle_timeout, input_stream.next()) => {
+                    // read input messages
+                    read_msg = input_stream.next() => {
                         match read_msg {
-                            Ok(Some(mut msg)) => {
+                            Some(mut msg) => {
                                 // If shutting down, drain the stream
                                 if self.shutting_down_on_err {
                                     info!("Reduce component is shutting down due to an error, not accepting the message");
                                     continue;
+                                }
+
+                                // Handle WMB messages with idle watermarks
+                                if let MessageType::WMB = msg.typ {
+                                    if let Some(idle_watermark) = msg.watermark {
+                                        // Only close windows if the idle watermark is greater than current watermark
+                                        if idle_watermark > self.current_watermark {
+                                            self.current_watermark = idle_watermark;
+                                            self.close_windows_with_watermark(idle_watermark, &actor_tx).await;
+                                        }
+                                    }
+                                    continue; // Skip further processing for WMB messages
                                 }
 
                                 // If the stream is not keyed, set all messages to have the same key
@@ -489,14 +492,9 @@ impl AlignedReducer {
 
                                 self.assign_and_close_windows(msg, &actor_tx).await;
                             }
-                            Ok(None) => {
+                            None => {
                                 // Stream ended
                                 break;
-                            }
-                            Err(_timeout) => {
-                                // watermark can still progress when there is no data, because of idle watermark
-                                // so we need to check if any windows can be closed based on the idle watermark.
-                                self.close_windows_by_idle_wm(&actor_tx).await;
                             }
                         }
                     }
@@ -625,26 +623,6 @@ impl AlignedReducer {
         // Send each window message to the actor for processing
         for window_msg in window_messages {
             actor_tx.send(window_msg).await.expect("Receiver dropped");
-        }
-    }
-
-    /// Closes windows based on the idle watermark.
-    async fn close_windows_by_idle_wm(&mut self, actor_tx: &mpsc::Sender<AlignedWindowMessage>) {
-        if self.shutting_down_on_err {
-            return;
-        }
-
-        let Some(watermark_handle) = self.watermark_handle.as_mut() else {
-            return;
-        };
-
-        let idle_watermark = watermark_handle.fetch_head_idle_watermark().await;
-
-        // Only close windows if the idle watermark is greater than the current watermark
-        if idle_watermark > self.current_watermark {
-            self.current_watermark = idle_watermark;
-            self.close_windows_with_watermark(idle_watermark, actor_tx)
-                .await;
         }
     }
 }
@@ -806,9 +784,7 @@ mod tests {
             None, // No GC WAL for testing
             Duration::from_secs(0),
             Duration::from_millis(50),
-            Duration::from_secs(1),
             true,
-            None,
         )
         .await;
 
@@ -1055,9 +1031,7 @@ mod tests {
             None, // No GC WAL for testing
             Duration::from_secs(0),
             Duration::from_millis(50),
-            Duration::from_secs(1),
             true,
-            None,
         )
         .await;
 
@@ -1307,9 +1281,7 @@ mod tests {
             None, // No GC WAL for testing
             Duration::from_secs(0),
             Duration::from_millis(50),
-            Duration::from_secs(1),
             true,
-            None,
         )
         .await;
 
