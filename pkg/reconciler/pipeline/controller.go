@@ -701,7 +701,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 			},
 			Spec: spec,
 		}
-		// If corresponding pipline has instance annotation, we should copy it to the vertex
+		// If corresponding pipeline has instance annotation, we should copy it to the vertex
 		if x := pl.GetAnnotations()[dfv1.KeyInstance]; x != "" {
 			obj.Annotations[dfv1.KeyInstance] = x
 		}

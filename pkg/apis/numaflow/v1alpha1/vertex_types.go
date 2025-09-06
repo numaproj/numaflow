@@ -478,9 +478,9 @@ func (v Vertex) GetToBuffers() []string {
 	return r
 }
 
-func (v VertexLimits) GetReadBatchSize() int {
+func (v VertexLimits) GetReadBatchSize() uint64 {
 	if v.ReadBatchSize != nil {
-		return int(*v.ReadBatchSize)
+		return *v.ReadBatchSize
 	}
 	return DefaultReadBatchSize
 }
