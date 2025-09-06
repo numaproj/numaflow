@@ -26,11 +26,7 @@ use crate::reduce::wal::segment::compactor::WindowKind;
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::TrackerHandle;
-use crate::typ::{
-    NumaflowTypeConfig, WithInMemoryRateLimiter, WithRedisRateLimiter, WithoutRateLimiter,
-    build_in_memory_rate_limiter_config, build_redis_rate_limiter_config,
-    should_use_redis_rate_limiter,
-};
+use crate::typ::{NumaflowTypeConfig, WithoutRateLimiter};
 use crate::watermark::WatermarkHandle;
 use crate::{Result, shared};
 use async_nats::jetstream::Context;

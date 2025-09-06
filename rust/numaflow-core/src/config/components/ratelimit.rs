@@ -1,5 +1,4 @@
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica, is_mono_vertex};
-use tracing::info;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct RateLimitConfig {

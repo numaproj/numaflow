@@ -16,10 +16,10 @@ test:
 .PHONY: all-tests
 all-tests:
 	cargo test --features nats-tests,pulsar-tests,sqs-tests,kafka-tests --workspace --all
-	cargo test --features panic-tests test_map_stream_with_panic
-	#cargo test --features panic-tests test_batch_map_with_panic
-	cargo test --features panic-tests test_map_stream_panic
-	cargo test --features panic-tests test_transform_stream_with_panic
+	cargo test --features global-state-tests test_map_stream_with_panic
+	#cargo test --features global-state-tests test_batch_map_with_panic
+	cargo test --features global-state-tests test_map_stream_panic
+	cargo test --features global-state-tests test_transform_stream_with_panic
 
 .PHONY: clean
 clean:

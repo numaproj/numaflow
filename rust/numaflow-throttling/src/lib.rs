@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
-use tracing::{info, warn};
+use tracing::warn;
 
 pub(crate) mod error;
 
@@ -45,7 +45,8 @@ pub struct RateLimit<W> {
     token: Arc<AtomicUsize>,
     /// Max number of tokens ever filled till now. The next refill relies on the current max allowed
     /// value. For the first run this will be set to `burst` and will be slowly incremented to the
-    /// `max` value.
+    /// `max` value. This has to be float because we support fractional slope. E.g., one could
+    /// say ramp up from 10 to 20 in 60 seconds, which means we add 1/6 tokens per second.
     max_ever_filled: Arc<Mutex<f32>>,
     /// Last time the token was queried. The tokens are replenished based on the time elapsed since
     /// the last query.
