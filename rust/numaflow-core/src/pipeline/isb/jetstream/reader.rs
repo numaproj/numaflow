@@ -289,6 +289,27 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                 ));
 
                 let semaphore = Arc::new(Semaphore::new(max_ack_pending));
+
+                // ** Inconsistent Reality**
+                // Until now, the information exchange between Vn-1th and Vnth happened in two
+                // phases. The first phase involves updating the view of the world (offset-timeline)
+                // based on the WATCH on the key, while the second phase involves reading data from
+                // the buffer and using the offset of that data to align with the view of the world
+                // (indexing the offset-timeline using offset as the key). With the introduction of
+                // the Watermark Barrier, the second phase will not be activated when there is idleness.
+                // This introduces a problem where the assumed state might differ from reality because
+                // we are not tying both states using any identifiers (earlier we had monotonically
+                // increasing offset).
+                // This inconsistency is due to the corner cases in the process-scheduling of and
+                // others reasons.
+                //
+                // ** Forcing Consistency **
+                // To force consistency, all reconciliation of states when using Watermark will go
+                // through two iterations. In the first iteration, it saves the states it has built
+                // and ensures the state matches in the second iteration. In other words, it should
+                // ensure that between two iterations, the idle-offset remains the same.
+                let mut consecutive_empty_reads = 0;
+
                 loop {
                     if cancel_token.is_cancelled() {
                         info!(stream=?self.stream, "Cancellation token received, stopping the reader.");
@@ -306,8 +327,25 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                         .await?;
 
                     if read_messages.is_empty() {
+                        consecutive_empty_reads += 1;
+
+                        // Send idle watermark message after two consecutive empty reads
+                        if consecutive_empty_reads >= 2 {
+                            consecutive_empty_reads = 0; // Reset counter
+
+                            if let Some(idle_wmb_message) =
+                                self.check_and_create_idle_watermark_message().await
+                                && let Err(e) = messages_tx.send(idle_wmb_message).await
+                            {
+                                error!(?e, "Failed to send idle watermark message to channel");
+                                break;
+                            }
+                        }
                         continue;
                     }
+
+                    // Reset counter when we get messages
+                    consecutive_empty_reads = 0;
 
                     for message in read_messages {
                         Self::update_metrics(&labels, &message);
@@ -653,6 +691,28 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
 
     pub(crate) fn name(&self) -> &'static str {
         self.stream.name
+    }
+
+    /// Checks for idle watermarks and creates a WMB message if an idle watermark is available.
+    /// Returns None if no idle watermark is available or if there's no watermark handle.
+    async fn check_and_create_idle_watermark_message(&mut self) -> Option<Message> {
+        let watermark_handle = self.watermark_handle.as_mut()?;
+
+        let idle_watermark = watermark_handle.fetch_head_idle_watermark().await;
+
+        // Only create a WMB message if we have a valid idle watermark (not -1)
+        if idle_watermark.timestamp_millis() == -1 {
+            return None;
+        }
+
+        // Create a WMB message with the idle watermark
+        Some(Message {
+            typ: MessageType::WMB,
+            watermark: Some(idle_watermark),
+            offset: Offset::Int(IntOffset::new(-1, self.stream.partition)), // Use -1 as a placeholder offset for idle WMB
+            event_time: idle_watermark,
+            ..Default::default()
+        })
     }
 }
 
