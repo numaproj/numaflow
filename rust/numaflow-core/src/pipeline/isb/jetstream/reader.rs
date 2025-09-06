@@ -290,7 +290,24 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
 
                 let semaphore = Arc::new(Semaphore::new(max_ack_pending));
 
-                // Track consecutive empty reads to detect idle state
+                // ** Inconsistent Reality**
+                // Until now, the information exchange between Vn-1th and Vnth happened in two
+                // phases. The first phase involves updating the view of the world (offset-timeline)
+                // based on the WATCH on the key, while the second phase involves reading data from
+                // the buffer and using the offset of that data to align with the view of the world
+                // (indexing the offset-timeline using offset as the key). With the introduction of
+                // the Watermark Barrier, the second phase will not be activated when there is idleness.
+                // This introduces a problem where the assumed state might differ from reality because
+                // we are not tying both states using any identifiers (earlier we had monotonically
+                // increasing offset).
+                // This inconsistency is due to the corner cases in the process-scheduling of and
+                // others reasons.
+                //
+                // ** Forcing Consistency **
+                // To force consistency, all reconciliation of states when using Watermark will go
+                // through two iterations. In the first iteration, it saves the states it has built
+                // and ensures the state matches in the second iteration. In other words, it should
+                // ensure that between two iterations, the idle-offset remains the same.
                 let mut consecutive_empty_reads = 0;
 
                 loop {
