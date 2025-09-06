@@ -872,7 +872,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "panic-tests")]
+    #[cfg(feature = "global-state-tests")]
     #[tokio::test]
     async fn test_map_stream_with_panic() -> Result<()> {
         let tmp_dir = TempDir::new().unwrap();
@@ -1088,7 +1088,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "panic-tests")]
+    #[cfg(feature = "global-state-tests")]
     #[tokio::test]
     async fn test_batch_map_with_panic() -> Result<()> {
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
@@ -1301,7 +1301,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "panic-tests")]
+    #[cfg(feature = "global-state-tests")]
     #[tokio::test]
     async fn test_map_stream_panic() -> Result<()> {
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();

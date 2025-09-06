@@ -155,7 +155,6 @@ spec:
                   rateLimit:
                     properties:
                       max:
-                        default: 10
                         format: int64
                         type: integer
                       min:
@@ -7203,7 +7202,6 @@ spec:
                         rateLimit:
                           properties:
                             max:
-                              default: 10
                               format: int64
                               type: integer
                             min:

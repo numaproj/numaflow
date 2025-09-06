@@ -357,6 +357,15 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                 }
 
                 self.wait_for_ack_completion(semaphore).await;
+
+                // Shutdown rate limiter if configured
+                if let Some(ref rate_limiter) = self.rate_limiter {
+                    rate_limiter
+                        .shutdown()
+                        .await
+                        .map_err(|e| Error::ISB(format!("Failed to shutdown rate limiter: {e}")))?;
+                }
+
                 Ok(())
             }
         });

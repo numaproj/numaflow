@@ -14,12 +14,12 @@ use super::{
 use crate::Result;
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::ratelimit::RateLimitConfig;
+use crate::config::components::sink;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::source::{GeneratorConfig, SourceConfig, SourceSpec, SourceType};
 use crate::config::components::transformer::{
     TransformerConfig, TransformerType, UserDefinedConfig,
 };
-use crate::config::components::{sink, source};
 use crate::config::get_vertex_replica;
 use crate::config::monovertex::sink::SinkType;
 use crate::error::Error;
@@ -56,7 +56,7 @@ impl Default for MonovertexConfig {
             replica: 0,
             source_config: SourceConfig {
                 read_ahead: false,
-                source_type: source::SourceType::Generator(GeneratorConfig::default()),
+                source_type: SourceType::Generator(GeneratorConfig::default()),
             },
             sink_config: SinkConfig {
                 sink_type: SinkType::Log(sink::LogConfig::default()),
@@ -108,7 +108,7 @@ impl MonovertexConfig {
             .limits
             .as_ref()
             .and_then(|limits| limits.rate_limit.clone())
-            .map(RateLimitConfig::from);
+            .map(|rate_limit| RateLimitConfig::new(batch_size as usize, true, *rate_limit));
 
         let mono_vertex_name = mono_vertex_obj
             .metadata

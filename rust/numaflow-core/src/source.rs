@@ -518,6 +518,15 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 .await
                 .expect("acquiring permit should not fail");
             info!("All inflight messages are acked. Source stopped.");
+
+            // Shutdown rate limiter if configured
+            if let Some(ref rate_limiter) = self.rate_limiter {
+                rate_limiter
+                    .shutdown()
+                    .await
+                    .map_err(|e| Error::Source(format!("Failed to shutdown rate limiter: {e}")))?;
+            }
+
             result
         });
         Ok((ReceiverStream::new(messages_rx), handle))

@@ -8,8 +8,8 @@ nats-tests = []
 pulsar-tests = []
 sqs-tests = []
 kafka-tests = []
-panic-tests = []
-all-tests = ["nats-tests", "pulsar-tests", "sqs-tests", "kafka-tests", "panic-tests"]
+global-state-tests = []
+all-tests = ["nats-tests", "pulsar-tests", "sqs-tests", "kafka-tests", "global-state-tests"]
 
 [lints]
 workspace = true
@@ -55,8 +55,6 @@ pin-project.workspace = true
 kube.workspace = true
 
 hyper-util = "0.1.6"
-semver = "1.0"
-pep440_rs = "0.7.3"
 rand = "0.8.5"
 flate2 = "1.1.2"
 zstd = "0.13.3"

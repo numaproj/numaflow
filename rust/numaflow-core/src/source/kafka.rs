@@ -36,7 +36,7 @@ impl TryFrom<KafkaMessage> for Message {
 
         Ok(Message {
             typ: Default::default(),
-            keys: Arc::from(vec![]),
+            keys: Arc::from(message.key.map(|k| vec![k]).unwrap_or_default()),
             tags: None,
             value: message.value,
             offset: offset.clone(),
@@ -160,6 +160,7 @@ mod tests {
             value: Bytes::from("test_value"),
             partition: 1,
             offset: 42,
+            key: Some("test_key".to_string()),
             headers: {
                 let mut headers = HashMap::new();
                 headers.insert("key".to_string(), "value".to_string());
@@ -184,6 +185,7 @@ mod tests {
             value: Bytes::from("test_value"),
             partition: 1,
             offset: 42,
+            key: None,
             headers: HashMap::new(),
             timestamp: None, // No timestamp available
         };
@@ -206,6 +208,7 @@ mod tests {
             value: Bytes::from("test_value"),
             partition: 1,
             offset: 42,
+            key: None,
             headers: HashMap::new(),
             timestamp: Some(i64::MAX), // Invalid timestamp that will cause overflow
         };

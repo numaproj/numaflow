@@ -1,0 +1,45 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: rate-limit-redis
+spec:
+  limits:
+    readBatchSize: 50
+    rateLimit:
+      max: 100  # 100 TPS maximum
+      min: 10   # 10 TPS minimum during ramp up
+      rampUpDuration: 10s  # 10 seconds to ramp up from min to max
+      store:
+        redisStore:
+          mode: single
+          url: redis://redis:6379
+  vertices:
+    - name: in
+      limits:
+        readBatchSize: 50
+        rateLimit:
+          max: 200
+          min: 50
+          rampUpDuration: 1s
+      source:
+        generator:
+          rpu: 300
+          duration: 1s
+    - name: map-udf
+      scale:
+        min: 2
+      udf:
+        container:
+          # Simple cat UDF that just passes messages through
+          image: quay.io/numaio/numaflow-go/map-cat:stable
+          imagePullPolicy: IfNotPresent
+    - name: out
+      scale:
+        min: 1
+      sink:
+        blackhole: {}
+  edges:
+    - from: in
+      to: map-udf
+    - from: map-udf
+      to: out

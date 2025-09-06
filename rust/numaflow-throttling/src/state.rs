@@ -30,6 +30,10 @@ pub struct RateLimiterDistributedState<S> {
     /// Pool size this Consumer should eventually converge to. This is based on the pool-size
     /// reported by other external store.
     desired_pool_size: Arc<AtomicUsize>,
+    /// Processor ID for this rate limiter instance
+    processor_id: String,
+    /// Cancellation token for background tasks
+    cancel_token: CancellationToken,
     store: S,
 }
 
@@ -75,6 +79,8 @@ impl<S: Store> RateLimiterDistributedState<S> {
             )),
             known_pool_size: Arc::new(AtomicUsize::new(pool_size)),
             desired_pool_size: Arc::new(AtomicUsize::new(pool_size)),
+            processor_id: processor_id.to_string(),
+            cancel_token: cancel.clone(),
             store: s,
         };
 
@@ -187,5 +193,13 @@ impl<S: Store> RateLimiterDistributedState<S> {
                 );
             }
         }
+    }
+
+    /// Shutdown the distributed state by deregistering from the store.
+    pub(crate) async fn shutdown(&self) -> crate::Result<()> {
+        // Deregister from the store
+        self.store
+            .deregister(&self.processor_id, self.cancel_token.clone())
+            .await
     }
 }
