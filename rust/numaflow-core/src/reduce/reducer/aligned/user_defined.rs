@@ -22,7 +22,7 @@ impl From<Message> for reduce_request::Payload {
             event_time: Some(prost_timestamp_from_utc(msg.event_time)),
             watermark: msg.watermark.map(prost_timestamp_from_utc),
             headers: msg.headers.clone(),
-            metadata: msg.metadata.map(|m| m.into()),
+            metadata: msg.metadata.map(|m| m.to_proto()),
         }
     }
 }
@@ -35,7 +35,7 @@ impl From<&Message> for reduce_request::Payload {
             event_time: Some(prost_timestamp_from_utc(msg.event_time)),
             watermark: msg.watermark.map(prost_timestamp_from_utc),
             headers: msg.headers.clone(),
-            metadata: msg.metadata.clone().map(|m| m.into()),
+            metadata: msg.metadata.clone().map(|m| m.to_proto()),
         }
     }
 }

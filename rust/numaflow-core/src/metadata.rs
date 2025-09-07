@@ -32,6 +32,22 @@ pub(crate) struct KeyValueGroup {
 // Conversion implementations between protobuf and internal type
 impl From<metadata::Metadata> for Metadata {
     fn from(metadata: metadata::Metadata) -> Self {
+        Self::from_proto(metadata)
+    }
+}
+
+impl From<Metadata> for metadata::Metadata {
+    fn from(metadata: Metadata) -> Self {
+        // For JetStream writes: set previous_vertex to current vertex name
+        // so the next vertex knows who sent the message
+        metadata.to_proto_with_previous_vertex(get_vertex_name().to_string())
+    }
+}
+
+impl Metadata {
+    /// Convert from protobuf metadata to internal representation.
+    /// Preserves all fields as-is from the protobuf.
+    pub(crate) fn from_proto(metadata: metadata::Metadata) -> Self {
         Self {
             previous_vertex: metadata.previous_vertex,
             sys_metadata: metadata
@@ -46,19 +62,25 @@ impl From<metadata::Metadata> for Metadata {
                 .collect(),
         }
     }
-}
 
-impl From<Metadata> for metadata::Metadata {
-    fn from(metadata: Metadata) -> Self {
-        Self {
-            // write the current vertex name so that next vertex knows who sent it.
-            previous_vertex: get_vertex_name().to_string(),
-            sys_metadata: metadata
+    /// Convert to protobuf metadata for UDF requests.
+    /// Preserves the original previous_vertex so UDFs know the actual sender.
+    pub(crate) fn to_proto(self) -> metadata::Metadata {
+        let previous_vertex = self.previous_vertex.clone();
+        self.to_proto_with_previous_vertex(previous_vertex)
+    }
+
+    /// Convert to protobuf metadata with a specific previous_vertex value.
+    /// Used internally by both conversion methods.
+    fn to_proto_with_previous_vertex(self, previous_vertex: String) -> metadata::Metadata {
+        metadata::Metadata {
+            previous_vertex,
+            sys_metadata: self
                 .sys_metadata
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
-            user_metadata: metadata
+            user_metadata: self
                 .user_metadata
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))

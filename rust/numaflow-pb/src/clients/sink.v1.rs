@@ -86,6 +86,9 @@ pub mod sink_response {
         pub err_msg: ::prost::alloc::string::String,
         #[prost(bytes = "vec", optional, tag = "4")]
         pub serve_response: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+        /// Metadata is the metadata of the message
+        #[prost(message, optional, tag = "5")]
+        pub metadata: ::core::option::Option<crate::common::metadata::Metadata>,
     }
 }
 ///
