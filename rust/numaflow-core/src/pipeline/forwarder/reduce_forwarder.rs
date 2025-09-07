@@ -26,11 +26,7 @@ use crate::reduce::wal::segment::compactor::WindowKind;
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::TrackerHandle;
-use crate::typ::{
-    NumaflowTypeConfig, WithInMemoryRateLimiter, WithRedisRateLimiter, WithoutRateLimiter,
-    build_in_memory_rate_limiter_config, build_redis_rate_limiter_config,
-    should_use_redis_rate_limiter,
-};
+use crate::typ::{NumaflowTypeConfig, WithoutRateLimiter};
 use crate::watermark::WatermarkHandle;
 use crate::{Result, shared};
 use async_nats::jetstream::Context;
@@ -227,36 +223,9 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         tracker_handle,
     };
 
-    if let Some(rate_limit_config) = &config.rate_limit {
-        if should_use_redis_rate_limiter(rate_limit_config) {
-            let redis_config =
-                build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
-
-            run_reduce_forwarder::<WithRedisRateLimiter>(
-                &context,
-                reader_components.clone(),
-                reducer,
-                wal,
-                Some(redis_config.throttling_config),
-            )
-            .await?
-        } else {
-            let in_mem_config =
-                build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
-
-            run_reduce_forwarder::<WithInMemoryRateLimiter>(
-                &context,
-                reader_components.clone(),
-                reducer,
-                wal,
-                Some(in_mem_config.throttling_config),
-            )
-            .await?
-        }
-    } else {
-        run_reduce_forwarder::<WithoutRateLimiter>(&context, reader_components, reducer, wal, None)
-            .await?
-    };
+    // rate limit is not applicable for reduce
+    run_reduce_forwarder::<WithoutRateLimiter>(&context, reader_components, reducer, wal, None)
+        .await?;
 
     info!("Aligned reduce forwarder has stopped successfully");
     Ok(())
@@ -376,36 +345,9 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         tracker_handle,
     };
 
-    if let Some(rate_limit_config) = &config.rate_limit {
-        if should_use_redis_rate_limiter(rate_limit_config) {
-            let redis_config =
-                build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
-
-            run_reduce_forwarder::<WithRedisRateLimiter>(
-                &context,
-                reader_components.clone(),
-                reducer,
-                wal,
-                Some(redis_config.throttling_config),
-            )
-            .await?
-        } else {
-            let in_mem_config =
-                build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
-
-            run_reduce_forwarder::<WithInMemoryRateLimiter>(
-                &context,
-                reader_components.clone(),
-                reducer,
-                wal,
-                Some(in_mem_config.throttling_config),
-            )
-            .await?
-        }
-    } else {
-        run_reduce_forwarder::<WithoutRateLimiter>(&context, reader_components, reducer, wal, None)
-            .await?
-    };
+    // rate limit is not applicable for reduce
+    run_reduce_forwarder::<WithoutRateLimiter>(&context, reader_components, reducer, wal, None)
+        .await?;
 
     info!("Unaligned reduce forwarder has stopped successfully");
     Ok(())

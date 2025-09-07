@@ -529,28 +529,25 @@ impl Store for RedisStore {
     async fn register(
         &self,
         processor_id: &str,
-        cancel: CancellationToken,
+        _cancel: CancellationToken,
     ) -> crate::Result<usize> {
-        if cancel.is_cancelled() {
-            return Err(crate::Error::Cancellation);
-        }
         let pool_size: usize = self
             .exec_lua_script(&self.register_script, &[self.key_prefix], &[processor_id])
             .await
-            .map_err(|e| crate::Error::Redis(e.to_string()))?;
+            .map_err(|e| Error::Redis(e.to_string()))?;
 
         Ok(pool_size)
     }
 
-    async fn deregister(&self, processor_id: &str, cancel: CancellationToken) -> crate::Result<()> {
-        if cancel.is_cancelled() {
-            return Err(crate::Error::Cancellation);
-        }
-
+    async fn deregister(
+        &self,
+        processor_id: &str,
+        _cancel: CancellationToken,
+    ) -> crate::Result<()> {
         let _: String = self
             .exec_lua_script(&self.deregister_script, &[self.key_prefix], &[processor_id])
             .await
-            .map_err(|e| crate::Error::Redis(e.to_string()))?;
+            .map_err(|e| Error::Redis(e.to_string()))?;
 
         Ok(())
     }
@@ -559,12 +556,8 @@ impl Store for RedisStore {
         &self,
         processor_id: &str,
         pool_size: usize,
-        cancel: CancellationToken,
+        _cancel: CancellationToken,
     ) -> crate::Result<Consensus> {
-        if cancel.is_cancelled() {
-            return Err(crate::Error::Cancellation);
-        }
-
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("Time went backwards")
@@ -580,10 +573,10 @@ impl Store for RedisStore {
                 &[processor_id, &timestamp, &pool_size_str],
             )
             .await
-            .map_err(|e| crate::Error::Redis(e.to_string()))?;
+            .map_err(|e| Error::Redis(e.to_string()))?;
 
         if result.len() != 3 {
-            return Err(crate::Error::Redis(
+            return Err(Error::Redis(
                 "Invalid response from sync script".to_string(),
             ));
         }
@@ -598,7 +591,7 @@ impl Store for RedisStore {
         match consensus_type.as_str() {
             "AGREE" => Ok(Consensus::Agree(size)),
             "DISAGREE" => Ok(Consensus::Disagree(size)),
-            _ => Err(crate::Error::Redis("Unknown consensus type".to_string())),
+            _ => Err(Error::Redis("Unknown consensus type".to_string())),
         }
     }
 }

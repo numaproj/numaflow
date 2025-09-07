@@ -517,7 +517,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "panic-tests")]
+    #[cfg(feature = "global-state-tests")]
     #[tokio::test]
     async fn test_transform_stream_with_panic() -> Result<()> {
         let tmp_dir = TempDir::new().unwrap();

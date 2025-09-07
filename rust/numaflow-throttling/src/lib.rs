@@ -1,8 +1,8 @@
 use crate::state::OptimisticValidityUpdateSecs;
 use crate::state::store::Store;
 use state::RateLimiterDistributedState;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
@@ -29,6 +29,10 @@ pub trait RateLimiter {
     /// If timeout is None, it will block till the tokens are available, else returns whatever is
     /// available. If `n` is provided, it will try to acquire `n` tokens else it will acquire all the tokens.
     async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize;
+
+    /// Shutdown the rate limiter and clean up resources.
+    /// This will deregister the processor from the distributed store and stop any background tasks.
+    async fn shutdown(&self) -> Result<()>;
 }
 
 /// RateLimit is the main struct that will be used by the user to get the tokens available for the
@@ -41,8 +45,9 @@ pub struct RateLimit<W> {
     token: Arc<AtomicUsize>,
     /// Max number of tokens ever filled till now. The next refill relies on the current max allowed
     /// value. For the first run this will be set to `burst` and will be slowly incremented to the
-    /// `max` value.
-    max_ever_filled: Arc<AtomicUsize>,
+    /// `max` value. This has to be float because we support fractional slope. E.g., one could
+    /// say ramp up from 10 to 20 in 60 seconds, which means we add 1/6 tokens per second.
+    max_ever_filled: Arc<Mutex<f32>>,
     /// Last time the token was queried. The tokens are replenished based on the time elapsed since
     /// the last query.
     last_queried_epoch: Arc<AtomicU64>,
@@ -57,8 +62,7 @@ impl<W> std::fmt::Display for RateLimit<W> {
             "token_calc_bounds: {:?}, token: {}, max_ever_filled: {}, last_queried_epoch: {}",
             self.token_calc_bounds,
             self.token.load(std::sync::atomic::Ordering::Relaxed),
-            self.max_ever_filled
-                .load(std::sync::atomic::Ordering::Relaxed),
+            self.max_ever_filled.lock().unwrap(),
             self.last_queried_epoch
                 .load(std::sync::atomic::Ordering::Relaxed)
         )
@@ -79,19 +83,19 @@ enum TokenAvailability {
 impl<W> RateLimit<W> {
     /// Computes the number of tokens to be refilled for the next epoch.
     pub(crate) fn compute_refill(&self) -> usize {
-        let max_ever_filled = self
-            .max_ever_filled
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
 
         // let's make sure we do not go beyond the max
-        if max_ever_filled >= self.token_calc_bounds.max {
+        if *max_ever_filled >= self.token_calc_bounds.max as f32 {
             self.token_calc_bounds.max
         } else {
-            let refill = max_ever_filled + (self.token_calc_bounds.slope as usize);
-            let capped_refill = refill.min(self.token_calc_bounds.max);
-            self.max_ever_filled
-                .store(capped_refill, std::sync::atomic::Ordering::Release);
-            capped_refill
+            let refill = *max_ever_filled + self.token_calc_bounds.slope;
+            let capped_refill = refill.min(self.token_calc_bounds.max as f32);
+
+            // Update the fractional value
+            *max_ever_filled = capped_refill;
+
+            capped_refill as usize
         }
     }
 }
@@ -103,7 +107,7 @@ impl RateLimit<WithoutDistributedState> {
         Ok(RateLimit {
             token_calc_bounds,
             token: Arc::new(AtomicUsize::new(burst)),
-            max_ever_filled: Arc::new(AtomicUsize::new(burst)),
+            max_ever_filled: Arc::new(Mutex::new(burst as f32)),
             last_queried_epoch: Arc::new(AtomicU64::new(
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -247,6 +251,10 @@ impl RateLimiter for RateLimit<WithoutDistributedState> {
             .await
             .unwrap_or(0)
     }
+
+    async fn shutdown(&self) -> crate::Result<()> {
+        Ok(())
+    }
 }
 
 impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithDistributedState<S>> {
@@ -321,6 +329,10 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDis
             .await
             .unwrap_or(0)
     }
+
+    async fn shutdown(&self) -> crate::Result<()> {
+        self.state.0.shutdown().await
+    }
 }
 
 impl<S: Store> RateLimit<WithDistributedState<S>> {
@@ -352,7 +364,7 @@ impl<S: Store> RateLimit<WithDistributedState<S>> {
             token_calc_bounds,
             // Store the full burst amount, we divide by pool size when querying tokens
             token: Arc::new(AtomicUsize::new(burst)),
-            max_ever_filled: Arc::new(AtomicUsize::new(burst)),
+            max_ever_filled: Arc::new(Mutex::new(burst as f32)),
             last_queried_epoch: Arc::new(AtomicU64::new(
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -467,6 +479,11 @@ impl RateLimiter for NoOpRateLimiter {
     async fn acquire_n(&self, n: Option<usize>, _timeout: Option<Duration>) -> usize {
         // Always return the requested number of tokens (or max if not specified)
         n.unwrap_or(usize::MAX)
+    }
+
+    async fn shutdown(&self) -> crate::Result<()> {
+        // No-op for NoOpRateLimiter as there are no resources to clean up
+        Ok(())
     }
 }
 
@@ -638,6 +655,66 @@ mod tests {
         let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
         let tokens = rate_limiter.acquire_n(None, None).await;
         assert_eq!(tokens, 5);
+    }
+
+    #[tokio::test]
+    async fn test_fractional_slope_accumulation() {
+        // Test case: max=2, min=1, ramp_up=10s
+        // slope = (2-1)/10 = 0.1 tokens per second
+        let bounds = TokenCalcBounds::new(2, 1, Duration::from_secs(10));
+        assert_eq!(bounds.max, 2);
+        assert_eq!(bounds.min, 1);
+        assert_eq!(bounds.slope, 0.1); // (2-1)/10
+
+        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+
+        // Initially should have 1 token (burst)
+        let tokens = rate_limiter.acquire_n(None, None).await;
+        assert_eq!(tokens, 1);
+
+        // Force time passage to trigger refill
+        rate_limiter
+            .last_queried_epoch
+            .store(0, std::sync::atomic::Ordering::Release);
+
+        // After first refill: 1.0 + 0.1 = 1.1, but tokens returned as usize = 1
+        let tokens = rate_limiter.acquire_n(None, None).await;
+        assert_eq!(tokens, 1);
+
+        // Check that max_ever_filled is accumulating fractionally
+        let max_filled = *rate_limiter.max_ever_filled.lock().unwrap();
+        assert_eq!(max_filled, 1.1);
+
+        // Force another time passage
+        rate_limiter
+            .last_queried_epoch
+            .store(0, std::sync::atomic::Ordering::Release);
+
+        // After second refill: 1.1 + 0.1 = 1.2, tokens = 1
+        let tokens = rate_limiter.acquire_n(None, None).await;
+        assert_eq!(tokens, 1);
+        let max_filled = *rate_limiter.max_ever_filled.lock().unwrap();
+        assert_eq!(max_filled, 1.2);
+
+        // Continue until we reach 2.0 (after 10 refills total)
+        for _ in 0..8 {
+            rate_limiter
+                .last_queried_epoch
+                .store(0, std::sync::atomic::Ordering::Release);
+            rate_limiter.acquire_n(None, None).await;
+        }
+
+        let max_filled = *rate_limiter.max_ever_filled.lock().unwrap();
+        assert_eq!(max_filled, 2.0);
+
+        // Force one more time passage - should be capped at max (2)
+        rate_limiter
+            .last_queried_epoch
+            .store(0, std::sync::atomic::Ordering::Release);
+        let tokens = rate_limiter.acquire_n(None, None).await;
+        assert_eq!(tokens, 2);
+        let max_filled = *rate_limiter.max_ever_filled.lock().unwrap();
+        assert_eq!(max_filled, 2.0); // Should not exceed max
     }
 
     #[tokio::test]
