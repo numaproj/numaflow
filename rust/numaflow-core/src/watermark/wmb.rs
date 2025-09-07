@@ -91,41 +91,41 @@ impl WMBChecker {
     /// Checks if the head wmb is idle, and it has the same wmb offset from the previous iteration.
     /// If all the iterations get the same wmb offset, returns true.
     pub fn validate_head_wmb(&mut self, wmb: WMB) -> bool {
-        if !wmb.idle {
-            // if wmb is not idle, skip and reset the iteration_counter
-            self.iteration_counter = 0;
+        // First iteration: store the WMB and increment counter
+        if self.iteration_counter == 0 {
+            self.wmb = Some(wmb);
+            self.iteration_counter += 1;
             return false;
         }
 
-        // check the iteration_counter value
-        if self.iteration_counter == 0 {
-            self.iteration_counter += 1;
-            // the wmb only writes once when iteration_counter is zero
-            self.wmb = Some(wmb);
-        } else if self.iteration_counter < self.iterations - 1 {
-            self.iteration_counter += 1;
-            if let Some(ref stored_wmb) = self.wmb {
-                if stored_wmb.offset == wmb.offset {
-                    // we get the same wmb, meaning the wmb is valid, continue
-                } else {
-                    // else, start over
-                    self.iteration_counter = 0;
-                    self.wmb = None;
-                }
-            }
-        } else if self.iteration_counter >= self.iterations - 1 {
-            self.iteration_counter = 0;
-            if let Some(ref stored_wmb) = self.wmb
-                && stored_wmb.offset == wmb.offset
-            {
-                // reach max iteration, if still get the same wmb,
-                // then the wmb is considered as valid, return true
-                self.wmb = None; // Reset for next validation cycle
-                return true;
-            }
-            self.wmb = None; // Reset for next validation cycle
+        // Check if the offset matches the stored WMB
+        let offset_matches = self
+            .wmb
+            .as_ref()
+            .is_some_and(|stored| stored.offset == wmb.offset);
+
+        if !offset_matches {
+            // Different offset: reset and start over
+            self.reset();
+            return false;
         }
+
+        // Same offset: increment counter
+        self.iteration_counter += 1;
+
+        // Check if we've reached the required number of iterations
+        if self.iteration_counter >= self.iterations {
+            self.reset();
+            return true;
+        }
+
         false
+    }
+
+    /// Reset the checker state
+    fn reset(&mut self) {
+        self.iteration_counter = 0;
+        self.wmb = None;
     }
 }
 
