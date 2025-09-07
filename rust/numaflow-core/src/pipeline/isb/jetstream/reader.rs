@@ -324,8 +324,7 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
 
                     if read_messages.is_empty() {
                         // Check for idle watermark message when batch is empty
-                        if let Some(idle_wmb_message) =
-                            self.check_and_create_idle_watermark_message().await
+                        if let Some(idle_wmb_message) = self.validate_and_create_wmb_message().await
                             && let Err(e) = messages_tx.send(idle_wmb_message).await
                         {
                             error!(?e, "Failed to send idle watermark message to channel");
@@ -680,10 +679,9 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
         self.stream.name
     }
 
-    /// Checks for idle watermarks and creates a WMB message if an idle watermark is available.
-    /// Uses WMBChecker to validate that the idle WMB has the same offset across consecutive iterations.
-    /// Returns None if no idle watermark is available or if there's no watermark handle.
-    async fn check_and_create_idle_watermark_message(&mut self) -> Option<Message> {
+    /// Validates the idle WMB and creates a WMB message with the validated idle watermark.
+    /// Returns None if the WMB is not idle or if the watermark is -1.
+    async fn validate_and_create_wmb_message(&mut self) -> Option<Message> {
         let watermark_handle = self.watermark_handle.as_mut()?;
 
         // Fetch the head idle WMB for the current partition

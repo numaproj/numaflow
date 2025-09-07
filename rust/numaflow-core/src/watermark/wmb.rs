@@ -91,6 +91,11 @@ impl WMBChecker {
     /// Checks if the head wmb is idle, and it has the same wmb offset from the previous iteration.
     /// If all the iterations get the same wmb offset, returns true.
     pub fn validate_head_wmb(&mut self, wmb: WMB) -> bool {
+        if !wmb.idle {
+            self.reset();
+            return false;
+        }
+
         // First iteration: store the WMB and increment counter
         if self.iteration_counter == 0 {
             self.wmb = Some(wmb);

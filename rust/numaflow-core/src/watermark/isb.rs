@@ -53,9 +53,6 @@ enum ISBWaterMarkActorMessage {
         offset: IntOffset,
         oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
     },
-    FetchHeadIdle {
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
-    },
     FetchHead {
         partition_idx: u16,
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
@@ -136,15 +133,6 @@ impl ISBWatermarkActor {
                     .map_err(|_| Error::Watermark("failed to send response".to_string()))
             }
 
-            // fetches the head idle watermark
-            ISBWaterMarkActorMessage::FetchHeadIdle { oneshot_tx } => {
-                let watermark = self.fetcher.fetch_head_idle_watermark();
-
-                oneshot_tx
-                    .send(Ok(watermark))
-                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
-            }
-
             // fetches the head watermark
             ISBWaterMarkActorMessage::FetchHead {
                 partition_idx,
@@ -203,6 +191,10 @@ impl ISBWatermarkActor {
         // we should fetch the head idle watermark and publish it to downstream.
         if min_wm.timestamp_millis() == -1 {
             min_wm = self.fetcher.fetch_head_idle_watermark();
+        }
+
+        if min_wm.timestamp_millis() == -1 {
+            return Ok(());
         }
 
         // Identify the streams that are idle and publish the idle watermark
@@ -396,31 +388,6 @@ impl ISBWatermarkHandle {
         match oneshot_rx.await {
             Ok(watermark) => watermark.unwrap_or_else(|e| {
                 warn!(?e, "Failed to fetch head watermark");
-                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
-            }),
-            Err(e) => {
-                warn!(?e, "Failed to receive response");
-                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
-            }
-        }
-    }
-
-    /// Fetches the head idle watermark using the watermark fetcher. This returns the minimum
-    /// of all the head watermarks across all processors if they are ALL idle, otherwise returns -1.
-    pub(crate) async fn fetch_head_idle_watermark(&mut self) -> Watermark {
-        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
-        if let Err(e) = self
-            .sender
-            .send(ISBWaterMarkActorMessage::FetchHeadIdle { oneshot_tx })
-            .await
-        {
-            warn!(?e, "Failed to send message");
-            return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
-        }
-
-        match oneshot_rx.await {
-            Ok(watermark) => watermark.unwrap_or_else(|e| {
-                warn!(?e, "Failed to fetch head idle watermark");
                 Watermark::from_timestamp_millis(-1).expect("failed to parse time")
             }),
             Err(e) => {

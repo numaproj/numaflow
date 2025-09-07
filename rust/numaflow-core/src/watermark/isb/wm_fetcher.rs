@@ -113,7 +113,7 @@ impl ISBWatermarkFetcher {
         self.get_watermark()
     }
 
-    /// Fetches the latest idle WMB with the smallest watermark for the given partition
+    /// Fetches the latest idle WMB with the smallest watermark across all the partitions.
     /// Only returns one if all Publishers are idle and if it's the smallest one of any partitions
     pub(crate) fn fetch_head_idle_watermark(&mut self) -> Watermark {
         let mut min_wm = i64::MAX;
