@@ -41,7 +41,7 @@ pub(crate) mod source;
 mod idle;
 
 /// Stores WMB related data.
-mod wmb;
+pub(crate) mod wmb;
 
 /// Watermark handle, enum to hold both edge and source watermark handles
 /// This is used to fetch and publish watermarks

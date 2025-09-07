@@ -16,6 +16,7 @@ use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
+use crate::watermark::wmb::WMBChecker;
 use async_nats::jetstream::{
     AckKind, Context, Message as JetstreamMessage, consumer::PullConsumer,
 };
@@ -97,6 +98,7 @@ pub(crate) struct JetStreamReader<C: NumaflowTypeConfig> {
     vertex_type: String,
     compression_type: Option<CompressionType>,
     rate_limiter: Option<C::RateLimiter>,
+    wmb_checker: WMBChecker,
 }
 
 /// JSWrappedMessage is a wrapper around the JetStream message that includes the
@@ -252,6 +254,7 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                 .isb_config
                 .map(|c| c.compression.compress_type),
             rate_limiter,
+            wmb_checker: WMBChecker::new(2),
         })
     }
 
@@ -303,13 +306,6 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                 // This inconsistency is due to the corner cases in the process-scheduling of and
                 // others reasons.
                 //
-                // ** Forcing Consistency **
-                // To force consistency, all reconciliation of states when using Watermark will go
-                // through two iterations. In the first iteration, it saves the states it has built
-                // and ensures the state matches in the second iteration. In other words, it should
-                // ensure that between two iterations, the idle-offset remains the same.
-                let mut consecutive_empty_reads = 0;
-
                 loop {
                     if cancel_token.is_cancelled() {
                         info!(stream=?self.stream, "Cancellation token received, stopping the reader.");
@@ -327,25 +323,16 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                         .await?;
 
                     if read_messages.is_empty() {
-                        consecutive_empty_reads += 1;
-
-                        // Send idle watermark message after two consecutive empty reads
-                        if consecutive_empty_reads >= 2 {
-                            consecutive_empty_reads = 0; // Reset counter
-
-                            if let Some(idle_wmb_message) =
-                                self.check_and_create_idle_watermark_message().await
-                                && let Err(e) = messages_tx.send(idle_wmb_message).await
-                            {
-                                error!(?e, "Failed to send idle watermark message to channel");
-                                break;
-                            }
+                        // Check for idle watermark message when batch is empty
+                        if let Some(idle_wmb_message) =
+                            self.check_and_create_idle_watermark_message().await
+                            && let Err(e) = messages_tx.send(idle_wmb_message).await
+                        {
+                            error!(?e, "Failed to send idle watermark message to channel");
+                            break;
                         }
                         continue;
                     }
-
-                    // Reset counter when we get messages
-                    consecutive_empty_reads = 0;
 
                     for message in read_messages {
                         Self::update_metrics(&labels, &message);
@@ -685,22 +672,30 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
     }
 
     /// Checks for idle watermarks and creates a WMB message if an idle watermark is available.
+    /// Uses WMBChecker to validate that the idle WMB has the same offset across consecutive iterations.
     /// Returns None if no idle watermark is available or if there's no watermark handle.
     async fn check_and_create_idle_watermark_message(&mut self) -> Option<Message> {
         let watermark_handle = self.watermark_handle.as_mut()?;
 
-        let idle_watermark = watermark_handle.fetch_head_idle_watermark().await;
+        // Fetch the head idle WMB for the current partition
+        let idle_wmb = watermark_handle
+            .fetch_head_idle_wmb(self.stream.partition)
+            .await?;
 
-        // Only create a WMB message if we have a valid idle watermark (not -1)
-        if idle_watermark.timestamp_millis() == -1 {
+        // Use WMBChecker to validate the idle WMB
+        if !self.wmb_checker.validate_head_wmb(idle_wmb) {
             return None;
         }
 
-        // Create a WMB message with the idle watermark
+        // Create a watermark from the validated WMB
+        let idle_watermark = chrono::DateTime::from_timestamp_millis(idle_wmb.watermark)
+            .expect("Failed to create watermark from WMB");
+
+        // Create a WMB message with the validated idle watermark
         Some(Message {
             typ: MessageType::WMB,
             watermark: Some(idle_watermark),
-            offset: Offset::Int(IntOffset::new(-1, self.stream.partition)), // Use -1 as a placeholder offset for idle WMB
+            offset: Offset::Int(IntOffset::new(idle_wmb.offset, self.stream.partition)),
             event_time: idle_watermark,
             ..Default::default()
         })
