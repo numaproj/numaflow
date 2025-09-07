@@ -10,7 +10,7 @@ use crate::config::pipeline::VertexType;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::Result;
 use crate::watermark::processor::manager::ProcessorManager;
-use crate::watermark::wmb::Watermark;
+use crate::watermark::wmb::{WMB, Watermark};
 use std::collections::HashMap;
 
 /// ISBWatermarkFetcher is the watermark fetcher for the incoming edges.
@@ -207,6 +207,66 @@ impl ISBWatermarkFetcher {
         }
 
         Watermark::from_timestamp_millis(min_wm).expect("failed to parse time")
+    }
+
+    /// Fetches the head idle WMB for the given partition.Returns the minimum idle WMB across all
+    /// processors for the specified partition, but only if all active processors are idle for that
+    /// partition.
+    pub(crate) fn fetch_head_idle_wmb(&mut self, partition_idx: u16) -> Option<WMB> {
+        let mut min_wmb: Option<WMB> = None;
+
+        for (edge, processor_manager) in &self.processor_managers {
+            let mut edge_min_wmb: Option<WMB> = None;
+
+            let processors = processor_manager
+                .processors
+                .read()
+                .expect("failed to acquire lock");
+
+            let active_processors = processors
+                .values()
+                .filter(|processor| processor.is_active());
+
+            for processor in active_processors {
+                // Only check the timeline for the requested partition
+                if let Some(timeline) = processor.timelines.get(partition_idx as usize)
+                    && let Some(head_wmb) = timeline.get_head_wmb()
+                    && head_wmb.idle
+                {
+                    // Track the minimum WMB for this edge
+                    match edge_min_wmb {
+                        None => edge_min_wmb = Some(head_wmb),
+                        Some(current_min) => {
+                            if head_wmb.watermark < current_min.watermark {
+                                edge_min_wmb = Some(head_wmb);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Update the last processed watermark for this edge and partition if we found a valid WMB
+            if let Some(wmb) = edge_min_wmb {
+                *self
+                    .last_processed_wm
+                    .get_mut(edge)
+                    .unwrap_or_else(|| panic!("invalid vertex {edge}"))
+                    .get_mut(partition_idx as usize)
+                    .expect("should have partition index") = wmb.watermark;
+
+                // Track the overall minimum WMB across all edges
+                match min_wmb {
+                    None => min_wmb = Some(wmb),
+                    Some(current_min) => {
+                        if wmb.watermark < current_min.watermark {
+                            min_wmb = Some(wmb);
+                        }
+                    }
+                }
+            }
+        }
+
+        min_wmb
     }
 
     /// returns the smallest last processed watermark among all the partitions
@@ -1450,6 +1510,211 @@ mod tests {
         // Invoke fetch_head_idle_watermark and verify the result
         let watermark = fetcher.fetch_head_idle_watermark();
         assert_eq!(watermark.timestamp_millis(), -1);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_head_idle_wmb_single_partition() {
+        // Create a ProcessorManager with a single Processor and a single OffsetTimeline
+        let processor_name = Bytes::from("processor1");
+        let mut processor = Processor::new(processor_name.clone(), Status::Active, 1);
+        let timeline = OffsetTimeline::new(10);
+
+        // Populate the OffsetTimeline with sorted WMB entries
+        let wmb1 = WMB {
+            watermark: 100,
+            offset: 1,
+            idle: true,
+            partition: 0,
+        };
+        let wmb2 = WMB {
+            watermark: 200,
+            offset: 2,
+            idle: true,
+            partition: 0,
+        };
+
+        timeline.put(wmb1);
+        timeline.put(wmb2);
+
+        processor.timelines[0] = timeline;
+
+        let mut processors = HashMap::new();
+        processors.insert(processor_name.clone(), processor);
+
+        let processor_manager = ProcessorManager {
+            processors: Arc::new(RwLock::new(processors)),
+            handles: vec![],
+        };
+
+        let mut processor_managers = HashMap::new();
+        processor_managers.insert("from_vtx", processor_manager);
+
+        let bucket_config = BucketConfig {
+            vertex: "from_vtx",
+            ot_bucket: "ot_bucket",
+            hb_bucket: "hb_bucket",
+            partitions: 1,
+            delay: None,
+        };
+
+        let mut fetcher =
+            ISBWatermarkFetcher::new(processor_managers, &[bucket_config], VertexType::MapUDF)
+                .await
+                .unwrap();
+
+        // Invoke fetch_head_idle_wmb and verify the result
+        let wmb = fetcher.fetch_head_idle_wmb(0);
+        assert!(wmb.is_some());
+        let wmb = wmb.unwrap();
+        assert_eq!(wmb.watermark, 200);
+        assert_eq!(wmb.offset, 2);
+        assert!(wmb.idle);
+        assert_eq!(wmb.partition, 0);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_head_idle_wmb_not_idle() {
+        // Create a ProcessorManager with a single Processor and a single OffsetTimeline
+        let processor_name = Bytes::from("processor1");
+        let mut processor = Processor::new(processor_name.clone(), Status::Active, 1);
+        let timeline = OffsetTimeline::new(10);
+
+        // Populate the OffsetTimeline with sorted WMB entries (one not idle)
+        let wmb1 = WMB {
+            watermark: 100,
+            offset: 1,
+            idle: true,
+            partition: 0,
+        };
+        let wmb2 = WMB {
+            watermark: 200,
+            offset: 2,
+            idle: false, // Not idle
+            partition: 0,
+        };
+
+        timeline.put(wmb1);
+        timeline.put(wmb2);
+
+        processor.timelines[0] = timeline;
+
+        let mut processors = HashMap::new();
+        processors.insert(processor_name.clone(), processor);
+
+        let processor_manager = ProcessorManager {
+            processors: Arc::new(RwLock::new(processors)),
+            handles: vec![],
+        };
+
+        let mut processor_managers = HashMap::new();
+        processor_managers.insert("from_vtx", processor_manager);
+
+        let bucket_config = BucketConfig {
+            vertex: "from_vtx",
+            ot_bucket: "ot_bucket",
+            hb_bucket: "hb_bucket",
+            partitions: 1,
+            delay: None,
+        };
+
+        let mut fetcher =
+            ISBWatermarkFetcher::new(processor_managers, &[bucket_config], VertexType::MapUDF)
+                .await
+                .unwrap();
+
+        // Invoke fetch_head_idle_wmb and verify the result (should be None because not all are idle)
+        let wmb = fetcher.fetch_head_idle_wmb(0);
+        assert!(wmb.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_fetch_head_idle_wmb_multi_processor_min_watermark() {
+        // Create ProcessorManager with multiple Processors and different OffsetTimelines
+        let processor_name1 = Bytes::from("processor1");
+        let processor_name2 = Bytes::from("processor2");
+
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, 1);
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, 1);
+
+        let timeline1 = OffsetTimeline::new(10);
+        let timeline2 = OffsetTimeline::new(10);
+
+        // Populate the OffsetTimelines with sorted WMB entries
+        // Note: Timeline stores WMBs sorted by watermark from highest to lowest
+        // The head WMB is the one with the highest watermark
+        let wmbs1 = vec![
+            WMB {
+                watermark: 100,
+                offset: 3,
+                idle: true,
+                partition: 0,
+            },
+            WMB {
+                watermark: 200, // This will be the head for processor1
+                offset: 10,
+                idle: true,
+                partition: 0,
+            },
+        ];
+        let wmbs2 = vec![
+            WMB {
+                watermark: 150,
+                offset: 5,
+                idle: true,
+                partition: 0,
+            },
+            WMB {
+                watermark: 180, // This will be the head for processor2
+                offset: 8,
+                idle: true,
+                partition: 0,
+            },
+        ];
+
+        for wmb in wmbs1 {
+            timeline1.put(wmb);
+        }
+        for wmb in wmbs2 {
+            timeline2.put(wmb);
+        }
+
+        processor1.timelines[0] = timeline1;
+        processor2.timelines[0] = timeline2;
+
+        let mut processors = HashMap::new();
+        processors.insert(processor_name1.clone(), processor1);
+        processors.insert(processor_name2.clone(), processor2);
+
+        let processor_manager = ProcessorManager {
+            processors: Arc::new(RwLock::new(processors)),
+            handles: vec![],
+        };
+
+        let mut processor_managers = HashMap::new();
+        processor_managers.insert("from_vtx", processor_manager);
+
+        let bucket_config = BucketConfig {
+            vertex: "from_vtx",
+            ot_bucket: "ot_bucket",
+            hb_bucket: "hb_bucket",
+            partitions: 1,
+            delay: None,
+        };
+
+        let mut fetcher =
+            ISBWatermarkFetcher::new(processor_managers, &[bucket_config], VertexType::MapUDF)
+                .await
+                .unwrap();
+
+        // Invoke fetch_head_idle_wmb and verify the result (should return the minimum watermark WMB)
+        // The head WMBs are: processor1=200, processor2=180, so minimum is 180
+        let wmb = fetcher.fetch_head_idle_wmb(0);
+        assert!(wmb.is_some());
+        let wmb = wmb.unwrap();
+        assert_eq!(wmb.watermark, 180); // Should be the minimum between head WMBs
+        assert_eq!(wmb.offset, 8);
+        assert!(wmb.idle);
+        assert_eq!(wmb.partition, 0);
     }
 
     #[tokio::test]

@@ -37,7 +37,7 @@ use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::isb::wm_fetcher::ISBWatermarkFetcher;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
 use crate::watermark::processor::manager::ProcessorManager;
-use crate::watermark::wmb::Watermark;
+use crate::watermark::wmb::{WMB, Watermark};
 
 pub(crate) mod wm_fetcher;
 pub(crate) mod wm_publisher;
@@ -59,6 +59,10 @@ enum ISBWaterMarkActorMessage {
     FetchHead {
         partition_idx: u16,
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
+    },
+    FetchHeadIdleWmb {
+        partition_idx: u16,
+        oneshot_tx: tokio::sync::oneshot::Sender<Result<Option<WMB>>>,
     },
     PublishIdleWatermark {
         oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
@@ -150,6 +154,18 @@ impl ISBWatermarkActor {
 
                 oneshot_tx
                     .send(Ok(watermark))
+                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
+            }
+
+            // fetches the head idle WMB for a specific partition
+            ISBWaterMarkActorMessage::FetchHeadIdleWmb {
+                partition_idx,
+                oneshot_tx,
+            } => {
+                let wmb = self.fetcher.fetch_head_idle_wmb(partition_idx);
+
+                oneshot_tx
+                    .send(Ok(wmb))
                     .map_err(|_| Error::Watermark("failed to send response".to_string()))
             }
 
@@ -410,6 +426,35 @@ impl ISBWatermarkHandle {
             Err(e) => {
                 warn!(?e, "Failed to receive response");
                 Watermark::from_timestamp_millis(-1).expect("failed to parse time")
+            }
+        }
+    }
+
+    /// Fetches the head idle WMB for the given partition. Returns the minimum idle WMB across all
+    /// processors for the specified partition, but only if all active processors are idle for that
+    /// partition.
+    pub(crate) async fn fetch_head_idle_wmb(&mut self, partition_idx: u16) -> Option<WMB> {
+        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
+        if let Err(e) = self
+            .sender
+            .send(ISBWaterMarkActorMessage::FetchHeadIdleWmb {
+                partition_idx,
+                oneshot_tx,
+            })
+            .await
+        {
+            warn!(?e, "Failed to send message");
+            return None;
+        }
+
+        match oneshot_rx.await {
+            Ok(wmb_result) => wmb_result.unwrap_or_else(|e| {
+                warn!(?e, "Failed to fetch head idle WMB");
+                None
+            }),
+            Err(e) => {
+                warn!(?e, "Failed to receive response");
+                None
             }
         }
     }
