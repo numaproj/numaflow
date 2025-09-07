@@ -602,7 +602,7 @@ func (r *vertexReconciler) findExistingPods(ctx context.Context, vertex *dfv1.Ve
 	}
 	result := make(map[string]corev1.Pod)
 	for _, v := range pods.Items {
-		if !v.DeletionTimestamp.IsZero() {
+		if r.isTerminatingPod(&v) {
 			// Ignore pods being deleted
 			continue
 		}
@@ -613,6 +613,12 @@ func (r *vertexReconciler) findExistingPods(ctx context.Context, vertex *dfv1.Ve
 		}
 	}
 	return result, nil
+}
+
+func (r *vertexReconciler) isTerminatingPod(pod *corev1.Pod) bool {
+	// A pod is terminating if its deletion timestamp is set (i.e., non-nil)
+	// It is also terminating if its status phase is in "Failed" or "Succeeded"
+	return !pod.DeletionTimestamp.IsZero() || pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded
 }
 
 func (r *vertexReconciler) findExistingServices(ctx context.Context, vertex *dfv1.Vertex) (map[string]corev1.Service, error) {

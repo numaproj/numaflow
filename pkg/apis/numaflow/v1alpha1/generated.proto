@@ -1203,8 +1203,8 @@ message PipelineLimits {
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 4;
 
   // RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the
-  // vertex's limit settings. It will be applied to all non-source vertices. This is because for source vertices, the
-  // rate limit is defined by how many times the `Read` is called per second multiplied by the `readBatchSize`.
+  // vertex's limit settings. For source vertices, it will be set to rate divided by readBatchSize because for source
+  // vertices, the rate limit is defined by how many times the `Read` is called per second
   // Reduce does not support RateLimit.
   // +optional
   optional RateLimit rateLimit = 5;
@@ -1384,7 +1384,6 @@ message PulsarSource {
 message RateLimit {
   // Max is the maximum TPS that this vertex can process give a distributed `Store` is configured. Otherwise, it will
   // be the maximum TPS for a single replica.
-  // +kubebuilder:default=10
   optional uint64 max = 1;
 
   // Minimum TPS allowed during initial bootup. This value will be distributed across all the replicas if a distributed

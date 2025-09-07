@@ -1,0 +1,23 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: rate-limit-redis-mv
+spec:
+  scale:
+    min: 2
+  limits:
+    readBatchSize: 50
+    rateLimit:
+      max: 100
+      min: 50
+      rampUpDuration: 1s
+      store:
+        redisStore:
+          mode: single
+          url: redis://redis:6379
+  source:
+    generator:
+      rpu: 300
+      duration: 1s
+  sink:
+    blackhole: {}

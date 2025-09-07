@@ -244,7 +244,7 @@ mod tests {
                     let keys = request.keys.clone();
                     let updated_key = format!("{}_{}", keys.join(":"), current_count);
 
-                    let mut message = accumulator::Message::from_datum(request);
+                    let mut message = accumulator::Message::from_accumulator_request(request);
                     message = message.with_keys(vec![updated_key]);
                     message = message.with_value(format!("count_{}", current_count).into_bytes());
 
@@ -288,7 +288,7 @@ mod tests {
             value: "value1".into(),
             offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 10).unwrap(),
-            watermark: None,
+            watermark: Some(Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap()),
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
@@ -304,7 +304,7 @@ mod tests {
             value: "value2".into(),
             offset: Offset::String(StringOffset::new("1".to_string(), 1)),
             event_time: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 20).unwrap(),
-            watermark: None,
+            watermark: Some(Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap()),
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "1".to_string().into(),
@@ -320,7 +320,7 @@ mod tests {
             value: "value3".into(),
             offset: Offset::String(StringOffset::new("2".to_string(), 2)),
             event_time: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 30).unwrap(),
-            watermark: None,
+            watermark: Some(Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap()),
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "2".to_string().into(),
@@ -454,7 +454,7 @@ mod tests {
                 value: "valueA1".into(),
                 offset: Offset::String(StringOffset::new("0".to_string(), 0)),
                 event_time: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 10).unwrap(),
-                watermark: None,
+                watermark: Some(Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap()),
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "0".to_string().into(),
@@ -469,7 +469,7 @@ mod tests {
                 value: "valueB1".into(),
                 offset: Offset::String(StringOffset::new("1".to_string(), 1)),
                 event_time: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 20).unwrap(),
-                watermark: None,
+                watermark: Some(Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap()),
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "1".to_string().into(),
@@ -484,7 +484,7 @@ mod tests {
                 value: "valueA2".into(),
                 offset: Offset::String(StringOffset::new("2".to_string(), 2)),
                 event_time: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 30).unwrap(),
-                watermark: None,
+                watermark: Some(Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap()),
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "2".to_string().into(),
@@ -499,7 +499,7 @@ mod tests {
                 value: "valueA3".into(),
                 offset: Offset::String(StringOffset::new("3".to_string(), 3)),
                 event_time: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 40).unwrap(),
-                watermark: None,
+                watermark: Some(Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap()),
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "3".to_string().into(),
@@ -514,7 +514,7 @@ mod tests {
                 value: "valueB2".into(),
                 offset: Offset::String(StringOffset::new("4".to_string(), 4)),
                 event_time: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 50).unwrap(),
-                watermark: None,
+                watermark: Some(Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap()),
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "4".to_string().into(),
@@ -529,7 +529,7 @@ mod tests {
                 value: "valueB3".into(),
                 offset: Offset::String(StringOffset::new("5".to_string(), 5)),
                 event_time: Utc.with_ymd_and_hms(2023, 1, 1, 0, 1, 0).unwrap(),
-                watermark: None,
+                watermark: Some(Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap()),
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "5".to_string().into(),

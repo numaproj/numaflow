@@ -8,7 +8,8 @@ nats-tests = []
 pulsar-tests = []
 sqs-tests = []
 kafka-tests = []
-all-tests = ["nats-tests", "pulsar-tests", "sqs-tests", "kafka-tests"]
+global-state-tests = []
+all-tests = ["nats-tests", "pulsar-tests", "sqs-tests", "kafka-tests", "global-state-tests"]
 
 [lints]
 workspace = true
@@ -54,8 +55,6 @@ pin-project.workspace = true
 kube.workspace = true
 
 hyper-util = "0.1.6"
-semver = "1.0"
-pep440_rs = "0.7.3"
 rand = "0.8.5"
 flate2 = "1.1.2"
 zstd = "0.13.3"
@@ -64,7 +63,7 @@ async-trait = "0.1.88"
 
 [dev-dependencies]
 tempfile = "3.11.0"
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "9a12a1d832d4fece830452044bd7706dc8b2a381" }
+numaflow = "0.3.0"
 pulsar = { version = "6.3.0", default-features = false, features = ["tokio-rustls-runtime"] }
 hyper = "1.6.0"
 hyper-rustls = "0.27.5"

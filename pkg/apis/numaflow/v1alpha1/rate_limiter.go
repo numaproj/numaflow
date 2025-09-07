@@ -8,7 +8,6 @@ import (
 type RateLimit struct {
 	// Max is the maximum TPS that this vertex can process give a distributed `Store` is configured. Otherwise, it will
 	// be the maximum TPS for a single replica.
-	// +kubebuilder:default=10
 	Max *uint64 `json:"max,omitempty" protobuf:"varint,1,opt,name=max"`
 	// Minimum TPS allowed during initial bootup. This value will be distributed across all the replicas if a distributed
 	// `Store` is configured. Otherwise, it will be the minimum TPS for a single replica.

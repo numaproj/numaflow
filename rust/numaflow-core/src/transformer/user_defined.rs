@@ -225,7 +225,6 @@ mod tests {
             &self,
             input: sourcetransform::SourceTransformRequest,
         ) -> Vec<sourcetransform::Message> {
-            println!("transforming message: {:?}", input.eventtime);
             let message = sourcetransform::Message::new(input.value, Utc::now())
                 .with_keys(input.keys)
                 .with_tags(vec![]);

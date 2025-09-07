@@ -4,6 +4,7 @@ use crate::config::CustomResourceType;
 use bytes::Bytes;
 use config::Settings;
 use numaflow_monitor::runtime;
+use pipeline::forwarder;
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -117,7 +118,7 @@ pub async fn run() -> Result<()> {
         }
         CustomResourceType::Pipeline(config) => {
             info!("Starting pipeline forwarder with config: {:#?}", config);
-            if let Err(e) = pipeline::start_forwarder(cln_token, config).await {
+            if let Err(e) = forwarder::start_forwarder(cln_token, config).await {
                 if let Error::Grpc(e) = e {
                     error!(error=?e, "Pipeline failed because of UDF failure");
                     runtime::persist_application_error(*e);
