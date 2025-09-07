@@ -1543,6 +1543,7 @@ mod tests {
                 status: Success as i32,
                 err_msg: "".to_string(),
                 serve_response: None,
+                metadata: None,
             }],
             handshake: None,
             status: None,

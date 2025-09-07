@@ -667,7 +667,6 @@ mod tests {
     use numaflow_pb::clients::map::map_client::MapClient;
     use tempfile::TempDir;
     use tokio::sync::{mpsc::Sender, oneshot};
-    use tokio::time::sleep;
 
     use super::*;
     use crate::{

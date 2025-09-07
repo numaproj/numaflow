@@ -70,6 +70,8 @@ message ReadRequest {
     // uint32 can represent 2^32 milliseconds, which is about 49 days.
     // We don't use uint64 because time.Duration takes int64 as nano seconds. Using uint64 for milli will cause overflow.
     uint32 timeout_in_ms = 2;
+    // Metadata is the metadata of the message
+    common.metadata.Metadata metadata = 3;
   }
   // Required field indicating the request.
   Request request = 1;
