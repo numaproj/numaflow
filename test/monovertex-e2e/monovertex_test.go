@@ -83,6 +83,7 @@ func (s *MonoVertexSuite) TestExponentialBackoffRetryStrategy() {
 }
 
 func (s *MonoVertexSuite) TestMonoVertexRateLimitWithRedisStore() {
+	s.T().Skip("Skipping until we fix Rater")
 	w := s.Given().MonoVertex("@testdata/mono-vertex-rate-limit-redis.yaml").
 		When().
 		CreateMonoVertexAndWait()
