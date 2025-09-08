@@ -81,6 +81,8 @@ type PodPendingCount struct {
 	name string
 	// key represents partition name, value represents the count of messages pending in the corresponding partition
 	partitionPendingCounts map[string]float64
+	// timestamp when the metric was fetched
+	fetchTimestamp int64
 }
 
 func (p *PodPendingCount) Name() string {
@@ -91,12 +93,18 @@ func (p *PodPendingCount) PartitionPendingCounts() map[string]float64 {
 	return p.partitionPendingCounts
 }
 
+func (p *PodPendingCount) FetchTimestamp() int64 {
+	return p.fetchTimestamp
+}
+
 // PodReadCount is a struct to maintain count of messages read from each partition by a pod
 type PodReadCount struct {
 	// pod name
 	name string
 	// key represents partition name, value represents the count of messages read by the corresponding partition
 	partitionReadCounts map[string]float64
+	// timestamp when the metric was fetched
+	fetchTimestamp int64
 }
 
 func (p *PodReadCount) Name() string {
@@ -105,6 +113,10 @@ func (p *PodReadCount) Name() string {
 
 func (p *PodReadCount) PartitionReadCounts() map[string]float64 {
 	return p.partitionReadCounts
+}
+
+func (p *PodReadCount) FetchTimestamp() int64 {
+	return p.fetchTimestamp
 }
 
 func NewRater(ctx context.Context, p *v1alpha1.Pipeline, opts ...Option) *Rater {
@@ -172,16 +184,17 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	}
 	var podReadCount *PodReadCount
 	var podPendingCount *PodPendingCount
-	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
+	// Ensure all fetches for the same tick go to the same window
+	now := time.Now().Truncate(CountWindow).Unix()
 	if r.podTracker.IsActive(key) {
-		podMetrics := r.getPodMetrics(podInfo.vertexName, podInfo.podName)
-		podReadCount = r.getPodReadCounts(podInfo.vertexName, podInfo.podName, podMetrics)
+		podMetrics, fetchTime := r.getPodMetrics(podInfo.vertexName, podInfo.podName)
+		podReadCount = r.getPodReadCounts(podInfo.vertexName, podInfo.podName, podMetrics, fetchTime)
 		if podReadCount == nil {
 			log.Debugf("Failed retrieving total podReadCount for pod %s", podInfo.podName)
 		}
 		// Only maintain the timestamped pending counts if pod is a Reduce or if it is the 0th replica of any other vertex type.
 		if isReduce || podInfo.replica == 0 {
-			podPendingCount = r.getPodPendingCounts(podInfo.vertexName, podInfo.podName, podMetrics)
+			podPendingCount = r.getPodPendingCounts(podInfo.vertexName, podInfo.podName, podMetrics, fetchTime)
 			if podPendingCount == nil {
 				log.Debugf("Failed retrieving pending counts for pod %s vertex %s", podInfo.podName, podInfo.vertexName)
 			}
@@ -240,36 +253,46 @@ func (r *Rater) Start(ctx context.Context) error {
 	}
 }
 
-// sleep function uses a select statement to check if the context is canceled before sleeping for the given duration
-// it helps ensure the sleep will be released when the context is canceled, allowing the goroutine to exit gracefully
-func sleep(ctx context.Context, duration time.Duration) {
-	select {
-	case <-ctx.Done():
-	case <-time.After(duration):
-	}
-}
-
 // getPodMetrics Fetches the metrics for a given pod from the Prometheus metrics endpoint.
-func (r *Rater) getPodMetrics(vertexName, podName string) map[string]*dto.MetricFamily {
+// Returns the parsed metrics and the response timestamp (from Date header or current time as fallback)
+func (r *Rater) getPodMetrics(vertexName, podName string) (map[string]*dto.MetricFamily, int64) {
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	resp, err := r.httpClient.Get(url)
 	if err != nil {
 		r.log.Warnf("[vertex name %s, pod name %s]: failed reading the metrics endpoint, the pod might have been scaled down: %v", vertexName, podName, err.Error())
-		return nil
+		return nil, 0
 	}
 	defer resp.Body.Close()
+
+	// Extract timestamp from Date header, fallback to current time
+	fetchTime := r.extractResponseTimestamp(resp)
 
 	textParser := expfmt.TextParser{}
 	result, err := textParser.TextToMetricFamilies(resp.Body)
 	if err != nil {
 		r.log.Errorf("[Pod name %s]: failed parsing to prometheus metric families, %v", podName, err)
-		return nil
+		return nil, 0
 	}
-	return result
+	return result, fetchTime
+}
+
+// extractResponseTimestamp extracts timestamp from HTTP response Date header, fallback to current time
+func (r *Rater) extractResponseTimestamp(resp *http.Response) int64 {
+	// Try to get the Date header from the response
+	if dateHeader := resp.Header.Get("Date"); dateHeader != "" {
+		if parsedTime, err := http.ParseTime(dateHeader); err == nil {
+			return parsedTime.Unix()
+		} else {
+			r.log.Debugf("Failed to parse Date header '%s': %v, falling back to current time", dateHeader, err)
+		}
+	}
+
+	// Fallback to current time if Date header is not present or invalid
+	return time.Now().Unix()
 }
 
 // getPodPendingCounts returns the partition pending counts for a given pod
-func (r *Rater) getPodPendingCounts(vertexName, podName string, metricsData map[string]*dto.MetricFamily) *PodPendingCount {
+func (r *Rater) getPodPendingCounts(vertexName, podName string, metricsData map[string]*dto.MetricFamily, fetchTimestamp int64) *PodPendingCount {
 	pendingMetricName := "vertex_pending_messages_raw"
 	if value, ok := metricsData[pendingMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
 		metricsList := value.GetMetric()
@@ -294,7 +317,7 @@ func (r *Rater) getPodPendingCounts(vertexName, podName string, metricsData map[
 				partitionPendingCount[partitionName] = gaugeVal
 			}
 		}
-		podPendingCount := &PodPendingCount{podName, partitionPendingCount}
+		podPendingCount := &PodPendingCount{podName, partitionPendingCount, fetchTimestamp}
 		return podPendingCount
 	} else {
 		r.log.Warnf("[vertex name %s, pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", vertexName, podName, pendingMetricName)
@@ -304,7 +327,7 @@ func (r *Rater) getPodPendingCounts(vertexName, podName string, metricsData map[
 
 // getPodReadCounts returns the total number of messages read by the pod
 // since a pod can read from multiple partitions, we will return a map of partition to read count.
-func (r *Rater) getPodReadCounts(vertexName, podName string, metricsData map[string]*dto.MetricFamily) *PodReadCount {
+func (r *Rater) getPodReadCounts(vertexName, podName string, metricsData map[string]*dto.MetricFamily, fetchTimestamp int64) *PodReadCount {
 	readTotalMetricName := "forwarder_data_read_total"
 	if value, ok := metricsData[readTotalMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
 		metricsList := value.GetMetric()
@@ -329,7 +352,7 @@ func (r *Rater) getPodReadCounts(vertexName, podName string, metricsData map[str
 				partitionReadCount[partitionName] = counterVal
 			}
 		}
-		podReadCount := &PodReadCount{podName, partitionReadCount}
+		podReadCount := &PodReadCount{podName, partitionReadCount, fetchTimestamp}
 		return podReadCount
 	} else {
 		r.log.Infof("[vertex name %s, pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", vertexName, podName, readTotalMetricName)

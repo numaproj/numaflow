@@ -47,6 +47,9 @@ func (m *raterMockHttpClient) Get(url string) (*http.Response, error) {
 		m.podOneCount = m.podOneCount + 20
 		resp := &http.Response{
 			StatusCode: 200,
+			Header: http.Header{
+				"Date": []string{time.Now().Format(http.TimeFormat)},
+			},
 			// the test uses an abstract vertex without specifying vertex type, meaning it's neither source nor reduce,
 			// hence the default forwarder metric name "forwarder_data_read" is used to retrieve the metric
 			Body: io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`
@@ -59,6 +62,9 @@ forwarder_data_read_total{buffer="input",pipeline="simple-pipeline",vertex="inpu
 		m.podTwoCount = m.podTwoCount + 60
 		resp := &http.Response{
 			StatusCode: 200,
+			Header: http.Header{
+				"Date": []string{time.Now().Format(http.TimeFormat)},
+			},
 			Body: io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`
 # HELP forwarder_data_read_total Total number of Messages Read
 # TYPE forwarder_data_read_total counter
@@ -157,7 +163,7 @@ func TestRater_updateDynamicLookbackSecs(t *testing.T) {
 			setupTimestampedCounts: func() map[string]*sharedqueue.OverflowQueue[*TimestampedCounts] {
 				q := sharedqueue.New[*TimestampedCounts](180)
 				tc := NewTimestampedCounts(time.Now().Unix())
-				tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 100.0}})
+				tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 100.0}, time.Now().Unix()})
 				q.Append(tc)
 				return map[string]*sharedqueue.OverflowQueue[*TimestampedCounts]{"v1": q}
 			},
@@ -172,9 +178,9 @@ func TestRater_updateDynamicLookbackSecs(t *testing.T) {
 				now := time.Now().Truncate(CountWindow).Unix()
 				// Add counts that are too old (older than 3 * lookback seconds)
 				tc1 := NewTimestampedCounts(now - 300) // 5 minutes ago
-				tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 100.0}})
+				tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 100.0}, now - 300})
 				tc2 := NewTimestampedCounts(now - 290)
-				tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 100.0}})
+				tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 100.0}, now - 290})
 				q.Append(tc1)
 				q.Append(tc2)
 				return map[string]*sharedqueue.OverflowQueue[*TimestampedCounts]{"v1": q}
@@ -190,11 +196,11 @@ func TestRater_updateDynamicLookbackSecs(t *testing.T) {
 				now := time.Now().Truncate(CountWindow).Unix()
 				// Add counts with same timestamp
 				tc1 := NewTimestampedCounts(now - 60)
-				tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 100.0}})
+				tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 100.0}, now - 60})
 				tc2 := NewTimestampedCounts(now - 60) // same timestamp
-				tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 200.0}})
+				tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 200.0}, now - 60})
 				tc3 := NewTimestampedCounts(now - 50)
-				tc3.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 300.0}})
+				tc3.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 300.0}, now - 50})
 				q.Append(tc1)
 				q.Append(tc2)
 				q.Append(tc3)
@@ -215,7 +221,7 @@ func TestRater_updateDynamicLookbackSecs(t *testing.T) {
 				count := 100.0
 				for _, ts := range timestamps {
 					tc := NewTimestampedCounts(ts)
-					tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": count}})
+					tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": count}, ts})
 					q.Append(tc)
 					// Simulate very slow processing - count stays same for long periods
 					if ts > now-70 {
@@ -246,7 +252,7 @@ func TestRater_updateDynamicLookbackSecs(t *testing.T) {
 				count := 100.0
 				for i, ts := range timestamps {
 					tc := NewTimestampedCounts(ts)
-					tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": count}})
+					tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": count}, ts})
 					q.Append(tc)
 					// Change only happens at the very end, creating a long unchanged period within 180s window
 					if i == len(timestamps)-1 {
@@ -275,7 +281,7 @@ func TestRater_updateDynamicLookbackSecs(t *testing.T) {
 				count := 100.0
 				for i, ts := range timestamps {
 					tc := NewTimestampedCounts(ts)
-					tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": count}})
+					tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": count}, ts})
 					q.Append(tc)
 					// Only change count at the very end to simulate 20 minutes of no processing
 					if i == len(timestamps)-1 {
@@ -299,7 +305,7 @@ func TestRater_updateDynamicLookbackSecs(t *testing.T) {
 				count := 100.0
 				for _, ts := range timestamps {
 					tc := NewTimestampedCounts(ts)
-					tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": count}})
+					tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": count}, ts})
 					q.Append(tc)
 					count += 100 // fast processing
 				}
@@ -445,7 +451,7 @@ func TestCalculateLookback(t *testing.T) {
 			counts: func() []*TimestampedCounts {
 				now := time.Now().Unix()
 				tc := NewTimestampedCounts(now)
-				tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 100.0}})
+				tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 100.0}, now})
 				return []*TimestampedCounts{tc}
 			}(),
 			startIndex:       0,
@@ -466,9 +472,9 @@ func TestCalculateLookback(t *testing.T) {
 				count := 100.0
 				for i, tc := range counts {
 					if i < 3 { // first 3 have same count
-						tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": count}})
+						tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": count}, tc.timestamp})
 					} else { // last one has increased count
-						tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": count + 50}})
+						tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": count + 50}, tc.timestamp})
 					}
 				}
 				return counts
@@ -507,7 +513,7 @@ func TestCalculateLookback(t *testing.T) {
 					tc.Update(&PodReadCount{"pod1", map[string]float64{
 						"partition1": p1Count,
 						"partition2": p2Count,
-					}})
+					}, tc.timestamp})
 				}
 				return counts
 			}(),
@@ -537,8 +543,8 @@ func TestCalculateLookback(t *testing.T) {
 						p1Count2 = 250.0
 					}
 
-					tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": p1Count1}})
-					tc.Update(&PodReadCount{"pod2", map[string]float64{"partition1": p1Count2}})
+					tc.Update(&PodReadCount{"pod1", map[string]float64{"partition1": p1Count1}, tc.timestamp})
+					tc.Update(&PodReadCount{"pod2", map[string]float64{"partition1": p1Count2}, tc.timestamp})
 				}
 				return counts
 			}(),

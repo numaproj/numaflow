@@ -140,11 +140,8 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 		return rateNotAvailable
 	}
 
-	delta := float64(0)
-	for i := startIndex; i < endIndex; i++ {
-		delta += calculatePartitionDelta(counts[i], counts[i+1], partitionName)
-	}
-	return delta / float64(timeDiff)
+	// Calculate rate per pod using fetch timestamps and then sum across pods
+	return calculatePodRatesWithFetchTimestamps(counts, startIndex, endIndex, partitionName)
 }
 
 // calculatePartitionDelta calculates the difference of the metric count between two timestamped counts for a given partition.
@@ -180,6 +177,82 @@ func calculatePartitionDelta(tc1, tc2 *TimestampedCounts, partitionName string) 
 		delta += podDelta
 	}
 	return delta
+}
+
+// calculatePodRatesWithFetchTimestamps calculates rate for each pod using fetch timestamps and sums them
+func calculatePodRatesWithFetchTimestamps(counts []*TimestampedCounts, startIndex, endIndex int, partitionName string) float64 {
+	totalRate := float64(0)
+
+	// Get all unique pod names across the time window
+	allPods := make(map[string]bool)
+	for i := startIndex; i <= endIndex; i++ {
+		podTimeSeries := counts[i].PodPartitionTimeSeriesSnapshot()
+		for podName := range podTimeSeries {
+			allPods[podName] = true
+		}
+	}
+
+	// Calculate rate for each pod separately using fetch timestamps
+	for podName := range allPods {
+		podRate := calculateSinglePodPartitionRate(counts, startIndex, endIndex, podName, partitionName)
+		totalRate += podRate
+	}
+
+	return totalRate
+}
+
+// calculateSinglePodPartitionRate calculates the rate for a single pod's partition across the time window
+func calculateSinglePodPartitionRate(counts []*TimestampedCounts, startIndex, endIndex int, podName, partitionName string) float64 {
+	podDelta := float64(0)
+	totalTimeDiff := int64(0)
+
+	// Calculate total delta and time difference for this pod's partition across all time windows
+	for i := startIndex; i < endIndex; i++ {
+		prevPodTimeSeries := counts[i].PodPartitionTimeSeriesSnapshot()
+		currPodTimeSeries := counts[i+1].PodPartitionTimeSeriesSnapshot()
+
+		currData, currExists := currPodTimeSeries[podName]
+		prevData, prevExists := prevPodTimeSeries[podName]
+
+		if !currExists || !prevExists {
+			continue
+		}
+
+		// Calculate time difference for this specific pod using fetch timestamps
+		timeDiff := currData.Time - prevData.Time
+		if timeDiff <= 0 {
+			continue
+		}
+
+		// Get partition values
+		currPartitionValue, currPartitionExists := currData.PartitionValues[partitionName]
+		prevPartitionValue, prevPartitionExists := prevData.PartitionValues[partitionName]
+
+		if !currPartitionExists {
+			continue
+		}
+
+		// Calculate delta for this partition
+		windowDelta := currPartitionValue
+		if prevPartitionExists && currPartitionValue >= prevPartitionValue {
+			// Normal case: partition existed before and count increased
+			windowDelta = currPartitionValue - prevPartitionValue
+		} else if !prevPartitionExists {
+			// New partition case: use 0 delta to prevent cold start spike
+			windowDelta = 0
+		}
+
+		// If currPartitionValue < prevPartitionValue and partition existed before, use currPartitionValue (restart case)
+		podDelta += windowDelta
+		totalTimeDiff += timeDiff
+	}
+
+	// Calculate rate for this pod's partition: total_delta / total_time_diff
+	if totalTimeDiff > 0 {
+		return podDelta / float64(totalTimeDiff)
+	}
+
+	return 0
 }
 
 // findStartIndex finds the index of the first element in the queue that is within the lookback seconds

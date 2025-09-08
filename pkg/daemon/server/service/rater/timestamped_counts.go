@@ -22,6 +22,14 @@ import (
 	"sync"
 )
 
+// PodPartitionTimeSeries represents time series data for all partitions of a pod
+type PodPartitionTimeSeries struct {
+	// timestamp when the metric was fetched
+	Time int64
+	// key represents partition name, value represents the count/value for that partition
+	PartitionValues map[string]float64
+}
+
 // TimestampedCounts track the total count of processed messages for a list of pods at a given timestamp
 type TimestampedCounts struct {
 	// timestamp in seconds is the time when the count is recorded
@@ -29,14 +37,17 @@ type TimestampedCounts struct {
 	// the key of podPartitionCount represents the pod name, the value represents a partition counts map for the pod
 	// partition counts map holds mappings between partition name and the count of messages processed by the partition
 	podPartitionCount map[string]map[string]float64
-	lock              *sync.RWMutex
+	// the key represents the pod name, the value represents the time series data for all partitions of the pod
+	podPartitionTimeSeries map[string]*PodPartitionTimeSeries
+	lock                   *sync.RWMutex
 }
 
 func NewTimestampedCounts(t int64) *TimestampedCounts {
 	return &TimestampedCounts{
-		timestamp:         t,
-		podPartitionCount: make(map[string]map[string]float64),
-		lock:              new(sync.RWMutex),
+		timestamp:              t,
+		podPartitionCount:      make(map[string]map[string]float64),
+		podPartitionTimeSeries: make(map[string]*PodPartitionTimeSeries),
+		lock:                   new(sync.RWMutex),
 	}
 }
 
@@ -53,6 +64,10 @@ func (tc *TimestampedCounts) UpdatePending(podPendingCount *PodPendingCount) {
 		return
 	}
 	tc.podPartitionCount[podPendingCount.Name()] = podPendingCount.PartitionPendingCounts()
+	tc.podPartitionTimeSeries[podPendingCount.Name()] = &PodPartitionTimeSeries{
+		Time:            podPendingCount.FetchTimestamp(),
+		PartitionValues: podPendingCount.PartitionPendingCounts(),
+	}
 }
 
 // Update updates the count of processed messages for a pod
@@ -71,6 +86,10 @@ func (tc *TimestampedCounts) Update(podReadCount *PodReadCount) {
 		return
 	}
 	tc.podPartitionCount[podReadCount.Name()] = podReadCount.PartitionReadCounts()
+	tc.podPartitionTimeSeries[podReadCount.Name()] = &PodPartitionTimeSeries{
+		Time:            podReadCount.FetchTimestamp(),
+		PartitionValues: podReadCount.PartitionReadCounts(),
+	}
 }
 
 // PodPartitionCountSnapshot returns a copy of podPartitionCount
@@ -83,10 +102,28 @@ func (tc *TimestampedCounts) PodPartitionCountSnapshot() map[string]map[string]f
 	return counts
 }
 
+// PodPartitionTimeSeriesSnapshot returns a copy of podPartitionTimeSeries
+// it's used to ensure the returned map is not modified by other goroutines
+func (tc *TimestampedCounts) PodPartitionTimeSeriesSnapshot() map[string]*PodPartitionTimeSeries {
+	tc.lock.RLock()
+	defer tc.lock.RUnlock()
+	// Create a deep copy to avoid concurrent access issues
+	snapshot := make(map[string]*PodPartitionTimeSeries)
+	for podName, timeSeries := range tc.podPartitionTimeSeries {
+		partitionValuesCopy := make(map[string]float64)
+		maps.Copy(partitionValuesCopy, timeSeries.PartitionValues)
+		snapshot[podName] = &PodPartitionTimeSeries{
+			Time:            timeSeries.Time,
+			PartitionValues: partitionValuesCopy,
+		}
+	}
+	return snapshot
+}
+
 // String returns a string representation of the TimestampedCounts
 // it's used for debugging purpose
 func (tc *TimestampedCounts) String() string {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
-	return fmt.Sprintf("{timestamp: %d, podPartitionCount: %v}", tc.timestamp, tc.podPartitionCount)
+	return fmt.Sprintf("{timestamp: %d, podPartitionCount: %v, podPartitionTimeSeries: %v}", tc.timestamp, tc.podPartitionCount, tc.podPartitionTimeSeries)
 }
