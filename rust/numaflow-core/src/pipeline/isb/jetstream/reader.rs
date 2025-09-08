@@ -274,9 +274,9 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
 
         let batch_size = if max_ack_pending < self.batch_size {
             warn!(
-                "read_batch_size ({}) should be <= max_ack_pending ({}) for ISB. \
+                "read_batch_size ({max_ack_pending}) should be <= max_ack_pending ({}) for ISB. \
                 Setting batch_size to max_ack_pending",
-                max_ack_pending, self.batch_size
+                self.batch_size
             );
             max_ack_pending
         } else {
