@@ -294,7 +294,7 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
 
                 let semaphore = Arc::new(Semaphore::new(max_ack_pending));
 
-                // ** Inconsistent Reality**
+                // ** Inconsistent Reality **
                 // Until now, the information exchange between Vn-1th and Vnth happened in two
                 // phases. The first phase involves updating the view of the world (offset-timeline)
                 // based on the WATCH on the key, while the second phase involves reading data from
@@ -307,6 +307,13 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                 // This inconsistency is due to the corner cases in the process-scheduling of and
                 // others reasons.
                 //
+                // ** Forcing Consistency
+                // To force consistency, all reconciliation of states when using Watermark will go
+                // through two iterations. In the first iteration, it saves the states it has built
+                // and ensures the state matches in the second iteration.
+                // NOTE: We no longer have to use the WMB checker because reader has detected idleness
+                // and is propagating downstream.
+
                 loop {
                     if cancel_token.is_cancelled() {
                         info!(stream=?self.stream, "Cancellation token received, stopping the reader.");

@@ -118,9 +118,8 @@ impl WMBChecker {
         // Same offset: increment counter
         self.iteration_counter += 1;
 
-        // Check if we've reached the required number of iterations
+        // If we have reached the required number of iterations, return true
         if self.iteration_counter >= self.iterations {
-            self.reset();
             return true;
         }
 
