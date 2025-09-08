@@ -152,9 +152,11 @@ func (r *Rater) monitor(ctx context.Context, id int, keyCh <-chan string) {
 			r.log.Infof("Stopped monitoring worker %v", id)
 			return
 		case key := <-keyCh:
+			startTime := time.Now()
 			if err := r.monitorOnePod(ctx, key, id); err != nil {
 				r.log.Errorw("Failed to monitor a pod", zap.String("pod", key), zap.Error(err))
 			}
+			r.log.Infow("Monitored a pod", zap.String("pod", key), zap.Duration("duration", time.Since(startTime)))
 		}
 	}
 }
@@ -222,6 +224,7 @@ func (r *Rater) Start(ctx context.Context) error {
 		}
 	}
 
+	ticker := time.NewTicker(time.Duration(r.options.taskInterval) * time.Millisecond)
 	// Following for loop keeps calling assign() function to assign monitoring tasks to the workers.
 	// It makes sure each element in the list will be assigned every N milliseconds.
 	for {
@@ -229,20 +232,10 @@ func (r *Rater) Start(ctx context.Context) error {
 		case <-ctx.Done():
 			r.log.Info("Shutting down monitoring job assigner")
 			return nil
-		default:
-			assign()
-			// Make sure each of the key will be assigned at least every taskInterval milliseconds.
-			sleep(ctx, time.Millisecond*time.Duration(func() int {
-				l := r.podTracker.GetActivePodsCount()
-				if l == 0 {
-					return r.options.taskInterval
-				}
-				result := r.options.taskInterval / l
-				if result > 0 {
-					return result
-				}
-				return 1
-			}()))
+		case <-ticker.C:
+			for range r.podTracker.GetActivePodsCount() {
+				assign()
+			}
 		}
 	}
 }

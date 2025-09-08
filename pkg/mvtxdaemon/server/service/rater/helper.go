@@ -143,12 +143,20 @@ func calculatePodDelta(tc1, tc2 *TimestampedCounts) float64 {
 	currPodReadCount := tc2.PodCountSnapshot()
 	for podName, readCount := range currPodReadCount {
 		currCount := readCount
-		prevCount := prevPodReadCount[podName]
-		// pod delta will be equal to current count in case of restart
+		prevCount, podExistedBefore := prevPodReadCount[podName]
+
+		// pod delta will be equal to current count in case of restart or new pod
 		podDelta := currCount
-		if currCount >= prevCount {
+		if podExistedBefore && currCount >= prevCount {
+			// Normal case: pod existed before and count increased
 			podDelta = currCount - prevCount
+		} else if !podExistedBefore {
+			// New pod case: use 0 delta to prevent cold start spike
+			// The accumulated count represents historical processing, not recent activity
+			podDelta = 0
 		}
+		
+		// If currCount < prevCount and pod existed before, use currCount (restart case)
 		delta += podDelta
 	}
 	return delta

@@ -85,6 +85,9 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 }
 
 func (pt *PodTracker) trackActivePods(ctx context.Context) {
+	// start updating active pods as soon as called and then after every refreshInterval
+	pt.updateActivePods()
+
 	ticker := time.NewTicker(pt.refreshInterval)
 	defer ticker.Stop()
 	for {
@@ -101,7 +104,6 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 // updateActivePods checks the status of all pods and updates the activePods set accordingly.
 func (pt *PodTracker) updateActivePods() {
 	var wg sync.WaitGroup
-
 	for i := range int(pt.monoVertex.Spec.Scale.GetMaxReplicas()) {
 		wg.Add(1)
 		go func(index int) {
