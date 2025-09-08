@@ -20,7 +20,7 @@ option go_package = "github.com/numaproj/numaflow-go/pkg/apis/proto/sideinput/v1
 option java_package = "io.numaproj.numaflow.sideinput.v1";
 
 import "google/protobuf/empty.proto";
-import "common/metadata.proto";
+import "metadata.proto";
 
 package sideinput.v1;
 
@@ -51,7 +51,7 @@ message SideInputResponse {
   // False if value should be broadcasted
   bool no_broadcast = 2;
   // Metadata is the metadata of the message
-  common.metadata.Metadata metadata = 3;
+  metadata.Metadata metadata = 3;
 }
 
 /**

@@ -1,2 +1,2 @@
-#[path = "common/common.metadata.rs"]
+#[path = "common/metadata.rs"]
 pub mod metadata;

@@ -21,7 +21,7 @@ option java_package = "io.numaproj.numaflow.sourcetransformer.v1";
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/empty.proto";
-import "common/metadata.proto";
+import "metadata.proto";
 
 package sourcetransformer.v1;
 
@@ -56,7 +56,7 @@ message SourceTransformRequest {
     // This ID is used to uniquely identify a transform request
     string id = 6;
     // Metadata is the metadata of the message
-    common.metadata.Metadata metadata = 7;
+    metadata.Metadata metadata = 7;
   }
   Request request = 1;
   optional Handshake handshake = 2;
@@ -72,7 +72,7 @@ message SourceTransformResponse {
     google.protobuf.Timestamp event_time = 3;
     repeated string tags = 4;
     // Metadata is the metadata of the message
-    common.metadata.Metadata metadata = 5;
+    metadata.Metadata metadata = 5;
   }
   repeated Result results = 1;
   // This ID is used to refer the responses to the request it corresponds to.

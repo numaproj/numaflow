@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 syntax = "proto3";
-option go_package = "github.com/numaproj/numaflow/pkg/apis/proto/common";
+option go_package = "github.com/numaproj/numaflow/pkg/apis/proto";
 
 package metadata;
 

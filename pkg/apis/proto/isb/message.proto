@@ -18,7 +18,7 @@ syntax = "proto3";
 option go_package = "github.com/numaproj/numaflow/pkg/apis/proto/isb";
 
 import "google/protobuf/timestamp.proto";
-import "common/metadata.proto";
+import "metadata.proto";
 
 package isb;
 
@@ -55,7 +55,7 @@ message Header {
   // Headers is the headers of the message which can be used to store and propagate source headers
   map<string, string> headers = 5;
   // Metadata is the metadata of the message
-  common.metadata.Metadata metadata = 6;
+  metadata.Metadata metadata = 6;
 }
 
 

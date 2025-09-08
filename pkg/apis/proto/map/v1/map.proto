@@ -21,7 +21,7 @@ option java_package = "io.numaproj.numaflow.map.v1";
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
-import "common/metadata.proto";
+import "metadata.proto";
 
 package map.v1;
 
@@ -44,7 +44,7 @@ message MapRequest {
     google.protobuf.Timestamp watermark = 4;
     map<string, string> headers = 5;
     // Metadata is the metadata of the message
-    common.metadata.Metadata metadata = 6;
+    metadata.Metadata metadata = 6;
   }
   Request request = 1;
   // This ID is used to uniquely identify a map request
@@ -77,7 +77,7 @@ message MapResponse {
     bytes value = 2;
     repeated string tags = 3;
     // Metadata is the metadata of the message
-    common.metadata.Metadata metadata = 4;
+    metadata.Metadata metadata = 4;
   }
   repeated Result results = 1;
   // This ID is used to refer the responses to the request it corresponds to.

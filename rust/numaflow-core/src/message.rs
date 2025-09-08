@@ -313,7 +313,12 @@ impl TryFrom<Message> for BytesMut {
                 id: Some(message.id.into()),
                 keys: message.keys.to_vec(),
                 headers: message.headers,
-                metadata: message.metadata.map(|m| m.into()),
+                metadata: message.metadata.map(|mut m| {
+                    // When writing to JetStream, we set previous_vertex to current vertex name
+                    // so that the next vertex knows who sent the message
+                    m.previous_vertex = crate::config::get_vertex_name().to_string();
+                    m.into()
+                }),
             }),
             body: Some(numaflow_pb::objects::isb::Body {
                 payload: message.value.to_vec(),

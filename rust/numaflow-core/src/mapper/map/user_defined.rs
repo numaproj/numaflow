@@ -43,7 +43,7 @@ impl From<Message> for MapRequest {
                 event_time: Some(prost_timestamp_from_utc(message.event_time)),
                 watermark: message.watermark.map(prost_timestamp_from_utc),
                 headers: message.headers,
-                metadata: message.metadata.map(|m| m.to_proto()),
+                metadata: message.metadata.map(|m| m.into()),
             }),
             id: message.offset.to_string(),
             handshake: None,

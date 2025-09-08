@@ -12,7 +12,7 @@ fn main() {
 fn build_common() {
     prost_build::Config::new()
         .out_dir("src/common")
-        .compile_protos(&["proto/common/metadata.proto"], &["proto"])
+        .compile_protos(&["proto/metadata.proto"], &["proto"])
         .expect("failed to compile common protos");
 }
 
@@ -21,7 +21,7 @@ fn build_client() {
         .build_client(true)
         .build_server(false)
         .out_dir("src/clients")
-        .extern_path(".common.metadata", "crate::common::metadata")
+        .extern_path(".metadata", "crate::common::metadata")
         .compile_protos(
             &[
                 "proto/source/v1/source.proto",
@@ -43,7 +43,7 @@ fn build_client() {
 fn build_objects() {
     prost_build::Config::new()
         .out_dir("src/objects")
-        .extern_path(".common.metadata", "crate::common::metadata")
+        .extern_path(".metadata", "crate::common::metadata")
         .compile_protos(
             &[
                 "proto/isb/message.proto",

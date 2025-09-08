@@ -62,7 +62,7 @@ gen-protoc pkg/apis/proto/daemon/daemon.proto
 
 gen-protoc pkg/apis/proto/mvtxdaemon/mvtxdaemon.proto
 
-gen-protoc pkg/apis/proto/common/metadata.proto
+gen-protoc pkg/apis/proto/metadata.proto
 
 gen-protoc pkg/apis/proto/isb/message.proto
 
