@@ -202,6 +202,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn side_input_operations() -> Result<()> {
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
