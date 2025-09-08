@@ -76,6 +76,8 @@ type Rater struct {
 	timestampedPodCounts *sharedqueue.OverflowQueue[*TimestampedCounts]
 	// timestampedPendingCount is a queue of timestamped pending counts for the MonoVertex
 	timestampedPendingCount *sharedqueue.OverflowQueue[*TimestampedCounts]
+	// podRateData maintains time series data for efficient rate calculation
+	podRateData *PodRateData
 	// lookBackSeconds is the lookback time window used for scaling calculations
 	// this can be updated dynamically, defaults to user-specified value in the spec
 	lookBackSeconds *atomic.Float64
@@ -126,6 +128,8 @@ func NewRater(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...Option) *Rat
 	rater.timestampedPodCounts = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
 	// maintain the total pending counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
 	rater.timestampedPendingCount = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
+	// initialize the new pod rate data structure for efficient rate calculation
+	rater.podRateData = NewPodRateData()
 	for _, opt := range opts {
 		if opt != nil {
 			opt(rater.options)
@@ -175,6 +179,9 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 			podReadCount = r.getPodReadCounts(pInfo.podName, podMetrics, fetchTime)
 			if podReadCount == nil {
 				log.Debugf("Failed retrieving read counts for pod %s", pInfo.podName)
+			} else {
+				// Update the new pod rate data structure for efficient rate calculation
+				r.podRateData.AddDataPoint(pInfo.podName, fetchTime, podReadCount.readCount)
 			}
 			// Pending is only fetched from replica 0. Only maintain that in the timeline
 			if pInfo.replica == 0 {
@@ -282,9 +289,9 @@ func (r *Rater) GetPending() map[string]*wrapperspb.Int64Value {
 func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 	r.log.Debugf("Current timestampedPodCounts for MonoVertex %s is: %v", r.monoVertex.Name, r.timestampedPodCounts)
 	var result = make(map[string]*wrapperspb.DoubleValue)
-	// calculate rates for each lookback seconds
+	// calculate rates for each lookback seconds using the new efficient data structure
 	for windowLabel, lookbackSeconds := range r.buildLookbackSecondsMap() {
-		rate := CalculateRate(r.timestampedPodCounts, lookbackSeconds)
+		rate := r.podRateData.CalculateRateFromData(lookbackSeconds)
 		result[windowLabel] = wrapperspb.Double(rate)
 	}
 	r.log.Infof("Got rates for MonoVertex %s: %v", r.monoVertex.Name, result)
@@ -344,6 +351,8 @@ func (r *Rater) Start(ctx context.Context) error {
 			for range r.podTracker.GetActivePodsCount() {
 				assign()
 			}
+			// Cleanup old data from pod rate data structure beyond max lookback
+			r.podRateData.CleanupOldData(v1alpha1.MaxLookbackSeconds)
 		}
 	}
 }

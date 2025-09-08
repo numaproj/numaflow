@@ -18,6 +18,7 @@ package rater
 
 import (
 	"math"
+	"sync"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -31,6 +32,205 @@ const (
 	// available pod data, a negative min is returned to indicate this.
 	rateNotAvailable = float64(math.MinInt)
 )
+
+// TimeSeries represents a single data point with timestamp and value
+type TimeSeries struct {
+	Time  int64   // fetch timestamp from HTTP Date header
+	Value float64 // metric value
+}
+
+// PodRateData maintains time series data for rate calculation
+type PodRateData struct {
+	// map[pod-replica] -> []*TimeSeries (sorted by time, acts as overflow queue)
+	podTimeSeries map[string][]*TimeSeries
+	mutex         sync.RWMutex
+}
+
+// NewPodRateData creates a new PodRateData instance
+func NewPodRateData() *PodRateData {
+	return &PodRateData{
+		podTimeSeries: make(map[string][]*TimeSeries),
+	}
+}
+
+// AddDataPoint adds a new data point for a pod, maintaining sorted order
+func (prd *PodRateData) AddDataPoint(podName string, timestamp int64, value float64) {
+	prd.mutex.Lock()
+	defer prd.mutex.Unlock()
+
+	newPoint := &TimeSeries{Time: timestamp, Value: value}
+
+	if _, exists := prd.podTimeSeries[podName]; !exists {
+		prd.podTimeSeries[podName] = []*TimeSeries{newPoint}
+		return
+	}
+
+	// Since timestamps come from real-time HTTP Date headers, they are naturally sorted
+	// Just append to maintain chronological order
+	prd.podTimeSeries[podName] = append(prd.podTimeSeries[podName], newPoint)
+}
+
+// GetActivePods returns the list of pods that have data
+func (prd *PodRateData) GetActivePods() []string {
+	prd.mutex.RLock()
+	defer prd.mutex.RUnlock()
+
+	pods := make([]string, 0, len(prd.podTimeSeries))
+	for podName := range prd.podTimeSeries {
+		if len(prd.podTimeSeries[podName]) > 0 {
+			pods = append(pods, podName)
+		}
+	}
+	return pods
+}
+
+
+
+// CalculateRateFromData calculates rate for all pods using the new data structure
+func (prd *PodRateData) CalculateRateFromData(lookbackSeconds int64) float64 {
+	prd.mutex.RLock()
+	defer prd.mutex.RUnlock()
+
+	if len(prd.podTimeSeries) == 0 {
+		return rateNotAvailable
+	}
+
+	totalRate := float64(0)
+
+	// Iterate over all pods and calculate their rates
+	// Each pod looks back from its own latest timestamp
+	for podName := range prd.podTimeSeries {
+		podRate := prd.calculateSinglePodRate(podName, lookbackSeconds)
+		totalRate += podRate
+	}
+
+	return math.Floor(totalRate)
+}
+
+// calculateSinglePodRate calculates rate for a single pod (caller must hold lock)
+func (prd *PodRateData) calculateSinglePodRate(podName string, lookbackSeconds int64) float64 {
+	series, exists := prd.podTimeSeries[podName]
+	if !exists || len(series) < 2 {
+		return 0 // Need at least 2 data points
+	}
+
+	// Calculate lookback time from this pod's latest timestamp
+	latestTime := series[len(series)-1].Time
+	lookbackTime := latestTime - lookbackSeconds
+
+	startIndex := prd.findStartIndex(podName, lookbackTime)
+	if startIndex == -1 || startIndex >= len(series)-1 {
+		return 0 // No valid data within lookback window
+	}
+
+	// Calculate total delta from start index to latest
+	totalDelta := float64(0)
+	for i := startIndex; i < len(series)-1; i++ {
+		curr := series[i+1]
+		prev := series[i]
+
+		// Calculate delta (handle restarts)
+		delta := curr.Value
+		if curr.Value >= prev.Value {
+			// Normal case: count increased
+			delta = curr.Value - prev.Value
+		} else {
+			// Restart case: use current value as delta
+			delta = curr.Value
+		}
+
+		totalDelta += delta
+	}
+
+	// Rate = total_delta / lookback_seconds
+	return totalDelta / float64(lookbackSeconds)
+}
+
+// findStartIndex finds the start index for a pod within the lookback window using binary search
+// (caller must hold lock)
+func (prd *PodRateData) findStartIndex(podName string, lookbackTime int64) int {
+	series, exists := prd.podTimeSeries[podName]
+	if !exists || len(series) == 0 {
+		return -1
+	}
+
+	// Binary search for the first element >= lookbackTime
+	left, right := 0, len(series)
+	for left < right {
+		mid := (left + right) / 2
+		if series[mid].Time < lookbackTime {
+			left = mid + 1
+		} else {
+			right = mid
+		}
+	}
+
+	if left >= len(series) {
+		return -1 // No data within lookback window
+	}
+
+	return left
+}
+
+// CleanupOldData removes entries older than maxLookbackSeconds from all pods
+func (prd *PodRateData) CleanupOldData(maxLookbackSeconds int64) {
+	prd.mutex.Lock()
+	defer prd.mutex.Unlock()
+
+	if len(prd.podTimeSeries) == 0 {
+		return
+	}
+
+	// Find the latest timestamp across all pods
+	latestTime := int64(0)
+	for _, series := range prd.podTimeSeries {
+		if len(series) > 0 {
+			if series[len(series)-1].Time > latestTime {
+				latestTime = series[len(series)-1].Time
+			}
+		}
+	}
+
+	if latestTime == 0 {
+		return
+	}
+
+	cutoffTime := latestTime - maxLookbackSeconds
+
+	// Clean up old entries for each pod
+	for podName, series := range prd.podTimeSeries {
+		if len(series) == 0 {
+			// Remove pods with no data
+			delete(prd.podTimeSeries, podName)
+			continue
+		}
+
+		// Find the first index to keep (>= cutoffTime)
+		keepIndex := 0
+		for i, point := range series {
+			if point.Time >= cutoffTime {
+				keepIndex = i
+				break
+			}
+			keepIndex = i + 1
+		}
+
+		// If all entries are old, keep only the latest one to maintain continuity
+		if keepIndex >= len(series) {
+			if len(series) > 1 {
+				prd.podTimeSeries[podName] = series[len(series)-1:]
+			}
+		} else if keepIndex > 0 {
+			// Keep entries from keepIndex onwards
+			prd.podTimeSeries[podName] = series[keepIndex:]
+		}
+
+		// Remove pods that have no recent data
+		if len(prd.podTimeSeries[podName]) == 0 {
+			delete(prd.podTimeSeries, podName)
+		}
+	}
+}
 
 // UpdateCount updates the count for a given timestamp in the queue.
 func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podReadCounts *PodMetricsCount) {
@@ -72,8 +272,9 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 		return rateNotAvailable
 	}
 
-	// Calculate rate per pod using fetch timestamps and then sum across pods
-	return calculatePodRatesWithFetchTimestamps(counts, startIndex, endIndex)
+	// Calculate rate per pod using lookback-based approach and then sum across pods
+	rate := calculatePodRatesWithLookback(counts, lookbackSeconds)
+	return math.Floor(rate)
 }
 
 // CalculatePending calculates the pending of a MonoVertex for a given lookback period.
@@ -128,72 +329,97 @@ func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	return startIndex
 }
 
-// calculatePodRatesWithFetchTimestamps calculates rate for each pod using fetch timestamps and sums them
-func calculatePodRatesWithFetchTimestamps(counts []*TimestampedCounts, startIndex, endIndex int) float64 {
-	totalRate := float64(0)
-
-	// Get all unique pod names across the time window
-	allPods := make(map[string]bool)
-	for i := startIndex; i <= endIndex; i++ {
-		podTimeSeries := counts[i].PodTimeSeriesSnapshot()
-		for podName := range podTimeSeries {
-			allPods[podName] = true
-		}
+// calculatePodRatesWithLookback calculates rate for each active pod using lookback approach and sums them
+func calculatePodRatesWithLookback(counts []*TimestampedCounts, lookbackSeconds int64) float64 {
+	if len(counts) == 0 {
+		return 0
 	}
 
-	// Calculate rate for each pod separately using fetch timestamps
-	for podName := range allPods {
-		podRate := calculateSinglePodRate(counts, startIndex, endIndex, podName)
+	// Get active pods from the latest timestamp
+	latestCounts := counts[len(counts)-1]
+	activePods := latestCounts.PodTimeSeriesSnapshot()
+
+	totalRate := float64(0)
+
+	// Calculate rate for each active pod separately
+	for podName := range activePods {
+		podRate := calculateSinglePodRateWithLookback(counts, podName, lookbackSeconds)
 		totalRate += podRate
 	}
 
 	return totalRate
 }
 
-// calculateSinglePodRate calculates the rate for a single pod across the time window
-func calculateSinglePodRate(counts []*TimestampedCounts, startIndex, endIndex int, podName string) float64 {
-	podDelta := float64(0)
-	totalTimeDiff := int64(0)
+// calculateSinglePodRateWithLookback calculates the rate for a single pod using lookback approach
+func calculateSinglePodRateWithLookback(counts []*TimestampedCounts, podName string, lookbackSeconds int64) float64 {
+	if len(counts) == 0 {
+		return 0
+	}
 
-	// Calculate total delta and time difference for this pod across all time windows
-	for i := startIndex; i < endIndex; i++ {
+	// Find the pod-specific start index based on lookback time
+	podStartIndex := findPodStartIndex(counts, podName, lookbackSeconds)
+	if podStartIndex == -1 {
+		return 0 // Pod not found or insufficient data
+	}
+
+	podDelta := float64(0)
+
+	// Calculate total delta for this pod from its start index to end
+	for i := podStartIndex; i < len(counts)-1; i++ {
 		prevPodTimeSeries := counts[i].PodTimeSeriesSnapshot()
 		currPodTimeSeries := counts[i+1].PodTimeSeriesSnapshot()
 
 		currData, currExists := currPodTimeSeries[podName]
 		prevData, prevExists := prevPodTimeSeries[podName]
 
-		if !currExists || !prevExists {
-			continue
-		}
-
-		// Calculate time difference for this specific pod using fetch timestamps
-		timeDiff := currData.Time - prevData.Time
-		if timeDiff <= 0 {
+		if !currExists {
 			continue
 		}
 
 		// pod delta will be equal to current count in case of restart or new pod
 		windowDelta := currData.Value
-		if currData.Value >= prevData.Value {
+		if prevExists && currData.Value >= prevData.Value {
 			// Normal case: pod existed before and count increased
 			windowDelta = currData.Value - prevData.Value
-		} else {
+		} else if !prevExists {
 			// New pod case: use 0 delta to prevent cold start spike
+			// The accumulated count represents historical processing, not recent activity
 			windowDelta = 0
 		}
 
 		// If currCount < prevCount and pod existed before, use currCount (restart case)
 		podDelta += windowDelta
-		totalTimeDiff += timeDiff
 	}
 
-	// Calculate rate for this pod: total_delta / total_time_diff
-	if totalTimeDiff > 0 {
-		return podDelta / float64(totalTimeDiff)
+	// Calculate rate: total_delta / lookback_seconds
+	// This ensures new pods contribute their full rate potential
+	return podDelta / float64(lookbackSeconds)
+}
+
+// findPodStartIndex finds the appropriate start index for a specific pod based on lookback time
+func findPodStartIndex(counts []*TimestampedCounts, podName string, lookbackSeconds int64) int {
+	if len(counts) == 0 {
+		return -1
 	}
 
-	return 0
+	endTime := counts[len(counts)-1].timestamp
+	lookbackTime := endTime - lookbackSeconds
+
+	// Find the earliest index where:
+	// 1. The pod exists in the data
+	// 2. The timestamp is within the lookback window
+	for i := 0; i < len(counts); i++ {
+		if counts[i].timestamp < lookbackTime {
+			continue
+		}
+
+		podTimeSeries := counts[i].PodTimeSeriesSnapshot()
+		if _, exists := podTimeSeries[podName]; exists {
+			return i
+		}
+	}
+
+	return -1 // Pod not found within lookback window
 }
 
 // podLastSeen stores the last seen timestamp and count of each pod

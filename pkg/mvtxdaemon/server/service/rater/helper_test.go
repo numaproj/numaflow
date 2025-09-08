@@ -182,10 +182,10 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5))
 		// no enough data collected within lookback seconds, expect rate 0
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15))
-		// tc1 and tc2 are used to calculate the rate
-		assert.Equal(t, 0.5, CalculateRate(q, 25))
-		// tc1 and tc2 are used to calculate the rate
-		assert.Equal(t, 0.5, CalculateRate(q, 100))
+		// tc1, tc2, tc3 are used to calculate the rate: delta=15, 15/25=0.6, floor=0
+		assert.Equal(t, 0.0, CalculateRate(q, 25))
+		// tc1, tc2, tc3 are used to calculate the rate: delta=15, 15/100=0.15, floor=0
+		assert.Equal(t, 0.0, CalculateRate(q, 100))
 	})
 
 	t.Run("singlePod_givenCountDecreases_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -209,12 +209,12 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5))
 		// no enough data collected within lookback seconds, expect rate 0
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15))
-		// tc2 and tc3 are used to calculate the rate
-		assert.Equal(t, 5.0, CalculateRate(q, 25))
-		// tc1, 2 and 3 are used to calculate the rate
-		assert.Equal(t, 7.5, CalculateRate(q, 35))
-		// tc1, 2 and 3 are used to calculate the rate
-		assert.Equal(t, 7.5, CalculateRate(q, 100))
+		// tc2, tc3, tc4 are used: delta=80 (50+30), 80/25=3.2, floor=3
+		assert.Equal(t, 3.0, CalculateRate(q, 25))
+		// tc1, tc2, tc3, tc4 are used: delta=180, 180/35=5.14, floor=5
+		assert.Equal(t, 5.0, CalculateRate(q, 35))
+		// tc1, tc2, tc3, tc4 are used: delta=180, 180/100=1.8, floor=1
+		assert.Equal(t, 1.0, CalculateRate(q, 100))
 	})
 
 	t.Run("multiplePods_givenCountIncreases_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -240,8 +240,8 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15))
 		// no enough data collected within lookback seconds, expect rate 0
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 25))
-		// tc1 and tc2 are used to calculate the rate
-		assert.Equal(t, 15.0, CalculateRate(q, 35))
+		// tc1, tc2, tc3 are used: pod1_delta=150, pod2_delta=200, total=350, 350/35=10, floor=10
+		assert.Equal(t, 10.0, CalculateRate(q, 35))
 	})
 
 	t.Run("multiplePods_givenCountDecreases_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -267,8 +267,8 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15))
 		// no enough data collected within lookback seconds, expect rate 0
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 25))
-		// tc1 and tc2 are used to calculate the rate
-		assert.Equal(t, 30.0, CalculateRate(q, 35))
+		// tc1, tc2, tc3 are used: pod1_delta=150, pod2_delta=300, total=450, 450/35=12.86, floor=12
+		assert.Equal(t, 12.0, CalculateRate(q, 35))
 	})
 
 	t.Run("multiplePods_givenOnePodRestarts_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -294,8 +294,8 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15))
 		// no enough data collected within lookback seconds, expect rate 0
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 25))
-		// tc1 and tc2 are used to calculate the rate
-		assert.Equal(t, 25.0, CalculateRate(q, 35))
+		// tc1, tc2, tc3 are used: pod1_delta=150, pod2_delta=300, total=450, 450/35=12.86, floor=12
+		assert.Equal(t, 12.0, CalculateRate(q, 35))
 	})
 
 	t.Run("multiplePods_givenPodsComeAndGo_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -327,11 +327,12 @@ func TestCalculateRate(t *testing.T) {
 		// With cold start fix: new pods (pod4, pod3, pod100) are skipped
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5))
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15))
-		// tc2->tc3: pod1 delta=50, pod2 delta=100, pod4 skipped -> (50+100)/10 = 15.0
-		assert.Equal(t, 15.0, CalculateRate(q, 25))
-		// tc1->tc2->tc3: (pod1=100+pod2=110) + (pod1=50+pod2=100) = 360/20 = 18.0
-		assert.Equal(t, 18.0, CalculateRate(q, 35))
-		assert.Equal(t, 18.0, CalculateRate(q, 100))
+		// Active pods: pod2, pod3, pod100. pod2 delta=200, pod3=0 (cold start), pod100=0 (cold start), total=200, 200/25=8, floor=8
+		assert.Equal(t, 8.0, CalculateRate(q, 25))
+		// Active pods: pod2, pod3, pod100. pod2 delta=300, pod3=0 (cold start), pod100=0 (cold start), total=300, 300/35=8.57, floor=8
+		assert.Equal(t, 8.0, CalculateRate(q, 35))
+		// Active pods: pod2, pod3, pod100. pod2 delta=300, pod3=0 (cold start), pod100=0 (cold start), total=300, 300/100=3, floor=3
+		assert.Equal(t, 3.0, CalculateRate(q, 100))
 	})
 
 	t.Run("newPod_givenColdStart_whenCalculateRate_thenUseZeroDelta", func(t *testing.T) {
@@ -355,13 +356,8 @@ func TestCalculateRate(t *testing.T) {
 		tc3.Update(&PodMetricsCount{"pod2", 1050.0, now.Unix() - 10}) // pod2 processed 50 more
 		q.Append(tc3)
 
-		// Rate calculation with cold start fix:
-		// tc1->tc2: pod1 delta=50, pod2 delta=0 (new pod, prevents cold start spike)
-		// tc2->tc3: pod1 delta=50, pod2 delta=50 (normal calculation since pod2 existed in tc2)
-		// For lookback 35s: (50 + 0) + (50 + 50) / 20 = 150/20 = 7.5
-		// But actual result is 5.0, which means pod2 is still treated as new in tc2->tc3
-		// This suggests pod2 doesn't exist in tc1, so it's treated as new throughout
-		assert.Equal(t, 5.0, CalculateRate(q, 35))
+		// Active pods: pod1, pod2. pod1 delta=100, pod2 delta=50 (0 for cold start + 50), total=150, 150/35=4.29, floor=4
+		assert.Equal(t, 4.0, CalculateRate(q, 35))
 	})
 }
 
