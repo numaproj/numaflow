@@ -72,12 +72,8 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 		return rateNotAvailable
 	}
 
-	delta := float64(0)
-	for i := startIndex; i < endIndex; i++ {
-		// calculate the difference between the current and previous pod count snapshots
-		delta += calculatePodDelta(counts[i], counts[i+1])
-	}
-	return delta / float64(timeDiff)
+	// Calculate rate per pod using fetch timestamps and then sum across pods
+	return calculatePodRatesWithFetchTimestamps(counts, startIndex, endIndex)
 }
 
 // CalculatePending calculates the pending of a MonoVertex for a given lookback period.
@@ -132,34 +128,72 @@ func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	return startIndex
 }
 
-// calculatePodDelta calculates the difference between the current and previous pod count snapshots
-func calculatePodDelta(tc1, tc2 *TimestampedCounts) float64 {
-	delta := float64(0)
-	if tc1 == nil || tc2 == nil {
-		// we calculate delta only when both input timestamped counts are non-nil
-		return delta
+// calculatePodRatesWithFetchTimestamps calculates rate for each pod using fetch timestamps and sums them
+func calculatePodRatesWithFetchTimestamps(counts []*TimestampedCounts, startIndex, endIndex int) float64 {
+	totalRate := float64(0)
+
+	// Get all unique pod names across the time window
+	allPods := make(map[string]bool)
+	for i := startIndex; i <= endIndex; i++ {
+		podTimeSeries := counts[i].PodTimeSeriesSnapshot()
+		for podName := range podTimeSeries {
+			allPods[podName] = true
+		}
 	}
-	prevPodReadCount := tc1.PodCountSnapshot()
-	currPodReadCount := tc2.PodCountSnapshot()
-	for podName, readCount := range currPodReadCount {
-		currCount := readCount
-		prevCount, podExistedBefore := prevPodReadCount[podName]
+
+	// Calculate rate for each pod separately using fetch timestamps
+	for podName := range allPods {
+		podRate := calculateSinglePodRate(counts, startIndex, endIndex, podName)
+		totalRate += podRate
+	}
+
+	return totalRate
+}
+
+// calculateSinglePodRate calculates the rate for a single pod across the time window
+func calculateSinglePodRate(counts []*TimestampedCounts, startIndex, endIndex int, podName string) float64 {
+	podDelta := float64(0)
+	totalTimeDiff := int64(0)
+
+	// Calculate total delta and time difference for this pod across all time windows
+	for i := startIndex; i < endIndex; i++ {
+		prevPodTimeSeries := counts[i].PodTimeSeriesSnapshot()
+		currPodTimeSeries := counts[i+1].PodTimeSeriesSnapshot()
+
+		currData, currExists := currPodTimeSeries[podName]
+		prevData, prevExists := prevPodTimeSeries[podName]
+
+		if !currExists || !prevExists {
+			continue
+		}
+
+		// Calculate time difference for this specific pod using fetch timestamps
+		timeDiff := currData.Time - prevData.Time
+		if timeDiff <= 0 {
+			continue
+		}
 
 		// pod delta will be equal to current count in case of restart or new pod
-		podDelta := currCount
-		if podExistedBefore && currCount >= prevCount {
+		windowDelta := currData.Value
+		if currData.Value >= prevData.Value {
 			// Normal case: pod existed before and count increased
-			podDelta = currCount - prevCount
-		} else if !podExistedBefore {
+			windowDelta = currData.Value - prevData.Value
+		} else {
 			// New pod case: use 0 delta to prevent cold start spike
-			// The accumulated count represents historical processing, not recent activity
-			podDelta = 0
+			windowDelta = 0
 		}
-		
+
 		// If currCount < prevCount and pod existed before, use currCount (restart case)
-		delta += podDelta
+		podDelta += windowDelta
+		totalTimeDiff += timeDiff
 	}
-	return delta
+
+	// Calculate rate for this pod: total_delta / total_time_diff
+	if totalTimeDiff > 0 {
+		return podDelta / float64(totalTimeDiff)
+	}
+
+	return 0
 }
 
 // podLastSeen stores the last seen timestamp and count of each pod

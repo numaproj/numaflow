@@ -88,6 +88,8 @@ type PodMetricsCount struct {
 	name string
 	// represents the count of messages read by the pod
 	readCount float64
+	// timestamp when the metric was fetched
+	fetchTimestamp int64
 }
 
 // Name returns the pod name
@@ -98,6 +100,11 @@ func (p *PodMetricsCount) Name() string {
 // ReadCount returns the value of the messages read by the Pod
 func (p *PodMetricsCount) ReadCount() float64 {
 	return p.readCount
+}
+
+// FetchTimestamp returns the timestamp when the metric was fetched
+func (p *PodMetricsCount) FetchTimestamp() int64 {
+	return p.fetchTimestamp
 }
 
 func NewRater(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...Option) *Rater {
@@ -155,22 +162,23 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 		return err
 	}
 	var podReadCount, podPendingCount *PodMetricsCount
-	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
+	// Ensure all fetches for the same tick go to the same window
+	now := time.Now().Truncate(CountWindow).Unix()
 
 	if !r.podTracker.IsActive(key) {
 		log.Debugf("Pod %s does not exist, updating it with nil...", pInfo.podName)
 	} else {
-		podMetrics := r.getPodMetrics(pInfo.podName)
+		podMetrics, fetchTime := r.getPodMetrics(pInfo.podName)
 		if podMetrics == nil {
 			log.Debugf("No metrics available for pod %s", pInfo.podName)
 		} else {
-			podReadCount = r.getPodReadCounts(pInfo.podName, podMetrics)
+			podReadCount = r.getPodReadCounts(pInfo.podName, podMetrics, fetchTime)
 			if podReadCount == nil {
 				log.Debugf("Failed retrieving read counts for pod %s", pInfo.podName)
 			}
 			// Pending is only fetched from replica 0. Only maintain that in the timeline
 			if pInfo.replica == 0 {
-				podPendingCount = r.getPodPendingCounts(pInfo.podName, podMetrics)
+				podPendingCount = r.getPodPendingCounts(pInfo.podName, podMetrics, fetchTime)
 				if podPendingCount == nil {
 					log.Debugf("Failed retrieving pending counts for pod %s", pInfo.podName)
 				}
@@ -183,7 +191,8 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 }
 
 // getPodMetrics Fetches the metrics for a given pod from the Prometheus metrics endpoint.
-func (r *Rater) getPodMetrics(podName string) map[string]*dto.MetricFamily {
+// Returns the parsed metrics and the response timestamp (from Date header or current time as fallback)
+func (r *Rater) getPodMetrics(podName string) (map[string]*dto.MetricFamily, int64) {
 	headlessServiceName := r.monoVertex.GetHeadlessServiceName()
 	// scrape the read total metric from pod metric port
 	// example for 0th pod: https://simple-mono-vertex-mv-0.simple-mono-vertex-mv-headless.default.svc:2469/metrics
@@ -191,21 +200,39 @@ func (r *Rater) getPodMetrics(podName string) map[string]*dto.MetricFamily {
 	resp, err := r.httpClient.Get(url)
 	if err != nil {
 		r.log.Warnf("[Pod name %s]: failed reading the metrics endpoint, the pod might have been scaled down: %v", podName, err.Error())
-		return nil
+		return nil, 0
 	}
 	defer resp.Body.Close()
+
+	// Extract timestamp from Date header, fallback to current time
+	fetchTime := r.extractResponseTimestamp(resp)
 
 	textParser := expfmt.TextParser{}
 	result, err := textParser.TextToMetricFamilies(resp.Body)
 	if err != nil {
 		r.log.Errorf("[Pod name %s]: failed parsing to prometheus metric families, %v", podName, err)
-		return nil
+		return nil, 0
 	}
-	return result
+	return result, fetchTime
+}
+
+// extractResponseTimestamp extracts timestamp from HTTP response Date header, fallback to current time
+func (r *Rater) extractResponseTimestamp(resp *http.Response) int64 {
+	// Try to get the Date header from the response
+	if dateHeader := resp.Header.Get("Date"); dateHeader != "" {
+		if parsedTime, err := http.ParseTime(dateHeader); err == nil {
+			return parsedTime.Unix()
+		} else {
+			r.log.Debugf("Failed to parse Date header '%s': %v, falling back to current time", dateHeader, err)
+		}
+	}
+
+	// Fallback to current time if Date header is not present or invalid
+	return time.Now().Unix()
 }
 
 // getPodReadCounts returns the total number of messages read by the pod
-func (r *Rater) getPodReadCounts(podName string, result map[string]*dto.MetricFamily) *PodMetricsCount {
+func (r *Rater) getPodReadCounts(podName string, result map[string]*dto.MetricFamily, fetchTimestamp int64) *PodMetricsCount {
 	if value, ok := result[monoVtxReadMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
 		metricsList := value.GetMetric()
 		// Each pod should be emitting only one metric with this name, so we should be able to take the first value
@@ -213,7 +240,7 @@ func (r *Rater) getPodReadCounts(podName string, result map[string]*dto.MetricFa
 		// We use Untyped here as the counter metric family shows up as untyped from the rust client
 		// TODO(MonoVertex): Check further on this to understand why not type is counter
 		// https://github.com/prometheus/client_rust/issues/194
-		podReadCount := &PodMetricsCount{podName, metricsList[0].Untyped.GetValue()}
+		podReadCount := &PodMetricsCount{podName, metricsList[0].Untyped.GetValue(), fetchTimestamp}
 		return podReadCount
 	} else {
 		r.log.Infof("[Pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", podName, monoVtxReadMetricName)
@@ -222,10 +249,10 @@ func (r *Rater) getPodReadCounts(podName string, result map[string]*dto.MetricFa
 }
 
 // getPodPendingCounts returns the total number of pending messages for a pod
-func (r *Rater) getPodPendingCounts(podName string, result map[string]*dto.MetricFamily) *PodMetricsCount {
+func (r *Rater) getPodPendingCounts(podName string, result map[string]*dto.MetricFamily, fetchTimestamp int64) *PodMetricsCount {
 	if value, ok := result[monoVtxPendingRawMetric]; ok && value != nil && len(value.GetMetric()) > 0 {
 		metricsList := value.GetMetric()
-		podPendingCount := &PodMetricsCount{podName, metricsList[0].Gauge.GetValue()}
+		podPendingCount := &PodMetricsCount{podName, metricsList[0].Gauge.GetValue(), fetchTimestamp}
 		return podPendingCount
 	} else {
 		r.log.Infof("[Pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", podName, monoVtxPendingRawMetric)
@@ -318,15 +345,6 @@ func (r *Rater) Start(ctx context.Context) error {
 				assign()
 			}
 		}
-	}
-}
-
-// sleep function uses a select statement to check if the context is canceled before sleeping for the given duration
-// it helps ensure the sleep will be released when the context is canceled, allowing the goroutine to exit gracefully
-func sleep(ctx context.Context, duration time.Duration) {
-	select {
-	case <-ctx.Done():
-	case <-time.After(duration):
 	}
 }
 

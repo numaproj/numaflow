@@ -21,19 +21,27 @@ import (
 	"sync"
 )
 
+// PodTimeSeries represents a time series data point for a pod
+type PodTimeSeries struct {
+	// timestamp when the metric was fetched
+	Time int64
+	// value of the metric
+	Value float64
+}
+
 // TimestampedCounts track the total count of processed messages for a list of pods at a given timestamp
 type TimestampedCounts struct {
 	// timestamp in seconds is the time when the count is recorded
 	timestamp int64
-	// the key of podReadCounts represents the pod name, the value represents a count of messages processed by the pod
-	podReadCounts map[string]float64
+	// the key represents the pod name, the value represents the time series data for the pod
+	podTimeSeries map[string]*PodTimeSeries
 	lock          *sync.RWMutex
 }
 
 func NewTimestampedCounts(t int64) *TimestampedCounts {
 	return &TimestampedCounts{
 		timestamp:     t,
-		podReadCounts: make(map[string]float64),
+		podTimeSeries: make(map[string]*PodTimeSeries),
 		lock:          new(sync.RWMutex),
 	}
 }
@@ -53,15 +61,38 @@ func (tc *TimestampedCounts) Update(podReadCount *PodMetricsCount) {
 		// hence we'd rather keep the readCount as it is to avoid wrong rate calculation.
 		return
 	}
-	tc.podReadCounts[podReadCount.Name()] = podReadCount.ReadCount()
+	tc.podTimeSeries[podReadCount.Name()] = &PodTimeSeries{
+		Time:  podReadCount.FetchTimestamp(),
+		Value: podReadCount.ReadCount(),
+	}
 }
 
-// PodCountSnapshot returns a copy of podReadCounts
+// PodTimeSeriesSnapshot returns a copy of podTimeSeries
+// it's used to ensure the returned map is not modified by other goroutines
+func (tc *TimestampedCounts) PodTimeSeriesSnapshot() map[string]*PodTimeSeries {
+	tc.lock.RLock()
+	defer tc.lock.RUnlock()
+	// Create a deep copy to avoid concurrent access issues
+	snapshot := make(map[string]*PodTimeSeries)
+	for podName, timeSeries := range tc.podTimeSeries {
+		snapshot[podName] = &PodTimeSeries{
+			Time:  timeSeries.Time,
+			Value: timeSeries.Value,
+		}
+	}
+	return snapshot
+}
+
+// PodCountSnapshot returns a copy of pod counts for backward compatibility
 // it's used to ensure the returned map is not modified by other goroutines
 func (tc *TimestampedCounts) PodCountSnapshot() map[string]float64 {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
-	return tc.podReadCounts
+	snapshot := make(map[string]float64)
+	for podName, timeSeries := range tc.podTimeSeries {
+		snapshot[podName] = timeSeries.Value
+	}
+	return snapshot
 }
 
 // String returns a string representation of the TimestampedCounts
@@ -69,7 +100,7 @@ func (tc *TimestampedCounts) PodCountSnapshot() map[string]float64 {
 func (tc *TimestampedCounts) String() string {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
-	return fmt.Sprintf("{timestamp: %d, podReadCounts: %v}", tc.timestamp, tc.podReadCounts)
+	return fmt.Sprintf("{timestamp: %d, podTimeSeries: %v}", tc.timestamp, tc.podTimeSeries)
 }
 
 func (tc *TimestampedCounts) PodTimestamp() int64 {

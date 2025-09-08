@@ -34,77 +34,80 @@ func TestUpdateCount(t *testing.T) {
 	t.Run("givenTimeExistsPodExistsCountAvailable_whenUpdate_thenUpdatePodPartitionCount", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		tc := NewTimestampedCounts(TestTime)
-		tc.Update(&PodMetricsCount{"pod1", 10.0})
+		tc.Update(&PodMetricsCount{"pod1", 10.0, TestTime})
 		q.Append(tc)
 
-		UpdateCount(q, TestTime, &PodMetricsCount{"pod1", 20.0})
+		UpdateCount(q, TestTime, &PodMetricsCount{"pod1", 20.0, TestTime + 1})
 
 		assert.Equal(t, 1, q.Length())
-		assert.Equal(t, 20.0, q.Items()[0].podReadCounts["pod1"])
+		assert.Equal(t, 20.0, q.Items()[0].podTimeSeries["pod1"].Value)
+		assert.Equal(t, int64(TestTime + 1), q.Items()[0].podTimeSeries["pod1"].Time)
 	})
 
 	t.Run("givenTimeExistsPodNotExistsCountAvailable_whenUpdate_thenAddPodCount", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		tc := NewTimestampedCounts(TestTime)
-		tc.Update(&PodMetricsCount{"pod1", 20.0})
+		tc.Update(&PodMetricsCount{"pod1", 20.0, TestTime})
 		q.Append(tc)
 
-		UpdateCount(q, TestTime, &PodMetricsCount{"pod2", 10.0})
+		UpdateCount(q, TestTime, &PodMetricsCount{"pod2", 10.0, TestTime + 1})
 
 		assert.Equal(t, 1, q.Length())
-		assert.Equal(t, 20.0, q.Items()[0].podReadCounts["pod1"])
-		assert.Equal(t, 10.0, q.Items()[0].podReadCounts["pod2"])
+		assert.Equal(t, 20.0, q.Items()[0].podTimeSeries["pod1"].Value)
+		assert.Equal(t, 10.0, q.Items()[0].podTimeSeries["pod2"].Value)
+		assert.Equal(t, int64(TestTime), q.Items()[0].podTimeSeries["pod1"].Time)
+		assert.Equal(t, int64(TestTime + 1), q.Items()[0].podTimeSeries["pod2"].Time)
 	})
 
 	t.Run("givenTimeExistsPodExistsCountNotAvailable_whenUpdate_thenNotUpdatePod", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		tc := NewTimestampedCounts(TestTime)
-		tc.Update(&PodMetricsCount{"pod1", 10.0})
+		tc.Update(&PodMetricsCount{"pod1", 10.0, TestTime})
 		q.Append(tc)
 
 		UpdateCount(q, TestTime, nil)
 
 		assert.Equal(t, 1, q.Length())
-		assert.Equal(t, 1, len(q.Items()[0].podReadCounts))
-		assert.Equal(t, 10.0, q.Items()[0].podReadCounts["pod1"])
+		assert.Equal(t, 1, len(q.Items()[0].podTimeSeries))
+		assert.Equal(t, 10.0, q.Items()[0].podTimeSeries["pod1"].Value)
 	})
 
 	t.Run("givenTimeExistsPodNotExistsCountNotAvailable_whenUpdate_thenNoUpdate", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		tc := NewTimestampedCounts(TestTime)
-		tc.Update(&PodMetricsCount{"pod1", 10.0})
+		tc.Update(&PodMetricsCount{"pod1", 10.0, TestTime})
 		q.Append(tc)
 
 		UpdateCount(q, TestTime, nil)
 
 		assert.Equal(t, 1, q.Length())
-		assert.Equal(t, 10.0, q.Items()[0].podReadCounts["pod1"])
+		assert.Equal(t, 10.0, q.Items()[0].podTimeSeries["pod1"].Value)
 	})
 
 	t.Run("givenTimeNotExistsCountAvailable_whenUpdate_thenAddNewItem", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		tc := NewTimestampedCounts(TestTime)
-		tc.Update(&PodMetricsCount{"pod1", 10.0})
+		tc.Update(&PodMetricsCount{"pod1", 10.0, TestTime})
 		q.Append(tc)
 
-		UpdateCount(q, TestTime+1, &PodMetricsCount{"pod1", 20.0})
+		UpdateCount(q, TestTime+1, &PodMetricsCount{"pod1", 20.0, TestTime + 1})
 
 		assert.Equal(t, 2, q.Length())
-		assert.Equal(t, 10.0, q.Items()[0].podReadCounts["pod1"])
-		assert.Equal(t, 20.0, q.Items()[1].podReadCounts["pod1"])
+		assert.Equal(t, 10.0, q.Items()[0].podTimeSeries["pod1"].Value)
+		assert.Equal(t, 20.0, q.Items()[1].podTimeSeries["pod1"].Value)
 	})
 
 	t.Run("givenTimeNotExistsCountNotAvailable_whenUpdate_thenAddEmptyItem", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		tc := NewTimestampedCounts(TestTime)
-		tc.Update(&PodMetricsCount{"pod1", 10.0})
+		tc.Update(&PodMetricsCount{"pod1", 10.0, TestTime})
 		q.Append(tc)
 
 		UpdateCount(q, TestTime+1, nil)
 
 		assert.Equal(t, 2, q.Length())
-		assert.Equal(t, 10.0, q.Items()[0].podReadCounts["pod1"])
-		assert.Equal(t, 0, len(q.Items()[1].podReadCounts))
+		assert.Equal(t, 10.0, q.Items()[0].podTimeSeries["pod1"].Value)
+		assert.Equal(t, 0, len(q.Items()[1].podTimeSeries))
 	})
 }
 
@@ -117,7 +120,7 @@ func TestCalculatePending(t *testing.T) {
 		// only one data
 		now := time.Now()
 		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc1.Update(&PodMetricsCount{"pod0", 5.0})
+		tc1.Update(&PodMetricsCount{"pod0", 5.0, now.Unix() - 20})
 		q.Append(tc1)
 		assert.Equal(t, v1alpha1.PendingNotAvailable, CalculatePending(q, 10))
 	})
@@ -127,13 +130,13 @@ func TestCalculatePending(t *testing.T) {
 		now := time.Now()
 
 		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20) //80
-		tc1.Update(&PodMetricsCount{"pod0", 3.0})
+		tc1.Update(&PodMetricsCount{"pod0", 3.0, now.Unix() - 20})
 		q.Append(tc1)
 		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10) //90
-		tc2.Update(&PodMetricsCount{"pod0", 20.0})
+		tc2.Update(&PodMetricsCount{"pod0", 20.0, now.Unix() - 10})
 		q.Append(tc2)
 		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix()) // 100
-		tc3.Update(&PodMetricsCount{"pod0", 10.0})
+		tc3.Update(&PodMetricsCount{"pod0", 10.0, now.Unix()})
 		q.Append(tc3)
 
 		// no enough data collected within lookback seconds, expect rate 0
@@ -156,7 +159,7 @@ func TestCalculateRate(t *testing.T) {
 		// only one data
 		now := time.Now()
 		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc1.Update(&PodMetricsCount{"pod1", 5.0})
+		tc1.Update(&PodMetricsCount{"pod1", 5.0, now.Unix() - 20})
 		q.Append(tc1)
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 10))
 	})
@@ -166,13 +169,13 @@ func TestCalculateRate(t *testing.T) {
 		now := time.Now()
 
 		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc1.Update(&PodMetricsCount{"pod1", 5.0})
+		tc1.Update(&PodMetricsCount{"pod1", 5.0, now.Unix() - 20})
 		q.Append(tc1)
 		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc2.Update(&PodMetricsCount{"pod1", 10.0})
+		tc2.Update(&PodMetricsCount{"pod1", 10.0, now.Unix() - 10})
 		q.Append(tc2)
 		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix())
-		tc3.Update(&PodMetricsCount{"pod1", 20.0})
+		tc3.Update(&PodMetricsCount{"pod1", 20.0, now.Unix()})
 		q.Append(tc3)
 
 		// no enough data collected within lookback seconds, expect rate 0
@@ -190,16 +193,16 @@ func TestCalculateRate(t *testing.T) {
 		now := time.Now()
 
 		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 30)
-		tc1.Update(&PodMetricsCount{"pod1", 200.0})
+		tc1.Update(&PodMetricsCount{"pod1", 200.0, now.Unix() - 30})
 		q.Append(tc1)
 		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc2.Update(&PodMetricsCount{"pod1", 100.0})
+		tc2.Update(&PodMetricsCount{"pod1", 100.0, now.Unix() - 20})
 		q.Append(tc2)
 		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc3.Update(&PodMetricsCount{"pod1", 50.0})
+		tc3.Update(&PodMetricsCount{"pod1", 50.0, now.Unix() - 10})
 		q.Append(tc3)
 		tc4 := NewTimestampedCounts(now.Truncate(CountWindow).Unix())
-		tc4.Update(&PodMetricsCount{"pod1", 80.0})
+		tc4.Update(&PodMetricsCount{"pod1", 80.0, now.Unix()})
 		q.Append(tc4)
 
 		// no enough data collected within lookback seconds, expect rate 0
@@ -219,16 +222,16 @@ func TestCalculateRate(t *testing.T) {
 		now := time.Now()
 
 		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 30)
-		tc1.Update(&PodMetricsCount{"pod1", 50.0})
-		tc1.Update(&PodMetricsCount{"pod2", 100.0})
+		tc1.Update(&PodMetricsCount{"pod1", 50.0, now.Unix() - 30})
+		tc1.Update(&PodMetricsCount{"pod2", 100.0, now.Unix() - 30})
 		q.Append(tc1)
 		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc2.Update(&PodMetricsCount{"pod1", 100.0})
-		tc2.Update(&PodMetricsCount{"pod2", 200.0})
+		tc2.Update(&PodMetricsCount{"pod1", 100.0, now.Unix() - 20})
+		tc2.Update(&PodMetricsCount{"pod2", 200.0, now.Unix() - 20})
 		q.Append(tc2)
 		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc3.Update(&PodMetricsCount{"pod1", 200.0})
-		tc3.Update(&PodMetricsCount{"pod2", 300.0})
+		tc3.Update(&PodMetricsCount{"pod1", 200.0, now.Unix() - 10})
+		tc3.Update(&PodMetricsCount{"pod2", 300.0, now.Unix() - 10})
 		q.Append(tc3)
 
 		// no enough data collected within lookback seconds, expect rate 0
@@ -246,16 +249,16 @@ func TestCalculateRate(t *testing.T) {
 		now := time.Now()
 
 		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 30)
-		tc1.Update(&PodMetricsCount{"pod1", 200.0})
-		tc1.Update(&PodMetricsCount{"pod2", 300.0})
+		tc1.Update(&PodMetricsCount{"pod1", 200.0, now.Unix() - 30})
+		tc1.Update(&PodMetricsCount{"pod2", 300.0, now.Unix() - 30})
 		q.Append(tc1)
 		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc2.Update(&PodMetricsCount{"pod1", 100.0})
-		tc2.Update(&PodMetricsCount{"pod2", 200.0})
+		tc2.Update(&PodMetricsCount{"pod1", 100.0, now.Unix() - 20})
+		tc2.Update(&PodMetricsCount{"pod2", 200.0, now.Unix() - 20})
 		q.Append(tc2)
 		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc3.Update(&PodMetricsCount{"pod1", 50.0})
-		tc3.Update(&PodMetricsCount{"pod2", 100.0})
+		tc3.Update(&PodMetricsCount{"pod1", 50.0, now.Unix() - 10})
+		tc3.Update(&PodMetricsCount{"pod2", 100.0, now.Unix() - 10})
 		q.Append(tc3)
 
 		// no enough data collected within lookback seconds, expect rate 0
@@ -273,16 +276,16 @@ func TestCalculateRate(t *testing.T) {
 		now := time.Now()
 
 		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 30)
-		tc1.Update(&PodMetricsCount{"pod1", 50.0})
-		tc1.Update(&PodMetricsCount{"pod2", 300.0})
+		tc1.Update(&PodMetricsCount{"pod1", 50.0, now.Unix() - 30})
+		tc1.Update(&PodMetricsCount{"pod2", 300.0, now.Unix() - 30})
 		q.Append(tc1)
 		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc2.Update(&PodMetricsCount{"pod1", 100.0})
-		tc2.Update(&PodMetricsCount{"pod2", 200.0})
+		tc2.Update(&PodMetricsCount{"pod1", 100.0, now.Unix() - 20})
+		tc2.Update(&PodMetricsCount{"pod2", 200.0, now.Unix() - 20})
 		q.Append(tc2)
 		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc3.Update(&PodMetricsCount{"pod1", 200.0})
-		tc3.Update(&PodMetricsCount{"pod2", 100.0})
+		tc3.Update(&PodMetricsCount{"pod1", 200.0, now.Unix() - 10})
+		tc3.Update(&PodMetricsCount{"pod2", 100.0, now.Unix() - 10})
 		q.Append(tc3)
 
 		// no enough data collected within lookback seconds, expect rate 0
@@ -300,24 +303,24 @@ func TestCalculateRate(t *testing.T) {
 		now := time.Now()
 
 		tc1 := NewTimestampedCounts(now.Truncate(time.Second*10).Unix() - 30)
-		tc1.Update(&PodMetricsCount{"pod1", 200.0})
-		tc1.Update(&PodMetricsCount{"pod2", 90.0})
-		tc1.Update(&PodMetricsCount{"pod3", 50.0})
+		tc1.Update(&PodMetricsCount{"pod1", 200.0, now.Unix() - 30})
+		tc1.Update(&PodMetricsCount{"pod2", 90.0, now.Unix() - 30})
+		tc1.Update(&PodMetricsCount{"pod3", 50.0, now.Unix() - 30})
 		q.Append(tc1)
 		tc2 := NewTimestampedCounts(now.Truncate(time.Second*10).Unix() - 20)
-		tc2.Update(&PodMetricsCount{"pod1", 100.0})
-		tc2.Update(&PodMetricsCount{"pod2", 200.0})
+		tc2.Update(&PodMetricsCount{"pod1", 100.0, now.Unix() - 20})
+		tc2.Update(&PodMetricsCount{"pod2", 200.0, now.Unix() - 20})
 		q.Append(tc2)
 		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc3.Update(&PodMetricsCount{"pod1", 50.0})
-		tc3.Update(&PodMetricsCount{"pod2", 300.0})
-		tc3.Update(&PodMetricsCount{"pod4", 100.0})
+		tc3.Update(&PodMetricsCount{"pod1", 50.0, now.Unix() - 10})
+		tc3.Update(&PodMetricsCount{"pod2", 300.0, now.Unix() - 10})
+		tc3.Update(&PodMetricsCount{"pod4", 100.0, now.Unix() - 10})
 		q.Append(tc3)
 
 		tc4 := NewTimestampedCounts(now.Truncate(CountWindow).Unix())
-		tc4.Update(&PodMetricsCount{"pod2", 400.0})
-		tc4.Update(&PodMetricsCount{"pod3", 200.0})
-		tc4.Update(&PodMetricsCount{"pod100", 200.0})
+		tc4.Update(&PodMetricsCount{"pod2", 400.0, now.Unix()})
+		tc4.Update(&PodMetricsCount{"pod3", 200.0, now.Unix()})
+		tc4.Update(&PodMetricsCount{"pod100", 200.0, now.Unix()})
 		q.Append(tc4)
 
 		// vertex rate
@@ -337,19 +340,19 @@ func TestCalculateRate(t *testing.T) {
 
 		// First timestamp: only pod1 exists
 		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 30)
-		tc1.Update(&PodMetricsCount{"pod1", 100.0})
+		tc1.Update(&PodMetricsCount{"pod1", 100.0, now.Unix() - 30})
 		q.Append(tc1)
 
 		// Second timestamp: pod1 continues, pod2 appears for first time with accumulated count
 		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc2.Update(&PodMetricsCount{"pod1", 150.0}) // pod1 processed 50 more
-		tc2.Update(&PodMetricsCount{"pod2", 1000.0}) // pod2 appears with large accumulated count
+		tc2.Update(&PodMetricsCount{"pod1", 150.0, now.Unix() - 20}) // pod1 processed 50 more
+		tc2.Update(&PodMetricsCount{"pod2", 1000.0, now.Unix() - 20}) // pod2 appears with large accumulated count
 		q.Append(tc2)
 
 		// Third timestamp: both pods continue
 		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc3.Update(&PodMetricsCount{"pod1", 200.0}) // pod1 processed 50 more
-		tc3.Update(&PodMetricsCount{"pod2", 1050.0}) // pod2 processed 50 more
+		tc3.Update(&PodMetricsCount{"pod1", 200.0, now.Unix() - 10}) // pod1 processed 50 more
+		tc3.Update(&PodMetricsCount{"pod2", 1050.0, now.Unix() - 10}) // pod2 processed 50 more
 		q.Append(tc3)
 
 		// Rate calculation with cold start fix:
@@ -364,11 +367,19 @@ func TestCalculateRate(t *testing.T) {
 
 // Helper function to create a TimestampedCounts instance
 func newTimestampedCounts(timestamp int64, counts map[string]float64) *TimestampedCounts {
-	return &TimestampedCounts{
+	tc := &TimestampedCounts{
 		timestamp:     timestamp,
-		podReadCounts: counts,
+		podTimeSeries: make(map[string]*PodTimeSeries),
 		lock:          new(sync.RWMutex),
 	}
+	// Convert the counts map to PodTimeSeries
+	for podName, value := range counts {
+		tc.podTimeSeries[podName] = &PodTimeSeries{
+			Time:  timestamp, // Use the window timestamp as fetch time for test data
+			Value: value,
+		}
+	}
+	return tc
 }
 
 // TestCalculateMaxLookback tests various scenarios on the CalculateMaxLookback function

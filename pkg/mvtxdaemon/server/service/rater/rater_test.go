@@ -45,6 +45,9 @@ func (m *raterMockHttpClient) Get(url string) (*http.Response, error) {
 		m.podOneCount = m.podOneCount + 20
 		resp := &http.Response{
 			StatusCode: 200,
+			Header: http.Header{
+				"Date": []string{time.Now().Format(http.TimeFormat)},
+			},
 			// we use the default monovertex forwarder metric name "monovtx_read_total" is used to retrieve the metric
 			Body: io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`
 # HELP monovtx_read A Counter to keep track of the total number of messages read from the source.
@@ -56,6 +59,9 @@ monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="0"} %d
 		m.podTwoCount = m.podTwoCount + 60
 		resp := &http.Response{
 			StatusCode: 200,
+			Header: http.Header{
+				"Date": []string{time.Now().Format(http.TimeFormat)},
+			},
 			Body: io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`
 # HELP monovtx_read A Counter to keep track of the total number of messages read from the source.
 # TYPE monovtx_read counter
