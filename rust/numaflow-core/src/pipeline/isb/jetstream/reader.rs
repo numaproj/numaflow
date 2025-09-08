@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use crate::Result;
 use crate::config::get_vertex_name;
+use crate::config::pipeline::VertexType::ReduceUDF;
 use crate::config::pipeline::isb::{BufferReaderConfig, CompressionType, ISBConfig, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
@@ -322,7 +323,9 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                         )
                         .await?;
 
-                    if read_messages.is_empty() {
+                    // if it's a reduce vertex, we should send wmb messages to the reduce component so
+                    // that it can close the windows when we are idling.
+                    if read_messages.is_empty() && self.vertex_type == ReduceUDF.as_str() {
                         // Check for idle watermark message when batch is empty
                         if let Some(idle_wmb_message) = self.validate_and_create_wmb_message().await
                             && let Err(e) = messages_tx.send(idle_wmb_message).await
