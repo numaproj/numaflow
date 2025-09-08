@@ -260,7 +260,7 @@ func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 		rate := CalculateRate(r.timestampedPodCounts, lookbackSeconds)
 		result[windowLabel] = wrapperspb.Double(rate)
 	}
-	r.log.Debugf("Got rates for MonoVertex %s: %v", r.monoVertex.Name, result)
+	r.log.Infof("Got rates for MonoVertex %s: %v", r.monoVertex.Name, result)
 	return result
 }
 
@@ -305,6 +305,7 @@ func (r *Rater) Start(ctx context.Context) error {
 		}
 	}
 
+	ticker := time.NewTicker(time.Duration(r.options.taskInterval) * time.Millisecond)
 	// Following for loop keeps calling assign() function to assign monitoring tasks to the workers.
 	// It makes sure each element in the list will be assigned every N milliseconds.
 	for {
@@ -312,20 +313,10 @@ func (r *Rater) Start(ctx context.Context) error {
 		case <-ctx.Done():
 			r.log.Info("Shutting down monitoring job assigner")
 			return nil
-		default:
-			assign()
-			// Make sure each of the key will be assigned at least every taskInterval milliseconds.
-			sleep(ctx, time.Millisecond*time.Duration(func() int {
-				l := r.podTracker.GetActivePodsCount()
-				if l == 0 {
-					return r.options.taskInterval
-				}
-				result := r.options.taskInterval / l
-				if result > 0 {
-					return result
-				}
-				return 1
-			}()))
+		case <-ticker.C:
+			for range r.podTracker.GetActivePodsCount() {
+				assign()
+			}
 		}
 	}
 }

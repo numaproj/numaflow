@@ -86,6 +86,9 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 }
 
 func (pt *PodTracker) trackActivePods(ctx context.Context) {
+	// start updating active pods as soon as called and then after every refreshInterval
+	pt.updateActivePods()
+	
 	ticker := time.NewTicker(pt.refreshInterval)
 	defer ticker.Stop()
 	for {
