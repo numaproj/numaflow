@@ -207,8 +207,6 @@ impl SourceReader for UserDefinedSourceRead {
             request: Some(read_request::Request {
                 num_records: self.num_records as u64,
                 timeout_in_ms: self.timeout.as_millis() as u32,
-                // TODO: Determine whether any system metadata is needed to be sent to the source.
-                metadata: None,
             }),
             handshake: None,
         };
