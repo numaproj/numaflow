@@ -309,25 +309,25 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 10.5, CalculateRate(q, 35, "partition2"))
 		assert.Equal(t, 10.5, CalculateRate(q, 100, "partition2"))
 
-		// partition3 rate - pod3 reappears in tc3 as new pod (delta=0)
+		// partition3 rate
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5, "partition3"))
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15, "partition3"))
-		assert.Equal(t, 0.0, CalculateRate(q, 25, "partition3")) // pod3 treated as new, delta=0
-		assert.Equal(t, 0.0, CalculateRate(q, 35, "partition3")) // pod3 treated as new, delta=0
-		assert.Equal(t, 0.0, CalculateRate(q, 100, "partition3")) // pod3 treated as new, delta=0
+		assert.Equal(t, 20.0, CalculateRate(q, 25, "partition3"))
+		assert.Equal(t, 10.0, CalculateRate(q, 35, "partition3"))
+		assert.Equal(t, 10.0, CalculateRate(q, 100, "partition3"))
 
-		// partition4 rate - pod4 appears in tc3 as new pod (delta=0)
+		// partition4 rate
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5, "partition4"))
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15, "partition4"))
-		assert.Equal(t, 0.0, CalculateRate(q, 25, "partition4")) // pod4 is new, delta=0
-		assert.Equal(t, 0.0, CalculateRate(q, 35, "partition4")) // pod4 is new, delta=0
-		assert.Equal(t, 0.0, CalculateRate(q, 100, "partition4")) // pod4 is new, delta=0
+		assert.Equal(t, 10.0, CalculateRate(q, 25, "partition4"))
+		assert.Equal(t, 5.0, CalculateRate(q, 35, "partition4"))
+		assert.Equal(t, 5.0, CalculateRate(q, 100, "partition4"))
 
-		// partition100 rate - pod100 appears in tc4 as new pod (delta=0)
+		// partition100 rate
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5, "partition100"))
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15, "partition100"))
-		assert.Equal(t, 0.0, CalculateRate(q, 25, "partition100")) // pod100 is new, delta=0
-		assert.Equal(t, 0.0, CalculateRate(q, 35, "partition100")) // pod100 is new, delta=0
+		assert.Equal(t, 0.0, CalculateRate(q, 25, "partition100"))
+		assert.Equal(t, 0.0, CalculateRate(q, 35, "partition100"))
 		assert.Equal(t, 0.0, CalculateRate(q, 100, "partition100"))
 	})
 
@@ -375,34 +375,5 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 111.0, CalculateRate(q, 25, "partition2"))
 		assert.Equal(t, 111.0, CalculateRate(q, 35, "partition2"))
 		assert.Equal(t, 111.0, CalculateRate(q, 100, "partition2"))
-	})
-
-	t.Run("newPod_givenColdStart_whenCalculateRate_thenUseZeroDelta", func(t *testing.T) {
-		q := sharedqueue.New[*TimestampedCounts](1800)
-		now := time.Now()
-
-		// First timestamp: only pod1 exists
-		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 100.0}})
-		q.Append(tc1)
-
-		// Second timestamp: pod1 continues, pod2 appears for first time with accumulated count
-		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 150.0}}) // pod1 processed 50 more
-		tc2.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 1000.0}}) // pod2 appears with large accumulated count
-		q.Append(tc2)
-
-		// Third timestamp: both pods continue
-		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix())
-		tc3.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 200.0}}) // pod1 processed 50 more
-		tc3.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 1050.0}}) // pod2 processed 50 more
-		q.Append(tc3)
-
-		// Rate calculation with cold start fix:
-		// tc1->tc2: pod1 delta=50, pod2 delta=0 (new pod, prevents cold start spike)
-		// tc2->tc3: pod1 delta=50, pod2 delta=50 (normal calculation since pod2 existed in tc2)
-		// Expected: (50 + 0 + 50 + 50) / 20 = 150/20 = 7.5 messages/second
-		// But actual result is 5.0, which means pod2 is treated as new throughout
-		assert.Equal(t, 5.0, CalculateRate(q, 25, "partition1"))
 	})
 }

@@ -142,26 +142,30 @@ func NewRater(ctx context.Context, p *v1alpha1.Pipeline, opts ...Option) *Rater 
 	return &rater
 }
 
+// podTask represents a monitoring task for a pod with a common timestamp
+type podTask struct {
+	key       string
+	timestamp int64
+}
+
 // Function monitor() defines each of the worker's jobs.
 // It waits for keys in the channel, and starts a monitoring job
-func (r *Rater) monitor(ctx context.Context, id int, keyCh <-chan string) {
+func (r *Rater) monitor(ctx context.Context, id int, taskCh <-chan podTask) {
 	r.log.Infof("Started monitoring worker %v", id)
 	for {
 		select {
 		case <-ctx.Done():
 			r.log.Infof("Stopped monitoring worker %v", id)
 			return
-		case key := <-keyCh:
-			startTime := time.Now()
-			if err := r.monitorOnePod(ctx, key, id); err != nil {
-				r.log.Errorw("Failed to monitor a pod", zap.String("pod", key), zap.Error(err))
+		case task := <-taskCh:
+			if err := r.monitorOnePod(ctx, task.key, id, task.timestamp); err != nil {
+				r.log.Errorw("Failed to monitor a pod", zap.String("pod", task.key), zap.Error(err))
 			}
-			r.log.Infow("Monitored a pod", zap.String("pod", key), zap.Duration("duration", time.Since(startTime)))
 		}
 	}
 }
 
-func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error {
+func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int, timestamp int64) error {
 	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("podKey", key)
 	log.Debugf("Working on key: %s", key)
 	podInfo, err := r.podTracker.GetPodInfo(key)
@@ -172,7 +176,6 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	}
 	var podReadCount *PodReadCount
 	var podPendingCount *PodPendingCount
-	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
 	if r.podTracker.IsActive(key) {
 		podMetrics := r.getPodMetrics(podInfo.vertexName, podInfo.podName)
 		podReadCount = r.getPodReadCounts(podInfo.vertexName, podInfo.podName, podMetrics)
@@ -185,18 +188,18 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 			if podPendingCount == nil {
 				log.Debugf("Failed retrieving pending counts for pod %s vertex %s", podInfo.podName, podInfo.vertexName)
 			}
-			UpdatePendingCount(r.timestampedPendingCount[podInfo.vertexName], now, podPendingCount)
+			UpdatePendingCount(r.timestampedPendingCount[podInfo.vertexName], timestamp, podPendingCount)
 		}
 	} else {
 		log.Debugf("Pod %s does not exist, updating it with nil...", podInfo.podName)
 	}
-	UpdateCount(r.timestampedPodCounts[podInfo.vertexName], now, podReadCount)
+	UpdateCount(r.timestampedPodCounts[podInfo.vertexName], timestamp, podReadCount)
 	return nil
 }
 
 func (r *Rater) Start(ctx context.Context) error {
 	r.log.Infof("Starting rater...")
-	keyCh := make(chan string)
+	taskCh := make(chan podTask)
 	ctx, cancel := context.WithCancel(logging.WithLogger(ctx, r.log))
 	defer cancel()
 
@@ -213,13 +216,13 @@ func (r *Rater) Start(ctx context.Context) error {
 
 	// Worker group
 	for i := 1; i <= r.options.workers; i++ {
-		go r.monitor(ctx, i, keyCh)
+		go r.monitor(ctx, i, taskCh)
 	}
 
 	// Function assign() sends the least recently used podKey to the channel so that it can be picked up by a worker.
-	assign := func() {
+	assign := func(timestamp int64) {
 		if e := r.podTracker.LeastRecentlyUsed(); e != "" {
-			keyCh <- e
+			taskCh <- podTask{key: e, timestamp: timestamp}
 			return
 		}
 	}
@@ -233,8 +236,10 @@ func (r *Rater) Start(ctx context.Context) error {
 			r.log.Info("Shutting down monitoring job assigner")
 			return nil
 		case <-ticker.C:
+			// Generate a common timestamp for all pods in this tick
+			now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
 			for range r.podTracker.GetActivePodsCount() {
-				assign()
+				assign(now)
 			}
 		}
 	}

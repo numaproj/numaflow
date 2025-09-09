@@ -159,24 +159,13 @@ func calculatePartitionDelta(tc1, tc2 *TimestampedCounts, partitionName string) 
 	for podName, partitionReadCounts := range currPodReadCount {
 		currCount := partitionReadCounts[partitionName]
 
-		// Check if this pod existed in the previous timestamp
-		prevPodPartitions, podExistedBefore := prevPodReadCount[podName]
-
-		// pod delta will be equal to current count in case of restart or new pod
+		prevCount := prevPodReadCount[podName][partitionName]
+		// pod delta will be equal to current count in case of restart
 		podDelta := currCount
-		if podExistedBefore {
-			prevCount := prevPodPartitions[partitionName]
-			if currCount >= prevCount {
-				// Normal case: pod existed before and count increased
-				podDelta = currCount - prevCount
-			}
-			// If currCount < prevCount, use currCount (restart case)
-		} else {
-			// New pod case: use 0 delta to prevent cold start spike
-			// The accumulated count represents historical processing, not recent activity
-			podDelta = 0
-		}
+		if currCount >= prevCount {
+			podDelta = currCount - prevCount
 
+		}
 		delta += podDelta
 	}
 	return delta

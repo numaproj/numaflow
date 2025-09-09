@@ -19,6 +19,7 @@ package rater
 import (
 	"crypto/tls"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"time"
@@ -129,25 +130,31 @@ func NewRater(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...Option) *Rat
 	return &rater
 }
 
+// podTask represents a monitoring task for a pod with a common timestamp
+type podTask struct {
+	key       string
+	timestamp int64
+}
+
 // Function monitor() defines each of the worker's jobs.
 // It waits for keys in the channel, and starts a monitoring job
-func (r *Rater) monitor(ctx context.Context, id int, keyCh <-chan string) {
+func (r *Rater) monitor(ctx context.Context, id int, taskCh <-chan *podTask) {
 	r.log.Infof("Started monitoring worker %v", id)
 	for {
 		select {
 		case <-ctx.Done():
 			r.log.Infof("Stopped monitoring worker %v", id)
 			return
-		case key := <-keyCh:
-			if err := r.monitorOnePod(ctx, key, id); err != nil {
-				r.log.Errorw("Failed to monitor a pod", zap.String("pod", key), zap.Error(err))
+		case task := <-taskCh:
+			if err := r.monitorOnePod(ctx, task.key, id, task.timestamp); err != nil {
+				r.log.Errorw("Failed to monitor a pod", zap.String("pod", task.key), zap.Error(err))
 			}
 		}
 	}
 }
 
 // monitorOnePod monitors a single pod and updates the rate metrics for the given pod.
-func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error {
+func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int, timestamp int64) error {
 	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("podKey", key)
 	log.Debugf("Working on key: %s", key)
 	pInfo, err := r.podTracker.GetPodInfo(key)
@@ -155,7 +162,6 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 		return err
 	}
 	var podReadCount, podPendingCount *PodMetricsCount
-	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
 
 	if !r.podTracker.IsActive(key) {
 		log.Debugf("Pod %s does not exist, updating it with nil...", pInfo.podName)
@@ -174,11 +180,11 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 				if podPendingCount == nil {
 					log.Debugf("Failed retrieving pending counts for pod %s", pInfo.podName)
 				}
-				UpdateCount(r.timestampedPendingCount, now, podPendingCount)
+				UpdateCount(r.timestampedPendingCount, timestamp, podPendingCount)
 			}
 		}
 	}
-	UpdateCount(r.timestampedPodCounts, now, podReadCount)
+	UpdateCount(r.timestampedPodCounts, timestamp, podReadCount)
 	return nil
 }
 
@@ -193,7 +199,12 @@ func (r *Rater) getPodMetrics(podName string) map[string]*dto.MetricFamily {
 		r.log.Warnf("[Pod name %s]: failed reading the metrics endpoint, the pod might have been scaled down: %v", podName, err.Error())
 		return nil
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			r.log.Errorf("Failed to close response body for pod %s: %v", podName, err)
+		}
+	}(resp.Body)
 
 	textParser := expfmt.TextParser{}
 	result, err := textParser.TextToMetricFamilies(resp.Body)
@@ -260,7 +271,7 @@ func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 		rate := CalculateRate(r.timestampedPodCounts, lookbackSeconds)
 		result[windowLabel] = wrapperspb.Double(rate)
 	}
-	r.log.Infof("Got rates for MonoVertex %s: %v", r.monoVertex.Name, result)
+	r.log.Debugf("Got rates for MonoVertex %s: %v", r.monoVertex.Name, result)
 	return result
 }
 
@@ -277,7 +288,7 @@ func (r *Rater) buildLookbackSecondsMap() map[string]int64 {
 
 func (r *Rater) Start(ctx context.Context) error {
 	r.log.Infof("Starting rater...")
-	keyCh := make(chan string)
+	taskCh := make(chan *podTask)
 	ctx, cancel := context.WithCancel(logging.WithLogger(ctx, r.log))
 	defer cancel()
 
@@ -294,13 +305,13 @@ func (r *Rater) Start(ctx context.Context) error {
 
 	// Worker group
 	for i := 1; i <= r.options.workers; i++ {
-		go r.monitor(ctx, i, keyCh)
+		go r.monitor(ctx, i, taskCh)
 	}
 
 	// Function assign() sends the least recently used podKey to the channel so that it can be picked up by a worker.
-	assign := func() {
+	assign := func(timestamp int64) {
 		if e := r.podTracker.LeastRecentlyUsed(); e != "" {
-			keyCh <- e
+			taskCh <- &podTask{key: e, timestamp: timestamp}
 			return
 		}
 	}
@@ -314,19 +325,12 @@ func (r *Rater) Start(ctx context.Context) error {
 			r.log.Info("Shutting down monitoring job assigner")
 			return nil
 		case <-ticker.C:
+			// Generate a common timestamp for all pods in this tick
+			now := time.Now().Unix()
 			for range r.podTracker.GetActivePodsCount() {
-				assign()
+				assign(now)
 			}
 		}
-	}
-}
-
-// sleep function uses a select statement to check if the context is canceled before sleeping for the given duration
-// it helps ensure the sleep will be released when the context is canceled, allowing the goroutine to exit gracefully
-func sleep(ctx context.Context, duration time.Duration) {
-	select {
-	case <-ctx.Done():
-	case <-time.After(duration):
 	}
 }
 

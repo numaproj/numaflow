@@ -321,44 +321,11 @@ func TestCalculateRate(t *testing.T) {
 		q.Append(tc4)
 
 		// vertex rate
-		// With cold start fix: new pods (pod4, pod3, pod100) are skipped
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5))
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15))
-		// tc2->tc3: pod1 delta=50, pod2 delta=100, pod4 skipped -> (50+100)/10 = 15.0
-		assert.Equal(t, 15.0, CalculateRate(q, 25))
-		// tc1->tc2->tc3: (pod1=100+pod2=110) + (pod1=50+pod2=100) = 360/20 = 18.0
-		assert.Equal(t, 18.0, CalculateRate(q, 35))
-		assert.Equal(t, 18.0, CalculateRate(q, 100))
-	})
-
-	t.Run("newPod_givenColdStart_whenCalculateRate_thenUseZeroDelta", func(t *testing.T) {
-		q := sharedqueue.New[*TimestampedCounts](1800)
-		now := time.Now()
-
-		// First timestamp: only pod1 exists
-		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 30)
-		tc1.Update(&PodMetricsCount{"pod1", 100.0})
-		q.Append(tc1)
-
-		// Second timestamp: pod1 continues, pod2 appears for first time with accumulated count
-		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
-		tc2.Update(&PodMetricsCount{"pod1", 150.0}) // pod1 processed 50 more
-		tc2.Update(&PodMetricsCount{"pod2", 1000.0}) // pod2 appears with large accumulated count
-		q.Append(tc2)
-
-		// Third timestamp: both pods continue
-		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-		tc3.Update(&PodMetricsCount{"pod1", 200.0}) // pod1 processed 50 more
-		tc3.Update(&PodMetricsCount{"pod2", 1050.0}) // pod2 processed 50 more
-		q.Append(tc3)
-
-		// Rate calculation with cold start fix:
-		// tc1->tc2: pod1 delta=50, pod2 delta=0 (new pod, prevents cold start spike)
-		// tc2->tc3: pod1 delta=50, pod2 delta=50 (normal calculation since pod2 existed in tc2)
-		// For lookback 35s: (50 + 0) + (50 + 50) / 20 = 150/20 = 7.5
-		// But actual result is 5.0, which means pod2 is still treated as new in tc2->tc3
-		// This suggests pod2 doesn't exist in tc1, so it's treated as new throughout
-		assert.Equal(t, 5.0, CalculateRate(q, 35))
+		assert.Equal(t, 25.0, CalculateRate(q, 25))
+		assert.Equal(t, 23.0, CalculateRate(q, 35))
+		assert.Equal(t, 23.0, CalculateRate(q, 100))
 	})
 }
 
