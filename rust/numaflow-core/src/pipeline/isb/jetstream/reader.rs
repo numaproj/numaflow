@@ -17,7 +17,6 @@ use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
-use crate::watermark::wmb::WMBChecker;
 use async_nats::jetstream::{
     AckKind, Context, Message as JetstreamMessage, consumer::PullConsumer,
 };
@@ -99,7 +98,6 @@ pub(crate) struct JetStreamReader<C: NumaflowTypeConfig> {
     vertex_type: String,
     compression_type: Option<CompressionType>,
     rate_limiter: Option<C::RateLimiter>,
-    wmb_checker: WMBChecker,
 }
 
 /// JSWrappedMessage is a wrapper around the JetStream message that includes the
@@ -255,7 +253,6 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                 .isb_config
                 .map(|c| c.compression.compress_type),
             rate_limiter,
-            wmb_checker: WMBChecker::new(2),
         })
     }
 
@@ -293,27 +290,6 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                 ));
 
                 let semaphore = Arc::new(Semaphore::new(max_ack_pending));
-
-                // ** Inconsistent Reality **
-                // Until now, the information exchange between Vn-1th and Vnth happened in two
-                // phases. The first phase involves updating the view of the world (offset-timeline)
-                // based on the WATCH on the key, while the second phase involves reading data from
-                // the buffer and using the offset of that data to align with the view of the world
-                // (indexing the offset-timeline using offset as the key). With the introduction of
-                // the Watermark Barrier, the second phase will not be activated when there is idleness.
-                // This introduces a problem where the assumed state might differ from reality because
-                // we are not tying both states using any identifiers (earlier we had monotonically
-                // increasing offset).
-                // This inconsistency is due to the corner cases in the process-scheduling of and
-                // others reasons.
-                //
-                // ** Forcing Consistency
-                // To force consistency, all reconciliation of states when using Watermark will go
-                // through two iterations. In the first iteration, it saves the states it has built
-                // and ensures the state matches in the second iteration.
-                // NOTE: We no longer have to use the WMB checker because reader has detected idleness
-                // and is propagating downstream.
-
                 loop {
                     if cancel_token.is_cancelled() {
                         info!(stream=?self.stream, "Cancellation token received, stopping the reader.");
@@ -332,15 +308,10 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
 
                     // if it's a reduce vertex, we should send wmb messages to the reduce component so
                     // that it can close the windows when we are idling.
-                    if read_messages.is_empty() && self.vertex_type == ReduceUDF.as_str() {
-                        // Check for idle watermark message when batch is empty
-                        if let Some(idle_wmb_message) = self.validate_and_create_wmb_message().await
-                            && let Err(e) = messages_tx.send(idle_wmb_message).await
-                        {
-                            error!(?e, "Failed to send idle watermark message to channel");
-                            break;
-                        }
-                        continue;
+                    if read_messages.is_empty()
+                        && let Some(idle_wmb_message) = self.create_wmb_message().await
+                    {
+                        let _ = messages_tx.send(idle_wmb_message).await;
                     }
 
                     for message in read_messages {
@@ -689,20 +660,19 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
         self.stream.name
     }
 
-    /// Validates the idle WMB and creates a WMB message with the validated idle watermark.
-    /// Returns None if the WMB is not idle or if the watermark is -1.
-    async fn validate_and_create_wmb_message(&mut self) -> Option<Message> {
+    /// Creates a WMB message with the by fetching the head idle WMB for the current partition.
+    async fn create_wmb_message(&mut self) -> Option<Message> {
         let watermark_handle = self.watermark_handle.as_mut()?;
+
+        // we only need to create wmb messages for reduce vertices because they have to close windows
+        if self.vertex_type != ReduceUDF.as_str() {
+            return None;
+        }
 
         // Fetch the head idle WMB for the current partition
         let idle_wmb = watermark_handle
             .fetch_head_idle_wmb(self.stream.partition)
             .await?;
-
-        // Use WMBChecker to validate the idle WMB
-        if !self.wmb_checker.validate_head_wmb(idle_wmb) {
-            return None;
-        }
 
         // Create a watermark from the validated WMB
         let idle_watermark = chrono::DateTime::from_timestamp_millis(idle_wmb.watermark)
