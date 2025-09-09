@@ -18,13 +18,15 @@ The out of box Numaflow autoscaling is done by a `scaling` component running in 
 
 ## Source Vertices
 
-For source vertices, we define a target time (in seconds) to finish processing the pending messages based on the processing rate (tps) of the vertex.
+For source vertices, we define a target processing time (in seconds) to finish processing the pending messages based on the processing rate (tps) of the vertex.
 
 ```
-  pendingMessages / processingRate = targetSeconds
+  targetProcessingRate = pendingMessages / targetProcessingSeconds
+  singlePodProcessingRate = currentProcessingRate / currentReplicas
+  desiredReplicas =  targetProcessingRate / singlePodProcessingRate
 ```
 
-For example, if `targetSeconds` is 3, current replica number is `2`, current `tps` is 10000/second, and the pending messages is 60000, so we calculate the desired replica number as following:
+For example, if `targetProcessingSeconds` is 3, current replica number is `2`, current `tps` is 10000/second, and the pending messages is 60000, so we calculate the desired replica number as following:
 
 ```
   desiredReplicas = 60000 / (3 * (10000 / 2)) = 4
