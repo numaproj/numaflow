@@ -154,14 +154,14 @@ func (pt *PodTracker) GetActivePodsCount() int {
 	return pt.activePods.Length()
 }
 
-// podInfo represents the information of a pod that is used for tracking the processing rate
-type podInfo struct {
+// PodInfo represents the information of a pod that is used for tracking the processing rate
+type PodInfo struct {
 	monoVertexName string
 	replica        int
 	podName        string
 }
 
-func (pt *PodTracker) GetPodInfo(key string) (*podInfo, error) {
+func (pt *PodTracker) GetPodInfo(key string) (*PodInfo, error) {
 	pi := strings.Split(key, podInfoSeparator)
 	if len(pi) != 2 {
 		return nil, fmt.Errorf("invalid key %q", key)
@@ -170,7 +170,7 @@ func (pt *PodTracker) GetPodInfo(key string) (*podInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid replica in key %q", key)
 	}
-	return &podInfo{
+	return &PodInfo{
 		monoVertexName: pi[0],
 		replica:        replica,
 		podName:        strings.Join([]string{pi[0], "mv", pi[1]}, "-"),

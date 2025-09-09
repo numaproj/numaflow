@@ -88,7 +88,7 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 func (pt *PodTracker) trackActivePods(ctx context.Context) {
 	// start updating active pods as soon as called and then after every refreshInterval
 	pt.updateActivePods()
-	
+
 	ticker := time.NewTicker(pt.refreshInterval)
 	defer ticker.Stop()
 	for {
@@ -144,15 +144,15 @@ func (pt *PodTracker) GetActivePodsCount() int {
 	return pt.activePods.Length()
 }
 
-// podInfo represents the information of a pod that is used for tracking the processing rate
-type podInfo struct {
+// PodInfo represents the information of a pod that is used for tracking the processing rate
+type PodInfo struct {
 	pipelineName string
 	vertexName   string
 	podName      string
 	replica      int
 }
 
-func (pt *PodTracker) GetPodInfo(key string) (*podInfo, error) {
+func (pt *PodTracker) GetPodInfo(key string) (*PodInfo, error) {
 	pi := strings.Split(key, podInfoSeparator)
 	if len(pi) != 3 {
 		return nil, fmt.Errorf("invalid key %q", key)
@@ -161,7 +161,7 @@ func (pt *PodTracker) GetPodInfo(key string) (*podInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid replica in key %q", key)
 	}
-	return &podInfo{
+	return &PodInfo{
 		pipelineName: pi[0],
 		vertexName:   pi[1],
 		replica:      replica,

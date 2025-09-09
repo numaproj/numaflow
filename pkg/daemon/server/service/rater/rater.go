@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"maps"
 	"math"
 	"net/http"
@@ -131,7 +132,7 @@ func NewRater(ctx context.Context, p *v1alpha1.Pipeline, opts ...Option) *Rater 
 		rater.timestampedPendingCount[v.Name] = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
 		rater.lookBackSeconds[v.Name] = atomic.NewFloat64(float64(v.Scale.GetLookbackSeconds()))
 		// initialise the metric value for the lookback window for each vertex
-		metrics.VertexLookBackSecs.WithLabelValues(v.Name, string(v.GetVertexType())).Set(float64(rater.lookBackSeconds[v.Name].Load()))
+		metrics.VertexLookBackSecs.WithLabelValues(v.Name, string(v.GetVertexType())).Set(rater.lookBackSeconds[v.Name].Load())
 	}
 
 	for _, opt := range opts {
@@ -150,7 +151,7 @@ type podTask struct {
 
 // Function monitor() defines each of the worker's jobs.
 // It waits for keys in the channel, and starts a monitoring job
-func (r *Rater) monitor(ctx context.Context, id int, taskCh <-chan podTask) {
+func (r *Rater) monitor(ctx context.Context, id int, taskCh <-chan *podTask) {
 	r.log.Infof("Started monitoring worker %v", id)
 	for {
 		select {
@@ -199,7 +200,7 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int, times
 
 func (r *Rater) Start(ctx context.Context) error {
 	r.log.Infof("Starting rater...")
-	taskCh := make(chan podTask)
+	taskCh := make(chan *podTask)
 	ctx, cancel := context.WithCancel(logging.WithLogger(ctx, r.log))
 	defer cancel()
 
@@ -222,12 +223,14 @@ func (r *Rater) Start(ctx context.Context) error {
 	// Function assign() sends the least recently used podKey to the channel so that it can be picked up by a worker.
 	assign := func(timestamp int64) {
 		if e := r.podTracker.LeastRecentlyUsed(); e != "" {
-			taskCh <- podTask{key: e, timestamp: timestamp}
+			taskCh <- &podTask{key: e, timestamp: timestamp}
 			return
 		}
 	}
 
 	ticker := time.NewTicker(time.Duration(r.options.taskInterval) * time.Millisecond)
+	defer ticker.Stop()
+
 	// Following for loop keeps calling assign() function to assign monitoring tasks to the workers.
 	// It makes sure each element in the list will be assigned every N milliseconds.
 	for {
@@ -237,20 +240,11 @@ func (r *Rater) Start(ctx context.Context) error {
 			return nil
 		case <-ticker.C:
 			// Generate a common timestamp for all pods in this tick
-			now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
+			now := time.Now().Unix()
 			for range r.podTracker.GetActivePodsCount() {
 				assign(now)
 			}
 		}
-	}
-}
-
-// sleep function uses a select statement to check if the context is canceled before sleeping for the given duration
-// it helps ensure the sleep will be released when the context is canceled, allowing the goroutine to exit gracefully
-func sleep(ctx context.Context, duration time.Duration) {
-	select {
-	case <-ctx.Done():
-	case <-time.After(duration):
 	}
 }
 
@@ -262,7 +256,12 @@ func (r *Rater) getPodMetrics(vertexName, podName string) map[string]*dto.Metric
 		r.log.Warnf("[vertex name %s, pod name %s]: failed reading the metrics endpoint, the pod might have been scaled down: %v", vertexName, podName, err.Error())
 		return nil
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			r.log.Errorf("Failed to close response body for pod %s: %v", podName, err)
+		}
+	}(resp.Body)
 
 	textParser := expfmt.TextParser{}
 	result, err := textParser.TextToMetricFamilies(resp.Body)

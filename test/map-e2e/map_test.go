@@ -123,7 +123,6 @@ func (s *MapSuite) TestMapStreamUDFunctionAndSink() {
 }
 
 func (s *MapSuite) TestPipelineRateLimitWithRedisStore() {
-	s.T().Skip("Skipping until we fix Rater")
 	w := s.Given().Pipeline("@testdata/rate-limit-redis.yaml").
 		When().
 		CreatePipelineAndWait()
