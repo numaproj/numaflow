@@ -2680,7 +2680,7 @@
 <div class="highlight"><pre><span></span><code><span class="w">  </span>kubectl<span class="w"> </span>patch<span class="w"> </span>mvtx<span class="w"> </span>my-mvtx<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span>--patch<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;: {&quot;lifecycle&quot;: {&quot;desiredPhase&quot;: &quot;Running&quot;}}}&#39;</span>
 </code></pre></div>
 <p>Run the following command if you would like to resume the MonoVertex with the minimal number of pods (the number defined in <code>spec.scale.min</code>, otherwise 1).</p>
-<div class="highlight"><pre><span></span><code><span class="w">  </span>kubectl<span class="w"> </span>patch<span class="w"> </span>mvtx<span class="w"> </span>my-mvtx<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span>--patch<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;: {&quot;lifecycle&quot;: {&quot;desiredPhase&quot;: &quot;Running&quot;}, &quot;replicas&quot;: null}}}&#39;</span>
+<div class="highlight"><pre><span></span><code><span class="w">  </span>kubectl<span class="w"> </span>patch<span class="w"> </span>mvtx<span class="w"> </span>my-mvtx<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span>--patch<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;: {&quot;lifecycle&quot;: {&quot;desiredPhase&quot;: &quot;Running&quot;}, &quot;replicas&quot;: null}}&#39;</span>
 </code></pre></div>
 
               

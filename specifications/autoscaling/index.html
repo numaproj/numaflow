@@ -2722,10 +2722,12 @@
 <h2 id="numaflow-autoscaling">Numaflow Autoscaling<a class="headerlink" href="#numaflow-autoscaling" title="Permanent link">&para;</a></h2>
 <p>The out of box Numaflow autoscaling is done by a <code>scaling</code> component running in the controller manager, you can find the source code <a href="https://github.com/numaproj/numaflow/tree/main/pkg/reconciler/vertex/scaling">here</a>. The autoscaling strategy is implemented according to different type of vertices.</p>
 <h2 id="source-vertices">Source Vertices<a class="headerlink" href="#source-vertices" title="Permanent link">&para;</a></h2>
-<p>For source vertices, we define a target time (in seconds) to finish processing the pending messages based on the processing rate (tps) of the vertex.</p>
-<div class="highlight"><pre><span></span><code>  pendingMessages / processingRate = targetSeconds
+<p>For source vertices, we define a target processing time (in seconds) to finish processing the pending messages based on the processing rate (tps) of the vertex.</p>
+<div class="highlight"><pre><span></span><code>  targetProcessingRate = pendingMessages / targetProcessingSeconds
+  singlePodProcessingRate = currentProcessingRate / currentReplicas
+  desiredReplicas =  targetProcessingRate / singlePodProcessingRate
 </code></pre></div>
-<p>For example, if <code>targetSeconds</code> is 3, current replica number is <code>2</code>, current <code>tps</code> is 10000/second, and the pending messages is 60000, so we calculate the desired replica number as following:</p>
+<p>For example, if <code>targetProcessingSeconds</code> is 3, current replica number is <code>2</code>, current <code>tps</code> is 10000/second, and the pending messages is 60000, so we calculate the desired replica number as following:</p>
 <div class="highlight"><pre><span></span><code>  desiredReplicas = 60000 / (3 * (10000 / 2)) = 4
 </code></pre></div>
 <p>Numaflow autoscaling does not work for those source vertices that can not calculate pending messages.</p>
