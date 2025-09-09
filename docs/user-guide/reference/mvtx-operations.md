@@ -19,5 +19,5 @@ The command below will bring the MonoVertex back to `Running` state, resuming wi
 Run the following command if you would like to resume the MonoVertex with the minimal number of pods (the number defined in `spec.scale.min`, otherwise 1).
 
 ```bash
-  kubectl patch mvtx my-mvtx --type=merge --patch '{"spec": {"lifecycle": {"desiredPhase": "Running"}, "replicas": null}}}'
+  kubectl patch mvtx my-mvtx --type=merge --patch '{"spec": {"lifecycle": {"desiredPhase": "Running"}, "replicas": null}}'
 ```
