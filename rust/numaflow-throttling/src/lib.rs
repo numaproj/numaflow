@@ -120,17 +120,12 @@ impl RateLimit<WithoutDistributedState> {
 
     /// Get the number of tokens available for the current time provided it is already refilled.
     /// Since pool size is always one, we don't have to divide the tokens by pool size.
-    pub(crate) fn get_tokens(&self, n: Option<usize>) -> TokenAvailability {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs();
-
+    pub(crate) fn get_tokens(&self, n: Option<usize>, cur_epoch: u64) -> TokenAvailability {
         let previous_epoch = self
             .last_queried_epoch
             .load(std::sync::atomic::Ordering::Relaxed);
 
-        if previous_epoch < now {
+        if previous_epoch < cur_epoch {
             return TokenAvailability::Recompute;
         }
 
@@ -164,37 +159,36 @@ impl RateLimit<WithoutDistributedState> {
 }
 
 /// Helper to sleep until the start of the next second.
-async fn sleep_until_next_sec() {
+async fn sleep_until_next_sec() -> u64 {
     let now = std::time::SystemTime::now();
     let since_epoch = now
         .duration_since(std::time::UNIX_EPOCH)
         .expect("Time went backwards");
 
-    // Calculate the start of the next second
-    let next_sec = since_epoch.as_secs() + 1;
-    let next_sec_duration = Duration::from_secs(next_sec);
+    // Calculate the start of the next second truncated to the next second so we sleep only
+    // till the top of the second
+    let start_of_next_sec = since_epoch.as_secs() + 1;
+
+    // delta till the top of the next second
+    let delta_till_next_sec = Duration::from_secs(start_of_next_sec) - since_epoch;
 
     tokio::time::sleep_until(tokio::time::Instant::from_std(
-        std::time::Instant::now() + (next_sec_duration - since_epoch),
+        std::time::Instant::now() + (delta_till_next_sec),
     ))
     .await;
+
+    start_of_next_sec
 }
 
 impl RateLimit<WithoutDistributedState> {
     /// Tries to acquire tokens(non-blocking)
-    async fn attempt_acquire_n(&self, n: Option<usize>) -> usize {
+    async fn attempt_acquire_n(&self, n: Option<usize>, cur_epoch: u64) -> usize {
         // let's try to acquire the tokens
-        match self.get_tokens(n) {
+        match self.get_tokens(n, cur_epoch) {
             TokenAvailability::Available(t) => return t,
             TokenAvailability::Exhausted => return 0,
             TokenAvailability::Recompute => {}
         }
-
-        // recompute the number of tokens available
-        let now_epoch = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs();
 
         let new_token_count = self.compute_refill();
         self.token
@@ -202,10 +196,10 @@ impl RateLimit<WithoutDistributedState> {
 
         // Update the epoch to current time after refilling
         self.last_queried_epoch
-            .store(now_epoch, std::sync::atomic::Ordering::Release);
+            .store(cur_epoch, std::sync::atomic::Ordering::Release);
 
         // try to acquire the tokens again
-        match self.get_tokens(n) {
+        match self.get_tokens(n, cur_epoch) {
             TokenAvailability::Available(tokens) => tokens,
             other => {
                 warn!(
@@ -224,8 +218,14 @@ impl RateLimiter for RateLimit<WithoutDistributedState> {
     /// If timeout is Some, will wait up to the specified duration for some tokens to be available.
     /// Timeout is only considered when token size is zero.
     async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize {
+        // recompute the number of tokens available
+        let cur_epoch = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
+
         // First attempt - try to get tokens immediately
-        let tokens = self.attempt_acquire_n(n).await;
+        let tokens = self.attempt_acquire_n(n, cur_epoch).await;
         if tokens > 0 {
             return tokens;
         }
@@ -239,8 +239,8 @@ impl RateLimiter for RateLimit<WithoutDistributedState> {
         let acquisition_loop = async {
             loop {
                 // Wait for the next epoch to try again
-                sleep_until_next_sec().await;
-                let tokens = self.attempt_acquire_n(n).await;
+                let cur_epoch = sleep_until_next_sec().await;
+                let tokens = self.attempt_acquire_n(n, cur_epoch).await;
                 if tokens > 0 {
                     return tokens;
                 }
@@ -260,18 +260,18 @@ impl RateLimiter for RateLimit<WithoutDistributedState> {
 impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithDistributedState<S>> {
     /// Tries to acquire tokens (non-blocking)
     async fn attempt_acquire_n(&self, n: Option<usize>) -> usize {
+        // We crossed a new epoch; recompute this second's budget.
+        let cur_epoch = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
+
         // Try the hot-path first: consume from the current window.
-        match self.get_tokens(n) {
+        match self.get_tokens(n, cur_epoch) {
             TokenAvailability::Available(t) => return t,
             TokenAvailability::Exhausted => return 0,
             TokenAvailability::Recompute => {}
         }
-
-        // We crossed a new epoch; recompute this second's budget.
-        let now_epoch = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs();
 
         let next_total_tokens = self.compute_refill();
 
@@ -280,10 +280,10 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithDistributedState<S>
             .store(next_total_tokens, std::sync::atomic::Ordering::Release);
 
         self.last_queried_epoch
-            .store(now_epoch, std::sync::atomic::Ordering::Release);
+            .store(cur_epoch, std::sync::atomic::Ordering::Release);
 
         // Try to take after refill.
-        match self.get_tokens(n) {
+        match self.get_tokens(n, cur_epoch) {
             TokenAvailability::Available(tokens) => tokens,
             other => {
                 warn!(
@@ -376,17 +376,12 @@ impl<S: Store> RateLimit<WithDistributedState<S>> {
     }
 
     /// Get the number of tokens available for the current time provided it is already refilled.
-    pub(crate) fn get_tokens(&self, n: Option<usize>) -> TokenAvailability {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs();
-
+    pub(crate) fn get_tokens(&self, n: Option<usize>, cur_epoch: u64) -> TokenAvailability {
         let previous_epoch = self
             .last_queried_epoch
             .load(std::sync::atomic::Ordering::Relaxed);
 
-        if previous_epoch < now {
+        if previous_epoch < cur_epoch {
             return TokenAvailability::Recompute;
         }
 
