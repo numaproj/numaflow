@@ -1034,13 +1034,6 @@ mod tests {
         )
         .await
         .unwrap();
-        rate_limiter.last_queried_epoch.store(
-            SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("Time went backwards")
-                .as_secs(),
-            std::sync::atomic::Ordering::Release,
-        );
 
         // initial state(0th second) we can acquire min number of tokens.
         let mut cur_epoch = 0;
@@ -1051,6 +1044,7 @@ mod tests {
         // the max rate limit (20).
         for i in 1..10 {
             cur_epoch += 1;
+            println!("Rate limiter state: {}", rate_limiter);
             let attempt = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
             assert_eq!(
                 attempt,
