@@ -137,7 +137,7 @@ type podTask struct {
 }
 
 // Function monitor() defines each of the worker's jobs.
-// It waits for keys in the channel, and starts a monitoring job
+// It waits for pod monitoring tasks in the channel, and starts them
 func (r *Rater) monitor(ctx context.Context, id int, taskCh <-chan *podTask) {
 	r.log.Infof("Started monitoring worker %v", id)
 	for {
