@@ -1277,21 +1277,34 @@ mod tests {
    start time
    end time
 */
+#[cfg(test)]
 mod test_utils {
     use crate::state::{OptimisticValidityUpdateSecs, Store};
     use crate::{RateLimit, TokenCalcBounds, WithState};
     use std::time::Duration;
     use tokio_util::sync::CancellationToken;
 
+    pub(super) struct TestParams {
+        pub(super) bounds: TokenCalcBounds,
+        pub(super) refresh_interval: Duration,
+        pub(super) pod_count: usize,
+        pub(super) iterations: usize,
+        pub(super) runway_update: OptimisticValidityUpdateSecs,
+    }
+
     async fn test_rate_limiter_with_state<S: Store + Sync + Clone + 'static>(
         store: S,
-        bounds: TokenCalcBounds,
-        pod_count: usize,
-        refresh_interval: Duration,
-        runway_update: OptimisticValidityUpdateSecs,
-        iterations: usize,
+        params: TestParams,
         cancel: CancellationToken,
     ) {
+        let TestParams {
+            bounds,
+            refresh_interval,
+            pod_count,
+            iterations,
+            runway_update,
+        } = params;
+
         let _cancel_guard = cancel.clone().drop_guard();
         let mut rate_limiters = vec![];
         for i in 0..pod_count {
