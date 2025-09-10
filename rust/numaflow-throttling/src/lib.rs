@@ -1,6 +1,6 @@
 use crate::state::OptimisticValidityUpdateSecs;
 use crate::state::store::Store;
-use state::RateLimiterDistributedState;
+use state::RateLimiterState;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -12,15 +12,15 @@ pub(crate) mod error;
 pub(crate) use error::Error;
 pub(crate) use error::Result;
 
-/// State module contains the implementation of the [RateLimiterDistributedState] which has the
+/// State module contains the implementation of the [RateLimiterState] which has the
 /// holds distributed consensus state required to compute the available tokens.
 pub mod state;
 
 #[derive(Clone)]
-pub struct WithoutDistributedState;
+pub struct WithoutState;
 
 #[derive(Clone)]
-pub struct WithDistributedState<S>(RateLimiterDistributedState<S>);
+pub struct WithState<S>(RateLimiterState<S>);
 
 /// RateLimiter will expose methods to query the tokens available per unit time
 #[trait_variant::make(Send)]
@@ -51,7 +51,7 @@ pub struct RateLimit<W> {
     /// Last time the token was queried. The tokens are replenished based on the time elapsed since
     /// the last query.
     last_queried_epoch: Arc<AtomicU64>,
-    /// Optional [RateLimiterDistributedState] to query for the pool-size in a distributed setting.
+    /// Optional [RateLimiterState] to query for the pool-size in a distributed setting.
     state: W,
 }
 
@@ -89,6 +89,8 @@ impl<W> RateLimit<W> {
         if *max_ever_filled >= self.token_calc_bounds.max as f32 {
             self.token_calc_bounds.max
         } else {
+            // TODO: a lot of different cases to consider on how to refill.
+            //  Today we do the simplest, if the time as progressed, we increase by the slope.
             let refill = *max_ever_filled + self.token_calc_bounds.slope;
             let capped_refill = refill.min(self.token_calc_bounds.max as f32);
 
@@ -100,7 +102,7 @@ impl<W> RateLimit<W> {
     }
 }
 
-impl RateLimit<WithoutDistributedState> {
+impl RateLimit<WithoutState> {
     /// Create a new [RateLimit] without a distributed state.
     pub fn new(token_calc_bounds: TokenCalcBounds) -> Result<Self> {
         let burst = token_calc_bounds.min;
@@ -114,7 +116,7 @@ impl RateLimit<WithoutDistributedState> {
                     .expect("Time went backwards")
                     .as_secs(),
             )),
-            state: WithoutDistributedState,
+            state: WithoutState,
         })
     }
 
@@ -180,7 +182,7 @@ async fn sleep_until_next_sec() -> u64 {
     start_of_next_sec
 }
 
-impl RateLimit<WithoutDistributedState> {
+impl RateLimit<WithoutState> {
     /// Tries to acquire tokens(non-blocking)
     async fn attempt_acquire_n(&self, n: Option<usize>, cur_epoch: u64) -> usize {
         // let's try to acquire the tokens
@@ -212,13 +214,12 @@ impl RateLimit<WithoutDistributedState> {
     }
 }
 
-impl RateLimiter for RateLimit<WithoutDistributedState> {
+impl RateLimiter for RateLimit<WithoutState> {
     /// Acquire `n` tokens. If `n` is not provided, it will acquire all the tokens.
     /// If timeout is None, returns immediately with available tokens (non-blocking).
     /// If timeout is Some, will wait up to the specified duration for some tokens to be available.
     /// Timeout is only considered when token size is zero.
     async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize {
-        // recompute the number of tokens available
         let cur_epoch = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("Time went backwards")
@@ -257,15 +258,9 @@ impl RateLimiter for RateLimit<WithoutDistributedState> {
     }
 }
 
-impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithDistributedState<S>> {
+impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithState<S>> {
     /// Tries to acquire tokens (non-blocking)
-    async fn attempt_acquire_n(&self, n: Option<usize>) -> usize {
-        // We crossed a new epoch; recompute this second's budget.
-        let cur_epoch = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs();
-
+    async fn attempt_acquire_n(&self, n: Option<usize>, cur_epoch: u64) -> usize {
         // Try the hot-path first: consume from the current window.
         match self.get_tokens(n, cur_epoch) {
             TokenAvailability::Available(t) => return t,
@@ -273,6 +268,8 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithDistributedState<S>
             TokenAvailability::Recompute => {}
         }
 
+        // We crossed a new epoch; we gave to recompute the budget i.e., recompute the number of
+        // new tokens available
         let next_total_tokens = self.compute_refill();
 
         // Store the total tokens (division happens in get_tokens)
@@ -296,14 +293,19 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithDistributedState<S>
     }
 }
 
-impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDistributedState<S>> {
+impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithState<S>> {
     /// Acquire `n` tokens. If `n` is not provided, it will acquire all the tokens.
     /// If timeout is None, returns immediately with available tokens (non-blocking).
     /// If timeout is Some, will wait up to the specified duration for some tokens to be available.
     /// Timeout is only considered when token size is zero.
     async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize {
+        let mut cur_epoch = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
+
         // First attempt - try to get tokens immediately
-        let tokens = self.attempt_acquire_n(n).await;
+        let tokens = self.attempt_acquire_n(n, cur_epoch).await;
         if tokens > 0 {
             return tokens;
         }
@@ -317,8 +319,8 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDis
         let acquisition_loop = async {
             loop {
                 // Wait for the next epoch to try again
-                sleep_until_next_sec().await;
-                let tokens = self.attempt_acquire_n(n).await;
+                cur_epoch = sleep_until_next_sec().await;
+                let tokens = self.attempt_acquire_n(n, cur_epoch).await;
                 if tokens > 0 {
                     return tokens;
                 }
@@ -330,12 +332,12 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDis
             .unwrap_or(0)
     }
 
-    async fn shutdown(&self) -> crate::Result<()> {
+    async fn shutdown(&self) -> Result<()> {
         self.state.0.shutdown().await
     }
 }
 
-impl<S: Store> RateLimit<WithDistributedState<S>> {
+impl<S: Store> RateLimit<WithState<S>> {
     /// Create a new [RateLimit] with a distributed state.
     pub async fn new(
         token_calc_bounds: TokenCalcBounds,
@@ -346,7 +348,7 @@ impl<S: Store> RateLimit<WithDistributedState<S>> {
         runway_update_len: OptimisticValidityUpdateSecs,
     ) -> Result<Self> {
         // Registers and blocks until initial consensus (AGREE) inside state::new(...)
-        let state = RateLimiterDistributedState::new(
+        let state = RateLimiterState::new(
             store,
             processor_id,
             cancel,
@@ -371,7 +373,7 @@ impl<S: Store> RateLimit<WithDistributedState<S>> {
                     .expect("Time went backwards")
                     .as_secs(),
             )),
-            state: WithDistributedState(state),
+            state: WithState(state),
         })
     }
 
@@ -540,7 +542,7 @@ mod tests {
     #[tokio::test]
     async fn test_acquire_all_tokens() {
         let bounds = TokenCalcBounds::new(10, 5, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
 
         // Should get all 5 burst tokens initially
         let tokens = rate_limiter.acquire_n(None, None).await;
@@ -563,7 +565,7 @@ mod tests {
     #[tokio::test]
     async fn test_acquire_specific_tokens() {
         let bounds = TokenCalcBounds::new(10, 5, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
 
         // Acquire 3 tokens
         let tokens = rate_limiter.acquire_n(Some(3), None).await;
@@ -581,7 +583,7 @@ mod tests {
     #[tokio::test]
     async fn test_acquire_more_than_available() {
         let bounds = TokenCalcBounds::new(10, 3, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
 
         // Try to acquire 5 tokens when only 3 are available
         let tokens = rate_limiter.acquire_n(Some(5), None).await;
@@ -595,7 +597,7 @@ mod tests {
     #[tokio::test]
     async fn test_token_refill_gradual() {
         let bounds = TokenCalcBounds::new(10, 2, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
 
         // Consume initial burst tokens
         let tokens = rate_limiter.acquire_n(None, None).await;
@@ -614,7 +616,7 @@ mod tests {
     #[tokio::test]
     async fn test_token_refill_capped_at_max() {
         let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
 
         // Consume initial tokens
         rate_limiter.acquire_n(None, None).await;
@@ -635,7 +637,7 @@ mod tests {
         assert_eq!(bounds.max, 1);
         assert_eq!(bounds.min, 1);
 
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
         let tokens = rate_limiter.acquire_n(None, None).await;
         assert_eq!(tokens, 1);
     }
@@ -647,7 +649,7 @@ mod tests {
         assert_eq!(bounds.min, 5);
         assert_eq!(bounds.slope, 7.5); // (20-5)/2
 
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
         let tokens = rate_limiter.acquire_n(None, None).await;
         assert_eq!(tokens, 5);
     }
@@ -661,7 +663,7 @@ mod tests {
         assert_eq!(bounds.min, 1);
         assert_eq!(bounds.slope, 0.1); // (2-1)/10
 
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
 
         // Initially should have 1 token (burst)
         let tokens = rate_limiter.acquire_n(None, None).await;
@@ -715,7 +717,7 @@ mod tests {
     #[tokio::test]
     async fn test_concurrent_token_acquisition() {
         let bounds = TokenCalcBounds::new(10, 10, Duration::from_secs(1));
-        let rate_limiter = Arc::new(RateLimit::<WithoutDistributedState>::new(bounds).unwrap());
+        let rate_limiter = Arc::new(RateLimit::<WithoutState>::new(bounds).unwrap());
 
         let mut join_set = tokio::task::JoinSet::new();
 
@@ -735,7 +737,7 @@ mod tests {
     #[tokio::test]
     async fn test_timeout_with_available_tokens() {
         let bounds = TokenCalcBounds::new(5, 3, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
 
         // Should return immediately when tokens are available
         let start = std::time::Instant::now();
@@ -751,7 +753,7 @@ mod tests {
     #[tokio::test]
     async fn test_timeout_when_tokens_exhausted() {
         let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
 
         rate_limiter.last_queried_epoch.store(
             SystemTime::now()
@@ -773,7 +775,7 @@ mod tests {
     #[tokio::test]
     async fn test_no_timeout_returns_immediately() {
         let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
 
         // Consume all available tokens
         let tokens = rate_limiter.acquire_n(None, None).await;
@@ -792,7 +794,7 @@ mod tests {
     #[tokio::test]
     async fn test_timeout_waits_for_next_epoch() {
         let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
 
         // Consume all available tokens
         let tokens = rate_limiter.acquire_n(None, None).await;
@@ -827,7 +829,7 @@ mod tests {
         let runway_update = OptimisticValidityUpdateSecs::default();
 
         // Create a single distributed rate limiter
-        let rate_limiter = RateLimit::<WithDistributedState<InMemoryStore>>::new(
+        let rate_limiter = RateLimit::<WithState<InMemoryStore>>::new(
             bounds,
             store.clone(),
             "processor_1",
@@ -876,7 +878,7 @@ mod tests {
         let runway_update = OptimisticValidityUpdateSecs::default();
 
         // Create three distributed rate limiters (simulating 3 pods)
-        let rate_limiter_1 = RateLimit::<WithDistributedState<InMemoryStore>>::new(
+        let rate_limiter_1 = RateLimit::<WithState<InMemoryStore>>::new(
             bounds.clone(),
             store.clone(),
             "processor_1",
@@ -887,7 +889,7 @@ mod tests {
         .await
         .unwrap();
 
-        let rate_limiter_2 = RateLimit::<WithDistributedState<InMemoryStore>>::new(
+        let rate_limiter_2 = RateLimit::<WithState<InMemoryStore>>::new(
             bounds.clone(),
             store.clone(),
             "processor_2",
@@ -898,7 +900,7 @@ mod tests {
         .await
         .unwrap();
 
-        let rate_limiter_3 = RateLimit::<WithDistributedState<InMemoryStore>>::new(
+        let rate_limiter_3 = RateLimit::<WithState<InMemoryStore>>::new(
             bounds.clone(),
             store.clone(),
             "processor_3",
@@ -996,7 +998,7 @@ mod tests {
         let runway_update = OptimisticValidityUpdateSecs::default();
 
         // Create three distributed rate limiters (simulating 3 pods)
-        let rate_limiter_1 = RateLimit::<WithDistributedState<InMemoryStore>>::new(
+        let rate_limiter_1 = RateLimit::<WithState<InMemoryStore>>::new(
             bounds.clone(),
             store.clone(),
             "processor_1",
@@ -1007,7 +1009,7 @@ mod tests {
         .await
         .unwrap();
 
-        let rate_limiter_2 = RateLimit::<WithDistributedState<InMemoryStore>>::new(
+        let rate_limiter_2 = RateLimit::<WithState<InMemoryStore>>::new(
             bounds.clone(),
             store.clone(),
             "processor_2",
@@ -1018,7 +1020,7 @@ mod tests {
         .await
         .unwrap();
 
-        let rate_limiter_3 = RateLimit::<WithDistributedState<InMemoryStore>>::new(
+        let rate_limiter_3 = RateLimit::<WithState<InMemoryStore>>::new(
             bounds.clone(),
             store.clone(),
             "processor_3",
@@ -1115,7 +1117,7 @@ mod tests {
         let runway_update = OptimisticValidityUpdateSecs::default();
 
         // Create three distributed rate limiters (simulating 3 pods)
-        let rate_limiter_1 = RateLimit::<WithDistributedState<RedisStore>>::new(
+        let rate_limiter_1 = RateLimit::<WithState<RedisStore>>::new(
             bounds.clone(),
             store.clone(),
             "processor_1",
@@ -1126,7 +1128,7 @@ mod tests {
         .await
         .unwrap();
 
-        let rate_limiter_2 = RateLimit::<WithDistributedState<RedisStore>>::new(
+        let rate_limiter_2 = RateLimit::<WithState<RedisStore>>::new(
             bounds.clone(),
             store.clone(),
             "processor_2",
@@ -1137,7 +1139,7 @@ mod tests {
         .await
         .unwrap();
 
-        let rate_limiter_3 = RateLimit::<WithDistributedState<RedisStore>>::new(
+        let rate_limiter_3 = RateLimit::<WithState<RedisStore>>::new(
             bounds.clone(),
             store.clone(),
             "processor_3",
