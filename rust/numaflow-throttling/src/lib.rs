@@ -533,7 +533,13 @@ mod tests {
     async fn test_acquire_all_tokens() {
         let bounds = TokenCalcBounds::new(10, 5, Duration::from_secs(1));
         let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
-
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
         // Should get all 5 burst tokens initially
         let tokens = rate_limiter.acquire_n(None, None).await;
         assert_eq!(tokens, 5);
@@ -556,6 +562,13 @@ mod tests {
     async fn test_acquire_specific_tokens() {
         let bounds = TokenCalcBounds::new(10, 5, Duration::from_secs(1));
         let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
 
         // Acquire 3 tokens
         let tokens = rate_limiter.acquire_n(Some(3), None).await;
@@ -574,6 +587,13 @@ mod tests {
     async fn test_acquire_more_than_available() {
         let bounds = TokenCalcBounds::new(10, 3, Duration::from_secs(1));
         let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
 
         // Try to acquire 5 tokens when only 3 are available
         let tokens = rate_limiter.acquire_n(Some(5), None).await;
@@ -588,6 +608,13 @@ mod tests {
     async fn test_token_refill_gradual() {
         let bounds = TokenCalcBounds::new(10, 2, Duration::from_secs(1));
         let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
 
         // Consume initial burst tokens
         let tokens = rate_limiter.acquire_n(None, None).await;
@@ -640,6 +667,13 @@ mod tests {
         assert_eq!(bounds.slope, 7.5); // (20-5)/2
 
         let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
         let tokens = rate_limiter.acquire_n(None, None).await;
         assert_eq!(tokens, 5);
     }
@@ -654,6 +688,13 @@ mod tests {
         assert_eq!(bounds.slope, 0.1); // (2-1)/10
 
         let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
 
         // Initially should have 1 token (burst)
         let tokens = rate_limiter.acquire_n(None, None).await;
@@ -766,6 +807,13 @@ mod tests {
     async fn test_no_timeout_returns_immediately() {
         let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
         let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
 
         // Consume all available tokens
         let tokens = rate_limiter.acquire_n(None, None).await;
@@ -785,6 +833,13 @@ mod tests {
     async fn test_timeout_waits_for_next_epoch() {
         let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
         let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
 
         // Consume all available tokens
         let tokens = rate_limiter.acquire_n(None, None).await;
@@ -889,6 +944,13 @@ mod tests {
         )
         .await
         .unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
 
         // With a single pod, it should get the full burst allocation
         let tokens = rate_limiter.acquire_n(None, None).await;
