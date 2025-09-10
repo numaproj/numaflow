@@ -481,12 +481,153 @@ mod tests {
     use tokio::time::Duration;
 
     /// Test utilities for Redis integration tests
-    #[cfg(feature = "redis-tests")]
+
     mod test_utils {
+        use std::time::Duration;
+        use tokio_util::sync::CancellationToken;
+        use crate::state::{OptimisticValidityUpdateSecs, Store};
         use crate::state::store::redis_store::{RedisMode, RedisStore};
+        use crate::{RateLimit, RateLimiter, TokenCalcBounds, WithState};
+
+        /// Test case struct for distributed rate limiter tests [create::run_distributed_rate_limiter_multiple_pods_test_cases]
+        ///
+        /// # Arguments
+        ///
+        /// * `max_tokens` - The maximum number of tokens that can be stored in the bucket
+        /// * `burst_tokens` - The number of tokens that can be burst in a single second
+        /// * `duration` - The duration of the bucket
+        /// * `pod_count` - The number of pods
+        /// * `iterations` - The number of iterations
+        /// * `store` - The store to use for the test
+        pub(super) struct TestCase<S> {
+            pub(super) max_tokens: usize,
+            pub(super) burst_tokens: usize,
+            pub(super) duration: Duration,
+            pub(super) pod_count: usize,
+            pub(super) iterations: usize,
+            pub(super) store: S,
+        }
+
+        /// Struct to hold test parameters for rate limiter
+        ///
+        /// # Arguments
+        ///
+        /// * `bounds` - A struct containing the token calculation bounds
+        /// * `refresh_interval` - The interval at which the store should be refreshed (redis)
+        /// * `pod_count` - The number of pods/processors to simulate
+        /// * `iterations` - The number of iterations to run the rate limiter for
+        /// * `runway_update` - The runway update to use
+        pub(super) struct TestParams {
+            pub(super) bounds: TokenCalcBounds,
+            pub(super) refresh_interval: Duration,
+            pub(super) pod_count: usize,
+            pub(super) iterations: usize,
+            pub(super) runway_update: OptimisticValidityUpdateSecs,
+        }
+
+        /// A generic utility function to test rate limiter with generic state
+        ///
+        /// # Arguments
+        ///
+        /// * `store` - A trait object that implements the [Store] trait
+        /// * `params` - A struct containing the test parameters
+        /// * `cancel` - A [CancellationToken] to cancel the test
+        pub async fn test_rate_limiter_with_state<S: Store + Sync + Clone + 'static>(
+            store: S,
+            params: TestParams,
+            cancel: CancellationToken,
+        ) {
+            // Unpack test params for usage
+            let TestParams {
+                bounds,
+                refresh_interval,
+                pod_count,
+                iterations,
+                runway_update,
+            } = params;
+
+            // create pod_count number of rate limiters with passed store
+            let mut rate_limiters = vec![];
+            for i in 0..pod_count {
+                rate_limiters.push(
+                    RateLimit::<WithState<S>>::new(
+                        bounds.clone(),
+                        store.clone(),
+                        &format!("processor_{}", i),
+                        cancel.clone(),
+                        refresh_interval,
+                        runway_update.clone(),
+                    )
+                    .await
+                    .unwrap(),
+                );
+            }
+
+            // cur_epoch = 0 -> at t = 0;
+            // at t = 0, each processor should get (min|burst)/pod_count tokens
+            let mut cur_epoch = 0;
+            let mut total_tokens = 0;
+            for rate_limiter in rate_limiters.iter() {
+                let tokens = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
+                total_tokens += tokens;
+                assert_eq!(
+                    tokens,
+                    bounds.min / pod_count,
+                );
+            }
+
+            // Total tokens distributed at t=0 should equal burst/pod_count
+            assert_eq!(
+                total_tokens, bounds.min,
+                "Total distributed should equal burst"
+            );
+
+            // for each additional iteration, each processor should get
+            // (min|burst)/pod_count additional tokens until fully ramped up
+            for i in 1..=iterations {
+                cur_epoch += 1;
+                for rate_limiter in rate_limiters.iter() {
+                    let tokens = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
+                    assert_eq!(
+                        tokens,
+                        calc_cur_processor_tokens(&bounds, i, pod_count),
+                        "Number of tokens fetched in each iteration \
+                should increase by slope/pod_count until ramp up",
+                    );
+                }
+            }
+
+            for rate_limiter in rate_limiters.iter() {
+                rate_limiter.shutdown().await.unwrap();
+            }
+        }
+
+        /// Calculate the number of tokens available to a processor at a given iteration
+        ///
+        /// # Arguments
+        ///
+        /// * `bounds` - A struct containing the token calculation bounds
+        /// * `iteration` - The iteration count. This is the number of times the rate limiter has been called
+        /// * `pod_count` - The number of pods/processors
+        ///
+        /// # Returns
+        ///
+        /// The number of tokens available to a processor at a given iteration
+        fn calc_cur_processor_tokens(
+            bounds: &TokenCalcBounds,
+            iteration: usize,
+            pod_count: usize) -> usize {
+            // Actual ramp up duration is recalculated here
+            let actual_ramp_up = ((bounds.max - bounds.min) as f32 / bounds.slope) as usize;
+            // effective ramp up is the minimum of actual ramp up and iteration
+            let effective_ramp_up = actual_ramp_up.min(iteration);
+            // calculate tokens allowed to each processor based on effective ramp up
+            (bounds.min + (effective_ramp_up as f32 * bounds.slope) as usize) / pod_count
+        }
 
         /// Creates a Redis store for testing with a unique key prefix
         /// Returns None if Redis is not available
+        #[cfg(feature = "redis-tests")]
         pub async fn create_test_redis_store(test_name: &str) -> Option<RedisStore> {
             let redis_url = "redis://127.0.0.1:6379";
 
@@ -515,6 +656,7 @@ mod tests {
         }
 
         /// Cleans up Redis keys after a test
+        #[cfg(feature = "redis-tests")]
         pub fn cleanup_redis_keys(test_name: &str) {
             let redis_url = "redis://127.0.0.1:6379";
             if let Ok(client) = redis::Client::open(redis_url)
@@ -981,52 +1123,72 @@ mod tests {
         use crate::state::OptimisticValidityUpdateSecs;
         use crate::state::store::in_memory_store::InMemoryStore;
 
-        let bounds = TokenCalcBounds::new(60, 30, Duration::from_secs(10));
         // common state store for all the pods
-        let store = InMemoryStore::new();
+        let in_memory_store = InMemoryStore::new();
         let cancel = CancellationToken::new();
         let refresh_interval = Duration::from_millis(50);
         let runway_update = OptimisticValidityUpdateSecs::default();
 
-        let pod_count = 3;
-        let mut rate_limiters = vec![];
-        for i in 0..pod_count {
-            rate_limiters.push(
-                RateLimit::<WithState<InMemoryStore>>::new(
-                    bounds.clone(),
-                    store.clone(),
-                    &format!("processor_{}", i),
-                    cancel.clone(),
-                    refresh_interval,
-                    runway_update.clone(),
-                )
-                .await
-                .unwrap(),
-            );
-        }
+        let test_cases = [
+            test_utils::TestCase {
+                max_tokens: 60,
+                burst_tokens: 30,
+                duration: Duration::from_secs(10),
+                pod_count: 3,
+                iterations: 10,
+                store: in_memory_store.clone(),
+            },
+            test_utils::TestCase {
+                max_tokens: 120,
+                burst_tokens: 60,
+                duration: Duration::from_secs(10),
+                pod_count: 5,
+                iterations: 20,
+                store: in_memory_store.clone(),
+            },
+        ];
 
-        let mut cur_epoch = 0;
-        let mut total_tokens = 0;
-        // Each pod should get 1/3 of the burst tokens (15/3 = 5)
-        for rate_limiter in rate_limiters.iter() {
-            let tokens = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
-            total_tokens += tokens;
-            assert_eq!(tokens, 10, "Each pod should get 1/3 of burst tokens");
-        }
-
-        // Total tokens distributed should equal burst
-        assert_eq!(total_tokens, 30, "Total distributed should equal burst");
-
-        for i in 1..10 {
-            cur_epoch += 1;
-            for rate_limiter in rate_limiters.iter() {
-                let tokens = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
-                assert_eq!(tokens, 10 + i, "Each pod should get 1 more token");
-            }
-        }
-
+        run_distributed_rate_limiter_multiple_pods_test_cases(&cancel, refresh_interval, runway_update, test_cases).await;
         // Clean up
         cancel.cancel();
+    }
+
+    /// Utility function to run distributed rate limiter multiple pods test cases
+    /// Used for running
+    /// - [test_distributed_rate_limiter_multiple_pods]
+    /// - [test_distributed_rate_limiter_multiple_pods_redis]
+    ///
+    /// # Arguments
+    ///
+    /// * `cancel` - The cancellation token to cancel the test
+    /// * `refresh_interval` - The refresh interval for the rate limiter
+    /// * `runway_update` - The runway update for the rate limiter
+    /// * `test_cases` - The test cases to run
+    async fn run_distributed_rate_limiter_multiple_pods_test_cases<S: Store + Send + Sync + 'static>(
+        cancel: &CancellationToken,
+        refresh_interval: Duration,
+        runway_update: OptimisticValidityUpdateSecs,
+        test_cases: [test_utils::TestCase<S>; 2]) {
+        for test_case in test_cases {
+            let test_utils::TestCase {
+                max_tokens,
+                burst_tokens,
+                duration,
+                pod_count,
+                iterations,
+                store,
+            } = test_case;
+            let bounds = TokenCalcBounds::new(max_tokens, burst_tokens, duration);
+            let temp_runway_update = runway_update.clone();
+            let test_params = test_utils::TestParams {
+                bounds,
+                refresh_interval,
+                pod_count,
+                iterations,
+                runway_update: temp_runway_update,
+            };
+            test_utils::test_rate_limiter_with_state(store, test_params, cancel.clone()).await;
+        }
     }
 
     #[tokio::test]
@@ -1264,91 +1426,42 @@ mod tests {
         // Clean up
         cancel.cancel();
     }
-}
 
-/*
-  // a generic test function to take these params and run the tests
-   max -> max number of tokens that can be added in a unit of time.
-   min -> minimum number of tokens available at t=0 (origin)
-   duration -> duration at which we can add max tokens.
+    #[tokio::test]
+    #[cfg(feature = "redis-tests")]
+    async fn test_distributed_rate_limiter_multiple_pods_redis() {
+        use crate::state::OptimisticValidityUpdateSecs;
 
-   store -> trait
-   x -> number of active processors (default to 1)
-   start time
-   end time
-*/
-#[cfg(test)]
-mod test_utils {
-    use crate::state::{OptimisticValidityUpdateSecs, Store};
-    use crate::{RateLimit, TokenCalcBounds, WithState};
-    use std::time::Duration;
-    use tokio_util::sync::CancellationToken;
+        // common state store for all the pods
+        let redis_store = match test_utils::create_test_redis_store("test_distributed_rate_limiter_multiple_pods_redis").await {
+            Some(store) => store,
+            None => return, // Skip test if Redis is not available
+        };
+        let cancel = CancellationToken::new();
+        let refresh_interval = Duration::from_millis(50);
+        let runway_update = OptimisticValidityUpdateSecs::default();
 
-    pub(super) struct TestParams {
-        pub(super) bounds: TokenCalcBounds,
-        pub(super) refresh_interval: Duration,
-        pub(super) pod_count: usize,
-        pub(super) iterations: usize,
-        pub(super) runway_update: OptimisticValidityUpdateSecs,
-    }
+        let test_cases = [
+            test_utils::TestCase {
+                max_tokens: 60,
+                burst_tokens: 30,
+                duration: Duration::from_secs(10),
+                pod_count: 3,
+                iterations: 10,
+                store: redis_store.clone(),
+            },
+            test_utils::TestCase {
+                max_tokens: 120,
+                burst_tokens: 60,
+                duration: Duration::from_secs(10),
+                pod_count: 5,
+                iterations: 20,
+                store: redis_store.clone(),
+            },
+        ];
 
-    async fn test_rate_limiter_with_state<S: Store + Sync + Clone + 'static>(
-        store: S,
-        params: TestParams,
-        cancel: CancellationToken,
-    ) {
-        let TestParams {
-            bounds,
-            refresh_interval,
-            pod_count,
-            iterations,
-            runway_update,
-        } = params;
-
-        let _cancel_guard = cancel.clone().drop_guard();
-        let mut rate_limiters = vec![];
-        for i in 0..pod_count {
-            rate_limiters.push(
-                RateLimit::<WithState<S>>::new(
-                    bounds.clone(),
-                    store.clone(),
-                    &format!("processor_{}", i),
-                    cancel.clone(),
-                    refresh_interval,
-                    runway_update.clone(),
-                )
-                .await
-                .unwrap(),
-            );
-        }
-
-        let mut cur_epoch = 0;
-        let mut total_tokens = 0;
-        for rate_limiter in rate_limiters.iter() {
-            let tokens = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
-            total_tokens += tokens;
-            assert_eq!(
-                tokens,
-                bounds.min / pod_count,
-                "Each pod should get 1/3 of burst tokens"
-            );
-        }
-
-        // Total tokens distributed should equal burst
-        assert_eq!(
-            total_tokens, bounds.min,
-            "Total distributed should equal burst"
-        );
-
-        for _ in 1..iterations {
-            cur_epoch += 1;
-            for rate_limiter in rate_limiters.iter() {
-                let tokens = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
-                assert_eq!(
-                    tokens,
-                    (bounds.min / pod_count) + (bounds.slope as usize / pod_count),
-                );
-            }
-        }
+        run_distributed_rate_limiter_multiple_pods_test_cases(&cancel, refresh_interval, runway_update, test_cases).await;
+        // Clean up
+        cancel.cancel();
     }
 }
