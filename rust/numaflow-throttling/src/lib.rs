@@ -483,11 +483,11 @@ mod tests {
     /// Test utilities for Redis integration tests
 
     mod test_utils {
+        use crate::state::store::redis_store::{RedisMode, RedisStore};
+        use crate::state::{OptimisticValidityUpdateSecs, Store};
+        use crate::{RateLimit, RateLimiter, TokenCalcBounds, WithState};
         use std::time::Duration;
         use tokio_util::sync::CancellationToken;
-        use crate::state::{OptimisticValidityUpdateSecs, Store};
-        use crate::state::store::redis_store::{RedisMode, RedisStore};
-        use crate::{RateLimit, RateLimiter, TokenCalcBounds, WithState};
 
         /// Test case struct for distributed rate limiter tests [create::run_distributed_rate_limiter_multiple_pods_test_cases]
         ///
@@ -570,10 +570,7 @@ mod tests {
             for rate_limiter in rate_limiters.iter() {
                 let tokens = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
                 total_tokens += tokens;
-                assert_eq!(
-                    tokens,
-                    bounds.min / pod_count,
-                );
+                assert_eq!(tokens, bounds.min / pod_count,);
             }
 
             // Total tokens distributed at t=0 should equal burst/pod_count
@@ -616,7 +613,8 @@ mod tests {
         fn calc_cur_processor_tokens(
             bounds: &TokenCalcBounds,
             iteration: usize,
-            pod_count: usize) -> usize {
+            pod_count: usize,
+        ) -> usize {
             // Actual ramp up duration is recalculated here
             let actual_ramp_up = ((bounds.max - bounds.min) as f32 / bounds.slope) as usize;
             // effective ramp up is the minimum of actual ramp up and iteration
@@ -1154,7 +1152,13 @@ mod tests {
                 store: in_memory_store.clone(),
             },
         ];
-        run_distributed_rate_limiter_multiple_pods_test_cases(&cancel, refresh_interval, runway_update, test_cases).await;
+        run_distributed_rate_limiter_multiple_pods_test_cases(
+            &cancel,
+            refresh_interval,
+            runway_update,
+            test_cases,
+        )
+        .await;
         // Clean up
         cancel.cancel();
     }
@@ -1170,11 +1174,14 @@ mod tests {
     /// * `refresh_interval` - The refresh interval for the rate limiter
     /// * `runway_update` - The runway update for the rate limiter
     /// * `test_cases` - The test cases to run
-    async fn run_distributed_rate_limiter_multiple_pods_test_cases<S: Store + Send + Sync + 'static>(
+    async fn run_distributed_rate_limiter_multiple_pods_test_cases<
+        S: Store + Send + Sync + 'static,
+    >(
         cancel: &CancellationToken,
         refresh_interval: Duration,
         runway_update: OptimisticValidityUpdateSecs,
-        test_cases: [test_utils::TestCase<S>; 2]) {
+        test_cases: [test_utils::TestCase<S>; 2],
+    ) {
         for test_case in test_cases {
             let test_utils::TestCase {
                 max_tokens,
@@ -1439,7 +1446,11 @@ mod tests {
         use crate::state::OptimisticValidityUpdateSecs;
 
         // common state store for all the pods
-        let redis_store = match test_utils::create_test_redis_store("test_distributed_rate_limiter_multiple_pods_redis").await {
+        let redis_store = match test_utils::create_test_redis_store(
+            "test_distributed_rate_limiter_multiple_pods_redis",
+        )
+        .await
+        {
             Some(store) => store,
             None => return, // Skip test if Redis is not available
         };
@@ -1466,7 +1477,13 @@ mod tests {
             },
         ];
 
-        run_distributed_rate_limiter_multiple_pods_test_cases(&cancel, refresh_interval, runway_update, test_cases).await;
+        run_distributed_rate_limiter_multiple_pods_test_cases(
+            &cancel,
+            refresh_interval,
+            runway_update,
+            test_cases,
+        )
+        .await;
         // Clean up
         cancel.cancel();
     }
