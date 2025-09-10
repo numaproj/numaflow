@@ -36,8 +36,8 @@ pub trait RateLimiter {
 }
 
 /// RateLimit is the main struct that will be used by the user to get the tokens available for the
-/// current time window. It has to be clonable so it can be used across multiple tasks (e.g., pipeline
-/// with multiple partitions).
+/// current time window. It has to be clonable so it can be used across multiple process-a-stream
+/// tasks (e.g., pipeline with multiple partitions).
 #[derive(Clone)]
 pub struct RateLimit<W> {
     token_calc_bounds: TokenCalcBounds,
@@ -815,6 +815,72 @@ mod tests {
         assert_eq!(tokens, 1);
         // Should return quickly since we forced epoch reset
         assert!(elapsed < Duration::from_millis(100));
+    }
+
+    #[tokio::test]
+    async fn test_attempt_acquire_n_with_state_rate_limiter_single_pod() {
+        use crate::state::OptimisticValidityUpdateSecs;
+        use crate::state::store::in_memory_store::InMemoryStore;
+
+        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(10));
+        let store = InMemoryStore::new();
+        let cancel = CancellationToken::new();
+        let refresh_interval = Duration::from_millis(100);
+        let runway_update = OptimisticValidityUpdateSecs::default();
+
+        // expected = [10,11,12 .. .20]
+        // input = for from=time to=time+end
+        // result = [] populated while running for loop
+        // assert_eq!(result, expected)
+
+        // Create a single distributed rate limiter
+        let rate_limiter = RateLimit::<WithState<InMemoryStore>>::new(
+            bounds,
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update,
+        )
+        .await
+        .unwrap();
+
+        let cur_epoch = 60_000;
+        // let's go back by a sec to make sure we have all available tokens
+        // rate_limiter
+        //     .last_queried_epoch
+        //     .store(cur_epoch - 1, std::sync::atomic::Ordering::Release);
+        let attempt = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
+        assert_eq!(attempt, 10, "Single pod should get full burst tokens");
+
+        // Should get 0 tokens on next call within same epoch
+        let tokens = rate_limiter.attempt_acquire_n(Some(5), cur_epoch).await;
+        assert_eq!(tokens, 0, "No tokens should be available in same epoch");
+
+        println!("Rate limiter: {}", rate_limiter);
+
+        // let's rewind and we should get all the tokens again
+        rate_limiter
+            .last_queried_epoch
+            .store(cur_epoch, std::sync::atomic::Ordering::Release);
+        println!("Rate limiter: {}", rate_limiter);
+        let attempt = rate_limiter.attempt_acquire_n(None, cur_epoch + 1).await;
+        println!("Rate limiter: {}", rate_limiter);
+        assert_eq!(attempt, 11, "Single pod should get full burst tokens");
+
+        // let's go back by a sec to make sure we have all available tokens
+        rate_limiter
+            .last_queried_epoch
+            .store(0, std::sync::atomic::Ordering::Release);
+        // Should refill to max capacity for single pod
+        let tokens = rate_limiter.acquire_n(None, None).await;
+        assert_eq!(
+            tokens, 12,
+            "Single pod should get full max tokens after refill"
+        );
+
+        // Clean up
+        cancel.cancel();
     }
 
     #[tokio::test]
