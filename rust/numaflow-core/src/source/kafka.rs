@@ -7,6 +7,7 @@ use numaflow_kafka::source::{KafkaMessage, KafkaSource, KafkaSourceConfig};
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::message::{Message, MessageID, Offset, StringOffset};
+use crate::metadata::Metadata;
 use crate::source;
 
 impl TryFrom<KafkaMessage> for Message {
@@ -48,7 +49,11 @@ impl TryFrom<KafkaMessage> for Message {
                 index: 0,
             },
             headers: message.headers,
-            metadata: None,
+            metadata: Some(Metadata {
+                previous_vertex: get_vertex_name().to_string(),
+                sys_metadata: Default::default(),
+                user_metadata: Default::default(),
+            }),
             is_late: false,
         })
     }

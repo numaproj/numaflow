@@ -585,7 +585,8 @@ mod tests {
 
     use super::*;
     use crate::message::StringOffset;
-    use crate::message::{IntOffset, MessageID, Metadata, Offset};
+    use crate::message::{IntOffset, MessageID, Offset};
+    use crate::metadata::Metadata;
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 

@@ -667,7 +667,6 @@ mod tests {
     use numaflow_pb::clients::map::map_client::MapClient;
     use tempfile::TempDir;
     use tokio::sync::{mpsc::Sender, oneshot};
-    use tokio::time::sleep;
 
     use super::*;
     use crate::{
@@ -931,7 +930,7 @@ mod tests {
                 ..Default::default()
             };
             input_tx.send(message).await.unwrap();
-            sleep(Duration::from_millis(10)).await;
+            tokio::time::sleep(Duration::from_millis(10)).await;
         }
 
         drop(input_tx);
@@ -1361,7 +1360,7 @@ mod tests {
                 ..Default::default()
             };
             input_tx.send(message).await.unwrap();
-            sleep(Duration::from_millis(10)).await;
+            tokio::time::sleep(Duration::from_millis(10)).await;
         }
 
         drop(input_tx);

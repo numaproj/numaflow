@@ -3,6 +3,7 @@
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Result;
 use crate::message::{Message, MessageID, Offset, StringOffset};
+use crate::metadata::Metadata;
 use crate::source;
 use crate::source::{SourceAcker, SourceReader};
 use numaflow_http::HttpMessage;
@@ -37,7 +38,11 @@ impl From<HttpMessage> for Message {
                 index: 0,
             },
             headers: value.headers,
-            metadata: None,
+            metadata: Some(Metadata {
+                previous_vertex: get_vertex_name().to_string(),
+                sys_metadata: Default::default(),
+                user_metadata: Default::default(),
+            }),
             is_late: false,
         }
     }

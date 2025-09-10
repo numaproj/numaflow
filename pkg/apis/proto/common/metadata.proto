@@ -1,0 +1,37 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+syntax = "proto3";
+option go_package = "github.com/numaproj/numaflow/pkg/apis/proto/common";
+
+package metadata;
+
+// Metadata is the metadata of the message
+message Metadata {
+  // PreviousVertex is the name of the previous vertex
+  string previous_vertex = 1;
+  // SystemMetadata is the system metadata of the message
+  // Key of the map is the group name
+  map<string, KeyValueGroup> sys_metadata = 2;
+  // UserMetadata is the user metadata of the message
+  // Key of the map is the group name
+  map<string, KeyValueGroup> user_metadata = 3;
+}
+
+// KeyValueGroup is a group of key-value pairs for a given group.
+message KeyValueGroup {
+  map<string, bytes> key_value = 1;
+}

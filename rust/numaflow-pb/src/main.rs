@@ -1,4 +1,7 @@
 fn main() {
+    // Common protobuf objects
+    build_common();
+
     // gRPC clients for UDF
     build_client();
 
@@ -6,11 +9,19 @@ fn main() {
     build_objects();
 }
 
+fn build_common() {
+    prost_build::Config::new()
+        .out_dir("src/common")
+        .compile_protos(&["proto/metadata.proto"], &["proto"])
+        .expect("failed to compile common protos");
+}
+
 fn build_client() {
     tonic_build::configure()
         .build_client(true)
         .build_server(false)
         .out_dir("src/clients")
+        .extern_path(".metadata", "crate::common::metadata")
         .compile_protos(
             &[
                 "proto/source/v1/source.proto",
@@ -32,6 +43,7 @@ fn build_client() {
 fn build_objects() {
     prost_build::Config::new()
         .out_dir("src/objects")
+        .extern_path(".metadata", "crate::common::metadata")
         .compile_protos(
             &[
                 "proto/isb/message.proto",

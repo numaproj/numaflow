@@ -50,6 +50,7 @@ gen-protoc(){
     protoc \
       -I /usr/local/include \
       -I . \
+      -I pkg/apis/proto \
       -I ${GOPATH}/src \
       --go_out=paths=source_relative:. \
       --go-grpc_out=paths=source_relative:. \
@@ -60,6 +61,8 @@ gen-protoc(){
 gen-protoc pkg/apis/proto/daemon/daemon.proto
 
 gen-protoc pkg/apis/proto/mvtxdaemon/mvtxdaemon.proto
+
+gen-protoc pkg/apis/proto/metadata.proto
 
 gen-protoc pkg/apis/proto/isb/message.proto
 

@@ -14,6 +14,7 @@ use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
 use crate::message::{Message, MessageID, Offset, StringOffset};
+use crate::metadata::Metadata;
 use crate::reader::LagReader;
 use crate::shared::grpc::utc_from_timestamp;
 use crate::source::{SourceAcker, SourceReader};
@@ -160,7 +161,18 @@ impl TryFrom<read_response::Result> for Message {
             },
             headers: result.headers,
             watermark: None,
-            metadata: None,
+            metadata: Some(match result.metadata {
+                Some(source_metadata) => {
+                    let mut metadata: Metadata = source_metadata.into();
+                    metadata.previous_vertex = config::get_vertex_name().to_string();
+                    metadata
+                }
+                None => Metadata {
+                    previous_vertex: config::get_vertex_name().to_string(),
+                    sys_metadata: Default::default(),
+                    user_metadata: Default::default(),
+                },
+            }),
             is_late: false,
         })
     }
@@ -480,6 +492,7 @@ mod tests {
             )),
             keys: vec!["key1".to_string()],
             headers: HashMap::new(),
+            metadata: None,
         };
 
         let message: Result<crate::message::Message> = result.try_into();
