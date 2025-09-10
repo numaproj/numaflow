@@ -1036,6 +1036,13 @@ mod tests {
         )
         .await
         .unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
 
         // initial state(0th second) we can acquire min number of tokens.
         let mut cur_epoch = 0;
@@ -1147,7 +1154,6 @@ mod tests {
                 store: in_memory_store.clone(),
             },
         ];
-
         run_distributed_rate_limiter_multiple_pods_test_cases(&cancel, refresh_interval, runway_update, test_cases).await;
         // Clean up
         cancel.cancel();
