@@ -110,12 +110,7 @@ impl RateLimit<WithoutState> {
             token_calc_bounds,
             token: Arc::new(AtomicUsize::new(burst)),
             max_ever_filled: Arc::new(Mutex::new(burst as f32)),
-            last_queried_epoch: Arc::new(AtomicU64::new(
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("Time went backwards")
-                    .as_secs(),
-            )),
+            last_queried_epoch: Arc::new(AtomicU64::new(0)),
             state: WithoutState,
         })
     }
@@ -367,12 +362,7 @@ impl<S: Store> RateLimit<WithState<S>> {
             // Store the full burst amount, we divide by pool size when querying tokens
             token: Arc::new(AtomicUsize::new(burst)),
             max_ever_filled: Arc::new(Mutex::new(burst as f32)),
-            last_queried_epoch: Arc::new(AtomicU64::new(
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("Time went backwards")
-                    .as_secs(),
-            )),
+            last_queried_epoch: Arc::new(AtomicU64::new(0)),
             state: WithState(state),
         })
     }
@@ -823,6 +813,11 @@ mod tests {
         use crate::state::store::in_memory_store::InMemoryStore;
 
         let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(10));
+        // time 0 -> 10
+        // time 1 -> 11
+        // time 2 -> 12
+        // time 3 -> 13
+        // time 10 -> 20
         let store = InMemoryStore::new();
         let cancel = CancellationToken::new();
         let refresh_interval = Duration::from_millis(100);
@@ -845,39 +840,28 @@ mod tests {
         .await
         .unwrap();
 
-        let cur_epoch = 60_000;
-        // let's go back by a sec to make sure we have all available tokens
-        // rate_limiter
-        //     .last_queried_epoch
-        //     .store(cur_epoch - 1, std::sync::atomic::Ordering::Release);
+        // initial state(0th second) we can acquire min number of tokens.
+        let mut cur_epoch = 0;
         let attempt = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
         assert_eq!(attempt, 10, "Single pod should get full burst tokens");
 
-        // Should get 0 tokens on next call within same epoch
-        let tokens = rate_limiter.attempt_acquire_n(Some(5), cur_epoch).await;
-        assert_eq!(tokens, 0, "No tokens should be available in same epoch");
+        // Since the slope is 1, we should get 1 more token each second until we reach
+        // the max rate limit (20).
+        for i in 1..10 {
+            cur_epoch += 1;
+            let attempt = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
+            assert_eq!(
+                attempt,
+                10 + i,
+                "No tokens should be available in same epoch"
+            );
+        }
 
-        println!("Rate limiter: {}", rate_limiter);
+        let attempt = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
+        assert_eq!(attempt, 0, "No tokens should be available in same epoch");
 
-        // let's rewind and we should get all the tokens again
-        rate_limiter
-            .last_queried_epoch
-            .store(cur_epoch, std::sync::atomic::Ordering::Release);
-        println!("Rate limiter: {}", rate_limiter);
         let attempt = rate_limiter.attempt_acquire_n(None, cur_epoch + 1).await;
-        println!("Rate limiter: {}", rate_limiter);
-        assert_eq!(attempt, 11, "Single pod should get full burst tokens");
-
-        // let's go back by a sec to make sure we have all available tokens
-        rate_limiter
-            .last_queried_epoch
-            .store(0, std::sync::atomic::Ordering::Release);
-        // Should refill to max capacity for single pod
-        let tokens = rate_limiter.acquire_n(None, None).await;
-        assert_eq!(
-            tokens, 12,
-            "Single pod should get full max tokens after refill"
-        );
+        assert_eq!(attempt, 20, "No tokens should be available in same epoch");
 
         // Clean up
         cancel.cancel();
@@ -930,122 +914,54 @@ mod tests {
         cancel.cancel();
     }
 
-    // ignore this test for now since it is flaky
     #[tokio::test]
-    #[ignore]
     async fn test_distributed_rate_limiter_multiple_pods() {
         use crate::state::OptimisticValidityUpdateSecs;
         use crate::state::store::in_memory_store::InMemoryStore;
 
-        let bounds = TokenCalcBounds::new(30, 15, Duration::from_secs(1));
+        let bounds = TokenCalcBounds::new(60, 30, Duration::from_secs(10));
+        // common state store for all the pods
         let store = InMemoryStore::new();
         let cancel = CancellationToken::new();
         let refresh_interval = Duration::from_millis(50);
         let runway_update = OptimisticValidityUpdateSecs::default();
 
-        // Create three distributed rate limiters (simulating 3 pods)
-        let rate_limiter_1 = RateLimit::<WithState<InMemoryStore>>::new(
-            bounds.clone(),
-            store.clone(),
-            "processor_1",
-            cancel.clone(),
-            refresh_interval,
-            runway_update.clone(),
-        )
-        .await
-        .unwrap();
+        let pod_count = 3;
+        let mut rate_limiters = vec![];
+        for i in 0..pod_count {
+            rate_limiters.push(
+                RateLimit::<WithState<InMemoryStore>>::new(
+                    bounds.clone(),
+                    store.clone(),
+                    &format!("processor_{}", i),
+                    cancel.clone(),
+                    refresh_interval,
+                    runway_update.clone(),
+                )
+                .await
+                .unwrap(),
+            );
+        }
 
-        let rate_limiter_2 = RateLimit::<WithState<InMemoryStore>>::new(
-            bounds.clone(),
-            store.clone(),
-            "processor_2",
-            cancel.clone(),
-            refresh_interval,
-            runway_update.clone(),
-        )
-        .await
-        .unwrap();
-
-        let rate_limiter_3 = RateLimit::<WithState<InMemoryStore>>::new(
-            bounds.clone(),
-            store.clone(),
-            "processor_3",
-            cancel.clone(),
-            refresh_interval,
-            runway_update,
-        )
-        .await
-        .unwrap();
-
-        // Wait for consensus to be reached among all pods
-        tokio::time::sleep(Duration::from_millis(300)).await;
-
+        let mut cur_epoch = 0;
+        let mut total_tokens = 0;
         // Each pod should get 1/3 of the burst tokens (15/3 = 5)
-        let tokens_1 = rate_limiter_1.acquire_n(None, None).await;
-        let tokens_2 = rate_limiter_2.acquire_n(None, None).await;
-        let tokens_3 = rate_limiter_3.acquire_n(None, None).await;
-
-        // Each pod should get equal share
-        assert_eq!(tokens_1, 5, "Pod 1 should get 1/3 of burst tokens");
-        assert_eq!(tokens_2, 5, "Pod 2 should get 1/3 of burst tokens");
-        assert_eq!(tokens_3, 5, "Pod 3 should get 1/3 of burst tokens");
+        for rate_limiter in rate_limiters.iter() {
+            let tokens = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
+            total_tokens += tokens;
+            assert_eq!(tokens, 10, "Each pod should get 1/3 of burst tokens");
+        }
 
         // Total tokens distributed should equal burst
-        assert_eq!(
-            tokens_1 + tokens_2 + tokens_3,
-            15,
-            "Total distributed should equal burst"
-        );
+        assert_eq!(total_tokens, 30, "Total distributed should equal burst");
 
-        // Force time passage for all pods to trigger refill
-        rate_limiter_1
-            .last_queried_epoch
-            .store(0, std::sync::atomic::Ordering::Release);
-        rate_limiter_2
-            .last_queried_epoch
-            .store(0, std::sync::atomic::Ordering::Release);
-        rate_limiter_3
-            .last_queried_epoch
-            .store(0, std::sync::atomic::Ordering::Release);
-
-        // After refill, each pod should get 1/3 of max tokens (30/3 = 10)
-        let tokens_1_refill = rate_limiter_1.acquire_n(None, None).await;
-        let tokens_2_refill = rate_limiter_2.acquire_n(None, None).await;
-        let tokens_3_refill = rate_limiter_3.acquire_n(None, None).await;
-
-        assert_eq!(
-            tokens_1_refill, 10,
-            "Pod 1 should get 1/3 of max tokens after refill"
-        );
-        assert_eq!(
-            tokens_2_refill, 10,
-            "Pod 2 should get 1/3 of max tokens after refill"
-        );
-        assert_eq!(
-            tokens_3_refill, 10,
-            "Pod 3 should get 1/3 of max tokens after refill"
-        );
-
-        // Total tokens after refill should equal max
-        assert_eq!(
-            tokens_1_refill + tokens_2_refill + tokens_3_refill,
-            30,
-            "Total distributed after refill should equal max"
-        );
-
-        // Test partial token acquisition
-        rate_limiter_1
-            .last_queried_epoch
-            .store(0, std::sync::atomic::Ordering::Release);
-
-        let partial_tokens = rate_limiter_1.acquire_n(Some(3), None).await;
-        assert_eq!(
-            partial_tokens, 3,
-            "Should acquire exactly 3 tokens when requested"
-        );
-
-        let remaining_tokens = rate_limiter_1.acquire_n(None, None).await;
-        assert_eq!(remaining_tokens, 7, "Should get remaining 7 tokens");
+        for i in 1..10 {
+            cur_epoch += 1;
+            for rate_limiter in rate_limiters.iter() {
+                let tokens = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
+                assert_eq!(tokens, 10 + i, "Each pod should get 1 more token");
+            }
+        }
 
         // Clean up
         cancel.cancel();
@@ -1285,5 +1201,79 @@ mod tests {
 
         // Clean up
         cancel.cancel();
+    }
+}
+
+/*
+  // a generic test function to take these params and run the tests
+   max -> max number of tokens that can be added in a unit of time.
+   min -> minimum number of tokens available at t=0 (origin)
+   duration -> duration at which we can add max tokens.
+
+   store -> trait
+   x -> number of active processors (default to 1)
+   start time
+   end time
+*/
+mod test_utils {
+    use crate::state::{OptimisticValidityUpdateSecs, Store};
+    use crate::{RateLimit, TokenCalcBounds, WithState};
+    use std::time::Duration;
+    use tokio_util::sync::CancellationToken;
+
+    async fn test_rate_limiter_with_state<S: Store + Sync + Clone + 'static>(
+        store: S,
+        bounds: TokenCalcBounds,
+        pod_count: usize,
+        refresh_interval: Duration,
+        runway_update: OptimisticValidityUpdateSecs,
+        iterations: usize,
+        cancel: CancellationToken,
+    ) {
+        let _cancel_guard = cancel.clone().drop_guard();
+        let mut rate_limiters = vec![];
+        for i in 0..pod_count {
+            rate_limiters.push(
+                RateLimit::<WithState<S>>::new(
+                    bounds.clone(),
+                    store.clone(),
+                    &format!("processor_{}", i),
+                    cancel.clone(),
+                    refresh_interval,
+                    runway_update.clone(),
+                )
+                .await
+                .unwrap(),
+            );
+        }
+
+        let mut cur_epoch = 0;
+        let mut total_tokens = 0;
+        for rate_limiter in rate_limiters.iter() {
+            let tokens = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
+            total_tokens += tokens;
+            assert_eq!(
+                tokens,
+                bounds.min / pod_count,
+                "Each pod should get 1/3 of burst tokens"
+            );
+        }
+
+        // Total tokens distributed should equal burst
+        assert_eq!(
+            total_tokens, bounds.min,
+            "Total distributed should equal burst"
+        );
+
+        for _ in 1..iterations {
+            cur_epoch += 1;
+            for rate_limiter in rate_limiters.iter() {
+                let tokens = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
+                assert_eq!(
+                    tokens,
+                    (bounds.min / pod_count) + (bounds.slope as usize / pod_count),
+                );
+            }
+        }
     }
 }
