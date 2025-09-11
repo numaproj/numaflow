@@ -441,6 +441,82 @@ impl JetstreamWriter {
             .observe(write_processing_start.elapsed().as_micros() as f64);
     }
 
+    /// Returns true if the stream is full.
+    fn is_stream_full(&self, stream: &Stream) -> Option<bool> {
+        self.is_full
+            .get(stream.name)
+            .map(|is_full| is_full.load(Ordering::Relaxed))
+    }
+
+    /// Drops the message by deleting the offset from the tracker.
+    async fn drop_message_on_full(&self, stream_name: &str, offset: Offset, msg_bytes: usize) {
+        // delete the entry from tracker
+        self.tracker_handle
+            .delete(offset)
+            .await
+            .expect("Failed to delete offset from tracker");
+
+        // increment drop metrics when buffer is full and strategy is DiscardLatest
+        pipeline_metrics()
+            .forwarder
+            .drop_total
+            .get_or_create(&pipeline_drop_metric_labels(
+                self.vertex_type.as_str(),
+                stream_name,
+                "buffer-full",
+            ))
+            .inc();
+        pipeline_metrics()
+            .forwarder
+            .drop_bytes_total
+            .get_or_create(&pipeline_drop_metric_labels(
+                self.vertex_type.as_str(),
+                stream_name,
+                "buffer-full",
+            ))
+            .inc_by(msg_bytes as u64);
+    }
+
+    /// Publishes the message to the stream once.
+    async fn publish_once(
+        &self,
+        stream_name: &'static str,
+        id: &str,
+        payload: Bytes,
+    ) -> std::result::Result<PublishAckFuture, async_nats::jetstream::context::PublishError> {
+        self.js_ctx
+            .send_publish(
+                stream_name,
+                Publish::build().payload(payload).message_id(id),
+            )
+            .await
+    }
+
+    /// Records the publish error metrics.
+    fn record_publish_error_metrics(
+        stream_name: &str,
+        e: async_nats::jetstream::context::PublishError,
+    ) {
+        pipeline_metrics()
+            .jetstream_isb
+            .write_error_total
+            .get_or_create(&jetstream_isb_error_metrics_labels(
+                stream_name,
+                e.kind().to_string(),
+            ))
+            .inc();
+        if let PublishErrorKind::TimedOut = e.kind() {
+            pipeline_metrics()
+                .jetstream_isb
+                .write_timeout_total
+                .get_or_create(&jetstream_isb_error_metrics_labels(
+                    stream_name,
+                    e.kind().to_string(),
+                ))
+                .inc();
+        }
+    }
+
     /// Writes the message to the JetStream ISB and returns a future which can be
     /// awaited to get the PublishAck. It will do infinite retries until the message
     /// gets published successfully. If it returns an error it means it is fatal error
@@ -458,18 +534,14 @@ impl JetstreamWriter {
         let id = message.id.to_string();
         let msg_bytes = message.value.len();
 
-        let payload: BytesMut = message
+        // Serialize once and reuse a cheap cloneable Bytes across retries
+        let payload_mut: BytesMut = message
             .try_into()
             .expect("message serialization should not fail");
+        let payload: Bytes = payload_mut.freeze();
 
-        // loop till we get a PAF, there could be other reasons why PAFs cannot be created.
-        let paf = loop {
-            // let's write only if the buffer is not full for the stream
-            match self
-                .is_full
-                .get(stream.name)
-                .map(|is_full| is_full.load(Ordering::Relaxed))
-            {
+        while !cln_token.is_cancelled() {
+            match self.is_stream_full(&stream) {
                 Some(true) => {
                     pipeline_metrics()
                         .jetstream_isb
@@ -483,82 +555,32 @@ impl JetstreamWriter {
                     log_counter += 1;
                     match on_full {
                         BufferFullStrategy::DiscardLatest => {
-                            // delete the entry from tracker
-                            self.tracker_handle
-                                .delete(offset.clone())
-                                .await
-                                .expect("Failed to delete offset from tracker");
-                            // increment drop metric if buffer is full and
-                            // Buffer full strategy is DiscardLatest
-                            pipeline_metrics()
-                                .forwarder
-                                .drop_total
-                                .get_or_create(&pipeline_drop_metric_labels(
-                                    self.vertex_type.as_str(),
-                                    stream.name,
-                                    "buffer-full",
-                                ))
-                                .inc();
-                            pipeline_metrics()
-                                .forwarder
-                                .drop_bytes_total
-                                .get_or_create(&pipeline_drop_metric_labels(
-                                    self.vertex_type.as_str(),
-                                    stream.name,
-                                    "buffer-full",
-                                ))
-                                .inc_by(msg_bytes as u64);
+                            self.drop_message_on_full(stream.name, offset.clone(), msg_bytes)
+                                .await;
                             return None;
                         }
                         BufferFullStrategy::RetryUntilSuccess => {}
                     }
                 }
-                Some(false) => match self
-                    .js_ctx
-                    .send_publish(
-                        stream.name,
-                        Publish::build()
-                            .payload(payload.clone().freeze())
-                            .message_id(&id),
-                    )
-                    .await
-                {
-                    Ok(paf) => break paf,
+                Some(false) => match self.publish_once(stream.name, &id, payload.clone()).await {
+                    Ok(ack_fut) => return Some(ack_fut),
                     Err(e) => {
-                        pipeline_metrics()
-                            .jetstream_isb
-                            .write_error_total
-                            .get_or_create(&jetstream_isb_error_metrics_labels(
-                                stream.name,
-                                e.kind().to_string(),
-                            ))
-                            .inc();
                         error!(?e, "publishing failed, retrying");
-                        if let PublishErrorKind::TimedOut = e.kind() {
-                            pipeline_metrics()
-                                .jetstream_isb
-                                .write_timeout_total
-                                .get_or_create(&jetstream_isb_error_metrics_labels(
-                                    stream.name,
-                                    e.kind().to_string(),
-                                ))
-                                .inc();
-                        }
+                        Self::record_publish_error_metrics(stream.name, e);
                     }
                 },
-                None => error!("Stream {} not found in is_full map", stream),
-            }
-
-            // short-circuit out in failure mode if shutdown has been initiated
-            if cln_token.is_cancelled() {
-                error!("Shutdown signal received, exiting write loop");
-                return None;
+                None => {
+                    error!("Stream {} not found in is_full map", stream);
+                    return None;
+                }
             }
 
             // sleep to avoid busy looping
             sleep(Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS)).await;
-        };
-        Some(paf)
+        }
+
+        error!("Shutdown signal received, exiting write loop");
+        None
     }
 
     /// resolve_pafs resolves the PAFs for the given result. It will try to resolve the PAFs
