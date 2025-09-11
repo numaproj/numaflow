@@ -488,6 +488,7 @@ mod tests {
         use crate::{RateLimit, RateLimiter, TokenCalcBounds, WithState};
         use std::time::Duration;
         use tokio_util::sync::CancellationToken;
+        use crate::tests::{test_distributed_rate_limiter_multiple_pods, test_utils};
 
         /// Test case struct for distributed rate limiter tests [create::run_distributed_rate_limiter_multiple_pods_test_cases]
         ///
@@ -621,6 +622,47 @@ mod tests {
             let effective_ramp_up = actual_ramp_up.min(iteration);
             // calculate tokens allowed to each processor based on effective ramp up
             (bounds.min + (effective_ramp_up as f32 * bounds.slope) as usize) / pod_count
+        }
+
+        /// Utility function to run distributed rate limiter multiple pods test cases
+        /// Used for running
+        /// - [test_distributed_rate_limiter_multiple_pods]
+        /// - [test_distributed_rate_limiter_multiple_pods_redis]
+        ///
+        /// # Arguments
+        ///
+        /// * `cancel` - The cancellation token to cancel the test
+        /// * `refresh_interval` - The refresh interval for the rate limiter
+        /// * `runway_update` - The runway update for the rate limiter
+        /// * `test_cases` - The test cases to run
+        pub async fn run_distributed_rate_limiter_multiple_pods_test_cases<
+            S: Store + Send + Sync + 'static,
+        >(
+            cancel: &CancellationToken,
+            refresh_interval: Duration,
+            runway_update: OptimisticValidityUpdateSecs,
+            test_cases: Vec<TestCase<S>>,
+        ) {
+            for test_case in test_cases {
+                let TestCase {
+                    max_tokens,
+                    burst_tokens,
+                    duration,
+                    pod_count,
+                    iterations,
+                    store,
+                } = test_case;
+                let bounds = TokenCalcBounds::new(max_tokens, burst_tokens, duration);
+                let temp_runway_update = runway_update.clone();
+                let test_params = TestParams {
+                    bounds,
+                    refresh_interval,
+                    pod_count,
+                    iterations,
+                    runway_update: temp_runway_update,
+                };
+                test_rate_limiter_with_state(store, test_params, cancel.clone()).await;
+            }
         }
 
         /// Creates a Redis store for testing with a unique key prefix
@@ -1128,7 +1170,7 @@ mod tests {
         let refresh_interval = Duration::from_millis(50);
         let runway_update = OptimisticValidityUpdateSecs::default();
 
-        let test_cases = [
+        let test_cases = vec![
             test_utils::TestCase {
                 max_tokens: 60,
                 burst_tokens: 30,
@@ -1145,8 +1187,16 @@ mod tests {
                 iterations: 20,
                 store: in_memory_store.clone(),
             },
+            test_utils::TestCase {
+                max_tokens: 120,
+                burst_tokens: 60,
+                duration: Duration::from_secs(10),
+                pod_count: 5,
+                iterations: 20,
+                store: in_memory_store.clone(),
+            },
         ];
-        run_distributed_rate_limiter_multiple_pods_test_cases(
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(
             &cancel,
             refresh_interval,
             runway_update,
@@ -1155,47 +1205,6 @@ mod tests {
         .await;
         // Clean up
         cancel.cancel();
-    }
-
-    /// Utility function to run distributed rate limiter multiple pods test cases
-    /// Used for running
-    /// - [test_distributed_rate_limiter_multiple_pods]
-    /// - [test_distributed_rate_limiter_multiple_pods_redis]
-    ///
-    /// # Arguments
-    ///
-    /// * `cancel` - The cancellation token to cancel the test
-    /// * `refresh_interval` - The refresh interval for the rate limiter
-    /// * `runway_update` - The runway update for the rate limiter
-    /// * `test_cases` - The test cases to run
-    async fn run_distributed_rate_limiter_multiple_pods_test_cases<
-        S: Store + Send + Sync + 'static,
-    >(
-        cancel: &CancellationToken,
-        refresh_interval: Duration,
-        runway_update: OptimisticValidityUpdateSecs,
-        test_cases: [test_utils::TestCase<S>; 2],
-    ) {
-        for test_case in test_cases {
-            let test_utils::TestCase {
-                max_tokens,
-                burst_tokens,
-                duration,
-                pod_count,
-                iterations,
-                store,
-            } = test_case;
-            let bounds = TokenCalcBounds::new(max_tokens, burst_tokens, duration);
-            let temp_runway_update = runway_update.clone();
-            let test_params = test_utils::TestParams {
-                bounds,
-                refresh_interval,
-                pod_count,
-                iterations,
-                runway_update: temp_runway_update,
-            };
-            test_utils::test_rate_limiter_with_state(store, test_params, cancel.clone()).await;
-        }
     }
 
     #[tokio::test]
@@ -1452,7 +1461,7 @@ mod tests {
         let refresh_interval = Duration::from_millis(50);
         let runway_update = OptimisticValidityUpdateSecs::default();
 
-        let test_cases = [
+        let test_cases = vec![
             test_utils::TestCase {
                 max_tokens: 60,
                 burst_tokens: 30,
@@ -1471,7 +1480,7 @@ mod tests {
             },
         ];
 
-        run_distributed_rate_limiter_multiple_pods_test_cases(
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(
             &cancel,
             refresh_interval,
             runway_update,
