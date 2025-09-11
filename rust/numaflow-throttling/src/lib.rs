@@ -599,7 +599,7 @@ mod tests {
             }
 
             for rate_limiter in rate_limiters.iter() {
-                rate_limiter.shutdown().await.unwrap();
+                rate_limiter.shutdown().await.expect("Rate limiter failed to shutdown");
             }
         }
 
