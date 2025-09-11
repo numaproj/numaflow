@@ -339,7 +339,7 @@ impl SourceWatermarkActor {
 
         // we should only publish to active input partitions, because we consider input-partitions as
         // the processing entity while publishing watermark inside source
-        let idle_streams = self.isb_idle_manager.fetch_idle_streams().await;
+        let idle_streams = self.isb_idle_manager.fetch_all_streams().await;
         for stream in idle_streams.iter() {
             let offset = self
                 .isb_idle_manager
@@ -411,8 +411,7 @@ impl SourceWatermarkHandle {
             .as_ref()
             .map(|idle_config| SourceIdleDetector::new(idle_config.clone()));
 
-        let isb_idle_manager =
-            ISBIdleDetector::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
+        let isb_idle_manager = ISBIdleDetector::new(to_vertex_configs, js_context.clone()).await;
 
         let actor = SourceWatermarkActor::new(
             publisher,

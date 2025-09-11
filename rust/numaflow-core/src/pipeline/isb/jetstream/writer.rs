@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -248,112 +248,144 @@ impl JetstreamWriter {
         cln_token: CancellationToken,
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
+            let mut this = self;
             let mut messages_stream = messages_stream;
 
-            while let Some(message) = messages_stream.next().await {
-                let write_processing_start = Instant::now();
-                // if message needs to be dropped, ack and continue
-                if message.dropped() {
-                    // delete the entry from tracker
-                    self.tracker_handle
-                        .delete(message.offset)
-                        .await
-                        .expect("Failed to delete offset from tracker");
-                    pipeline_metrics()
-                        .forwarder
-                        .udf_drop_total
-                        .get_or_create(&pipeline_drop_metric_labels(
-                            self.vertex_type.as_str(),
-                            "n/a",
-                            "to_drop",
-                        ))
-                        .inc();
-                    continue;
-                }
+            // Pre-compute all downstream streams we might write to
+            let all_streams: BTreeSet<Stream> = this
+                .config
+                .iter()
+                .flat_map(|c| c.writer_config.streams.clone())
+                .collect();
 
-                let mut message = message;
-                // if compression is enabled, then compress and sent
-                message.value = Self::compress(self.compression_type, message.value)?;
+            // track which streams received at least one message within the current idle interval
+            let mut idle_streams = all_streams.clone();
 
-                // List of PAFs(one message can be written to multiple streams)
-                let mut pafs = vec![];
-                for vertex in &*self.config {
-                    // check whether we need to write to this downstream vertex
-                    if !forward::should_forward(message.tags.clone(), vertex.conditions.clone()) {
-                        continue;
-                    }
+            // Fixed idle tick; on each tick, if only a subset of streams were written, publish idle WM for the rest
+            let mut idle_tick = tokio::time::interval(Duration::from_millis(1000));
+            idle_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
-                    // if the to_vertex is a reduce vertex, we should use the keys as the shuffle key
-                    let shuffle_key = match vertex.to_vertex_type {
-                        VertexType::MapUDF | VertexType::Sink | VertexType::Source => {
-                            String::from_utf8_lossy(&message.id.offset).to_string()
+            loop {
+                tokio::select! {
+                    maybe_msg = messages_stream.next() => {
+                        let Some(message) = maybe_msg else { break; };
+
+                        let write_processing_start = Instant::now();
+                        // if message needs to be dropped, ack and continue
+                        if message.dropped() {
+                            // delete the entry from tracker
+                            this.tracker_handle
+                                .delete(message.offset)
+                                .await
+                                .expect("Failed to delete offset from tracker");
+                            pipeline_metrics()
+                                .forwarder
+                                .udf_drop_total
+                                .get_or_create(&pipeline_drop_metric_labels(
+                                    this.vertex_type.as_str(),
+                                    "n/a",
+                                    "to_drop",
+                                ))
+                                .inc();
+                            continue;
                         }
-                        VertexType::ReduceUDF => message.keys.join(":"),
-                    };
 
-                    // check to which partition the message should be written
-                    let partition = forward::determine_partition(shuffle_key, vertex.partitions);
+                        let mut message = message;
+                        // if compression is enabled, then compress and send
+                        message.value = Self::compress(this.compression_type, message.value)?;
 
-                    // write the message to the corresponding stream
-                    let stream = vertex
-                        .writer_config
-                        .streams
-                        .get(partition as usize)
-                        .expect("stream should be present")
-                        .clone();
+                        // List of PAFs(one message can be written to multiple streams)
+                        let mut pafs = vec![];
+                        for vertex in &*this.config {
+                            // check whether we need to write to this downstream vertex
+                            if !forward::should_forward(message.tags.clone(), vertex.conditions.clone()) {
+                                continue;
+                            }
 
-                    if let Some(paf) = self
-                        .write(
-                            stream.clone(),
-                            message.clone(),
-                            vertex.writer_config.buffer_full_strategy.clone(),
-                            cln_token.clone(),
-                        )
-                        .await
-                    {
-                        pafs.push((stream, write_processing_start, paf));
+                            // if the to_vertex is a reduce vertex, we should use the keys as the shuffle key
+                            let shuffle_key = match vertex.to_vertex_type {
+                                VertexType::MapUDF | VertexType::Sink | VertexType::Source => {
+                                    String::from_utf8_lossy(&message.id.offset).to_string()
+                                }
+                                VertexType::ReduceUDF => message.keys.join(":"),
+                            };
+
+                            // check to which partition the message should be written
+                            let partition = forward::determine_partition(shuffle_key, vertex.partitions);
+
+                            // write the message to the corresponding stream
+                            let stream = vertex
+                                .writer_config
+                                .streams
+                                .get(partition as usize)
+                                .expect("stream should be present")
+                                .clone();
+
+                            if let Some(paf) = this
+                                .write(
+                                    stream.clone(),
+                                    message.clone(),
+                                    vertex.writer_config.buffer_full_strategy.clone(),
+                                    cln_token.clone(),
+                                )
+                                .await
+                            {
+                                idle_streams.remove(&stream);
+                                pafs.push((stream, write_processing_start, paf));
+                            }
+                        }
+
+                        // pafs is empty means message should not be written to any stream, so we can delete
+                        // and continue. The `to_drop()` case is already handled above.
+                        // NOTE: PAFs can be empty during following scenarios:
+                        //  1. Conditional forwarding conditions are not met.
+                        if pafs.is_empty() {
+                            debug!(
+                                tags = ?message.tags,
+                                "message will be dropped because conditional forwarding rules are not met"
+                            );
+
+                            pipeline_metrics()
+                                .forwarder
+                                .udf_drop_total
+                                .get_or_create(&pipeline_drop_metric_labels(
+                                    this.vertex_type.as_str(),
+                                    "n/a",
+                                    "forwarding-rules-not-met",
+                                ))
+                                .inc();
+
+                            // delete the entry from tracker
+                            this.tracker_handle
+                                .delete(message.offset)
+                                .await
+                                .expect("Failed to delete offset from tracker");
+                            continue;
+                        }
+
+                        this.resolve_pafs(pafs, message, cln_token.clone())
+                            .await
+                            .inspect_err(|e| {
+                                error!(?e, "Failed to resolve PAFs");
+                                cln_token.cancel();
+                            })?;
+                    }
+                    _ = idle_tick.tick() => {
+                        // Only invoke when we have partial streams (some written, some not). If none written, skip.
+                        if idle_streams.len() < all_streams.len() {
+                            if let Some(wm_handle) = this.watermark_handle.as_mut() {
+                                JetstreamWriter::publish_idle_watermark(wm_handle, Some(idle_streams.iter().cloned().collect())).await;
+                            }
+                            // reset interval state
+                            idle_streams = all_streams.clone();
+                        }
                     }
                 }
-
-                // pafs is empty means message should not be written to any stream, so we can delete
-                // and continue. The `to_drop()` case is already handled above.
-                // NOTE: PAFs can be empty during following scenarios:
-                //  1. Conditional forwarding conditions are not met.
-                if pafs.is_empty() {
-                    debug!(
-                        tags = ?message.tags,
-                        "message will be dropped because conditional forwarding rules are not met"
-                    );
-
-                    pipeline_metrics()
-                        .forwarder
-                        .udf_drop_total
-                        .get_or_create(&pipeline_drop_metric_labels(
-                            self.vertex_type.as_str(),
-                            "n/a",
-                            "forwarding-rules-not-met",
-                        ))
-                        .inc();
-
-                    // delete the entry from tracker
-                    self.tracker_handle
-                        .delete(message.offset)
-                        .await
-                        .expect("Failed to delete offset from tracker");
-                    continue;
-                }
-
-                self.resolve_pafs(pafs, message, cln_token.clone())
-                    .await
-                    .inspect_err(|e| {
-                        error!(?e, "Failed to resolve PAFs");
-                        cln_token.cancel();
-                    })?;
             }
 
             // wait for all the paf resolvers to complete before returning
-            let _ = Arc::clone(&self.sem)
-                .acquire_many_owned(self.paf_concurrency as u32)
+            let _ = Arc::clone(&this.sem)
+                .acquire_many_owned(this.paf_concurrency as u32)
                 .await
                 .expect("Failed to acquire semaphore permit");
 
@@ -729,6 +761,16 @@ impl JetstreamWriter {
                     .publish_source_isb_watermark(stream, offset, input_partition)
                     .await;
             }
+        }
+    }
+
+    /// Publishes idle watermark for the given set of streams
+    async fn publish_idle_watermark(
+        watermark_handle: &mut WatermarkHandle,
+        streams: Option<Vec<Stream>>,
+    ) {
+        if let WatermarkHandle::ISB(handle) = watermark_handle {
+            handle.publish_idle_watermark(streams).await;
         }
     }
 

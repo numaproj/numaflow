@@ -751,11 +751,9 @@ pub async fn create_edge_watermark_handle(
                 config.vertex_name,
                 config.replica,
                 config.vertex_type,
-                2 * config.read_timeout,
                 js_context.clone(),
                 edge_config,
                 &config.to_vertex_config,
-                cln_token.clone(),
                 window_manager,
                 tracker_handle,
             )

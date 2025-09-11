@@ -646,6 +646,7 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
         .await;
     }
 
+    /// Returns the number of pending messages in the stream.
     pub(crate) async fn pending(&mut self) -> Result<Option<usize>> {
         let x = self.consumer.info().await.map_err(|e| {
             Error::ISB(format!(

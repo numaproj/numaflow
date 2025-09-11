@@ -19,33 +19,20 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use bytes::BytesMut;
-use chrono::{DateTime, Utc};
 
 use crate::config::pipeline::ToVertexConfig;
 use crate::config::pipeline::isb::Stream;
 
 /// State of each partition in the ISB. It has the information required to identify whether the
 /// partition is idling or not.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct IdleState {
     stream: Stream,
-    last_wm_published_time: DateTime<Utc>,
     /// This offset's WM will keep increasing as long as the [Stream] is idling.
     wmb_msg_offset: Option<i64>,
 }
 
-impl Default for IdleState {
-    fn default() -> Self {
-        IdleState {
-            stream: Stream::default(),
-            last_wm_published_time: Utc::now(),
-            wmb_msg_offset: None,
-        }
-    }
-}
-
 // TODO(vigith): rename ISBIdleDetector to ISBIdleManager, it is not just detecting, but also managing the idle state.
-
 /// ISBIdleDetector detects the idle partitions in the ISB. It keeps track of the last published watermark
 /// state to detect the idle partitions, it also keeps track of the ctrl message offset that should
 /// be used for publishing the idle watermark.
@@ -54,14 +41,11 @@ pub(crate) struct ISBIdleDetector {
     /// last published wm state per [Stream].
     last_published_wm_state: Arc<RwLock<HashMap<&'static str, Vec<IdleState>>>>,
     js_context: async_nats::jetstream::Context,
-    /// X duration we wait before we start publishing idle WM.
-    idle_timeout: Duration,
 }
 
 impl ISBIdleDetector {
     /// Creates a new ISBIdleManager.
     pub(crate) async fn new(
-        idle_timeout: Duration,
         to_vertex_configs: &[ToVertexConfig],
         js_context: async_nats::jetstream::Context,
     ) -> Self {
@@ -86,14 +70,13 @@ impl ISBIdleDetector {
         }
 
         ISBIdleDetector {
-            idle_timeout,
             last_published_wm_state: Arc::new(RwLock::new(last_published_wm)),
             js_context,
         }
     }
 
-    /// resets the stream's idle metadata by updating the last published time and resets the ctrl
-    /// message offset. It implicitly marks that stream as active.
+    /// Resets the stream's idle metadata by resetting the ctrl message offset.
+    /// It implicitly marks that stream as active.
     pub(crate) async fn reset_idle(&mut self, stream: &Stream) {
         let mut write_guard = self
             .last_published_wm_state
@@ -104,10 +87,6 @@ impl ISBIdleDetector {
             .get_mut(stream.vertex)
             .unwrap_or_else(|| panic!("Invalid vertex: {}", stream.vertex));
 
-        last_published_wm
-            .get_mut(stream.partition as usize)
-            .expect("should have partition")
-            .last_wm_published_time = Utc::now();
         // setting None for wmb-offset means it is active
         last_published_wm
             .get_mut(stream.partition as usize)
@@ -153,7 +132,7 @@ impl ISBIdleDetector {
         Ok(offset as i64)
     }
 
-    /// updates the idle stream's metadata, by setting the ctrl message offset and updates the last published time.
+    /// Updates the idle stream's metadata by setting the ctrl message offset (marks the stream idle).
     pub(crate) async fn update_idle_metadata(&mut self, stream: &Stream, offset: i64) {
         let mut write_guard = self
             .last_published_wm_state
@@ -168,33 +147,6 @@ impl ISBIdleDetector {
             .get_mut(stream.partition as usize)
             .expect("should have partition")
             .wmb_msg_offset = Some(offset);
-        last_published_wm
-            .get_mut(stream.partition as usize)
-            .expect("should have partition")
-            .last_wm_published_time = Utc::now();
-    }
-
-    /// fetches the idle streams, we consider a stream as idle if the last published
-    /// time is greater than the idle timeout.
-    pub(crate) async fn fetch_idle_streams(&self) -> Vec<Stream> {
-        let read_guard = self
-            .last_published_wm_state
-            .read()
-            .expect("Failed to get read lock");
-
-        read_guard
-            .iter()
-            .flat_map(|(_, partitions)| {
-                partitions
-                    .iter()
-                    .filter(|partition| {
-                        Utc::now().timestamp_millis()
-                            - partition.last_wm_published_time.timestamp_millis()
-                            > self.idle_timeout.as_millis() as i64
-                    })
-                    .map(move |partition| partition.stream.clone())
-            })
-            .collect()
     }
 
     /// fetch all the partitions for the vertices.
@@ -213,11 +165,8 @@ impl ISBIdleDetector {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use async_nats::jetstream;
     use async_nats::jetstream::stream;
-    use tokio::time::sleep;
 
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
@@ -242,9 +191,7 @@ mod tests {
             to_vertex_type: VertexType::Sink,
         };
 
-        let mut manager =
-            ISBIdleDetector::new(Duration::from_millis(100), &[to_vertex_config], js_context).await;
-
+        let mut manager = ISBIdleDetector::new(&[to_vertex_config], js_context).await;
         manager.reset_idle(&stream).await;
 
         let read_guard = manager
@@ -285,8 +232,7 @@ mod tests {
             to_vertex_type: VertexType::Sink,
         };
 
-        let manager =
-            ISBIdleDetector::new(Duration::from_millis(100), &[to_vertex_config], js_context).await;
+        let manager = ISBIdleDetector::new(&[to_vertex_config], js_context).await;
 
         let offset = manager
             .fetch_idle_offset(&stream)
@@ -324,8 +270,7 @@ mod tests {
             to_vertex_type: VertexType::Sink,
         };
 
-        let mut manager =
-            ISBIdleDetector::new(Duration::from_millis(100), &[to_vertex_config], js_context).await;
+        let mut manager = ISBIdleDetector::new(&[to_vertex_config], js_context).await;
 
         let offset = manager
             .fetch_idle_offset(&stream)
@@ -359,17 +304,9 @@ mod tests {
             to_vertex_type: VertexType::Sink,
         };
 
-        let mut manager =
-            ISBIdleDetector::new(Duration::from_millis(10), &[to_vertex_config], js_context).await;
+        let mut manager = ISBIdleDetector::new(&[to_vertex_config], js_context).await;
 
         // Mark the stream as active first
         manager.reset_idle(&stream).await;
-
-        // Simulate idle timeout
-        sleep(Duration::from_millis(20)).await;
-
-        let idle_streams = manager.fetch_idle_streams().await;
-        assert_eq!(idle_streams.len(), 1);
-        assert_eq!(idle_streams[0], stream);
     }
 }
