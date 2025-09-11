@@ -485,14 +485,16 @@ mod tests {
     mod test_utils {
         use crate::state::store::in_memory_store::InMemoryStore;
         use crate::state::store::redis_store::{RedisMode, RedisStore};
-        use crate::state::{OptimisticValidityUpdateSecs, Store};
+        use crate::state::{Consensus, OptimisticValidityUpdateSecs, Store};
         use crate::{RateLimit, RateLimiter, TokenCalcBounds, WithState};
         use std::time::Duration;
         use tokio_util::sync::CancellationToken;
 
         /// Test case struct for distributed rate limiter tests
-        /// - [test_distributed_rate_limiter_multiple_pods]
-        /// - [test_distributed_rate_limiter_multiple_pods_redis]
+        /// Takes in the test parameters to be used for each test case.
+        ///
+        /// - [crate::tests::test_distributed_rate_limiter_multiple_pods_in_memory]
+        /// - [crate::tests::test_distributed_rate_limiter_multiple_pods_redis]
         ///
         pub(super) struct TestCase {
             // The maximum number of tokens that can be stored in the bucket
@@ -513,45 +515,31 @@ mod tests {
             pub(super) expected_tokens: Vec<usize>,
         }
 
-        /// Struct to hold test parameters for rate limiter
-        ///
-        pub(super) struct TestParams {
-            // A struct containing the token calculation bounds
-            pub(super) bounds: TokenCalcBounds,
-            // The interval at which the store should be refreshed (redis)
-            pub(super) refresh_interval: Duration,
-            // The number of pods/processors to simulate
-            pub(super) pod_count: usize,
-            // The runway update to use
-            pub(super) runway_update: OptimisticValidityUpdateSecs,
-            // The name of the test
-            pub(super) test_name: String,
-            // Tokens asked in each iteration by *each* pod
-            pub(super) asked_tokens: Vec<usize>,
-            // Tokens expected to be returned by rate limiter in each iteration to *each* pod
-            pub(super) expected_tokens: Vec<usize>,
-        }
-
         /// A generic utility function to test rate limiter with generic state
+        /// Test runner for:
+        /// - [crate::tests::test_distributed_rate_limiter_multiple_pods_in_memory]
+        /// - [crate::tests::test_distributed_rate_limiter_multiple_pods_redis]
         ///
         pub async fn test_rate_limiter_with_state<S: Store + Sync>(
             // A trait object that implements the [Store] trait
             store: S,
             // A struct containing the test parameters
-            params: TestParams,
-            // A [CancellationToken] to cancel the test
-            cancel: CancellationToken,
+            test_case: TestCase,
         ) {
-            // Unpack test params for usage
-            let TestParams {
-                bounds,
-                refresh_interval,
+            let TestCase {
+                max_tokens,
+                burst_tokens,
+                duration,
                 pod_count,
-                runway_update,
+                store_type: _store_type,
                 test_name,
                 asked_tokens,
                 expected_tokens,
-            } = params;
+            } = test_case;
+            let cancel = CancellationToken::new();
+            let refresh_interval = Duration::from_millis(50);
+            let runway_update = OptimisticValidityUpdateSecs::default();
+            let bounds = TokenCalcBounds::new(max_tokens, burst_tokens, duration);
 
             println!("Running test: {}", test_name);
             assert_eq!(
@@ -560,6 +548,7 @@ mod tests {
                 "asked_tokens and expected_tokens should have same length for test: {}",
                 test_name
             );
+
             // create pod_count number of rate limiters with passed store
             let mut rate_limiters = Vec::with_capacity(pod_count);
             for i in 0..pod_count {
@@ -615,41 +604,17 @@ mod tests {
         }
 
         /// Utility function to run distributed rate limiter multiple pods test cases
-        /// Used for running
-        /// - [test_distributed_rate_limiter_multiple_pods]
-        /// - [test_distributed_rate_limiter_multiple_pods_redis]
+        /// Only here to iterate over the different test cases and initialize stores to
+        /// be used by the test cases.
         ///
         pub async fn run_distributed_rate_limiter_multiple_pods_test_cases(
             // The test cases to run
             test_cases: Vec<TestCase>,
         ) {
-            // common state store for all the pods
-            let cancel = CancellationToken::new();
-            let refresh_interval = Duration::from_millis(50);
-            let runway_update = OptimisticValidityUpdateSecs::default();
-
             for test_case in test_cases {
-                let TestCase {
-                    max_tokens,
-                    burst_tokens,
-                    duration,
-                    pod_count,
-                    store_type,
-                    test_name,
-                    asked_tokens,
-                    expected_tokens,
-                } = test_case;
-                let bounds = TokenCalcBounds::new(max_tokens, burst_tokens, duration);
+                let store_type = test_case.store_type.clone();
+                let test_name = test_case.test_name.clone();
                 let temp_test_name = test_name.clone();
-                let test_params = TestParams {
-                    bounds,
-                    refresh_interval,
-                    pod_count,
-                    runway_update: runway_update.clone(),
-                    test_name,
-                    asked_tokens,
-                    expected_tokens,
-                };
 
                 // Determining/initializing the store based on the store type here
                 // instead of passing a cloned store so that each test case gets its own store
@@ -657,7 +622,7 @@ mod tests {
                 match store_type == "in_memory_store" {
                     true => {
                         let store = InMemoryStore::new();
-                        test_rate_limiter_with_state(store, test_params, cancel.clone()).await;
+                        test_rate_limiter_with_state(store, test_case).await;
                     }
                     _ => {
                         let store = match create_test_redis_store(temp_test_name.as_str()).await {
@@ -665,7 +630,7 @@ mod tests {
                             None => return, // Skip test if Redis is not available
                         };
 
-                        test_rate_limiter_with_state(store, test_params, cancel.clone()).await;
+                        test_rate_limiter_with_state(store, test_case).await;
                     }
                 }
             }
