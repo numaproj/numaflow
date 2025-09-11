@@ -77,6 +77,9 @@ enum ActorMessage {
     LowestWatermark {
         respond_to: oneshot::Sender<DateTime<Utc>>,
     },
+    LastProcessedWatermark {
+        respond_to: oneshot::Sender<Option<DateTime<Utc>>>,
+    },
 }
 
 /// Tracker is responsible for managing the state of messages being processed.
@@ -84,9 +87,15 @@ enum ActorMessage {
 struct Tracker {
     /// entries organized by partition, each partition has its own BTreeMap of offsets
     entries: HashMap<u16, BTreeMap<Offset, TrackerEntry>>,
+    /// receiver for actor messages
     receiver: mpsc::Receiver<ActorMessage>,
+    /// handler to write callbacks to serving
     serving_callback_handler: Option<CallbackHandler>,
+    /// number of processed messages used for logging processed messages per second
     processed_msg_count: Arc<AtomicUsize>,
+    /// last processed watermark used to publish idle watermark to stale partitions/edges
+    last_processed_watermark: Option<DateTime<Utc>>,
+    /// cancellation token to stop the tracker
     cln_token: CancellationToken,
 }
 
@@ -174,6 +183,7 @@ impl Tracker {
             serving_callback_handler,
             processed_msg_count,
             cln_token,
+            last_processed_watermark: None,
         }
     }
 
@@ -234,6 +244,7 @@ impl Tracker {
             }
             ActorMessage::LowestWatermark { respond_to } => {
                 let watermark = self.get_lowest_watermark();
+                self.last_processed_watermark = watermark.or(self.last_processed_watermark);
                 let _ = respond_to
                     .send(watermark.unwrap_or(DateTime::from_timestamp_millis(-1).unwrap()));
             }
@@ -241,6 +252,9 @@ impl Tracker {
             ActorMessage::IsEmpty { respond_to } => {
                 let is_empty = self.entries.values().all(|partition| partition.is_empty());
                 let _ = respond_to.send(is_empty);
+            }
+            ActorMessage::LastProcessedWatermark { respond_to } => {
+                let _ = respond_to.send(self.last_processed_watermark);
             }
         }
     }
@@ -570,6 +584,14 @@ impl TrackerHandle {
             .map_err(|e| Error::Tracker(format!("{e:?}")))?;
         response.await.map_err(|e| Error::Tracker(format!("{e:?}")))
     }
+
+    /// Returns the last processed watermark.
+    pub(crate) async fn last_processed_watermark(&self) -> Option<DateTime<Utc>> {
+        let (respond_to, response) = oneshot::channel();
+        let message = ActorMessage::LastProcessedWatermark { respond_to };
+        let _ = self.sender.send(message).await;
+        response.await.unwrap_or_default()
+    }
 }
 
 #[cfg(test)]
@@ -875,5 +897,50 @@ mod tests {
         // Clean up the KV store
         js_context.delete_key_value(store_name).await.unwrap();
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_last_processed_watermark() {
+        let handle = TrackerHandle::new(None);
+        // Initially no last processed watermark
+        assert_eq!(handle.last_processed_watermark().await, None);
+
+        // Insert a message with a watermark
+        let watermark = DateTime::from_timestamp_millis(100).unwrap();
+        let (ack_send, ack_recv) = oneshot::channel();
+        let message = Message {
+            typ: Default::default(),
+            keys: Arc::from([]),
+            tags: None,
+            value: Bytes::from_static(b"test"),
+            offset: Offset::Int(IntOffset::new(0, 0)),
+            event_time: Default::default(),
+            watermark: Some(watermark),
+            id: MessageID {
+                vertex_name: "in".into(),
+                offset: Bytes::from_static(b"0"),
+                index: 1,
+            },
+            headers: HashMap::new(),
+            metadata: None,
+            is_late: false,
+        };
+
+        handle.insert(&message, ack_send).await.unwrap();
+
+        // Calling lowest_watermark updates the last_processed_watermark inside the tracker
+        let lowest = handle.lowest_watermark().await.unwrap();
+        assert_eq!(lowest, watermark);
+        assert_eq!(handle.last_processed_watermark().await, Some(watermark));
+
+        // Delete the only entry; ack should be received and tracker becomes empty
+        handle.delete(message.offset.clone()).await.unwrap();
+        let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
+        assert!(result.is_ok());
+        assert!(handle.is_empty().await.unwrap());
+
+        // When there are no entries, last_processed_watermark should remain unchanged
+        let _ = handle.lowest_watermark().await.unwrap();
+        assert_eq!(handle.last_processed_watermark().await, Some(watermark));
     }
 }
