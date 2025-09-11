@@ -483,6 +483,8 @@ mod tests {
     /// Test utilities for Redis integration tests
 
     mod test_utils {
+        use crate::state::store::in_memory_store::InMemoryStore;
+        use crate::state::store::redis_store::{RedisMode, RedisStore};
         use crate::state::{OptimisticValidityUpdateSecs, Store};
         use crate::{RateLimit, RateLimiter, TokenCalcBounds, WithState};
         use std::time::Duration;
@@ -492,30 +494,29 @@ mod tests {
         /// - [test_distributed_rate_limiter_multiple_pods]
         /// - [test_distributed_rate_limiter_multiple_pods_redis]
         ///
-        /// # Arguments
-        ///
-        /// * `max_tokens` - The maximum number of tokens that can be stored in the bucket
-        /// * `burst_tokens` - The number of tokens that can be burst in a single second
-        /// * `duration` - The duration of the bucket
-        /// * `pod_count` - The number of pods
-        /// * `iterations` - The number of iterations
-        /// * `store` - The store to use for the test
-        pub(super) struct GreedyTestCase<S> {
+        pub(super) struct GreedyTestCase {
+            // The maximum number of tokens that can be stored in the bucket
             pub(super) max_tokens: usize,
+            // The number of tokens that can be burst in a single second
             pub(super) burst_tokens: usize,
+            // The duration of the bucket
             pub(super) duration: Duration,
+            // The number of pods
             pub(super) pod_count: usize,
+            // The number of iterations
             pub(super) iterations: usize,
-            pub(super) store: S,
+            // The store name (String) to initialize for the test
+            pub(super) store_type: String,
+            // The name of the test
             pub(super) test_name: String,
         }
 
-        pub(super) struct VariableTestCase<S> {
+        pub(super) struct VariableTestCase {
             pub(super) max_tokens: usize,
             pub(super) burst_tokens: usize,
             pub(super) duration: Duration,
             pub(super) pod_count: usize,
-            pub(super) store: S,
+            pub(super) store_type: String,
             pub(super) test_name: String,
             pub(super) asked_tokens: Vec<usize>,
             pub(super) expected_tokens: Vec<usize>,
@@ -523,32 +524,29 @@ mod tests {
 
         /// Struct to hold test parameters for rate limiter
         ///
-        /// # Arguments
-        ///
-        /// * `bounds` - A struct containing the token calculation bounds
-        /// * `refresh_interval` - The interval at which the store should be refreshed (redis)
-        /// * `pod_count` - The number of pods/processors to simulate
-        /// * `iterations` - The number of iterations to run the rate limiter for
-        /// * `runway_update` - The runway update to use
         pub(super) struct TestParams {
+            // A struct containing the token calculation bounds
             pub(super) bounds: TokenCalcBounds,
+            // The interval at which the store should be refreshed (redis)
             pub(super) refresh_interval: Duration,
+            // The number of pods/processors to simulate
             pub(super) pod_count: usize,
+            // The number of iterations to run the rate limiter for
             pub(super) iterations: usize,
+            // The runway update to use
             pub(super) runway_update: OptimisticValidityUpdateSecs,
+            // The name of the test
             pub(super) test_name: String,
         }
 
         /// A generic utility function to test rate limiter with generic state
         ///
-        /// # Arguments
-        ///
-        /// * `store` - A trait object that implements the [Store] trait
-        /// * `params` - A struct containing the test parameters
-        /// * `cancel` - A [CancellationToken] to cancel the test
-        pub async fn test_rate_limiter_with_state<S: Store + Sync + Clone + 'static>(
+        pub async fn test_rate_limiter_with_state<S: Store + Sync>(
+            // A trait object that implements the [Store] trait
             store: S,
+            // A struct containing the test parameters
             params: TestParams,
+            // A [CancellationToken] to cancel the test
             cancel: CancellationToken,
         ) {
             // Unpack test params for usage
@@ -575,7 +573,7 @@ mod tests {
                         runway_update.clone(),
                     )
                     .await
-                    .unwrap(),
+                    .expect("Failed to create rate limiters"),
                 );
             }
 
@@ -601,18 +599,14 @@ mod tests {
 
         /// Calculate the number of tokens available to a processor at a given iteration
         ///
-        /// # Arguments
-        ///
-        /// * `bounds` - A struct containing the token calculation bounds
-        /// * `iteration` - The iteration count. This is the number of times the rate limiter has been called
-        /// * `pod_count` - The number of pods/processors
-        ///
         /// # Returns
-        ///
         /// The number of tokens available to a processor at a given iteration
         fn calc_cur_processor_tokens(
+            // A struct containing the token calculation bounds
             bounds: &TokenCalcBounds,
+            // The iteration count. This is the number of times the rate limiter has been called
             iteration: usize,
+            // The number of pods/processors
             pod_count: usize,
         ) -> usize {
             // Actual ramp up duration is recalculated here
@@ -628,18 +622,15 @@ mod tests {
         /// - [test_distributed_rate_limiter_multiple_pods]
         /// - [test_distributed_rate_limiter_multiple_pods_redis]
         ///
-        /// # Arguments
-        ///
-        /// * `cancel` - The cancellation token to cancel the test
-        /// * `refresh_interval` - The refresh interval for the rate limiter
-        /// * `runway_update` - The runway update for the rate limiter
-        /// * `test_cases` - The test cases to run
-        pub async fn run_distributed_rate_limiter_multiple_pods_test_cases<S: Store + Sync>(
-            cancel: &CancellationToken,
-            refresh_interval: Duration,
-            runway_update: OptimisticValidityUpdateSecs,
-            test_cases: Vec<GreedyTestCase<S>>,
+        pub async fn run_distributed_rate_limiter_multiple_pods_test_cases(
+            // The test cases to run
+            test_cases: Vec<GreedyTestCase>,
         ) {
+            // common state store for all the pods
+            let cancel = CancellationToken::new();
+            let refresh_interval = Duration::from_millis(50);
+            let runway_update = OptimisticValidityUpdateSecs::default();
+
             for test_case in test_cases {
                 let GreedyTestCase {
                     max_tokens,
@@ -647,10 +638,11 @@ mod tests {
                     duration,
                     pod_count,
                     iterations,
-                    store,
+                    store_type,
                     test_name,
                 } = test_case;
                 let bounds = TokenCalcBounds::new(max_tokens, burst_tokens, duration);
+                let temp_test_name = test_name.clone();
                 let test_params = TestParams {
                     bounds,
                     refresh_interval,
@@ -659,13 +651,26 @@ mod tests {
                     runway_update: runway_update.clone(),
                     test_name,
                 };
-                test_rate_limiter_with_state(store, test_params, cancel.clone()).await;
+
+                match store_type == "in_memory_store" {
+                    true => {
+                        let store = InMemoryStore::new();
+                        test_rate_limiter_with_state(store, test_params, cancel.clone()).await;
+                    }
+                    _ => {
+                        let store = match create_test_redis_store(temp_test_name.as_str()).await {
+                            Some(store) => store,
+                            None => return, // Skip test if Redis is not available
+                        };
+
+                        test_rate_limiter_with_state(store, test_params, cancel.clone()).await;
+                    }
+                }
             }
         }
 
         /// Creates a Redis store for testing with a unique key prefix
         /// Returns None if Redis is not available
-        #[cfg(feature = "redis-tests")]
         pub async fn create_test_redis_store(test_name: &str) -> Option<RedisStore> {
             let redis_url = "redis://127.0.0.1:6379";
 
@@ -1084,7 +1089,6 @@ mod tests {
         // the max rate limit (20).
         for i in 1..10 {
             cur_epoch += 1;
-            println!("Rate limiter state: {}", rate_limiter);
             let attempt = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
             assert_eq!(
                 attempt,
@@ -1161,18 +1165,8 @@ mod tests {
     /// using InMemoryStore as the state store
     /// Only tests the greedy case where each pod is trying to acquire max tokens
     ///
-    /// TODO: Look more into this. Seems to be flaky
     #[tokio::test]
-    async fn test_distributed_rate_limiter_multiple_pods() {
-        use crate::state::OptimisticValidityUpdateSecs;
-        use crate::state::store::in_memory_store::InMemoryStore;
-
-        // common state store for all the pods
-        let in_memory_store = InMemoryStore::new();
-        let cancel = CancellationToken::new();
-        let refresh_interval = Duration::from_millis(50);
-        let runway_update = OptimisticValidityUpdateSecs::default();
-
+    async fn test_distributed_rate_limiter_multiple_pods_in_memory() {
         let test_cases = vec![
             // Fractional slope with single pod
             test_utils::GreedyTestCase {
@@ -1181,7 +1175,7 @@ mod tests {
                 duration: Duration::from_secs(10),
                 pod_count: 1,
                 iterations: 20,
-                store: in_memory_store.clone(),
+                store_type: "in_memory_store".to_string(),
                 test_name: "InMemoryStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1, iterations=20".to_string(),
             },
             // Fractional slope with multiple pods
@@ -1191,7 +1185,7 @@ mod tests {
                 duration: Duration::from_secs(10),
                 pod_count: 2,
                 iterations: 20,
-                store: in_memory_store.clone(),
+                store_type: "in_memory_store".to_string(),
                 test_name: "InMemoryStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=2, iterations=20".to_string(),
             },
             // Fractional slope (>1) with multiple pods
@@ -1201,7 +1195,7 @@ mod tests {
                 duration: Duration::from_secs(10),
                 pod_count: 2,
                 iterations: 20,
-                store: in_memory_store.clone(),
+                store_type: "in_memory_store".to_string(),
                 test_name: "InMemoryStore Test params: max_tokens=60, burst_tokens=15, duration=10s, pod_count=2, iterations=20".to_string(),
             },
             // Integer slope with multiple pods
@@ -1211,7 +1205,7 @@ mod tests {
                 duration: Duration::from_secs(10),
                 pod_count: 2,
                 iterations: 20,
-                store: in_memory_store.clone(),
+                store_type: "in_memory_store".to_string(),
                 test_name: "InMemoryStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2, iterations=20".to_string(),
             },
             test_utils::GreedyTestCase {
@@ -1220,7 +1214,7 @@ mod tests {
                 duration: Duration::from_secs(10),
                 pod_count: 3,
                 iterations: 10,
-                store: in_memory_store.clone(),
+                store_type: "in_memory_store".to_string(),
                 test_name: "InMemoryStore Test params: max_tokens=60, burst_tokens=30, duration=10s, pod_count=3, iterations=10".to_string(),
             },
             test_utils::GreedyTestCase {
@@ -1229,19 +1223,11 @@ mod tests {
                 duration: Duration::from_secs(10),
                 pod_count: 5,
                 iterations: 20,
-                store: in_memory_store.clone(),
+                store_type: "in_memory_store".to_string(),
                 test_name: "InMemoryStore Test params: max_tokens=120, burst_tokens=60, duration=10s, pod_count=5, iterations=20".to_string(),
             },
         ];
-        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(
-            &cancel,
-            refresh_interval,
-            runway_update,
-            test_cases,
-        )
-        .await;
-        // Clean up
-        cancel.cancel();
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
 
     #[tokio::test]
@@ -1485,21 +1471,6 @@ mod tests {
     #[tokio::test]
     #[cfg(feature = "redis-tests")]
     async fn test_distributed_rate_limiter_multiple_pods_redis() {
-        use crate::state::OptimisticValidityUpdateSecs;
-
-        // common state store for all the pods
-        let redis_store = match test_utils::create_test_redis_store(
-            "test_distributed_rate_limiter_multiple_pods_redis",
-        )
-        .await
-        {
-            Some(store) => store,
-            None => return, // Skip test if Redis is not available
-        };
-        let cancel = CancellationToken::new();
-        let refresh_interval = Duration::from_millis(50);
-        let runway_update = OptimisticValidityUpdateSecs::default();
-
         let test_cases = vec![
             test_utils::GreedyTestCase {
                 max_tokens: 60,
@@ -1507,7 +1478,7 @@ mod tests {
                 duration: Duration::from_secs(10),
                 pod_count: 3,
                 iterations: 10,
-                store: redis_store.clone(),
+                store_type: String::from("redis_store"),
                 test_name: "RedisStore Test params: max_tokens=60, burst_tokens=30, duration=10s, pod_count=3, iterations=10".to_string(),
             },
             test_utils::GreedyTestCase {
@@ -1516,19 +1487,11 @@ mod tests {
                 duration: Duration::from_secs(10),
                 pod_count: 5,
                 iterations: 20,
-                store: redis_store.clone(),
+                store_type: String::from("redis_store"),
                 test_name: "RedisStore Test params: max_tokens=120, burst_tokens=60, duration=10s, pod_count=5, iterations=20".to_string(),
             },
         ];
 
-        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(
-            &cancel,
-            refresh_interval,
-            runway_update,
-            test_cases,
-        )
-        .await;
-        // Clean up
-        cancel.cancel();
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
 }
