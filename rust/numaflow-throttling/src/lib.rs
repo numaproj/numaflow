@@ -1165,7 +1165,6 @@ mod tests {
 
     /// Test distributed rate limiter with multiple pods (1 or more)
     /// using InMemoryStore as the state store
-    /// Only tests the greedy case where each pod is trying to acquire max tokens
     ///
     #[tokio::test]
     async fn test_distributed_rate_limiter_multiple_pods_in_memory() {
@@ -1531,7 +1530,6 @@ mod tests {
     }
 
     /// Test distributed rate limiter with multiple pods (1 or more) using Redis as the state store
-    /// Tests the greedy case where each pod is trying to acquire max tokens
     #[tokio::test]
     #[cfg(feature = "redis-tests")]
     async fn test_distributed_rate_limiter_multiple_pods_redis() {
