@@ -580,8 +580,9 @@ mod tests {
             let iterations = asked_tokens.len();
             let mut cur_epoch = 0;
             for i in 0..iterations {
+                let mut total_got_tokens = 0;
+                let mut total_expected_tokens = 0;
                 for rate_limiter in rate_limiters.iter() {
-                    //println!("Processor {}", rate_limiter);
                     let asked_token_size = match asked_tokens[i] {
                         0 => None,
                         _ => Some(asked_tokens[i]),
@@ -594,7 +595,14 @@ mod tests {
                         "Number of tokens fetched in each iteration \
                 should increase by slope/pod_count until ramp up",
                     );
+                    total_got_tokens += tokens;
+                    total_expected_tokens += expected_tokens[i];
                 }
+                assert_eq!(
+                    total_got_tokens, total_expected_tokens,
+                    "Total number of tokens fetched in each iteration \
+                should be less than or equal to total expected tokens for each processor",
+                );
                 cur_epoch += 1;
             }
 
