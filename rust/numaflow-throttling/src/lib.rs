@@ -561,7 +561,7 @@ mod tests {
                 test_name
             );
             // create pod_count number of rate limiters with passed store
-            let mut rate_limiters = vec![];
+            let mut rate_limiters = Vec::with_capacity(pod_count);
             for i in 0..pod_count {
                 rate_limiters.push(
                     RateLimit::<WithState<S>>::new(
