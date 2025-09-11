@@ -223,8 +223,10 @@ func (r *Rater) Start(ctx context.Context) error {
 	// Function assign() sends the least recently used podKey to the channel so that it can be picked up by a worker.
 	assign := func(timestamp int64) {
 		if e := r.podTracker.LeastRecentlyUsed(); e != "" {
-			taskCh <- &podTask{key: e, timestamp: timestamp}
-			return
+			select {
+			case taskCh <- &podTask{key: e, timestamp: timestamp}:
+			case <-ctx.Done():
+			}
 		}
 	}
 
