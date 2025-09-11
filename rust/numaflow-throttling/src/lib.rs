@@ -485,10 +485,10 @@ mod tests {
     mod test_utils {
         use crate::state::store::redis_store::{RedisMode, RedisStore};
         use crate::state::{OptimisticValidityUpdateSecs, Store};
+        use crate::tests::{test_distributed_rate_limiter_multiple_pods, test_utils};
         use crate::{RateLimit, RateLimiter, TokenCalcBounds, WithState};
         use std::time::Duration;
         use tokio_util::sync::CancellationToken;
-        use crate::tests::{test_distributed_rate_limiter_multiple_pods, test_utils};
 
         /// Test case struct for distributed rate limiter tests [create::run_distributed_rate_limiter_multiple_pods_test_cases]
         ///
@@ -1188,7 +1188,7 @@ mod tests {
                 store: in_memory_store.clone(),
             },
             test_utils::TestCase {
-                max_tokens: 120,
+                max_tokens: 100,
                 burst_tokens: 60,
                 duration: Duration::from_secs(10),
                 pod_count: 5,
