@@ -483,14 +483,14 @@ mod tests {
     /// Test utilities for Redis integration tests
 
     mod test_utils {
-        use crate::state::store::redis_store::{RedisMode, RedisStore};
         use crate::state::{OptimisticValidityUpdateSecs, Store};
-        use crate::tests::{test_distributed_rate_limiter_multiple_pods, test_utils};
         use crate::{RateLimit, RateLimiter, TokenCalcBounds, WithState};
         use std::time::Duration;
         use tokio_util::sync::CancellationToken;
 
-        /// Test case struct for distributed rate limiter tests [create::run_distributed_rate_limiter_multiple_pods_test_cases]
+        /// Test case struct for distributed rate limiter tests
+        /// - [test_distributed_rate_limiter_multiple_pods]
+        /// - [test_distributed_rate_limiter_multiple_pods_redis]
         ///
         /// # Arguments
         ///
@@ -500,13 +500,24 @@ mod tests {
         /// * `pod_count` - The number of pods
         /// * `iterations` - The number of iterations
         /// * `store` - The store to use for the test
-        pub(super) struct TestCase<S> {
+        pub(super) struct GreedyTestCase<S> {
             pub(super) max_tokens: usize,
             pub(super) burst_tokens: usize,
             pub(super) duration: Duration,
             pub(super) pod_count: usize,
             pub(super) iterations: usize,
             pub(super) store: S,
+            pub(super) test_name: String,
+        }
+
+        pub(super) struct VariableTestCase<S> {
+            pub(super) max_tokens: usize,
+            pub(super) burst_tokens: usize,
+            pub(super) duration: Duration,
+            pub(super) pod_count: usize,
+            pub(super) iterations: usize,
+            pub(super) store: S,
+            pub(super) test_name: String,
         }
 
         /// Struct to hold test parameters for rate limiter
@@ -524,6 +535,7 @@ mod tests {
             pub(super) pod_count: usize,
             pub(super) iterations: usize,
             pub(super) runway_update: OptimisticValidityUpdateSecs,
+            pub(super) test_name: String,
         }
 
         /// A generic utility function to test rate limiter with generic state
@@ -545,8 +557,10 @@ mod tests {
                 pod_count,
                 iterations,
                 runway_update,
+                test_name,
             } = params;
 
+            println!("Running test: {}", test_name);
             // create pod_count number of rate limiters with passed store
             let mut rate_limiters = vec![];
             for i in 0..pod_count {
@@ -564,27 +578,10 @@ mod tests {
                 );
             }
 
-            // cur_epoch = 0 -> at t = 0;
-            // at t = 0, each processor should get (min|burst)/pod_count tokens
             let mut cur_epoch = 0;
-            let mut total_tokens = 0;
-            for rate_limiter in rate_limiters.iter() {
-                let tokens = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
-                total_tokens += tokens;
-                assert_eq!(tokens, bounds.min / pod_count,);
-            }
-
-            // Total tokens distributed at t=0 should equal burst/pod_count
-            assert_eq!(
-                total_tokens, bounds.min,
-                "Total distributed should equal burst"
-            );
-
-            // for each additional iteration, each processor should get
-            // (min|burst)/pod_count additional tokens until fully ramped up
-            for i in 1..=iterations {
-                cur_epoch += 1;
+            for i in 0..iterations {
                 for rate_limiter in rate_limiters.iter() {
+                    //println!("Processor {}", rate_limiter);
                     let tokens = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
                     assert_eq!(
                         tokens,
@@ -593,6 +590,7 @@ mod tests {
                 should increase by slope/pod_count until ramp up",
                     );
                 }
+                cur_epoch += 1;
             }
 
             for rate_limiter in rate_limiters.iter() {
@@ -641,25 +639,26 @@ mod tests {
             cancel: &CancellationToken,
             refresh_interval: Duration,
             runway_update: OptimisticValidityUpdateSecs,
-            test_cases: Vec<TestCase<S>>,
+            test_cases: Vec<GreedyTestCase<S>>,
         ) {
             for test_case in test_cases {
-                let TestCase {
+                let GreedyTestCase {
                     max_tokens,
                     burst_tokens,
                     duration,
                     pod_count,
                     iterations,
                     store,
+                    test_name,
                 } = test_case;
                 let bounds = TokenCalcBounds::new(max_tokens, burst_tokens, duration);
-                let temp_runway_update = runway_update.clone();
                 let test_params = TestParams {
                     bounds,
                     refresh_interval,
                     pod_count,
                     iterations,
-                    runway_update: temp_runway_update,
+                    runway_update: runway_update.clone(),
+                    test_name,
                 };
                 test_rate_limiter_with_state(store, test_params, cancel.clone()).await;
             }
@@ -1159,6 +1158,11 @@ mod tests {
         cancel.cancel();
     }
 
+    /// Test distributed rate limiter with multiple pods (1 or more)
+    /// using InMemoryStore as the state store
+    /// Only tests the greedy case where each pod is trying to acquire max tokens
+    ///
+    /// TODO: Look more into this. Seems to be flaky
     #[tokio::test]
     async fn test_distributed_rate_limiter_multiple_pods() {
         use crate::state::OptimisticValidityUpdateSecs;
@@ -1171,29 +1175,63 @@ mod tests {
         let runway_update = OptimisticValidityUpdateSecs::default();
 
         let test_cases = vec![
-            test_utils::TestCase {
+            // Fractional slope with single pod
+            test_utils::GreedyTestCase {
+                max_tokens: 2,
+                burst_tokens: 1,
+                duration: Duration::from_secs(10),
+                pod_count: 1,
+                iterations: 20,
+                store: in_memory_store.clone(),
+                test_name: "InMemoryStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1, iterations=20".to_string(),
+            },
+            // Fractional slope with multiple pods
+            test_utils::GreedyTestCase {
+                max_tokens: 2,
+                burst_tokens: 1,
+                duration: Duration::from_secs(10),
+                pod_count: 2,
+                iterations: 20,
+                store: in_memory_store.clone(),
+                test_name: "InMemoryStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=2, iterations=20".to_string(),
+            },
+            // Fractional slope (>1) with multiple pods
+            test_utils::GreedyTestCase {
+                max_tokens: 60,
+                burst_tokens: 15,
+                duration: Duration::from_secs(10),
+                pod_count: 2,
+                iterations: 20,
+                store: in_memory_store.clone(),
+                test_name: "InMemoryStore Test params: max_tokens=60, burst_tokens=15, duration=10s, pod_count=2, iterations=20".to_string(),
+            },
+            // Integer slope with multiple pods
+            test_utils::GreedyTestCase {
+                max_tokens: 20,
+                burst_tokens: 10,
+                duration: Duration::from_secs(10),
+                pod_count: 2,
+                iterations: 20,
+                store: in_memory_store.clone(),
+                test_name: "InMemoryStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2, iterations=20".to_string(),
+            },
+            test_utils::GreedyTestCase {
                 max_tokens: 60,
                 burst_tokens: 30,
                 duration: Duration::from_secs(10),
                 pod_count: 3,
                 iterations: 10,
                 store: in_memory_store.clone(),
+                test_name: "InMemoryStore Test params: max_tokens=60, burst_tokens=30, duration=10s, pod_count=3, iterations=10".to_string(),
             },
-            test_utils::TestCase {
+            test_utils::GreedyTestCase {
                 max_tokens: 120,
                 burst_tokens: 60,
                 duration: Duration::from_secs(10),
                 pod_count: 5,
                 iterations: 20,
                 store: in_memory_store.clone(),
-            },
-            test_utils::TestCase {
-                max_tokens: 100,
-                burst_tokens: 60,
-                duration: Duration::from_secs(10),
-                pod_count: 5,
-                iterations: 20,
-                store: in_memory_store.clone(),
+                test_name: "InMemoryStore Test params: max_tokens=120, burst_tokens=60, duration=10s, pod_count=5, iterations=20".to_string(),
             },
         ];
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(
@@ -1443,6 +1481,8 @@ mod tests {
         cancel.cancel();
     }
 
+    /// Test distributed rate limiter with multiple pods (1 or more) using Redis as the state store
+    /// Tests the greedy case where each pod is trying to acquire max tokens
     #[tokio::test]
     #[cfg(feature = "redis-tests")]
     async fn test_distributed_rate_limiter_multiple_pods_redis() {
@@ -1462,21 +1502,23 @@ mod tests {
         let runway_update = OptimisticValidityUpdateSecs::default();
 
         let test_cases = vec![
-            test_utils::TestCase {
+            test_utils::GreedyTestCase {
                 max_tokens: 60,
                 burst_tokens: 30,
                 duration: Duration::from_secs(10),
                 pod_count: 3,
                 iterations: 10,
                 store: redis_store.clone(),
+                test_name: "RedisStore Test params: max_tokens=60, burst_tokens=30, duration=10s, pod_count=3, iterations=10".to_string(),
             },
-            test_utils::TestCase {
+            test_utils::GreedyTestCase {
                 max_tokens: 120,
                 burst_tokens: 60,
                 duration: Duration::from_secs(10),
                 pod_count: 5,
                 iterations: 20,
                 store: redis_store.clone(),
+                test_name: "RedisStore Test params: max_tokens=120, burst_tokens=60, duration=10s, pod_count=5, iterations=20".to_string(),
             },
         ];
 
