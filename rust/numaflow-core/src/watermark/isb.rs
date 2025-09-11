@@ -37,7 +37,7 @@ use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::isb::wm_fetcher::ISBWatermarkFetcher;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
 use crate::watermark::processor::manager::ProcessorManager;
-use crate::watermark::wmb::Watermark;
+use crate::watermark::wmb::{WMB, Watermark};
 
 pub(crate) mod wm_fetcher;
 pub(crate) mod wm_publisher;
@@ -53,12 +53,13 @@ enum ISBWaterMarkActorMessage {
         offset: IntOffset,
         oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
     },
-    FetchHeadIdle {
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
-    },
     FetchHead {
         partition_idx: u16,
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
+    },
+    FetchHeadIdleWmb {
+        partition_idx: u16,
+        oneshot_tx: tokio::sync::oneshot::Sender<Result<Option<WMB>>>,
     },
     PublishIdleWatermark {
         oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
@@ -132,15 +133,6 @@ impl ISBWatermarkActor {
                     .map_err(|_| Error::Watermark("failed to send response".to_string()))
             }
 
-            // fetches the head idle watermark
-            ISBWaterMarkActorMessage::FetchHeadIdle { oneshot_tx } => {
-                let watermark = self.fetcher.fetch_head_idle_watermark();
-
-                oneshot_tx
-                    .send(Ok(watermark))
-                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
-            }
-
             // fetches the head watermark
             ISBWaterMarkActorMessage::FetchHead {
                 partition_idx,
@@ -150,6 +142,18 @@ impl ISBWatermarkActor {
 
                 oneshot_tx
                     .send(Ok(watermark))
+                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
+            }
+
+            // fetches the head idle WMB for a specific partition
+            ISBWaterMarkActorMessage::FetchHeadIdleWmb {
+                partition_idx,
+                oneshot_tx,
+            } => {
+                let wmb = self.fetcher.fetch_head_idle_wmb(partition_idx);
+
+                oneshot_tx
+                    .send(Ok(wmb))
                     .map_err(|_| Error::Watermark("failed to send response".to_string()))
             }
 
@@ -187,6 +191,10 @@ impl ISBWatermarkActor {
         // we should fetch the head idle watermark and publish it to downstream.
         if min_wm.timestamp_millis() == -1 {
             min_wm = self.fetcher.fetch_head_idle_watermark();
+        }
+
+        if min_wm.timestamp_millis() == -1 {
+            return Ok(());
         }
 
         // Identify the streams that are idle and publish the idle watermark
@@ -389,27 +397,31 @@ impl ISBWatermarkHandle {
         }
     }
 
-    /// Fetches the head idle watermark using the watermark fetcher. This returns the minimum
-    /// of all the head watermarks across all processors if they are ALL idle, otherwise returns -1.
-    pub(crate) async fn fetch_head_idle_watermark(&mut self) -> Watermark {
+    /// Fetches the head idle WMB for the given partition. Returns the minimum idle WMB across all
+    /// processors for the specified partition, but only if all active processors are idle for that
+    /// partition.
+    pub(crate) async fn fetch_head_idle_wmb(&mut self, partition_idx: u16) -> Option<WMB> {
         let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
         if let Err(e) = self
             .sender
-            .send(ISBWaterMarkActorMessage::FetchHeadIdle { oneshot_tx })
+            .send(ISBWaterMarkActorMessage::FetchHeadIdleWmb {
+                partition_idx,
+                oneshot_tx,
+            })
             .await
         {
             warn!(?e, "Failed to send message");
-            return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
+            return None;
         }
 
         match oneshot_rx.await {
-            Ok(watermark) => watermark.unwrap_or_else(|e| {
-                warn!(?e, "Failed to fetch head idle watermark");
-                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
+            Ok(wmb_result) => wmb_result.unwrap_or_else(|e| {
+                warn!(?e, "Failed to fetch head idle WMB");
+                None
             }),
             Err(e) => {
                 warn!(?e, "Failed to receive response");
-                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
+                None
             }
         }
     }

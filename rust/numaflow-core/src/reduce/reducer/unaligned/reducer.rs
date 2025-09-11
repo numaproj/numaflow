@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::message::Message;
+use crate::message::{Message, MessageType};
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
 use crate::reduce::reducer::unaligned::user_defined::accumulator::UserDefinedAccumulator;
@@ -8,7 +8,6 @@ use crate::reduce::reducer::unaligned::windower::{
     UnalignedWindowManager, UnalignedWindowMessage, Window,
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
-use crate::watermark::isb::ISBWatermarkHandle;
 
 use crate::jh_abort_guard;
 use chrono::{DateTime, Utc};
@@ -519,11 +518,6 @@ pub(crate) struct UnalignedReducer {
     keyed: bool,
     /// Graceful shutdown timeout duration.
     graceful_timeout: Duration,
-    /// Idle timeout duration for reading messages.
-    idle_timeout: Duration,
-    /// Watermark handle for fetching head idle wmb to check if any windows can be closed,
-    /// when there is no data.
-    watermark_handle: Option<ISBWatermarkHandle>,
 }
 
 impl UnalignedReducer {
@@ -535,9 +529,7 @@ impl UnalignedReducer {
         allowed_lateness: Duration,
         gc_wal: Option<AppendOnlyWal>,
         graceful_timeout: Duration,
-        idle_timeout: Duration,
         keyed: bool,
-        watermark_handle: Option<ISBWatermarkHandle>,
     ) -> Self {
         Self {
             client,
@@ -550,8 +542,6 @@ impl UnalignedReducer {
             current_watermark: DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"),
             keyed,
             graceful_timeout,
-            idle_timeout,
-            watermark_handle,
         }
     }
 
@@ -614,14 +604,27 @@ impl UnalignedReducer {
                     }
 
                     // Process input messages with timeout
-                    read_msg = tokio::time::timeout(self.idle_timeout, input_stream.next()) => {
+                    read_msg = input_stream.next() => {
                         match read_msg {
-                            Ok(Some(mut msg)) => {
+                            Some(mut msg) => {
                                 // If shutting down, drain the stream
                                 if self.shutting_down_on_err {
                                     info!("Unaligned reducer is in shutdown mode, ignoring the message");
                                     continue;
                                 }
+
+                                // Handle WMB messages with idle watermarks
+                                if let MessageType::WMB = msg.typ {
+                                    if let Some(idle_watermark) = msg.watermark {
+                                        // Only close windows if the idle watermark is greater than current watermark
+                                        if idle_watermark > self.current_watermark {
+                                            self.current_watermark = idle_watermark;
+                                            self.close_windows_by_wm(idle_watermark, &actor_tx).await;
+                                        }
+                                    }
+                                    continue; // Skip further processing for WMB messages
+                                }
+
 
                                 // If the stream is not keyed, set all messages to have the same key
                                 if !keyed {
@@ -635,14 +638,9 @@ impl UnalignedReducer {
 
                                 self.assign_and_close_windows(msg, &actor_tx).await;
                             }
-                            Ok(None) => {
+                            None => {
                                 // Stream ended
                                 break;
-                            }
-                            Err(_timeout) => {
-                                // watermark can still progress when there is no data, because of idle watermark
-                                // so we need to check if any windows can be closed based on the idle watermark.
-                                self.close_windows_by_idle_wm(&actor_tx).await;
                             }
                         }
                     }
@@ -750,26 +748,6 @@ impl UnalignedReducer {
                 .send(window_msg)
                 .await
                 .expect("Failed to send window message");
-        }
-    }
-
-    /// Closes windows based on the idle watermark.
-    async fn close_windows_by_idle_wm(&mut self, actor_tx: &mpsc::Sender<UnalignedWindowMessage>) {
-        if self.shutting_down_on_err {
-            return;
-        }
-
-        let Some(ref mut watermark_handle) = self.watermark_handle else {
-            return;
-        };
-
-        // Only fetch idle watermark if we have a watermark handle
-        let idle_watermark = watermark_handle.fetch_head_idle_watermark().await;
-
-        // Only close windows if the idle watermark is greater than the current watermark
-        if idle_watermark > self.current_watermark {
-            self.current_watermark = idle_watermark;
-            self.close_windows_by_wm(idle_watermark, actor_tx).await;
         }
     }
 }
@@ -1013,9 +991,7 @@ mod tests {
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
-            Duration::from_secs(1), // Idle timeout
-            true,
-            None, // No watermark handle for testing
+            true, // No watermark handle for testing
         )
         .await;
 
@@ -1239,9 +1215,7 @@ mod tests {
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
-            Duration::from_secs(1), // Idle timeout
-            true,
-            None, // No watermark handle for testing
+            true, // No watermark handle for testing
         )
         .await;
 
@@ -1522,9 +1496,7 @@ mod tests {
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
-            Duration::from_secs(1),
             true,
-            None,
         )
         .await;
 
@@ -1725,9 +1697,7 @@ mod tests {
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
-            Duration::from_secs(1),
             true,
-            None,
         )
         .await;
 
@@ -1960,9 +1930,7 @@ mod tests {
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
-            Duration::from_secs(1),
             true,
-            None,
         )
         .await;
 
