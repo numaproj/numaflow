@@ -1564,7 +1564,7 @@ mod tests {
                 pod_count: 2,
                 store_type: "redis_store".to_string(),
                 test_name: "RedisStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2".to_string(),
-                asked_tokens: vec![None],
+                asked_tokens: vec![None, None, None, None, None, None, None, None, None, None, None],
                 expected_tokens: vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
             },
             // Integer slope with multiple pods
