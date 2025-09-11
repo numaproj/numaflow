@@ -515,9 +515,10 @@ mod tests {
             pub(super) burst_tokens: usize,
             pub(super) duration: Duration,
             pub(super) pod_count: usize,
-            pub(super) iterations: usize,
             pub(super) store: S,
             pub(super) test_name: String,
+            pub(super) asked_tokens: Vec<usize>,
+            pub(super) expected_tokens: Vec<usize>,
         }
 
         /// Struct to hold test parameters for rate limiter
@@ -633,9 +634,7 @@ mod tests {
         /// * `refresh_interval` - The refresh interval for the rate limiter
         /// * `runway_update` - The runway update for the rate limiter
         /// * `test_cases` - The test cases to run
-        pub async fn run_distributed_rate_limiter_multiple_pods_test_cases<
-            S: Store + Send + Sync + 'static,
-        >(
+        pub async fn run_distributed_rate_limiter_multiple_pods_test_cases<S: Store + Sync>(
             cancel: &CancellationToken,
             refresh_interval: Duration,
             runway_update: OptimisticValidityUpdateSecs,
