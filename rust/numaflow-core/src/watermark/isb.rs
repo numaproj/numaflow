@@ -222,11 +222,14 @@ impl ISBWatermarkActor {
     /// Publishes the idle watermark for the given streams
     async fn publish_idle_watermark_for_streams(&mut self, wm_ms: i64, streams: Vec<Stream>) {
         for stream in streams.iter() {
-            if let Ok(offset) = self.idle_manager.fetch_idle_offset(stream).await {
-                self.publisher
-                    .publish_watermark(stream, offset, wm_ms, true)
-                    .await;
-                self.idle_manager.update_idle_metadata(stream, offset).await;
+            match self.idle_manager.fetch_idle_offset(stream).await {
+                Ok(offset) => {
+                    self.publisher
+                        .publish_watermark(stream, offset, wm_ms, true)
+                        .await;
+                    self.idle_manager.update_idle_metadata(stream, offset).await;
+                }
+                Err(e) => {}
             }
         }
     }
@@ -903,6 +906,15 @@ mod tests {
             .unwrap();
 
         js_context
+            .create_stream(jetstream::stream::Config {
+                name: "test_stream".to_string(),
+                subjects: vec!["test_stream".to_string()],
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        js_context
             .create_key_value(Config {
                 bucket: to_ot_bucket_name.to_string(),
                 history: 1,
@@ -924,12 +936,12 @@ mod tests {
             from_vertex_config: vec![from_bucket_config.clone()],
             to_vertex_config: vec![to_bucket_config.clone()],
         };
-        let tracker_handle = TrackerHandle::new(None);
 
-        let _handle = ISBWatermarkHandle::new(
+        let tracker_handle = TrackerHandle::new(None);
+        let handle = ISBWatermarkHandle::new(
             vertex_name,
             0,
-            VertexType::MapUDF, // Set idle timeout to a very short duration
+            VertexType::MapUDF,
             js_context.clone(),
             &edge_config,
             &[ToVertexConfig {
@@ -955,8 +967,10 @@ mod tests {
             tracker_handle.insert(&message, ack_send).await.unwrap();
         }
 
-        // Wait for the idle timeout to trigger
-        tokio::time::sleep(Duration::from_millis(20)).await;
+        // publish idle watermark
+        handle
+            .publish_idle_watermark(Some(vec![Stream::new("test_stream", "to_vertex", 0)]))
+            .await;
 
         // Check if the idle watermark is published
         let ot_bucket = js_context

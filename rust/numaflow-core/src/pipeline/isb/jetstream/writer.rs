@@ -270,8 +270,8 @@ impl JetstreamWriter {
 
             loop {
                 tokio::select! {
-                    maybe_msg = messages_stream.next() => {
-                        let Some(message) = maybe_msg else { break; };
+                    msg = messages_stream.next() => {
+                        let Some(message) = msg else { break; };
 
                         let write_processing_start = Instant::now();
                         // if message needs to be dropped, ack and continue
@@ -575,7 +575,7 @@ impl JetstreamWriter {
             .expect("message serialization should not fail");
         let payload: Bytes = payload_mut.freeze();
 
-        while !cln_token.is_cancelled() {
+        loop {
             match self.is_stream_full(&stream) {
                 Some(true) => {
                     pipeline_metrics()
@@ -610,12 +610,14 @@ impl JetstreamWriter {
                 }
             }
 
+            if !cln_token.is_cancelled() {
+                error!("Shutdown signal received, exiting write loop");
+                return None;
+            }
+
             // sleep to avoid busy looping
             sleep(Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS)).await;
         }
-
-        error!("Shutdown signal received, exiting write loop");
-        None
     }
 
     /// resolve_pafs resolves the PAFs for the given result. It will try to resolve the PAFs
@@ -1540,7 +1542,7 @@ mod tests {
         // because the max message size is set to 1024
         let message = Message {
             typ: Default::default(),
-            keys: Arc::from(vec!["key_101".to_string()]),
+            keys: Arc::from(vec!["key_100".to_string()]),
             tags: None,
             value: vec![0; 1025].into(),
             offset: Offset::Int(IntOffset::new(101, 0)),
@@ -1548,8 +1550,8 @@ mod tests {
             watermark: None,
             id: MessageID {
                 vertex_name: "vertex".to_string().into(),
-                offset: "offset_101".to_string().into(),
-                index: 101,
+                offset: "offset_100".to_string().into(),
+                index: 100,
             },
             ..Default::default()
         };

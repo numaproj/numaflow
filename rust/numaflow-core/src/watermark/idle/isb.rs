@@ -24,7 +24,7 @@ use crate::config::pipeline::isb::Stream;
 
 /// State of each partition in the ISB. It has the information required to identify whether the
 /// partition is idling or not.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 struct IdleState {
     stream: Stream,
     /// This offset's WM will keep increasing as long as the [Stream] is idling.
