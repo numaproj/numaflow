@@ -46,6 +46,7 @@ pub struct BufferInfo {
 #[derive(Clone)]
 pub(crate) struct ISBWriterComponents {
     pub config: Vec<ToVertexConfig>,
+    pub idle_timeout: Duration,
     pub js_ctx: Context,
     pub paf_concurrency: usize,
     pub tracker_handle: TrackerHandle,
@@ -70,6 +71,7 @@ impl ISBWriterComponents {
             watermark_handle,
             vertex_type: context.config.vertex_type,
             isb_config: context.config.isb_config.clone(),
+            idle_timeout: context.config.read_timeout,
         }
     }
 }
@@ -98,6 +100,7 @@ pub(crate) struct JetstreamWriter {
     watermark_handle: Option<WatermarkHandle>,
     paf_concurrency: usize,
     vertex_type: VertexType,
+    idle_timeout: Duration,
     compression_type: Option<CompressionType>,
 }
 
@@ -125,6 +128,7 @@ impl JetstreamWriter {
             watermark_handle: writer_components.watermark_handle,
             paf_concurrency: writer_components.paf_concurrency,
             vertex_type: writer_components.vertex_type,
+            idle_timeout: writer_components.idle_timeout,
             compression_type: writer_components
                 .isb_config
                 .map(|c| c.compression.compress_type),
@@ -261,8 +265,7 @@ impl JetstreamWriter {
             // track which streams received at least one message within the current idle interval
             let mut idle_streams = all_streams.clone();
 
-            // Fixed idle tick; on each tick, if only a subset of streams were written, publish idle WM for the rest
-            let mut idle_tick = tokio::time::interval(Duration::from_millis(1000));
+            let mut idle_tick = tokio::time::interval(this.idle_timeout);
             idle_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
             loop {
@@ -914,6 +917,7 @@ mod tests {
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
             }],
+            idle_timeout: Duration::from_millis(100),
             js_ctx: context.clone(),
             paf_concurrency: 100,
             tracker_handle,
@@ -1019,6 +1023,7 @@ mod tests {
             cancel_token: cln_token.clone(),
             watermark_handle: None,
             vertex_type: VertexType::Source,
+            idle_timeout: Duration::from_millis(100),
             isb_config: None,
         };
         let writer = JetstreamWriter::new(writer_components);
@@ -1087,6 +1092,7 @@ mod tests {
             cancel_token: cancel_token.clone(),
             watermark_handle: None,
             vertex_type: VertexType::MapUDF,
+            idle_timeout: Duration::from_millis(100),
             isb_config: None,
         };
         let writer = JetstreamWriter::new(writer_components);
@@ -1298,6 +1304,7 @@ mod tests {
             paf_concurrency: 100,
             tracker_handle,
             cancel_token: cancel_token.clone(),
+            idle_timeout: Duration::from_millis(100),
             watermark_handle: None,
             vertex_type: VertexType::Source,
             isb_config: None,
@@ -1394,6 +1401,7 @@ mod tests {
             paf_concurrency: 100,
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
+            idle_timeout: Duration::from_millis(100),
             watermark_handle: None,
             vertex_type: VertexType::Source,
             isb_config: None,
@@ -1491,6 +1499,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cancel_token.clone(),
             watermark_handle: None,
+            idle_timeout: Duration::from_millis(100),
             vertex_type: VertexType::Source,
             isb_config: None,
         };
@@ -1641,6 +1650,7 @@ mod tests {
             cancel_token: cln_token.clone(),
             watermark_handle: None,
             vertex_type: VertexType::Source,
+            idle_timeout: Duration::from_millis(100),
             isb_config: None,
         };
         let writer = JetstreamWriter::new(writer_components);

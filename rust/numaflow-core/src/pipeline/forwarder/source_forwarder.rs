@@ -449,6 +449,7 @@ mod tests {
             paf_concurrency: 100,
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
+            idle_timeout: Duration::from_millis(100),
             watermark_handle: None,
             vertex_type: VertexType::Source,
             isb_config: None,
