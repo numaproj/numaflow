@@ -496,8 +496,12 @@ mod tests {
             Redis,
         }
 
+        /// Test type enum for distributed rate limiter tests
+        /// Defines the different types of test the same helper function can run
         pub(super) enum TestType {
+            // Tests the acquire_n method
             AcquireN,
+            // Tests the attempt_acquire_n method
             AttemptAcquireN,
         }
 
@@ -525,7 +529,7 @@ mod tests {
             pub(super) asked_tokens: Vec<(Option<usize>, usize)>,
             // Tokens expected to be returned by rate limiter in each iteration to *each* pod
             pub(super) expected_tokens: Vec<usize>,
-            // The test type
+            // The test type that we need to run for the test case
             pub(super) test_type: TestType,
         }
 
@@ -849,6 +853,7 @@ mod tests {
         );
         let tokens = rate_limiter.acquire_n(None, None).await;
         assert_eq!(tokens, 5);
+
     }
 
     #[tokio::test]
