@@ -547,7 +547,6 @@ mod tests {
             let runway_update = OptimisticValidityUpdateSecs::default();
             let bounds = TokenCalcBounds::new(max_tokens, burst_tokens, duration);
 
-            println!("Running test: {}", test_name);
             assert_eq!(
                 asked_tokens.len(),
                 expected_tokens.len(),
