@@ -480,8 +480,7 @@ mod tests {
     use std::time::SystemTime;
     use tokio::time::Duration;
 
-    /// Test utilities for Redis integration tests
-
+    /// Test utilities for integration tests
     mod test_utils {
         use crate::state::store::in_memory_store::InMemoryStore;
         use crate::state::store::redis_store::{RedisMode, RedisStore};
@@ -489,6 +488,12 @@ mod tests {
         use crate::{RateLimit, RateLimiter, TokenCalcBounds, WithState};
         use std::time::Duration;
         use tokio_util::sync::CancellationToken;
+
+        #[derive(Clone)]
+        pub(super) enum StoreType {
+            InMemory,
+            Redis,
+        }
 
         /// Test case struct for distributed rate limiter tests
         /// Takes in the test parameters to be used for each test case.
@@ -506,7 +511,7 @@ mod tests {
             // The number of pods
             pub(super) pod_count: usize,
             // The store name (String) to initialize for the test
-            pub(super) store_type: String,
+            pub(super) store_type: StoreType,
             // The name of the test
             pub(super) test_name: String,
             // Tokens asked in each iteration by *each* pod
@@ -520,7 +525,7 @@ mod tests {
         /// - [crate::tests::test_distributed_rate_limiter_multiple_pods_in_memory]
         /// - [crate::tests::test_distributed_rate_limiter_multiple_pods_redis]
         ///
-        pub async fn test_rate_limiter_with_state<S: Store + Sync>(
+        async fn test_rate_limiter_with_state<S: Store + Sync>(
             // A trait object that implements the [Store] trait
             store: S,
             // A struct containing the test parameters
@@ -541,7 +546,6 @@ mod tests {
             let runway_update = OptimisticValidityUpdateSecs::default();
             let bounds = TokenCalcBounds::new(max_tokens, burst_tokens, duration);
 
-            println!("Running test: {}", test_name);
             assert_eq!(
                 asked_tokens.len(),
                 expected_tokens.len(),
@@ -615,12 +619,12 @@ mod tests {
                 // Determining/initializing the store based on the store type here
                 // instead of passing a cloned store so that each test case gets its own store
                 // Necessary for redis store test cases.
-                match store_type == "in_memory_store" {
-                    true => {
+                match store_type {
+                    StoreType::InMemory => {
                         let store = InMemoryStore::new();
                         test_rate_limiter_with_state(store, test_case).await;
                     }
-                    _ => {
+                    StoreType::Redis => {
                         let store = match create_test_redis_store(temp_test_name.as_str()).await {
                             Some(store) => store,
                             None => return, // Skip test if Redis is not available
@@ -1137,9 +1141,9 @@ mod tests {
                 burst_tokens: 15,
                 duration: Duration::from_secs(10),
                 pod_count: 2,
-                store_type: "in_memory_store".to_string(),
+                store_type: test_utils::StoreType::InMemory,
                 test_name: "InMemoryStore Test params: max_tokens=60, burst_tokens=15, duration=10s, pod_count=2".to_string(),
-                asked_tokens: vec![None, None, None, None, None, None, None, None, None, None, None],
+                asked_tokens: vec![None; 11],
                 expected_tokens: vec![7, 9, 12, 14, 16, 18, 21, 23, 25, 27, 30],
             },
             // Fractional slope (>1) with multiple pods
@@ -1149,9 +1153,9 @@ mod tests {
                 burst_tokens: 15,
                 duration: Duration::from_secs(10),
                 pod_count: 2,
-                store_type: "in_memory_store".to_string(),
+                store_type: test_utils::StoreType::InMemory,
                 test_name: "InMemoryStore Test params: max_tokens=60, burst_tokens=15, duration=10s, pod_count=2".to_string(),
-                asked_tokens: vec![Some(20), Some(20), Some(20), Some(20), Some(20), Some(20), Some(20), Some(20), Some(20), Some(20), Some(20)],
+                asked_tokens: vec![Some(20); 11],
                 expected_tokens: vec![7, 9, 12, 14, 16, 18, 20, 20, 20, 20, 20],
             },
             // Fractional slope (<1) with multiple pods
@@ -1161,9 +1165,9 @@ mod tests {
                 burst_tokens: 1,
                 duration: Duration::from_secs(10),
                 pod_count: 2,
-                asked_tokens: vec![None, None, None, None, None, None, None, None, None, None, None],
+                asked_tokens: vec![None; 11],
                 expected_tokens: vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-                store_type: "in_memory_store".to_string(),
+                store_type: test_utils::StoreType::InMemory,
                 test_name: "InMemoryStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=2".to_string(),
             },
             // Fractional slope (<1) with multiple pods
@@ -1173,9 +1177,9 @@ mod tests {
                 burst_tokens: 1,
                 duration: Duration::from_secs(10),
                 pod_count: 2,
-                asked_tokens: vec![Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1)],
+                asked_tokens: vec![Some(1); 11],
                 expected_tokens: vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-                store_type: "in_memory_store".to_string(),
+                store_type: test_utils::StoreType::InMemory,
                 test_name: "InMemoryStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=2".to_string(),
             },
             // Integer slope with multiple pods
@@ -1185,9 +1189,9 @@ mod tests {
                 burst_tokens: 10,
                 duration: Duration::from_secs(10),
                 pod_count: 2,
-                store_type: "in_memory_store".to_string(),
+                store_type: test_utils::StoreType::InMemory,
                 test_name: "InMemoryStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2".to_string(),
-                asked_tokens: vec![Some(30), Some(30), Some(30), Some(30), Some(30), Some(30), Some(30), Some(30), Some(30), Some(30), Some(30)],
+                asked_tokens: vec![Some(30); 11],
                 expected_tokens: vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
             },
             // Integer slope with multiple pods
@@ -1197,9 +1201,9 @@ mod tests {
                 burst_tokens: 10,
                 duration: Duration::from_secs(10),
                 pod_count: 2,
-                store_type: "in_memory_store".to_string(),
+                store_type: test_utils::StoreType::InMemory,
                 test_name: "InMemoryStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2".to_string(),
-                asked_tokens: vec![None, None, None, None, None, None, None, None, None, None, None],
+                asked_tokens: vec![None; 11],
                 expected_tokens: vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
             },
             // Integer slope with multiple pods
@@ -1209,9 +1213,9 @@ mod tests {
                 burst_tokens: 10,
                 duration: Duration::from_secs(10),
                 pod_count: 2,
-                store_type: "in_memory_store".to_string(),
+                store_type: test_utils::StoreType::InMemory,
                 test_name: "InMemoryStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2".to_string(),
-                asked_tokens: vec![Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1)],
+                asked_tokens: vec![Some(1); 11],
                 expected_tokens: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
             },
             // Fractional slope with single pod
@@ -1221,9 +1225,9 @@ mod tests {
                 burst_tokens: 1,
                 duration: Duration::from_secs(10),
                 pod_count: 1,
-                asked_tokens: vec![None, None, None, None, None, None, None, None, None, None, None],
+                asked_tokens: vec![None; 11],
                 expected_tokens: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
-                store_type: "in_memory_store".to_string(),
+                store_type: test_utils::StoreType::InMemory,
                 test_name: "InMemoryStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1".to_string(),
             },
             // Fractional slope with single pod
@@ -1233,9 +1237,9 @@ mod tests {
                 burst_tokens: 1,
                 duration: Duration::from_secs(10),
                 pod_count: 1,
-                asked_tokens: vec![Some(5), Some(5), Some(5), Some(5), Some(5), Some(5), Some(5), Some(5), Some(5), Some(5), Some(5)],
+                asked_tokens: vec![Some(5); 11],
                 expected_tokens: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
-                store_type: "in_memory_store".to_string(),
+                store_type: test_utils::StoreType::InMemory,
                 test_name: "InMemoryStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1".to_string(),
             },
             // Fractional slope with single pod
@@ -1245,9 +1249,9 @@ mod tests {
                 burst_tokens: 1,
                 duration: Duration::from_secs(10),
                 pod_count: 1,
-                asked_tokens: vec![Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1)],
+                asked_tokens: vec![Some(1); 11],
                 expected_tokens: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                store_type: "in_memory_store".to_string(),
+                store_type: test_utils::StoreType::InMemory,
                 test_name: "InMemoryStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1".to_string(),
             },
         ];
@@ -1502,9 +1506,9 @@ mod tests {
                 burst_tokens: 15,
                 duration: Duration::from_secs(10),
                 pod_count: 2,
-                store_type: "redis_store".to_string(),
+                store_type: test_utils::StoreType::Redis,
                 test_name: "RedisStore Test params: max_tokens=60, burst_tokens=15, duration=10s, pod_count=2".to_string(),
-                asked_tokens: vec![None, None, None, None, None, None, None, None, None, None, None],
+                asked_tokens: vec![None; 11],
                 expected_tokens: vec![7, 9, 12, 14, 16, 18, 21, 23, 25, 27, 30],
             },
             // Fractional slope (>1) with multiple pods
@@ -1514,9 +1518,9 @@ mod tests {
                 burst_tokens: 15,
                 duration: Duration::from_secs(10),
                 pod_count: 2,
-                store_type: "redis_store".to_string(),
+                store_type: test_utils::StoreType::Redis,
                 test_name: "RedisStore Test params: max_tokens=60, burst_tokens=15, duration=10s, pod_count=2".to_string(),
-                asked_tokens: vec![Some(20), Some(20), Some(20), Some(20), Some(20), Some(20), Some(20), Some(20), Some(20), Some(20), Some(20)],
+                asked_tokens: vec![Some(20); 11],
                 expected_tokens: vec![7, 9, 12, 14, 16, 18, 20, 20, 20, 20, 20],
             },
             // Fractional slope (<1) with multiple pods
@@ -1526,9 +1530,9 @@ mod tests {
                 burst_tokens: 1,
                 duration: Duration::from_secs(10),
                 pod_count: 2,
-                asked_tokens: vec![None, None, None, None, None, None, None, None, None, None, None],
+                asked_tokens: vec![None; 11],
                 expected_tokens: vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-                store_type: "redis_store".to_string(),
+                store_type: test_utils::StoreType::Redis,
                 test_name: "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=2".to_string(),
             },
             // Fractional slope (<1) with multiple pods
@@ -1538,9 +1542,9 @@ mod tests {
                 burst_tokens: 1,
                 duration: Duration::from_secs(10),
                 pod_count: 2,
-                asked_tokens: vec![Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1)],
+                asked_tokens: vec![Some(1); 11],
                 expected_tokens: vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-                store_type: "redis_store".to_string(),
+                store_type: test_utils::StoreType::Redis,
                 test_name: "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=2".to_string(),
             },
             // Integer slope with multiple pods
@@ -1550,9 +1554,9 @@ mod tests {
                 burst_tokens: 10,
                 duration: Duration::from_secs(10),
                 pod_count: 2,
-                store_type: "in_memory_store".to_string(),
+                store_type: test_utils::StoreType::Redis,
                 test_name: "RedisStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2".to_string(),
-                asked_tokens: vec![Some(30), Some(30), Some(30), Some(30), Some(30), Some(30), Some(30), Some(30), Some(30), Some(30), Some(30)],
+                asked_tokens: vec![Some(30); 11],
                 expected_tokens: vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
             },
             // Integer slope with multiple pods
@@ -1562,9 +1566,9 @@ mod tests {
                 burst_tokens: 10,
                 duration: Duration::from_secs(10),
                 pod_count: 2,
-                store_type: "redis_store".to_string(),
+                store_type: test_utils::StoreType::Redis,
                 test_name: "RedisStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2".to_string(),
-                asked_tokens: vec![None, None, None, None, None, None, None, None, None, None, None],
+                asked_tokens: vec![None; 11],
                 expected_tokens: vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
             },
             // Integer slope with multiple pods
@@ -1574,9 +1578,9 @@ mod tests {
                 burst_tokens: 10,
                 duration: Duration::from_secs(10),
                 pod_count: 2,
-                store_type: "redis_store".to_string(),
+                store_type: test_utils::StoreType::Redis,
                 test_name: "RedisStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2".to_string(),
-                asked_tokens: vec![Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1)],
+                asked_tokens: vec![Some(1); 11],
                 expected_tokens: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
             },
             // Fractional slope with single pod
@@ -1586,9 +1590,9 @@ mod tests {
                 burst_tokens: 1,
                 duration: Duration::from_secs(10),
                 pod_count: 1,
-                asked_tokens: vec![None, None, None, None, None, None, None, None, None, None, None],
+                asked_tokens: vec![None; 11],
                 expected_tokens: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
-                store_type: "redis_store".to_string(),
+                store_type: test_utils::StoreType::Redis,
                 test_name: "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1".to_string(),
             },
             // Fractional slope with single pod
@@ -1598,7 +1602,7 @@ mod tests {
                 burst_tokens: 1,
                 duration: Duration::from_secs(10),
                 pod_count: 1,
-                asked_tokens: vec![Some(5), Some(5), Some(5), Some(5), Some(5), Some(5), Some(5), Some(5), Some(5), Some(5), Some(5)],
+                asked_tokens: vec![Some(5); 11],
                 expected_tokens: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
                 store_type: "redis_store".to_string(),
                 test_name: "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1".to_string(),
@@ -1610,7 +1614,7 @@ mod tests {
                 burst_tokens: 1,
                 duration: Duration::from_secs(10),
                 pod_count: 1,
-                asked_tokens: vec![Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1), Some(1)],
+                asked_tokens: vec![Some(1); 11],
                 expected_tokens: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
                 store_type: "redis_store".to_string(),
                 test_name: "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1".to_string(),
