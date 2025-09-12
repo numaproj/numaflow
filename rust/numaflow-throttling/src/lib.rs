@@ -853,7 +853,6 @@ mod tests {
         );
         let tokens = rate_limiter.acquire_n(None, None).await;
         assert_eq!(tokens, 5);
-
     }
 
     #[tokio::test]
