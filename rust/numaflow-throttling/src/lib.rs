@@ -35,6 +35,19 @@ pub trait RateLimiter {
     async fn shutdown(&self) -> Result<()>;
 }
 
+#[derive(Clone)]
+pub enum Mode {
+    OnlyIfUsed(usize),
+    Scheduled,
+    Relaxed,
+}
+
+impl Mode {
+    pub fn new() -> Self {
+        Mode::Relaxed
+    }
+}
+
 /// RateLimit is the main struct that will be used by the user to get the tokens available for the
 /// current time window. It has to be clonable so it can be used across multiple process-a-stream
 /// tasks (e.g., pipeline with multiple partitions).
@@ -53,6 +66,7 @@ pub struct RateLimit<W> {
     last_queried_epoch: Arc<AtomicU64>,
     /// Optional [RateLimiterState] to query for the pool-size in a distributed setting.
     state: W,
+    mode: Arc<Mutex<Mode>>,
 }
 
 impl<W> std::fmt::Display for RateLimit<W> {
@@ -82,22 +96,88 @@ enum TokenAvailability {
 
 impl<W> RateLimit<W> {
     /// Computes the number of tokens to be refilled for the next epoch.
-    pub(crate) fn compute_refill(&self) -> usize {
+    ///
+    /// TODO: refactor duplicate code
+    pub(crate) fn compute_refill(
+        &self,
+        requested_token_size: Option<usize>,
+        cur_epoch: u64,
+    ) -> usize {
         let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
 
-        // let's make sure we do not go beyond the max
-        if *max_ever_filled >= self.token_calc_bounds.max as f32 {
-            self.token_calc_bounds.max
-        } else {
-            // TODO: a lot of different cases to consider on how to refill.
-            //  Today we do the simplest, if the time as progressed, we increase by the slope.
-            let refill = *max_ever_filled + self.token_calc_bounds.slope;
-            let capped_refill = refill.min(self.token_calc_bounds.max as f32);
+        let mut mode = self.mode.lock().unwrap();
+        match *mode {
+            Mode::OnlyIfUsed(previous_token_size) => {
+                match requested_token_size {
+                    None => {
+                        if *max_ever_filled >= self.token_calc_bounds.max as f32 {
+                            *mode = Mode::OnlyIfUsed(*max_ever_filled as usize);
+                            self.token_calc_bounds.max
+                        } else {
+                            let refill = *max_ever_filled + self.token_calc_bounds.slope;
+                            let capped_refill = refill.min(self.token_calc_bounds.max as f32);
 
-            // Update the fractional value
-            *max_ever_filled = capped_refill;
+                            // Update the fractional value
+                            *max_ever_filled = capped_refill;
 
-            capped_refill as usize
+                            *mode = Mode::OnlyIfUsed(capped_refill as usize);
+                            capped_refill as usize
+                        }
+                    }
+                    Some(token_size) => {
+                        if token_size > previous_token_size {
+                            if *max_ever_filled >= self.token_calc_bounds.max as f32 {
+                                *mode = Mode::OnlyIfUsed(token_size);
+                                self.token_calc_bounds.max
+                            } else {
+                                let refill = *max_ever_filled + self.token_calc_bounds.slope;
+                                let capped_refill = refill.min(self.token_calc_bounds.max as f32);
+
+                                // Update the fractional value
+                                *max_ever_filled = capped_refill;
+
+                                *mode = Mode::OnlyIfUsed(capped_refill as usize);
+                                capped_refill as usize
+                            }
+                        } else {
+                            previous_token_size
+                        }
+                    }
+                }
+            }
+            Mode::Scheduled => {
+                // let's make sure we do not go beyond the max
+                if *max_ever_filled >= self.token_calc_bounds.max as f32 {
+                    self.token_calc_bounds.max
+                } else {
+                    let prev_epoch = self
+                        .last_queried_epoch
+                        .load(std::sync::atomic::Ordering::Relaxed);
+                    let time_diff = cur_epoch.checked_sub(prev_epoch)
+                        .expect("Previous epoch should be smaller than current epoch when calculating scheduled refill") as f32;
+                    let refill = *max_ever_filled + self.token_calc_bounds.slope * (time_diff);
+                    let capped_refill = refill.min(self.token_calc_bounds.max as f32);
+
+                    // Update the fractional value
+                    *max_ever_filled = capped_refill;
+
+                    capped_refill as usize
+                }
+            }
+            Mode::Relaxed => {
+                // let's make sure we do not go beyond the max
+                if *max_ever_filled >= self.token_calc_bounds.max as f32 {
+                    self.token_calc_bounds.max
+                } else {
+                    let refill = *max_ever_filled + self.token_calc_bounds.slope;
+                    let capped_refill = refill.min(self.token_calc_bounds.max as f32);
+
+                    // Update the fractional value
+                    *max_ever_filled = capped_refill;
+
+                    capped_refill as usize
+                }
+            }
         }
     }
 }
@@ -112,6 +192,8 @@ impl RateLimit<WithoutState> {
             max_ever_filled: Arc::new(Mutex::new(burst as f32)),
             last_queried_epoch: Arc::new(AtomicU64::new(0)),
             state: WithoutState,
+            // TODO: Get this from config
+            mode: Arc::new(Mutex::new(Mode::Relaxed)),
         })
     }
 
@@ -187,7 +269,7 @@ impl RateLimit<WithoutState> {
             TokenAvailability::Recompute => {}
         }
 
-        let new_token_count = self.compute_refill();
+        let new_token_count = self.compute_refill(n, cur_epoch);
         self.token
             .store(new_token_count, std::sync::atomic::Ordering::Release);
 
@@ -265,7 +347,7 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithState<S>> {
 
         // We crossed a new epoch; we gave to recompute the budget i.e., recompute the number of
         // new tokens available
-        let next_total_tokens = self.compute_refill();
+        let next_total_tokens = self.compute_refill(n, cur_epoch);
 
         // Store the total tokens (division happens in get_tokens)
         self.token
@@ -334,6 +416,7 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithSta
 
 impl<S: Store> RateLimit<WithState<S>> {
     /// Create a new [RateLimit] with a distributed state.
+    /// TODO: Pass throttling mode as a parameter
     pub async fn new(
         token_calc_bounds: TokenCalcBounds,
         store: S,
@@ -364,6 +447,8 @@ impl<S: Store> RateLimit<WithState<S>> {
             max_ever_filled: Arc::new(Mutex::new(burst as f32)),
             last_queried_epoch: Arc::new(AtomicU64::new(0)),
             state: WithState(state),
+            // TODO: Get this from config
+            mode: Arc::new(Mutex::new(Mode::Relaxed)),
         })
     }
 
