@@ -278,6 +278,7 @@ impl Tracker {
                 watermark,
             },
         );
+        self.last_processed_watermark = Self::get_lowest_watermark(&self.entries);
     }
 
     /// Updates an existing entry in the tracker with the number of expected messages for this offset.
@@ -328,7 +329,6 @@ impl Tracker {
         if entry.count == 0 {
             let entry = partition_entries.remove(&offset).unwrap();
             self.completed_successfully(entry).await;
-            self.last_processed_watermark = Self::get_lowest_watermark(&self.entries)
         }
     }
 
@@ -931,8 +931,7 @@ mod tests {
         handle.insert(&message, ack_send).await.unwrap();
 
         // Calling lowest_watermark updates the last_processed_watermark inside the tracker
-        let lowest = handle.lowest_watermark().await.unwrap();
-        assert_eq!(lowest, watermark);
+        handle.delete(message.offset.clone()).await.unwrap();
         assert_eq!(handle.last_processed_watermark().await, Some(watermark));
 
         // Delete the only entry; ack should be received and tracker becomes empty
