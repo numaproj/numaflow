@@ -571,13 +571,12 @@ mod tests {
             }
 
             let iterations = asked_tokens.len();
-            let mut cur_epoch = 0;
-            for i in 0..iterations {
+            for (cur_epoch, i) in (0..iterations).enumerate() {
                 let mut total_got_tokens = 0;
                 let mut total_expected_tokens = 0;
                 for rate_limiter in rate_limiters.iter() {
                     let tokens = rate_limiter
-                        .attempt_acquire_n(asked_tokens[i], cur_epoch)
+                        .attempt_acquire_n(asked_tokens[i], cur_epoch as u64)
                         .await;
                     assert_eq!(
                         tokens, expected_tokens[i],
@@ -592,7 +591,6 @@ mod tests {
                     "Total number of tokens fetched in each iteration \
                 should be less than or equal to total expected tokens for each processor",
                 );
-                cur_epoch += 1;
             }
 
             for rate_limiter in rate_limiters.iter() {
@@ -642,7 +640,7 @@ mod tests {
             let redis_url = "redis://127.0.0.1:6379";
 
             // Check if Redis is available
-            if let Err(_) = redis::Client::open(redis_url) {
+            if redis::Client::open(redis_url).is_err() {
                 println!(
                     "Skipping Redis test - Redis server not available at {}",
                     redis_url
@@ -1604,7 +1602,7 @@ mod tests {
                 pod_count: 1,
                 asked_tokens: vec![Some(5); 11],
                 expected_tokens: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
-                store_type: "redis_store".to_string(),
+                store_type: test_utils::StoreType::Redis,
                 test_name: "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1".to_string(),
             },
             // Fractional slope with single pod
@@ -1616,7 +1614,7 @@ mod tests {
                 pod_count: 1,
                 asked_tokens: vec![Some(1); 11],
                 expected_tokens: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                store_type: "redis_store".to_string(),
+                store_type: test_utils::StoreType::Redis,
                 test_name: "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1".to_string(),
             },
         ];

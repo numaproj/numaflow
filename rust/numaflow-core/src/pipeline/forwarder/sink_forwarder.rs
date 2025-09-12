@@ -104,7 +104,6 @@ pub async fn start_sink_forwarder(
     let watermark_handle = create_components::create_edge_watermark_handle(
         &config,
         &js_context,
-        &cln_token,
         None,
         tracker_handle.clone(),
     )

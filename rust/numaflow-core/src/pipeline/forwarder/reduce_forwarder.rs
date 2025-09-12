@@ -133,7 +133,6 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     let watermark_handle = create_components::create_edge_watermark_handle(
         &config,
         &js_context,
-        &cln_token,
         Some(WindowManager::Aligned(window_manager.clone())),
         tracker_handle.clone(),
     )
@@ -257,7 +256,6 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     let watermark_handle = create_components::create_edge_watermark_handle(
         &config,
         &js_context,
-        &cln_token,
         Some(WindowManager::Unaligned(window_manager.clone())),
         tracker_handle.clone(),
     )
