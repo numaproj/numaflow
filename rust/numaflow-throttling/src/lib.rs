@@ -477,9 +477,9 @@ impl RateLimiter for NoOpRateLimiter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::test_utils::TestType;
     use std::time::SystemTime;
     use tokio::time::Duration;
-    use crate::tests::test_utils::TestType;
 
     /// Test utilities for integration tests
     mod test_utils {
@@ -592,7 +592,11 @@ mod tests {
                 for rate_limiter in rate_limiters.iter() {
                     let tokens = match test_type {
                         TestType::AcquireN => rate_limiter.acquire_n(asked_tokens[i].0, None).await,
-                        TestType::AttemptAcquireN => rate_limiter.attempt_acquire_n(asked_tokens[i].0, cur_epoch).await,
+                        TestType::AttemptAcquireN => {
+                            rate_limiter
+                                .attempt_acquire_n(asked_tokens[i].0, cur_epoch)
+                                .await
+                        }
                     };
                     assert_eq!(
                         tokens, expected_tokens[i],
@@ -1289,7 +1293,8 @@ mod tests {
     async fn test_distributed_rate_limiter_multiple_pods_in_memory_acquire_n() {
         let test_cases = vec![
             // Fractional slope (>1) with multiple pods
-            // Acquire all tokens
+            // Acquire all tokens.
+            // Do not wait for next epoch before asking for tokens again.
             test_utils::TestCase {
                 max_tokens: 60,
                 burst_tokens: 15,
@@ -1302,8 +1307,7 @@ mod tests {
                 expected_tokens: vec![ 9, 0, 12, 14, 16, 18, 21, 23, 25, 27, 30, 30],
             },
         ];
-        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases)
-            .await;
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
 
     #[tokio::test]
