@@ -165,8 +165,12 @@ impl ISBWatermarkFetcher {
 
     /// Fetches the head watermark using the watermark fetcher. This returns the minimum
     /// of the head watermarks across all processors for the specified partition.
-    pub(crate) fn fetch_head_watermark(&mut self, partition_idx: u16) -> Watermark {
+    pub(crate) fn fetch_head_watermark(&mut self, mut partition_idx: u16) -> Watermark {
         let mut min_wm = i64::MAX;
+
+        if self.vertex_type == VertexType::ReduceUDF {
+            partition_idx = 0;
+        }
 
         for (edge, processor_manager) in &self.processor_managers {
             let mut epoch = i64::MAX;
@@ -212,8 +216,12 @@ impl ISBWatermarkFetcher {
     /// Fetches the head idle WMB for the given partition.Returns the minimum idle WMB across all
     /// processors for the specified partition, but only if all active processors are idle for that
     /// partition.
-    pub(crate) fn fetch_head_idle_wmb(&mut self, partition_idx: u16) -> Option<WMB> {
+    pub(crate) fn fetch_head_idle_wmb(&mut self, mut partition_idx: u16) -> Option<WMB> {
         let mut min_wmb: Option<WMB> = None;
+
+        if self.vertex_type == VertexType::ReduceUDF {
+            partition_idx = 0;
+        }
 
         for (edge, processor_manager) in &self.processor_managers {
             let mut edge_min_wmb: Option<WMB> = None;
