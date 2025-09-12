@@ -309,9 +309,19 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                     // if it's a reduce vertex, we should send wmb messages to the reduce component so
                     // that it can close the windows when we are idling.
                     if read_messages.is_empty()
-                        && let Some(idle_wmb_message) = self.create_wmb_message().await
+                        && let Some(watermark_handle) = &mut self.watermark_handle
                     {
-                        let _ = messages_tx.send(idle_wmb_message).await;
+                        if let Some(idle_wmb_message) = Self::create_wmb_message(
+                            &self.stream,
+                            &self.vertex_type,
+                            watermark_handle,
+                        )
+                        .await
+                        {
+                            let _ = messages_tx.send(idle_wmb_message).await;
+                        }
+                        // publish idle watermark for the current stream
+                        watermark_handle.publish_idle_watermark(None).await;
                     }
 
                     for message in read_messages {
@@ -662,17 +672,19 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
     }
 
     /// Creates a WMB message with the by fetching the head idle WMB for the current partition.
-    async fn create_wmb_message(&mut self) -> Option<Message> {
-        let watermark_handle = self.watermark_handle.as_mut()?;
-
+    async fn create_wmb_message(
+        stream: &Stream,
+        vertex_type: &str,
+        watermark_handle: &mut ISBWatermarkHandle,
+    ) -> Option<Message> {
         // we only need to create wmb messages for reduce vertices because they have to close windows
-        if self.vertex_type != ReduceUDF.as_str() {
+        if vertex_type != ReduceUDF.as_str() {
             return None;
         }
 
         // Fetch the head idle WMB for the current partition
         let idle_wmb = watermark_handle
-            .fetch_head_idle_wmb(self.stream.partition)
+            .fetch_head_idle_wmb(stream.partition)
             .await?;
 
         // Create a watermark from the validated WMB
@@ -683,7 +695,7 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
         Some(Message {
             typ: MessageType::WMB,
             watermark: Some(idle_watermark),
-            offset: Offset::Int(IntOffset::new(idle_wmb.offset, self.stream.partition)),
+            offset: Offset::Int(IntOffset::new(idle_wmb.offset, stream.partition)),
             event_time: idle_watermark,
             ..Default::default()
         })

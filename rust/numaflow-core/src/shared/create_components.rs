@@ -741,7 +741,6 @@ pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> Result<String, St
 pub async fn create_edge_watermark_handle(
     config: &PipelineConfig,
     js_context: &Context,
-    cln_token: &CancellationToken,
     window_manager: Option<WindowManager>,
     tracker_handle: TrackerHandle,
 ) -> error::Result<Option<ISBWatermarkHandle>> {
@@ -751,7 +750,6 @@ pub async fn create_edge_watermark_handle(
                 config.vertex_name,
                 config.replica,
                 config.vertex_type,
-                2 * config.read_timeout,
                 js_context.clone(),
                 edge_config,
                 &config.to_vertex_config,

@@ -16,7 +16,6 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
 
 use bytes::BytesMut;
 
