@@ -243,8 +243,7 @@ impl Tracker {
                 self.handle_refresh(offset);
             }
             ActorMessage::LowestWatermark { respond_to } => {
-                let watermark = self.get_lowest_watermark();
-                self.last_processed_watermark = watermark.or(self.last_processed_watermark);
+                let watermark = Self::get_lowest_watermark(&self.entries);
                 let _ = respond_to
                     .send(watermark.unwrap_or(DateTime::from_timestamp_millis(-1).unwrap()));
             }
@@ -329,6 +328,7 @@ impl Tracker {
         if entry.count == 0 {
             let entry = partition_entries.remove(&offset).unwrap();
             self.completed_successfully(entry).await;
+            self.last_processed_watermark = Self::get_lowest_watermark(&self.entries)
         }
     }
 
@@ -391,9 +391,11 @@ impl Tracker {
     }
 
     /// Returns the lowest watermark among all the tracked offsets across all partitions.
-    fn get_lowest_watermark(&self) -> Option<DateTime<Utc>> {
+    fn get_lowest_watermark(
+        entries: &HashMap<u16, BTreeMap<Offset, TrackerEntry>>,
+    ) -> Option<DateTime<Utc>> {
         // Get the lowest watermark across all partitions
-        self.entries
+        entries
             .values()
             .filter_map(|partition_entries| {
                 partition_entries
