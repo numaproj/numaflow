@@ -35,7 +35,9 @@ pub trait RateLimiter {
     async fn shutdown(&self) -> Result<()>;
 }
 
-#[derive(Clone)]
+/// Mode of calculation of tokens to give out
+/// 
+#[derive(Clone, Debug)]
 pub enum Mode {
     OnlyIfUsed,
     Scheduled,
@@ -67,7 +69,6 @@ pub struct RateLimit<W> {
     last_queried_epoch: Arc<AtomicU64>,
     /// Optional [RateLimiterState] to query for the pool-size in a distributed setting.
     state: W,
-    mode: Arc<Mode>,
 }
 
 impl<W> std::fmt::Display for RateLimit<W> {
@@ -106,7 +107,7 @@ impl<W> RateLimit<W> {
     ) -> usize {
         let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
 
-        match *self.mode {
+        match self.token_calc_bounds.mode {
             Mode::OnlyIfUsed => {
                 match requested_token_size {
                     None => {
@@ -184,8 +185,6 @@ impl RateLimit<WithoutState> {
             max_ever_filled: Arc::new(Mutex::new(burst as f32)),
             last_queried_epoch: Arc::new(AtomicU64::new(0)),
             state: WithoutState,
-            // TODO: Get this from config
-            mode: Arc::new(Mode::default()),
         })
     }
 
@@ -408,7 +407,6 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithSta
 
 impl<S: Store> RateLimit<WithState<S>> {
     /// Create a new [RateLimit] with a distributed state.
-    /// TODO: Pass throttling mode as a parameter
     pub async fn new(
         token_calc_bounds: TokenCalcBounds,
         store: S,
@@ -439,8 +437,6 @@ impl<S: Store> RateLimit<WithState<S>> {
             max_ever_filled: Arc::new(Mutex::new(burst as f32)),
             last_queried_epoch: Arc::new(AtomicU64::new(0)),
             state: WithState(state),
-            // TODO: Get this from config
-            mode: Arc::new(Mode::default()),
         })
     }
 
@@ -512,6 +508,8 @@ pub struct TokenCalcBounds {
     max: usize,
     /// Minimum number of tokens available at t=0 (origin)
     min: usize,
+    /// Mode of operation
+    mode: Mode,
 }
 
 impl Default for TokenCalcBounds {
@@ -520,6 +518,7 @@ impl Default for TokenCalcBounds {
             slope: 1.0,
             max: 1,
             min: 1,
+            mode: Mode::Relaxed,
         }
     }
 }
@@ -532,6 +531,8 @@ impl TokenCalcBounds {
             slope: (max - min) as f32 / duration.as_secs_f32(),
             max,
             min,
+            // TODO: Get this from config
+            mode: Mode::Relaxed,
         }
     }
 }
