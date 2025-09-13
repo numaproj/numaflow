@@ -502,20 +502,25 @@ mod tests {
         /// - [crate::tests::test_distributed_rate_limiter_multiple_pods_redis]
         ///
         pub(super) struct TestCase {
-            // The maximum number of tokens that can be stored in the bucket
+            /// The maximum number of tokens that can be stored in the bucket
             pub(super) max_tokens: usize,
-            // The number of tokens that can be burst in a single second
+            /// The number of tokens that can be burst in a single second
             pub(super) burst_tokens: usize,
-            // The duration of the bucket
+            /// The duration of the bucket
             pub(super) duration: Duration,
-            // The number of pods
+            /// The number of pods
             pub(super) pod_count: usize,
-            // The store name (String) to initialize for the test
+            /// The store name (String) to initialize for the test
             pub(super) store_type: StoreType,
-            // The name of the test
+            /// The name of the test
             pub(super) test_name: String,
-            // Tuple of tokens asked in each iteration by *each* pod
-            // and count of epochs after which the next set of tokens are asked.
+            /// Tuple of tokens asked in each iteration by *each* pod and count of epochs after which
+            /// the next set of tokens are asked.
+            /// Second item in the tuple refers to the number of epochs after which the next set of
+            /// tokens are going to be fetched, not the tokens specified in the current tuple.
+            /// Eg:
+            /// This test case: [(None, 3), (Some(2), 1)], specifies that fetch all tokens at 0th
+            /// epoch and fetch 2 tokens after 3 epochs.
             pub(super) asked_tokens: Vec<(Option<usize>, usize)>,
             // Tokens expected to be returned by rate limiter in each iteration to *each* pod
             pub(super) expected_tokens: Vec<usize>,
@@ -1133,7 +1138,6 @@ mod tests {
 
     /// Test distributed rate limiter with multiple pods (1 or more)
     /// using InMemoryStore as the state store
-    ///
     #[tokio::test]
     async fn test_distributed_rate_limiter_multiple_pods_in_memory() {
         let test_cases = vec![
@@ -1147,7 +1151,7 @@ mod tests {
                 pod_count: 2,
                 store_type: test_utils::StoreType::InMemory,
                 test_name: "InMemoryStore Test params: max_tokens=60, burst_tokens=15, duration=10s, pod_count=2".to_string(),
-                asked_tokens: || -> _ { let mut a = vec![(None,1), (None,0)]; a.extend(vec![(None,1); 10]); a}(),
+                asked_tokens: || -> _ { let mut a = vec![(None,1), (None,0)]; a.extend(vec![(None,1); 10]); a }(),
                 expected_tokens: vec![7, 9, 0, 12, 14, 16, 18, 21, 23, 25, 27, 30],
             },
             // Fractional slope (>1) with multiple pods
