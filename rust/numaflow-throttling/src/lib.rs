@@ -639,6 +639,7 @@ mod tests {
                         };
 
                         test_rate_limiter_with_state(store, test_case).await;
+                        cleanup_redis_keys(test_name.as_str());
                     }
                 }
             }
@@ -674,7 +675,6 @@ mod tests {
         }
 
         /// Cleans up Redis keys after a test
-        #[cfg(feature = "redis-tests")]
         pub fn cleanup_redis_keys(test_name: &str) {
             let redis_url = "redis://127.0.0.1:6379";
             if let Ok(client) = redis::Client::open(redis_url)
