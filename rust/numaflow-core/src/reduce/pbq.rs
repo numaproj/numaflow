@@ -68,80 +68,86 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
         cancellation_token: CancellationToken,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (tx, rx) = mpsc::channel(100);
-        let Some(wal) = self.wal else {
-            // No WAL, just read from ISB
-            return self.isb_reader.streaming_read(cancellation_token).await;
-        };
 
-        let handle = tokio::spawn(async move {
-            let start = std::time::Instant::now();
-            // Create a channel for WAL replay
-            let (wal_tx, mut wal_rx) = mpsc::channel(500);
-
-            // Clone the tx for use in the replay handler
-            let messages_tx = tx.clone();
-
-            // starts the compaction process, for the first time it compacts and replays the
-            // unprocessed data then it does the periodic compaction.
-            let compaction_handle = wal
-                .compactor
-                .start_compaction_with_replay(
-                    wal_tx,
-                    Duration::from_secs(60),
-                    cancellation_token.clone(),
+        let handle = if let Some(wal) = self.wal {
+            tokio::spawn(async move {
+                Self::read_isb_with_wal(
+                    self.isb_reader,
+                    wal,
+                    self.tracker_handle,
+                    tx,
+                    cancellation_token,
                 )
-                .await?;
-
-            let mut replayed_count = 0;
-
-            // Process replayed messages
-            while let Some(msg) = wal_rx.recv().await {
-                let msg: WalMessage = msg.try_into().expect("Failed to parse WAL message");
-                messages_tx
-                    .send(msg.into())
-                    .await
-                    .expect("Receiver dropped");
-                replayed_count += 1;
-            }
-
-            info!(
-                time_taken_ms = start.elapsed().as_millis(),
-                ?replayed_count,
-                "Finished replaying from WAL, starting to read from ISB"
-            );
-
-            // After replaying the unprocessed data, start reading the new set of messages from ISB
-            // and also persist them in WAL.
-            Self::read_isb_and_write_wal(
-                self.isb_reader,
-                wal.append_only_wal,
-                self.tracker_handle,
-                tx,
-                cancellation_token,
-            )
-            .await?;
-
-            // Wait for compaction task to exit gracefully
-            compaction_handle.await.expect("task failed")?;
-
-            info!("PBQ streaming read completed");
-            Ok(())
-        });
+                .await
+            })
+        } else {
+            tokio::spawn(async move {
+                Self::read_isb_without_wal(
+                    self.isb_reader,
+                    self.tracker_handle,
+                    tx,
+                    cancellation_token,
+                )
+                .await
+            })
+        };
 
         Ok((ReceiverStream::new(rx), handle))
     }
 
-    /// Reads from ISB and writes to WAL.
-    async fn read_isb_and_write_wal(
+    /// Replays any persisted data from WAL and then starts reading new messages from the ISB and
+    /// keeps persisting them to WAL and acknowledges the messages from ISB after writing to WAL.
+    async fn read_isb_with_wal(
         isb_reader: JetStreamReader<C>,
-        append_only_wal: AppendOnlyWal,
+        wal: WAL,
         tracker_handle: TrackerHandle,
         tx: Sender<Message>,
         cancellation_token: CancellationToken,
     ) -> Result<()> {
+        let start = std::time::Instant::now();
+        // Create a channel for WAL replay
+        let (wal_tx, mut wal_rx) = mpsc::channel(500);
+
+        // Clone the tx for use in the replay handler
+        let messages_tx = tx.clone();
+
+        // starts the compaction process, for the first time it compacts and replays the
+        // unprocessed data then it does the periodic compaction.
+        let compaction_handle = wal
+            .compactor
+            .start_compaction_with_replay(
+                wal_tx,
+                Duration::from_secs(60),
+                cancellation_token.clone(),
+            )
+            .await?;
+
+        let mut replayed_count = 0;
+
+        // Process replayed messages
+        while let Some(msg) = wal_rx.recv().await {
+            let msg: WalMessage = msg.try_into().expect("Failed to parse WAL message");
+            messages_tx
+                .send(msg.into())
+                .await
+                .expect("Receiver dropped");
+            replayed_count += 1;
+        }
+
+        info!(
+            time_taken_ms = start.elapsed().as_millis(),
+            ?replayed_count,
+            "Finished replaying from WAL, starting to read from ISB"
+        );
+
+        // After replaying the unprocessed data, start reading the new set of messages from ISB
+        // and also persist them in WAL.
         let (wal_tx, wal_rx) = mpsc::channel(100);
-        let (mut isb_stream, isb_handle) = isb_reader.streaming_read(cancellation_token).await?;
-        let (mut offset_stream, wal_handle) = append_only_wal
+        let (mut isb_stream, isb_handle) = isb_reader
+            .streaming_read(cancellation_token.clone())
+            .await?;
+        let (mut offset_stream, wal_handle) = wal
+            .append_only_wal
             .streaming_write(ReceiverStream::new(wal_rx))
             .await?;
 
@@ -178,6 +184,39 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
         // drop the sender to signal the wal eof and wait for the wal task to exit gracefully
         drop(wal_tx);
         wal_handle.await.expect("task failed")?;
+
+        // Wait for compaction task to exit gracefully
+        compaction_handle.await.expect("task failed")?;
+
+        info!("PBQ streaming read completed");
+        Ok(())
+    }
+
+    /// Reads messages from ISB and immediately acks it by invoking the tracker delete.
+    async fn read_isb_without_wal(
+        isb_reader: JetStreamReader<C>,
+        tracker_handle: TrackerHandle,
+        tx: Sender<Message>,
+        cancellation_token: CancellationToken,
+    ) -> Result<()> {
+        let (mut isb_stream, isb_handle) = isb_reader.streaming_read(cancellation_token).await?;
+
+        // Process messages from ISB stream
+        while let Some(msg) = isb_stream.next().await {
+            let offset = msg.offset.clone();
+
+            // Forward the message to the output channel
+            tx.send(msg).await.expect("Receiver dropped");
+
+            // Immediately delete from tracker to do acknowledgment
+            tracker_handle
+                .delete(offset)
+                .await
+                .expect("Failed to delete offset from tracker");
+        }
+
+        // Wait for the ISB reader task to complete
+        isb_handle.await.expect("ISB reader task failed")?;
 
         Ok(())
     }
@@ -300,6 +339,13 @@ mod tests {
             buffer.len(),
             10,
             "Expected 10 messages from the jetstream reader"
+        );
+
+        // Verify that tracker is empty (all messages have been automatically deleted)
+        // This validates that our fix properly calls tracker.delete() for non-WAL case
+        assert!(
+            tracker.is_empty().await.unwrap(),
+            "Tracker should be empty after messages are processed (tracker.delete() should have been called automatically)"
         );
 
         for offset in offsets {

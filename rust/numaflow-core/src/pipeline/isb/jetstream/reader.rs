@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use crate::Result;
 use crate::config::get_vertex_name;
+use crate::config::pipeline::VertexType::ReduceUDF;
 use crate::config::pipeline::isb::{BufferReaderConfig, CompressionType, ISBConfig, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
@@ -270,9 +271,9 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
 
         let batch_size = if max_ack_pending < self.batch_size {
             warn!(
-                "read_batch_size ({}) should be <= max_ack_pending ({}) for ISB. \
+                "read_batch_size ({max_ack_pending}) should be <= max_ack_pending ({}) for ISB. \
                 Setting batch_size to max_ack_pending",
-                max_ack_pending, self.batch_size
+                self.batch_size
             );
             max_ack_pending
         } else {
@@ -305,8 +306,12 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                         )
                         .await?;
 
-                    if read_messages.is_empty() {
-                        continue;
+                    // if it's a reduce vertex, we should send wmb messages to the reduce component so
+                    // that it can close the windows when we are idling.
+                    if read_messages.is_empty()
+                        && let Some(idle_wmb_message) = self.create_wmb_message().await
+                    {
+                        let _ = messages_tx.send(idle_wmb_message).await;
                     }
 
                     for message in read_messages {
@@ -653,6 +658,34 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
 
     pub(crate) fn name(&self) -> &'static str {
         self.stream.name
+    }
+
+    /// Creates a WMB message with the by fetching the head idle WMB for the current partition.
+    async fn create_wmb_message(&mut self) -> Option<Message> {
+        let watermark_handle = self.watermark_handle.as_mut()?;
+
+        // we only need to create wmb messages for reduce vertices because they have to close windows
+        if self.vertex_type != ReduceUDF.as_str() {
+            return None;
+        }
+
+        // Fetch the head idle WMB for the current partition
+        let idle_wmb = watermark_handle
+            .fetch_head_idle_wmb(self.stream.partition)
+            .await?;
+
+        // Create a watermark from the validated WMB
+        let idle_watermark = chrono::DateTime::from_timestamp_millis(idle_wmb.watermark)
+            .expect("Failed to create watermark from WMB");
+
+        // Create a WMB message with the validated idle watermark
+        Some(Message {
+            typ: MessageType::WMB,
+            watermark: Some(idle_watermark),
+            offset: Offset::Int(IntOffset::new(idle_wmb.offset, self.stream.partition)),
+            event_time: idle_watermark,
+            ..Default::default()
+        })
     }
 }
 
