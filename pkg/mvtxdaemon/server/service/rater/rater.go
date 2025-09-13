@@ -37,7 +37,6 @@ import (
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
-const CountWindow = time.Second * 10
 const monoVtxReadMetricName = "monovtx_read_total"
 const monoVtxPendingRawMetric = "monovtx_pending_raw"
 
@@ -117,9 +116,9 @@ func NewRater(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...Option) *Rat
 	}
 	rater.podTracker = NewPodTracker(ctx, mv)
 	// maintain the total counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
-	rater.timestampedPodCounts = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
+	rater.timestampedPodCounts = sharedqueue.New[*TimestampedCounts](360)
 	// maintain the total pending counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
-	rater.timestampedPendingCount = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
+	rater.timestampedPendingCount = sharedqueue.New[*TimestampedCounts](360)
 	for _, opt := range opts {
 		if opt != nil {
 			opt(rater.options)

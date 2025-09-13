@@ -33,10 +33,8 @@ func defaultOptions() *options {
 	// Translating to numaflow language, for a 200-pod pipeline, a worker needs to finish scraping 1 pod in 0.5 second, which is a reasonable number.
 	return &options{
 		workers: 50, // default max replicas is 50
-		// ensure that each task is picked up at least once within a CountWindow by defining taskInterval as half of CountWindow.
-		// if a CountWindow misses one pod, when calculating the delta with the next window, for that specific pod,
-		// we will count the total processed count as delta, which is wrong and eventually leads to incorrect high processing rate.
-		taskInterval: int(CountWindow.Milliseconds() / 2),
+		// we execute the rater metrics fetching every 5 seconds
+		taskInterval: 5,
 	}
 }
 

@@ -110,7 +110,7 @@ func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookback
 // findStartIndex finds the index of the first element in the queue that is within the lookback seconds
 func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	n := len(counts)
-	now := time.Now().Truncate(CountWindow).Unix()
+	now := time.Now().Unix()
 	if n < 2 || now-counts[n-2].timestamp > lookbackSeconds {
 		// if the second last element is already outside the lookback window, we return indexNotFound
 		return indexNotFound

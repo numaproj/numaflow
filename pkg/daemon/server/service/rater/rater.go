@@ -46,11 +46,6 @@ type Ratable interface {
 
 var _ Ratable = (*Rater)(nil)
 
-// CountWindow is the time window for which we maintain the timestamped counts, currently 10 seconds
-// e.g., if the current time is 12:00:07,
-// the retrieved count will be tracked in the 12:00:00-12:00:10 time window using 12:00:10 as the timestamp
-const CountWindow = time.Second * 10
-
 // metricsHttpClient interface for the GET/HEAD call to metrics endpoint.
 // Had to add this an interface for testing
 type metricsHttpClient interface {
@@ -127,9 +122,9 @@ func NewRater(ctx context.Context, p *v1alpha1.Pipeline, opts ...Option) *Rater 
 	rater.podTracker = NewPodTracker(ctx, p)
 	for _, v := range p.Spec.Vertices {
 		// maintain the total counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
-		rater.timestampedPodCounts[v.Name] = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
+		rater.timestampedPodCounts[v.Name] = sharedqueue.New[*TimestampedCounts](360)
 		// maintain the pending counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
-		rater.timestampedPendingCount[v.Name] = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
+		rater.timestampedPendingCount[v.Name] = sharedqueue.New[*TimestampedCounts](360)
 		rater.lookBackSeconds[v.Name] = atomic.NewFloat64(float64(v.Scale.GetLookbackSeconds()))
 		// initialise the metric value for the lookback window for each vertex
 		metrics.VertexLookBackSecs.WithLabelValues(v.Name, string(v.GetVertexType())).Set(rater.lookBackSeconds[v.Name].Load())
