@@ -1350,13 +1350,12 @@ mod tests {
         .await
         .unwrap();
 
-        // Wait for consensus to be reached among all pods
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        let mut cur_epoch = 1;
 
         // Phase 1: Each pod requests a specific number of tokens
-        let tokens_1_phase1 = rate_limiter_1.acquire_n(Some(2), None).await;
-        let tokens_2_phase1 = rate_limiter_2.acquire_n(Some(2), None).await;
-        let tokens_3_phase1 = rate_limiter_3.acquire_n(Some(2), None).await;
+        let tokens_1_phase1 = rate_limiter_1.attempt_acquire_n(Some(2), cur_epoch).await;
+        let tokens_2_phase1 = rate_limiter_2.attempt_acquire_n(Some(2), cur_epoch).await;
+        let tokens_3_phase1 = rate_limiter_3.attempt_acquire_n(Some(2), cur_epoch).await;
 
         println!("Phase 1 - Specific token requests:");
         println!("Pod 1 got: {} tokens", tokens_1_phase1);
@@ -1369,12 +1368,12 @@ mod tests {
         assert!(tokens_3_phase1 > 0, "Pod 3 should get some tokens");
 
         println!("Waiting for token refill...");
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        cur_epoch += 2;
 
         // Phase 2: Each pod tries to acquire all available tokens
-        let tokens_1_phase2 = rate_limiter_1.acquire_n(None, None).await;
-        let tokens_2_phase2 = rate_limiter_2.acquire_n(None, None).await;
-        let tokens_3_phase2 = rate_limiter_3.acquire_n(None, None).await;
+        let tokens_1_phase2 = rate_limiter_1.attempt_acquire_n(None, cur_epoch).await;
+        let tokens_2_phase2 = rate_limiter_2.attempt_acquire_n(None, cur_epoch).await;
+        let tokens_3_phase2 = rate_limiter_3.attempt_acquire_n(None, cur_epoch).await;
 
         println!("Phase 2 - Acquire all available tokens:");
         println!("Pod 1 got: {} tokens", tokens_1_phase2);
@@ -1399,9 +1398,9 @@ mod tests {
         assert!(total_phase2 > 0, "Should distribute some tokens in phase 2");
 
         // Phase 3: Try to acquire more tokens immediately (should get 0 or very few)
-        let tokens_1_phase3 = rate_limiter_1.acquire_n(Some(5), None).await;
-        let tokens_2_phase3 = rate_limiter_2.acquire_n(Some(5), None).await;
-        let tokens_3_phase3 = rate_limiter_3.acquire_n(Some(5), None).await;
+        let tokens_1_phase3 = rate_limiter_1.attempt_acquire_n(Some(5), cur_epoch).await;
+        let tokens_2_phase3 = rate_limiter_2.attempt_acquire_n(Some(5), cur_epoch).await;
+        let tokens_3_phase3 = rate_limiter_3.attempt_acquire_n(Some(5), cur_epoch).await;
 
         println!("Phase 3 - Immediate retry:");
         println!("Pod 1 got: {} tokens", tokens_1_phase3);
@@ -1470,12 +1469,12 @@ mod tests {
         .unwrap();
 
         // Wait for consensus to be reached among all pods
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        let mut cur_epoch = 1;
 
         // Phase 1: Each pod requests a specific number of tokens
-        let tokens_1_phase1 = rate_limiter_1.acquire_n(Some(2), None).await;
-        let tokens_2_phase1 = rate_limiter_2.acquire_n(Some(2), None).await;
-        let tokens_3_phase1 = rate_limiter_3.acquire_n(Some(2), None).await;
+        let tokens_1_phase1 = rate_limiter_1.attempt_acquire_n(Some(2), cur_epoch).await;
+        let tokens_2_phase1 = rate_limiter_2.attempt_acquire_n(Some(2), cur_epoch).await;
+        let tokens_3_phase1 = rate_limiter_3.attempt_acquire_n(Some(2), cur_epoch).await;
 
         println!("Phase 1 - Specific token requests:");
         println!("Pod 1 got: {} tokens", tokens_1_phase1);
@@ -1496,12 +1495,12 @@ mod tests {
         );
 
         // Phase 2: Wait for some time to allow token refill
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        cur_epoch += 2;
 
         // Phase 2: Request tokens again to test refill
-        let tokens_1_phase2 = rate_limiter_1.acquire_n(Some(3), None).await;
-        let tokens_2_phase2 = rate_limiter_2.acquire_n(Some(3), None).await;
-        let tokens_3_phase2 = rate_limiter_3.acquire_n(Some(3), None).await;
+        let tokens_1_phase2 = rate_limiter_1.attempt_acquire_n(Some(3), cur_epoch).await;
+        let tokens_2_phase2 = rate_limiter_2.attempt_acquire_n(Some(3), cur_epoch).await;
+        let tokens_3_phase2 = rate_limiter_3.attempt_acquire_n(Some(3), cur_epoch).await;
 
         println!("Phase 2 - After refill:");
         println!("Pod 1 got: {} tokens", tokens_1_phase2);
@@ -1516,9 +1515,9 @@ mod tests {
         );
 
         // Phase 3: Test exhaustion - try to get many tokens
-        let tokens_1_phase3 = rate_limiter_1.acquire_n(Some(50), None).await;
-        let tokens_2_phase3 = rate_limiter_2.acquire_n(Some(50), None).await;
-        let tokens_3_phase3 = rate_limiter_3.acquire_n(Some(50), None).await;
+        let tokens_1_phase3 = rate_limiter_1.attempt_acquire_n(Some(50), cur_epoch).await;
+        let tokens_2_phase3 = rate_limiter_2.attempt_acquire_n(Some(50), cur_epoch).await;
+        let tokens_3_phase3 = rate_limiter_3.attempt_acquire_n(Some(50), cur_epoch).await;
 
         println!("Phase 3 - Exhaustion test:");
         println!("Pod 1 got: {} tokens", tokens_1_phase3);
