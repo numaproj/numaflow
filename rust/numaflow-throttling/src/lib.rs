@@ -37,13 +37,14 @@ pub trait RateLimiter {
 
 #[derive(Clone)]
 pub enum Mode {
-    OnlyIfUsed(usize),
+    OnlyIfUsed,
     Scheduled,
     Relaxed,
 }
 
+// change to default
 impl Mode {
-    pub fn new() -> Self {
+    pub fn default() -> Self {
         Mode::Relaxed
     }
 }
@@ -66,7 +67,7 @@ pub struct RateLimit<W> {
     last_queried_epoch: Arc<AtomicU64>,
     /// Optional [RateLimiterState] to query for the pool-size in a distributed setting.
     state: W,
-    mode: Arc<Mutex<Mode>>,
+    mode: Arc<Mode>,
 }
 
 impl<W> std::fmt::Display for RateLimit<W> {
@@ -105,13 +106,11 @@ impl<W> RateLimit<W> {
     ) -> usize {
         let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
 
-        let mut mode = self.mode.lock().unwrap();
-        match *mode {
-            Mode::OnlyIfUsed(previous_token_size) => {
+        match *self.mode {
+            Mode::OnlyIfUsed => {
                 match requested_token_size {
                     None => {
                         if *max_ever_filled >= self.token_calc_bounds.max as f32 {
-                            *mode = Mode::OnlyIfUsed(*max_ever_filled as usize);
                             self.token_calc_bounds.max
                         } else {
                             let refill = *max_ever_filled + self.token_calc_bounds.slope;
@@ -120,27 +119,20 @@ impl<W> RateLimit<W> {
                             // Update the fractional value
                             *max_ever_filled = capped_refill;
 
-                            *mode = Mode::OnlyIfUsed(capped_refill as usize);
                             capped_refill as usize
                         }
                     }
-                    Some(token_size) => {
-                        if token_size > previous_token_size {
-                            if *max_ever_filled >= self.token_calc_bounds.max as f32 {
-                                *mode = Mode::OnlyIfUsed(token_size);
-                                self.token_calc_bounds.max
-                            } else {
-                                let refill = *max_ever_filled + self.token_calc_bounds.slope;
-                                let capped_refill = refill.min(self.token_calc_bounds.max as f32);
-
-                                // Update the fractional value
-                                *max_ever_filled = capped_refill;
-
-                                *mode = Mode::OnlyIfUsed(capped_refill as usize);
-                                capped_refill as usize
-                            }
+                    Some(_) => {
+                        if *max_ever_filled >= self.token_calc_bounds.max as f32 {
+                            self.token_calc_bounds.max
                         } else {
-                            previous_token_size
+                            let refill = *max_ever_filled;
+                            let capped_refill = refill.min(self.token_calc_bounds.max as f32);
+
+                            // Update the fractional value
+                            *max_ever_filled = capped_refill;
+
+                            capped_refill as usize
                         }
                     }
                 }
@@ -193,7 +185,7 @@ impl RateLimit<WithoutState> {
             last_queried_epoch: Arc::new(AtomicU64::new(0)),
             state: WithoutState,
             // TODO: Get this from config
-            mode: Arc::new(Mutex::new(Mode::Relaxed)),
+            mode: Arc::new(Mode::default()),
         })
     }
 
@@ -448,7 +440,7 @@ impl<S: Store> RateLimit<WithState<S>> {
             last_queried_epoch: Arc::new(AtomicU64::new(0)),
             state: WithState(state),
             // TODO: Get this from config
-            mode: Arc::new(Mutex::new(Mode::Relaxed)),
+            mode: Arc::new(Mode::default()),
         })
     }
 
