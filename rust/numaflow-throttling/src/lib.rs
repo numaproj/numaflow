@@ -36,7 +36,8 @@ pub trait RateLimiter {
 }
 
 /// Mode of calculation of tokens to give out
-/// 
+///
+/// Todo: docs for definition/usage
 #[derive(Clone, Debug)]
 pub enum Mode {
     OnlyIfUsed,
@@ -123,17 +124,19 @@ impl<W> RateLimit<W> {
                             capped_refill as usize
                         }
                     }
-                    Some(_) => {
+                    Some(tokens_to_acquire) => {
                         if *max_ever_filled >= self.token_calc_bounds.max as f32 {
                             self.token_calc_bounds.max
-                        } else {
-                            let refill = *max_ever_filled;
+                        } else if *max_ever_filled < tokens_to_acquire as f32 {
+                            let refill = *max_ever_filled + self.token_calc_bounds.slope;
                             let capped_refill = refill.min(self.token_calc_bounds.max as f32);
 
                             // Update the fractional value
                             *max_ever_filled = capped_refill;
 
                             capped_refill as usize
+                        } else {
+                            *max_ever_filled as usize
                         }
                     }
                 }
