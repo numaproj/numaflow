@@ -85,6 +85,9 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 }
 
 func (pt *PodTracker) trackActivePods(ctx context.Context) {
+	// start updating active pods as soon as called and then after every refreshInterval
+	pt.updateActivePods()
+
 	ticker := time.NewTicker(pt.refreshInterval)
 	defer ticker.Stop()
 	for {
@@ -101,7 +104,6 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 // updateActivePods checks the status of all pods and updates the activePods set accordingly.
 func (pt *PodTracker) updateActivePods() {
 	var wg sync.WaitGroup
-
 	for i := range int(pt.monoVertex.Spec.Scale.GetMaxReplicas()) {
 		wg.Add(1)
 		go func(index int) {
@@ -152,14 +154,14 @@ func (pt *PodTracker) GetActivePodsCount() int {
 	return pt.activePods.Length()
 }
 
-// podInfo represents the information of a pod that is used for tracking the processing rate
-type podInfo struct {
+// PodInfo represents the information of a pod that is used for tracking the processing rate
+type PodInfo struct {
 	monoVertexName string
 	replica        int
 	podName        string
 }
 
-func (pt *PodTracker) GetPodInfo(key string) (*podInfo, error) {
+func (pt *PodTracker) GetPodInfo(key string) (*PodInfo, error) {
 	pi := strings.Split(key, podInfoSeparator)
 	if len(pi) != 2 {
 		return nil, fmt.Errorf("invalid key %q", key)
@@ -168,7 +170,7 @@ func (pt *PodTracker) GetPodInfo(key string) (*podInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid replica in key %q", key)
 	}
-	return &podInfo{
+	return &PodInfo{
 		monoVertexName: pi[0],
 		replica:        replica,
 		podName:        strings.Join([]string{pi[0], "mv", pi[1]}, "-"),

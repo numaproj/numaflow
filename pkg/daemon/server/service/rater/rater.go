@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"maps"
 	"math"
 	"net/http"
@@ -44,11 +45,6 @@ type Ratable interface {
 }
 
 var _ Ratable = (*Rater)(nil)
-
-// CountWindow is the time window for which we maintain the timestamped counts, currently 10 seconds
-// e.g., if the current time is 12:00:07,
-// the retrieved count will be tracked in the 12:00:00-12:00:10 time window using 12:00:10 as the timestamp
-const CountWindow = time.Second * 10
 
 // metricsHttpClient interface for the GET/HEAD call to metrics endpoint.
 // Had to add this an interface for testing
@@ -126,12 +122,12 @@ func NewRater(ctx context.Context, p *v1alpha1.Pipeline, opts ...Option) *Rater 
 	rater.podTracker = NewPodTracker(ctx, p)
 	for _, v := range p.Spec.Vertices {
 		// maintain the total counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
-		rater.timestampedPodCounts[v.Name] = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
+		rater.timestampedPodCounts[v.Name] = sharedqueue.New[*TimestampedCounts](360)
 		// maintain the pending counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
-		rater.timestampedPendingCount[v.Name] = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
+		rater.timestampedPendingCount[v.Name] = sharedqueue.New[*TimestampedCounts](360)
 		rater.lookBackSeconds[v.Name] = atomic.NewFloat64(float64(v.Scale.GetLookbackSeconds()))
 		// initialise the metric value for the lookback window for each vertex
-		metrics.VertexLookBackSecs.WithLabelValues(v.Name, string(v.GetVertexType())).Set(float64(rater.lookBackSeconds[v.Name].Load()))
+		metrics.VertexLookBackSecs.WithLabelValues(v.Name, string(v.GetVertexType())).Set(rater.lookBackSeconds[v.Name].Load())
 	}
 
 	for _, opt := range opts {
@@ -142,24 +138,30 @@ func NewRater(ctx context.Context, p *v1alpha1.Pipeline, opts ...Option) *Rater 
 	return &rater
 }
 
+// podTask represents a monitoring task for a pod with a common timestamp
+type podTask struct {
+	key       string
+	timestamp int64
+}
+
 // Function monitor() defines each of the worker's jobs.
 // It waits for keys in the channel, and starts a monitoring job
-func (r *Rater) monitor(ctx context.Context, id int, keyCh <-chan string) {
+func (r *Rater) monitor(ctx context.Context, id int, taskCh <-chan *podTask) {
 	r.log.Infof("Started monitoring worker %v", id)
 	for {
 		select {
 		case <-ctx.Done():
 			r.log.Infof("Stopped monitoring worker %v", id)
 			return
-		case key := <-keyCh:
-			if err := r.monitorOnePod(ctx, key, id); err != nil {
-				r.log.Errorw("Failed to monitor a pod", zap.String("pod", key), zap.Error(err))
+		case task := <-taskCh:
+			if err := r.monitorOnePod(ctx, task.key, id, task.timestamp); err != nil {
+				r.log.Errorw("Failed to monitor a pod", zap.String("pod", task.key), zap.Error(err))
 			}
 		}
 	}
 }
 
-func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error {
+func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int, timestamp int64) error {
 	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("podKey", key)
 	log.Debugf("Working on key: %s", key)
 	podInfo, err := r.podTracker.GetPodInfo(key)
@@ -170,7 +172,6 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	}
 	var podReadCount *PodReadCount
 	var podPendingCount *PodPendingCount
-	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
 	if r.podTracker.IsActive(key) {
 		podMetrics := r.getPodMetrics(podInfo.vertexName, podInfo.podName)
 		podReadCount = r.getPodReadCounts(podInfo.vertexName, podInfo.podName, podMetrics)
@@ -183,18 +184,18 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 			if podPendingCount == nil {
 				log.Debugf("Failed retrieving pending counts for pod %s vertex %s", podInfo.podName, podInfo.vertexName)
 			}
-			UpdatePendingCount(r.timestampedPendingCount[podInfo.vertexName], now, podPendingCount)
+			UpdatePendingCount(r.timestampedPendingCount[podInfo.vertexName], timestamp, podPendingCount)
 		}
 	} else {
 		log.Debugf("Pod %s does not exist, updating it with nil...", podInfo.podName)
 	}
-	UpdateCount(r.timestampedPodCounts[podInfo.vertexName], now, podReadCount)
+	UpdateCount(r.timestampedPodCounts[podInfo.vertexName], timestamp, podReadCount)
 	return nil
 }
 
 func (r *Rater) Start(ctx context.Context) error {
 	r.log.Infof("Starting rater...")
-	keyCh := make(chan string)
+	taskCh := make(chan *podTask)
 	ctx, cancel := context.WithCancel(logging.WithLogger(ctx, r.log))
 	defer cancel()
 
@@ -211,16 +212,21 @@ func (r *Rater) Start(ctx context.Context) error {
 
 	// Worker group
 	for i := 1; i <= r.options.workers; i++ {
-		go r.monitor(ctx, i, keyCh)
+		go r.monitor(ctx, i, taskCh)
 	}
 
 	// Function assign() sends the least recently used podKey to the channel so that it can be picked up by a worker.
-	assign := func() {
+	assign := func(timestamp int64) {
 		if e := r.podTracker.LeastRecentlyUsed(); e != "" {
-			keyCh <- e
-			return
+			select {
+			case taskCh <- &podTask{key: e, timestamp: timestamp}:
+			case <-ctx.Done():
+			}
 		}
 	}
+
+	ticker := time.NewTicker(time.Duration(r.options.taskInterval) * time.Millisecond)
+	defer ticker.Stop()
 
 	// Following for loop keeps calling assign() function to assign monitoring tasks to the workers.
 	// It makes sure each element in the list will be assigned every N milliseconds.
@@ -229,30 +235,13 @@ func (r *Rater) Start(ctx context.Context) error {
 		case <-ctx.Done():
 			r.log.Info("Shutting down monitoring job assigner")
 			return nil
-		default:
-			assign()
-			// Make sure each of the key will be assigned at least every taskInterval milliseconds.
-			sleep(ctx, time.Millisecond*time.Duration(func() int {
-				l := r.podTracker.GetActivePodsCount()
-				if l == 0 {
-					return r.options.taskInterval
-				}
-				result := r.options.taskInterval / l
-				if result > 0 {
-					return result
-				}
-				return 1
-			}()))
+		case <-ticker.C:
+			// Generate a common timestamp for all pods in this tick
+			now := time.Now().Unix()
+			for range r.podTracker.GetActivePodsCount() {
+				assign(now)
+			}
 		}
-	}
-}
-
-// sleep function uses a select statement to check if the context is canceled before sleeping for the given duration
-// it helps ensure the sleep will be released when the context is canceled, allowing the goroutine to exit gracefully
-func sleep(ctx context.Context, duration time.Duration) {
-	select {
-	case <-ctx.Done():
-	case <-time.After(duration):
 	}
 }
 
@@ -264,7 +253,12 @@ func (r *Rater) getPodMetrics(vertexName, podName string) map[string]*dto.Metric
 		r.log.Warnf("[vertex name %s, pod name %s]: failed reading the metrics endpoint, the pod might have been scaled down: %v", vertexName, podName, err.Error())
 		return nil
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			r.log.Errorf("Failed to close response body for pod %s: %v", podName, err)
+		}
+	}(resp.Body)
 
 	textParser := expfmt.TextParser{}
 	result, err := textParser.TextToMetricFamilies(resp.Body)

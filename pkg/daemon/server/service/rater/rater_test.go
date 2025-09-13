@@ -169,7 +169,7 @@ func TestRater_updateDynamicLookbackSecs(t *testing.T) {
 			name: "no update when startIndex not found",
 			setupTimestampedCounts: func() map[string]*sharedqueue.OverflowQueue[*TimestampedCounts] {
 				q := sharedqueue.New[*TimestampedCounts](180)
-				now := time.Now().Truncate(CountWindow).Unix()
+				now := time.Now().Unix()
 				// Add counts that are too old (older than 3 * lookback seconds)
 				tc1 := NewTimestampedCounts(now - 300) // 5 minutes ago
 				tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 100.0}})
@@ -187,7 +187,7 @@ func TestRater_updateDynamicLookbackSecs(t *testing.T) {
 			name: "no update when time diff is 0",
 			setupTimestampedCounts: func() map[string]*sharedqueue.OverflowQueue[*TimestampedCounts] {
 				q := sharedqueue.New[*TimestampedCounts](180)
-				now := time.Now().Truncate(CountWindow).Unix()
+				now := time.Now().Unix()
 				// Add counts with same timestamp
 				tc1 := NewTimestampedCounts(now - 60)
 				tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 100.0}})
@@ -208,7 +208,7 @@ func TestRater_updateDynamicLookbackSecs(t *testing.T) {
 			name: "update when calculated lookback is higher",
 			setupTimestampedCounts: func() map[string]*sharedqueue.OverflowQueue[*TimestampedCounts] {
 				q := sharedqueue.New[*TimestampedCounts](180)
-				now := time.Now().Truncate(CountWindow).Unix()
+				now := time.Now().Unix()
 
 				// Create a scenario where data processing is slow, requiring higher lookback
 				timestamps := []int64{now - 120, now - 110, now - 100, now - 90, now - 80, now - 70, now - 60, now - 50, now - 40, now - 30}
@@ -232,7 +232,7 @@ func TestRater_updateDynamicLookbackSecs(t *testing.T) {
 			name: "test MaxLookbackSeconds limit (3*currentLookback)",
 			setupTimestampedCounts: func() map[string]*sharedqueue.OverflowQueue[*TimestampedCounts] {
 				q := sharedqueue.New[*TimestampedCounts](180)
-				now := time.Now().Truncate(CountWindow).Unix()
+				now := time.Now().Unix()
 
 				// findStartIndex uses 3*currentLookback (180s) to find startIndex
 				// So we need to create data within the last 180 seconds that would calculate > 600s lookback
@@ -263,7 +263,7 @@ func TestRater_updateDynamicLookbackSecs(t *testing.T) {
 			name: "test MaxLookbackSeconds limit with high current lookback (600s)",
 			setupTimestampedCounts: func() map[string]*sharedqueue.OverflowQueue[*TimestampedCounts] {
 				q := sharedqueue.New[*TimestampedCounts](180)
-				now := time.Now().Truncate(CountWindow).Unix()
+				now := time.Now().Unix()
 
 				// Create data that spans a longer period (3*400 = 1200s window)
 				// This simulates a scenario where current lookback is 400s, so 3*400 = 1200s window
@@ -292,7 +292,7 @@ func TestRater_updateDynamicLookbackSecs(t *testing.T) {
 			name: "update respects minimum lookback from vertex scale",
 			setupTimestampedCounts: func() map[string]*sharedqueue.OverflowQueue[*TimestampedCounts] {
 				q := sharedqueue.New[*TimestampedCounts](180)
-				now := time.Now().Truncate(CountWindow).Unix()
+				now := time.Now().Unix()
 
 				// Create a scenario with very fast processing
 				timestamps := []int64{now - 120, now - 110, now - 100, now - 90, now - 80, now - 70, now - 60, now - 50}
@@ -355,7 +355,7 @@ func TestRater_updateDynamicLookbackSecs(t *testing.T) {
 
 // TestFindStartIndex tests the findStartIndex helper function
 func TestFindStartIndex(t *testing.T) {
-	now := time.Now().Truncate(CountWindow).Unix()
+	now := time.Now().Unix()
 
 	tests := []struct {
 		name            string

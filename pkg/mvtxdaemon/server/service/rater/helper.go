@@ -110,7 +110,7 @@ func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookback
 // findStartIndex finds the index of the first element in the queue that is within the lookback seconds
 func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	n := len(counts)
-	now := time.Now().Truncate(CountWindow).Unix()
+	now := time.Now().Unix()
 	if n < 2 || now-counts[n-2].timestamp > lookbackSeconds {
 		// if the second last element is already outside the lookback window, we return indexNotFound
 		return indexNotFound
@@ -145,9 +145,11 @@ func calculatePodDelta(tc1, tc2 *TimestampedCounts) float64 {
 		currCount := readCount
 		prevCount := prevPodReadCount[podName]
 		// pod delta will be equal to current count in case of restart
+
 		podDelta := currCount
 		if currCount >= prevCount {
 			podDelta = currCount - prevCount
+
 		}
 		delta += podDelta
 	}
