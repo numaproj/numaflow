@@ -46,8 +46,8 @@ pub enum Mode {
 }
 
 // change to default
-impl Mode {
-    pub fn default() -> Self {
+impl Default for Mode {
+    fn default() -> Self {
         Mode::Relaxed
     }
 }
