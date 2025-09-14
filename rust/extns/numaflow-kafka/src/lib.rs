@@ -16,6 +16,9 @@ pub enum Error {
     #[error("Kafka - {0}")]
     Kafka(String),
 
+    #[error("End of stream")]
+    EOF(),
+
     #[error("{0}")]
     Other(String),
 }

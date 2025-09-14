@@ -46,6 +46,7 @@ impl From<numaflow_pulsar::Error> for Error {
                 Error::ActorPatternRecv(value.to_string())
             }
             numaflow_pulsar::Error::Other(e) => Error::Source(e),
+            numaflow_pulsar::Error::EOF() => Error::EOF(),
         }
     }
 }
@@ -55,8 +56,9 @@ pub(crate) async fn new_pulsar_source(
     batch_size: usize,
     timeout: Duration,
     vertex_replica: u16,
+    cancel_token: tokio_util::sync::CancellationToken,
 ) -> crate::Result<PulsarSource> {
-    Ok(PulsarSource::new(cfg, batch_size, timeout, vertex_replica).await?)
+    Ok(PulsarSource::new(cfg, batch_size, timeout, vertex_replica, cancel_token).await?)
 }
 
 impl source::SourceReader for PulsarSource {
@@ -118,7 +120,14 @@ mod tests {
             max_unack: 100,
             auth: None,
         };
-        let mut pulsar = new_pulsar_source(cfg, 10, Duration::from_millis(200), 0).await?;
+        let mut pulsar = new_pulsar_source(
+            cfg,
+            10,
+            Duration::from_millis(200),
+            0,
+            tokio_util::sync::CancellationToken::new(),
+        )
+        .await?;
         assert_eq!(pulsar.name(), "Pulsar");
 
         // Read should return before the timeout

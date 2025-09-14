@@ -83,7 +83,6 @@ func (s *MonoVertexSuite) TestExponentialBackoffRetryStrategy() {
 }
 
 func (s *MonoVertexSuite) TestMonoVertexRateLimitWithRedisStore() {
-	s.T().Skip("Skipping until we fix Rater")
 	w := s.Given().MonoVertex("@testdata/mono-vertex-rate-limit-redis.yaml").
 		When().
 		CreateMonoVertexAndWait()
@@ -97,9 +96,6 @@ func (s *MonoVertexSuite) TestMonoVertexRateLimitWithRedisStore() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-
-	// Wait for messages to start flowing
-	time.Sleep(10 * time.Second)
 
 	// port-forward mvtx daemon server
 	defer w.MvtxDaemonPodPortForward(1234, dfv1.MonoVertexDaemonServicePort).
@@ -129,19 +125,23 @@ func (s *MonoVertexSuite) TestMonoVertexRateLimitWithRedisStore() {
 			case <-timer.C:
 				return
 			default:
+				s.T().Logf("Checking metrics...")
 				m, err := client.GetMonoVertexMetrics(context.Background())
 				if err != nil {
+					s.T().Logf("Failed to get metrics: %v", err)
 					time.Sleep(waitInterval)
 					continue
 				}
 
 				if m == nil {
+					s.T().Logf("Metrics is nil, retrying...")
 					time.Sleep(waitInterval)
 					continue
 				}
 
 				oneMinRate := m.ProcessingRates["1m"]
 				if oneMinRate == nil {
+					s.T().Logf("One minute rate is nil, retrying...")
 					time.Sleep(waitInterval)
 					continue
 				}

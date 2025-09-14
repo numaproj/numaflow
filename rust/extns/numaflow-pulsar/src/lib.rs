@@ -19,6 +19,9 @@ pub enum Error {
     #[error("Received unknown offset for acknowledgement. offset={0}")]
     UnknownOffset(u64),
 
+    #[error("End of stream")]
+    EOF(),
+
     #[error("{0}")]
     Other(String),
 }

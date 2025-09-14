@@ -123,7 +123,6 @@ func (s *MapSuite) TestMapStreamUDFunctionAndSink() {
 }
 
 func (s *MapSuite) TestPipelineRateLimitWithRedisStore() {
-	s.T().Skip("Skipping until we fix Rater")
 	w := s.Given().Pipeline("@testdata/rate-limit-redis.yaml").
 		When().
 		CreatePipelineAndWait()
@@ -172,19 +171,23 @@ func (s *MapSuite) TestPipelineRateLimitWithRedisStore() {
 			case <-timer.C:
 				return
 			default:
+				s.T().Logf("Checking metrics...")
 				m, err := client.GetVertexMetrics(context.Background(), pipelineName, "map-udf")
 				if err != nil {
+					s.T().Logf("Failed to get metrics: %v", err)
 					time.Sleep(waitInterval)
 					continue
 				}
 
 				if len(m) == 0 {
+					s.T().Logf("Metrics is empty, retrying...")
 					time.Sleep(waitInterval)
 					continue
 				}
 
 				oneMinRate := m[0].ProcessingRates["1m"]
 				if oneMinRate == nil {
+					s.T().Logf("One minute rate is nil, retrying...")
 					time.Sleep(waitInterval)
 					continue
 				}

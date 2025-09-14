@@ -2591,6 +2591,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.16",
  "tokio",
+ "tokio-util",
  "tower",
  "tracing",
  "uuid",
@@ -2605,6 +2606,7 @@ dependencies = [
  "rdkafka",
  "thiserror 2.0.16",
  "tokio",
+ "tokio-util",
  "tracing",
  "uuid",
 ]
@@ -2688,6 +2690,7 @@ dependencies = [
  "thiserror 2.0.16",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "tracing",
  "uuid",
 ]
@@ -2750,6 +2753,7 @@ dependencies = [
  "test-log",
  "thiserror 2.0.16",
  "tokio",
+ "tokio-util",
  "tracing",
 ]
 

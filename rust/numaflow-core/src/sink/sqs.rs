@@ -30,6 +30,7 @@ impl From<numaflow_sqs::SqsSinkError> for Error {
                 Error::Sink(e)
             }
             numaflow_sqs::SqsSinkError::Error(numaflow_sqs::Error::Other(e)) => Error::Sink(e),
+            numaflow_sqs::SqsSinkError::Error(numaflow_sqs::Error::EOF()) => Error::EOF(),
         }
     }
 }

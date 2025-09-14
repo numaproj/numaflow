@@ -18,6 +18,7 @@ use bytes::Bytes;
 use chrono::{DateTime, TimeZone, Utc};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
+use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 use crate::Error::ActorTaskTerminated;
@@ -93,6 +94,7 @@ struct SqsActor {
     client: Client,
     queue_url: String,
     config: SqsSourceConfig,
+    cancel_token: CancellationToken,
 }
 
 impl SqsActor {
@@ -101,12 +103,14 @@ impl SqsActor {
         client: Client,
         queue_url: String,
         config: SqsSourceConfig,
+        cancel_token: CancellationToken,
     ) -> Self {
         Self {
             handler_rx,
             client,
             queue_url,
             config,
+            cancel_token,
         }
     }
 
@@ -153,6 +157,10 @@ impl SqsActor {
     /// - Processes message attributes and system metadata
     /// - Returns messages in a normalized format
     async fn get_messages(&mut self, count: i32, timeout_at: Instant) -> Result<Vec<SqsMessage>> {
+        if self.cancel_token.is_cancelled() {
+            return Err(SqsSourceError::from(Error::EOF()));
+        }
+
         let remaining_time = timeout_at - Instant::now();
 
         // default to one second if remaining time is less than one second
@@ -455,7 +463,7 @@ impl SqsSourceBuilder {
     /// # Returns
     /// - `Ok(SqsSource)` if the source is successfully built.
     /// - `Err(Error)` if there is an error during the initialization process.
-    pub async fn build(self) -> Result<SqsSource> {
+    pub async fn build(self, cancel_token: CancellationToken) -> Result<SqsSource> {
         let sqs_client = match self.client {
             Some(client) => client,
             None => crate::create_sqs_client(SqsConfig::Source(self.config.clone())).await?,
@@ -480,7 +488,8 @@ impl SqsSourceBuilder {
 
         let (handler_tx, handler_rx) = mpsc::channel(10);
         tokio::spawn(async move {
-            let mut actor = SqsActor::new(handler_rx, sqs_client, queue_url, self.config);
+            let mut actor =
+                SqsActor::new(handler_rx, sqs_client, queue_url, self.config, cancel_token);
             actor.run().await;
         });
 
@@ -639,7 +648,7 @@ mod tests {
         .batch_size(1)
         .timeout(Duration::from_secs(0))
         .client(sqs_mock_client)
-        .build()
+        .build(CancellationToken::new())
         .await
         .unwrap();
 
@@ -681,7 +690,7 @@ mod tests {
         .batch_size(1)
         .timeout(Duration::from_secs(0))
         .client(sqs_mock_client)
-        .build()
+        .build(CancellationToken::new())
         .await
         .unwrap();
 
@@ -720,7 +729,7 @@ mod tests {
         .batch_size(1)
         .timeout(Duration::from_secs(0))
         .client(sqs_mock_client)
-        .build()
+        .build(CancellationToken::new())
         .await
         .unwrap();
 
@@ -765,7 +774,7 @@ mod tests {
         .batch_size(1)
         .timeout(Duration::from_secs(0))
         .client(sqs_mock_client)
-        .build()
+        .build(CancellationToken::new())
         .await
         .unwrap();
 
@@ -802,7 +811,7 @@ mod tests {
         .batch_size(1)
         .timeout(Duration::from_secs(0))
         .client(sqs_mock_client)
-        .build()
+        .build(CancellationToken::new())
         .await
         .unwrap();
 
@@ -839,7 +848,7 @@ mod tests {
         .batch_size(1)
         .timeout(Duration::from_secs(0))
         .client(sqs_mock_client)
-        .build()
+        .build(CancellationToken::new())
         .await
         .unwrap();
 
@@ -874,7 +883,7 @@ mod tests {
         .batch_size(1)
         .timeout(Duration::from_secs(0))
         .client(sqs_mock_client)
-        .build()
+        .build(CancellationToken::new())
         .await
         .unwrap();
 
@@ -906,7 +915,7 @@ mod tests {
         .batch_size(1)
         .timeout(Duration::from_secs(0))
         .client(sqs_mock_client)
-        .build()
+        .build(CancellationToken::new())
         .await;
         assert!(source.is_err());
     }

@@ -10,6 +10,8 @@ use tokio::{
     sync::{mpsc, oneshot},
     time,
 };
+use tokio_util::sync::CancellationToken;
+
 use tokio_stream::StreamExt;
 use tracing::info;
 
@@ -51,14 +53,16 @@ struct ConsumerReaderActor {
     message_ids: BTreeMap<u64, MessageIdData>,
     max_unack: usize,
     topic: String,
+    cancel_token: CancellationToken,
 }
 
 impl ConsumerReaderActor {
     async fn start(
         config: PulsarSourceConfig,
         handler_rx: mpsc::Receiver<ConsumerActorMessage>,
+        cancel_token: CancellationToken,
     ) -> Result<()> {
-        tracing::info!(
+        info!(
             addr = &config.pulsar_server_addr,
             "Pulsar connection details"
         );
@@ -107,6 +111,7 @@ impl ConsumerReaderActor {
                 message_ids: BTreeMap::new(),
                 max_unack: config.max_unack,
                 topic: config.topic,
+                cancel_token,
             };
             consumer_actor.run().await;
         });
@@ -144,6 +149,10 @@ impl ConsumerReaderActor {
         count: usize,
         timeout_at: Instant,
     ) -> Result<Vec<PulsarMessage>> {
+        if self.cancel_token.is_cancelled() {
+            return Err(Error::EOF());
+        }
+
         if self.message_ids.len() >= self.max_unack {
             return Err(Error::AckPendingExceeded(self.message_ids.len()));
         }
@@ -243,9 +252,10 @@ impl PulsarSource {
         batch_size: usize,
         timeout: Duration,
         vertex_replica: u16,
+        cancel_token: CancellationToken,
     ) -> Result<Self> {
         let (tx, rx) = mpsc::channel(10);
-        ConsumerReaderActor::start(config, rx).await?;
+        ConsumerReaderActor::start(config, rx, cancel_token).await?;
         Ok(Self {
             actor_tx: tx,
             batch_size,

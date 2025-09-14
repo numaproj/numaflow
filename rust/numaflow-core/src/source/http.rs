@@ -7,7 +7,6 @@ use crate::source;
 use crate::source::{SourceAcker, SourceReader};
 use numaflow_http::HttpMessage;
 use std::sync::Arc;
-use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 impl From<numaflow_http::Error> for crate::error::Error {
@@ -18,7 +17,7 @@ impl From<numaflow_http::Error> for crate::error::Error {
             Error::Server(_) | Error::ChannelSend(_) | Error::ChannelRecv(_) => {
                 Self::Source(format!("HTTP source: {value:?}"))
             }
-            Error::EOF() => Self::Eof(),
+            Error::EOF() => Self::EOF(),
         }
     }
 }
@@ -49,18 +48,14 @@ impl From<HttpMessage> for Message {
 pub(crate) struct CoreHttpSource {
     batch_size: usize,
     http_source: numaflow_http::HttpSourceHandle,
-    cancel_token: Option<CancellationToken>,
-    shutdown_initiated: bool,
 }
 
 impl CoreHttpSource {
     pub(crate) fn new(batch_size: usize, http_source: numaflow_http::HttpSourceHandle) -> Self {
-        Self { batch_size, http_source, cancel_token: None, shutdown_initiated: false }
-    }
-
-    pub(crate) fn with_cancel_token(mut self, token: CancellationToken) -> Self {
-        self.cancel_token = Some(token);
-        self
+        Self {
+            batch_size,
+            http_source,
+        }
     }
 }
 
@@ -70,17 +65,9 @@ impl SourceReader for CoreHttpSource {
     }
 
     async fn read(&mut self) -> Result<Vec<Message>> {
-        // If cancellation is requested, stop accepting new requests and drain.
-        if let Some(token) = &self.cancel_token {
-            if token.is_cancelled() && !self.shutdown_initiated {
-                let _ = self.http_source.shutdown().await;
-                self.shutdown_initiated = true;
-            }
-        }
-
         match self.http_source.read(self.batch_size).await {
             Ok(msgs) => Ok(msgs.into_iter().map(|m| m.into()).collect()),
-            Err(numaflow_http::Error::Eof()) => Err(CoreError::Eof()),
+            Err(numaflow_http::Error::EOF()) => Err(CoreError::EOF()),
             Err(e) => Err(e.into()),
         }
     }
@@ -137,6 +124,7 @@ mod tests {
     use std::time::Duration;
     use tokio::task::JoinSet;
     use tokio::time::sleep;
+    use tokio_util::sync::CancellationToken;
 
     // Custom certificate verifier that accepts any certificate (for testing)
     #[derive(Debug)]
@@ -208,8 +196,10 @@ mod tests {
             .timeout(Duration::from_millis(100))
             .build();
 
-        // Create HttpSourceHandle
-        let http_source = numaflow_http::HttpSourceHandle::new(http_source_config).await;
+        // Create CancellationToken and HttpSourceHandle
+        let cln_token = CancellationToken::new();
+        let http_source =
+            numaflow_http::HttpSourceHandle::new(http_source_config, cln_token.clone()).await;
 
         // Create CoreHttpSource with batch size 5
         let batch_size = 5;

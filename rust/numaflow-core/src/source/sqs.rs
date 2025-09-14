@@ -47,6 +47,7 @@ impl From<numaflow_sqs::SqsSourceError> for Error {
                 Error::Source(e)
             }
             numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::Other(e)) => Error::Source(e),
+            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::EOF()) => Error::EOF(),
         }
     }
 }
@@ -56,12 +57,13 @@ pub(crate) async fn new_sqs_source(
     batch_size: usize,
     timeout: Duration,
     vertex_replica: u16,
+    cancel_token: tokio_util::sync::CancellationToken,
 ) -> crate::Result<SqsSource> {
     Ok(SqsSourceBuilder::new(cfg)
         .batch_size(batch_size)
         .timeout(timeout)
         .vertex_replica(vertex_replica)
-        .build()
+        .build(cancel_token)
         .await?)
 }
 
@@ -185,13 +187,15 @@ pub mod tests {
         .batch_size(1)
         .timeout(Duration::from_secs(1))
         .client(sqs_client)
-        .build()
+        .build(CancellationToken::new())
         .await
         .unwrap();
 
         // create SQS source with test client
         use crate::tracker::TrackerHandle;
         let tracker_handle = TrackerHandle::new(None);
+        let cln_token = CancellationToken::new();
+
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             1,
             SourceType::Sqs(sqs_source),
@@ -202,7 +206,6 @@ pub mod tests {
             None,
         );
 
-        let cln_token = CancellationToken::new();
         // create sink writer
         use crate::sink::{SinkClientType, SinkWriterBuilder};
         let sink_writer = SinkWriterBuilder::new(

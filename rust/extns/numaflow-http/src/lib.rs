@@ -16,8 +16,8 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
-use axum_server::tls_rustls::RustlsConfig;
 use axum_server::Handle as AxumHandle;
+use axum_server::tls_rustls::RustlsConfig;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use rcgen::{Certificate, CertifiedKey, generate_simple_self_signed};
@@ -33,6 +33,8 @@ use tokio::sync::{Mutex, mpsc, oneshot};
 use tracing::{debug, error, info, trace, warn};
 use uuid::Uuid;
 
+use tokio_util::sync::CancellationToken;
+
 /// Map that tracks inflight HTTP requests. This is passed to ack actor to send response back to
 /// the client. The entries are inserted at [axum::handler].
 type InflightRequestsMap = Arc<Mutex<HashMap<String, oneshot::Sender<StatusCode>>>>;
@@ -41,7 +43,6 @@ type InflightRequestsMap = Arc<Mutex<HashMap<String, oneshot::Sender<StatusCode>
 struct HttpSourceActor {
     server_rx: mpsc::Receiver<HttpMessage>,
     _server_handle: tokio::task::JoinHandle<Result<()>>,
-    axum_handle: AxumHandle,
     timeout: Duration,
     /// Map of inflight requests and their response channels
     inflight_requests: InflightRequestsMap,
@@ -59,7 +60,7 @@ pub enum Error {
     #[error("Server error: {0}")]
     Server(String),
     #[error("End of stream")]
-    Eof(),
+    EOF(),
 }
 
 type Result<T> = std::result::Result<T, Error>;
@@ -177,11 +178,10 @@ pub enum HttpActorMessage {
         response_tx: oneshot::Sender<Result<()>>,
     },
     Pending(oneshot::Sender<Option<usize>>),
-    Shutdown,
 }
 
 impl HttpSourceActor {
-    async fn new(http_source_config: HttpSourceConfig) -> Self {
+    async fn new(http_source_config: HttpSourceConfig, cancel_token: CancellationToken) -> Self {
         let (tx, rx) = mpsc::channel(http_source_config.buffer_size); // Increased buffer size for better throughput
         let inflight_requests = Arc::new(Mutex::new(HashMap::new()));
         let axum_handle = AxumHandle::new();
@@ -195,11 +195,16 @@ impl HttpSourceActor {
             axum_handle.clone(),
         ));
 
+        tokio::spawn(async move {
+            cancel_token.cancelled().await;
+            info!("CancellationToken cancelled; initiating HTTP graceful shutdown");
+            axum_handle.graceful_shutdown(None);
+        });
+
         Self {
             server_rx: rx,
             timeout: http_source_config.timeout,
             _server_handle: server_handle,
-            axum_handle,
             inflight_requests,
         }
     }
@@ -215,7 +220,10 @@ impl HttpSourceActor {
                     debug!("Reading messages from HttpSource");
                     response_tx.send(messages).expect("rx should be open");
                 }
-                HttpActorMessage::Ack { offsets, response_tx } => {
+                HttpActorMessage::Ack {
+                    offsets,
+                    response_tx,
+                } => {
                     debug!(count = offsets.len(), "Ack'ing messages from HttpSource");
                     response_tx
                         .send(self.ack(offsets).await)
@@ -226,14 +234,10 @@ impl HttpSourceActor {
                     debug!(?pending, "Pending messages from HttpSource");
                     response_tx.send(pending).expect("rx should be open");
                 }
-                HttpActorMessage::Shutdown => {
-                    info!("HTTP server graceful shutdown requested");
-                    self.axum_handle.graceful_shutdown(None);
-                }
             }
         }
 
-        // Send error responses to any pending requests during shutdown
+        // Send error responses to any pending requests after shutdown
         self.fail_pending_requests().await;
 
         info!("HttpSource processor stopped");
@@ -267,7 +271,7 @@ impl HttpSourceActor {
                         Some(message) => messages.push(message),
                         None => {
                             return if messages.is_empty() {
-                                Err(Error::Eof())
+                                Err(Error::EOF())
                             } else {
                                 Ok(messages)
                             }
@@ -328,11 +332,14 @@ pub struct HttpSourceHandle {
 
 impl HttpSourceHandle {
     /// Create a new HttpSourceHandle
-    pub async fn new(http_source_config: HttpSourceConfig) -> Self {
+    pub async fn new(
+        http_source_config: HttpSourceConfig,
+        cancel_token: CancellationToken,
+    ) -> Self {
         let (actor_tx, actor_rx) =
             mpsc::channel::<HttpActorMessage>(http_source_config.buffer_size);
 
-        let http_source = HttpSourceActor::new(http_source_config).await;
+        let http_source = HttpSourceActor::new(http_source_config, cancel_token).await;
 
         // the tokio task will stop when tx is dropped
         tokio::spawn(async move { http_source.run(actor_rx).await });
@@ -375,14 +382,6 @@ impl HttpSourceHandle {
             .expect("actor should be running");
         rx.await.ok().flatten()
     }
-    /// Request graceful shutdown of the HTTP server (stop accepting new requests)
-    pub async fn shutdown(&self) -> Result<()> {
-        self.actor_tx
-            .send(HttpActorMessage::Shutdown)
-            .await
-            .map_err(|e| Error::ChannelSend(e.to_string()))
-    }
-
 }
 
 /// Send a message to the processing channel
@@ -572,7 +571,7 @@ async fn data_handler(
     };
 
     // Send the message to the processing channel
-    match send_message(http_source.tx.clone(), message).await {
+    match send_message(http_source.tx, message).await {
         Ok(()) => {
             trace!(?id, "Successfully queued message, waiting for ack");
 
@@ -873,7 +872,7 @@ mod tests {
         // Create HttpSource with the address
         let http_source_config = HttpSourceConfigBuilder::new("test").addr(addr).build();
 
-        let http_source = HttpSourceActor::new(http_source_config).await;
+        let http_source = HttpSourceActor::new(http_source_config, CancellationToken::new()).await;
 
         // Create actor channel for communicating with HttpSource
         let (actor_tx, actor_rx) = mpsc::channel::<HttpActorMessage>(10);
@@ -1025,7 +1024,7 @@ mod tests {
 
         let http_source_config = HttpSourceConfigBuilder::new("test").addr(addr).build();
 
-        let http_source = HttpSourceActor::new(http_source_config).await;
+        let http_source = HttpSourceActor::new(http_source_config, CancellationToken::new()).await;
 
         let (actor_tx, actor_rx) = mpsc::channel::<HttpActorMessage>(10);
 
@@ -1066,7 +1065,8 @@ mod tests {
             .build();
 
         // Create HttpSourceHandle
-        let handle = HttpSourceHandle::new(http_source_config.clone()).await;
+        let handle =
+            HttpSourceHandle::new(http_source_config.clone(), CancellationToken::new()).await;
 
         // Wait a bit for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;

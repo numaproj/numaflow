@@ -62,6 +62,7 @@ impl From<numaflow_kafka::Error> for Error {
                 "Failed to connect to Kafka server: {server} - {error}"
             )),
             numaflow_kafka::Error::Other(e) => Error::Source(e),
+            numaflow_kafka::Error::EOF() => Error::EOF(),
         }
     }
 }
@@ -70,8 +71,9 @@ pub(crate) async fn new_kafka_source(
     cfg: KafkaSourceConfig,
     batch_size: usize,
     timeout: Duration,
+    cancel_token: tokio_util::sync::CancellationToken,
 ) -> crate::Result<KafkaSource> {
-    Ok(KafkaSource::connect(cfg, batch_size, timeout).await?)
+    Ok(KafkaSource::connect(cfg, batch_size, timeout, cancel_token).await?)
 }
 
 impl source::SourceReader for KafkaSource {
@@ -251,9 +253,14 @@ mod tests {
         };
 
         let read_timeout = Duration::from_secs(5);
-        let mut source = super::new_kafka_source(config, 20, read_timeout)
-            .await
-            .unwrap();
+        let mut source = super::new_kafka_source(
+            config,
+            20,
+            read_timeout,
+            tokio_util::sync::CancellationToken::new(),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(source.partitions().await.unwrap(), vec![0]);
 

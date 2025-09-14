@@ -394,6 +394,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 batch_size,
                 read_timeout,
                 *get_vertex_replica(),
+                cln_token.clone(),
             )
             .await?;
             Ok(crate::source::Source::new(
@@ -412,6 +413,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 batch_size,
                 read_timeout,
                 *get_vertex_replica(),
+                cln_token.clone(),
             )
             .await?;
             Ok(Source::new(
@@ -429,7 +431,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 jetstream_config.clone(),
                 batch_size,
                 read_timeout,
-                cln_token,
+                cln_token.clone(),
             )
             .await?;
             Ok(Source::new(
@@ -443,7 +445,13 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             ))
         }
         SourceType::Nats(nats_config) => {
-            let nats = new_nats_source(nats_config.clone(), batch_size, read_timeout).await?;
+            let nats = new_nats_source(
+                nats_config.clone(),
+                batch_size,
+                read_timeout,
+                cln_token.clone(),
+            )
+            .await?;
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Nats(nats),
@@ -456,7 +464,8 @@ pub async fn create_source<C: NumaflowTypeConfig>(
         }
         SourceType::Kafka(kafka_config) => {
             let config = *kafka_config.clone();
-            let kafka = new_kafka_source(config, batch_size, read_timeout).await?;
+            let kafka =
+                new_kafka_source(config, batch_size, read_timeout, cln_token.clone()).await?;
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Kafka(kafka),
@@ -469,7 +478,8 @@ pub async fn create_source<C: NumaflowTypeConfig>(
         }
         SourceType::Http(http_source_config) => {
             let http_source =
-                numaflow_http::HttpSourceHandle::new(http_source_config.clone()).await;
+                numaflow_http::HttpSourceHandle::new(http_source_config.clone(), cln_token.clone())
+                    .await;
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Http(CoreHttpSource::new(batch_size, http_source)),

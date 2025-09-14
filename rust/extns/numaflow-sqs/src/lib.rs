@@ -37,6 +37,9 @@ pub enum Error {
     #[error("Invalid configuration: {0}")]
     InvalidConfig(String),
 
+    #[error("End of stream")]
+    EOF(),
+
     #[error("{0}")]
     Other(String),
 }

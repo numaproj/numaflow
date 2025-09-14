@@ -124,7 +124,6 @@ enum ActorMessage {
     Partitions {
         respond_to: oneshot::Sender<Result<Vec<u16>>>,
     },
-    Cancel,
 }
 
 struct SourceActor<R, A, L> {
@@ -132,8 +131,6 @@ struct SourceActor<R, A, L> {
     reader: R,
     acker: A,
     lag_reader: L,
-    cancelled: bool,
-    cancel_token: Option<CancellationToken>,
 }
 
 impl<R, A, L> SourceActor<R, A, L>
@@ -142,20 +139,12 @@ where
     A: SourceAcker,
     L: LagReader,
 {
-    fn new(
-        receiver: mpsc::Receiver<ActorMessage>,
-        reader: R,
-        acker: A,
-        lag_reader: L,
-        cancel_token: Option<CancellationToken>,
-    ) -> Self {
+    fn new(receiver: mpsc::Receiver<ActorMessage>, reader: R, acker: A, lag_reader: L) -> Self {
         Self {
             receiver,
             reader,
             acker,
             lag_reader,
-            cancelled: false,
-            cancel_token,
         }
     }
 
@@ -166,13 +155,8 @@ where
                 let _ = respond_to.send(name);
             }
             ActorMessage::Read { respond_to } => {
-                // By default HTTP drains; others return EOF after cancellation
-                if self.cancelled && self.reader.name() != "HTTP" {
-                    let _ = respond_to.send(Err(Error::Eof()));
-                } else {
-                    let msgs = self.reader.read().await;
-                    let _ = respond_to.send(msgs);
-                }
+                let msgs = self.reader.read().await;
+                let _ = respond_to.send(msgs);
             }
             ActorMessage::Ack {
                 respond_to,
@@ -188,12 +172,6 @@ where
             ActorMessage::Partitions { respond_to } => {
                 let partitions = self.reader.partitions().await;
                 let _ = respond_to.send(partitions);
-            }
-            ActorMessage::Cancel => {
-                self.cancelled = true;
-                if let Some(token) = &self.cancel_token {
-                    token.cancel();
-                }
             }
         }
     }
@@ -243,13 +221,13 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             SourceType::UserDefinedSource(reader, acker, lag_reader) => {
                 health_checker = Some(reader.get_source_client());
                 tokio::spawn(async move {
-                    let actor = SourceActor::new(receiver, *reader, *acker, lag_reader, None);
+                    let actor = SourceActor::new(receiver, *reader, *acker, lag_reader);
                     actor.run().await;
                 });
             }
             SourceType::Generator(reader, acker, lag_reader) => {
                 tokio::spawn(async move {
-                    let actor = SourceActor::new(receiver, reader, acker, lag_reader, None);
+                    let actor = SourceActor::new(receiver, reader, acker, lag_reader);
                     actor.run().await;
                 });
             }
@@ -260,7 +238,6 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         pulsar_source.clone(),
                         pulsar_source.clone(),
                         pulsar_source,
-                        None,
                     );
                     actor.run().await;
                 });
@@ -272,45 +249,36 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         sqs_source.clone(),
                         sqs_source.clone(),
                         sqs_source,
-                        None,
                     );
                     actor.run().await;
                 });
             }
             SourceType::Jetstream(jetstream) => {
                 tokio::spawn(async move {
-                    let actor = SourceActor::new(
-                        receiver,
-                        jetstream.clone(),
-                        jetstream.clone(),
-                        jetstream,
-                        None,
-                    );
+                    let actor =
+                        SourceActor::new(receiver, jetstream.clone(), jetstream.clone(), jetstream);
                     actor.run().await;
                 });
             }
             SourceType::Nats(nats) => {
                 tokio::spawn(async move {
-                    let actor = SourceActor::new(receiver, nats.clone(), nats.clone(), nats, None);
+                    let actor = SourceActor::new(receiver, nats.clone(), nats.clone(), nats);
                     actor.run().await;
                 });
             }
             SourceType::Kafka(kafka) => {
                 tokio::spawn(async move {
-                    let actor = SourceActor::new(receiver, kafka.clone(), kafka.clone(), kafka, None);
+                    let actor = SourceActor::new(receiver, kafka.clone(), kafka.clone(), kafka);
                     actor.run().await;
                 });
             }
             SourceType::Http(http_source) => {
                 tokio::spawn(async move {
-                    let cancel_token = CancellationToken::new();
-                    let http_source = http_source.with_cancel_token(cancel_token.clone());
                     let actor = SourceActor::new(
                         receiver,
                         http_source.clone(),
                         http_source.clone(),
                         http_source,
-                        Some(cancel_token),
                     );
                     actor.run().await;
                 });
@@ -409,15 +377,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             let semaphore = Arc::new(Semaphore::new(max_ack_tasks));
 
             let mut result = Ok(());
-            let mut cancel_sent = false;
             loop {
-                if cln_token.is_cancelled() && !cancel_sent {
-                    info!("Cancellation token received. Initiating source cancellation.");
-                    // Inform source actor to cancel; HTTP will drain, others return EOF on next read
-                    let _ = self.sender.send(ActorMessage::Cancel).await;
-                    cancel_sent = true;
-                }
-
                 // Acquire the semaphore permit before reading the next batch to make
                 // sure we are not reading ahead and all the inflight messages are acked.
                 let _permit = Arc::clone(&semaphore)
@@ -426,24 +386,24 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     .expect("acquiring permit should not fail");
 
                 // Apply rate limiting before reading if configured.
-                // Skip rate limiting after cancellation so we can drain promptly.
-                if !cancel_sent {
-                    if let Some(ref rate_limiter) = self.rate_limiter
-                        && rate_limiter
-                            .acquire_n(Some(1), Some(Duration::from_secs(1)))
-                            .await
-                            == 0
-                    {
-                        continue;
-                    }
+                // In source, we rate limit the `read` method invocations,
+                // and not the number of messages read. It just removes a single token per read.
+                // To throttle the number of messages read, make sure that `read_batch_size` is set to
+                // appropriate value.
+                if let Some(ref rate_limiter) = self.rate_limiter
+                    && rate_limiter
+                        .acquire_n(Some(1), Some(Duration::from_secs(1)))
+                        .await
+                        == 0
+                {
+                    continue;
                 }
 
                 let read_start_time = Instant::now();
                 let messages = match Self::read(self.sender.clone()).await {
                     Ok(messages) => messages,
-                    Err(Error::Eof()) => {
+                    Err(Error::EOF()) => {
                         info!("Source returned EOF. Stopping the source.");
-                        result = Ok(());
                         break;
                     }
                     Err(e) => {
