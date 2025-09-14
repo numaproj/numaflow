@@ -17,6 +17,7 @@ use axum::{
     routing::{get, post},
 };
 use axum_server::tls_rustls::RustlsConfig;
+use axum_server::Handle as AxumHandle;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use rcgen::{Certificate, CertifiedKey, generate_simple_self_signed};
@@ -40,6 +41,7 @@ type InflightRequestsMap = Arc<Mutex<HashMap<String, oneshot::Sender<StatusCode>
 struct HttpSourceActor {
     server_rx: mpsc::Receiver<HttpMessage>,
     _server_handle: tokio::task::JoinHandle<Result<()>>,
+    axum_handle: AxumHandle,
     timeout: Duration,
     /// Map of inflight requests and their response channels
     inflight_requests: InflightRequestsMap,
@@ -56,6 +58,8 @@ pub enum Error {
     ChannelFull(),
     #[error("Server error: {0}")]
     Server(String),
+    #[error("End of stream")]
+    Eof(),
 }
 
 type Result<T> = std::result::Result<T, Error>;
@@ -173,12 +177,14 @@ pub enum HttpActorMessage {
         response_tx: oneshot::Sender<Result<()>>,
     },
     Pending(oneshot::Sender<Option<usize>>),
+    Shutdown,
 }
 
 impl HttpSourceActor {
     async fn new(http_source_config: HttpSourceConfig) -> Self {
         let (tx, rx) = mpsc::channel(http_source_config.buffer_size); // Increased buffer size for better throughput
         let inflight_requests = Arc::new(Mutex::new(HashMap::new()));
+        let axum_handle = AxumHandle::new();
 
         let server_handle = tokio::spawn(start_server(
             http_source_config.vertex_name,
@@ -186,12 +192,14 @@ impl HttpSourceActor {
             http_source_config.addr,
             http_source_config.token,
             Arc::clone(&inflight_requests),
+            axum_handle.clone(),
         ));
 
         Self {
             server_rx: rx,
             timeout: http_source_config.timeout,
             _server_handle: server_handle,
+            axum_handle,
             inflight_requests,
         }
     }
@@ -207,10 +215,7 @@ impl HttpSourceActor {
                     debug!("Reading messages from HttpSource");
                     response_tx.send(messages).expect("rx should be open");
                 }
-                HttpActorMessage::Ack {
-                    offsets,
-                    response_tx,
-                } => {
+                HttpActorMessage::Ack { offsets, response_tx } => {
                     debug!(count = offsets.len(), "Ack'ing messages from HttpSource");
                     response_tx
                         .send(self.ack(offsets).await)
@@ -220,6 +225,10 @@ impl HttpSourceActor {
                     let pending = self.pending().await;
                     debug!(?pending, "Pending messages from HttpSource");
                     response_tx.send(pending).expect("rx should be open");
+                }
+                HttpActorMessage::Shutdown => {
+                    info!("HTTP server graceful shutdown requested");
+                    self.axum_handle.graceful_shutdown(None);
                 }
             }
         }
@@ -254,10 +263,16 @@ impl HttpSourceActor {
 
                 message = self.server_rx.recv() => {
                     // stream ended
-                    let Some(message) = message else {
-                        return Ok(messages);
-                    };
-                    messages.push(message);
+                    match message {
+                        Some(message) => messages.push(message),
+                        None => {
+                            return if messages.is_empty() {
+                                Err(Error::Eof())
+                            } else {
+                                Ok(messages)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -360,6 +375,14 @@ impl HttpSourceHandle {
             .expect("actor should be running");
         rx.await.ok().flatten()
     }
+    /// Request graceful shutdown of the HTTP server (stop accepting new requests)
+    pub async fn shutdown(&self) -> Result<()> {
+        self.actor_tx
+            .send(HttpActorMessage::Shutdown)
+            .await
+            .map_err(|e| Error::ChannelSend(e.to_string()))
+    }
+
 }
 
 /// Send a message to the processing channel
@@ -437,6 +460,7 @@ pub async fn start_server(
     addr: SocketAddr,
     token: Option<&'static str>,
     inflight_requests: InflightRequestsMap,
+    axum_handle: AxumHandle,
 ) -> Result<()> {
     let router = create_router(vertex_name, token, tx, inflight_requests);
 
@@ -450,6 +474,7 @@ pub async fn start_server(
         .map_err(|e| Error::Server(format!("Creating TLS config from PEM: {e}")))?;
 
     axum_server::bind_rustls(addr, tls_config)
+        .handle(axum_handle)
         .serve(router.into_make_service())
         .await
         .map_err(|e| Error::Server(format!("HTTPS server error: {e}")))?;
@@ -536,8 +561,6 @@ async fn data_handler(
             )
                 .into_response();
         }
-
-        //pending_responses.insert(id.clone(), response_tx);
     }
 
     // Create the HTTP message
@@ -549,7 +572,7 @@ async fn data_handler(
     };
 
     // Send the message to the processing channel
-    match send_message(http_source.tx, message).await {
+    match send_message(http_source.tx.clone(), message).await {
         Ok(()) => {
             trace!(?id, "Successfully queued message, waiting for ack");
 

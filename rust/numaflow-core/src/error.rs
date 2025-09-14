@@ -71,6 +71,9 @@ pub enum Error {
     #[error("Cancellation Token Cancelled")]
     Cancelled(),
 
+    #[error("End of stream")]
+    Eof(),
+
     #[error("WAL Error - {0}")]
     #[allow(clippy::upper_case_acronyms)]
     WAL(String),
