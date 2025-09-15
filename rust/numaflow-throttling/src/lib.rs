@@ -1391,7 +1391,7 @@ mod tests {
         // Should get very few or no tokens immediately after exhausting the pool
         let total_phase3 = tokens_1_phase3 + tokens_2_phase3 + tokens_3_phase3;
 
-        assert_eq!(total_phase3, 0, "Should distribute some tokens in phase 3");
+        assert_eq!(total_phase3, 0, "Should distribute no tokens in phase 3");
 
         // Clean up
         cancel.cancel();
@@ -1498,7 +1498,7 @@ mod tests {
             rate_limiter
                 .shutdown()
                 .await
-                .expect("Rate limiter failed to shutdownj");
+                .expect("Rate limiter failed to shutdown");
         }
 
         // Clean up
