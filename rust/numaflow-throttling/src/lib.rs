@@ -1475,7 +1475,7 @@ mod tests {
         // Phase 3: Wait for some time to allow token refill
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        // Phase 3: Each pod tries to acquire all available tokens
+        // Phase 3: Each pod tries to acquire some available tokens
         let mut total_got_tokens_phase3 = 0;
         let mut total_expected_tokens_phase3 = 0;
         for rate_limiter in rate_limiters.iter() {
@@ -1698,7 +1698,7 @@ mod tests {
         // Phase 3: Wait for some time to allow token refill
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        // Phase 3: Each pod tries to acquire all available tokens
+        // Phase 3: Each pod tries to acquire some available tokens
         let mut total_got_tokens_phase3 = 0;
         let mut total_expected_tokens_phase3 = 0;
         for rate_limiter in rate_limiters.iter() {
