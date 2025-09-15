@@ -72,6 +72,7 @@ pub enum Error {
     Cancelled(),
 
     #[error("End of stream")]
+    #[allow(clippy::upper_case_acronyms)]
     EOF(),
 
     #[error("WAL Error - {0}")]

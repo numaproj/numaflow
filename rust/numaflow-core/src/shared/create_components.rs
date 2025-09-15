@@ -377,7 +377,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
     match &source_config.source_type {
         SourceType::Generator(generator_config) => {
             let (generator, generator_ack, generator_lag) =
-                new_generator(generator_config.clone(), batch_size)?;
+                new_generator(generator_config.clone(), batch_size, cln_token.clone())?;
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Generator(generator, generator_ack, generator_lag),
@@ -495,7 +495,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             let source_client =
                 create_source_client(user_defined_config, cln_token.clone()).await?;
             let (ud_read, ud_ack, ud_lag) =
-                new_source(source_client, batch_size, read_timeout).await?;
+                new_source(source_client, batch_size, read_timeout, cln_token.clone()).await?;
             Ok(Source::new(
                 batch_size,
                 source::SourceType::UserDefinedSource(Box::new(ud_read), Box::new(ud_ack), ud_lag),
