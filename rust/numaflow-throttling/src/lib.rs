@@ -1357,28 +1357,17 @@ mod tests {
         let tokens_2_phase1 = rate_limiter_2.attempt_acquire_n(Some(2), cur_epoch).await;
         let tokens_3_phase1 = rate_limiter_3.attempt_acquire_n(Some(2), cur_epoch).await;
 
-        println!("Phase 1 - Specific token requests:");
-        println!("Pod 1 got: {} tokens", tokens_1_phase1);
-        println!("Pod 2 got: {} tokens", tokens_2_phase1);
-        println!("Pod 3 got: {} tokens", tokens_3_phase1);
-
         // Each pod should get some tokens (may not be exactly 2 due to pool division)
         assert!(tokens_1_phase1 > 0, "Pod 1 should get some tokens");
         assert!(tokens_2_phase1 > 0, "Pod 2 should get some tokens");
         assert!(tokens_3_phase1 > 0, "Pod 3 should get some tokens");
 
-        println!("Waiting for token refill...");
         cur_epoch += 2;
 
         // Phase 2: Each pod tries to acquire all available tokens
         let tokens_1_phase2 = rate_limiter_1.attempt_acquire_n(None, cur_epoch).await;
         let tokens_2_phase2 = rate_limiter_2.attempt_acquire_n(None, cur_epoch).await;
         let tokens_3_phase2 = rate_limiter_3.attempt_acquire_n(None, cur_epoch).await;
-
-        println!("Phase 2 - Acquire all available tokens:");
-        println!("Pod 1 got: {} tokens", tokens_1_phase2);
-        println!("Pod 2 got: {} tokens", tokens_2_phase2);
-        println!("Pod 3 got: {} tokens", tokens_3_phase2);
 
         // After refill, each pod should get more tokens
         assert!(tokens_1_phase2 > 0, "Pod 1 should get tokens after refill");
@@ -1388,9 +1377,6 @@ mod tests {
         // Total tokens distributed should be reasonable (allowing for truncation effects)
         let total_phase1 = tokens_1_phase1 + tokens_2_phase1 + tokens_3_phase1;
         let total_phase2 = tokens_1_phase2 + tokens_2_phase2 + tokens_3_phase2;
-
-        println!("Total tokens phase 1: {}", total_phase1);
-        println!("Total tokens phase 2: {}", total_phase2);
 
         // Due to time-based truncation and distributed consensus, we can't expect exact values,
         // but we should see reasonable token distribution
@@ -1402,14 +1388,10 @@ mod tests {
         let tokens_2_phase3 = rate_limiter_2.attempt_acquire_n(Some(5), cur_epoch).await;
         let tokens_3_phase3 = rate_limiter_3.attempt_acquire_n(Some(5), cur_epoch).await;
 
-        println!("Phase 3 - Immediate retry:");
-        println!("Pod 1 got: {} tokens", tokens_1_phase3);
-        println!("Pod 2 got: {} tokens", tokens_2_phase3);
-        println!("Pod 3 got: {} tokens", tokens_3_phase3);
-
         // Should get very few or no tokens immediately after exhausting the pool
         let total_phase3 = tokens_1_phase3 + tokens_2_phase3 + tokens_3_phase3;
-        println!("Total tokens phase 3: {}", total_phase3);
+
+        assert_eq!(total_phase3, 0, "Should distribute some tokens in phase 3");
 
         // Clean up
         cancel.cancel();
@@ -1441,8 +1423,8 @@ mod tests {
                     refresh_interval,
                     runway_update.clone(),
                 )
-                    .await
-                    .expect("Failed to create rate limiters"),
+                .await
+                .expect("Failed to create rate limiters"),
             );
         }
 
@@ -1450,9 +1432,7 @@ mod tests {
         let mut total_got_tokens_phase1 = 0;
         let mut total_expected_tokens_phase1 = 0;
         for rate_limiter in rate_limiters.iter() {
-            let tokens = rate_limiter
-                .acquire_n(None, None)
-                .await;
+            let tokens = rate_limiter.acquire_n(None, None).await;
             assert_eq!(
                 tokens, 16,
                 "Number of tokens fetched in each iteration \
@@ -1467,7 +1447,6 @@ mod tests {
                 should be equal to total expected tokens for each processor",
         );
 
-        println!("Waiting for token refill...");
         // Phase 2: Wait for some time to allow token refill
         tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -1475,9 +1454,7 @@ mod tests {
         let mut total_got_tokens_phase2 = 0;
         let mut total_expected_tokens_phase2 = 0;
         for rate_limiter in rate_limiters.iter() {
-            let tokens = rate_limiter
-                .acquire_n(None, None)
-                .await;
+            let tokens = rate_limiter.acquire_n(None, None).await;
             assert_eq!(
                 tokens, 18,
                 "Number of tokens fetched in each iteration \
@@ -1495,7 +1472,6 @@ mod tests {
         // Phase 2 should have more tokens than phase 1
         assert!(total_got_tokens_phase2 > total_got_tokens_phase1);
 
-        println!("Waiting for token refill...");
         // Phase 3: Wait for some time to allow token refill
         tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -1503,9 +1479,7 @@ mod tests {
         let mut total_got_tokens_phase3 = 0;
         let mut total_expected_tokens_phase3 = 0;
         for rate_limiter in rate_limiters.iter() {
-            let tokens = rate_limiter
-                .acquire_n(Some(2), None)
-                .await;
+            let tokens = rate_limiter.acquire_n(Some(2), None).await;
             assert_eq!(
                 tokens, 2,
                 "Number of tokens fetched in each iteration \
@@ -1592,11 +1566,6 @@ mod tests {
         let tokens_2_phase1 = rate_limiter_2.attempt_acquire_n(Some(2), cur_epoch).await;
         let tokens_3_phase1 = rate_limiter_3.attempt_acquire_n(Some(2), cur_epoch).await;
 
-        println!("Phase 1 - Specific token requests:");
-        println!("Pod 1 got: {} tokens", tokens_1_phase1);
-        println!("Pod 2 got: {} tokens", tokens_2_phase1);
-        println!("Pod 3 got: {} tokens", tokens_3_phase1);
-
         // Each pod should get some tokens (may not be exactly 2 due to pool division)
         assert!(tokens_1_phase1 > 0, "Pod 1 should get some tokens");
         assert!(tokens_2_phase1 > 0, "Pod 2 should get some tokens");
@@ -1618,11 +1587,6 @@ mod tests {
         let tokens_2_phase2 = rate_limiter_2.attempt_acquire_n(Some(3), cur_epoch).await;
         let tokens_3_phase2 = rate_limiter_3.attempt_acquire_n(Some(3), cur_epoch).await;
 
-        println!("Phase 2 - After refill:");
-        println!("Pod 1 got: {} tokens", tokens_1_phase2);
-        println!("Pod 2 got: {} tokens", tokens_2_phase2);
-        println!("Pod 3 got: {} tokens", tokens_3_phase2);
-
         // Should get more tokens due to refill
         let total_tokens_phase2 = tokens_1_phase2 + tokens_2_phase2 + tokens_3_phase2;
         assert!(
@@ -1634,11 +1598,6 @@ mod tests {
         let tokens_1_phase3 = rate_limiter_1.attempt_acquire_n(Some(50), cur_epoch).await;
         let tokens_2_phase3 = rate_limiter_2.attempt_acquire_n(Some(50), cur_epoch).await;
         let tokens_3_phase3 = rate_limiter_3.attempt_acquire_n(Some(50), cur_epoch).await;
-
-        println!("Phase 3 - Exhaustion test:");
-        println!("Pod 1 got: {} tokens", tokens_1_phase3);
-        println!("Pod 2 got: {} tokens", tokens_2_phase3);
-        println!("Pod 3 got: {} tokens", tokens_3_phase3);
 
         // Should get fewer tokens as the bucket is getting exhausted
         let total_tokens_phase3 = tokens_1_phase3 + tokens_2_phase3 + tokens_3_phase3;
@@ -1665,10 +1624,11 @@ mod tests {
         // Create a rate limiter with 30 max tokens, 15 burst, over 2 seconds
         let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9));
         // Create Redis store for testing
-        let store = match test_utils::create_test_redis_store("simple_acquire_n_rate_limiter_test").await {
-            Some(store) => store,
-            None => return, // Skip test if Redis is not available
-        };
+        let store =
+            match test_utils::create_test_redis_store("simple_acquire_n_rate_limiter_test").await {
+                Some(store) => store,
+                None => return, // Skip test if Redis is not available
+            };
         let cancel = CancellationToken::new();
         let refresh_interval = Duration::from_millis(50);
         let runway_update = OptimisticValidityUpdateSecs::default();
@@ -1686,8 +1646,8 @@ mod tests {
                     refresh_interval,
                     runway_update.clone(),
                 )
-                    .await
-                    .expect("Failed to create rate limiters"),
+                .await
+                .expect("Failed to create rate limiters"),
             );
         }
 
@@ -1695,9 +1655,7 @@ mod tests {
         let mut total_got_tokens_phase1 = 0;
         let mut total_expected_tokens_phase1 = 0;
         for rate_limiter in rate_limiters.iter() {
-            let tokens = rate_limiter
-                .acquire_n(None, None)
-                .await;
+            let tokens = rate_limiter.acquire_n(None, None).await;
             assert_eq!(
                 tokens, 16,
                 "Number of tokens fetched in each iteration \
@@ -1712,7 +1670,6 @@ mod tests {
                 should be equal to total expected tokens for each processor",
         );
 
-        println!("Waiting for token refill...");
         // Phase 2: Wait for some time to allow token refill
         tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -1720,9 +1677,7 @@ mod tests {
         let mut total_got_tokens_phase2 = 0;
         let mut total_expected_tokens_phase2 = 0;
         for rate_limiter in rate_limiters.iter() {
-            let tokens = rate_limiter
-                .acquire_n(None, None)
-                .await;
+            let tokens = rate_limiter.acquire_n(None, None).await;
             assert_eq!(
                 tokens, 18,
                 "Number of tokens fetched in each iteration \
@@ -1740,7 +1695,6 @@ mod tests {
         // Phase 2 should have more tokens than phase 1
         assert!(total_got_tokens_phase2 > total_got_tokens_phase1);
 
-        println!("Waiting for token refill...");
         // Phase 3: Wait for some time to allow token refill
         tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -1748,9 +1702,7 @@ mod tests {
         let mut total_got_tokens_phase3 = 0;
         let mut total_expected_tokens_phase3 = 0;
         for rate_limiter in rate_limiters.iter() {
-            let tokens = rate_limiter
-                .acquire_n(Some(2), None)
-                .await;
+            let tokens = rate_limiter.acquire_n(Some(2), None).await;
             assert_eq!(
                 tokens, 2,
                 "Number of tokens fetched in each iteration \
