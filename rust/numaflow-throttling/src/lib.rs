@@ -1415,6 +1415,122 @@ mod tests {
         cancel.cancel();
     }
 
+    // Simple test for acquire_n with in-memory store
+    #[tokio::test]
+    async fn test_distributed_rate_limiter_simple_acquire_n_in_memory_store() {
+        use crate::state::OptimisticValidityUpdateSecs;
+        use crate::state::store::in_memory_store::InMemoryStore;
+
+        // Create a rate limiter with 30 max tokens, 15 burst, over 2 seconds
+        let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9));
+        let store = InMemoryStore::new();
+        let cancel = CancellationToken::new();
+        let refresh_interval = Duration::from_millis(50);
+        let runway_update = OptimisticValidityUpdateSecs::default();
+        let pod_count = 3;
+
+        // create pod_count number of rate limiters with in memory store
+        let mut rate_limiters = Vec::with_capacity(pod_count);
+        for i in 0..pod_count {
+            rate_limiters.push(
+                RateLimit::<WithState<InMemoryStore>>::new(
+                    bounds.clone(),
+                    store.clone(),
+                    &format!("processor_{}", i),
+                    cancel.clone(),
+                    refresh_interval,
+                    runway_update.clone(),
+                )
+                    .await
+                    .expect("Failed to create rate limiters"),
+            );
+        }
+
+        // Phase 1: Each pod requests all tokens
+        let mut total_got_tokens_phase1 = 0;
+        let mut total_expected_tokens_phase1 = 0;
+        for rate_limiter in rate_limiters.iter() {
+            let tokens = rate_limiter
+                .acquire_n(None, None)
+                .await;
+            assert_eq!(
+                tokens, 16,
+                "Number of tokens fetched in each iteration \
+                should increase by slope/pod_count until ramp up",
+            );
+            total_got_tokens_phase1 += tokens;
+            total_expected_tokens_phase1 += 16;
+        }
+        assert_eq!(
+            total_got_tokens_phase1, total_expected_tokens_phase1,
+            "Total number of tokens fetched in each iteration \
+                should be equal to total expected tokens for each processor",
+        );
+
+        println!("Waiting for token refill...");
+        // Phase 2: Wait for some time to allow token refill
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        // Phase 2: Each pod tries to acquire all available tokens
+        let mut total_got_tokens_phase2 = 0;
+        let mut total_expected_tokens_phase2 = 0;
+        for rate_limiter in rate_limiters.iter() {
+            let tokens = rate_limiter
+                .acquire_n(None, None)
+                .await;
+            assert_eq!(
+                tokens, 18,
+                "Number of tokens fetched in each iteration \
+                should increase by slope/pod_count until ramp up",
+            );
+            total_got_tokens_phase2 += tokens;
+            total_expected_tokens_phase2 += 18;
+        }
+        assert_eq!(
+            total_got_tokens_phase2, total_expected_tokens_phase2,
+            "Total number of tokens fetched in each iteration \
+                should be equal to total expected tokens for each processor",
+        );
+
+        // Phase 2 should have more tokens than phase 1
+        assert!(total_got_tokens_phase2 > total_got_tokens_phase1);
+
+        println!("Waiting for token refill...");
+        // Phase 3: Wait for some time to allow token refill
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        // Phase 3: Each pod tries to acquire all available tokens
+        let mut total_got_tokens_phase3 = 0;
+        let mut total_expected_tokens_phase3 = 0;
+        for rate_limiter in rate_limiters.iter() {
+            let tokens = rate_limiter
+                .acquire_n(Some(2), None)
+                .await;
+            assert_eq!(
+                tokens, 2,
+                "Number of tokens fetched in each iteration \
+                should be exactly what we asked for",
+            );
+            total_got_tokens_phase3 += tokens;
+            total_expected_tokens_phase3 += 2;
+        }
+        assert_eq!(
+            total_got_tokens_phase3, total_expected_tokens_phase3,
+            "Total number of tokens fetched in each iteration \
+                should be equal to total expected tokens for each processor",
+        );
+
+        for rate_limiter in rate_limiters.iter() {
+            rate_limiter
+                .shutdown()
+                .await
+                .expect("Rate limiter failed to shutdownj");
+        }
+
+        // Clean up
+        cancel.cancel();
+    }
+
     #[tokio::test]
     #[cfg(feature = "redis-tests")]
     async fn test_distributed_rate_limiter_time_based_refill_redis() {
@@ -1535,6 +1651,128 @@ mod tests {
         // Clean up Redis keys
         test_utils::cleanup_redis_keys("rate_limiter_refill");
 
+        // Clean up
+        cancel.cancel();
+    }
+
+    // Simple test for acquire_n with redis store
+    #[tokio::test]
+    #[cfg(feature = "redis-tests")]
+    async fn test_distributed_rate_limiter_simple_acquire_n_redis_store() {
+        use crate::state::OptimisticValidityUpdateSecs;
+        use crate::state::store::redis_store::RedisStore;
+
+        // Create a rate limiter with 30 max tokens, 15 burst, over 2 seconds
+        let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9));
+        // Create Redis store for testing
+        let store = match test_utils::create_test_redis_store("simple_acquire_n_rate_limiter_test").await {
+            Some(store) => store,
+            None => return, // Skip test if Redis is not available
+        };
+        let cancel = CancellationToken::new();
+        let refresh_interval = Duration::from_millis(50);
+        let runway_update = OptimisticValidityUpdateSecs::default();
+        let pod_count = 3;
+
+        // create pod_count number of rate limiters with in memory store
+        let mut rate_limiters = Vec::with_capacity(pod_count);
+        for i in 0..pod_count {
+            rate_limiters.push(
+                RateLimit::<WithState<RedisStore>>::new(
+                    bounds.clone(),
+                    store.clone(),
+                    &format!("processor_{}", i),
+                    cancel.clone(),
+                    refresh_interval,
+                    runway_update.clone(),
+                )
+                    .await
+                    .expect("Failed to create rate limiters"),
+            );
+        }
+
+        // Phase 1: Each pod requests all tokens
+        let mut total_got_tokens_phase1 = 0;
+        let mut total_expected_tokens_phase1 = 0;
+        for rate_limiter in rate_limiters.iter() {
+            let tokens = rate_limiter
+                .acquire_n(None, None)
+                .await;
+            assert_eq!(
+                tokens, 16,
+                "Number of tokens fetched in each iteration \
+                should increase by slope/pod_count until ramp up",
+            );
+            total_got_tokens_phase1 += tokens;
+            total_expected_tokens_phase1 += 16;
+        }
+        assert_eq!(
+            total_got_tokens_phase1, total_expected_tokens_phase1,
+            "Total number of tokens fetched in each iteration \
+                should be equal to total expected tokens for each processor",
+        );
+
+        println!("Waiting for token refill...");
+        // Phase 2: Wait for some time to allow token refill
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        // Phase 2: Each pod tries to acquire all available tokens
+        let mut total_got_tokens_phase2 = 0;
+        let mut total_expected_tokens_phase2 = 0;
+        for rate_limiter in rate_limiters.iter() {
+            let tokens = rate_limiter
+                .acquire_n(None, None)
+                .await;
+            assert_eq!(
+                tokens, 18,
+                "Number of tokens fetched in each iteration \
+                should increase by slope/pod_count until ramp up",
+            );
+            total_got_tokens_phase2 += tokens;
+            total_expected_tokens_phase2 += 18;
+        }
+        assert_eq!(
+            total_got_tokens_phase2, total_expected_tokens_phase2,
+            "Total number of tokens fetched in each iteration \
+                should be equal to total expected tokens for each processor",
+        );
+
+        // Phase 2 should have more tokens than phase 1
+        assert!(total_got_tokens_phase2 > total_got_tokens_phase1);
+
+        println!("Waiting for token refill...");
+        // Phase 3: Wait for some time to allow token refill
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        // Phase 3: Each pod tries to acquire all available tokens
+        let mut total_got_tokens_phase3 = 0;
+        let mut total_expected_tokens_phase3 = 0;
+        for rate_limiter in rate_limiters.iter() {
+            let tokens = rate_limiter
+                .acquire_n(Some(2), None)
+                .await;
+            assert_eq!(
+                tokens, 2,
+                "Number of tokens fetched in each iteration \
+                should be exactly what we asked for",
+            );
+            total_got_tokens_phase3 += tokens;
+            total_expected_tokens_phase3 += 2;
+        }
+        assert_eq!(
+            total_got_tokens_phase3, total_expected_tokens_phase3,
+            "Total number of tokens fetched in each iteration \
+                should be equal to total expected tokens for each processor",
+        );
+
+        for rate_limiter in rate_limiters.iter() {
+            rate_limiter
+                .shutdown()
+                .await
+                .expect("Rate limiter failed to shutdownj");
+        }
+
+        test_utils::cleanup_redis_keys("simple_acquire_n_rate_limiter_test");
         // Clean up
         cancel.cancel();
     }
