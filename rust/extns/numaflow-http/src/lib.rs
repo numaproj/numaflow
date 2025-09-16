@@ -90,6 +90,7 @@ pub struct HttpSourceConfig {
     pub addr: SocketAddr,
     pub timeout: Duration,
     pub token: Option<&'static str>,
+    pub graceful_shutdown_time: Duration,
 }
 
 impl Debug for HttpSourceConfig {
@@ -111,6 +112,7 @@ impl Default for HttpSourceConfig {
             addr: "0.0.0.0:8443".parse().expect("Invalid address"),
             timeout: Duration::from_millis(5),
             token: None,
+            graceful_shutdown_time: Duration::from_secs(20),
         }
     }
 }
@@ -121,6 +123,7 @@ pub struct HttpSourceConfigBuilder {
     addr: Option<SocketAddr>,
     timeout: Option<Duration>,
     token: Option<&'static str>,
+    graceful_shutdown_time: Option<Duration>,
 }
 
 impl HttpSourceConfigBuilder {
@@ -131,6 +134,7 @@ impl HttpSourceConfigBuilder {
             addr: None,
             timeout: None,
             token: None,
+            graceful_shutdown_time: None,
         }
     }
 
@@ -154,6 +158,11 @@ impl HttpSourceConfigBuilder {
         self
     }
 
+    pub fn graceful_shutdown_time(mut self, graceful_shutdown_time: Duration) -> Self {
+        self.graceful_shutdown_time = Some(graceful_shutdown_time);
+        self
+    }
+
     pub fn build(self) -> HttpSourceConfig {
         HttpSourceConfig {
             vertex_name: self.vertex_name,
@@ -163,6 +172,9 @@ impl HttpSourceConfigBuilder {
                 .unwrap_or_else(|| "0.0.0.0:8443".parse().expect("Invalid address")),
             timeout: self.timeout.unwrap_or(Duration::from_millis(5)),
             token: self.token,
+            graceful_shutdown_time: self
+                .graceful_shutdown_time
+                .unwrap_or(Duration::from_secs(20)),
         }
     }
 }
@@ -195,10 +207,11 @@ impl HttpSourceActor {
             axum_handle.clone(),
         ));
 
+        let graceful_shutdown_time = http_source_config.graceful_shutdown_time;
         let shutdown_handle = tokio::spawn(async move {
             cancel_token.cancelled().await;
             info!("CancellationToken cancelled; initiating HTTP graceful shutdown");
-            axum_handle.graceful_shutdown(None);
+            axum_handle.graceful_shutdown(Some(graceful_shutdown_time));
             if let Err(e) = server_handle.await.expect("server handle failed") {
                 error!(?e, "HTTP server failed");
             }
