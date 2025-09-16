@@ -1631,6 +1631,88 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_fetch_head_idle_wmb_multi_processors_not_idle() {
+        // Create a ProcessorManager with multiple processors, and one is not idle
+        let processor_name1 = Bytes::from("processor1");
+        let processor_name2 = Bytes::from("processor2");
+
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, 1);
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, 1);
+
+        let timeline1_p0 = OffsetTimeline::new(10);
+        let timeline2_p0 = OffsetTimeline::new(10);
+
+        // Populate the OffsetTimelines with sorted WMB entries
+        let wmbs1_p0 = vec![
+            WMB {
+                watermark: 100,
+                offset: 6,
+                idle: true,
+                partition: 0,
+            },
+            WMB {
+                watermark: 150,
+                offset: 10,
+                idle: true,
+                partition: 0,
+            },
+        ];
+        let wmbs2_p0 = vec![
+            WMB {
+                watermark: 110,
+                offset: 25,
+                idle: true,
+                partition: 0,
+            },
+            WMB {
+                watermark: 160,
+                offset: 30,
+                idle: false, // Not idle
+                partition: 0,
+            },
+        ];
+
+        for wmb in wmbs1_p0 {
+            timeline1_p0.put(wmb);
+        }
+        for wmb in wmbs2_p0 {
+            timeline2_p0.put(wmb);
+        }
+
+        processor1.timelines[0] = timeline1_p0;
+        processor2.timelines[0] = timeline2_p0;
+
+        let mut processors = HashMap::new();
+        processors.insert(processor_name1.clone(), processor1);
+        processors.insert(processor_name2.clone(), processor2);
+
+        let processor_manager = ProcessorManager {
+            processors: Arc::new(RwLock::new(processors)),
+            handles: vec![],
+        };
+
+        let mut processor_managers = HashMap::new();
+        processor_managers.insert("from_vtx", processor_manager);
+
+        let bucket_config = BucketConfig {
+            vertex: "from_vtx",
+            ot_bucket: "ot_bucket",
+            hb_bucket: "hb_bucket",
+            partitions: 1,
+            delay: None,
+        };
+
+        let mut fetcher =
+            ISBWatermarkFetcher::new(processor_managers, &[bucket_config], VertexType::MapUDF)
+                .await
+                .unwrap();
+
+        // Invoke fetch_head_idle_wmb and verify the result (should be None because not all are idle)
+        let wmb = fetcher.fetch_head_idle_wmb(0);
+        assert!(wmb.is_none());
+    }
+
+    #[tokio::test]
     async fn test_fetch_head_idle_wmb_multi_processor_min_watermark() {
         // Create ProcessorManager with multiple Processors and different OffsetTimelines
         let processor_name1 = Bytes::from("processor1");

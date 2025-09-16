@@ -614,7 +614,6 @@ mod tests {
         /// Utility function to run distributed rate limiter multiple pods test cases
         /// Only here to iterate over the different test cases and initialize stores to
         /// be used by the test cases.
-        ///
         pub(super) async fn run_distributed_rate_limiter_multiple_pods_test_cases(
             // The test cases to run
             test_cases: Vec<TestCase>,
