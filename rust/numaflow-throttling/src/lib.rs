@@ -426,6 +426,11 @@ impl<S: Store> RateLimit<WithState<S>> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum Mode {
+    Relaxed,
+}
+
 /// Mathematical Boundaries of Token Computation
 #[derive(Clone, Debug)]
 pub struct TokenCalcBounds {
@@ -435,6 +440,8 @@ pub struct TokenCalcBounds {
     max: usize,
     /// Minimum number of tokens available at t=0 (origin)
     min: usize,
+    /// Mode of operation
+    mode: Mode,
 }
 
 impl Default for TokenCalcBounds {
@@ -443,6 +450,7 @@ impl Default for TokenCalcBounds {
             slope: 1.0,
             max: 1,
             min: 1,
+            mode: Mode::Relaxed,
         }
     }
 }
@@ -450,11 +458,12 @@ impl Default for TokenCalcBounds {
 impl TokenCalcBounds {
     /// `Maximum` number of tokens that can be added in a unit of time with an initial `burst`.
     /// The `duration` (in seconds) at with we can add `max` tokens.
-    pub fn new(max: usize, min: usize, duration: Duration) -> Self {
+    pub fn new(max: usize, min: usize, duration: Duration, mode: Mode) -> Self {
         TokenCalcBounds {
             slope: (max - min) as f32 / duration.as_secs_f32(),
             max,
             min,
+            mode,
         }
     }
 }
@@ -485,7 +494,7 @@ mod tests {
         use crate::state::store::in_memory_store::InMemoryStore;
         use crate::state::store::redis_store::{RedisMode, RedisStore};
         use crate::state::{OptimisticValidityUpdateSecs, Store};
-        use crate::{RateLimit, RateLimiter, TokenCalcBounds, WithState};
+        use crate::{Mode, RateLimit, RateLimiter, TokenCalcBounds, WithState};
         use std::time::Duration;
         use tokio_util::sync::CancellationToken;
 
@@ -550,7 +559,7 @@ mod tests {
             let cancel = CancellationToken::new();
             let refresh_interval = Duration::from_millis(50);
             let runway_update = OptimisticValidityUpdateSecs::default();
-            let bounds = TokenCalcBounds::new(max_tokens, burst_tokens, duration);
+            let bounds = TokenCalcBounds::new(max_tokens, burst_tokens, duration, Mode::Relaxed);
 
             assert_eq!(
                 asked_tokens.len(),
@@ -691,7 +700,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_acquire_all_tokens() {
-        let bounds = TokenCalcBounds::new(10, 5, Duration::from_secs(1));
+        let bounds = TokenCalcBounds::new(10, 5, Duration::from_secs(1), Mode::Relaxed);
         let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
         rate_limiter.last_queried_epoch.store(
             SystemTime::now()
@@ -720,7 +729,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_acquire_specific_tokens() {
-        let bounds = TokenCalcBounds::new(10, 5, Duration::from_secs(1));
+        let bounds = TokenCalcBounds::new(10, 5, Duration::from_secs(1), Mode::Relaxed);
         let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
         rate_limiter.last_queried_epoch.store(
             SystemTime::now()
@@ -745,7 +754,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_acquire_more_than_available() {
-        let bounds = TokenCalcBounds::new(10, 3, Duration::from_secs(1));
+        let bounds = TokenCalcBounds::new(10, 3, Duration::from_secs(1), Mode::Relaxed);
         let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
         rate_limiter.last_queried_epoch.store(
             SystemTime::now()
@@ -766,7 +775,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_token_refill_gradual() {
-        let bounds = TokenCalcBounds::new(10, 2, Duration::from_secs(1));
+        let bounds = TokenCalcBounds::new(10, 2, Duration::from_secs(1), Mode::Relaxed);
         let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
         rate_limiter.last_queried_epoch.store(
             SystemTime::now()
@@ -792,7 +801,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_token_refill_capped_at_max() {
-        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
+        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1), Mode::Relaxed);
         let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
 
         // Consume initial tokens
@@ -821,7 +830,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_custom_token_calc_bounds() {
-        let bounds = TokenCalcBounds::new(20, 5, Duration::from_secs(2));
+        let bounds = TokenCalcBounds::new(20, 5, Duration::from_secs(2), Mode::Relaxed);
         assert_eq!(bounds.max, 20);
         assert_eq!(bounds.min, 5);
         assert_eq!(bounds.slope, 7.5); // (20-5)/2
@@ -842,7 +851,7 @@ mod tests {
     async fn test_fractional_slope_accumulation() {
         // Test case: max=2, min=1, ramp_up=10s
         // slope = (2-1)/10 = 0.1 tokens per second
-        let bounds = TokenCalcBounds::new(2, 1, Duration::from_secs(10));
+        let bounds = TokenCalcBounds::new(2, 1, Duration::from_secs(10), Mode::Relaxed);
         assert_eq!(bounds.max, 2);
         assert_eq!(bounds.min, 1);
         assert_eq!(bounds.slope, 0.1); // (2-1)/10
@@ -907,7 +916,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_concurrent_token_acquisition() {
-        let bounds = TokenCalcBounds::new(10, 10, Duration::from_secs(1));
+        let bounds = TokenCalcBounds::new(10, 10, Duration::from_secs(1), Mode::Relaxed);
         let rate_limiter = Arc::new(RateLimit::<WithoutState>::new(bounds).unwrap());
 
         let mut join_set = tokio::task::JoinSet::new();
@@ -927,7 +936,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_timeout_with_available_tokens() {
-        let bounds = TokenCalcBounds::new(5, 3, Duration::from_secs(1));
+        let bounds = TokenCalcBounds::new(5, 3, Duration::from_secs(1), Mode::Relaxed);
         let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
 
         // Should return immediately when tokens are available
@@ -943,7 +952,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_timeout_when_tokens_exhausted() {
-        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
+        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1), Mode::Relaxed);
         let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
 
         rate_limiter.last_queried_epoch.store(
@@ -965,7 +974,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_no_timeout_returns_immediately() {
-        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
+        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1), Mode::Relaxed);
         let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
         rate_limiter.last_queried_epoch.store(
             SystemTime::now()
@@ -991,7 +1000,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_timeout_waits_for_next_epoch() {
-        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
+        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1), Mode::Relaxed);
         let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
         rate_limiter.last_queried_epoch.store(
             SystemTime::now()
@@ -1027,7 +1036,7 @@ mod tests {
         use crate::state::OptimisticValidityUpdateSecs;
         use crate::state::store::in_memory_store::InMemoryStore;
 
-        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(10));
+        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(10), Mode::Relaxed);
         // time 0 -> 10
         // time 1 -> 11
         // time 2 -> 12
@@ -1087,7 +1096,7 @@ mod tests {
         use crate::state::OptimisticValidityUpdateSecs;
         use crate::state::store::in_memory_store::InMemoryStore;
 
-        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(1));
+        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(1), Mode::Relaxed);
         let store = InMemoryStore::new();
         let cancel = CancellationToken::new();
         let refresh_interval = Duration::from_millis(100);
@@ -1310,7 +1319,7 @@ mod tests {
         use crate::state::store::in_memory_store::InMemoryStore;
 
         // Create a rate limiter with 30 max tokens, 15 burst, over 2 seconds
-        let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9));
+        let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9), Mode::Relaxed);
         let store = InMemoryStore::new();
         let cancel = CancellationToken::new();
         let refresh_interval = Duration::from_millis(50);
@@ -1404,7 +1413,7 @@ mod tests {
         use crate::state::store::in_memory_store::InMemoryStore;
 
         // Create a rate limiter with 30 max tokens, 15 burst, over 2 seconds
-        let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9));
+        let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9), Mode::Relaxed);
         let store = InMemoryStore::new();
         let cancel = CancellationToken::new();
         let refresh_interval = Duration::from_millis(50);
@@ -1518,7 +1527,7 @@ mod tests {
         };
 
         // Create a rate limiter with 90 max tokens, 45 burst, over 9 seconds
-        let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9));
+        let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9), Mode::Relaxed);
 
         let cancel = CancellationToken::new();
         let refresh_interval = Duration::from_millis(50);
@@ -1622,7 +1631,7 @@ mod tests {
         use crate::state::store::redis_store::RedisStore;
 
         // Create a rate limiter with 30 max tokens, 15 burst, over 2 seconds
-        let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9));
+        let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9), Mode::Relaxed);
         // Create Redis store for testing
         let store =
             match test_utils::create_test_redis_store("simple_acquire_n_rate_limiter_test").await {

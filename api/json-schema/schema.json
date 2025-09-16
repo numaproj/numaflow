@@ -21727,6 +21727,10 @@
           "format": "int64",
           "type": "integer"
         },
+        "modes": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterModes",
+          "description": "Modes is used to define the modes for rate limiting."
+        },
         "rampUpDuration": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
           "description": "RampUpDuration is the duration to reach the maximum TPS from the minimum TPS. The min unit of ramp up is 1 in 1 second."
@@ -21739,6 +21743,16 @@
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.RateLimiterInMemoryStore": {
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.RateLimiterModes": {
+      "description": "RateLimiterModes defines the modes for rate limiting.",
+      "properties": {
+        "relaxed": {
+          "description": "If there is some traffic, then release the max possible tokens.",
+          "type": "boolean"
+        }
+      },
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.RateLimiterRedisStore": {

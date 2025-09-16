@@ -161,6 +161,11 @@ spec:
                         default: 1
                         format: int64
                         type: integer
+                      modes:
+                        properties:
+                          relaxed:
+                            type: boolean
+                        type: object
                       rampUpDuration:
                         default: 1s
                         type: string
@@ -7208,6 +7213,11 @@ spec:
                               default: 1
                               format: int64
                               type: integer
+                            modes:
+                              properties:
+                                relaxed:
+                                  type: boolean
+                              type: object
                             rampUpDuration:
                               default: 1s
                               type: string

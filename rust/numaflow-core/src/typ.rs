@@ -6,7 +6,9 @@ use crate::{Result, error};
 use numaflow_throttling::state::OptimisticValidityUpdateSecs;
 use numaflow_throttling::state::store::in_memory_store::InMemoryStore;
 use numaflow_throttling::state::store::redis_store::{RedisMode, RedisStore};
-use numaflow_throttling::{NoOpRateLimiter, RateLimit, RateLimiter, TokenCalcBounds, WithState};
+use numaflow_throttling::{
+    Mode, NoOpRateLimiter, RateLimit, RateLimiter, TokenCalcBounds, WithState,
+};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
@@ -114,6 +116,7 @@ where
         rate_limit_config.max,
         rate_limit_config.min,
         rate_limit_config.ramp_up_duration,
+        Mode::Relaxed,
     );
 
     let refresh_interval = Duration::from_millis(100);

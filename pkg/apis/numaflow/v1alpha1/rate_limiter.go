@@ -22,6 +22,16 @@ type RateLimit struct {
 	// the replicas.
 	// +optional
 	RateLimiterStore *RateLimiterStore `json:"store,omitempty" protobuf:"bytes,4,opt,name=store"`
+	// Modes is used to define the modes for rate limiting.
+	// +optional
+	Modes *RateLimiterModes `json:"modes,omitempty" protobuf:"bytes,5,opt,name=modes"`
+}
+
+// RateLimiterModes defines the modes for rate limiting.
+type RateLimiterModes struct {
+	// If there is some traffic, then release the max possible tokens.
+	// +optional
+	Relaxed *bool `json:"relaxed,omitempty" protobuf:"varint,1,opt,name=relaxed"`
 }
 
 type RateLimiterStore struct {

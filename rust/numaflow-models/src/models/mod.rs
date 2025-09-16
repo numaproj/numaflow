@@ -138,6 +138,8 @@ pub mod rate_limit;
 pub use self::rate_limit::RateLimit;
 pub mod rate_limiter_in_memory_store;
 pub use self::rate_limiter_in_memory_store::RateLimiterInMemoryStore;
+pub mod rate_limiter_modes;
+pub use self::rate_limiter_modes::RateLimiterModes;
 pub mod rate_limiter_redis_store;
 pub use self::rate_limiter_redis_store::RateLimiterRedisStore;
 pub mod rate_limiter_store;

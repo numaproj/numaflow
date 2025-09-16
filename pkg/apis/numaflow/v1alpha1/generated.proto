@@ -1401,9 +1401,20 @@ message RateLimit {
   // the replicas.
   // +optional
   optional RateLimiterStore store = 4;
+
+  // Modes is used to define the modes for rate limiting.
+  // +optional
+  optional RateLimiterModes modes = 5;
 }
 
 message RateLimiterInMemoryStore {
+}
+
+// RateLimiterModes defines the modes for rate limiting.
+message RateLimiterModes {
+  // If there is some traffic, then release the max possible tokens.
+  // +optional
+  optional bool relaxed = 1;
 }
 
 message RateLimiterRedisStore {
