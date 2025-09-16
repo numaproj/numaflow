@@ -102,7 +102,7 @@ func (s *MonoVertexSuite) TestMonoVertexRateLimitWithRedisStore() {
 		_ = client.Close()
 	}()
 
-	w.Expect().MonoVertexPodLogNotContains("processed=50", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithCount(20))
+	w.Expect().MonoVertexPodLogContains("processed=50", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithCount(20))
 }
 
 func TestMonoVertexSuite(t *testing.T) {

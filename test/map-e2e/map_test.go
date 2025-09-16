@@ -143,7 +143,7 @@ func (s *MapSuite) TestPipelineRateLimitWithRedisStore() {
 		_ = client.Close()
 	}()
 
-	w.Expect().VertexPodLogNotContains("map-udf", "processed=50", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithCount(20))
+	w.Expect().VertexPodLogContains("map-udf", "processed=50", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithCount(20))
 }
 
 func TestMapSuite(t *testing.T) {
