@@ -1501,7 +1501,26 @@ mod tests {
                 2,
                 vec![(Some(30), 1); 11],
                 vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
-            ).mode(Mode::Scheduled),
+            )
+            .mode(Mode::Scheduled),
+            // Integer slope with multiple pods
+            // Acquire tokens more than max tokens after extended gaps between epochs
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(30), 1),
+                    (Some(30), 3),
+                    (Some(30), 2),
+                    (Some(30), 4),
+                    (Some(30), 1),
+                    (Some(30), 1),
+                ],
+                vec![5, 5, 7, 8, 10, 10],
+            )
+            .mode(Mode::Scheduled),
         ];
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
