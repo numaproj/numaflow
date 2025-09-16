@@ -3,6 +3,7 @@ use crate::state::store::Store;
 use state::RateLimiterState;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::sync::{Arc, Mutex};
+use std::time;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
@@ -97,7 +98,24 @@ enum TokenAvailability {
     Recompute,
 }
 
+
+
 impl<W> RateLimit<W> {
+    fn default_slope_increase(&self, max_ever_filled: &mut f32) -> usize {
+        // let's make sure we do not go beyond the max
+        if *max_ever_filled >= self.token_calc_bounds.max as f32 {
+            self.token_calc_bounds.max
+        } else {
+            let refill = *max_ever_filled + self.token_calc_bounds.slope;
+            let capped_refill = refill.min(self.token_calc_bounds.max as f32);
+
+            // Update the fractional value
+            *max_ever_filled = capped_refill;
+
+            capped_refill as usize
+        }
+    }
+
     /// Computes the number of tokens to be refilled for the next epoch.
     ///
     /// TODO: refactor duplicate code
@@ -112,31 +130,13 @@ impl<W> RateLimit<W> {
             Mode::OnlyIfUsed => {
                 match requested_token_size {
                     None => {
-                        if *max_ever_filled >= self.token_calc_bounds.max as f32 {
-                            self.token_calc_bounds.max
-                        } else {
-                            let refill = *max_ever_filled + self.token_calc_bounds.slope;
-                            let capped_refill = refill.min(self.token_calc_bounds.max as f32);
-
-                            // Update the fractional value
-                            *max_ever_filled = capped_refill;
-
-                            capped_refill as usize
-                        }
+                        self.default_slope_increase(&mut max_ever_filled)
                     }
                     Some(tokens_to_acquire) => {
-                        if *max_ever_filled >= self.token_calc_bounds.max as f32 {
-                            self.token_calc_bounds.max
-                        } else if *max_ever_filled < tokens_to_acquire as f32 {
-                            let refill = *max_ever_filled + self.token_calc_bounds.slope;
-                            let capped_refill = refill.min(self.token_calc_bounds.max as f32);
-
-                            // Update the fractional value
-                            *max_ever_filled = capped_refill;
-
-                            capped_refill as usize
-                        } else {
+                        if tokens_to_acquire <= *max_ever_filled as usize {
                             *max_ever_filled as usize
+                        } else {
+                            self.default_slope_increase(&mut max_ever_filled)
                         }
                     }
                 }
@@ -150,7 +150,8 @@ impl<W> RateLimit<W> {
                         .last_queried_epoch
                         .load(std::sync::atomic::Ordering::Relaxed);
                     let time_diff = cur_epoch.checked_sub(prev_epoch)
-                        .expect("Previous epoch should be smaller than current epoch when calculating scheduled refill") as f32;
+                        .expect("Previous epoch should be smaller than current epoch \
+                        when calculating scheduled refill") as f32;
                     let refill = *max_ever_filled + self.token_calc_bounds.slope * (time_diff);
                     let capped_refill = refill.min(self.token_calc_bounds.max as f32);
 
@@ -161,18 +162,7 @@ impl<W> RateLimit<W> {
                 }
             }
             Mode::Relaxed => {
-                // let's make sure we do not go beyond the max
-                if *max_ever_filled >= self.token_calc_bounds.max as f32 {
-                    self.token_calc_bounds.max
-                } else {
-                    let refill = *max_ever_filled + self.token_calc_bounds.slope;
-                    let capped_refill = refill.min(self.token_calc_bounds.max as f32);
-
-                    // Update the fractional value
-                    *max_ever_filled = capped_refill;
-
-                    capped_refill as usize
-                }
+                self.default_slope_increase(&mut max_ever_filled)
             }
         }
     }
@@ -536,6 +526,71 @@ impl TokenCalcBounds {
             min,
             // TODO: Get this from config
             mode: Mode::Relaxed,
+        }
+    }
+}
+
+/// Added TokenCalcBoundsBuilder to allow setting mode for testing purposes
+/// without changing original TokenCalcBounds constructor
+///
+/// TODO: Remove this once throttling implementation is finalized and tokenCalcBounds' new() api is changed
+struct TokenCalcBoundsBuilder {
+    max: Option<usize>,
+    min: Option<usize>,
+    duration: Option<Duration>,
+    mode: Option<Mode>,
+}
+
+impl Default for TokenCalcBoundsBuilder {
+    fn default() -> Self {
+        TokenCalcBoundsBuilder {
+            duration: None,
+            max: None,
+            min: None,
+            mode: None,
+        }
+    }
+}
+
+impl TokenCalcBoundsBuilder {
+    pub fn new(max: usize, min: usize, duration: Duration) -> Self {
+        TokenCalcBoundsBuilder {
+            max: Some(max),
+            min: Some(min),
+            duration: Some(duration),
+            mode: None,
+        }
+    }
+
+    pub fn max(&mut self, max: usize) -> &mut Self {
+        self.max = Some(max);
+        self
+    }
+
+    pub fn min(&mut self, min: usize) -> &mut Self {
+        self.min = Some(min);
+        self
+    }
+
+    pub fn duration(&mut self, duration: Duration) -> &mut Self {
+        self.duration = Some(duration);
+        self
+    }
+
+    pub fn mode(&mut self, mode: Mode) -> &mut Self {
+        self.mode = Some(mode);
+        self
+    }
+
+    pub fn build(&self) -> TokenCalcBounds {
+        let max = self.max.expect("max is required");
+        let min = self.min.expect("min is required");
+        let duration = self.duration.expect("duration is required");
+        TokenCalcBounds {
+            slope: (max - min) as f32 / duration.as_secs_f32(),
+            max,
+            min,
+            mode: self.mode.clone().expect("Mode is required"),
         }
     }
 }
