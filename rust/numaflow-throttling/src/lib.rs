@@ -3,7 +3,6 @@ use crate::state::store::Store;
 use state::RateLimiterState;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::sync::{Arc, Mutex};
-use std::time;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
@@ -118,7 +117,7 @@ impl<W> RateLimit<W> {
     /// TODO: refactor duplicate code
     pub(crate) fn compute_refill(
         &self,
-        requested_token_size: Option<usize>,
+        _requested_token_size: Option<usize>,
         cur_epoch: u64,
     ) -> usize {
         let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
