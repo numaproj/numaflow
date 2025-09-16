@@ -41,7 +41,6 @@ pub trait RateLimiter {
 /// Todo: docs for definition/usage
 #[derive(Clone, Debug)]
 pub enum Mode {
-    OnlyIfUsed,
     Scheduled,
     Relaxed,
 }
@@ -125,16 +124,6 @@ impl<W> RateLimit<W> {
         let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
 
         match self.token_calc_bounds.mode {
-            Mode::OnlyIfUsed => match requested_token_size {
-                None => self.default_slope_increase(&mut max_ever_filled),
-                Some(tokens_to_acquire) => {
-                    if tokens_to_acquire <= *max_ever_filled as usize {
-                        *max_ever_filled as usize
-                    } else {
-                        self.default_slope_increase(&mut max_ever_filled)
-                    }
-                }
-            },
             Mode::Scheduled => {
                 // let's make sure we do not go beyond the max
                 if *max_ever_filled >= self.token_calc_bounds.max as f32 {
@@ -1501,7 +1490,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_distributed_rate_limiter_only_if_used_mode() {
+    async fn test_distributed_rate_limiter_only_scheduled_mode() {
         let test_cases = vec![
             // Integer slope with multiple pods
             // Acquire tokens more than max
@@ -1510,23 +1499,9 @@ mod tests {
                 10,
                 Duration::from_secs(10),
                 2,
-                vec![
-                    (Some(30), 1),
-                    (None, 1),
-                    (Some(0), 1),
-                    (Some(0), 1),
-                    (Some(30), 1),
-                    (Some(30), 1),
-                    (Some(30), 1),
-                    (Some(30), 1),
-                    (Some(30), 1),
-                    (Some(30), 1),
-                    (Some(30), 1),
-                    (Some(30), 1),
-                ],
-                vec![5, 5, 6, 6, 6, 6, 7, 7, 8, 8, 9],
-            )
-            .mode(Mode::OnlyIfUsed),
+                vec![(Some(30), 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            ).mode(Mode::Scheduled),
         ];
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
