@@ -81,7 +81,7 @@ enum TokenAvailability {
 }
 
 impl<W> RateLimit<W> {
-    fn default_slope_increase(&self, max_ever_filled: &mut f32) -> usize {
+    fn relaxed_slope_increase(&self, max_ever_filled: &mut f32) -> usize {
         // let's make sure we do not go beyond the max
         if *max_ever_filled >= self.token_calc_bounds.max as f32 {
             self.token_calc_bounds.max
@@ -96,17 +96,24 @@ impl<W> RateLimit<W> {
     }
 
     /// Computes the number of tokens to be refilled for the next epoch based on various modes
+    ///
+    /// # Arguments
+    ///
+    /// * `requested_token_size` - Tokens requested by the caller
+    /// * `cur_epoch` - Current epoch
+    ///
+    /// # Returns
+    ///
+    /// * `usize` - Number of tokens to be refilled
     pub(crate) fn compute_refill(
         &self,
-        // Tokens requested by the caller
         _requested_token_size: Option<usize>,
-        // Current epoch
         _cur_epoch: u64,
     ) -> usize {
         let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
 
         match self.token_calc_bounds.mode {
-            Mode::Relaxed => self.default_slope_increase(&mut max_ever_filled),
+            Mode::Relaxed => self.relaxed_slope_increase(&mut max_ever_filled),
         }
     }
 }
@@ -435,6 +442,12 @@ impl<S: Store> RateLimit<WithState<S>> {
     }
 }
 
+/// Rate limiting/Throttling mode
+///
+/// - Relaxed: If there is some traffic, then release the max possible tokens
+/// - Scheduled: If we will release/increase tokens on a schedule even if it is not used
+/// - OnlyIfUsed: If the max token is not used, then we will give the same previously allocated token.
+///               If the tokens used are within +/-10% threshold of max, then we’ll increase by slope
 #[derive(Clone, Debug)]
 pub enum Mode {
     Relaxed,
