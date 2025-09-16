@@ -37,7 +37,10 @@ pub trait RateLimiter {
 
 /// Mode of calculation of tokens to give out
 ///
-/// Todo: docs for definition/usage
+/// Ref: https://github.com/numaproj/numaflow/issues/2941
+///
+/// Scheduled: If we will release/increase tokens on a schedule even if tokens weren't asked/used
+/// Relaxed: If there is some traffic, then release the max possible tokens
 #[derive(Clone, Debug)]
 pub enum Mode {
     Scheduled,
@@ -112,12 +115,12 @@ impl<W> RateLimit<W> {
         }
     }
 
-    /// Computes the number of tokens to be refilled for the next epoch.
-    ///
-    /// TODO: refactor duplicate code
+    /// Computes the number of tokens to be refilled for the next epoch based on various modes
     pub(crate) fn compute_refill(
         &self,
+        // Tokens requested by the caller
         _requested_token_size: Option<usize>,
+        // Current epoch
         cur_epoch: u64,
     ) -> usize {
         let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
