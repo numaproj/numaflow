@@ -112,15 +112,16 @@ pub async fn create_rate_limiter<S>(
 where
     S: numaflow_throttling::state::Store + Sync + 'static,
 {
-    let mut mode = Mode::Relaxed;
-    if rate_limit_config
+    let mode = if rate_limit_config
         .modes
         .as_ref()
-        .and_then(|m| m.relaxed)
+        .and_then(|m| m.relaxed.as_ref())
         .is_some()
     {
-        mode = Mode::Relaxed;
-    }
+        Mode::Relaxed
+    } else {
+        Mode::Relaxed
+    };
 
     let bounds = TokenCalcBounds::new(
         rate_limit_config.max,

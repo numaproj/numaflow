@@ -1402,7 +1402,7 @@ message RateLimit {
   // +optional
   optional RateLimiterStore store = 4;
 
-  // Modes is used to define the modes for rate limiting.
+  // RateLimiterModes is used to define the modes for rate limiting.
   // +optional
   optional RateLimiterModes modes = 5;
 }
@@ -1414,7 +1414,7 @@ message RateLimiterInMemoryStore {
 message RateLimiterModes {
   // If there is some traffic, then release the max possible tokens.
   // +optional
-  optional bool relaxed = 1;
+  optional RaterLimiterRelaxed relaxed = 1;
 }
 
 message RateLimiterRedisStore {
@@ -1448,6 +1448,10 @@ message RateLimiterStore {
   // InMemoryStore is used to define the in-memory store for the rate limit.
   // +optional
   optional RateLimiterInMemoryStore inMemoryStore = 2;
+}
+
+// RaterLimiterRelaxed is for the relaxed mode. It will release the max possible tokens if there is some traffic.
+message RaterLimiterRelaxed {
 }
 
 message RedisAuth {

@@ -114,6 +114,7 @@ impl<W> RateLimit<W> {
 
         match self.token_calc_bounds.mode {
             Mode::Relaxed => self.relaxed_slope_increase(&mut max_ever_filled),
+            Mode::Scheduled | Mode::OnlyIfUsed => unimplemented!(),
         }
     }
 }
@@ -443,14 +444,15 @@ impl<S: Store> RateLimit<WithState<S>> {
 }
 
 /// Rate limiting/Throttling mode
-///
-/// - Relaxed: If there is some traffic, then release the max possible tokens
-/// - Scheduled: If we will release/increase tokens on a schedule even if it is not used
-/// - OnlyIfUsed: If the max token is not used, then we will give the same previously allocated token.
-///               If the tokens used are within +/-10% threshold of max, then we’ll increase by slope
 #[derive(Clone, Debug)]
 pub enum Mode {
+    /// If there is some traffic, then release the max possible tokens
     Relaxed,
+    /// We will release/increase tokens on a schedule even if it is not used
+    Scheduled,
+    /// If the max token is not used, then we will give the same previously allocated token.
+    /// If the tokens used are within +/-10% threshold of max, then we’ll increase by slope
+    OnlyIfUsed,
 }
 
 /// Mathematical Boundaries of Token Computation
@@ -1856,7 +1858,8 @@ mod tests {
             .test_name(
                 "RedisStore Test params: max_tokens=60, burst_tokens=15, duration=10s, pod_count=2"
                     .to_string(),
-            ),
+            )
+            .mode(Mode::Relaxed),
             // Fractional slope (>1) with multiple pods
             // Acquire all tokens
             test_utils::TestCase::new(

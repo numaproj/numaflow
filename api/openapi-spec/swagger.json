@@ -21715,7 +21715,7 @@
           "format": "int64"
         },
         "modes": {
-          "description": "Modes is used to define the modes for rate limiting.",
+          "description": "RateLimiterModes is used to define the modes for rate limiting.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterModes"
         },
         "rampUpDuration": {
@@ -21737,7 +21737,7 @@
       "properties": {
         "relaxed": {
           "description": "If there is some traffic, then release the max possible tokens.",
-          "type": "boolean"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RaterLimiterRelaxed"
         }
       }
     },
@@ -21778,6 +21778,10 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterRedisStore"
         }
       }
+    },
+    "io.numaproj.numaflow.v1alpha1.RaterLimiterRelaxed": {
+      "description": "RaterLimiterRelaxed is for the relaxed mode. It will release the max possible tokens if there is some traffic.",
+      "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.RedisAuth": {
       "type": "object",

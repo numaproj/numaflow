@@ -798,7 +798,7 @@ spec:
                             modes:
                               properties:
                                 relaxed:
-                                  type: boolean
+                                  type: object
                               type: object
                             rampUpDuration:
                               default: 1s
@@ -1023,7 +1023,7 @@ spec:
                             modes:
                               properties:
                                 relaxed:
-                                  type: boolean
+                                  type: object
                               type: object
                             rampUpDuration:
                               default: 1s
@@ -2198,7 +2198,7 @@ spec:
                       modes:
                         properties:
                           relaxed:
-                            type: boolean
+                            type: object
                         type: object
                       rampUpDuration:
                         default: 1s
@@ -6084,7 +6084,7 @@ spec:
                             modes:
                               properties:
                                 relaxed:
-                                  type: boolean
+                                  type: object
                               type: object
                             rampUpDuration:
                               default: 1s
@@ -6309,7 +6309,7 @@ spec:
                             modes:
                               properties:
                                 relaxed:
-                                  type: boolean
+                                  type: object
                               type: object
                             rampUpDuration:
                               default: 1s

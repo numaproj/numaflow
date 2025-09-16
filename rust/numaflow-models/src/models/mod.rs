@@ -144,6 +144,8 @@ pub mod rate_limiter_redis_store;
 pub use self::rate_limiter_redis_store::RateLimiterRedisStore;
 pub mod rate_limiter_store;
 pub use self::rate_limiter_store::RateLimiterStore;
+pub mod rater_limiter_relaxed;
+pub use self::rater_limiter_relaxed::RaterLimiterRelaxed;
 pub mod redis_auth;
 pub use self::redis_auth::RedisAuth;
 pub mod redis_sentinel_config;
