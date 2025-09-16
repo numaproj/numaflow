@@ -242,6 +242,9 @@ impl ISBWatermarkFetcher {
                             }
                         }
                     }
+                } else {
+                    // If any of the processors are not idling, we can return none
+                    return None;
                 }
             }
 
