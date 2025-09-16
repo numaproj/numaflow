@@ -98,8 +98,6 @@ enum TokenAvailability {
     Recompute,
 }
 
-
-
 impl<W> RateLimit<W> {
     fn default_slope_increase(&self, max_ever_filled: &mut f32) -> usize {
         // let's make sure we do not go beyond the max
@@ -127,20 +125,16 @@ impl<W> RateLimit<W> {
         let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
 
         match self.token_calc_bounds.mode {
-            Mode::OnlyIfUsed => {
-                match requested_token_size {
-                    None => {
+            Mode::OnlyIfUsed => match requested_token_size {
+                None => self.default_slope_increase(&mut max_ever_filled),
+                Some(tokens_to_acquire) => {
+                    if tokens_to_acquire <= *max_ever_filled as usize {
+                        *max_ever_filled as usize
+                    } else {
                         self.default_slope_increase(&mut max_ever_filled)
                     }
-                    Some(tokens_to_acquire) => {
-                        if tokens_to_acquire <= *max_ever_filled as usize {
-                            *max_ever_filled as usize
-                        } else {
-                            self.default_slope_increase(&mut max_ever_filled)
-                        }
-                    }
                 }
-            }
+            },
             Mode::Scheduled => {
                 // let's make sure we do not go beyond the max
                 if *max_ever_filled >= self.token_calc_bounds.max as f32 {
@@ -149,9 +143,10 @@ impl<W> RateLimit<W> {
                     let prev_epoch = self
                         .last_queried_epoch
                         .load(std::sync::atomic::Ordering::Relaxed);
-                    let time_diff = cur_epoch.checked_sub(prev_epoch)
-                        .expect("Previous epoch should be smaller than current epoch \
-                        when calculating scheduled refill") as f32;
+                    let time_diff = cur_epoch.checked_sub(prev_epoch).expect(
+                        "Previous epoch should be smaller than current epoch \
+                        when calculating scheduled refill",
+                    ) as f32;
                     let refill = *max_ever_filled + self.token_calc_bounds.slope * (time_diff);
                     let capped_refill = refill.min(self.token_calc_bounds.max as f32);
 
@@ -161,9 +156,7 @@ impl<W> RateLimit<W> {
                     capped_refill as usize
                 }
             }
-            Mode::Relaxed => {
-                self.default_slope_increase(&mut max_ever_filled)
-            }
+            Mode::Relaxed => self.default_slope_increase(&mut max_ever_filled),
         }
     }
 }
@@ -618,11 +611,13 @@ mod tests {
 
     /// Test utilities for integration tests
     mod test_utils {
-        use std::ops::Deref;
         use crate::state::store::in_memory_store::InMemoryStore;
         use crate::state::store::redis_store::{RedisMode, RedisStore};
         use crate::state::{OptimisticValidityUpdateSecs, Store};
-        use crate::{RateLimit, RateLimiter, TokenCalcBounds, WithState, Mode, TokenCalcBoundsBuilder};
+        use crate::{
+            Mode, RateLimit, RateLimiter, TokenCalcBounds, TokenCalcBoundsBuilder, WithState,
+        };
+        use std::ops::Deref;
         use std::time::Duration;
         use tokio_util::sync::CancellationToken;
 
@@ -670,12 +665,14 @@ mod tests {
             // Creates a new test case with certain default values
             // Created to make it easier to add new params to test cases
             // without changing initialization of it in existing tests.
-            pub(super) fn new(max_tokens: usize,
-                              burst_tokens: usize,
-                              duration: Duration,
-                              pod_count: usize,
-                              asked_tokens: Vec<(Option<usize>, usize)>,
-                              expected_tokens: Vec<usize>) -> Self {
+            pub(super) fn new(
+                max_tokens: usize,
+                burst_tokens: usize,
+                duration: Duration,
+                pod_count: usize,
+                asked_tokens: Vec<(Option<usize>, usize)>,
+                expected_tokens: Vec<usize>,
+            ) -> Self {
                 TestCase {
                     max_tokens,
                     burst_tokens,
@@ -699,7 +696,7 @@ mod tests {
                 self
             }
 
-            pub(super) fn mode(&mut self, mode: Mode) -> &mut Self {
+            pub(super) fn mode(mut self, mode: Mode) -> Self {
                 self.mode = mode;
                 self
             }
@@ -731,8 +728,8 @@ mod tests {
             let refresh_interval = Duration::from_millis(50);
             let runway_update = OptimisticValidityUpdateSecs::default();
             let bounds = TokenCalcBoundsBuilder::new(max_tokens, burst_tokens, duration)
-                                                                .mode(mode)
-                                                                .build();
+                .mode(mode)
+                .build();
 
             assert_eq!(
                 asked_tokens.len(),
@@ -1326,8 +1323,24 @@ mod tests {
             // Acquire all tokens at each epoch
             // Immediately ask for tokens after first epoch
             test_utils::TestCase::new(
-                60, 15, Duration::from_secs(10), 2,
-                vec![(None,1), (None,0), (None, 1), (None, 1), (None, 1), (None, 1), (None, 1), (None, 1), (None, 1), (None, 1), (None, 1), (None, 1)],
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
                 vec![7, 9, 0, 12, 14, 16, 18, 21, 23, 25, 27, 30],
             ),
             // Fractional slope (>1) with multiple pods
@@ -1337,7 +1350,7 @@ mod tests {
                 15,
                 Duration::from_secs(10),
                 2,
-                vec![(None,1); 11],
+                vec![(None, 1); 11],
                 vec![7, 9, 12, 14, 16, 18, 21, 23, 25, 27, 30],
             ),
             // Fractional slope (>1) with multiple pods
@@ -1347,7 +1360,7 @@ mod tests {
                 15,
                 Duration::from_secs(10),
                 2,
-                vec![(Some(20),1); 11],
+                vec![(Some(20), 1); 11],
                 vec![7, 9, 12, 14, 16, 18, 20, 20, 20, 20, 20],
             ),
             // Fractional slope (<1) with multiple pods
@@ -1358,7 +1371,20 @@ mod tests {
                 1,
                 Duration::from_secs(10),
                 2,
-                vec![(None,1), (None, 1), (None, 1), (None,1), (None, 1), (None, 1), (None,1), (None, 1), (None, 1), (None,1), (None, 0), (None, 1)],
+                vec![
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                ],
                 vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
             ),
             // Fractional slope (<1) with multiple pods
@@ -1368,7 +1394,7 @@ mod tests {
                 1,
                 Duration::from_secs(10),
                 2,
-                vec![(None,1); 11],
+                vec![(None, 1); 11],
                 vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
             ),
             // Fractional slope (<1) with multiple pods
@@ -1378,7 +1404,7 @@ mod tests {
                 1,
                 Duration::from_secs(10),
                 2,
-                vec![(Some(1),1); 11],
+                vec![(Some(1), 1); 11],
                 vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
             ),
             // Integer slope with multiple pods
@@ -1388,7 +1414,7 @@ mod tests {
                 10,
                 Duration::from_secs(10),
                 2,
-                vec![(Some(30),1); 11],
+                vec![(Some(30), 1); 11],
                 vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
             ),
             // Integer slope with multiple pods
@@ -1398,7 +1424,7 @@ mod tests {
                 10,
                 Duration::from_secs(10),
                 2,
-                vec![(None,1); 11],
+                vec![(None, 1); 11],
                 vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
             ),
             // Integer slope with multiple pods
@@ -1409,7 +1435,25 @@ mod tests {
                 10,
                 Duration::from_secs(10),
                 2,
-                vec![(Some(1),0), (Some(2),1), (Some(1),0), (Some(3),1), (Some(1),0), (Some(4),2), (Some(1),0), (Some(10),1), (Some(2),0), (None,1), (None,1), (None,1), (None,1), (None,1), (None,1), (Some(5),1), (None,1)],
+                vec![
+                    (Some(1), 0),
+                    (Some(2), 1),
+                    (Some(1), 0),
+                    (Some(3), 1),
+                    (Some(1), 0),
+                    (Some(4), 2),
+                    (Some(1), 0),
+                    (Some(10), 1),
+                    (Some(2), 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (Some(5), 1),
+                    (None, 1),
+                ],
                 vec![1, 2, 1, 3, 1, 4, 1, 5, 2, 5, 7, 8, 8, 9, 9, 5, 10],
             ),
             // Integer slope with multiple pods
@@ -1419,7 +1463,7 @@ mod tests {
                 10,
                 Duration::from_secs(10),
                 2,
-                vec![(Some(1),1); 11],
+                vec![(Some(1), 1); 11],
                 vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
             ),
             // Fractional slope with single pod
@@ -1429,7 +1473,7 @@ mod tests {
                 1,
                 Duration::from_secs(10),
                 1,
-                vec![(None,1); 11],
+                vec![(None, 1); 11],
                 vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
             ),
             // Fractional slope with single pod
@@ -1439,7 +1483,7 @@ mod tests {
                 1,
                 Duration::from_secs(10),
                 1,
-                vec![(Some(5),1); 11],
+                vec![(Some(5), 1); 11],
                 vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
             ),
             // Fractional slope with single pod
@@ -1449,7 +1493,176 @@ mod tests {
                 1,
                 Duration::from_secs(10),
                 1,
-                vec![(Some(1),1); 11],
+                vec![(Some(1), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            ),
+        ];
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
+    }
+
+    #[tokio::test]
+    async fn test_distributed_rate_limiter_only_if_used_mode() {
+        let test_cases = vec![
+            // Fractional slope (>1) with multiple pods
+            // Acquire all tokens at each epoch
+            // Immediately ask for tokens after first epoch
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![7, 9, 0, 12, 14, 16, 18, 21, 23, 25, 27, 30],
+            ),
+            // Fractional slope (<1) with multiple pods
+            // Acquire all tokens
+            // Immediately ask for tokens in the same epoch after receiving 1 token
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                ],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+            ),
+            // Integer slope with multiple pods
+            // Acquire tokens more than max
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(30), 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            )
+            .mode(Mode::OnlyIfUsed),
+            // Integer slope with multiple pods
+            // Acquire tokens more than max
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(1), 1),
+                    (Some(1), 1),
+                    (Some(1), 1),
+                    (Some(1), 1),
+                    (Some(1), 1),
+                    (Some(1), 1),
+                    (Some(1), 1),
+                    (Some(1), 1),
+                    (Some(1), 1),
+                    (Some(1), 1),
+                    (Some(1), 1),
+                    (Some(1), 1),
+                ],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            )
+            .mode(Mode::OnlyIfUsed),
+            // Integer slope with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            ),
+            // Integer slope with multiple pods
+            // Acquire tokens less than max
+            // Combination of immediate and non-immediate token requests
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(1), 0),
+                    (Some(2), 1),
+                    (Some(1), 0),
+                    (Some(3), 1),
+                    (Some(1), 0),
+                    (Some(4), 2),
+                    (Some(1), 0),
+                    (Some(10), 1),
+                    (Some(2), 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (Some(5), 1),
+                    (None, 1),
+                ],
+                vec![1, 2, 1, 3, 1, 4, 1, 5, 2, 5, 7, 8, 8, 9, 9, 5, 10],
+            ),
+            // Integer slope with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(1), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            ),
+            // Fractional slope with single pod
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(None, 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+            ),
+            // Fractional slope with single pod
+            // Acquire tokens more than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(Some(5), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+            ),
+            // Fractional slope with single pod
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(Some(1), 1); 11],
                 vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
             ),
         ];
@@ -1701,18 +1914,46 @@ mod tests {
             // Acquire all tokens at each epoch
             // Immediately ask for tokens after first epoch
             test_utils::TestCase::new(
-                60, 15, Duration::from_secs(10), 2,
-                vec![(None,1), (None,0), (None, 1), (None, 1), (None, 1), (None, 1), (None, 1), (None, 1), (None, 1), (None, 1), (None, 1), (None, 1)],
-                vec![7, 9, 0, 12, 14, 16, 18, 21, 23, 25, 27, 30])
-                .store_type(test_utils::StoreType::Redis)
-                .test_name("RedisStore Test params: max_tokens=60, burst_tokens=15, duration=10s, pod_count=2".to_string()),
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![7, 9, 0, 12, 14, 16, 18, 21, 23, 25, 27, 30],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=60, burst_tokens=15, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
             // Fractional slope (>1) with multiple pods
             // Acquire all tokens
-            test_utils::TestCase::new(60, 15, Duration::from_secs(10), 2,
-                vec![(None,1); 11],
-                vec![7, 9, 12, 14, 16, 18, 21, 23, 25, 27, 30])
-                .store_type(test_utils::StoreType::Redis)
-                .test_name("RedisStore Test params: max_tokens=60, burst_tokens=15, duration=10s, pod_count=2".to_string()),
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![7, 9, 12, 14, 16, 18, 21, 23, 25, 27, 30],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=60, burst_tokens=15, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
             // Fractional slope (>1) with multiple pods
             // Acquire tokens less than max
             test_utils::TestCase::new(
@@ -1720,82 +1961,197 @@ mod tests {
                 15,
                 Duration::from_secs(10),
                 2,
-                vec![(Some(20),1); 11],
+                vec![(Some(20), 1); 11],
                 vec![7, 9, 12, 14, 16, 18, 20, 20, 20, 20, 20],
-            ).store_type(test_utils::StoreType::Redis)
-                .test_name("RedisStore Test params: max_tokens=60, burst_tokens=15, duration=10s, pod_count=2".to_string()),
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=60, burst_tokens=15, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
             // Fractional slope (<1) with multiple pods
             // Acquire all tokens
             // Immediately ask for tokens in the same epoch after receiving 1 token
-            test_utils::TestCase::new(2, 1, Duration::from_secs(10), 2,
-                vec![(None,1), (None, 1), (None, 1), (None,1), (None, 1), (None, 1), (None,1), (None, 1), (None, 1), (None,1), (None, 0), (None, 1)],
-                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0])
-                .store_type(test_utils::StoreType::Redis)
-                .test_name("RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=2".to_string()),
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                ],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
             // Fractional slope (<1) with multiple pods
             // Acquire all tokens
-            test_utils::TestCase::new(2, 1, Duration::from_secs(10), 2,
-                vec![(None,1); 11],
-                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
-                .store_type(test_utils::StoreType::Redis)
-                .test_name("RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=2".to_string()),
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
             // Fractional slope (<1) with multiple pods
             // Acquire tokens less than max
-            test_utils::TestCase::new(2, 1, Duration::from_secs(10), 2,
-                vec![(Some(1),1); 11],
-                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
-                .store_type(test_utils::StoreType::Redis)
-                .test_name("RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=2".to_string()),
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(1), 1); 11],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
             // Integer slope with multiple pods
             // Acquire tokens more than max
-            test_utils::TestCase::new(20, 10, Duration::from_secs(10), 2,
-                vec![(Some(30),1); 11],
-                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10])
-                .store_type(test_utils::StoreType::Redis)
-                .test_name("RedisStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2".to_string()),
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(30), 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
             // Integer slope with multiple pods
             // Acquire all tokens
-            test_utils::TestCase::new(20, 10, Duration::from_secs(10), 2,
-                vec![(None,1); 11],
-                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10])
-                .store_type(test_utils::StoreType::Redis)
-                .test_name("RedisStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2".to_string()),
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
             // Integer slope with multiple pods
             // Acquire tokens less than max
             // Combination of immediate and non-immediate token requests
-            test_utils::TestCase::new(20, 10, Duration::from_secs(10), 2,
-                vec![(Some(1),0), (Some(2),1), (Some(1),0), (Some(3),1), (Some(1),0), (Some(4),2), (Some(1),0), (Some(10),1), (Some(2),0), (None,1), (None,1), (None,1), (None,1), (None,1), (None,1), (Some(5),1), (None,1)],
-                vec![1, 2, 1, 3, 1, 4, 1, 5, 2, 5, 7, 8, 8, 9, 9, 5, 10])
-                .store_type(test_utils::StoreType::Redis)
-                .test_name("RedisStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2".to_string()),
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(1), 0),
+                    (Some(2), 1),
+                    (Some(1), 0),
+                    (Some(3), 1),
+                    (Some(1), 0),
+                    (Some(4), 2),
+                    (Some(1), 0),
+                    (Some(10), 1),
+                    (Some(2), 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (Some(5), 1),
+                    (None, 1),
+                ],
+                vec![1, 2, 1, 3, 1, 4, 1, 5, 2, 5, 7, 8, 8, 9, 9, 5, 10],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
             // Integer slope with multiple pods
             // Acquire tokens less than max
-            test_utils::TestCase::new(20, 10, Duration::from_secs(10), 2,
-                vec![(Some(1),1); 11],
-                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
-                .store_type(test_utils::StoreType::Redis)
-                .test_name("RedisStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2".to_string()),
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(1), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
             // Fractional slope with single pod
             // Acquire all tokens
-            test_utils::TestCase::new(2, 1, Duration::from_secs(10), 1,
-                vec![(None,1); 11],
-                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2])
-                .store_type(test_utils::StoreType::Redis)
-                .test_name("RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1".to_string()),
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(None, 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1"
+                    .to_string(),
+            ),
             // Fractional slope with single pod
             // Acquire tokens more than max
-            test_utils::TestCase::new(2, 1, Duration::from_secs(10), 1,
-                vec![(Some(5),1); 11],
-                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2])
-                .store_type(test_utils::StoreType::Redis)
-                .test_name("RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1".to_string()),
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(Some(5), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1"
+                    .to_string(),
+            ),
             // Fractional slope with single pod
             // Acquire tokens less than max
-            test_utils::TestCase::new(2,1,Duration::from_secs(10),1,
-                vec![(Some(1),1); 11],
-                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(Some(1), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            )
             .store_type(test_utils::StoreType::Redis)
-            .test_name("RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1".to_string()),
+            .test_name(
+                "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1"
+                    .to_string(),
+            ),
         ];
 
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
