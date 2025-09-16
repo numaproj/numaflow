@@ -42,7 +42,7 @@ type InflightRequestsMap = Arc<Mutex<HashMap<String, oneshot::Sender<StatusCode>
 /// HTTP source that manages incoming HTTP requests and forwards them to a processing channel
 struct HttpSourceActor {
     server_rx: mpsc::Receiver<HttpMessage>,
-    _server_handle: tokio::task::JoinHandle<Result<()>>,
+    shutdown_handle: tokio::task::JoinHandle<()>,
     timeout: Duration,
     /// Map of inflight requests and their response channels
     inflight_requests: InflightRequestsMap,
@@ -195,16 +195,19 @@ impl HttpSourceActor {
             axum_handle.clone(),
         ));
 
-        tokio::spawn(async move {
+        let shutdown_handle = tokio::spawn(async move {
             cancel_token.cancelled().await;
             info!("CancellationToken cancelled; initiating HTTP graceful shutdown");
             axum_handle.graceful_shutdown(None);
+            if let Err(e) = server_handle.await.expect("server handle failed") {
+                error!(?e, "HTTP server failed");
+            }
         });
 
         Self {
             server_rx: rx,
             timeout: http_source_config.timeout,
-            _server_handle: server_handle,
+            shutdown_handle,
             inflight_requests,
         }
     }
@@ -239,6 +242,8 @@ impl HttpSourceActor {
 
         // Send error responses to any pending requests after shutdown
         self.fail_pending_requests().await;
+
+        self.shutdown_handle.await.expect("shutdown handle failed");
 
         info!("HttpSource processor stopped");
         Ok(())
@@ -302,10 +307,7 @@ impl HttpSourceActor {
         Ok(())
     }
 
-    /// Send error responses to all pending requests during shutdown.
-    /// We cannot avoid this today because HTTP reads ahead (has a channel buffer) and the
-    /// current Source trait does not support "initiate shutdown".
-    /// https://github.com/numaproj/numaflow/issues/2734
+    /// Send error responses to all pending requests during shutdown
     async fn fail_pending_requests(&self) {
         let mut pending_responses = self.inflight_requests.lock().await;
         if pending_responses.is_empty() {
@@ -314,8 +316,8 @@ impl HttpSourceActor {
 
         error!(
             pending_count = pending_responses.len(),
-            "Sending error responses to pending requests during shutdown. \
-            This is a known issue (https://github.com/numaproj/numaflow/issues/2734)."
+            "Sending error responses to pending requests during shutdown, this should not happen \
+            unless messages take longer than the graceful shutdown timeout to be processed."
         );
 
         for (_, response_tx) in pending_responses.drain() {

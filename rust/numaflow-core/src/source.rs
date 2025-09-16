@@ -75,6 +75,8 @@ pub(crate) trait SourceReader {
     /// Name of the source.
     fn name(&self) -> &'static str;
 
+    /// Read messages from the source, should return [Error::EOF]  when there are no more messages
+    /// to read (shutdown).
     async fn read(&mut self) -> Result<Vec<Message>>;
 
     /// number of partitions processed by this source.
