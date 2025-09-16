@@ -817,7 +817,7 @@ mod tests {
                         };
 
                         test_rate_limiter_with_state(store, test_case).await;
-                        cleanup_redis_keys(test_name.as_str());
+                        cleanup_redis_keys(temp_test_name.as_str());
                     }
                 }
             }
