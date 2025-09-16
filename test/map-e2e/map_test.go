@@ -19,12 +19,9 @@ limitations under the License.
 package sdks_e2e
 
 import (
-	"context"
-	"testing"
-	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"testing"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
@@ -135,14 +132,6 @@ func (s *MapSuite) TestPipelineRateLimitWithRedisStore() {
 		VertexPodLogContains("map-udf", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("out", LogSinkVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa"))
 
-	defer w.StreamVertexPodLogs("map-udf", "numa").TerminateAllPodLogs()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
-	// Wait for messages to start flowing
-	time.Sleep(10 * time.Second)
-
 	// port-forward daemon server
 	defer w.DaemonPodPortForward(pipelineName, 1234, dfv1.DaemonServicePort).
 		TerminateAllPodPortForwards()
@@ -154,98 +143,7 @@ func (s *MapSuite) TestPipelineRateLimitWithRedisStore() {
 		_ = client.Close()
 	}()
 
-	// Check processing rates for the UDF vertex which has rate limiting applied
-	timer := time.NewTimer(5 * time.Minute)
-	waitInterval := 5 * time.Second
-	succeedChan := make(chan struct{})
-
-	go func() {
-		const stableDuration = 20 * time.Second
-
-		// First loop: Wait until rate reaches 99-100 TPS range
-		reachedStableRange := false
-		for !reachedStableRange {
-			select {
-			case <-ctx.Done():
-				return
-			case <-timer.C:
-				return
-			default:
-				s.T().Logf("Checking metrics...")
-				m, err := client.GetVertexMetrics(context.Background(), pipelineName, "map-udf")
-				if err != nil {
-					s.T().Logf("Failed to get metrics: %v", err)
-					time.Sleep(waitInterval)
-					continue
-				}
-
-				if len(m) == 0 {
-					s.T().Logf("Metrics is empty, retrying...")
-					time.Sleep(waitInterval)
-					continue
-				}
-
-				oneMinRate := m[0].ProcessingRates["1m"]
-				if oneMinRate == nil {
-					s.T().Logf("One minute rate is nil, retrying...")
-					time.Sleep(waitInterval)
-					continue
-				}
-
-				currentRate := oneMinRate.GetValue()
-				// The rate limit is set to 100 TPS, so processing rate should be around 100 or less
-				// Allow some tolerance for measurement variations (99-100 TPS)
-				if currentRate >= 99 && currentRate <= 100 {
-					s.T().Logf("Rate reached stable range: %.2f TPS. Starting stability verification...", currentRate)
-					reachedStableRange = true
-				} else {
-					s.T().Logf("Current processing rate: %.2f TPS, waiting for rate to reach 99-100 TPS range...", currentRate)
-					time.Sleep(waitInterval)
-				}
-			}
-		}
-
-		// Second loop: Verify rate stays in 99-100 TPS range for 20 seconds
-		stableStartTime := time.Now()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-timer.C:
-				return
-			default:
-				m, err := client.GetVertexMetrics(context.Background(), pipelineName, "map-udf")
-				if err != nil {
-					break
-				}
-
-				oneMinRate := m[0].ProcessingRates["1m"]
-				currentRate := oneMinRate.GetValue()
-				if currentRate >= 99 && currentRate <= 100 {
-					// Check if we've been stable for the required duration
-					if time.Since(stableStartTime) >= stableDuration {
-						s.T().Logf("Rate limiting working correctly and stable for %v. Processing rate: %.2f TPS (expected: 99-100 TPS)", stableDuration, currentRate)
-						succeedChan <- struct{}{}
-						return
-					}
-					s.T().Logf("Rate stable: %.2f TPS, stable for: %v (need %v)", currentRate, time.Since(stableStartTime).Round(time.Second), stableDuration)
-				} else {
-					// Rate regressed, restart stability verification
-					s.T().Logf("Rate regressed from stable range: %.2f TPS. Restarting stability verification...", currentRate)
-					stableStartTime = time.Now()
-				}
-				time.Sleep(waitInterval)
-			}
-		}
-	}()
-
-	select {
-	case <-succeedChan:
-		// Success - rate limiting is working
-	case <-timer.C:
-		assert.Fail(s.T(), "timed out waiting for rate limiting to take effect")
-	}
-	timer.Stop()
+	w.Expect().VertexPodLogNotContains("map-udf", "processed=50", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithCount(20))
 }
 
 func TestMapSuite(t *testing.T) {

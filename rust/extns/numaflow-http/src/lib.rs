@@ -865,6 +865,7 @@ mod tests {
     async fn test_http_source_read_with_real_server() {
         // Setup the CryptoProvider for rustls
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        let cln_token = CancellationToken::new();
 
         // Bind to a random available port
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -874,7 +875,7 @@ mod tests {
         // Create HttpSource with the address
         let http_source_config = HttpSourceConfigBuilder::new("test").addr(addr).build();
 
-        let http_source = HttpSourceActor::new(http_source_config, CancellationToken::new()).await;
+        let http_source = HttpSourceActor::new(http_source_config, cln_token.clone()).await;
 
         // Create actor channel for communicating with HttpSource
         let (actor_tx, actor_rx) = mpsc::channel::<HttpActorMessage>(10);
@@ -1012,6 +1013,7 @@ mod tests {
 
         // Note: We already tested ack above when we acked the messages to complete the HTTP requests
 
+        cln_token.cancel();
         // Clean up
         drop(actor_tx);
         let _ = source_handle.await;
@@ -1023,10 +1025,11 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
         drop(listener);
+        let cln_token = CancellationToken::new();
 
         let http_source_config = HttpSourceConfigBuilder::new("test").addr(addr).build();
 
-        let http_source = HttpSourceActor::new(http_source_config, CancellationToken::new()).await;
+        let http_source = HttpSourceActor::new(http_source_config, cln_token.clone()).await;
 
         let (actor_tx, actor_rx) = mpsc::channel::<HttpActorMessage>(10);
 
@@ -1045,6 +1048,7 @@ mod tests {
         let messages = read_rx.await.unwrap().unwrap();
         assert_eq!(messages.len(), 0); // Should be empty due to timeout
 
+        cln_token.cancel();
         // Clean up
         drop(actor_tx);
         let _ = source_handle.await;
