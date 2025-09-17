@@ -24,6 +24,8 @@ pub struct RateLimit {
     /// Minimum TPS allowed during initial bootup. This value will be distributed across all the replicas if a distributed `Store` is configured. Otherwise, it will be the minimum TPS for a single replica.
     #[serde(rename = "min", skip_serializing_if = "Option::is_none")]
     pub min: Option<i64>,
+    #[serde(rename = "modes", skip_serializing_if = "Option::is_none")]
+    pub modes: Option<Box<crate::models::RateLimiterModes>>,
     #[serde(rename = "rampUpDuration", skip_serializing_if = "Option::is_none")]
     pub ramp_up_duration: Option<kube::core::Duration>,
     #[serde(rename = "store", skip_serializing_if = "Option::is_none")]
@@ -35,6 +37,7 @@ impl RateLimit {
         RateLimit {
             max: None,
             min: None,
+            modes: None,
             ramp_up_duration: None,
             store: None,
         }

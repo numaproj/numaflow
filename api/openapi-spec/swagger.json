@@ -21714,6 +21714,10 @@
           "type": "integer",
           "format": "int64"
         },
+        "modes": {
+          "description": "RateLimiterModes is used to define the modes for rate limiting.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterModes"
+        },
         "rampUpDuration": {
           "description": "RampUpDuration is the duration to reach the maximum TPS from the minimum TPS. The min unit of ramp up is 1 in 1 second.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
@@ -21726,6 +21730,16 @@
     },
     "io.numaproj.numaflow.v1alpha1.RateLimiterInMemoryStore": {
       "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.RateLimiterModes": {
+      "description": "RateLimiterModes defines the modes for rate limiting.",
+      "type": "object",
+      "properties": {
+        "relaxed": {
+          "description": "If there is some traffic, then release the max possible tokens.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RaterLimiterRelaxed"
+        }
+      }
     },
     "io.numaproj.numaflow.v1alpha1.RateLimiterRedisStore": {
       "type": "object",
@@ -21764,6 +21778,10 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterRedisStore"
         }
       }
+    },
+    "io.numaproj.numaflow.v1alpha1.RaterLimiterRelaxed": {
+      "description": "RaterLimiterRelaxed is for the relaxed mode. It will release the max possible tokens if there is some traffic.",
+      "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.RedisAuth": {
       "type": "object",
