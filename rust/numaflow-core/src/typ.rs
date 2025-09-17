@@ -55,7 +55,7 @@ pub async fn build_redis_rate_limiter(
 
     let store = RedisStore::new(rate_limit_config.key_prefix, redis_mode)
         .await
-        .map_err(|e| error::Error::Config(format!("Failed to create Redis store: {}", e)))?;
+        .map_err(|e| Error::Config(format!("Failed to create Redis store: {}", e)))?;
 
     let limiter = create_rate_limiter(rate_limit_config, store, cln_token).await?;
     Ok(limiter)

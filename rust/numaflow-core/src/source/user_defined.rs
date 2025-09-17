@@ -326,6 +326,11 @@ impl SourceAcker for UserDefinedSourceAck {
 
         Ok(())
     }
+
+    async fn nack(&mut self, _offsets: Vec<Offset>) -> Result<()> {
+        // no-op for now, until udsource supports nack
+        Ok(())
+    }
 }
 
 #[derive(Clone)]

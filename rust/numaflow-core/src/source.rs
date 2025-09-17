@@ -86,6 +86,10 @@ pub(crate) trait SourceReader {
 pub(crate) trait SourceAcker {
     /// acknowledge an offset. The implementor might choose to do it in an asynchronous way.
     async fn ack(&mut self, _: Vec<Offset>) -> Result<()>;
+
+    /// negatively acknowledge an offset. The implementor might choose to do it in an asynchronous way.
+    /// For sources that don't support nack, this should be a no-op.
+    async fn nack(&mut self, _: Vec<Offset>) -> Result<()>;
 }
 
 pub(crate) enum SourceType {
@@ -116,6 +120,10 @@ enum ActorMessage {
         respond_to: oneshot::Sender<Option<Result<Vec<Message>>>>,
     },
     Ack {
+        respond_to: oneshot::Sender<Result<()>>,
+        offsets: Vec<Offset>,
+    },
+    Nack {
         respond_to: oneshot::Sender<Result<()>>,
         offsets: Vec<Offset>,
     },
@@ -165,6 +173,13 @@ where
             } => {
                 let ack = self.acker.ack(offsets).await;
                 let _ = respond_to.send(ack);
+            }
+            ActorMessage::Nack {
+                respond_to,
+                offsets,
+            } => {
+                let nack = self.acker.nack(offsets).await;
+                let _ = respond_to.send(nack);
             }
             ActorMessage::Pending { respond_to } => {
                 let pending = self.lag_reader.pending().await;
@@ -317,6 +332,21 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     async fn ack(source_handle: mpsc::Sender<ActorMessage>, offsets: Vec<Offset>) -> Result<()> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Ack {
+            respond_to: sender,
+            offsets,
+        };
+        // Ignore send errors. If send fails, so does the recv.await below. There's no reason
+        // to check for the same failure twice.
+        let _ = source_handle.send(msg).await;
+        receiver
+            .await
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
+    }
+
+    /// nack the offsets by communicating with the nack actor.
+    async fn nack(source_handle: mpsc::Sender<ActorMessage>, offsets: Vec<Offset>) -> Result<()> {
+        let (sender, receiver) = oneshot::channel();
+        let msg = ActorMessage::Nack {
             respond_to: sender,
             offsets,
         };
@@ -535,7 +565,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         Ok((ReceiverStream::new(messages_rx), handle))
     }
 
-    /// Listens to the oneshot receivers and invokes ack on the source for the offsets that are acked.
+    /// Listens to the oneshot receivers and invokes ack/nack on the source for the offsets.
     async fn invoke_ack(
         e2e_start_time: Instant,
         source_handle: mpsc::Sender<ActorMessage>,
@@ -545,6 +575,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     ) -> Result<()> {
         let n = ack_rx_batch.len();
         let mut offsets_to_ack = Vec::with_capacity(n);
+        let mut offsets_to_nack = Vec::with_capacity(n);
 
         for (offset, oneshot_rx) in ack_rx_batch {
             match oneshot_rx.await {
@@ -553,6 +584,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 }
                 Ok(ReadAck::Nak) => {
                     warn!(?offset, "Nak received for offset");
+                    offsets_to_nack.push(offset);
                 }
                 Err(e) => {
                     error!(?offset, err=?e, "Error receiving ack for offset");
@@ -562,7 +594,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
         let start = Instant::now();
         if !offsets_to_ack.is_empty() {
-            Self::ack_with_retry(source_handle, offsets_to_ack, &cancel_token).await;
+            Self::ack_with_retry(source_handle.clone(), offsets_to_ack, &cancel_token).await;
+        }
+        if !offsets_to_nack.is_empty() {
+            Self::nack_with_retry(source_handle, offsets_to_nack, &cancel_token).await;
         }
         Self::send_ack_metrics(e2e_start_time, n, start);
 
@@ -586,6 +621,34 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         error!(
                             ?result,
                             "Cancellation token received, stopping the ack retry loop"
+                        );
+                        return Ok(());
+                    }
+                }
+                result
+            },
+            |_: &Error| !cancel_token.is_cancelled(),
+        )
+        .await;
+    }
+
+    /// Invokes nack with infinite retries until the cancellation token is cancelled.
+    async fn nack_with_retry(
+        source_handle: mpsc::Sender<ActorMessage>,
+        offsets: Vec<Offset>,
+        cancel_token: &CancellationToken,
+    ) {
+        let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
+        let _ = Retry::new(
+            interval,
+            async || {
+                let result = Self::nack(source_handle.clone(), offsets.clone()).await;
+                if result.is_err() {
+                    error!(?result, "Failed to send nack to source, retrying...");
+                    if cancel_token.is_cancelled() {
+                        error!(
+                            ?result,
+                            "Cancellation token received, stopping the nack retry loop"
                         );
                         return Ok(());
                     }
