@@ -170,6 +170,7 @@ impl HttpSourceConfigBuilder {
                 .unwrap_or_else(|| "0.0.0.0:8443".parse().expect("Invalid address")),
             timeout: self.timeout.unwrap_or(Duration::from_millis(5)),
             token: self.token,
+            // FIXME: As of today we have a hard timeout of 30 secs from K8s, we have not exposed a way to increase it.
             graceful_shutdown_time: self
                 .graceful_shutdown_time
                 .unwrap_or(Duration::from_secs(20)),
@@ -191,6 +192,8 @@ pub enum HttpActorMessage {
 }
 
 impl HttpSourceActor {
+    /// Create a new HttpSourceActor and also start a background task to shut down the server when
+    /// the CancellationToken is cancelled.
     async fn new(http_source_config: HttpSourceConfig, cancel_token: CancellationToken) -> Self {
         let (tx, rx) = mpsc::channel(http_source_config.buffer_size); // Increased buffer size for better throughput
         let inflight_requests = Arc::new(Mutex::new(HashMap::new()));
@@ -227,6 +230,7 @@ impl HttpSourceActor {
     async fn run(mut self, mut actor_rx: mpsc::Receiver<HttpActorMessage>) -> Result<()> {
         info!("HttpSource processor started");
 
+        // rx will be closed when server has shutdown (shutdown has a grace period too)
         while let Some(msg) = actor_rx.recv().await {
             match msg {
                 HttpActorMessage::Read { size, response_tx } => {
@@ -285,10 +289,15 @@ impl HttpSourceActor {
                     // stream ended
                     match message {
                         Some(message) => messages.push(message),
+                        // channel closed
                         None => {
+                            // channel is closed and we do not have any more messages to send
+                            // in case we have read ahead.
                             return if messages.is_empty() {
                                 None
                             } else {
+                                // we have read ahead, return the messages, and in the next read,
+                                // we will return None.
                                 Some(Ok(messages))
                             }
                         }
