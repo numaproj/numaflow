@@ -684,7 +684,9 @@ mod tests {
                         "Failed test: {}\n\
                          Message: Total number of tokens fetched in each iteration: {}, \
                 should be less than or equal to the total number of tokens asked for: {}",
-                        test_name, total_got_tokens, total_asked_tokens,
+                        test_name,
+                        total_got_tokens,
+                        total_asked_tokens,
                     );
                 }
 
@@ -1253,7 +1255,8 @@ mod tests {
                     (None, 1),
                 ],
                 vec![7, 9, 0, 12, 14, 16, 18, 21, 23, 25, 27, 30],
-            ).test_name("test_distributed_rate_limiter_multiple_pods_in_memory_1".to_string()),
+            )
+            .test_name("test_distributed_rate_limiter_multiple_pods_in_memory_1".to_string()),
             // Fractional slope (>1) with multiple pods
             // Acquire all tokens
             test_utils::TestCase::new(
@@ -1263,7 +1266,8 @@ mod tests {
                 2,
                 vec![(None, 1); 11],
                 vec![7, 9, 12, 14, 16, 18, 21, 23, 25, 27, 30],
-            ).test_name("test_distributed_rate_limiter_multiple_pods_in_memory_2".to_string()),
+            )
+            .test_name("test_distributed_rate_limiter_multiple_pods_in_memory_2".to_string()),
             // Fractional slope (>1) with multiple pods
             // Acquire tokens less than max
             test_utils::TestCase::new(
@@ -1273,7 +1277,8 @@ mod tests {
                 2,
                 vec![(Some(20), 1); 11],
                 vec![7, 9, 12, 14, 16, 18, 20, 20, 20, 20, 20],
-            ).test_name("test_distributed_rate_limiter_multiple_pods_in_memory_3".to_string()),
+            )
+            .test_name("test_distributed_rate_limiter_multiple_pods_in_memory_3".to_string()),
             // Fractional slope (<1) with multiple pods
             // Acquire all tokens
             // Immediately ask for tokens in the same epoch after receiving 1 token
@@ -1297,7 +1302,8 @@ mod tests {
                     (None, 1),
                 ],
                 vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
-            ).test_name("test_distributed_rate_limiter_multiple_pods_in_memory_4".to_string()),
+            )
+            .test_name("test_distributed_rate_limiter_multiple_pods_in_memory_4".to_string()),
             // Fractional slope (<1) with multiple pods
             // Acquire all tokens
             test_utils::TestCase::new(
@@ -1307,7 +1313,8 @@ mod tests {
                 2,
                 vec![(None, 1); 11],
                 vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            ).test_name("test_distributed_rate_limiter_multiple_pods_in_memory_5".to_string()),
+            )
+            .test_name("test_distributed_rate_limiter_multiple_pods_in_memory_5".to_string()),
             // Fractional slope (<1) with multiple pods
             // Acquire tokens less than max
             test_utils::TestCase::new(
@@ -1317,7 +1324,8 @@ mod tests {
                 2,
                 vec![(Some(1), 1); 11],
                 vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            ).test_name("test_distributed_rate_limiter_multiple_pods_in_memory_6".to_string()),
+            )
+            .test_name("test_distributed_rate_limiter_multiple_pods_in_memory_6".to_string()),
             // Integer slope with multiple pods
             // Acquire tokens more than max
             test_utils::TestCase::new(
@@ -1327,7 +1335,8 @@ mod tests {
                 2,
                 vec![(Some(30), 1); 11],
                 vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
-            ).test_name("test_distributed_rate_limiter_multiple_pods_in_memory_7".to_string()),
+            )
+            .test_name("test_distributed_rate_limiter_multiple_pods_in_memory_7".to_string()),
             // Integer slope with multiple pods
             // Acquire all tokens
             test_utils::TestCase::new(
@@ -1337,7 +1346,8 @@ mod tests {
                 2,
                 vec![(None, 1); 11],
                 vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
-            ).test_name("test_distributed_rate_limiter_multiple_pods_in_memory_8".to_string()),
+            )
+            .test_name("test_distributed_rate_limiter_multiple_pods_in_memory_8".to_string()),
             // Integer slope with multiple pods
             // Acquire tokens less than max
             // Combination of immediate and non-immediate token requests
@@ -1366,7 +1376,8 @@ mod tests {
                     (None, 1),
                 ],
                 vec![1, 2, 1, 3, 1, 4, 1, 5, 2, 5, 7, 8, 8, 9, 9, 5, 10],
-            ).test_name("test_distributed_rate_limiter_multiple_pods_in_memory_9".to_string()),
+            )
+            .test_name("test_distributed_rate_limiter_multiple_pods_in_memory_9".to_string()),
             // Integer slope with multiple pods
             // Acquire tokens less than max
             test_utils::TestCase::new(
@@ -1376,7 +1387,8 @@ mod tests {
                 2,
                 vec![(Some(1), 1); 11],
                 vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            ).test_name("test_distributed_rate_limiter_multiple_pods_in_memory_10".to_string()),
+            )
+            .test_name("test_distributed_rate_limiter_multiple_pods_in_memory_10".to_string()),
             // Fractional slope with single pod
             // Acquire all tokens
             test_utils::TestCase::new(
@@ -1386,7 +1398,8 @@ mod tests {
                 1,
                 vec![(None, 1); 11],
                 vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
-            ).test_name("test_distributed_rate_limiter_multiple_pods_in_memory_11".to_string()),
+            )
+            .test_name("test_distributed_rate_limiter_multiple_pods_in_memory_11".to_string()),
             // Fractional slope with single pod
             // Acquire tokens more than max
             test_utils::TestCase::new(
@@ -1396,7 +1409,8 @@ mod tests {
                 1,
                 vec![(Some(5), 1); 11],
                 vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
-            ).test_name("test_distributed_rate_limiter_multiple_pods_in_memory_12".to_string()),
+            )
+            .test_name("test_distributed_rate_limiter_multiple_pods_in_memory_12".to_string()),
             // Fractional slope with single pod
             // Acquire tokens less than max
             test_utils::TestCase::new(
@@ -1406,7 +1420,8 @@ mod tests {
                 1,
                 vec![(Some(1), 1); 11],
                 vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            ).test_name("test_distributed_rate_limiter_multiple_pods_in_memory_13".to_string()),
+            )
+            .test_name("test_distributed_rate_limiter_multiple_pods_in_memory_13".to_string()),
         ];
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
