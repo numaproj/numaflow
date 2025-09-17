@@ -31,11 +31,18 @@ type RateLimit struct {
 type RateLimiterModes struct {
 	// If there is some traffic, then release the max possible tokens.
 	// +optional
-	RateLimiterRelaxed *RaterLimiterRelaxed `json:"relaxed,omitempty" protobuf:"varint,1,opt,name=relaxed"`
+	RateLimiterRelaxed *RateLimiterRelaxed `json:"relaxed,omitempty" protobuf:"varint,1,opt,name=relaxed"`
+	// Irrespective of the traffic, the rate limiter releases max possible tokens based on ramp-up duration.
+	// +optional
+	RateLimiterScheduled *RateLimiterScheduled `json:"scheduled,omitempty" protobuf:"varint,2,opt,name=scheduled"`
 }
 
-// RaterLimiterRelaxed is for the relaxed mode. It will release the max possible tokens if there is some traffic.
-type RaterLimiterRelaxed struct{}
+// RateLimiterRelaxed is for the relaxed mode. It will release the max possible tokens if there is some traffic.
+type RateLimiterRelaxed struct{}
+
+// RateLimiterScheduled is for the scheduled mode.
+// It will release the max possible tokens based on ramp-up duration irrespective of traffic encountered.
+type RateLimiterScheduled struct{}
 
 type RateLimiterStore struct {
 	// RedisStore is used to define the redis store for the rate limit.

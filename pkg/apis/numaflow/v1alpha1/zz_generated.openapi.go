@@ -98,8 +98,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterInMemoryStore":         schema_pkg_apis_numaflow_v1alpha1_RateLimiterInMemoryStore(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterModes":                 schema_pkg_apis_numaflow_v1alpha1_RateLimiterModes(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRedisStore":            schema_pkg_apis_numaflow_v1alpha1_RateLimiterRedisStore(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRelaxed":               schema_pkg_apis_numaflow_v1alpha1_RateLimiterRelaxed(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterScheduled":             schema_pkg_apis_numaflow_v1alpha1_RateLimiterScheduled(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterStore":                 schema_pkg_apis_numaflow_v1alpha1_RateLimiterStore(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RaterLimiterRelaxed":              schema_pkg_apis_numaflow_v1alpha1_RaterLimiterRelaxed(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisAuth":                        schema_pkg_apis_numaflow_v1alpha1_RedisAuth(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisSentinelConfig":              schema_pkg_apis_numaflow_v1alpha1_RedisSentinelConfig(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy":                    schema_pkg_apis_numaflow_v1alpha1_RetryStrategy(ref),
@@ -4339,14 +4340,20 @@ func schema_pkg_apis_numaflow_v1alpha1_RateLimiterModes(ref common.ReferenceCall
 					"relaxed": {
 						SchemaProps: spec.SchemaProps{
 							Description: "If there is some traffic, then release the max possible tokens.",
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RaterLimiterRelaxed"),
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRelaxed"),
+						},
+					},
+					"scheduled": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Irrespective of the traffic, the rate limiter releases max possible tokens based on ramp-up duration.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterScheduled"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RaterLimiterRelaxed"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRelaxed", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterScheduled"},
 	}
 }
 
@@ -4393,6 +4400,28 @@ func schema_pkg_apis_numaflow_v1alpha1_RateLimiterRedisStore(ref common.Referenc
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_RateLimiterRelaxed(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "RateLimiterRelaxed is for the relaxed mode. It will release the max possible tokens if there is some traffic.",
+				Type:        []string{"object"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_RateLimiterScheduled(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "RateLimiterScheduled is for the scheduled mode. It will release the max possible tokens based on ramp-up duration irrespective of traffic encountered.",
+				Type:        []string{"object"},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_RateLimiterStore(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -4416,17 +4445,6 @@ func schema_pkg_apis_numaflow_v1alpha1_RateLimiterStore(ref common.ReferenceCall
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterInMemoryStore", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRedisStore"},
-	}
-}
-
-func schema_pkg_apis_numaflow_v1alpha1_RaterLimiterRelaxed(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "RaterLimiterRelaxed is for the relaxed mode. It will release the max possible tokens if there is some traffic.",
-				Type:        []string{"object"},
-			},
-		},
 	}
 }
 

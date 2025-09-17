@@ -108,13 +108,34 @@ impl<W> RateLimit<W> {
     pub(crate) fn compute_refill(
         &self,
         _requested_token_size: Option<usize>,
-        _cur_epoch: u64,
+        cur_epoch: u64,
     ) -> usize {
         let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
 
         match self.token_calc_bounds.mode {
             Mode::Relaxed => self.relaxed_slope_increase(&mut max_ever_filled),
-            Mode::Scheduled | Mode::OnlyIfUsed => unimplemented!(),
+            Mode::Scheduled => {
+                // let's make sure we do not go beyond the max
+                if *max_ever_filled >= self.token_calc_bounds.max as f32 {
+                    self.token_calc_bounds.max
+                } else {
+                    let prev_epoch = self
+                        .last_queried_epoch
+                        .load(std::sync::atomic::Ordering::Relaxed);
+                    let time_diff = cur_epoch.checked_sub(prev_epoch).expect(
+                        "Previous epoch should be smaller than current epoch \
+                        when calculating scheduled refill",
+                    ) as f32;
+                    let refill = *max_ever_filled + self.token_calc_bounds.slope * (time_diff);
+                    let capped_refill = refill.min(self.token_calc_bounds.max as f32);
+
+                    // Update the fractional value
+                    *max_ever_filled = capped_refill;
+
+                    capped_refill as usize
+                }
+            }
+            Mode::OnlyIfUsed => unimplemented!(),
         }
     }
 }
@@ -1396,6 +1417,42 @@ mod tests {
                 vec![(Some(1), 1); 11],
                 vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
             ),
+        ];
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
+    }
+
+    #[tokio::test]
+    async fn test_distributed_rate_limiter_only_scheduled_mode() {
+        let test_cases = vec![
+            // Integer slope with multiple pods
+            // Acquire tokens more than max
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(30), 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            )
+            .mode(Mode::Scheduled),
+            // Integer slope with multiple pods
+            // Acquire tokens more than max tokens after extended gaps between epochs
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(30), 1),
+                    (Some(30), 3),
+                    (Some(30), 2),
+                    (Some(30), 4),
+                    (Some(30), 1),
+                    (Some(30), 1),
+                ],
+                vec![5, 5, 7, 8, 10, 10],
+            )
+            .mode(Mode::Scheduled),
         ];
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }

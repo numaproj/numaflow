@@ -1414,7 +1414,11 @@ message RateLimiterInMemoryStore {
 message RateLimiterModes {
   // If there is some traffic, then release the max possible tokens.
   // +optional
-  optional RaterLimiterRelaxed relaxed = 1;
+  optional RateLimiterRelaxed relaxed = 1;
+
+  // Irrespective of the traffic, the rate limiter releases max possible tokens based on ramp-up duration.
+  // +optional
+  optional RateLimiterScheduled scheduled = 2;
 }
 
 message RateLimiterRedisStore {
@@ -1440,6 +1444,15 @@ message RateLimiterRedisStore {
   optional int32 db = 4;
 }
 
+// RateLimiterRelaxed is for the relaxed mode. It will release the max possible tokens if there is some traffic.
+message RateLimiterRelaxed {
+}
+
+// RateLimiterScheduled is for the scheduled mode.
+// It will release the max possible tokens based on ramp-up duration irrespective of traffic encountered.
+message RateLimiterScheduled {
+}
+
 message RateLimiterStore {
   // RedisStore is used to define the redis store for the rate limit.
   // +optional
@@ -1448,10 +1461,6 @@ message RateLimiterStore {
   // InMemoryStore is used to define the in-memory store for the rate limit.
   // +optional
   optional RateLimiterInMemoryStore inMemoryStore = 2;
-}
-
-// RaterLimiterRelaxed is for the relaxed mode. It will release the max possible tokens if there is some traffic.
-message RaterLimiterRelaxed {
 }
 
 message RedisAuth {

@@ -115,10 +115,10 @@ where
     let mode = if rate_limit_config
         .modes
         .as_ref()
-        .and_then(|m| m.relaxed.as_ref())
+        .and_then(|m| m.scheduled.as_ref())
         .is_some()
     {
-        Mode::Relaxed
+        Mode::Scheduled
     } else {
         Mode::Relaxed
     };
