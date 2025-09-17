@@ -965,8 +965,10 @@ mod tests {
                     .unwrap();
 
                 // Wait for the read response
-                let messages = read_rx.await.unwrap().unwrap().unwrap();
-                all_messages.extend(messages);
+                match read_rx.await.unwrap() {
+                    Some(Ok(messages)) => all_messages.extend(messages),
+                    _ => break,
+                }
 
                 if all_messages.len() >= expected_count {
                     break;
