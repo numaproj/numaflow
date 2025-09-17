@@ -125,17 +125,19 @@ impl SqsSink {
     ) -> Result<Vec<SqsSinkResponse>> {
         let mut entries = Vec::with_capacity(messages.len());
         let mut id_correlation = std::collections::HashMap::with_capacity(messages.len());
-        
+
         for (index, message) in messages.into_iter().enumerate() {
             let sqs_batch_id = format!("msg_{}", index);
             id_correlation.insert(sqs_batch_id.clone(), message.id);
-            
+
             let entry = SendMessageBatchRequestEntry::builder()
                 .id(sqs_batch_id)
                 .message_body(String::from_utf8_lossy(&message.message_body).to_string())
                 .build()
-                .map_err(|e| SqsSinkError::from(Error::Other(format!("Failed to build entry: {}", e))))?;
-                
+                .map_err(|e| {
+                    SqsSinkError::from(Error::Other(format!("Failed to build entry: {}", e)))
+                })?;
+
             entries.push(entry);
         }
 
@@ -149,12 +151,13 @@ impl SqsSink {
             .map_err(|e| SqsSinkError::from(Error::Sqs(e.into())))?;
 
         let mut responses = Vec::new();
-        
+
         // Process successful messages
         for succeeded in output.successful {
-            let original_id = id_correlation.remove(&succeeded.id)
+            let original_id = id_correlation
+                .remove(&succeeded.id)
                 .expect("AWS returned unknown batch ID - this should never happen");
-            
+
             responses.push(SqsSinkResponse {
                 id: original_id,
                 status: Ok(()),
@@ -162,22 +165,23 @@ impl SqsSink {
                 sender_fault: None,
             });
         }
-        
-        // Process failed messages  
+
+        // Process failed messages
         for failed in output.failed {
-            let original_id = id_correlation.remove(&failed.id)
+            let original_id = id_correlation
+                .remove(&failed.id)
                 .expect("AWS returned unknown batch ID - this should never happen");
-            
+
             responses.push(SqsSinkResponse {
                 id: original_id,
                 status: Err(SqsSinkError::from(Error::Other(
-                    failed.message.unwrap_or_default()
+                    failed.message.unwrap_or_default(),
                 ))),
                 code: Some(failed.code),
                 sender_fault: Some(failed.sender_fault),
             });
         }
-        
+
         Ok(responses)
     }
 }
