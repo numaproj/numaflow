@@ -173,13 +173,15 @@ pub mod tests {
     #[tokio::test]
     async fn test_sqs_sink_e2e() {
         let tracker_handle = TrackerHandle::new(None);
-        let (source, src_handle, src_shutdown_tx) = get_simple_source(tracker_handle.clone()).await;
+        let cln_token = CancellationToken::new();
+
+        let (source, src_handle, src_shutdown_tx) =
+            get_simple_source(tracker_handle.clone(), cln_token.clone()).await;
         // let source = get_sqs_source().await;
         let sink_writer = get_sqs_sink(tracker_handle.clone()).await;
         // create the forwarder with the source, transformer, and writer
         let forwarder = Forwarder::new(source.clone(), sink_writer);
 
-        let cln_token = CancellationToken::new();
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<crate::error::Result<()>> = tokio::spawn(async move {
             forwarder.start(cancel_token).await?;
@@ -211,6 +213,7 @@ pub mod tests {
 
     async fn get_simple_source(
         tracker_handle: TrackerHandle,
+        cln_token: CancellationToken,
     ) -> (
         Source<crate::typ::WithoutRateLimiter>,
         JoinHandle<()>,
@@ -239,10 +242,11 @@ pub mod tests {
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let (src_read, src_ack, lag_reader) = new_source(client, 5, Duration::from_millis(100))
-            .await
-            .map_err(|e| panic!("failed to create source reader: {:?}", e))
-            .unwrap();
+        let (src_read, src_ack, lag_reader) =
+            new_source(client, 5, Duration::from_millis(100), cln_token)
+                .await
+                .map_err(|e| panic!("failed to create source reader: {:?}", e))
+                .unwrap();
         (
             Source::new(
                 5,

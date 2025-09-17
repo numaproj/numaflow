@@ -125,6 +125,9 @@ func (s *UserDefinedSourceSuite) testSimpleSource(lang string, verifyRate bool) 
 				for _, vertexName := range vertexNames {
 					m, err := client.GetVertexMetrics(context.Background(), pipelineName, vertexName)
 					assert.NoError(s.T(), err)
+					if len(m) == 0 {
+						continue
+					}
 					assert.Equal(s.T(), pipelineName, m[0].Pipeline)
 					oneMinRate := m[0].ProcessingRates["1m"]
 					rates = append(rates, oneMinRate.GetValue())

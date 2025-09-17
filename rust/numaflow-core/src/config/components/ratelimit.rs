@@ -14,6 +14,8 @@ pub(crate) struct RateLimitConfig {
     pub(crate) ramp_up_duration: std::time::Duration,
     /// Optional store for distributed rate limiting.
     pub(crate) store: Option<Box<numaflow_models::models::RateLimiterStore>>,
+    /// Optional modes for rate limiting.
+    pub(crate) modes: Option<Box<numaflow_models::models::RateLimiterModes>>,
 }
 
 impl Default for RateLimitConfig {
@@ -25,6 +27,7 @@ impl Default for RateLimitConfig {
             min: 1,
             ramp_up_duration: std::time::Duration::from_secs(1),
             store: None,
+            modes: None,
         }
     }
 }
@@ -73,6 +76,7 @@ impl RateLimitConfig {
                 .map(std::time::Duration::from)
                 .unwrap_or_default(),
             store: rate_limit.store,
+            modes: rate_limit.modes,
         }
     }
 }
