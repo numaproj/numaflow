@@ -676,6 +676,15 @@ mod tests {
                     "Total number of tokens fetched in each iteration \
                 should be less than or equal to total expected tokens for each processor",
                 );
+                let total_asked_tokens = asked_tokens[i].0.unwrap_or_else(|| 0);
+
+                if total_asked_tokens > 0 {
+                    assert!(
+                        total_got_tokens <= total_asked_tokens,
+                        "Total number of tokens fetched in each iteration \
+                should be less than or equal to the total number of tokens asked for",
+                    );
+                }
 
                 // Determines after how many epochs next pull is going to be made.
                 cur_epoch += asked_tokens[i].1 as u64;
