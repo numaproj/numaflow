@@ -18,6 +18,7 @@ use bytes::Bytes;
 use chrono::{DateTime, TimeZone, Utc};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
+use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 use crate::Error::ActorTaskTerminated;
@@ -54,7 +55,7 @@ pub struct SqsSourceConfig {
 /// - Handle concurrent requests without locks
 enum SQSActorMessage {
     Receive {
-        respond_to: oneshot::Sender<Result<Vec<SqsMessage>>>,
+        respond_to: oneshot::Sender<Option<Result<Vec<SqsMessage>>>>,
         count: i32,
         timeout_at: Instant,
     },
@@ -93,6 +94,7 @@ struct SqsActor {
     client: Client,
     queue_url: String,
     config: SqsSourceConfig,
+    cancel_token: CancellationToken,
 }
 
 impl SqsActor {
@@ -101,12 +103,14 @@ impl SqsActor {
         client: Client,
         queue_url: String,
         config: SqsSourceConfig,
+        cancel_token: CancellationToken,
     ) -> Self {
         Self {
             handler_rx,
             client,
             queue_url,
             config,
+            cancel_token,
         }
     }
 
@@ -152,7 +156,15 @@ impl SqsActor {
     /// - Respects timeout for long polling
     /// - Processes message attributes and system metadata
     /// - Returns messages in a normalized format
-    async fn get_messages(&mut self, count: i32, timeout_at: Instant) -> Result<Vec<SqsMessage>> {
+    async fn get_messages(
+        &mut self,
+        count: i32,
+        timeout_at: Instant,
+    ) -> Option<Result<Vec<SqsMessage>>> {
+        if self.cancel_token.is_cancelled() {
+            return None;
+        }
+
         let remaining_time = timeout_at - Instant::now();
 
         // default to one second if remaining time is less than one second
@@ -220,7 +232,7 @@ impl SqsActor {
                     queue_url = self.queue_url,
                     "failed to receive messages from SQS"
                 );
-                return Err(SqsSourceError::from(Error::Sqs(err.into())));
+                return Some(Err(SqsSourceError::from(Error::Sqs(err.into()))));
             }
         };
 
@@ -272,7 +284,7 @@ impl SqsActor {
             })
             .collect();
 
-        Ok(messages)
+        Some(Ok(messages))
     }
 
     /// deletes batch of messages from SQS, serves as Numaflow source ack.
@@ -455,7 +467,7 @@ impl SqsSourceBuilder {
     /// # Returns
     /// - `Ok(SqsSource)` if the source is successfully built.
     /// - `Err(Error)` if there is an error during the initialization process.
-    pub async fn build(self) -> Result<SqsSource> {
+    pub async fn build(self, cancel_token: CancellationToken) -> Result<SqsSource> {
         let sqs_client = match self.client {
             Some(client) => client,
             None => crate::create_sqs_client(SqsConfig::Source(self.config.clone())).await?,
@@ -480,7 +492,8 @@ impl SqsSourceBuilder {
 
         let (handler_tx, handler_rx) = mpsc::channel(10);
         tokio::spawn(async move {
-            let mut actor = SqsActor::new(handler_rx, sqs_client, queue_url, self.config);
+            let mut actor =
+                SqsActor::new(handler_rx, sqs_client, queue_url, self.config, cancel_token);
             actor.run().await;
         });
 
@@ -495,7 +508,7 @@ impl SqsSourceBuilder {
 
 impl SqsSource {
     /// read messages from SQS, corresponding sqs sdk method is receive_message
-    pub async fn read_messages(&self) -> Result<Vec<SqsMessage>> {
+    pub async fn read_messages(&self) -> Option<Result<Vec<SqsMessage>>> {
         tracing::debug!("Reading messages from SQS");
         let start = Instant::now();
         let (tx, rx) = oneshot::channel();
@@ -507,14 +520,9 @@ impl SqsSource {
         };
 
         let _ = self.actor_tx.send(msg).await;
-        let messages = rx.await.map_err(ActorTaskTerminated)??;
-        tracing::trace!(
-            count = messages.len(),
-            requested_count = self.batch_size,
-            time_taken_ms = start.elapsed().as_millis(),
-            "Got messages from sqs"
-        );
-        Ok(messages)
+        rx.await
+            .map_err(ActorTaskTerminated)
+            .unwrap_or_else(|e| Some(Err(SqsSourceError::Error(e))))
     }
 
     /// acknowledge the offsets of the messages read from SQS
@@ -639,12 +647,12 @@ mod tests {
         .batch_size(1)
         .timeout(Duration::from_secs(0))
         .client(sqs_mock_client)
-        .build()
+        .build(CancellationToken::new())
         .await
         .unwrap();
 
         // Read messages from the source
-        let messages = source.read_messages().await.unwrap();
+        let messages = source.read_messages().await.unwrap().unwrap();
 
         // Assert we got the expected number of messages
         assert_eq!(messages.len(), 1, "Should receive exactly 1 message");
@@ -681,12 +689,12 @@ mod tests {
         .batch_size(1)
         .timeout(Duration::from_secs(0))
         .client(sqs_mock_client)
-        .build()
+        .build(CancellationToken::new())
         .await
         .unwrap();
 
         // Read messages from the source
-        let messages = source.read_messages().await.unwrap();
+        let messages = source.read_messages().await.unwrap().unwrap();
 
         // Assert we got the expected number of messages
         assert_eq!(messages.len(), 1, "Should receive exactly 1 message");
@@ -720,7 +728,7 @@ mod tests {
         .batch_size(1)
         .timeout(Duration::from_secs(0))
         .client(sqs_mock_client)
-        .build()
+        .build(CancellationToken::new())
         .await
         .unwrap();
 
@@ -728,13 +736,14 @@ mod tests {
         let messages = source.read_messages().await;
 
         match messages {
-            Ok(_) => panic!("Expected an error, but got a successful response"),
-            Err(err) => {
+            Some(Ok(_)) => panic!("Expected an error, but got a successful response"),
+            Some(Err(err)) => {
                 assert_eq!(
                     err.to_string(),
                     "SQS Source Error: Failed with SQS error - unhandled error (InvalidAddress)"
                 );
             }
+            None => panic!("Expected an error, but got None"),
         }
     }
 
@@ -765,7 +774,7 @@ mod tests {
         .batch_size(1)
         .timeout(Duration::from_secs(0))
         .client(sqs_mock_client)
-        .build()
+        .build(CancellationToken::new())
         .await
         .unwrap();
 
@@ -802,7 +811,7 @@ mod tests {
         .batch_size(1)
         .timeout(Duration::from_secs(0))
         .client(sqs_mock_client)
-        .build()
+        .build(CancellationToken::new())
         .await
         .unwrap();
 
@@ -839,7 +848,7 @@ mod tests {
         .batch_size(1)
         .timeout(Duration::from_secs(0))
         .client(sqs_mock_client)
-        .build()
+        .build(CancellationToken::new())
         .await
         .unwrap();
 
@@ -874,7 +883,7 @@ mod tests {
         .batch_size(1)
         .timeout(Duration::from_secs(0))
         .client(sqs_mock_client)
-        .build()
+        .build(CancellationToken::new())
         .await
         .unwrap();
 
@@ -906,7 +915,7 @@ mod tests {
         .batch_size(1)
         .timeout(Duration::from_secs(0))
         .client(sqs_mock_client)
-        .build()
+        .build(CancellationToken::new())
         .await;
         assert!(source.is_err());
     }
