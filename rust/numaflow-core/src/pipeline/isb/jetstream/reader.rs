@@ -306,6 +306,19 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                         )
                         .await?;
 
+                    // Update tracker idle status based on whether we read any messages
+                    if read_messages.is_empty() {
+                        // No messages read, set tracker to idle
+                        if let Err(e) = self.tracker_handle.set_idle_status(true).await {
+                            warn!(?e, "Failed to set tracker idle status to true");
+                        }
+                    } else {
+                        // Messages read, set tracker to not idle
+                        if let Err(e) = self.tracker_handle.set_idle_status(false).await {
+                            warn!(?e, "Failed to set tracker idle status to false");
+                        }
+                    }
+
                     // if it's a reduce vertex, we should send wmb messages to the reduce component so
                     // that it can close the windows when we are idling.
                     if read_messages.is_empty()

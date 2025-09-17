@@ -188,9 +188,14 @@ impl ISBWatermarkActor {
         let mut min_wm = self.compute_min_watermark().await;
 
         // if the computed min watermark is -1, means there is no data (no windows and inflight messages)
-        // we should fetch the head idle watermark and publish it to downstream.
+        // we should also check if the tracker indicates the source is idling before fetching head idle watermark
         if min_wm.timestamp_millis() == -1 {
-            min_wm = self.fetcher.fetch_head_idle_watermark();
+            // Check if the tracker indicates the reader is idling, only when we are completely idle
+            // we can fetch and publish the head idle watermark.
+            let is_tracker_idle = self.tracker_handle.is_idle().await.unwrap_or(false);
+            if is_tracker_idle {
+                min_wm = self.fetcher.fetch_head_idle_watermark();
+            }
         }
 
         if min_wm.timestamp_millis() == -1 {

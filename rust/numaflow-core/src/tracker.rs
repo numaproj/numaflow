@@ -77,6 +77,12 @@ enum ActorMessage {
     LowestWatermark {
         respond_to: oneshot::Sender<DateTime<Utc>>,
     },
+    SetIdleStatus {
+        is_idle: bool,
+    },
+    GetIdleStatus {
+        respond_to: oneshot::Sender<bool>,
+    },
 }
 
 /// Tracker is responsible for managing the state of messages being processed.
@@ -88,6 +94,8 @@ struct Tracker {
     serving_callback_handler: Option<CallbackHandler>,
     processed_msg_count: Arc<AtomicUsize>,
     cln_token: CancellationToken,
+    /// tracks whether the source is currently idle (not reading any data)
+    is_idle: bool,
 }
 
 #[derive(Debug)]
@@ -174,6 +182,7 @@ impl Tracker {
             serving_callback_handler,
             processed_msg_count,
             cln_token,
+            is_idle: false,
         }
     }
 
@@ -236,6 +245,12 @@ impl Tracker {
                 let watermark = self.get_lowest_watermark();
                 let _ = respond_to
                     .send(watermark.unwrap_or(DateTime::from_timestamp_millis(-1).unwrap()));
+            }
+            ActorMessage::SetIdleStatus { is_idle } => {
+                self.is_idle = is_idle;
+            }
+            ActorMessage::GetIdleStatus { respond_to } => {
+                let _ = respond_to.send(self.is_idle);
             }
             #[cfg(test)]
             ActorMessage::IsEmpty { respond_to } => {
@@ -570,6 +585,27 @@ impl TrackerHandle {
             .map_err(|e| Error::Tracker(format!("{e:?}")))?;
         response.await.map_err(|e| Error::Tracker(format!("{e:?}")))
     }
+
+    /// Sets the idle status of the tracker.
+    pub(crate) async fn set_idle_status(&self, is_idle: bool) -> Result<()> {
+        let message = ActorMessage::SetIdleStatus { is_idle };
+        self.sender
+            .send(message)
+            .await
+            .map_err(|e| Error::Tracker(format!("{e:?}")))?;
+        Ok(())
+    }
+
+    /// Returns the current idle status of the tracker.
+    pub(crate) async fn is_idle(&self) -> Result<bool> {
+        let (respond_to, response) = oneshot::channel();
+        let message = ActorMessage::GetIdleStatus { respond_to };
+        self.sender
+            .send(message)
+            .await
+            .map_err(|e| Error::Tracker(format!("{e:?}")))?;
+        response.await.map_err(|e| Error::Tracker(format!("{e:?}")))
+    }
 }
 
 #[cfg(test)]
@@ -875,5 +911,24 @@ mod tests {
         // Clean up the KV store
         js_context.delete_key_value(store_name).await.unwrap();
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_idle_status_tracking() {
+        let handle = TrackerHandle::new(None);
+
+        // Initially should not be idle
+        let is_idle = handle.is_idle().await.unwrap();
+        assert!(!is_idle);
+
+        // Set to idle
+        handle.set_idle_status(true).await.unwrap();
+        let is_idle = handle.is_idle().await.unwrap();
+        assert!(is_idle);
+
+        // Set to not idle
+        handle.set_idle_status(false).await.unwrap();
+        let is_idle = handle.is_idle().await.unwrap();
+        assert!(!is_idle);
     }
 }
