@@ -50,13 +50,12 @@ impl SourceReader for NatsSource {
         "NATS"
     }
 
-    async fn read(&mut self) -> crate::Result<Vec<Message>> {
-        Ok(self
-            .read_messages()
-            .await?
-            .into_iter()
-            .map(Message::from)
-            .collect())
+    async fn read(&mut self) -> Option<crate::Result<Vec<Message>>> {
+        match self.read_messages().await {
+            Some(Ok(messages)) => Some(Ok(messages.into_iter().map(Message::from).collect())),
+            Some(Err(e)) => Some(Err(e.into())),
+            None => None,
+        }
     }
 
     async fn partitions(&mut self) -> crate::Result<Vec<u16>> {
@@ -103,7 +102,7 @@ mod tests {
         let message: Message = nats_message.into();
 
         assert_eq!(message.value, Bytes::from("test_value"));
-        assert_eq!(message.offset.to_string(), format!("msg-id-123-0"));
+        assert_eq!(message.offset.to_string(), "msg-id-123-0");
         assert_eq!(message.metadata.unwrap().previous_vertex, get_vertex_name());
         assert_eq!(message.event_time, test_timestamp);
         assert_eq!(message.event_time.timestamp(), 1672576245);
@@ -151,7 +150,7 @@ mod tests {
             NatsSource::connect(config, batch_size, read_timeout, CancellationToken::new())
                 .await
                 .unwrap();
-        let messages = source.read().await.unwrap_or_default();
+        let messages = source.read().await.unwrap().unwrap();
         assert!(
             messages.is_empty(),
             "Expected empty Vec when no messages are published"

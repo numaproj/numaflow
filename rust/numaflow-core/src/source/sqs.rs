@@ -47,7 +47,6 @@ impl From<numaflow_sqs::SqsSourceError> for Error {
                 Error::Source(e)
             }
             numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::Other(e)) => Error::Source(e),
-            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::EOF()) => Error::EOF(),
         }
     }
 }
@@ -72,12 +71,16 @@ impl source::SourceReader for SqsSource {
         "SQS"
     }
 
-    async fn read(&mut self) -> crate::Result<Vec<Message>> {
-        self.read_messages()
-            .await?
-            .into_iter()
-            .map(|msg| msg.try_into())
-            .collect()
+    async fn read(&mut self) -> Option<crate::Result<Vec<Message>>> {
+        match self.read_messages().await {
+            Some(Ok(messages)) => {
+                let result: crate::Result<Vec<Message>> =
+                    messages.into_iter().map(|msg| msg.try_into()).collect();
+                Some(result)
+            }
+            Some(Err(e)) => Some(Err(e.into())),
+            None => None,
+        }
     }
 
     // if source doesn't support partitions, we should return the vec![vertex_replica]

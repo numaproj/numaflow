@@ -196,9 +196,9 @@ impl SourceReader for UserDefinedSourceRead {
         "user-defined-source"
     }
 
-    async fn read(&mut self) -> Result<Vec<Message>> {
+    async fn read(&mut self) -> Option<Result<Vec<Message>>> {
         if self.cln_token.is_cancelled() {
-            return Err(Error::EOF());
+            return None;
         }
 
         let request = ReadRequest {
@@ -209,30 +209,31 @@ impl SourceReader for UserDefinedSourceRead {
             handshake: None,
         };
 
-        self.read_tx
-            .send(request)
-            .await
-            .map_err(|e| Error::Source(e.to_string()))?;
+        if let Err(e) = self.read_tx.send(request).await {
+            return Some(Err(Error::Source(e.to_string())));
+        }
 
         let mut messages = Vec::with_capacity(self.num_records);
 
-        while let Some(response) = self
-            .resp_stream
-            .message()
-            .await
-            .map_err(|e| Error::Grpc(Box::new(e)))?
-        {
+        while let Some(response) = match self.resp_stream.message().await {
+            Ok(response) => response,
+            Err(e) => return Some(Err(Error::Grpc(Box::new(e)))),
+        } {
             if response.status.is_some_and(|status| status.eot) {
                 break;
             }
 
-            let result = response
-                .result
-                .ok_or_else(|| Error::Source("Empty message in response".to_string()))?;
+            let result = match response.result {
+                Some(result) => result,
+                None => return Some(Err(Error::Source("Empty message in response".to_string()))),
+            };
 
-            messages.push(result.try_into()?);
+            match result.try_into() {
+                Ok(message) => messages.push(message),
+                Err(e) => return Some(Err(e)),
+            }
         }
-        Ok(messages)
+        Some(Ok(messages))
     }
 
     async fn partitions(&mut self) -> Result<Vec<u16>> {
@@ -453,7 +454,7 @@ mod tests {
                 .map_err(|e| panic!("failed to create source reader: {:?}", e))
                 .unwrap();
 
-        let messages = src_read.read().await.unwrap();
+        let messages = src_read.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 5);
 
         let response = src_ack

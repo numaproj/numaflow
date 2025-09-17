@@ -55,7 +55,7 @@ pub struct SqsSourceConfig {
 /// - Handle concurrent requests without locks
 enum SQSActorMessage {
     Receive {
-        respond_to: oneshot::Sender<Result<Vec<SqsMessage>>>,
+        respond_to: oneshot::Sender<Option<Result<Vec<SqsMessage>>>>,
         count: i32,
         timeout_at: Instant,
     },
@@ -156,9 +156,13 @@ impl SqsActor {
     /// - Respects timeout for long polling
     /// - Processes message attributes and system metadata
     /// - Returns messages in a normalized format
-    async fn get_messages(&mut self, count: i32, timeout_at: Instant) -> Result<Vec<SqsMessage>> {
+    async fn get_messages(
+        &mut self,
+        count: i32,
+        timeout_at: Instant,
+    ) -> Option<Result<Vec<SqsMessage>>> {
         if self.cancel_token.is_cancelled() {
-            return Err(SqsSourceError::from(Error::EOF()));
+            return None;
         }
 
         let remaining_time = timeout_at - Instant::now();
@@ -228,7 +232,7 @@ impl SqsActor {
                     queue_url = self.queue_url,
                     "failed to receive messages from SQS"
                 );
-                return Err(SqsSourceError::from(Error::Sqs(err.into())));
+                return Some(Err(SqsSourceError::from(Error::Sqs(err.into()))));
             }
         };
 
@@ -280,7 +284,7 @@ impl SqsActor {
             })
             .collect();
 
-        Ok(messages)
+        Some(Ok(messages))
     }
 
     /// deletes batch of messages from SQS, serves as Numaflow source ack.
@@ -504,7 +508,7 @@ impl SqsSourceBuilder {
 
 impl SqsSource {
     /// read messages from SQS, corresponding sqs sdk method is receive_message
-    pub async fn read_messages(&self) -> Result<Vec<SqsMessage>> {
+    pub async fn read_messages(&self) -> Option<Result<Vec<SqsMessage>>> {
         tracing::debug!("Reading messages from SQS");
         let start = Instant::now();
         let (tx, rx) = oneshot::channel();
@@ -516,14 +520,9 @@ impl SqsSource {
         };
 
         let _ = self.actor_tx.send(msg).await;
-        let messages = rx.await.map_err(ActorTaskTerminated)??;
-        tracing::trace!(
-            count = messages.len(),
-            requested_count = self.batch_size,
-            time_taken_ms = start.elapsed().as_millis(),
-            "Got messages from sqs"
-        );
-        Ok(messages)
+        rx.await
+            .map_err(ActorTaskTerminated)
+            .unwrap_or_else(|e| Some(Err(SqsSourceError::Error(e))))
     }
 
     /// acknowledge the offsets of the messages read from SQS
@@ -653,7 +652,7 @@ mod tests {
         .unwrap();
 
         // Read messages from the source
-        let messages = source.read_messages().await.unwrap();
+        let messages = source.read_messages().await.unwrap().unwrap();
 
         // Assert we got the expected number of messages
         assert_eq!(messages.len(), 1, "Should receive exactly 1 message");
@@ -695,7 +694,7 @@ mod tests {
         .unwrap();
 
         // Read messages from the source
-        let messages = source.read_messages().await.unwrap();
+        let messages = source.read_messages().await.unwrap().unwrap();
 
         // Assert we got the expected number of messages
         assert_eq!(messages.len(), 1, "Should receive exactly 1 message");
@@ -737,13 +736,14 @@ mod tests {
         let messages = source.read_messages().await;
 
         match messages {
-            Ok(_) => panic!("Expected an error, but got a successful response"),
-            Err(err) => {
+            Some(Ok(_)) => panic!("Expected an error, but got a successful response"),
+            Some(Err(err)) => {
                 assert_eq!(
                     err.to_string(),
                     "SQS Source Error: Failed with SQS error - unhandled error (InvalidAddress)"
                 );
             }
+            None => panic!("Expected an error, but got None"),
         }
     }
 

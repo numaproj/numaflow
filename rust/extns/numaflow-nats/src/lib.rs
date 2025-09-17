@@ -23,9 +23,6 @@ pub enum Error {
     #[error("NATS - {0}")]
     Nats(String),
 
-    #[error("End of stream")]
-    EOF(),
-
     #[error("{0}")]
     Other(String),
 }

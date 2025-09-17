@@ -31,7 +31,7 @@ enum ConsumerActorMessage {
     Read {
         count: usize,
         timeout_at: Instant,
-        respond_to: oneshot::Sender<Result<Vec<PulsarMessage>>>,
+        respond_to: oneshot::Sender<Option<Result<Vec<PulsarMessage>>>>,
     },
     Ack {
         offsets: Vec<u64>,
@@ -148,19 +148,19 @@ impl ConsumerReaderActor {
         &mut self,
         count: usize,
         timeout_at: Instant,
-    ) -> Result<Vec<PulsarMessage>> {
+    ) -> Option<Result<Vec<PulsarMessage>>> {
         if self.cancel_token.is_cancelled() {
-            return Err(Error::EOF());
+            return None;
         }
 
         if self.message_ids.len() >= self.max_unack {
-            return Err(Error::AckPendingExceeded(self.message_ids.len()));
+            return Some(Err(Error::AckPendingExceeded(self.message_ids.len())));
         }
         let mut messages = vec![];
         for _ in 0..count {
             let remaining_time = timeout_at - Instant::now();
             let Ok(msg) = time::timeout(remaining_time, self.consumer.try_next()).await else {
-                return Ok(messages);
+                return Some(Ok(messages));
             };
             let msg = match msg {
                 Ok(Some(msg)) => msg,
@@ -172,7 +172,7 @@ impl ConsumerReaderActor {
                         time::sleep(Duration::from_millis(50)).await; // FIXME: add error metrics. Also, respect the timeout
                         continue;
                     }
-                    return Err(Error::Pulsar(e));
+                    return Some(Err(Error::Pulsar(e)));
                 }
             };
             let offset = msg.message_id().entry_id;
@@ -211,10 +211,10 @@ impl ConsumerReaderActor {
 
             // stop reading as soon as we hit max_unack
             if messages.len() >= self.max_unack {
-                return Ok(messages);
+                return Some(Ok(messages));
             }
         }
-        Ok(messages)
+        Some(Ok(messages))
     }
 
     // TODO: Identify the longest continuous batch and use cumulative_ack_with_id() to ack them all.
@@ -266,8 +266,7 @@ impl PulsarSource {
 }
 
 impl PulsarSource {
-    pub async fn read_messages(&self) -> Result<Vec<PulsarMessage>> {
-        let start = Instant::now();
+    pub async fn read_messages(&self) -> Option<Result<Vec<PulsarMessage>>> {
         let (tx, rx) = oneshot::channel();
         let msg = ConsumerActorMessage::Read {
             count: self.batch_size,
@@ -275,14 +274,9 @@ impl PulsarSource {
             respond_to: tx,
         };
         let _ = self.actor_tx.send(msg).await;
-        let messages = rx.await.map_err(Error::ActorTaskTerminated)??;
-        tracing::debug!(
-            count = messages.len(),
-            requested_count = self.batch_size,
-            time_taken_ms = start.elapsed().as_millis(),
-            "Got messages from pulsar"
-        );
-        Ok(messages)
+        rx.await
+            .map_err(Error::ActorTaskTerminated)
+            .unwrap_or_else(|e| Some(Err(e)))
     }
 
     pub async fn ack_offsets(&self, offsets: Vec<u64>) -> Result<()> {

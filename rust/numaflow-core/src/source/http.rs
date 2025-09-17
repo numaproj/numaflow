@@ -1,7 +1,7 @@
 //! HTTP source for Numaflow.
 
 use crate::config::{get_vertex_name, get_vertex_replica};
-use crate::error::{Error as CoreError, Result};
+use crate::error::Result;
 use crate::message::{Message, MessageID, Offset, StringOffset};
 use crate::source;
 use crate::source::{SourceAcker, SourceReader};
@@ -17,7 +17,6 @@ impl From<numaflow_http::Error> for crate::error::Error {
             Error::Server(_) | Error::ChannelSend(_) | Error::ChannelRecv(_) => {
                 Self::Source(format!("HTTP source: {value:?}"))
             }
-            Error::EOF() => Self::EOF(),
         }
     }
 }
@@ -64,11 +63,11 @@ impl SourceReader for CoreHttpSource {
         "HTTP"
     }
 
-    async fn read(&mut self) -> Result<Vec<Message>> {
+    async fn read(&mut self) -> Option<Result<Vec<Message>>> {
         match self.http_source.read(self.batch_size).await {
-            Ok(msgs) => Ok(msgs.into_iter().map(|m| m.into()).collect()),
-            Err(numaflow_http::Error::EOF()) => Err(CoreError::EOF()),
-            Err(e) => Err(e.into()),
+            Some(Ok(msgs)) => Some(Ok(msgs.into_iter().map(|m| m.into()).collect())),
+            Some(Err(e)) => Some(Err(e.into())),
+            None => None,
         }
     }
 
@@ -264,7 +263,7 @@ mod tests {
         assert_eq!(partitions.len(), 1, "Should have 1 partition");
 
         // Test read method - should get batch_size (5) messages
-        let messages = core_http_source.read().await.unwrap();
+        let messages = core_http_source.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 5, "Should read 5 messages (batch size)");
 
         let current_time = Utc::now();
@@ -300,7 +299,7 @@ mod tests {
         );
 
         // Read remaining messages
-        let messages = core_http_source.read().await.unwrap();
+        let messages = core_http_source.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 2, "Should read remaining 2 messages");
 
         // Ack the remaining messages

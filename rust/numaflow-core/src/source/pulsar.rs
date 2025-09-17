@@ -46,7 +46,6 @@ impl From<numaflow_pulsar::Error> for Error {
                 Error::ActorPatternRecv(value.to_string())
             }
             numaflow_pulsar::Error::Other(e) => Error::Source(e),
-            numaflow_pulsar::Error::EOF() => Error::EOF(),
         }
     }
 }
@@ -66,12 +65,16 @@ impl source::SourceReader for PulsarSource {
         "Pulsar"
     }
 
-    async fn read(&mut self) -> crate::Result<Vec<Message>> {
-        self.read_messages()
-            .await?
-            .into_iter()
-            .map(|msg| msg.try_into())
-            .collect()
+    async fn read(&mut self) -> Option<crate::Result<Vec<Message>>> {
+        match self.read_messages().await {
+            Some(Ok(messages)) => {
+                let result: crate::Result<Vec<Message>> =
+                    messages.into_iter().map(|msg| msg.try_into()).collect();
+                Some(result)
+            }
+            Some(Err(e)) => Some(Err(e.into())),
+            None => None,
+        }
     }
 
     async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
@@ -164,7 +167,7 @@ mod tests {
             fut.await?;
         }
 
-        let messages = pulsar.read().await?;
+        let messages = pulsar.read().await.unwrap()?;
         assert_eq!(messages.len(), 10);
 
         let offsets: Vec<Offset> = messages.into_iter().map(|m| m.offset).collect();

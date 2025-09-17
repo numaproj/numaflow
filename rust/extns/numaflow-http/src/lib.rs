@@ -59,8 +59,6 @@ pub enum Error {
     ChannelFull(),
     #[error("Server error: {0}")]
     Server(String),
-    #[error("End of stream")]
-    EOF(),
 }
 
 type Result<T> = std::result::Result<T, Error>;
@@ -183,7 +181,7 @@ impl HttpSourceConfigBuilder {
 pub enum HttpActorMessage {
     Read {
         size: usize,
-        response_tx: oneshot::Sender<Result<Vec<HttpMessage>>>,
+        response_tx: oneshot::Sender<Option<Result<Vec<HttpMessage>>>>,
     },
     Ack {
         offsets: Vec<String>,
@@ -266,7 +264,7 @@ impl HttpSourceActor {
         Some(self.server_rx.len())
     }
 
-    async fn read(&mut self, count: usize) -> Result<Vec<HttpMessage>> {
+    async fn read(&mut self, count: usize) -> Option<Result<Vec<HttpMessage>>> {
         // return all the messages in self.server_rx as long as timeout is not reached and not
         // exceeding the count.
 
@@ -280,7 +278,7 @@ impl HttpSourceActor {
                 biased;
 
                 _ =  &mut timeout => {
-                    return Ok(messages);
+                    return Some(Ok(messages));
                 }
 
                 message = self.server_rx.recv() => {
@@ -289,9 +287,9 @@ impl HttpSourceActor {
                         Some(message) => messages.push(message),
                         None => {
                             return if messages.is_empty() {
-                                Err(Error::EOF())
+                                None
                             } else {
-                                Ok(messages)
+                                Some(Ok(messages))
                             }
                         }
                     }
@@ -299,7 +297,7 @@ impl HttpSourceActor {
             }
 
             if messages.len() >= count {
-                return Ok(messages);
+                return Some(Ok(messages));
             }
         }
     }
@@ -363,7 +361,7 @@ impl HttpSourceHandle {
     }
 
     /// Read messages from the HttpSource.
-    pub async fn read(&self, size: usize) -> Result<Vec<HttpMessage>> {
+    pub async fn read(&self, size: usize) -> Option<Result<Vec<HttpMessage>>> {
         let (tx, rx) = oneshot::channel();
         self.actor_tx
             .send(HttpActorMessage::Read {
@@ -372,7 +370,9 @@ impl HttpSourceHandle {
             })
             .await
             .expect("actor should be running");
-        rx.await.map_err(|e| Error::ChannelRecv(e.to_string()))?
+        rx.await
+            .map_err(|e| Error::ChannelRecv(e.to_string()))
+            .unwrap_or_else(|e| Some(Err(e)))
     }
 
     /// Ack messages to the HttpSource.
@@ -956,7 +956,7 @@ mod tests {
                     .unwrap();
 
                 // Wait for the read response
-                let messages = read_rx.await.unwrap().unwrap();
+                let messages = read_rx.await.unwrap().unwrap().unwrap();
                 all_messages.extend(messages);
 
                 if all_messages.len() >= expected_count {
@@ -1058,7 +1058,7 @@ mod tests {
             .await
             .unwrap();
 
-        let messages = read_rx.await.unwrap().unwrap();
+        let messages = read_rx.await.unwrap().unwrap().unwrap();
         assert_eq!(messages.len(), 0); // Should be empty due to timeout
 
         cln_token.cancel();
@@ -1132,7 +1132,7 @@ mod tests {
         assert_eq!(pending, Some(5), "Should have 5 pending messages");
 
         // Test read method
-        let messages = handle.read(3).await.unwrap();
+        let messages = handle.read(3).await.unwrap().unwrap();
         assert_eq!(messages.len(), 3, "Should read 3 messages");
 
         let expected_event_time = DateTime::from_timestamp_millis(1431628200000).unwrap(); // May 15, 2015
@@ -1162,7 +1162,7 @@ mod tests {
         assert!(ack_result.is_ok(), "Ack should succeed");
 
         // Read remaining messages
-        let remaining_messages = handle.read(5).await.unwrap();
+        let remaining_messages = handle.read(5).await.unwrap().unwrap();
         assert_eq!(
             remaining_messages.len(),
             2,

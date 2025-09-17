@@ -363,10 +363,7 @@ fn extract_error_details(details_bytes: &[u8]) -> Option<String> {
                 // "type.googleapis.com/google.rpc.QuotaFailure" => { ... }
                 // "type.googleapis.com/google.rpc.BadRequest" => { ... }
                 // "type.googleapis.com/google.rpc.PreconditionFailure" => { ... }
-                _ => {
-                    // Unknown error detail type, skip
-                    continue;
-                }
+                _ => {}
             }
         }
     }

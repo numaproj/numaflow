@@ -43,7 +43,7 @@ impl TryFrom<async_nats::Message> for NatsMessage {
 /// NatsActorMessage represents a message sent to the NatsActor
 enum NatsActorMessage {
     Read {
-        respond_to: oneshot::Sender<Result<Vec<NatsMessage>>>,
+        respond_to: oneshot::Sender<Option<Result<Vec<NatsMessage>>>>,
     },
 }
 
@@ -123,9 +123,9 @@ impl NatsActor {
     }
 
     /// Reads messages from the NATS subscriber, up to batch_size or until timeout
-    async fn read_messages(&mut self) -> Result<Vec<NatsMessage>> {
+    async fn read_messages(&mut self) -> Option<Result<Vec<NatsMessage>>> {
         if self.cancel_token.is_cancelled() {
-            return Err(Error::EOF());
+            return None;
         }
         let mut messages: Vec<NatsMessage> = Vec::with_capacity(self.batch_size);
         let timeout = tokio::time::timeout(self.read_timeout, std::future::pending::<()>());
@@ -145,13 +145,16 @@ impl NatsActor {
                     let Some(msg) = maybe_msg else {
                         break;
                     };
-                    let nats_msg = NatsMessage::try_from(msg)?;
+                    let nats_msg = match NatsMessage::try_from(msg) {
+                        Ok(msg) => msg,
+                        Err(e) => return Some(Err(e)),
+                    };
                     messages.push(nats_msg);
                 }
             }
         }
         debug!(msg_count = messages.len(), "Read messages from NATS");
-        Ok(messages)
+        Some(Ok(messages))
     }
 
     /// Handles messages sent to the NatsActor
@@ -182,12 +185,12 @@ impl NatsSource {
         Ok(Self { actor_tx: tx })
     }
 
-    pub async fn read_messages(&self) -> Result<Vec<NatsMessage>> {
+    pub async fn read_messages(&self) -> Option<Result<Vec<NatsMessage>>> {
         let (tx, rx) = oneshot::channel();
         let msg = NatsActorMessage::Read { respond_to: tx };
         let _ = self.actor_tx.send(msg).await;
         rx.await
-            .map_err(|_| Error::Other("Actor task terminated".into()))?
+            .unwrap_or_else(|_| Some(Err(Error::Other("Actor task terminated".into()))))
     }
 }
 
@@ -232,22 +235,22 @@ mod tests {
 
         // Read the first batch
         // Read Messages loop will break when batch size is reached in this case
-        let messages = source.read_messages().await.unwrap();
+        let messages = source.read_messages().await.unwrap().unwrap();
         assert_eq!(messages.len(), 2);
 
         // Read the second batch
         // Read Messages loop will break when batch size is reached in this case
-        let messages = source.read_messages().await.unwrap();
+        let messages = source.read_messages().await.unwrap().unwrap();
         assert_eq!(messages.len(), 2);
 
         // Read the third batch
         // Read Messages loop will break when timeout is reached in this case
         // as batch size is 2 and remaining messages are 1
-        let messages = source.read_messages().await.unwrap();
+        let messages = source.read_messages().await.unwrap().unwrap();
         assert_eq!(messages.len(), 1);
 
         // Should be empty after all messages are read
-        let messages = source.read_messages().await.unwrap();
+        let messages = source.read_messages().await.unwrap().unwrap();
         assert!(
             messages.is_empty(),
             "No messages should be returned after all messages are read"

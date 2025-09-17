@@ -1,6 +1,6 @@
 use crate::config::components::source::GeneratorConfig;
 use crate::config::get_vertex_replica;
-use crate::error::Error;
+
 use crate::message::{Message, Offset};
 use crate::reader;
 use crate::source;
@@ -368,15 +368,12 @@ impl source::SourceReader for GeneratorRead {
         "generator"
     }
 
-    async fn read(&mut self) -> crate::error::Result<Vec<Message>> {
+    async fn read(&mut self) -> Option<crate::error::Result<Vec<Message>>> {
         if self.cancel_token.is_cancelled() {
-            return Err(Error::EOF());
+            return None;
         }
 
-        let Some(messages) = self.stream_generator.next().await else {
-            panic!("Stream generator has stopped");
-        };
-        Ok(messages)
+        Some(Ok(self.stream_generator.next().await?))
     }
 
     async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
@@ -443,7 +440,7 @@ mod tests {
         let mut generator = GeneratorRead::new(cfg, batch, CancellationToken::new());
 
         // Read the first batch of messages
-        let messages = generator.read().await.unwrap();
+        let messages = generator.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), batch);
 
         assert!(messages.first().unwrap().value.eq(&content));
@@ -451,7 +448,7 @@ mod tests {
         // Verify that each message has the expected structure
 
         // Read the second batch of messages
-        let messages = generator.read().await.unwrap();
+        let messages = generator.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), rpu - batch);
     }
 
@@ -475,7 +472,7 @@ mod tests {
         let mut generator = GeneratorRead::new(cfg, batch, CancellationToken::new());
 
         // Read the first batch of messages
-        let messages = generator.read().await.unwrap();
+        let messages = generator.read().await.unwrap().unwrap();
         let keys = messages
             .iter()
             .map(|m| m.keys[0].clone())

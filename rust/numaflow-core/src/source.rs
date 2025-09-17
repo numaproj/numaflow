@@ -75,9 +75,8 @@ pub(crate) trait SourceReader {
     /// Name of the source.
     fn name(&self) -> &'static str;
 
-    /// Read messages from the source, should return [Error::EOF]  when there are no more messages
-    /// to read (shutdown).
-    async fn read(&mut self) -> Result<Vec<Message>>;
+    /// Read messages from the source. Returns None when the stream has ended.
+    async fn read(&mut self) -> Option<Result<Vec<Message>>>;
 
     /// number of partitions processed by this source.
     async fn partitions(&mut self) -> Result<Vec<u16>>;
@@ -114,7 +113,7 @@ enum ActorMessage {
         respond_to: oneshot::Sender<&'static str>,
     },
     Read {
-        respond_to: oneshot::Sender<Result<Vec<Message>>>,
+        respond_to: oneshot::Sender<Option<Result<Vec<Message>>>>,
     },
     Ack {
         respond_to: oneshot::Sender<Result<()>>,
@@ -300,7 +299,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     }
 
     /// read messages from the source by communicating with the read actor.
-    async fn read(source_handle: mpsc::Sender<ActorMessage>) -> Result<Vec<Message>> {
+    async fn read(source_handle: mpsc::Sender<ActorMessage>) -> Option<Result<Vec<Message>>> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Read { respond_to: sender };
         // Ignore send errors. If send fails, so does the recv.await below. There's no reason
@@ -308,7 +307,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         let _ = source_handle.send(msg).await;
         receiver
             .await
-            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))
+            .unwrap_or(Some(Err(Error::ActorPatternRecv(
+                "Channel closed".to_string(),
+            ))))
     }
 
     /// ack the offsets by communicating with the ack actor.
@@ -403,12 +405,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
                 let read_start_time = Instant::now();
                 let messages = match Self::read(self.sender.clone()).await {
-                    Ok(messages) => messages,
-                    Err(Error::EOF()) => {
-                        info!("Source returned EOF. Stopping the source.");
+                    Some(Ok(messages)) => messages,
+                    None => {
+                        info!("Source returned None (end of stream). Stopping the source.");
                         break;
                     }
-                    Err(e) => {
+                    Some(Err(e)) => {
                         error!("Error while reading messages: {:?}", e);
                         result = Err(e);
                         break;
