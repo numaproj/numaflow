@@ -141,6 +141,7 @@ impl SqsSink {
             entries.push(entry);
         }
 
+        // on error, we will cascade the error to numaflow core which will initiate a shutdown.
         let output = self
             .client
             .send_message_batch()
