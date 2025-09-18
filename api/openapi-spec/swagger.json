@@ -21737,7 +21737,11 @@
       "properties": {
         "relaxed": {
           "description": "If there is some traffic, then release the max possible tokens.",
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RaterLimiterRelaxed"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterRelaxed"
+        },
+        "scheduled": {
+          "description": "Irrespective of the traffic, the rate limiter releases max possible tokens based on ramp-up duration.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterScheduled"
         }
       }
     },
@@ -21766,6 +21770,14 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.RateLimiterRelaxed": {
+      "description": "RateLimiterRelaxed is for the relaxed mode. It will release the max possible tokens if there is some traffic.",
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.RateLimiterScheduled": {
+      "description": "RateLimiterScheduled is for the scheduled mode. It will release the max possible tokens based on ramp-up duration irrespective of traffic encountered.",
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.RateLimiterStore": {
       "type": "object",
       "properties": {
@@ -21778,10 +21790,6 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterRedisStore"
         }
       }
-    },
-    "io.numaproj.numaflow.v1alpha1.RaterLimiterRelaxed": {
-      "description": "RaterLimiterRelaxed is for the relaxed mode. It will release the max possible tokens if there is some traffic.",
-      "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.RedisAuth": {
       "type": "object",

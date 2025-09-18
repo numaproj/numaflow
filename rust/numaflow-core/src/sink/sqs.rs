@@ -299,7 +299,8 @@ pub mod tests {
         let mut successful = vec![];
         for i in 0..count {
             let msg_id = format!("msg-id-source-testsinke2e-{}", i.clone());
-            let id = format!("source-testsinke2e-{}", i.clone());
+            // IMPORTANT: id must match the sink's generated batch entry IDs (e.g., "msg_{i}")
+            let id = format!("msg_{}", i.clone());
             let entry = aws_sdk_sqs::types::SendMessageBatchResultEntry::builder()
                 .id(id)
                 .message_id(msg_id)
