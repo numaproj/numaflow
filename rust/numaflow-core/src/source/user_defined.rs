@@ -267,7 +267,7 @@ impl UserDefinedSourceAck {
         Ok(Self {
             ack_tx,
             ack_resp_stream,
-            client: client,
+            client,
             supports_nack,
         })
     }
