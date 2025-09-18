@@ -322,8 +322,7 @@ impl ISBWatermarkHandle {
             processor_managers.insert(from_bucket_config.vertex, processor_manager);
         }
         let fetcher =
-            ISBWatermarkFetcher::new(processor_managers, &config.from_vertex_config, vertex_type)
-                .await?;
+            ISBWatermarkFetcher::new(processor_managers, &config.from_vertex_config).await?;
 
         let processor_name = format!("{vertex_name}-{vertex_replica}");
         let publisher = ISBWatermarkPublisher::new(
