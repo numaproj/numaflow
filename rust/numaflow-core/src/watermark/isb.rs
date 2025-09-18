@@ -553,7 +553,7 @@ mod tests {
 
         let from_bucket_config = BucketConfig {
             vertex: "from_vertex",
-            partitions: 1,
+            partitions: vec![0],
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
             delay: None,
@@ -561,7 +561,7 @@ mod tests {
 
         let to_bucket_config = BucketConfig {
             vertex: "to_vertex",
-            partitions: 1,
+            partitions: vec![0],
             ot_bucket: to_ot_bucket_name,
             hb_bucket: to_hb_bucket_name,
             delay: None,
@@ -756,7 +756,7 @@ mod tests {
 
         let from_bucket_config = BucketConfig {
             vertex: "from_vertex",
-            partitions: 1,
+            partitions: vec![0],
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
             delay: None,
@@ -884,7 +884,7 @@ mod tests {
 
         let from_bucket_config = BucketConfig {
             vertex: "from_vertex",
-            partitions: 1,
+            partitions: vec![0],
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
             delay: None,
@@ -892,7 +892,7 @@ mod tests {
 
         let to_bucket_config = BucketConfig {
             vertex: "to_vertex",
-            partitions: 1,
+            partitions: vec![0],
             ot_bucket: to_ot_bucket_name,
             hb_bucket: to_hb_bucket_name,
             delay: None,
@@ -1029,7 +1029,7 @@ mod tests {
 
         let from_bucket_config = BucketConfig {
             vertex: "from_vertex",
-            partitions: 1,
+            partitions: vec![0],
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
             delay: None,

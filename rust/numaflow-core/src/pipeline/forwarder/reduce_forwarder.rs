@@ -197,7 +197,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
                 .clone()
                 .map(|handle| WatermarkFetcherState {
                     watermark_handle: WatermarkHandle::ISB(handle),
-                    partition_count: 1, // Reduce vertices always read from single partition (partition 0)
+                    partitions: vec![*get_vertex_replica()], // Reduce vertices always read from single partition (partition 0)
                 }),
         },
     )
@@ -319,7 +319,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
                 .clone()
                 .map(|handle| WatermarkFetcherState {
                     watermark_handle: WatermarkHandle::ISB(handle),
-                    partition_count: 1, // Reduce vertices always read from single partition (partition 0)
+                    partitions: vec![*get_vertex_replica()], // Reduce vertices always read from single partition (partition 0)
                 }),
         },
     )
@@ -1054,7 +1054,7 @@ mod tests {
             watermark_config: Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
                 from_vertex_config: vec![BucketConfig {
                     vertex: "input-vertex",
-                    partitions: 1,
+                    partitions: vec![0],
                     ot_bucket,
                     hb_bucket,
                     delay: Some(Duration::from_millis(100)),

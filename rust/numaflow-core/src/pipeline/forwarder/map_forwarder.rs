@@ -192,7 +192,7 @@ pub async fn start_map_forwarder(
             ))),
             watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
                 watermark_handle: WatermarkHandle::ISB(handle),
-                partition_count: reader_config.streams.len() as u16, // Number of partitions = number of streams
+                partitions: (0..reader_config.streams.len() as u16).collect(),
             }),
         },
     )

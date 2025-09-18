@@ -36,7 +36,7 @@ impl ISBWatermarkFetcher {
 
         // Create a ProcessorManager for each edge.
         for config in bucket_configs {
-            let processed_wm = vec![-1; config.partitions as usize];
+            let processed_wm = vec![-1; config.partitions.len()];
             last_processed_wm.insert(config.vertex, processed_wm);
         }
 
@@ -49,12 +49,6 @@ impl ISBWatermarkFetcher {
 
     /// Fetches the watermark for the given offset and partition.
     pub(crate) fn fetch_watermark(&mut self, offset: i64, mut partition_idx: u16) -> Watermark {
-        // In reduce, a pod always reads from a single partition so we will only have one timeline
-        // for each processor, so we should always consider timeline[0].
-        if self.vertex_type == VertexType::ReduceUDF {
-            partition_idx = 0;
-        }
-
         // Iterate over all the processor managers and get the smallest watermark. (join case)
         for (edge, processor_manager) in self.processor_managers.iter() {
             let mut epoch = i64::MAX;
@@ -68,7 +62,7 @@ impl ISBWatermarkFetcher {
                 .iter()
                 .for_each(|(name, processor)| {
                     // we only need to consider the timeline for the requested partition
-                    if let Some(timeline) = processor.timelines.get(partition_idx as usize) {
+                    if let Some(timeline) = processor.timelines.get(&partition_idx) {
                         let t = timeline.get_event_time(offset);
                         if t < epoch {
                             epoch = t;
@@ -81,7 +75,7 @@ impl ISBWatermarkFetcher {
                         // headOffset is used to check whether this pod can be deleted (e.g., dead pod)
                         let head_offset = processor
                             .timelines
-                            .iter()
+                            .values()
                             .map(|timeline| timeline.get_head_offset())
                             .max()
                             .unwrap_or(-1);
@@ -132,7 +126,7 @@ impl ISBWatermarkFetcher {
 
             for processor in active_processors {
                 // Only check the timeline for the requested partition
-                if let Some(timeline) = processor.timelines.get(partition_idx as usize) {
+                if let Some(timeline) = processor.timelines.get(&partition_idx) {
                     let head_watermark = timeline.get_head_watermark();
                     if head_watermark != -1 {
                         epoch = epoch.min(head_watermark);
@@ -179,7 +173,7 @@ impl ISBWatermarkFetcher {
 
             for processor in active_processors {
                 // Only check the timeline for the requested partition
-                if let Some(timeline) = processor.timelines.get(partition_idx as usize)
+                if let Some(timeline) = processor.timelines.get(&partition_idx)
                     && let Some(head_wmb) = timeline.get_head_wmb()
                     && head_wmb.idle
                 {
@@ -257,7 +251,7 @@ mod tests {
     async fn test_fetch_watermark_single_edge_single_processor_single_partition() {
         // Create a ProcessorManager with a single Processor and a single OffsetTimeline
         let processor_name = Bytes::from("processor1");
-        let mut processor = Processor::new(processor_name.clone(), Status::Active, 1);
+        let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0]);
         let timeline = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
@@ -284,7 +278,7 @@ mod tests {
         timeline.put(wmb2);
         timeline.put(wmb3);
 
-        processor.timelines[0] = timeline;
+        processor.timelines.insert(0, timeline);
 
         let mut processors = HashMap::new();
         processors.insert(processor_name.clone(), processor);
@@ -301,7 +295,7 @@ mod tests {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
-            partitions: 1,
+            partitions: vec![0],
             delay: None,
         };
 
@@ -322,9 +316,9 @@ mod tests {
         let processor_name2 = Bytes::from("processor2");
         let processor_name3 = Bytes::from("processor3");
 
-        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, 1);
-        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, 1);
-        let mut processor3 = Processor::new(processor_name3.clone(), Status::Active, 1);
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0]);
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0]);
+        let mut processor3 = Processor::new(processor_name3.clone(), Status::Active, &[0]);
 
         let timeline1 = OffsetTimeline::new(10);
         let timeline2 = OffsetTimeline::new(10);
@@ -420,9 +414,9 @@ mod tests {
             timeline3.put(wmb);
         }
 
-        processor1.timelines[0] = timeline1;
-        processor2.timelines[0] = timeline2;
-        processor3.timelines[0] = timeline3;
+        processor1.timelines.insert(0, timeline1);
+        processor2.timelines.insert(0, timeline2);
+        processor3.timelines.insert(0, timeline3);
 
         let mut processors = HashMap::new();
         processors.insert(processor_name1.clone(), processor1);
@@ -441,7 +435,7 @@ mod tests {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
-            partitions: 1,
+            partitions: vec![0],
             delay: None,
         };
 
@@ -462,9 +456,9 @@ mod tests {
         let processor_name2 = Bytes::from("processor2");
         let processor_name3 = Bytes::from("processor3");
 
-        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, 2);
-        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, 2);
-        let mut processor3 = Processor::new(processor_name3.clone(), Status::Active, 2);
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0, 1]);
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0, 1]);
+        let mut processor3 = Processor::new(processor_name3.clone(), Status::Active, &[0, 1]);
 
         let timeline1_p0 = OffsetTimeline::new(10);
         let timeline1_p1 = OffsetTimeline::new(10);
@@ -650,12 +644,12 @@ mod tests {
             timeline3_p1.put(wmb);
         }
 
-        processor1.timelines[0] = timeline1_p0;
-        processor1.timelines[1] = timeline1_p1;
-        processor2.timelines[0] = timeline2_p0;
-        processor2.timelines[1] = timeline2_p1;
-        processor3.timelines[0] = timeline3_p0;
-        processor3.timelines[1] = timeline3_p1;
+        processor1.timelines.insert(0, timeline1_p0);
+        processor1.timelines.insert(1, timeline1_p1);
+        processor2.timelines.insert(0, timeline2_p0);
+        processor2.timelines.insert(1, timeline2_p1);
+        processor3.timelines.insert(0, timeline3_p0);
+        processor3.timelines.insert(1, timeline3_p1);
 
         let mut processors = HashMap::new();
         processors.insert(processor_name1.clone(), processor1);
@@ -674,7 +668,7 @@ mod tests {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
-            partitions: 2,
+            partitions: vec![0, 1],
             delay: None,
         };
 
@@ -699,8 +693,10 @@ mod tests {
         let processor_name1_edge1 = Bytes::from("processor1_edge1");
         let processor_name2_edge1 = Bytes::from("processor2_edge1");
 
-        let mut processor1_edge1 = Processor::new(processor_name1_edge1.clone(), Status::Active, 2);
-        let mut processor2_edge1 = Processor::new(processor_name2_edge1.clone(), Status::Active, 2);
+        let mut processor1_edge1 =
+            Processor::new(processor_name1_edge1.clone(), Status::Active, &[0, 1]);
+        let mut processor2_edge1 =
+            Processor::new(processor_name2_edge1.clone(), Status::Active, &[0, 1]);
 
         let timeline1_p0_edge1 = OffsetTimeline::new(10);
         let timeline1_p1_edge1 = OffsetTimeline::new(10);
@@ -778,10 +774,10 @@ mod tests {
             timeline2_p1_edge1.put(wmb);
         }
 
-        processor1_edge1.timelines[0] = timeline1_p0_edge1;
-        processor1_edge1.timelines[1] = timeline1_p1_edge1;
-        processor2_edge1.timelines[0] = timeline2_p0_edge1;
-        processor2_edge1.timelines[1] = timeline2_p1_edge1;
+        processor1_edge1.timelines.insert(0, timeline1_p0_edge1);
+        processor1_edge1.timelines.insert(1, timeline1_p1_edge1);
+        processor2_edge1.timelines.insert(0, timeline2_p0_edge1);
+        processor2_edge1.timelines.insert(1, timeline2_p1_edge1);
 
         let mut processors_edge1 = HashMap::new();
         processors_edge1.insert(processor_name1_edge1.clone(), processor1_edge1);
@@ -796,8 +792,10 @@ mod tests {
         let processor_name1_edge2 = Bytes::from("processor1_edge2");
         let processor_name2_edge2 = Bytes::from("processor2_edge2");
 
-        let mut processor1_edge2 = Processor::new(processor_name1_edge2.clone(), Status::Active, 2);
-        let mut processor2_edge2 = Processor::new(processor_name2_edge2.clone(), Status::Active, 2);
+        let mut processor1_edge2 =
+            Processor::new(processor_name1_edge2.clone(), Status::Active, &[0, 1]);
+        let mut processor2_edge2 =
+            Processor::new(processor_name2_edge2.clone(), Status::Active, &[0, 1]);
 
         let timeline1_p0_edge2 = OffsetTimeline::new(10);
         let timeline1_p1_edge2 = OffsetTimeline::new(10);
@@ -875,10 +873,10 @@ mod tests {
             timeline2_p1_edge2.put(wmb);
         }
 
-        processor1_edge2.timelines[0] = timeline1_p0_edge2;
-        processor1_edge2.timelines[1] = timeline1_p1_edge2;
-        processor2_edge2.timelines[0] = timeline2_p0_edge2;
-        processor2_edge2.timelines[1] = timeline2_p1_edge2;
+        processor1_edge2.timelines.insert(0, timeline1_p0_edge2);
+        processor1_edge2.timelines.insert(1, timeline1_p1_edge2);
+        processor2_edge2.timelines.insert(0, timeline2_p0_edge2);
+        processor2_edge2.timelines.insert(1, timeline2_p1_edge2);
 
         let mut processors_edge2 = HashMap::new();
         processors_edge2.insert(processor_name1_edge2.clone(), processor1_edge2);
@@ -897,14 +895,14 @@ mod tests {
             vertex: "edge1",
             ot_bucket: "ot_bucket1",
             hb_bucket: "hb_bucket1",
-            partitions: 2,
+            partitions: vec![0, 1],
             delay: None,
         };
         let bucket_config2 = BucketConfig {
             vertex: "edge2",
             ot_bucket: "ot_bucket2",
             hb_bucket: "hb_bucket2",
-            partitions: 2,
+            partitions: vec![0, 1],
             delay: None,
         };
 
@@ -929,7 +927,7 @@ mod tests {
     async fn test_fetch_head_idle_wmb_single_partition() {
         // Create a ProcessorManager with a single Processor and a single OffsetTimeline
         let processor_name = Bytes::from("processor1");
-        let mut processor = Processor::new(processor_name.clone(), Status::Active, 1);
+        let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0]);
         let timeline = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
@@ -949,7 +947,7 @@ mod tests {
         timeline.put(wmb1);
         timeline.put(wmb2);
 
-        processor.timelines[0] = timeline;
+        processor.timelines.insert(0, timeline);
 
         let mut processors = HashMap::new();
         processors.insert(processor_name.clone(), processor);
@@ -966,7 +964,7 @@ mod tests {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
-            partitions: 1,
+            partitions: vec![0],
             delay: None,
         };
 
@@ -989,7 +987,7 @@ mod tests {
     async fn test_fetch_head_idle_wmb_not_idle() {
         // Create a ProcessorManager with a single Processor and a single OffsetTimeline
         let processor_name = Bytes::from("processor1");
-        let mut processor = Processor::new(processor_name.clone(), Status::Active, 1);
+        let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0]);
         let timeline = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries (one not idle)
@@ -1009,7 +1007,7 @@ mod tests {
         timeline.put(wmb1);
         timeline.put(wmb2);
 
-        processor.timelines[0] = timeline;
+        processor.timelines.insert(0, timeline);
 
         let mut processors = HashMap::new();
         processors.insert(processor_name.clone(), processor);
@@ -1026,7 +1024,7 @@ mod tests {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
-            partitions: 1,
+            partitions: vec![0],
             delay: None,
         };
 
@@ -1046,8 +1044,8 @@ mod tests {
         let processor_name1 = Bytes::from("processor1");
         let processor_name2 = Bytes::from("processor2");
 
-        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, 1);
-        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, 1);
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0]);
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0]);
 
         let timeline1_p0 = OffsetTimeline::new(10);
         let timeline2_p0 = OffsetTimeline::new(10);
@@ -1089,8 +1087,8 @@ mod tests {
             timeline2_p0.put(wmb);
         }
 
-        processor1.timelines[0] = timeline1_p0;
-        processor2.timelines[0] = timeline2_p0;
+        processor1.timelines.insert(0, timeline1_p0);
+        processor2.timelines.insert(0, timeline2_p0);
 
         let mut processors = HashMap::new();
         processors.insert(processor_name1.clone(), processor1);
@@ -1108,7 +1106,7 @@ mod tests {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
-            partitions: 1,
+            partitions: vec![0],
             delay: None,
         };
 
@@ -1128,8 +1126,8 @@ mod tests {
         let processor_name1 = Bytes::from("processor1");
         let processor_name2 = Bytes::from("processor2");
 
-        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, 1);
-        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, 1);
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0]);
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0]);
 
         let timeline1 = OffsetTimeline::new(10);
         let timeline2 = OffsetTimeline::new(10);
@@ -1173,8 +1171,8 @@ mod tests {
             timeline2.put(wmb);
         }
 
-        processor1.timelines[0] = timeline1;
-        processor2.timelines[0] = timeline2;
+        processor1.timelines.insert(0, timeline1);
+        processor2.timelines.insert(0, timeline2);
 
         let mut processors = HashMap::new();
         processors.insert(processor_name1.clone(), processor1);
@@ -1192,7 +1190,7 @@ mod tests {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
-            partitions: 1,
+            partitions: vec![0],
             delay: None,
         };
 
@@ -1216,7 +1214,7 @@ mod tests {
     async fn test_fetch_head_watermark_single_edge_single_processor_single_partition() {
         // Create a ProcessorManager with a single Processor and a single OffsetTimeline
         let processor_name = Bytes::from("processor1");
-        let mut processor = Processor::new(processor_name.clone(), Status::Active, 1);
+        let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0]);
         let timeline = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
@@ -1243,7 +1241,7 @@ mod tests {
         timeline.put(wmb2);
         timeline.put(wmb3);
 
-        processor.timelines[0] = timeline;
+        processor.timelines.insert(0, timeline);
 
         let mut processors = HashMap::new();
         processors.insert(processor_name.clone(), processor);
@@ -1260,7 +1258,7 @@ mod tests {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
-            partitions: 1,
+            partitions: vec![0],
             delay: None,
         };
 
@@ -1280,8 +1278,8 @@ mod tests {
         let processor_name1 = Bytes::from("processor1");
         let processor_name2 = Bytes::from("processor2");
 
-        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, 2);
-        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, 2);
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0, 1]);
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0, 1]);
 
         let timeline1_p0 = OffsetTimeline::new(10);
         let timeline1_p1 = OffsetTimeline::new(10);
@@ -1359,10 +1357,10 @@ mod tests {
             timeline2_p1.put(wmb);
         }
 
-        processor1.timelines[0] = timeline1_p0;
-        processor1.timelines[1] = timeline1_p1;
-        processor2.timelines[0] = timeline2_p0;
-        processor2.timelines[1] = timeline2_p1;
+        processor1.timelines.insert(0, timeline1_p0);
+        processor1.timelines.insert(1, timeline1_p1);
+        processor2.timelines.insert(0, timeline2_p0);
+        processor2.timelines.insert(1, timeline2_p1);
 
         let mut processors = HashMap::new();
         processors.insert(processor_name1.clone(), processor1);
@@ -1380,7 +1378,7 @@ mod tests {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
-            partitions: 2,
+            partitions: vec![0, 1],
             delay: None,
         };
 
@@ -1400,8 +1398,10 @@ mod tests {
         let processor_name1_edge1 = Bytes::from("processor1_edge1");
         let processor_name1_edge2 = Bytes::from("processor1_edge2");
 
-        let mut processor1_edge1 = Processor::new(processor_name1_edge1.clone(), Status::Active, 1);
-        let mut processor1_edge2 = Processor::new(processor_name1_edge2.clone(), Status::Active, 1);
+        let mut processor1_edge1 =
+            Processor::new(processor_name1_edge1.clone(), Status::Active, &[0]);
+        let mut processor1_edge2 =
+            Processor::new(processor_name1_edge2.clone(), Status::Active, &[0]);
 
         let timeline1_edge1 = OffsetTimeline::new(10);
         let timeline1_edge2 = OffsetTimeline::new(10);
@@ -1423,8 +1423,8 @@ mod tests {
         timeline1_edge1.put(wmb_edge1);
         timeline1_edge2.put(wmb_edge2);
 
-        processor1_edge1.timelines[0] = timeline1_edge1;
-        processor1_edge2.timelines[0] = timeline1_edge2;
+        processor1_edge1.timelines.insert(0, timeline1_edge1);
+        processor1_edge2.timelines.insert(0, timeline1_edge2);
 
         let mut processors_edge1 = HashMap::new();
         processors_edge1.insert(processor_name1_edge1.clone(), processor1_edge1);
@@ -1450,14 +1450,14 @@ mod tests {
             vertex: "edge1",
             ot_bucket: "ot_bucket1",
             hb_bucket: "hb_bucket1",
-            partitions: 1,
+            partitions: vec![0],
             delay: None,
         };
         let bucket_config2 = BucketConfig {
             vertex: "edge2",
             ot_bucket: "ot_bucket2",
             hb_bucket: "hb_bucket2",
-            partitions: 1,
+            partitions: vec![0],
             delay: None,
         };
 
