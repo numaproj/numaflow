@@ -33,7 +33,7 @@ pub trait RateLimiter {
     /// Deposit tokens into the rate limiter.
     /// This will be used to deposit tokens into the rate limiter.
     ///
-    async fn deposit_unused(&self, n: usize);
+    async fn deposit_unused(&self, n: usize, cur_epoch: u64);
 
     /// Shutdown the rate limiter and clean up resources.
     /// This will deregister the processor from the distributed store and stop any background tasks.
@@ -309,7 +309,7 @@ impl RateLimiter for RateLimit<WithoutState> {
             .unwrap_or(0)
     }
 
-    async fn deposit_unused(&self, _: usize) {}
+    async fn deposit_unused(&self, _: usize, _: u64) {}
 
     async fn shutdown(&self) -> crate::Result<()> {
         Ok(())
@@ -396,12 +396,7 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithSta
             .unwrap_or(0)
     }
 
-    async fn deposit_unused(&self, n: usize) {
-        let cur_epoch = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs();
-
+    async fn deposit_unused(&self, n: usize, cur_epoch: u64) {
         if self
             .deposit_reset_epoch
             .load(std::sync::atomic::Ordering::Acquire)
@@ -647,7 +642,7 @@ impl RateLimiter for NoOpRateLimiter {
         n.unwrap_or(usize::MAX)
     }
 
-    async fn deposit_unused(&self, _: usize) {}
+    async fn deposit_unused(&self, _: usize, _: u64) {}
 
     async fn shutdown(&self) -> crate::Result<()> {
         // No-op for NoOpRateLimiter as there are no resources to clean up
