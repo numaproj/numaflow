@@ -6,7 +6,7 @@ use base64::prelude::BASE64_STANDARD;
 use numaflow_pb::clients::source;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::source::{
-    AckRequest, AckResponse, ReadRequest, ReadResponse, read_request, read_response,
+    AckRequest, AckResponse, NackRequest, ReadRequest, ReadResponse, read_request, read_response,
 };
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -36,6 +36,7 @@ pub(crate) struct UserDefinedSourceRead {
 pub(crate) struct UserDefinedSourceAck {
     ack_tx: mpsc::Sender<AckRequest>,
     ack_resp_stream: Streaming<AckResponse>,
+    client: SourceClient<Channel>,
 }
 
 /// Creates a new User-Defined Source and its corresponding Lag Reader.
@@ -258,6 +259,7 @@ impl UserDefinedSourceAck {
         Ok(Self {
             ack_tx,
             ack_resp_stream,
+            client: client,
         })
     }
 
@@ -317,8 +319,7 @@ impl SourceAcker for UserDefinedSourceAck {
             .await
             .map_err(|e| Error::Source(e.to_string()))?;
 
-        let _ = self
-            .ack_resp_stream
+        self.ack_resp_stream
             .message()
             .await
             .map_err(|e| Error::Grpc(Box::new(e)))?
@@ -327,8 +328,25 @@ impl SourceAcker for UserDefinedSourceAck {
         Ok(())
     }
 
-    async fn nack(&mut self, _offsets: Vec<Offset>) -> Result<()> {
-        // no-op for now, until udsource supports nack
+    /// Negatively acknowledge the offsets.
+    async fn nack(&mut self, offsets: Vec<Offset>) -> Result<()> {
+        let nack_offsets: Result<Vec<source::Offset>> =
+            offsets.into_iter().map(TryInto::try_into).collect();
+
+        let response = self
+            .client
+            .nackfn(NackRequest {
+                request: Some(source::nack_request::Request {
+                    offsets: nack_offsets?,
+                }),
+            })
+            .await
+            .map_err(|e| Error::Grpc(Box::new(e)))?;
+
+        response
+            .into_inner()
+            .result
+            .ok_or(Error::Source("failed to receive nack response".to_string()))?;
         Ok(())
     }
 }
@@ -524,4 +542,6 @@ mod tests {
         let result: Result<numaflow_pb::clients::source::Offset> = offset.try_into();
         assert!(result.is_err());
     }
+
+    // TODO: add nack tests, once sdk changes are done
 }
