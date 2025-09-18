@@ -192,10 +192,7 @@ impl ISBWatermarkActor {
         if min_wm.timestamp_millis() == -1 {
             // Check if the tracker indicates the reader is idling, only when we are completely idle
             // we can fetch and publish the head idle watermark.
-            let is_tracker_idle = self.tracker_handle.is_idle().await.unwrap_or(false);
-            if is_tracker_idle {
-                min_wm = self.fetcher.fetch_head_idle_watermark();
-            }
+            min_wm = self.get_idle_watermark().await;
         }
 
         if min_wm.timestamp_millis() == -1 {
@@ -248,6 +245,34 @@ impl ISBWatermarkActor {
         self.get_lowest_watermark()
             .await
             .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap())
+    }
+
+    /// Gets the lowest idle watermark among all the partitions.
+    async fn get_idle_watermark(&mut self) -> Watermark {
+        let idle_offsets = self
+            .tracker_handle
+            .get_idle_offset()
+            .await
+            .unwrap_or_default();
+        let mut min_wm = i64::MAX;
+        for (partition_idx, offset) in idle_offsets {
+            let Some(idle_offset) = offset else {
+                return Watermark::from_timestamp_millis(-1).unwrap();
+            };
+
+            let wmb = self.fetcher.fetch_head_idle_wmb(partition_idx);
+            let Some(wmb) = wmb else {
+                return Watermark::from_timestamp_millis(-1).unwrap();
+            };
+
+            if wmb.offset == idle_offset && wmb.watermark < min_wm {
+                min_wm = wmb.watermark;
+            }
+        }
+        if min_wm == i64::MAX {
+            min_wm = -1;
+        }
+        Watermark::from_timestamp_millis(min_wm).expect("failed to parse time")
     }
 
     /// Gets the lowest watermark among all the inflight requests using the tracker

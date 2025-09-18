@@ -78,10 +78,11 @@ enum ActorMessage {
         respond_to: oneshot::Sender<DateTime<Utc>>,
     },
     SetIdleStatus {
-        is_idle: bool,
+        partition_idx: u16,
+        idle_offset: Option<i64>,
     },
     GetIdleStatus {
-        respond_to: oneshot::Sender<bool>,
+        respond_to: oneshot::Sender<HashMap<u16, Option<i64>>>,
     },
 }
 
@@ -95,7 +96,8 @@ struct Tracker {
     processed_msg_count: Arc<AtomicUsize>,
     cln_token: CancellationToken,
     /// tracks whether the source is currently idle (not reading any data)
-    is_idle: bool,
+    /// if it's set to none, it means the source is not idle.
+    idle_offset_map: HashMap<u16, Option<i64>>,
 }
 
 #[derive(Debug)]
@@ -182,7 +184,7 @@ impl Tracker {
             serving_callback_handler,
             processed_msg_count,
             cln_token,
-            is_idle: false,
+            idle_offset_map: HashMap::new(),
         }
     }
 
@@ -246,11 +248,14 @@ impl Tracker {
                 let _ = respond_to
                     .send(watermark.unwrap_or(DateTime::from_timestamp_millis(-1).unwrap()));
             }
-            ActorMessage::SetIdleStatus { is_idle } => {
-                self.is_idle = is_idle;
+            ActorMessage::SetIdleStatus {
+                partition_idx,
+                idle_offset,
+            } => {
+                self.idle_offset_map.insert(partition_idx, idle_offset);
             }
             ActorMessage::GetIdleStatus { respond_to } => {
-                let _ = respond_to.send(self.is_idle);
+                let _ = respond_to.send(self.idle_offset_map.clone());
             }
             #[cfg(test)]
             ActorMessage::IsEmpty { respond_to } => {
@@ -587,8 +592,15 @@ impl TrackerHandle {
     }
 
     /// Sets the idle status of the tracker.
-    pub(crate) async fn set_idle_status(&self, is_idle: bool) -> Result<()> {
-        let message = ActorMessage::SetIdleStatus { is_idle };
+    pub(crate) async fn set_idle_offset(
+        &self,
+        partition_idx: u16,
+        idle_offset: Option<i64>,
+    ) -> Result<()> {
+        let message = ActorMessage::SetIdleStatus {
+            partition_idx,
+            idle_offset,
+        };
         self.sender
             .send(message)
             .await
@@ -596,8 +608,8 @@ impl TrackerHandle {
         Ok(())
     }
 
-    /// Returns the current idle status of the tracker.
-    pub(crate) async fn is_idle(&self) -> Result<bool> {
+    /// Gets the idle wmb status of the tracker.
+    pub(crate) async fn get_idle_offset(&self) -> Result<HashMap<u16, Option<i64>>> {
         let (respond_to, response) = oneshot::channel();
         let message = ActorMessage::GetIdleStatus { respond_to };
         self.sender
@@ -916,19 +928,21 @@ mod tests {
     #[tokio::test]
     async fn test_idle_status_tracking() {
         let handle = TrackerHandle::new(None);
+        assert_eq!(handle.get_idle_offset().await.unwrap(), HashMap::new());
 
-        // Initially should not be idle
-        let is_idle = handle.is_idle().await.unwrap();
-        assert!(!is_idle);
+        handle.set_idle_offset(0, Some(100)).await.unwrap();
+        handle.set_idle_offset(1, Some(200)).await.unwrap();
+        handle.set_idle_offset(2, None).await.unwrap();
 
-        // Set to idle
-        handle.set_idle_status(true).await.unwrap();
-        let is_idle = handle.is_idle().await.unwrap();
-        assert!(is_idle);
+        let idle_offsets = handle.get_idle_offset().await.unwrap();
+        assert_eq!(idle_offsets.get(&0), Some(&Some(100)));
+        assert_eq!(idle_offsets.get(&1), Some(&Some(200)));
+        assert_eq!(idle_offsets.get(&2), Some(&None));
 
-        // Set to not idle
-        handle.set_idle_status(false).await.unwrap();
-        let is_idle = handle.is_idle().await.unwrap();
-        assert!(!is_idle);
+        handle.set_idle_offset(0, None).await.unwrap();
+        let idle_offsets = handle.get_idle_offset().await.unwrap();
+        assert_eq!(idle_offsets.get(&0), Some(&None));
+        assert_eq!(idle_offsets.get(&1), Some(&Some(200)));
+        assert_eq!(idle_offsets.get(&2), Some(&None));
     }
 }
