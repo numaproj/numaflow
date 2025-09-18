@@ -371,6 +371,11 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
             None => batch_size,
         };
 
+        let cur_epoch = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
+
         let start = Instant::now();
         let jetstream_messages = match self
             .consumer
@@ -413,6 +418,7 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                         effective_batch_size
                             .checked_sub(jetstream_messages.len())
                             .unwrap_or(0),
+                        cur_epoch,
                     )
                     .await;
             }
