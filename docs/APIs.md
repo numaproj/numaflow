@@ -9098,8 +9098,8 @@ Description
 <td>
 
 <code>relaxed</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.RaterLimiterRelaxed">
-RaterLimiterRelaxed </a> </em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterRelaxed">
+RateLimiterRelaxed </a> </em>
 </td>
 
 <td>
@@ -9108,6 +9108,28 @@ RaterLimiterRelaxed </a> </em>
 <p>
 
 If there is some traffic, then release the max possible tokens.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>scheduled</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterScheduled">
+RateLimiterScheduled </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Irrespective of the traffic, the rate limiter releases max possible
+tokens based on ramp-up duration.
 </p>
 
 </td>
@@ -9240,6 +9262,49 @@ COMMON: Optional DB index (default 0)
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.RateLimiterRelaxed">
+
+RateLimiterRelaxed
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterModes">RateLimiterModes</a>)
+</p>
+
+<p>
+
+<p>
+
+RateLimiterRelaxed is for the relaxed mode. It will release the max
+possible tokens if there is some traffic.
+</p>
+
+</p>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.RateLimiterScheduled">
+
+RateLimiterScheduled
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterModes">RateLimiterModes</a>)
+</p>
+
+<p>
+
+<p>
+
+RateLimiterScheduled is for the scheduled mode. It will release the max
+possible tokens based on ramp-up duration irrespective of traffic
+encountered.
+</p>
+
+</p>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.RateLimiterStore">
 
 RateLimiterStore
@@ -9322,27 +9387,6 @@ InMemoryStore is used to define the in-memory store for the rate limit.
 </tbody>
 
 </table>
-
-<h3 id="numaflow.numaproj.io/v1alpha1.RaterLimiterRelaxed">
-
-RaterLimiterRelaxed
-</h3>
-
-<p>
-
-(<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterModes">RateLimiterModes</a>)
-</p>
-
-<p>
-
-<p>
-
-RaterLimiterRelaxed is for the relaxed mode. It will release the max
-possible tokens if there is some traffic.
-</p>
-
-</p>
 
 <h3 id="numaflow.numaproj.io/v1alpha1.RedisAuth">
 

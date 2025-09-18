@@ -165,6 +165,8 @@ spec:
                         properties:
                           relaxed:
                             type: object
+                          scheduled:
+                            type: object
                         type: object
                       rampUpDuration:
                         default: 1s
@@ -7216,6 +7218,8 @@ spec:
                             modes:
                               properties:
                                 relaxed:
+                                  type: object
+                                scheduled:
                                   type: object
                               type: object
                             rampUpDuration:
