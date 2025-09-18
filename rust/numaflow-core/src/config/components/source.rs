@@ -458,8 +458,8 @@ mod tests {
             source,
             SourceType::Generator(GeneratorConfig {
                 content: Bytes::from("hello world\n"),
-                duration: Duration::from(Duration::from_secs(1)),
-                jitter: Duration::from(Duration::from_secs(0)),
+                duration: Duration::from_secs(1),
+                jitter: Duration::from_secs(0),
                 key_count: 0,
                 rpu: 1,
                 value: None,
@@ -990,7 +990,6 @@ mod nats_source_tests {
     use k8s_openapi::api::core::v1::SecretKeySelector;
     use numaflow_models::models::NatsSource;
     use numaflow_models::models::{BasicAuth, NatsAuth};
-    use numaflow_nats;
 
     const SECRET_BASE_PATH: &str = "/tmp/numaflow";
 

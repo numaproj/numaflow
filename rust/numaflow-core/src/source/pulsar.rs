@@ -55,8 +55,9 @@ pub(crate) async fn new_pulsar_source(
     batch_size: usize,
     timeout: Duration,
     vertex_replica: u16,
+    cancel_token: tokio_util::sync::CancellationToken,
 ) -> crate::Result<PulsarSource> {
-    Ok(PulsarSource::new(cfg, batch_size, timeout, vertex_replica).await?)
+    Ok(PulsarSource::new(cfg, batch_size, timeout, vertex_replica, cancel_token).await?)
 }
 
 impl source::SourceReader for PulsarSource {
@@ -64,12 +65,16 @@ impl source::SourceReader for PulsarSource {
         "Pulsar"
     }
 
-    async fn read(&mut self) -> crate::Result<Vec<Message>> {
-        self.read_messages()
-            .await?
-            .into_iter()
-            .map(|msg| msg.try_into())
-            .collect()
+    async fn read(&mut self) -> Option<crate::Result<Vec<Message>>> {
+        match self.read_messages().await {
+            Some(Ok(messages)) => {
+                let result: crate::Result<Vec<Message>> =
+                    messages.into_iter().map(|msg| msg.try_into()).collect();
+                Some(result)
+            }
+            Some(Err(e)) => Some(Err(e.into())),
+            None => None,
+        }
     }
 
     async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
@@ -118,7 +123,14 @@ mod tests {
             max_unack: 100,
             auth: None,
         };
-        let mut pulsar = new_pulsar_source(cfg, 10, Duration::from_millis(200), 0).await?;
+        let mut pulsar = new_pulsar_source(
+            cfg,
+            10,
+            Duration::from_millis(200),
+            0,
+            tokio_util::sync::CancellationToken::new(),
+        )
+        .await?;
         assert_eq!(pulsar.name(), "Pulsar");
 
         // Read should return before the timeout
@@ -155,7 +167,7 @@ mod tests {
             fut.await?;
         }
 
-        let messages = pulsar.read().await?;
+        let messages = pulsar.read().await.unwrap()?;
         assert_eq!(messages.len(), 10);
 
         let offsets: Vec<Offset> = messages.into_iter().map(|m| m.offset).collect();

@@ -1379,18 +1379,18 @@ async fn fetch_isb_pending<C: crate::typ::NumaflowTypeConfig>(
 mod tests {
     use std::net::SocketAddr;
 
-    use numaflow::source::{Message, Offset, SourceReadRequest};
-    use numaflow::{sink, source, sourcetransform};
-    use numaflow_pb::clients::sink::sink_client::SinkClient;
-    use numaflow_pb::clients::source::source_client::SourceClient;
-    use tokio::sync::mpsc::Sender;
-
     use super::*;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::SourceType;
     use crate::source::user_defined::new_source;
     use crate::tracker::TrackerHandle;
+    use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow::{sink, source, sourcetransform};
+    use numaflow_pb::clients::sink::sink_client::SinkClient;
+    use numaflow_pb::clients::source::source_client::SourceClient;
+    use tokio::sync::mpsc::Sender;
+    use tokio_util::sync::CancellationToken;
 
     struct SimpleSource;
     #[tonic::async_trait]
@@ -1434,6 +1434,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_start_metrics_https_server() {
+        let cln_token = CancellationToken::new();
         let (src_shutdown_tx, src_shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let src_sock_file = tmp_dir.path().join("source.sock");
@@ -1501,10 +1502,14 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let src_client = SourceClient::new(create_rpc_channel(src_sock_file).await.unwrap());
-        let (src_read, src_ack, lag_reader) =
-            new_source(src_client, 5, Duration::from_millis(1000))
-                .await
-                .expect("Failed to create source reader");
+        let (src_read, src_ack, lag_reader) = new_source(
+            src_client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+        )
+        .await
+        .expect("Failed to create source reader");
 
         let tracker = TrackerHandle::new(None);
         let source = Source::new(

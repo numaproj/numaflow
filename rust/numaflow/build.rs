@@ -89,18 +89,18 @@ fn get_git_commit() -> Result<String, Box<dyn std::error::Error>> {
     if let Ok(git_commit) = std::env::var("GIT_COMMIT") {
         return Ok(git_commit);
     }
-    let output = Command::new("git").args(&["rev-parse", "HEAD"]).output()?;
+    let output = Command::new("git").args(["rev-parse", "HEAD"]).output()?;
     let git_commit = String::from_utf8(output.stdout)?.trim().to_string();
     Ok(git_commit)
 }
 
 fn get_git_tree_state() -> Result<String, Box<dyn std::error::Error>> {
     // If the binary is built within a container, this env variable will be set.
-    if let Ok(git_tree_state) = std::env::var("GIT_TREE_STATE") {
+    if let Ok(git_tree_state) = env::var("GIT_TREE_STATE") {
         return Ok(git_tree_state);
     }
     let output = Command::new("git")
-        .args(&["status", "--porcelain"])
+        .args(["status", "--porcelain"])
         .output()?;
     let status_output = String::from_utf8(output.stdout)?;
     if status_output.trim().is_empty() {
@@ -128,7 +128,7 @@ fn get_git_tag() -> Result<String, Box<dyn std::error::Error>> {
 
 fn get_rust_version() -> Result<String, Box<dyn std::error::Error>> {
     let rustc_binary = std::env::var("RUSTC").unwrap();
-    let output = Command::new(rustc_binary).args(&["--version"]).output()?;
+    let output = Command::new(rustc_binary).args(["--version"]).output()?;
     let rust_version = String::from_utf8(output.stdout)?.trim().to_string();
     Ok(rust_version)
 }
