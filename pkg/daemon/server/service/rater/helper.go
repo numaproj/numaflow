@@ -33,8 +33,11 @@ const (
 
 // UpdatePendingCount updates the pending count for a pod at a given time
 func UpdatePendingCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podPendingCounts *PodPendingCount) {
-	items := q.Items()
+	if podPendingCounts == nil {
+		return
+	}
 
+	items := q.Items()
 	// find the element matching the input timestamp and update it
 	for _, i := range items {
 		if i.timestamp == time {
@@ -51,8 +54,11 @@ func UpdatePendingCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time i
 
 // UpdateCount updates the count of processed messages for a pod at a given time
 func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podReadCounts *PodReadCount) {
-	items := q.Items()
+	if podReadCounts == nil {
+		return
+	}
 
+	items := q.Items()
 	// find the element matching the input timestamp and update it
 	for _, i := range items {
 		if i.timestamp == time {
