@@ -1,10 +1,11 @@
-use tokio_stream::StreamExt;
-
 use crate::config::components::source::GeneratorConfig;
 use crate::config::get_vertex_replica;
+
 use crate::message::{Message, Offset};
 use crate::reader;
 use crate::source;
+use tokio_stream::StreamExt;
+use tokio_util::sync::CancellationToken;
 
 /// Stream Generator returns a set of messages for every `.next` call. It will throttle itself if
 /// the call exceeds the RPU. It will return a max (batch size, RPU) till the quota for that unit of
@@ -336,8 +337,9 @@ mod stream_generator {
 pub(crate) fn new_generator(
     cfg: GeneratorConfig,
     batch_size: usize,
+    cancel_token: CancellationToken,
 ) -> crate::Result<(GeneratorRead, GeneratorAck, GeneratorLagReader)> {
-    let gen_read = GeneratorRead::new(cfg, batch_size);
+    let gen_read = GeneratorRead::new(cfg, batch_size, cancel_token);
     let gen_ack = GeneratorAck::new();
     let gen_lag_reader = GeneratorLagReader::new();
 
@@ -346,14 +348,18 @@ pub(crate) fn new_generator(
 
 pub(crate) struct GeneratorRead {
     stream_generator: stream_generator::StreamGenerator,
+    cancel_token: CancellationToken,
 }
 
 impl GeneratorRead {
     /// A new [GeneratorRead] is returned. It takes a static content, requests per unit-time, batch size
     /// to return per [source::SourceReader::read], and the unit-time as duration.
-    fn new(cfg: GeneratorConfig, batch_size: usize) -> Self {
+    fn new(cfg: GeneratorConfig, batch_size: usize, cancel_token: CancellationToken) -> Self {
         let stream_generator = stream_generator::StreamGenerator::new(cfg.clone(), batch_size);
-        Self { stream_generator }
+        Self {
+            stream_generator,
+            cancel_token,
+        }
     }
 }
 
@@ -362,11 +368,12 @@ impl source::SourceReader for GeneratorRead {
         "generator"
     }
 
-    async fn read(&mut self) -> crate::error::Result<Vec<Message>> {
-        let Some(messages) = self.stream_generator.next().await else {
-            panic!("Stream generator has stopped");
-        };
-        Ok(messages)
+    async fn read(&mut self) -> Option<crate::error::Result<Vec<Message>>> {
+        if self.cancel_token.is_cancelled() {
+            return None;
+        }
+
+        Some(Ok(self.stream_generator.next().await?))
     }
 
     async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
@@ -430,10 +437,10 @@ mod tests {
         };
 
         // Create a new Generator
-        let mut generator = GeneratorRead::new(cfg, batch);
+        let mut generator = GeneratorRead::new(cfg, batch, CancellationToken::new());
 
         // Read the first batch of messages
-        let messages = generator.read().await.unwrap();
+        let messages = generator.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), batch);
 
         assert!(messages.first().unwrap().value.eq(&content));
@@ -441,7 +448,7 @@ mod tests {
         // Verify that each message has the expected structure
 
         // Read the second batch of messages
-        let messages = generator.read().await.unwrap();
+        let messages = generator.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), rpu - batch);
     }
 
@@ -462,10 +469,10 @@ mod tests {
         };
 
         // Create a new Generator
-        let mut generator = GeneratorRead::new(cfg, batch);
+        let mut generator = GeneratorRead::new(cfg, batch, CancellationToken::new());
 
         // Read the first batch of messages
-        let messages = generator.read().await.unwrap();
+        let messages = generator.read().await.unwrap().unwrap();
         let keys = messages
             .iter()
             .map(|m| m.keys[0].clone())

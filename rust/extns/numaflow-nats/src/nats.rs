@@ -4,6 +4,8 @@ use async_nats::ConnectOptions;
 use bytes::Bytes;
 use chrono::DateTime;
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
+
 use tokio_stream::StreamExt;
 use tracing::debug;
 use uuid::Uuid;
@@ -41,7 +43,7 @@ impl TryFrom<async_nats::Message> for NatsMessage {
 /// NatsActorMessage represents a message sent to the NatsActor
 enum NatsActorMessage {
     Read {
-        respond_to: oneshot::Sender<Result<Vec<NatsMessage>>>,
+        respond_to: oneshot::Sender<Option<Result<Vec<NatsMessage>>>>,
     },
 }
 
@@ -51,6 +53,7 @@ struct NatsActor {
     read_timeout: Duration,
     batch_size: usize,
     handler_rx: mpsc::Receiver<NatsActorMessage>,
+    cancel_token: CancellationToken,
 }
 
 impl NatsActor {
@@ -59,6 +62,7 @@ impl NatsActor {
         batch_size: usize,
         read_timeout: Duration,
         handler_rx: mpsc::Receiver<NatsActorMessage>,
+        cancel_token: CancellationToken,
     ) -> Result<()> {
         let mut conn_opts = ConnectOptions::new()
             .max_reconnects(None) // unlimited reconnects
@@ -103,6 +107,7 @@ impl NatsActor {
                 read_timeout,
                 batch_size,
                 handler_rx,
+                cancel_token,
             };
             tracing::info!(subject=?config.subject, queue=?config.queue, "Starting NATS source actor...");
             actor.run().await;
@@ -118,7 +123,10 @@ impl NatsActor {
     }
 
     /// Reads messages from the NATS subscriber, up to batch_size or until timeout
-    async fn read_messages(&mut self) -> Result<Vec<NatsMessage>> {
+    async fn read_messages(&mut self) -> Option<Result<Vec<NatsMessage>>> {
+        if self.cancel_token.is_cancelled() {
+            return None;
+        }
         let mut messages: Vec<NatsMessage> = Vec::with_capacity(self.batch_size);
         let timeout = tokio::time::timeout(self.read_timeout, std::future::pending::<()>());
         tokio::pin!(timeout);
@@ -137,13 +145,16 @@ impl NatsActor {
                     let Some(msg) = maybe_msg else {
                         break;
                     };
-                    let nats_msg = NatsMessage::try_from(msg)?;
+                    let nats_msg = match NatsMessage::try_from(msg) {
+                        Ok(msg) => msg,
+                        Err(e) => return Some(Err(e)),
+                    };
                     messages.push(nats_msg);
                 }
             }
         }
         debug!(msg_count = messages.len(), "Read messages from NATS");
-        Ok(messages)
+        Some(Ok(messages))
     }
 
     /// Handles messages sent to the NatsActor
@@ -167,18 +178,19 @@ impl NatsSource {
         config: NatsSourceConfig,
         batch_size: usize,
         read_timeout: Duration,
+        cancel_token: CancellationToken,
     ) -> Result<Self> {
         let (tx, rx) = mpsc::channel(10);
-        NatsActor::start(config, batch_size, read_timeout, rx).await?;
+        NatsActor::start(config, batch_size, read_timeout, rx, cancel_token).await?;
         Ok(Self { actor_tx: tx })
     }
 
-    pub async fn read_messages(&self) -> Result<Vec<NatsMessage>> {
+    pub async fn read_messages(&self) -> Option<Result<Vec<NatsMessage>>> {
         let (tx, rx) = oneshot::channel();
         let msg = NatsActorMessage::Read { respond_to: tx };
         let _ = self.actor_tx.send(msg).await;
         rx.await
-            .map_err(|_| Error::Other("Actor task terminated".into()))?
+            .unwrap_or_else(|_| Some(Err(Error::Other("Actor task terminated".into()))))
     }
 }
 
@@ -186,6 +198,7 @@ impl NatsSource {
 mod tests {
     use super::*;
     use std::time::Duration;
+    use tokio_util::sync::CancellationToken;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -205,7 +218,9 @@ mod tests {
 
         // Connect to the NATS server with batch size and read timeout
         let read_timeout = Duration::from_secs(1);
-        let source = NatsSource::connect(config, 2, read_timeout).await.unwrap();
+        let source = NatsSource::connect(config, 2, read_timeout, CancellationToken::new())
+            .await
+            .unwrap();
         // Wait for NATS Actor to start and subscribe to the subject with queue
         tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -220,22 +235,22 @@ mod tests {
 
         // Read the first batch
         // Read Messages loop will break when batch size is reached in this case
-        let messages = source.read_messages().await.unwrap();
+        let messages = source.read_messages().await.unwrap().unwrap();
         assert_eq!(messages.len(), 2);
 
         // Read the second batch
         // Read Messages loop will break when batch size is reached in this case
-        let messages = source.read_messages().await.unwrap();
+        let messages = source.read_messages().await.unwrap().unwrap();
         assert_eq!(messages.len(), 2);
 
         // Read the third batch
         // Read Messages loop will break when timeout is reached in this case
         // as batch size is 2 and remaining messages are 1
-        let messages = source.read_messages().await.unwrap();
+        let messages = source.read_messages().await.unwrap().unwrap();
         assert_eq!(messages.len(), 1);
 
         // Should be empty after all messages are read
-        let messages = source.read_messages().await.unwrap();
+        let messages = source.read_messages().await.unwrap().unwrap();
         assert!(
             messages.is_empty(),
             "No messages should be returned after all messages are read"
