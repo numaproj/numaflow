@@ -371,6 +371,7 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
             None => batch_size,
         };
 
+        // Note the epoch at which we got the estimated batch size from the rate limiter
         let cur_epoch = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("Time went backwards")
@@ -411,6 +412,9 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
             }
         };
 
+        // deposit the unused tokens back to the rate limiter
+        // utilize the cur_epoch we calculated when we initially acquired the tokens
+        // to ensure that the tokens are deposited for the correct epoch.
         match &self.rate_limiter {
             Some(rate_limiter) => {
                 rate_limiter
