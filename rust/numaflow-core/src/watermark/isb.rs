@@ -76,6 +76,7 @@ struct ISBWatermarkActor {
     window_manager: Option<WindowManager>,
     latest_fetched_wm: Watermark,
     tracker_handle: TrackerHandle,
+    from_partitions: Vec<u16>,
 }
 
 impl ISBWatermarkActor {
@@ -85,6 +86,7 @@ impl ISBWatermarkActor {
         idle_manager: ISBIdleDetector,
         window_manager: Option<WindowManager>,
         tracker_handle: TrackerHandle,
+        from_partitions: Vec<u16>,
     ) -> Self {
         Self {
             fetcher,
@@ -94,6 +96,7 @@ impl ISBWatermarkActor {
             latest_fetched_wm: Watermark::from_timestamp_millis(-1)
                 .expect("failed to parse timestamp"),
             tracker_handle,
+            from_partitions,
         }
     }
 
@@ -254,18 +257,28 @@ impl ISBWatermarkActor {
             .get_idle_offset()
             .await
             .unwrap_or_default();
+
+        // iterate over all the partitions and check if they are idling by fetching the head idle wmb
+        // and comparing it with the tracker's idle state.
         let mut min_wm = i64::MAX;
-        for (partition_idx, offset) in idle_offsets {
-            let Some(idle_offset) = offset else {
+        for partition_idx in self.from_partitions.iter() {
+            // if tracker's offset is none means, that partitions is not idling, we can skip publishing
+            // the head idle wmb.
+            let Some(Some(idle_offset)) = idle_offsets.get(partition_idx) else {
                 return Watermark::from_timestamp_millis(-1).unwrap();
             };
 
-            let wmb = self.fetcher.fetch_head_idle_wmb(partition_idx);
+            let wmb = self.fetcher.fetch_head_idle_wmb(*partition_idx);
             let Some(wmb) = wmb else {
                 return Watermark::from_timestamp_millis(-1).unwrap();
             };
 
-            if wmb.offset == idle_offset && wmb.watermark < min_wm {
+            // if the offset doesn't match, that means it's not idling anymore
+            if wmb.offset != *idle_offset {
+                return Watermark::from_timestamp_millis(-1).unwrap();
+            }
+
+            if wmb.watermark < min_wm {
                 min_wm = wmb.watermark;
             }
         }
@@ -306,6 +319,7 @@ impl ISBWatermarkHandle {
         cln_token: CancellationToken,
         window_manager: Option<WindowManager>,
         tracker_handle: TrackerHandle,
+        from_partitions: Vec<u16>,
     ) -> Result<Self> {
         let (sender, receiver) = mpsc::channel(100);
 
@@ -341,6 +355,7 @@ impl ISBWatermarkHandle {
             idle_manager.clone(),
             window_manager,
             tracker_handle.clone(),
+            from_partitions,
         );
         tokio::spawn(async move { actor.run(receiver).await });
 
@@ -642,6 +657,7 @@ mod tests {
             CancellationToken::new(),
             None,
             tracker_handle.clone(),
+            vec![0],
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
@@ -813,6 +829,7 @@ mod tests {
             CancellationToken::new(),
             None,
             tracker_handle.clone(),
+            vec![0],
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
@@ -974,6 +991,7 @@ mod tests {
             CancellationToken::new(),
             None,
             tracker_handle.clone(),
+            vec![0],
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
@@ -1086,6 +1104,7 @@ mod tests {
             CancellationToken::new(),
             None,
             tracker_handle.clone(),
+            vec![0],
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");

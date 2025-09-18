@@ -136,6 +136,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         &cln_token,
         Some(WindowManager::Aligned(window_manager.clone())),
         tracker_handle.clone(),
+        vec![*get_vertex_replica()], // in reduce, we consume from a single partition
     )
     .await?;
 
@@ -260,6 +261,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         &cln_token,
         Some(WindowManager::Unaligned(window_manager.clone())),
         tracker_handle.clone(),
+        vec![*get_vertex_replica()], // in reduce, we consume from a single partition
     )
     .await?;
 
@@ -319,7 +321,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
                 .clone()
                 .map(|handle| WatermarkFetcherState {
                     watermark_handle: WatermarkHandle::ISB(handle),
-                    partitions: vec![*get_vertex_replica()], // Reduce vertices always read from single partition (partition 0)
+                    partitions: vec![*get_vertex_replica()], // Reduce vertices always read from single partition (partition replica)
                 }),
         },
     )

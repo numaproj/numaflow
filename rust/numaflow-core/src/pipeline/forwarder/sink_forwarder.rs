@@ -99,22 +99,24 @@ pub async fn start_sink_forwarder(
         None
     };
 
-    let tracker_handle = TrackerHandle::new(serving_callback_handler.clone());
+    let reader_config = &config
+        .from_vertex_config
+        .first()
+        .ok_or_else(|| Error::Config("No from vertex config found".to_string()))?
+        .reader_config;
 
+    let from_partitions: Vec<u16> = (0..reader_config.streams.len() as u16).collect();
+
+    let tracker_handle = TrackerHandle::new(serving_callback_handler.clone());
     let watermark_handle = create_components::create_edge_watermark_handle(
         &config,
         &js_context,
         &cln_token,
         None,
         tracker_handle.clone(),
+        from_partitions.clone(),
     )
     .await?;
-
-    let reader_config = &config
-        .from_vertex_config
-        .first()
-        .ok_or_else(|| Error::Config("No from vertex config found".to_string()))?
-        .reader_config;
 
     let serving_store = match &sink.serving_store_config {
         Some(serving_store_config) => match serving_store_config {
@@ -189,7 +191,7 @@ pub async fn start_sink_forwarder(
             ))),
             watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
                 watermark_handle: WatermarkHandle::ISB(handle),
-                partitions: (0..reader_config.streams.len() as u16).collect(),
+                partitions: from_partitions,
             }),
         },
     )
