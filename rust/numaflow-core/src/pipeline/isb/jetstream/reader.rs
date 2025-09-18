@@ -406,6 +406,19 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
             }
         };
 
+        match &self.rate_limiter {
+            Some(rate_limiter) => {
+                rate_limiter
+                    .deposit_unused(
+                        effective_batch_size
+                            .checked_sub(jetstream_messages.len())
+                            .unwrap_or(0),
+                    )
+                    .await;
+            }
+            None => {}
+        }
+
         pipeline_metrics()
             .jetstream_isb
             .read_time_total
