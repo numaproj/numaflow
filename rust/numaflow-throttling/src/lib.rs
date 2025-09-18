@@ -584,7 +584,7 @@ impl<S: Store> RateLimit<WithState<S>> {
                 } else {
                     TokenAvailability::Exhausted
                 }
-            },
+            }
         }
     }
 }
