@@ -9011,6 +9011,27 @@ the sum of all the replicas.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>modes</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterModes">
+RateLimiterModes </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+RateLimiterModes is used to define the modes for rate limiting.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -9029,6 +9050,73 @@ RateLimiterInMemoryStore
 <p>
 
 </p>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.RateLimiterModes">
+
+RateLimiterModes
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimit">RateLimit</a>)
+</p>
+
+<p>
+
+<p>
+
+RateLimiterModes defines the modes for rate limiting.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>relaxed</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RaterLimiterRelaxed">
+RaterLimiterRelaxed </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+If there is some traffic, then release the max possible tokens.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
 
 <h3 id="numaflow.numaproj.io/v1alpha1.RateLimiterRedisStore">
 
@@ -9234,6 +9322,27 @@ InMemoryStore is used to define the in-memory store for the rate limit.
 </tbody>
 
 </table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.RaterLimiterRelaxed">
+
+RaterLimiterRelaxed
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterModes">RateLimiterModes</a>)
+</p>
+
+<p>
+
+<p>
+
+RaterLimiterRelaxed is for the relaxed mode. It will release the max
+possible tokens if there is some traffic.
+</p>
+
+</p>
 
 <h3 id="numaflow.numaproj.io/v1alpha1.RedisAuth">
 

@@ -124,66 +124,66 @@ impl SqsSink {
         messages: Vec<SqsSinkMessage>,
     ) -> Result<Vec<SqsSinkResponse>> {
         let mut entries = Vec::with_capacity(messages.len());
-        let mut sink_message_responses = Vec::with_capacity(messages.len());
-        for message in messages {
-            let entry = SendMessageBatchRequestEntry::builder()
-                .id(message.id)
-                .message_body(String::from_utf8_lossy(&message.message_body).to_string())
-                .build();
+        let mut id_correlation = std::collections::HashMap::with_capacity(messages.len());
 
-            match entry {
-                Ok(entry) => {
-                    tracing::debug!("SQS message entry created: {:?}", entry);
-                    entries.push(entry);
-                }
-                Err(err) => {
-                    tracing::error!("Failed to create SQS message entry: {:?}", err);
-                    return Err(SqsSinkError::from(Error::Sqs(err.into())));
-                }
-            }
+        for (index, message) in messages.into_iter().enumerate() {
+            let sqs_batch_id = format!("msg_{}", index);
+            id_correlation.insert(sqs_batch_id.clone(), message.id);
+
+            let entry = SendMessageBatchRequestEntry::builder()
+                .id(sqs_batch_id)
+                .message_body(String::from_utf8_lossy(&message.message_body).to_string())
+                .build()
+                .map_err(|e| {
+                    SqsSinkError::from(Error::Other(format!("Failed to build entry: {}", e)))
+                })?;
+
+            entries.push(entry);
         }
 
-        let send_message_batch_output = self
+        // on error, we will cascade the error to numaflow core which will initiate a shutdown.
+        let output = self
             .client
             .send_message_batch()
             .queue_url(self.queue_url)
             .set_entries(Some(entries))
             .send()
-            .await;
+            .await
+            .map_err(|e| SqsSinkError::from(Error::Sqs(e.into())))?;
 
-        match send_message_batch_output {
-            Ok(output) => {
-                for succeeded in output.successful {
-                    let id = succeeded.id;
-                    let status = Ok(());
-                    sink_message_responses.push(SqsSinkResponse {
-                        id,
-                        status,
-                        code: None,
-                        sender_fault: None,
-                    });
-                }
+        let mut responses = Vec::new();
 
-                for failed in output.failed {
-                    let id = failed.id;
-                    let status = Err(SqsSinkError::from(Error::Other(
-                        failed.message.unwrap_or_default().to_string(),
-                    )));
-                    sink_message_responses.push(SqsSinkResponse {
-                        id,
-                        status,
-                        code: Some(failed.code),
-                        sender_fault: Some(failed.sender_fault),
-                    });
-                }
+        // Process successful messages
+        for succeeded in output.successful {
+            let original_id = id_correlation
+                .remove(&succeeded.id)
+                .expect("AWS returned unknown batch ID - this should never happen");
 
-                Ok(sink_message_responses)
-            }
-            Err(err) => {
-                tracing::error!("Failed to send messages: {:?}", err);
-                Err(SqsSinkError::from(Error::Sqs(err.into())))
-            }
+            responses.push(SqsSinkResponse {
+                id: original_id,
+                status: Ok(()),
+                code: None,
+                sender_fault: None,
+            });
         }
+
+        // Process failed messages
+        for failed in output.failed {
+            let original_id = id_correlation
+                .remove(&failed.id)
+                .expect("AWS returned unknown batch ID - this should never happen");
+
+            responses.push(SqsSinkResponse {
+                id: original_id,
+                status: Err(SqsSinkError::from(Error::Other(
+                    failed.message.unwrap_or_default(),
+                ))),
+                code: Some(failed.code),
+                sender_fault: Some(failed.sender_fault),
+            });
+        }
+
+        Ok(responses)
     }
 }
 
@@ -316,10 +316,16 @@ mod tests {
         assert!(sink.is_ok());
 
         let sink = sink.unwrap();
-        let messages = vec![SqsSinkMessage {
-            id: "1".to_string(),
-            message_body: Bytes::from("test message"),
-        }];
+        let messages = vec![
+            SqsSinkMessage {
+                id: "1".to_string(),
+                message_body: Bytes::from("test message 1"),
+            },
+            SqsSinkMessage {
+                id: "2".to_string(),
+                message_body: Bytes::from("test message 2"),
+            },
+        ];
 
         let result = sink.sink_messages(messages).await;
         assert!(result.is_ok());
@@ -390,7 +396,7 @@ mod tests {
 
     fn get_send_message_output() -> Rule {
         let successful = aws_sdk_sqs::types::SendMessageBatchResultEntry::builder()
-            .id("1")
+            .id("msg_0")
             .message_id("msg-id-1")
             .md5_of_message_body("f11a425906289abf8cce1733622834c8")
             .build()
@@ -419,14 +425,14 @@ mod tests {
 
     fn get_send_message_output_with_failed() -> Rule {
         let successful = aws_sdk_sqs::types::SendMessageBatchResultEntry::builder()
-            .id("1")
+            .id("msg_0")
             .message_id("msg-id-1")
             .md5_of_message_body("84769b6348524b3317694d80c0ac6df9")
             .build()
             .unwrap();
 
         let failed = aws_sdk_sqs::types::BatchResultErrorEntry::builder()
-            .id("2")
+            .id("msg_1")
             .code("InvalidParameterValue")
             .message("The message is too large for the queue.")
             .sender_fault(true)

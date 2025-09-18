@@ -96,8 +96,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSource":                     schema_pkg_apis_numaflow_v1alpha1_PulsarSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimit":                        schema_pkg_apis_numaflow_v1alpha1_RateLimit(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterInMemoryStore":         schema_pkg_apis_numaflow_v1alpha1_RateLimiterInMemoryStore(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterModes":                 schema_pkg_apis_numaflow_v1alpha1_RateLimiterModes(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRedisStore":            schema_pkg_apis_numaflow_v1alpha1_RateLimiterRedisStore(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterStore":                 schema_pkg_apis_numaflow_v1alpha1_RateLimiterStore(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RaterLimiterRelaxed":              schema_pkg_apis_numaflow_v1alpha1_RaterLimiterRelaxed(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisAuth":                        schema_pkg_apis_numaflow_v1alpha1_RedisAuth(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisSentinelConfig":              schema_pkg_apis_numaflow_v1alpha1_RedisSentinelConfig(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy":                    schema_pkg_apis_numaflow_v1alpha1_RetryStrategy(ref),
@@ -4303,11 +4305,17 @@ func schema_pkg_apis_numaflow_v1alpha1_RateLimit(ref common.ReferenceCallback) c
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterStore"),
 						},
 					},
+					"modes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RateLimiterModes is used to define the modes for rate limiting.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterModes"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterStore", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterModes", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterStore", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
@@ -4318,6 +4326,27 @@ func schema_pkg_apis_numaflow_v1alpha1_RateLimiterInMemoryStore(ref common.Refer
 				Type: []string{"object"},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_RateLimiterModes(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "RateLimiterModes defines the modes for rate limiting.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"relaxed": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If there is some traffic, then release the max possible tokens.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RaterLimiterRelaxed"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RaterLimiterRelaxed"},
 	}
 }
 
@@ -4387,6 +4416,17 @@ func schema_pkg_apis_numaflow_v1alpha1_RateLimiterStore(ref common.ReferenceCall
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterInMemoryStore", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRedisStore"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_RaterLimiterRelaxed(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "RaterLimiterRelaxed is for the relaxed mode. It will release the max possible tokens if there is some traffic.",
+				Type:        []string{"object"},
+			},
+		},
 	}
 }
 

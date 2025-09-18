@@ -75,7 +75,8 @@ pub(crate) trait SourceReader {
     /// Name of the source.
     fn name(&self) -> &'static str;
 
-    async fn read(&mut self) -> Result<Vec<Message>>;
+    /// Read messages from the source. Returns None when the stream has ended.
+    async fn read(&mut self) -> Option<Result<Vec<Message>>>;
 
     /// number of partitions processed by this source.
     async fn partitions(&mut self) -> Result<Vec<u16>>;
@@ -112,7 +113,7 @@ enum ActorMessage {
         respond_to: oneshot::Sender<&'static str>,
     },
     Read {
-        respond_to: oneshot::Sender<Result<Vec<Message>>>,
+        respond_to: oneshot::Sender<Option<Result<Vec<Message>>>>,
     },
     Ack {
         respond_to: oneshot::Sender<Result<()>>,
@@ -298,7 +299,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     }
 
     /// read messages from the source by communicating with the read actor.
-    async fn read(source_handle: mpsc::Sender<ActorMessage>) -> Result<Vec<Message>> {
+    async fn read(source_handle: mpsc::Sender<ActorMessage>) -> Option<Result<Vec<Message>>> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Read { respond_to: sender };
         // Ignore send errors. If send fails, so does the recv.await below. There's no reason
@@ -306,7 +307,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         let _ = source_handle.send(msg).await;
         receiver
             .await
-            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))
+            .unwrap_or(Some(Err(Error::ActorPatternRecv(
+                "Channel closed".to_string(),
+            ))))
     }
 
     /// ack the offsets by communicating with the ack actor.
@@ -378,11 +382,6 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
             let mut result = Ok(());
             loop {
-                if cln_token.is_cancelled() {
-                    info!("Cancellation token is cancelled. Stopping the source.");
-                    break;
-                }
-
                 // Acquire the semaphore permit before reading the next batch to make
                 // sure we are not reading ahead and all the inflight messages are acked.
                 let _permit = Arc::clone(&semaphore)
@@ -406,8 +405,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
                 let read_start_time = Instant::now();
                 let messages = match Self::read(self.sender.clone()).await {
-                    Ok(messages) => messages,
-                    Err(e) => {
+                    Some(Ok(messages)) => messages,
+                    None => {
+                        info!("Source returned None (end of stream). Stopping the source.");
+                        break;
+                    }
+                    Some(Err(e)) => {
                         error!("Error while reading messages: {:?}", e);
                         result = Err(e);
                         break;
@@ -800,6 +803,7 @@ mod tests {
     #[tokio::test]
     async fn test_source() {
         // start the server
+        let cln_token = CancellationToken::new();
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("source.sock");
@@ -823,10 +827,11 @@ mod tests {
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let (src_read, src_ack, lag_reader) = new_source(client, 5, Duration::from_millis(1000))
-            .await
-            .map_err(|e| panic!("failed to create source reader: {:?}", e))
-            .unwrap();
+        let (src_read, src_ack, lag_reader) =
+            new_source(client, 5, Duration::from_millis(1000), cln_token.clone())
+                .await
+                .map_err(|e| panic!("failed to create source reader: {:?}", e))
+                .unwrap();
 
         let tracker = TrackerHandle::new(None);
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
@@ -840,8 +845,6 @@ mod tests {
         );
 
         let sender = source.sender.clone();
-
-        let cln_token = CancellationToken::new();
 
         let (mut stream, handle) = source.clone().streaming_read(cln_token.clone()).unwrap();
         let mut offsets = vec![];

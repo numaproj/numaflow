@@ -9,6 +9,8 @@ workspace = true
 [dependencies]
 tokio.workspace = true
 tracing.workspace = true
+tokio-util.workspace = true
+
 thiserror.workspace = true
 chrono.workspace = true
 bytes.workspace = true

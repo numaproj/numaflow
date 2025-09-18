@@ -63,12 +63,12 @@ impl SourceReader for CoreHttpSource {
         "HTTP"
     }
 
-    async fn read(&mut self) -> Result<Vec<Message>> {
-        self.http_source
-            .read(self.batch_size)
-            .await
-            .map_err(|e| e.into())
-            .map(|msgs| msgs.into_iter().map(|msg| msg.into()).collect())
+    async fn read(&mut self) -> Option<Result<Vec<Message>>> {
+        match self.http_source.read(self.batch_size).await {
+            Some(Ok(msgs)) => Some(Ok(msgs.into_iter().map(|m| m.into()).collect())),
+            Some(Err(e)) => Some(Err(e.into())),
+            None => None,
+        }
     }
 
     async fn partitions(&mut self) -> Result<Vec<u16>> {
@@ -123,6 +123,7 @@ mod tests {
     use std::time::Duration;
     use tokio::task::JoinSet;
     use tokio::time::sleep;
+    use tokio_util::sync::CancellationToken;
 
     // Custom certificate verifier that accepts any certificate (for testing)
     #[derive(Debug)]
@@ -194,8 +195,10 @@ mod tests {
             .timeout(Duration::from_millis(100))
             .build();
 
-        // Create HttpSourceHandle
-        let http_source = numaflow_http::HttpSourceHandle::new(http_source_config).await;
+        // Create CancellationToken and HttpSourceHandle
+        let cln_token = CancellationToken::new();
+        let http_source =
+            numaflow_http::HttpSourceHandle::new(http_source_config, cln_token.clone()).await;
 
         // Create CoreHttpSource with batch size 5
         let batch_size = 5;
@@ -260,7 +263,7 @@ mod tests {
         assert_eq!(partitions.len(), 1, "Should have 1 partition");
 
         // Test read method - should get batch_size (5) messages
-        let messages = core_http_source.read().await.unwrap();
+        let messages = core_http_source.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 5, "Should read 5 messages (batch size)");
 
         let current_time = Utc::now();
@@ -296,7 +299,7 @@ mod tests {
         );
 
         // Read remaining messages
-        let messages = core_http_source.read().await.unwrap();
+        let messages = core_http_source.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 2, "Should read remaining 2 messages");
 
         // Ack the remaining messages

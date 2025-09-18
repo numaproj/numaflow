@@ -63,13 +63,11 @@ impl SourceReader for JetstreamSource {
         "Jetstream"
     }
 
-    async fn read(&mut self) -> Result<Vec<Message>> {
-        Ok(self
-            .read_messages()
-            .await?
-            .into_iter()
-            .map(Message::from)
-            .collect())
+    async fn read(&mut self) -> Option<Result<Vec<Message>>> {
+        match self.read_messages().await {
+            Ok(messages) => Some(Ok(messages.into_iter().map(Message::from).collect())),
+            Err(e) => Some(Err(e.into())),
+        }
     }
 
     async fn partitions(&mut self) -> Result<Vec<u16>> {
@@ -201,7 +199,7 @@ mod tests {
         assert_eq!(source.partitions().await.unwrap(), vec![0]);
 
         // Test SourceReader::read
-        let messages = source.read().await.unwrap();
+        let messages = source.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 20, "Should read 20 messages in a batch");
         assert_eq!(messages[0].value, Bytes::from("message 0"));
         assert_eq!(messages[19].value, Bytes::from("message 19"));
@@ -231,7 +229,7 @@ mod tests {
         );
 
         // Read and ack remaining messages
-        let messages = source.read().await.unwrap();
+        let messages = source.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 20, "Should read another 20 messages");
         let offsets: Vec<Offset> = messages.iter().map(|msg| msg.offset.clone()).collect();
         source.ack(offsets).await.unwrap();
@@ -244,7 +242,7 @@ mod tests {
             "Pending messages should be 10 after acking another 20 messages"
         );
 
-        let messages = source.read().await.unwrap();
+        let messages = source.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 10, "Should read the last 10 messages");
         let offsets: Vec<Offset> = messages.iter().map(|msg| msg.offset.clone()).collect();
         source.ack(offsets).await.unwrap();

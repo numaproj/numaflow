@@ -11,6 +11,8 @@ use rdkafka::error::KafkaResult;
 use rdkafka::message::{Headers, Message};
 use rdkafka::topic_partition_list::TopicPartitionList;
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
+
 use tracing::{error, info, warn};
 
 use crate::{Error, KafkaSaslAuth, Result, TlsConfig};
@@ -85,7 +87,7 @@ pub struct KafkaOffset {
 
 enum KafkaActorMessage {
     Read {
-        respond_to: oneshot::Sender<Result<Vec<KafkaMessage>>>,
+        respond_to: oneshot::Sender<Option<Result<Vec<KafkaMessage>>>>,
     },
     Ack {
         offsets: Vec<KafkaOffset>,
@@ -107,6 +109,7 @@ struct KafkaActor {
     batch_size: usize,
     topics: Vec<String>,
     handler_rx: mpsc::Receiver<KafkaActorMessage>,
+    cancel_token: CancellationToken,
 }
 
 impl KafkaActor {
@@ -115,6 +118,7 @@ impl KafkaActor {
         batch_size: usize,
         read_timeout: Duration,
         handler_rx: mpsc::Receiver<KafkaActorMessage>,
+        cancel_token: CancellationToken,
     ) -> Result<()> {
         let mut client_config = ClientConfig::new();
         // https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html
@@ -171,6 +175,7 @@ impl KafkaActor {
             batch_size,
             topics: config.topics,
             handler_rx,
+            cancel_token,
         };
 
         actor
@@ -247,7 +252,11 @@ impl KafkaActor {
         }
     }
 
-    async fn read_messages(&mut self) -> Result<Vec<KafkaMessage>> {
+    async fn read_messages(&mut self) -> Option<Result<Vec<KafkaMessage>>> {
+        if self.cancel_token.is_cancelled() {
+            return None;
+        }
+
         let mut messages: Vec<KafkaMessage> = vec![];
         let timeout = tokio::time::timeout(self.read_timeout, std::future::pending::<()>());
         tokio::pin!(timeout);
@@ -277,9 +286,9 @@ impl KafkaActor {
                             // TODO: Check the error when topic doesn't exist
                             continuous_failure_count += 1;
                             if continuous_failure_count > MAX_FAILURE_COUNT {
-                                return Err(Error::Kafka(format!(
+                                return Some(Err(Error::Kafka(format!(
                                     "Failed to read messages after {MAX_FAILURE_COUNT} retries: {e:?}"
-                                )));
+                                ))));
                             }
                             error!(?e, "Failed to read messages, will retry after 100 milliseconds");
                             tokio::time::sleep(Duration::from_millis(100)).await;
@@ -324,7 +333,7 @@ impl KafkaActor {
             }
         }
         tracing::debug!(msg_count = messages.len(), "Read messages from Kafka");
-        Ok(messages)
+        Some(Ok(messages))
     }
 
     async fn ack_messages(&mut self, offsets: Vec<KafkaOffset>) -> Result<()> {
@@ -498,18 +507,19 @@ impl KafkaSource {
         config: KafkaSourceConfig,
         batch_size: usize,
         read_timeout: Duration,
+        cancel_token: CancellationToken,
     ) -> Result<Self> {
         let (tx, rx) = mpsc::channel(10);
-        KafkaActor::start(config, batch_size, read_timeout, rx).await?;
+        KafkaActor::start(config, batch_size, read_timeout, rx, cancel_token).await?;
         Ok(Self { actor_tx: tx })
     }
 
-    pub async fn read_messages(&self) -> Result<Vec<KafkaMessage>> {
+    pub async fn read_messages(&self) -> Option<Result<Vec<KafkaMessage>>> {
         let (tx, rx) = oneshot::channel();
         let msg = KafkaActorMessage::Read { respond_to: tx };
         let _ = self.actor_tx.send(msg).await;
         rx.await
-            .map_err(|_| Error::Other("Actor task terminated".into()))?
+            .unwrap_or_else(|_| Some(Err(Error::Other("Actor task terminated".into()))))
     }
 
     pub async fn ack_messages(&self, offsets: Vec<KafkaOffset>) -> Result<()> {
@@ -617,7 +627,7 @@ mod tests {
         };
 
         let read_timeout = Duration::from_secs(5);
-        let source = KafkaSource::connect(config, 30, read_timeout)
+        let source = KafkaSource::connect(config, 30, read_timeout, CancellationToken::new())
             .await
             .expect("Failed to connect to Kafka");
 
@@ -635,7 +645,9 @@ mod tests {
         let messages = source
             .read_messages()
             .await
-            .expect("Failed to read messages");
+            .expect("Failed to read messages")
+            .unwrap();
+
         assert_eq!(messages.len(), 30);
         let pending = source
             .pending_messages()
@@ -676,7 +688,9 @@ mod tests {
         let messages = source
             .read_messages()
             .await
-            .expect("Failed to read messages");
+            .expect("Failed to read messages")
+            .unwrap();
+
         assert_eq!(messages.len(), 30);
 
         // Ack remaining messages
@@ -709,7 +723,8 @@ mod tests {
         let messages = source
             .read_messages()
             .await
-            .expect("Failed to read messages");
+            .expect("Failed to read messages")
+            .unwrap();
         assert_eq!(messages.len(), 30);
 
         // Ack remaining messages
@@ -742,7 +757,8 @@ mod tests {
         let messages = source
             .read_messages()
             .await
-            .expect("Failed to read messages");
+            .expect("Failed to read messages")
+            .unwrap();
         assert_eq!(messages.len(), 10);
 
         // Ack remaining messages
@@ -776,7 +792,9 @@ mod tests {
         let messages = source
             .read_messages()
             .await
-            .expect("Failed to read messages");
+            .expect("Failed to read messages")
+            .unwrap();
+
         let elapsed = start.elapsed();
         assert!(
             elapsed < read_timeout + Duration::from_millis(100),
@@ -823,14 +841,17 @@ mod tests {
             kafka_raw_config: HashMap::new(),
         };
 
-        let source = KafkaSource::connect(config, 1, Duration::from_secs(5))
-            .await
-            .expect("Failed to connect to Kafka");
+        let source =
+            KafkaSource::connect(config, 1, Duration::from_secs(5), CancellationToken::new())
+                .await
+                .expect("Failed to connect to Kafka");
 
         let messages = source
             .read_messages()
             .await
-            .expect("Failed to read messages");
+            .expect("Failed to read messages")
+            .unwrap();
+
         assert_eq!(messages.len(), 1);
 
         let message = &messages[0];

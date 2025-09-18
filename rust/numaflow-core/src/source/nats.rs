@@ -13,8 +13,9 @@ pub(crate) async fn new_nats_source(
     config: NatsSourceConfig,
     batch_size: usize,
     read_timeout: Duration,
+    cancel_token: tokio_util::sync::CancellationToken,
 ) -> crate::Result<NatsSource> {
-    Ok(NatsSource::connect(config, batch_size, read_timeout).await?)
+    Ok(NatsSource::connect(config, batch_size, read_timeout, cancel_token).await?)
 }
 
 impl From<NatsMessage> for Message {
@@ -49,13 +50,12 @@ impl SourceReader for NatsSource {
         "NATS"
     }
 
-    async fn read(&mut self) -> crate::Result<Vec<Message>> {
-        Ok(self
-            .read_messages()
-            .await?
-            .into_iter()
-            .map(Message::from)
-            .collect())
+    async fn read(&mut self) -> Option<crate::Result<Vec<Message>>> {
+        match self.read_messages().await {
+            Some(Ok(messages)) => Some(Ok(messages.into_iter().map(Message::from).collect())),
+            Some(Err(e)) => Some(Err(e.into())),
+            None => None,
+        }
     }
 
     async fn partitions(&mut self) -> crate::Result<Vec<u16>> {
@@ -85,6 +85,7 @@ mod tests {
     use super::*;
     use bytes::Bytes;
     use numaflow_nats::nats::NatsMessage;
+    use tokio_util::sync::CancellationToken;
 
     #[tokio::test]
     async fn test_try_from_nats_message_success() {
@@ -101,7 +102,7 @@ mod tests {
         let message: Message = nats_message.into();
 
         assert_eq!(message.value, Bytes::from("test_value"));
-        assert_eq!(message.offset.to_string(), format!("msg-id-123-0"));
+        assert_eq!(message.offset.to_string(), "msg-id-123-0");
         assert_eq!(message.metadata.unwrap().previous_vertex, get_vertex_name());
         assert_eq!(message.event_time, test_timestamp);
         assert_eq!(message.event_time.timestamp(), 1672576245);
@@ -120,7 +121,9 @@ mod tests {
         };
         let batch_size = 1;
         let read_timeout = Duration::from_millis(10);
-        let result = super::new_nats_source(config, batch_size, read_timeout).await;
+        let result =
+            super::new_nats_source(config, batch_size, read_timeout, CancellationToken::new())
+                .await;
         assert!(result.is_ok());
         let source = result.unwrap();
         let name = source.name();
@@ -143,10 +146,11 @@ mod tests {
         let read_timeout = Duration::from_millis(50);
 
         // Connect to the NATS server
-        let mut source = NatsSource::connect(config, batch_size, read_timeout)
-            .await
-            .unwrap();
-        let messages = source.read().await.unwrap_or_default();
+        let mut source =
+            NatsSource::connect(config, batch_size, read_timeout, CancellationToken::new())
+                .await
+                .unwrap();
+        let messages = source.read().await.unwrap().unwrap();
         assert!(
             messages.is_empty(),
             "Expected empty Vec when no messages are published"
@@ -166,9 +170,14 @@ mod tests {
         };
 
         // Connect to the NATS server
-        let mut source = NatsSource::connect(config, 1, std::time::Duration::from_millis(10))
-            .await
-            .unwrap();
+        let mut source = NatsSource::connect(
+            config,
+            1,
+            std::time::Duration::from_millis(10),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
         let pending = source.pending().await.unwrap();
         assert_eq!(pending, None);
     }
@@ -185,9 +194,14 @@ mod tests {
         };
 
         // Connect to the NATS server
-        let mut source = NatsSource::connect(config, 1, std::time::Duration::from_millis(10))
-            .await
-            .unwrap();
+        let mut source = NatsSource::connect(
+            config,
+            1,
+            std::time::Duration::from_millis(10),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
         // Ack should succeed and do nothing
         let result = source.ack(vec![]).await;
         assert!(result.is_ok());

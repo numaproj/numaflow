@@ -10,6 +10,7 @@ use numaflow_pb::clients::source::{
 };
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
@@ -27,6 +28,7 @@ pub(crate) struct UserDefinedSourceRead {
     num_records: usize,
     timeout: Duration,
     source_client: SourceClient<Channel>,
+    cln_token: CancellationToken,
 }
 
 /// User-Defined Source to operative on custom sources.
@@ -41,12 +43,14 @@ pub(crate) async fn new_source(
     client: SourceClient<Channel>,
     num_records: usize,
     read_timeout: Duration,
+    cln_token: CancellationToken,
 ) -> Result<(
     UserDefinedSourceRead,
     UserDefinedSourceAck,
     UserDefinedSourceLagReader,
 )> {
-    let src_read = UserDefinedSourceRead::new(client.clone(), num_records, read_timeout).await?;
+    let src_read =
+        UserDefinedSourceRead::new(client.clone(), num_records, read_timeout, cln_token).await?;
     let src_ack = UserDefinedSourceAck::new(client.clone(), num_records).await?;
     let lag_reader = UserDefinedSourceLagReader::new(client);
 
@@ -58,6 +62,7 @@ impl UserDefinedSourceRead {
         client: SourceClient<Channel>,
         batch_size: usize,
         timeout: Duration,
+        cln_token: CancellationToken,
     ) -> Result<Self> {
         let (read_tx, resp_stream) = Self::create_reader(batch_size, &mut client.clone()).await?;
 
@@ -67,6 +72,7 @@ impl UserDefinedSourceRead {
             num_records: batch_size,
             timeout,
             source_client: client,
+            cln_token,
         })
     }
 
@@ -190,7 +196,11 @@ impl SourceReader for UserDefinedSourceRead {
         "user-defined-source"
     }
 
-    async fn read(&mut self) -> Result<Vec<Message>> {
+    async fn read(&mut self) -> Option<Result<Vec<Message>>> {
+        if self.cln_token.is_cancelled() {
+            return None;
+        }
+
         let request = ReadRequest {
             request: Some(read_request::Request {
                 num_records: self.num_records as u64,
@@ -199,30 +209,31 @@ impl SourceReader for UserDefinedSourceRead {
             handshake: None,
         };
 
-        self.read_tx
-            .send(request)
-            .await
-            .map_err(|e| Error::Source(e.to_string()))?;
+        if let Err(e) = self.read_tx.send(request).await {
+            return Some(Err(Error::Source(e.to_string())));
+        }
 
         let mut messages = Vec::with_capacity(self.num_records);
 
-        while let Some(response) = self
-            .resp_stream
-            .message()
-            .await
-            .map_err(|e| Error::Grpc(Box::new(e)))?
-        {
+        while let Some(response) = match self.resp_stream.message().await {
+            Ok(response) => response,
+            Err(e) => return Some(Err(Error::Grpc(Box::new(e)))),
+        } {
             if response.status.is_some_and(|status| status.eot) {
                 break;
             }
 
-            let result = response
-                .result
-                .ok_or_else(|| Error::Source("Empty message in response".to_string()))?;
+            let result = match response.result {
+                Some(result) => result,
+                None => return Some(Err(Error::Source("Empty message in response".to_string()))),
+            };
 
-            messages.push(result.try_into()?);
+            match result.try_into() {
+                Ok(message) => messages.push(message),
+                Err(e) => return Some(Err(e)),
+            }
         }
-        Ok(messages)
+        Some(Ok(messages))
     }
 
     async fn partitions(&mut self) -> Result<Vec<u16>> {
@@ -414,6 +425,7 @@ mod tests {
     #[tokio::test]
     async fn source_operations() {
         // start the server
+        let cln_token = CancellationToken::new();
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("source.sock");
@@ -437,12 +449,12 @@ mod tests {
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
         let (mut src_read, mut src_ack, mut lag_reader) =
-            new_source(client, 5, Duration::from_millis(1000))
+            new_source(client, 5, Duration::from_millis(1000), cln_token)
                 .await
                 .map_err(|e| panic!("failed to create source reader: {:?}", e))
                 .unwrap();
 
-        let messages = src_read.read().await.unwrap();
+        let messages = src_read.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 5);
 
         let response = src_ack
