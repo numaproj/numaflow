@@ -122,10 +122,7 @@ impl<W> RateLimit<W> {
                     let prev_epoch = self
                         .last_queried_epoch
                         .load(std::sync::atomic::Ordering::Relaxed);
-                    let time_diff = cur_epoch.checked_sub(prev_epoch).expect(
-                        "Previous epoch should be smaller than current epoch \
-                        when calculating scheduled refill",
-                    ) as f32;
+                    let time_diff = cur_epoch.checked_sub(prev_epoch).unwrap_or(0) as f32;
                     let refill = *max_ever_filled + self.token_calc_bounds.slope * (time_diff);
                     let capped_refill = refill.min(self.token_calc_bounds.max as f32);
 
