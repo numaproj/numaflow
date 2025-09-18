@@ -782,6 +782,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
 #[cfg(test)]
 mod tests {
+    use crate::shared::grpc::create_rpc_channel;
+    use crate::source::user_defined::new_source;
+    use crate::source::{Source, SourceType};
+    use crate::tracker::TrackerHandle;
     use chrono::Utc;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
@@ -792,11 +796,6 @@ mod tests {
     use tokio::sync::mpsc::Sender;
     use tokio_stream::StreamExt;
     use tokio_util::sync::CancellationToken;
-
-    use crate::shared::grpc::create_rpc_channel;
-    use crate::source::user_defined::new_source;
-    use crate::source::{Source, SourceType};
-    use crate::tracker::TrackerHandle;
 
     struct SimpleSource {
         num: usize,
@@ -890,11 +889,16 @@ mod tests {
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let (src_read, src_ack, lag_reader) =
-            new_source(client, 5, Duration::from_millis(1000), cln_token.clone())
-                .await
-                .map_err(|e| panic!("failed to create source reader: {:?}", e))
-                .unwrap();
+        let (src_read, src_ack, lag_reader) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
 
         let tracker = TrackerHandle::new(None);
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(

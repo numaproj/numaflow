@@ -1,8 +1,8 @@
 //! Type configuration trait for Numaflow components.
 
+use crate::Result;
 use crate::config::components::ratelimit::RateLimitConfig;
 use crate::error::Error;
-use crate::{Result, error};
 use numaflow_throttling::state::OptimisticValidityUpdateSecs;
 use numaflow_throttling::state::store::in_memory_store::InMemoryStore;
 use numaflow_throttling::state::store::redis_store::{RedisMode, RedisStore};

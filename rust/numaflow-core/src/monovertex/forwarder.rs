@@ -87,6 +87,14 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
 
 #[cfg(test)]
 mod tests {
+    use crate::Result;
+    use crate::monovertex::forwarder::Forwarder;
+    use crate::shared::grpc::create_rpc_channel;
+    use crate::sink::{SinkClientType, SinkWriterBuilder};
+    use crate::source::user_defined::new_source;
+    use crate::source::{Source, SourceType};
+    use crate::tracker::TrackerHandle;
+    use crate::transformer::Transformer;
     use chrono::Utc;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{source, sourcetransform};
@@ -100,15 +108,6 @@ mod tests {
     use tokio::sync::oneshot;
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
-
-    use crate::Result;
-    use crate::monovertex::forwarder::Forwarder;
-    use crate::shared::grpc::create_rpc_channel;
-    use crate::sink::{SinkClientType, SinkWriterBuilder};
-    use crate::source::user_defined::new_source;
-    use crate::source::{Source, SourceType};
-    use crate::tracker::TrackerHandle;
-    use crate::transformer::Transformer;
 
     struct SimpleSource {
         num: usize,
@@ -253,11 +252,16 @@ mod tests {
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let (src_read, src_ack, lag_reader) =
-            new_source(client, 5, Duration::from_millis(1000), cln_token.clone())
-                .await
-                .map_err(|e| panic!("failed to create source reader: {:?}", e))
-                .unwrap();
+        let (src_read, src_ack, lag_reader) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
         let tracker_handle = TrackerHandle::new(None);
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,
@@ -392,11 +396,16 @@ mod tests {
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let (src_read, src_ack, lag_reader) =
-            new_source(client, 5, Duration::from_millis(1000), cln_token.clone())
-                .await
-                .map_err(|e| panic!("failed to create source reader: {:?}", e))
-                .unwrap();
+        let (src_read, src_ack, lag_reader) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
 
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,

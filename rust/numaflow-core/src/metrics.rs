@@ -1507,6 +1507,7 @@ mod tests {
             5,
             Duration::from_millis(1000),
             cln_token.clone(),
+            true,
         )
         .await
         .expect("Failed to create source reader");

@@ -104,17 +104,17 @@ impl From<String> for ContainerType {
 pub struct ServerInfo {
     /// Protocol used by the server. This is for multi-proc mode.
     #[serde(default)]
-    protocol: String,
+    pub protocol: String,
     /// Language of the SDK/container. This is for publishing metrics.
     #[serde(default)]
     pub language: String,
     #[serde(default)]
-    minimum_numaflow_version: String,
+    pub minimum_numaflow_version: String,
     /// SDK version used for publishing metrics.
     #[serde(default)]
     pub version: String,
     #[serde(default)]
-    metadata: Option<HashMap<String, String>>, // Metadata is optional
+    pub metadata: Option<HashMap<String, String>>, // Metadata is optional
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -462,6 +462,42 @@ async fn read_server_info(
     Ok(server_info) // Return the parsed server info
 }
 
+/// Checks if the given SDK version supports nack functionality
+pub fn supports_nack(sdk_version: &str, sdk_language: &str) -> bool {
+    // If version or language is empty, assume no nack support for safety
+    if sdk_version.is_empty() || sdk_language.is_empty() {
+        return false;
+    }
+
+    // Get nack support version constraints
+    let nack_constraints = &crate::server_info::version::NACK_SUPPORT_SDK_VERSIONS;
+
+    // Check if the SDK language is present in the nack support versions
+    if let Some(required_version) = nack_constraints.get(sdk_language) {
+        let constraint = format!(">={required_version}");
+
+        // For Python, use Pep440 versioning
+        if sdk_language.to_lowercase() == "python" {
+            if let Ok(sdk_version_pep440) = PepVersion::from_str(sdk_version)
+                && let Ok(specifiers) = VersionSpecifier::from_str(&constraint)
+            {
+                return specifiers.contains(&sdk_version_pep440);
+            }
+        } else {
+            // Strip the 'v' prefix if present for non-Python languages
+            let sdk_version_stripped = sdk_version.trim_start_matches('v');
+
+            // Parse the SDK version using semver
+            if let Ok(sdk_version_semver) = Version::parse(sdk_version_stripped) {
+                return check_constraint(&sdk_version_semver, &constraint).is_ok();
+            }
+        }
+    }
+
+    // Default to no nack support if we can't determine compatibility
+    false
+}
+
 /// create a mod for version.rs
 mod version {
     use std::collections::HashMap;
@@ -536,6 +572,17 @@ mod version {
     pub(crate) fn get_minimum_supported_sdk_versions() -> &'static SdkConstraints {
         &MINIMUM_SUPPORTED_SDK_VERSIONS
     }
+
+    // NACK_SUPPORT_SDK_VERSIONS defines the minimum SDK versions that support nack functionality.
+    pub(crate) static NACK_SUPPORT_SDK_VERSIONS: LazyLock<HashMap<String, String>> =
+        LazyLock::new(|| {
+            let mut m = HashMap::new();
+            m.insert("go".to_string(), "0.10.2-z".to_string());
+            m.insert("python".to_string(), "0.10.2rc100".to_string());
+            m.insert("java".to_string(), "0.10.2-z".to_string());
+            m.insert("rust".to_string(), "0.10.2-z".to_string());
+            m
+        });
 
     /// Struct to hold version information.
     #[derive(Debug, PartialEq)]

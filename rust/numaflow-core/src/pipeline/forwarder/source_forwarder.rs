@@ -388,11 +388,16 @@ mod tests {
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let (src_read, src_ack, lag_reader) =
-            new_source(client, 5, Duration::from_millis(1000), cln_token.clone())
-                .await
-                .map_err(|e| panic!("failed to create source reader: {:?}", e))
-                .unwrap();
+        let (src_read, src_ack, lag_reader) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
 
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,

@@ -19,6 +19,7 @@ use crate::reader::LagReader;
 use crate::shared::grpc::utc_from_timestamp;
 use crate::source::{SourceAcker, SourceReader};
 use crate::{Error, Result, config};
+use tracing::warn;
 
 /// User-Defined Source to operative on custom sources.
 #[derive(Debug)]
@@ -37,6 +38,7 @@ pub(crate) struct UserDefinedSourceAck {
     ack_tx: mpsc::Sender<AckRequest>,
     ack_resp_stream: Streaming<AckResponse>,
     client: SourceClient<Channel>,
+    supports_nack: bool,
 }
 
 /// Creates a new User-Defined Source and its corresponding Lag Reader.
@@ -45,6 +47,7 @@ pub(crate) async fn new_source(
     num_records: usize,
     read_timeout: Duration,
     cln_token: CancellationToken,
+    supports_nack: bool,
 ) -> Result<(
     UserDefinedSourceRead,
     UserDefinedSourceAck,
@@ -52,7 +55,8 @@ pub(crate) async fn new_source(
 )> {
     let src_read =
         UserDefinedSourceRead::new(client.clone(), num_records, read_timeout, cln_token).await?;
-    let src_ack = UserDefinedSourceAck::new(client.clone(), num_records).await?;
+
+    let src_ack = UserDefinedSourceAck::new(client.clone(), num_records, supports_nack).await?;
     let lag_reader = UserDefinedSourceLagReader::new(client);
 
     Ok((src_read, src_ack, lag_reader))
@@ -253,13 +257,18 @@ impl SourceReader for UserDefinedSourceRead {
 }
 
 impl UserDefinedSourceAck {
-    async fn new(mut client: SourceClient<Channel>, batch_size: usize) -> Result<Self> {
+    async fn new(
+        mut client: SourceClient<Channel>,
+        batch_size: usize,
+        supports_nack: bool,
+    ) -> Result<Self> {
         let (ack_tx, ack_resp_stream) = Self::create_acker(batch_size, &mut client).await?;
 
         Ok(Self {
             ack_tx,
             ack_resp_stream,
             client: client,
+            supports_nack,
         })
     }
 
@@ -329,25 +338,37 @@ impl SourceAcker for UserDefinedSourceAck {
     }
 
     /// Negatively acknowledge the offsets.
+    /// This method checks if the SDK supports nack functionality using a pre-computed flag.
+    /// For older SDK versions (< 0.10.2), it logs a warning and returns Ok() for backward compatibility.
+    /// For newer SDK versions (>= 0.10.2), it calls the actual nack gRPC method.
     async fn nack(&mut self, offsets: Vec<Offset>) -> Result<()> {
-        let nack_offsets: Result<Vec<source::Offset>> =
-            offsets.into_iter().map(TryInto::try_into).collect();
+        if self.supports_nack {
+            // SDK supports nack, call the actual gRPC method
+            let nack_offsets: Result<Vec<source::Offset>> =
+                offsets.into_iter().map(TryInto::try_into).collect();
 
-        let response = self
-            .client
-            .nackfn(NackRequest {
-                request: Some(source::nack_request::Request {
-                    offsets: nack_offsets?,
-                }),
-            })
-            .await
-            .map_err(|e| Error::Grpc(Box::new(e)))?;
+            let response = self
+                .client
+                .nackfn(NackRequest {
+                    request: Some(source::nack_request::Request {
+                        offsets: nack_offsets?,
+                    }),
+                })
+                .await
+                .map_err(|e| Error::Grpc(Box::new(e)))?;
 
-        response
-            .into_inner()
-            .result
-            .ok_or(Error::Source("failed to receive nack response".to_string()))?;
-        Ok(())
+            response
+                .into_inner()
+                .result
+                .ok_or(Error::Source("failed to receive nack response".to_string()))?;
+            Ok(())
+        } else {
+            warn!(
+                offset_count = offsets.len(),
+                "SDK version does not support nack functionality, ignoring nack request for backward compatibility"
+            );
+            Ok(())
+        }
     }
 }
 
@@ -472,7 +493,7 @@ mod tests {
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
         let (mut src_read, mut src_ack, mut lag_reader) =
-            new_source(client, 5, Duration::from_millis(1000), cln_token)
+            new_source(client, 5, Duration::from_millis(1000), cln_token, true)
                 .await
                 .map_err(|e| panic!("failed to create source reader: {:?}", e))
                 .unwrap();
@@ -542,6 +563,4 @@ mod tests {
         let result: Result<numaflow_pb::clients::source::Offset> = offset.try_into();
         assert!(result.is_err());
     }
-
-    // TODO: add nack tests, once sdk changes are done
 }
