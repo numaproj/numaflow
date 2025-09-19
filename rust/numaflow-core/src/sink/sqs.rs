@@ -158,6 +158,8 @@ pub mod tests {
             }
         }
 
+        async fn nack(&self, _offsets: Vec<Offset>) {}
+
         async fn pending(&self) -> Option<usize> {
             Some(
                 self.num - self.sent_count.load(Ordering::SeqCst)

@@ -412,6 +412,7 @@ mod tests {
     struct SimpleSource {
         num: usize,
         yet_to_ack: std::sync::RwLock<HashSet<String>>,
+        nacked: std::sync::RwLock<HashSet<String>>,
     }
 
     impl SimpleSource {
@@ -419,6 +420,21 @@ mod tests {
             Self {
                 num,
                 yet_to_ack: std::sync::RwLock::new(HashSet::new()),
+                nacked: std::sync::RwLock::new(HashSet::new()),
+            }
+        }
+
+        async fn create_message(&self, offset: String) -> Message {
+            let payload = self.num.to_string();
+            Message {
+                value: payload.into_bytes(),
+                event_time: Utc::now(),
+                offset: Offset {
+                    offset: offset.clone().into_bytes(),
+                    partition_id: 0,
+                },
+                keys: vec![],
+                headers: Default::default(),
             }
         }
     }
@@ -428,19 +444,26 @@ mod tests {
         async fn read(&self, request: SourceReadRequest, transmitter: Sender<Message>) {
             let event_time = Utc::now();
             let mut message_offsets = Vec::with_capacity(request.count);
+
+            // if there are nacked message send them first and remove them from the nacked set
+            // and return early
+            let nacked = self.nacked.read().unwrap().clone();
+            if !nacked.is_empty() {
+                for offset in nacked {
+                    transmitter
+                        .send(self.create_message(offset).await)
+                        .await
+                        .unwrap();
+                }
+                // clear the nacked set
+                self.nacked.write().unwrap().clear();
+                return;
+            }
+
             for i in 0..request.count {
                 let offset = format!("{}-{}", event_time.timestamp_nanos_opt().unwrap(), i);
                 transmitter
-                    .send(Message {
-                        value: self.num.to_le_bytes().to_vec(),
-                        event_time,
-                        offset: Offset {
-                            offset: offset.clone().into_bytes(),
-                            partition_id: 0,
-                        },
-                        keys: vec![],
-                        headers: Default::default(),
-                    })
+                    .send(self.create_message(offset.clone()).await)
                     .await
                     .unwrap();
                 message_offsets.push(offset)
@@ -454,6 +477,20 @@ mod tests {
                     .write()
                     .unwrap()
                     .remove(&String::from_utf8(offset.offset).unwrap());
+            }
+        }
+
+        async fn nack(&self, offsets: Vec<Offset>) {
+            //
+            for offset in offsets {
+                self.yet_to_ack
+                    .write()
+                    .unwrap()
+                    .remove(&String::from_utf8(offset.offset.clone()).unwrap());
+                self.nacked
+                    .write()
+                    .unwrap()
+                    .insert(String::from_utf8(offset.offset).unwrap());
             }
         }
 
@@ -511,6 +548,23 @@ mod tests {
 
         let partitions = src_read.partitions().await.unwrap();
         assert_eq!(partitions, vec![2]);
+
+        let messages = src_read.read().await.unwrap().unwrap();
+        assert_eq!(messages.len(), 5);
+
+        // nack the messages
+        let response = src_ack
+            .nack(messages.iter().map(|m| m.offset.clone()).collect())
+            .await;
+        assert!(response.is_ok());
+
+        // read again and verify we get the nacked messages by comparing their offset
+        let nacked_messages = src_read.read().await.unwrap().unwrap();
+        assert_eq!(nacked_messages.len(), 5);
+
+        for msg in nacked_messages {
+            assert!(messages.iter().any(|m| m.offset == msg.offset));
+        }
 
         // we need to drop the client, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85

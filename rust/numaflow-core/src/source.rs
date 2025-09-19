@@ -801,6 +801,7 @@ mod tests {
         num: usize,
         sent_count: AtomicUsize,
         yet_to_ack: std::sync::RwLock<HashSet<String>>,
+        nacked: std::sync::RwLock<HashSet<String>>,
     }
 
     impl SimpleSource {
@@ -809,6 +810,20 @@ mod tests {
                 num,
                 sent_count: AtomicUsize::new(0),
                 yet_to_ack: std::sync::RwLock::new(HashSet::new()),
+                nacked: std::sync::RwLock::new(HashSet::new()),
+            }
+        }
+
+        async fn create_message(&self, offset: String) -> Message {
+            Message {
+                value: b"hello".to_vec(),
+                event_time: Utc::now(),
+                offset: Offset {
+                    offset: offset.clone().into_bytes(),
+                    partition_id: 0,
+                },
+                keys: vec![],
+                headers: Default::default(),
             }
         }
     }
@@ -819,6 +834,23 @@ mod tests {
             let event_time = Utc::now();
             let mut message_offsets = Vec::with_capacity(request.count);
 
+            // if there are nacked message send them first and remove them from the nacked set
+            // and return early
+            let nacked = self.nacked.read().unwrap().clone();
+            if !nacked.is_empty() {
+                for offset in nacked {
+                    transmitter
+                        .send(self.create_message(offset).await)
+                        .await
+                        .unwrap();
+                    self.sent_count.fetch_add(1, Ordering::SeqCst);
+                }
+
+                // clear the nacked set
+                self.nacked.write().unwrap().clear();
+                return;
+            }
+
             for i in 0..request.count {
                 if self.sent_count.load(Ordering::SeqCst) >= self.num {
                     return;
@@ -826,16 +858,7 @@ mod tests {
 
                 let offset = format!("{}-{}", event_time.timestamp_nanos_opt().unwrap(), i);
                 transmitter
-                    .send(Message {
-                        value: b"hello".to_vec(),
-                        event_time,
-                        offset: Offset {
-                            offset: offset.clone().into_bytes(),
-                            partition_id: 0,
-                        },
-                        keys: vec![],
-                        headers: Default::default(),
-                    })
+                    .send(self.create_message(offset.clone()).await)
                     .await
                     .unwrap();
                 message_offsets.push(offset);
@@ -846,15 +869,27 @@ mod tests {
 
         async fn ack(&self, offsets: Vec<Offset>) {
             for offset in offsets {
-                self.yet_to_ack
-                    .write()
-                    .unwrap()
-                    .remove(&String::from_utf8(offset.offset).unwrap());
+                let offset = &String::from_utf8(offset.offset).unwrap();
+                self.yet_to_ack.write().unwrap().remove(offset);
             }
         }
 
         async fn pending(&self) -> Option<usize> {
-            Some(self.yet_to_ack.read().unwrap().len())
+            Some(self.yet_to_ack.read().unwrap().len() + self.nacked.read().unwrap().len())
+        }
+
+        async fn nack(&self, offsets: Vec<Offset>) {
+            for offset in offsets {
+                self.yet_to_ack
+                    .write()
+                    .unwrap()
+                    .remove(&String::from_utf8(offset.offset.clone()).unwrap());
+                self.nacked
+                    .write()
+                    .unwrap()
+                    .insert(String::from_utf8(offset.offset).unwrap());
+                self.sent_count.fetch_sub(1, Ordering::SeqCst);
+            }
         }
 
         async fn partitions(&self) -> Option<Vec<i32>> {
@@ -922,23 +957,59 @@ mod tests {
             offsets.push(message.offset.clone());
         }
 
-        // ack all the messages
-        Source::<crate::typ::WithoutRateLimiter>::ack(sender.clone(), offsets.clone())
-            .await
-            .unwrap();
-
-        for offset in offsets {
-            tracker.discard(offset).await.unwrap();
+        // ack 50 messages by invoking delete on tracker
+        for offset in offsets.iter().take(50) {
+            tracker.delete(offset.clone()).await.unwrap();
         }
 
-        // since we acked all the messages, pending should be 0
-        let pending = source.pending().await.unwrap();
-        assert_eq!(pending, Some(0));
+        // wait for upto 1s with 10ms sleep between each check to make sure the pending becomes 50
+        let x = tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                let pending = source.pending().await.unwrap();
+                if pending == Some(50) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        assert!(x.is_ok(), "Timeout occurred before pending became 50");
 
         let partitions = Source::<crate::typ::WithoutRateLimiter>::partitions(sender.clone())
             .await
             .unwrap();
         assert_eq!(partitions, vec![1, 2]);
+
+        // tracker discard will invoke nack
+        for offset in offsets.iter().skip(50) {
+            tracker.discard(offset.clone()).await.unwrap();
+        }
+
+        // read should return 50 nacked messages
+        for _ in 0..50 {
+            let message = stream.next().await.unwrap();
+            assert_eq!(message.value, "hello".as_bytes());
+        }
+
+        // ack them all now
+        for offset in offsets.iter().skip(50) {
+            tracker.delete(offset.clone()).await.unwrap();
+        }
+
+        // pending should be 0 now
+        let x = tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                let pending = source.pending().await.unwrap();
+                if pending == Some(0) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        assert!(x.is_ok(), "Timeout occurred before pending became 0");
 
         drop(source);
         drop(sender);

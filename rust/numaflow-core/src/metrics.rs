@@ -1399,6 +1399,8 @@ mod tests {
 
         async fn ack(&self, _: Vec<Offset>) {}
 
+        async fn nack(&self, _offsets: Vec<Offset>) {}
+
         async fn pending(&self) -> Option<usize> {
             Some(0)
         }
