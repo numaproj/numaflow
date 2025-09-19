@@ -146,7 +146,7 @@ impl<W> RateLimit<W> {
             }
             Mode::OnlyIfUsed => {
                 // If the requested token size is less than the max_ever_filled
-                // then we won't increase the max_ever_filled
+                // then we won't increase the token pool size
                 if let Some(n) = requested_token_size
                     && n <= *max_ever_filled as usize
                 {
@@ -168,7 +168,7 @@ impl<W> RateLimit<W> {
                 let time_diff = cur_epoch.checked_sub(prev_epoch).unwrap_or(0) as f32;
 
                 // If the requested token size is less than the max_ever_filled
-                // then we won't increase the max_ever_filled amount
+                // then we won't increase the token pool size
                 if let Some(n) = requested_token_size
                     && n <= *max_ever_filled as usize
                 {
@@ -190,7 +190,7 @@ impl<W> RateLimit<W> {
                 }
             }
             Mode::ResetToUsed => {
-                // Do not increase the max_ever_filled if the requested token size is less than the max_ever_filled
+                // Do not increase the max_ever_filled if the requested token size is less than the token pool size
                 if let Some(n) = requested_token_size
                     && n <= *max_ever_filled as usize
                 {
