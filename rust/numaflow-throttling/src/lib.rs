@@ -103,7 +103,7 @@ impl<W> RateLimit<W> {
         let unused_tokens = self.token.load(std::sync::atomic::Ordering::Relaxed) as f32;
         // Calculate the percentage of tokens that were left unused in previous epoch
         let used_token_percentage =
-            ((1 - unused_tokens / *max_ever_filled) * 100.0).round() as usize;
+            ((1.0 - unused_tokens / *max_ever_filled) * 100.0).round() as usize;
 
         match self.token_calc_bounds.mode {
             Mode::Relaxed => self.relaxed_slope_increase(&mut max_ever_filled),
