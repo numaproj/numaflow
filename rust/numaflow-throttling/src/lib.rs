@@ -2,7 +2,7 @@ use crate::state::OptimisticValidityUpdateSecs;
 use crate::state::store::Store;
 use state::RateLimiterState;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
@@ -86,20 +86,6 @@ enum TokenAvailability {
 }
 
 impl<W> RateLimit<W> {
-    fn relaxed_slope_increase(&self, max_ever_filled: &mut f32) -> usize {
-        // let's make sure we do not go beyond the max
-        if *max_ever_filled >= self.token_calc_bounds.max as f32 {
-            self.token_calc_bounds.max
-        } else {
-            let refill = *max_ever_filled + self.token_calc_bounds.slope;
-            let capped_refill = refill.min(self.token_calc_bounds.max as f32);
-
-            // Update the fractional value
-            *max_ever_filled = capped_refill;
-            capped_refill as usize
-        }
-    }
-
     /// Computes the number of tokens to be refilled for the next epoch based on various modes
     /// and returns the number of tokens to be used for refilling token pool.
     /// <br>
@@ -116,95 +102,137 @@ impl<W> RateLimit<W> {
         // Whatever remains in the token pool after previous epoch are the unused tokens
         let unused_tokens = self.token.load(std::sync::atomic::Ordering::Relaxed) as f32;
         // Calculate the percentage of tokens that were left unused in previous epoch
-        let unused_token_percentage = ((unused_tokens / *max_ever_filled) * 100.0).round() as usize;
+        let used_token_percentage =
+            ((1 - unused_tokens / *max_ever_filled) * 100.0).round() as usize;
 
         match self.token_calc_bounds.mode {
             Mode::Relaxed => self.relaxed_slope_increase(&mut max_ever_filled),
-            Mode::Scheduled => {
-                // let's make sure we do not go beyond the max
-                if *max_ever_filled >= self.token_calc_bounds.max as f32 {
-                    self.token_calc_bounds.max
-                } else {
-                    let prev_epoch = self
-                        .last_queried_epoch
-                        .load(std::sync::atomic::Ordering::Relaxed);
-                    let time_diff = cur_epoch.checked_sub(prev_epoch).unwrap_or(0) as f32;
-                    let refill = *max_ever_filled + self.token_calc_bounds.slope * (time_diff);
-                    let capped_refill = refill.min(self.token_calc_bounds.max as f32);
-
-                    // Update the fractional value
-                    *max_ever_filled = capped_refill;
-
-                    capped_refill as usize
-                }
-            }
-            Mode::OnlyIfUsed => {
-                // If the requested token size is less than the max_ever_filled
-                // then we won't increase the token pool size
-                if let Some(n) = requested_token_size
-                    && n <= *max_ever_filled as usize
-                {
-                    (*max_ever_filled as usize).max(self.token_calc_bounds.max)
-                } else {
-                    // If the unused token percentage is less than 10%, then we'll increase the tokens
-                    // by slope. Otherwise, we'll keep the tokens as it is.
-                    if unused_token_percentage <= 10 {
-                        self.relaxed_slope_increase(&mut max_ever_filled)
-                    } else {
-                        *max_ever_filled as usize
-                    }
-                }
-            }
+            Mode::Scheduled => self.scheduled_slope_increase(cur_epoch, &mut max_ever_filled),
+            Mode::OnlyIfUsed(threshold_percentage) => self.only_if_used_slope_increase(
+                requested_token_size,
+                &mut max_ever_filled,
+                used_token_percentage,
+                threshold_percentage,
+            ),
             Mode::GoBackN => {
-                let prev_epoch = self
-                    .last_queried_epoch
-                    .load(std::sync::atomic::Ordering::Relaxed);
-                let time_diff = cur_epoch.checked_sub(prev_epoch).unwrap_or(0) as f32;
+                self.go_back_n_slope_increase(requested_token_size, cur_epoch, &mut max_ever_filled)
+            }
+            Mode::ResetToUsed(threshold_percentage) => self.reset_to_used_slope_increase(
+                &mut max_ever_filled,
+                used_token_percentage,
+                threshold_percentage,
+            ),
+        }
+    }
 
-                // If the requested token size is less than the max_ever_filled
-                // then we won't increase the token pool size
-                if let Some(n) = requested_token_size
-                    && n <= *max_ever_filled as usize
-                {
-                    (*max_ever_filled as usize).max(self.token_calc_bounds.max)
-                } else {
-                    // If the tokens haven't been refilled for a while then reduce the amount to be refilled
-                    // equivalent to slope * (time_diff - 1)
-                    // reduced_refill = max_ever_filled + slope - slope * (time_diff - 1)
-                    let reduced_refill =
-                        *max_ever_filled + self.token_calc_bounds.slope * (2.0 - time_diff);
-                    // Make sure we do not go below the min
-                    let refill = reduced_refill.max(self.token_calc_bounds.min as f32);
-                    // Make sure we do not go above the max
-                    if refill >= self.token_calc_bounds.max as f32 {
-                        self.token_calc_bounds.max
-                    } else {
-                        refill as usize
-                    }
-                }
+    fn relaxed_slope_increase(&self, max_ever_filled: &mut f32) -> usize {
+        // let's make sure we do not go beyond the max
+        if *max_ever_filled >= self.token_calc_bounds.max as f32 {
+            self.token_calc_bounds.max
+        } else {
+            let refill = *max_ever_filled + self.token_calc_bounds.slope;
+            let capped_refill = refill.min(self.token_calc_bounds.max as f32);
+
+            // Update the fractional value
+            *max_ever_filled = capped_refill;
+            capped_refill as usize
+        }
+    }
+
+    fn reset_to_used_slope_increase(
+        &self,
+        mut max_ever_filled: &mut f32,
+        used_token_percentage: usize,
+        threshold_percentage: usize,
+    ) -> usize {
+        // If the used token percentage is greater than threshold%, then we'll increase the tokens by slope.
+        // Otherwise, we'll reduce the amount of tokens to refill by slope.
+        if used_token_percentage >= threshold_percentage {
+            self.relaxed_slope_increase(&mut max_ever_filled)
+        } else {
+            // Reduce the amount of tokens to refill by previously unused tokens
+            let reduced_refill = *max_ever_filled - self.token_calc_bounds.slope;
+            // Make sure we do not go below the min
+            *max_ever_filled = reduced_refill.max(self.token_calc_bounds.min as f32);
+            // Make sure we do not go above the max
+            (*max_ever_filled as usize).max(self.token_calc_bounds.max)
+        }
+    }
+
+    fn go_back_n_slope_increase(
+        &self,
+        requested_token_size: Option<usize>,
+        cur_epoch: u64,
+        max_ever_filled: &mut f32,
+    ) -> usize {
+        let prev_epoch = self
+            .last_queried_epoch
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let time_diff = cur_epoch.checked_sub(prev_epoch).unwrap_or(0) as f32;
+
+        // If the requested token size is less than the max_ever_filled
+        // then we won't increase the token pool size
+        if let Some(n) = requested_token_size
+            && n <= *max_ever_filled as usize
+        {
+            (*max_ever_filled as usize).max(self.token_calc_bounds.max)
+        } else {
+            // If the tokens haven't been refilled for a while then reduce the amount to be refilled
+            // equivalent to slope * (time_diff - 1)
+            // reduced_refill = max_ever_filled + slope - slope * (time_diff - 1)
+            let reduced_refill =
+                *max_ever_filled + self.token_calc_bounds.slope * (2.0 - time_diff);
+            // Make sure we do not go below the min
+            let refill = reduced_refill.max(self.token_calc_bounds.min as f32);
+            // Make sure we do not go above the max
+            if refill >= self.token_calc_bounds.max as f32 {
+                self.token_calc_bounds.max
+            } else {
+                refill as usize
             }
-            Mode::ResetToUsed => {
-                // Do not increase the max_ever_filled if the requested token size is less than the token pool size
-                if let Some(n) = requested_token_size
-                    && n <= *max_ever_filled as usize
-                {
-                    (*max_ever_filled as usize).max(self.token_calc_bounds.max)
-                } else {
-                    // If the unused token percentage is less than 10%, then we'll increase the tokens by slope.
-                    // Otherwise, we'll reduce the amount of tokens to refill by unused tokens.
-                    if unused_token_percentage <= 10 {
-                        self.relaxed_slope_increase(&mut max_ever_filled)
-                    } else {
-                        // Reduce the amount of tokens to refill by previously unused tokens
-                        let reduced_refill =
-                            *max_ever_filled + self.token_calc_bounds.slope - unused_tokens;
-                        // Make sure we do not go below the min
-                        *max_ever_filled = reduced_refill.max(self.token_calc_bounds.min as f32);
-                        // Make sure we do not go above the max
-                        (*max_ever_filled as usize).max(self.token_calc_bounds.max)
-                    }
-                }
+        }
+    }
+
+    fn only_if_used_slope_increase(
+        &self,
+        requested_token_size: Option<usize>,
+        mut max_ever_filled: &mut f32,
+        used_token_percentage: usize,
+        threshold_percentage: usize,
+    ) -> usize {
+        // If the requested token size is less than the max_ever_filled
+        // then we won't increase the token pool size
+        if let Some(n) = requested_token_size
+            && n <= *max_ever_filled as usize
+        {
+            (*max_ever_filled as usize).max(self.token_calc_bounds.max)
+        } else {
+            // If the unused token percentage is less than 10%, then we'll increase the tokens
+            // by slope. Otherwise, we'll keep the tokens as it is.
+            if used_token_percentage >= threshold_percentage {
+                self.relaxed_slope_increase(&mut max_ever_filled)
+            } else {
+                *max_ever_filled as usize
             }
+        }
+    }
+
+    fn scheduled_slope_increase(&self, cur_epoch: u64, max_ever_filled: &mut f32) -> usize {
+        // let's make sure we do not go beyond the max
+        if *max_ever_filled >= self.token_calc_bounds.max as f32 {
+            self.token_calc_bounds.max
+        } else {
+            let prev_epoch = self
+                .last_queried_epoch
+                .load(std::sync::atomic::Ordering::Relaxed);
+            let time_diff = cur_epoch.checked_sub(prev_epoch).unwrap_or(0) as f32;
+            let refill = *max_ever_filled + self.token_calc_bounds.slope * (time_diff);
+            let capped_refill = refill.min(self.token_calc_bounds.max as f32);
+
+            // Update the fractional value
+            *max_ever_filled = capped_refill;
+
+            capped_refill as usize
         }
     }
 }
@@ -574,11 +602,19 @@ pub enum Mode {
     Relaxed,
     /// We will release/increase tokens on a schedule even if it is not used
     Scheduled,
-    /// If the max token is not used, then we will give the same previously allocated token.
-    /// If the tokens used are within +/-10% threshold of max, then we’ll increase by slope
-    OnlyIfUsed,
+    /// If the max token is not used, then we will refill the token pool size by the same amount as max_ever_filled
+    /// If the tokens used are within threshold % of max, then we’ll increase by slope
+    OnlyIfUsed(usize),
+    /// If the tokens aren't used within the last n epochs, then we will reduce the token pool size
+    /// by slope * (n - 1) before calculating the next increase.
+    ///
+    /// Penalty for delayed usage
     GoBackN,
-    ResetToUsed,
+    /// If the tokens used are lower than threshold % of max_ever_filled, then we’ll reduce the token
+    /// pool size by slope for that iteration, otherwise we'll increase the token pool size by slope.
+    ///
+    /// Penalty for underutilization
+    ResetToUsed(usize),
 }
 
 /// Mathematical Boundaries of Token Computation
