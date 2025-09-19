@@ -32,7 +32,6 @@ pub trait RateLimiter {
 
     /// Deposit tokens into the rate limiter.
     /// This will be used to deposit tokens into the rate limiter.
-    ///
     async fn deposit_unused(&self, n: usize, cur_epoch: u64);
 
     /// Shutdown the rate limiter and clean up resources.
