@@ -112,7 +112,7 @@ impl<W> RateLimit<W> {
     /// * `cur_epoch` - Current epoch
     pub(crate) fn compute_refill(
         &self,
-        _requested_token_size: Option<usize>,
+        requested_token_size: Option<usize>,
         cur_epoch: u64,
     ) -> usize {
         let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
@@ -121,7 +121,7 @@ impl<W> RateLimit<W> {
             .deposited_tokens
             .load(std::sync::atomic::Ordering::Relaxed) as f32;
         // Calculate the percentage of tokens that were left unused in previous epoch
-        let _unused_token_percentage =
+        let unused_token_percentage =
             ((deposited_tokens / *max_ever_filled) * 100.0).round() as usize;
 
         match self.token_calc_bounds.mode {
@@ -144,7 +144,73 @@ impl<W> RateLimit<W> {
                     capped_refill as usize
                 }
             }
-            Mode::OnlyIfUsed => unimplemented!(),
+            Mode::OnlyIfUsed => {
+                // If the requested token size is less than the max_ever_filled
+                // then we won't increase the max_ever_filled
+                if let Some(n) = requested_token_size
+                    && n <= *max_ever_filled as usize
+                {
+                    (*max_ever_filled as usize).max(self.token_calc_bounds.max)
+                } else {
+                    // If the unused token percentage is less than 10%, then we'll increase the tokens
+                    // by slope. Otherwise, we'll keep the tokens as it is.
+                    if unused_token_percentage <= 10 {
+                        self.relaxed_slope_increase(&mut max_ever_filled)
+                    } else {
+                        *max_ever_filled as usize
+                    }
+                }
+            }
+            Mode::GoBackN => {
+                let prev_epoch = self
+                    .last_queried_epoch
+                    .load(std::sync::atomic::Ordering::Relaxed);
+                let time_diff = cur_epoch.checked_sub(prev_epoch).unwrap_or(0) as f32;
+
+                // If the requested token size is less than the max_ever_filled
+                // then we won't increase the max_ever_filled amount
+                if let Some(n) = requested_token_size
+                    && n <= *max_ever_filled as usize
+                {
+                    (*max_ever_filled as usize).max(self.token_calc_bounds.max)
+                } else {
+                    // If the tokens haven't been refilled for a while then reduce the amount to be refilled
+                    // equivalent to slope * (time_diff - 1)
+                    // reduced_refill = max_ever_filled + slope - slope * (time_diff - 1)
+                    let reduced_refill =
+                        *max_ever_filled + self.token_calc_bounds.slope * (2.0 - time_diff);
+                    // Make sure we do not go below the min
+                    let refill = reduced_refill.max(self.token_calc_bounds.min as f32);
+                    // Make sure we do not go above the max
+                    if refill >= self.token_calc_bounds.max as f32 {
+                        self.token_calc_bounds.max
+                    } else {
+                        refill as usize
+                    }
+                }
+            }
+            Mode::ResetToUsed => {
+                // Do not increase the max_ever_filled if the requested token size is less than the max_ever_filled
+                if let Some(n) = requested_token_size
+                    && n <= *max_ever_filled as usize
+                {
+                    (*max_ever_filled as usize).max(self.token_calc_bounds.max)
+                } else {
+                    // If the unused token percentage is less than 10%, then we'll increase the tokens by slope.
+                    // Otherwise, we'll reduce the amount of tokens to refill by unused tokens.
+                    if unused_token_percentage <= 10 {
+                        self.relaxed_slope_increase(&mut max_ever_filled)
+                    } else {
+                        // Reduce the amount of tokens to refill by previously unused tokens
+                        let reduced_refill =
+                            *max_ever_filled + self.token_calc_bounds.slope - deposited_tokens;
+                        // Make sure we do not go below the min
+                        *max_ever_filled = reduced_refill.max(self.token_calc_bounds.min as f32);
+                        // Make sure we do not go above the max
+                        (*max_ever_filled as usize).max(self.token_calc_bounds.max)
+                    }
+                }
+            }
         }
     }
 }
@@ -581,6 +647,8 @@ pub enum Mode {
     /// If the max token is not used, then we will give the same previously allocated token.
     /// If the tokens used are within +/-10% threshold of max, then we’ll increase by slope
     OnlyIfUsed,
+    GoBackN,
+    ResetToUsed,
 }
 
 /// Mathematical Boundaries of Token Computation
