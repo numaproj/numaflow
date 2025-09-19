@@ -1858,6 +1858,36 @@ mod tests {
             .test_name("test_distributed_rate_limiter_deposit_logic_3".to_string())
             .mode(Mode::Relaxed)
             .deposited_tokens(vec![5, 5, 5, 5, 5]),
+            // Integer slope with multiple pods
+            // keep depositing same amount of tokens in each epoch
+            // The tokens fetched in next epoch should be independent of deposited tokens
+            // in relaxed mode
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1), (None, 1), (None, 1), (None, 1), (None, 1)],
+                vec![5, 5, 6, 6, 7],
+            )
+            .test_name("test_distributed_rate_limiter_deposit_logic_4".to_string())
+            .mode(Mode::Relaxed)
+            .deposited_tokens(vec![5, 5, 5, 5, 5]),
+            // Integer slope with multiple pods
+            // keep depositing same amount of tokens in each epoch
+            // The tokens fetched in next epoch should be independent of deposited tokens
+            // in scheduled mode
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1), (None, 1), (None, 1), (None, 1), (None, 1)],
+                vec![5, 5, 6, 6, 7],
+            )
+            .test_name("test_distributed_rate_limiter_deposit_logic_5".to_string())
+            .mode(Mode::Scheduled)
+            .deposited_tokens(vec![5, 5, 5, 5, 5]),
         ];
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
@@ -2537,6 +2567,92 @@ mod tests {
             ),
         ];
 
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "redis-tests")]
+    async fn test_distributed_rate_limiter_deposit_logic_redis() {
+        use test_utils::StoreType;
+
+        let test_cases = vec![
+            // Integer slope with multiple pods
+            // Keep acquiring min tokens with regular gaps in epochs between calls
+            // Acquire None tokens here and there to check the max tokens shelled out.
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(2), 0), (None, 0), (None, 1), (None, 0), (Some(3), 1)],
+                vec![2, 5, 2, 5, 3],
+            )
+            .test_name("test_distributed_rate_limiter_deposit_logic_redis_1".to_string())
+            .mode(Mode::Relaxed)
+            .store_type(StoreType::Redis)
+            .deposited_tokens(vec![2, 2, 0, 3, 0]),
+            // Integer slope with multiple pods
+            // Keep depositing all the tokens back
+            // We'll get burst tokens in each pull within the same epoch
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 0), (None, 0), (None, 0), (None, 0), (None, 1)],
+                vec![5, 5, 5, 5, 5],
+            )
+            .test_name("test_distributed_rate_limiter_deposit_logic_redis_2".to_string())
+            .mode(Mode::Relaxed)
+            .store_type(StoreType::Redis)
+            .deposited_tokens(vec![5, 5, 5, 5, 5]),
+            // Integer slope with multiple pods
+            // keep depositing same amount of tokens in each epoch
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1), (None, 0), (None, 1), (None, 0), (None, 1)],
+                vec![5, 5, 5, 6, 5],
+            )
+            .test_name("test_distributed_rate_limiter_deposit_logic_redis_3".to_string())
+            .mode(Mode::Relaxed)
+            .store_type(StoreType::Redis)
+            .deposited_tokens(vec![5, 5, 5, 5, 5]),
+            // Integer slope with multiple pods
+            // keep depositing same amount of tokens in each epoch
+            // The tokens fetched in next epoch should be independent of deposited tokens
+            // in relaxed mode
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1), (None, 1), (None, 1), (None, 1), (None, 1)],
+                vec![5, 5, 6, 6, 7],
+            )
+            .test_name("test_distributed_rate_limiter_deposit_logic_redis_4".to_string())
+            .mode(Mode::Relaxed)
+            .store_type(StoreType::Redis)
+            .deposited_tokens(vec![5, 5, 5, 5, 5]),
+            // Integer slope with multiple pods
+            // keep depositing same amount of tokens in each epoch
+            // The tokens fetched in next epoch should be independent of deposited tokens
+            // in scheduled mode
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1), (None, 1), (None, 1), (None, 1), (None, 1)],
+                vec![5, 5, 6, 6, 7],
+            )
+            .test_name("test_distributed_rate_limiter_deposit_logic_redis_5".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(StoreType::Redis)
+            .deposited_tokens(vec![5, 5, 5, 5, 5]),
+        ];
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
 }
