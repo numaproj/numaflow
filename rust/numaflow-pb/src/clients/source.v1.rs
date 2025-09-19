@@ -445,7 +445,7 @@ pub mod source_client {
         }
         /// NackFn negatively acknowledges a batch of offsets. Invoked during a critical error in the mono vertex or pipeline.
         /// Unlike AckFn its not a streaming rpc because this is only invoked when there is a critical error (error path).
-        pub async fn nackfn(
+        pub async fn nack_fn(
             &mut self,
             request: impl tonic::IntoRequest<super::NackRequest>,
         ) -> std::result::Result<tonic::Response<super::NackResponse>, tonic::Status> {
@@ -458,9 +458,9 @@ pub mod source_client {
                     )
                 })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/source.v1.Source/Nackfn");
+            let path = http::uri::PathAndQuery::from_static("/source.v1.Source/NackFn");
             let mut req = request.into_request();
-            req.extensions_mut().insert(GrpcMethod::new("source.v1.Source", "Nackfn"));
+            req.extensions_mut().insert(GrpcMethod::new("source.v1.Source", "NackFn"));
             self.inner.unary(req, path, codec).await
         }
         /// PendingFn returns the number of pending records at the user defined source.

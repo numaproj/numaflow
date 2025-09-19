@@ -470,7 +470,7 @@ pub fn supports_nack(sdk_version: &str, sdk_language: &str) -> bool {
     }
 
     // Get nack support version constraints
-    let nack_constraints = &crate::server_info::version::NACK_SUPPORT_SDK_VERSIONS;
+    let nack_constraints = &version::NACK_SUPPORT_SDK_VERSIONS;
 
     // Check if the SDK language is present in the nack support versions
     if let Some(required_version) = nack_constraints.get(sdk_language) {
@@ -580,7 +580,7 @@ mod version {
             m.insert("go".to_string(), "0.10.2-z".to_string());
             m.insert("python".to_string(), "0.10.2rc100".to_string());
             m.insert("java".to_string(), "0.10.2-z".to_string());
-            m.insert("rust".to_string(), "0.10.2-z".to_string());
+            m.insert("rust".to_string(), "0.4.0-z".to_string());
             m
         });
 

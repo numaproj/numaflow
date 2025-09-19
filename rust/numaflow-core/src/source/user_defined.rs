@@ -349,7 +349,7 @@ impl SourceAcker for UserDefinedSourceAck {
 
             let response = self
                 .client
-                .nackfn(NackRequest {
+                .nack_fn(NackRequest {
                     request: Some(source::nack_request::Request {
                         offsets: nack_offsets?,
                     }),

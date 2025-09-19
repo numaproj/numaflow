@@ -50,22 +50,21 @@ impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
     }
 
     pub(crate) async fn start(self, cln_token: CancellationToken) -> Result<()> {
-        let child_token = cln_token.child_token();
         // only the reader need to listen on the cancellation token, if the reader stops all
         // other components will stop gracefully because they are chained using tokio streams.
         let (read_messages_stream, reader_handle) = self
             .jetstream_reader
-            .streaming_read(child_token.clone())
+            .streaming_read(cln_token.clone())
             .await?;
 
         let (mapped_messages_stream, mapper_handle) = self
             .mapper
-            .streaming_map(read_messages_stream, child_token.clone())
+            .streaming_map(read_messages_stream, cln_token.clone())
             .await?;
 
         let writer_handle = self
             .jetstream_writer
-            .streaming_write(mapped_messages_stream, child_token)
+            .streaming_write(mapped_messages_stream, cln_token.clone())
             .await?;
 
         // Join the reader, mapper, and writer
@@ -79,17 +78,14 @@ impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
 
         writer_result.inspect_err(|e| {
             error!(?e, "Error while writing messages");
-            cln_token.cancel();
         })?;
 
         mapper_result.inspect_err(|e| {
             error!(?e, "Error while mapping messages");
-            cln_token.cancel();
         })?;
 
         reader_result.inspect_err(|e| {
             error!(?e, "Error while reading messages");
-            cln_token.cancel();
         })?;
 
         Ok(())

@@ -42,7 +42,7 @@ service Source {
 
   // NackFn negatively acknowledges a batch of offsets. Invoked during a critical error in the mono vertex or pipeline.
   // Unlike AckFn its not a streaming rpc because this is only invoked when there is a critical error (error path).
-  rpc Nackfn(NackRequest) returns (NackResponse);
+  rpc NackFn(NackRequest) returns (NackResponse);
 
   // PendingFn returns the number of pending records at the user defined source.
   rpc PendingFn(google.protobuf.Empty) returns (PendingResponse);
