@@ -2,7 +2,7 @@ use crate::state::OptimisticValidityUpdateSecs;
 use crate::state::store::Store;
 use state::RateLimiterState;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
