@@ -58,21 +58,17 @@ pub struct RateLimit<W> {
     last_queried_epoch: Arc<AtomicU64>,
     /// Optional [RateLimiterState] to query for the pool-size in a distributed setting.
     state: W,
-    /// Unused tokens deposited by the caller
-    deposited_tokens: Arc<AtomicUsize>,
 }
 
 impl<W> std::fmt::Display for RateLimit<W> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "token_calc_bounds: {:?}, token: {}, max_ever_filled: {}, last_queried_epoch: {}, deposited_tokens: {}",
+            "token_calc_bounds: {:?}, token: {}, max_ever_filled: {}, last_queried_epoch: {}",
             self.token_calc_bounds,
             self.token.load(std::sync::atomic::Ordering::Relaxed),
             self.max_ever_filled.lock().unwrap(),
             self.last_queried_epoch
-                .load(std::sync::atomic::Ordering::Relaxed),
-            self.deposited_tokens
                 .load(std::sync::atomic::Ordering::Relaxed)
         )
     }
@@ -117,12 +113,10 @@ impl<W> RateLimit<W> {
     ) -> usize {
         let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
 
-        let deposited_tokens = self
-            .deposited_tokens
-            .load(std::sync::atomic::Ordering::Relaxed) as f32;
+        // Whatever remains in the token pool after previous epoch are the unused tokens
+        let unused_tokens = self.token.load(std::sync::atomic::Ordering::Relaxed) as f32;
         // Calculate the percentage of tokens that were left unused in previous epoch
-        let unused_token_percentage =
-            ((deposited_tokens / *max_ever_filled) * 100.0).round() as usize;
+        let unused_token_percentage = ((unused_tokens / *max_ever_filled) * 100.0).round() as usize;
 
         match self.token_calc_bounds.mode {
             Mode::Relaxed => self.relaxed_slope_increase(&mut max_ever_filled),
@@ -203,7 +197,7 @@ impl<W> RateLimit<W> {
                     } else {
                         // Reduce the amount of tokens to refill by previously unused tokens
                         let reduced_refill =
-                            *max_ever_filled + self.token_calc_bounds.slope - deposited_tokens;
+                            *max_ever_filled + self.token_calc_bounds.slope - unused_tokens;
                         // Make sure we do not go below the min
                         *max_ever_filled = reduced_refill.max(self.token_calc_bounds.min as f32);
                         // Make sure we do not go above the max
@@ -224,7 +218,6 @@ impl RateLimit<WithoutState> {
             token: Arc::new(AtomicUsize::new(burst)),
             max_ever_filled: Arc::new(Mutex::new(burst as f32)),
             last_queried_epoch: Arc::new(AtomicU64::new(0)),
-            deposited_tokens: Arc::new(AtomicUsize::new(0)),
             state: WithoutState,
         })
     }
@@ -308,9 +301,6 @@ impl RateLimit<WithoutState> {
         // Update the epoch to current time after refilling
         self.last_queried_epoch
             .store(cur_epoch, std::sync::atomic::Ordering::Release);
-        // Reset the deposited tokens back to 0
-        self.deposited_tokens
-            .store(0, std::sync::atomic::Ordering::Release);
 
         // try to acquire the tokens again
         match self.get_tokens(n, cur_epoch) {
@@ -365,7 +355,17 @@ impl RateLimiter for RateLimit<WithoutState> {
             .unwrap_or(0)
     }
 
-    async fn deposit_unused(&self, _: usize, _: u64) {}
+    async fn deposit_unused(&self, n: usize, token_grabbed_epoch: u64) {
+        if self
+            .last_queried_epoch
+            .load(std::sync::atomic::Ordering::Acquire)
+            == token_grabbed_epoch
+        {
+            // Track the unused tokens
+            self.token
+                .fetch_add(n, std::sync::atomic::Ordering::Release);
+        }
+    }
 
     async fn shutdown(&self) -> crate::Result<()> {
         Ok(())
@@ -392,9 +392,6 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithState<S>> {
 
         self.last_queried_epoch
             .store(cur_epoch, std::sync::atomic::Ordering::Release);
-        // Reset the deposited tokens back to 0
-        self.deposited_tokens
-            .store(0, std::sync::atomic::Ordering::Release);
 
         // Try to take after refill.
         match self.get_tokens(n, cur_epoch) {
@@ -449,6 +446,8 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithSta
             .unwrap_or(0)
     }
 
+    /// Deposit unused tokens back into the rate limiter only if the tokens were acquired in the
+    /// same epoch used to acquire the tokens.
     async fn deposit_unused(&self, n: usize, cur_epoch: u64) {
         if self
             .last_queried_epoch
@@ -460,8 +459,11 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithSta
                 .0
                 .known_pool_size
                 .load(std::sync::atomic::Ordering::Acquire);
-            // Track the unused tokens
-            self.deposited_tokens
+
+            // Track the unused tokens. We multiply by pool size because while grabbing tokens,
+            // we divide by pool size thinking every other processor will be grabbing the same amount
+            // of tokens.
+            self.token
                 .fetch_add(n * known_pool_size, std::sync::atomic::Ordering::Release);
         }
     }
@@ -502,7 +504,6 @@ impl<S: Store> RateLimit<WithState<S>> {
             token: Arc::new(AtomicUsize::new(burst)),
             max_ever_filled: Arc::new(Mutex::new(burst as f32)),
             last_queried_epoch: Arc::new(AtomicU64::new(0)),
-            deposited_tokens: Arc::new(AtomicUsize::new(0)),
             state: WithState(state),
         })
     }
@@ -525,58 +526,6 @@ impl<S: Store> RateLimit<WithState<S>> {
             .load(std::sync::atomic::Ordering::Relaxed)
             .max(1);
 
-        // first utilize the deposited tokens and update the deposited_token store with
-        // the remaining amount of deposited tokens
-        let previously_deposited_tokens = self.deposited_tokens.fetch_update(
-            std::sync::atomic::Ordering::Release,
-            std::sync::atomic::Ordering::Acquire,
-            |current| {
-                // if there are no deposited tokens, then return None
-                if current == 0 {
-                    return None;
-                }
-
-                // divide by pool size to get appropriate tokens for this processor
-                let deposited_processor_tokens = current / pool;
-                // if the deposited tokens per processor are < 1, then return None
-                if deposited_processor_tokens == 0 {
-                    return None;
-                }
-
-                // if n is not provided, acquire all available tokens, else min of requested and
-                // available deposited tokens per processor
-                let deposited_tokens_to_acquire = match n {
-                    None => deposited_processor_tokens,
-                    Some(requested) => deposited_processor_tokens.min(requested),
-                };
-
-                // subtract the tokens count we deemed eligible to acquire now
-                // from the currently deposited tokens.
-                // The total deposited_tokens are stored at each processor level but not
-                // accessed by other processors so we need to multiply the deposited_tokens_to_acquire by pool size
-                // to simulate the total deposited tokens across all processors
-                current.checked_sub(deposited_tokens_to_acquire * pool)
-            },
-        );
-
-        // fetch_update call above returns previously stored value in the atomic, so we'll now
-        // be calculating the numerical amount of unused_tokens_per_pod by doing the same
-        // calculation as above.
-        let unused_tokens_per_pod = match previously_deposited_tokens {
-            Ok(previously_deposited_tokens) => {
-                let deposit_per_pod = previously_deposited_tokens / pool;
-                let acquired = match n {
-                    None => deposit_per_pod,
-                    Some(requested) => deposit_per_pod.min(requested),
-                };
-                acquired
-            }
-            Err(_) => 0,
-        };
-
-        // After determining how many tokens we can utilize from the deposited tokens store,
-        // we'll now determine how many tokens we can utilize from the ones available in the main token store
-        // and update the token store accordingly.
         let fetched = self.token.fetch_update(
             std::sync::atomic::Ordering::Release,
             std::sync::atomic::Ordering::Acquire,
@@ -595,8 +544,7 @@ impl<S: Store> RateLimit<WithState<S>> {
                 // available tokens.
                 let tokens_to_acquire = match n {
                     None => processor_tokens,
-                    Some(requested) => processor_tokens
-                        .min(requested.checked_sub(unused_tokens_per_pod).unwrap_or(0)),
+                    Some(requested) => processor_tokens.min(requested),
                 };
 
                 // since the tokens are not stored at processor level, we need to subtract the tokens
@@ -606,33 +554,15 @@ impl<S: Store> RateLimit<WithState<S>> {
         );
 
         match fetched {
-            // Previous has the total tokens that were available in the token store
             Ok(previous) => {
                 let available_for_pod = previous / pool;
                 let acquired = match n {
-                    // For greedy pulls, return all the tokens that you can acquire
-                    None => available_for_pod + unused_tokens_per_pod,
-                    Some(requested) => {
-                        // The tokens extracted from the token pool is the min between:
-                        // 1. available_for_pod
-                        // 2. requested - unused_tokens_per_pod
-                        let available_for_pod = available_for_pod
-                            .min(requested.checked_sub(unused_tokens_per_pod).unwrap_or(0));
-                        // Return the tokens fetched from main token pool and deposited token pool
-                        available_for_pod + unused_tokens_per_pod
-                    }
+                    None => available_for_pod,
+                    Some(requested) => available_for_pod.min(requested),
                 };
                 TokenAvailability::Available(acquired)
             }
-            // If we failed to fetch the previous tokens, then we'll check if we have any unused tokens
-            // If we have unused tokens, then we'll return them, else we'll return exhausted.
-            Err(_) => {
-                if unused_tokens_per_pod > 0 {
-                    TokenAvailability::Available(unused_tokens_per_pod)
-                } else {
-                    TokenAvailability::Exhausted
-                }
-            }
+            Err(_) => TokenAvailability::Exhausted,
         }
     }
 }
@@ -2902,7 +2832,7 @@ mod tests {
             .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis15".to_string())
             .mode(Mode::Scheduled)
             .store_type(Redis),
-            ];
+        ];
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
 
@@ -2987,8 +2917,7 @@ mod tests {
             .mode(Mode::Scheduled)
             .store_type(StoreType::Redis)
             .deposited_tokens(vec![5, 5, 5, 5, 5]),
-            ];
+        ];
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
 }
-

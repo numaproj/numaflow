@@ -355,8 +355,14 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
             .map_err(|e| Error::ISB(format!("Failed to acquire semaphore permit: {e}")))?;
 
         // Apply rate limiting if configured.
-        let effective_batch_size = match &self.rate_limiter {
+        let (effective_batch_size, token_grabbed_epoch) = match &self.rate_limiter {
             Some(rate_limiter) => {
+                // Note the epoch at which we got the estimated batch size from the rate limiter
+                let cur_epoch = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("Time went backwards beyond unix epoch")
+                    .as_secs();
+
                 let tokens_acquired = rate_limiter
                     .acquire_n(Some(batch_size), Some(Duration::from_secs(1)))
                     .await;
@@ -366,16 +372,10 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                     return Ok(vec![]);
                 }
 
-                effective_batch_size
+                (effective_batch_size, cur_epoch)
             }
-            None => batch_size,
+            None => (batch_size, 0),
         };
-
-        // Note the epoch at which we got the estimated batch size from the rate limiter
-        let cur_epoch = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs();
 
         let start = Instant::now();
         let jetstream_messages = match self
@@ -422,7 +422,7 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                         effective_batch_size
                             .checked_sub(jetstream_messages.len())
                             .unwrap_or(0),
-                        cur_epoch,
+                        token_grabbed_epoch,
                     )
                     .await;
             }
