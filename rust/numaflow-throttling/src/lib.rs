@@ -2834,7 +2834,7 @@ mod tests {
             .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis15".to_string())
             .mode(Mode::Scheduled)
             .store_type(Redis),
-            ];
+        ];
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
 
@@ -2919,8 +2919,7 @@ mod tests {
             .mode(Mode::Scheduled)
             .store_type(StoreType::Redis)
             .deposited_tokens(vec![5, 5, 5, 5, 5]),
-            ];
+        ];
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
 }
-
