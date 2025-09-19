@@ -58,10 +58,6 @@ pub struct RateLimit<W> {
     last_queried_epoch: Arc<AtomicU64>,
     /// Optional [RateLimiterState] to query for the pool-size in a distributed setting.
     state: W,
-    /// Epoch at which the deposited tokens will be reset back to zero.
-    /// If deposit_reset_epoch.as_secs() > cur_epoch.as_secs() then unused tokens are discarded
-    /// else unused tokens are added to deposited_tokens.
-    deposit_reset_epoch: Arc<AtomicU64>,
     /// Unused tokens deposited by the caller
     deposited_tokens: Arc<AtomicUsize>,
 }
@@ -70,11 +66,13 @@ impl<W> std::fmt::Display for RateLimit<W> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "token_calc_bounds: {:?}, token: {}, max_ever_filled: {}, last_queried_epoch: {}",
+            "token_calc_bounds: {:?}, token: {}, max_ever_filled: {}, last_queried_epoch: {}, deposited_tokens: {}",
             self.token_calc_bounds,
             self.token.load(std::sync::atomic::Ordering::Relaxed),
             self.max_ever_filled.lock().unwrap(),
             self.last_queried_epoch
+                .load(std::sync::atomic::Ordering::Relaxed),
+            self.deposited_tokens
                 .load(std::sync::atomic::Ordering::Relaxed)
         )
     }
@@ -107,15 +105,11 @@ impl<W> RateLimit<W> {
     }
 
     /// Computes the number of tokens to be refilled for the next epoch based on various modes
-    ///
-    /// # Arguments
-    ///
+    /// and returns the number of tokens to be used for refilling token pool.
+    /// <br>
+    /// Takes following arguments:
     /// * `requested_token_size` - Tokens requested by the caller
     /// * `cur_epoch` - Current epoch
-    ///
-    /// # Returns
-    ///
-    /// * `usize` - Number of tokens to be refilled
     pub(crate) fn compute_refill(
         &self,
         _requested_token_size: Option<usize>,
@@ -164,7 +158,6 @@ impl RateLimit<WithoutState> {
             token: Arc::new(AtomicUsize::new(burst)),
             max_ever_filled: Arc::new(Mutex::new(burst as f32)),
             last_queried_epoch: Arc::new(AtomicU64::new(0)),
-            deposit_reset_epoch: Arc::new(AtomicU64::new(0)),
             deposited_tokens: Arc::new(AtomicUsize::new(0)),
             state: WithoutState,
         })
@@ -248,9 +241,6 @@ impl RateLimit<WithoutState> {
 
         // Update the epoch to current time after refilling
         self.last_queried_epoch
-            .store(cur_epoch, std::sync::atomic::Ordering::Release);
-        // Update the deposit reset epoch time
-        self.deposit_reset_epoch
             .store(cur_epoch, std::sync::atomic::Ordering::Release);
         // Reset the deposited tokens back to 0
         self.deposited_tokens
@@ -336,9 +326,6 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithState<S>> {
 
         self.last_queried_epoch
             .store(cur_epoch, std::sync::atomic::Ordering::Release);
-        // Update the deposit reset epoch time
-        self.deposit_reset_epoch
-            .store(cur_epoch, std::sync::atomic::Ordering::Release);
         // Reset the deposited tokens back to 0
         self.deposited_tokens
             .store(0, std::sync::atomic::Ordering::Release);
@@ -398,7 +385,7 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithSta
 
     async fn deposit_unused(&self, n: usize, cur_epoch: u64) {
         if self
-            .deposit_reset_epoch
+            .last_queried_epoch
             .load(std::sync::atomic::Ordering::Acquire)
             == cur_epoch
         {
@@ -450,7 +437,6 @@ impl<S: Store> RateLimit<WithState<S>> {
             max_ever_filled: Arc::new(Mutex::new(burst as f32)),
             last_queried_epoch: Arc::new(AtomicU64::new(0)),
             deposited_tokens: Arc::new(AtomicUsize::new(0)),
-            deposit_reset_epoch: Arc::new(AtomicU64::new(0)),
             state: WithState(state),
         })
     }
@@ -566,6 +552,7 @@ impl<S: Store> RateLimit<WithState<S>> {
                         // 2. requested - unused_tokens_per_pod
                         let available_for_pod = available_for_pod
                             .min(requested.checked_sub(unused_tokens_per_pod).unwrap_or(0));
+                        // Return the tokens fetched from main token pool and deposited token pool
                         available_for_pod + unused_tokens_per_pod
                     }
                 };
@@ -698,10 +685,14 @@ mod tests {
             /// This test case: [(None, 3), (Some(2), 1)], specifies that fetch all tokens at 0th
             /// epoch and fetch 2 tokens after 3 epochs.
             pub(super) asked_tokens: Vec<(Option<usize>, usize)>,
-            // Tokens expected to be returned by rate limiter in each iteration to *each* pod
+            /// Tokens expected to be returned by rate limiter in each iteration to *each* pod
             pub(super) expected_tokens: Vec<usize>,
-            // The throttling mode of the rate limiter
-            // defaults to Relaxed
+            /// Vector of tokens that will be deposited back by the caller to each processor
+            /// Since each caller deposits tokens back to the rate limiter, this vector should
+            /// have the same length as asked_tokens.
+            pub(super) deposited_tokens: Vec<usize>,
+            /// The throttling mode of the rate limiter
+            /// defaults to Relaxed
             pub(super) mode: Mode,
         }
 
@@ -717,6 +708,7 @@ mod tests {
                 asked_tokens: Vec<(Option<usize>, usize)>,
                 expected_tokens: Vec<usize>,
             ) -> Self {
+                let asked_tokens_len = asked_tokens.len();
                 TestCase {
                     max_tokens,
                     burst_tokens,
@@ -727,6 +719,7 @@ mod tests {
                     store_type: StoreType::InMemory,
                     test_name: String::new(),
                     mode: Mode::Relaxed,
+                    deposited_tokens: vec![0; asked_tokens_len],
                 }
             }
 
@@ -742,6 +735,11 @@ mod tests {
 
             pub(super) fn mode(mut self, mode: Mode) -> Self {
                 self.mode = mode;
+                self
+            }
+
+            pub(super) fn deposited_tokens(mut self, deposited_tokens: Vec<usize>) -> Self {
+                self.deposited_tokens = deposited_tokens;
                 self
             }
         }
@@ -767,6 +765,7 @@ mod tests {
                 asked_tokens,
                 expected_tokens,
                 mode,
+                deposited_tokens,
             } = test_case;
             let cancel = CancellationToken::new();
             let refresh_interval = Duration::from_millis(50);
@@ -815,7 +814,21 @@ mod tests {
                     );
                     total_got_tokens += tokens;
                     total_expected_tokens += expected_tokens[i];
+
+                    assert!(
+                        deposited_tokens[i] <= tokens,
+                        "Test Name: {}\n\
+                        Invalid test case. Number of tokens deposited back ({}) can't \
+                        be greater that tokens given by the rate limiter ({})",
+                        test_name,
+                        deposited_tokens[i],
+                        tokens
+                    );
+                    rate_limiter
+                        .deposit_unused(deposited_tokens[i], cur_epoch)
+                        .await;
                 }
+
                 assert_eq!(
                     total_got_tokens, total_expected_tokens,
                     "Test Name: {}\n\
@@ -1794,6 +1807,57 @@ mod tests {
             )
             .test_name("test_distributed_rate_limiter_only_scheduled_mode_15".to_string())
             .mode(Mode::Scheduled),
+        ];
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
+    }
+
+    #[tokio::test]
+    async fn test_distributed_rate_limiter_deposit_logic() {
+        use test_utils::StoreType;
+
+        let test_cases = vec![
+            // Integer slope with multiple pods
+            // Keep acquiring min tokens with regular gaps in epochs between calls
+            // Acquire None tokens here and there to check the max tokens shelled out.
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(2), 0), (None, 0), (None, 1), (None, 0), (Some(3), 1)],
+                vec![2, 5, 2, 5, 3],
+            )
+            .test_name("test_distributed_rate_limiter_deposit_logic_1".to_string())
+            .mode(Mode::Relaxed)
+            .store_type(StoreType::InMemory)
+            .deposited_tokens(vec![2, 2, 0, 3, 0]),
+            // Integer slope with multiple pods
+            // Keep depositing all the tokens back
+            // We'll get burst tokens in each pull within the same epoch
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 0), (None, 0), (None, 0), (None, 0), (None, 1)],
+                vec![5, 5, 5, 5, 5],
+            )
+            .test_name("test_distributed_rate_limiter_deposit_logic_2".to_string())
+            .mode(Mode::Relaxed)
+            .deposited_tokens(vec![5, 5, 5, 5, 5]),
+            // Integer slope with multiple pods
+            // keep depositing same amount of tokens in each epoch
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1), (None, 0), (None, 1), (None, 0), (None, 1)],
+                vec![5, 5, 5, 6, 5],
+            )
+            .test_name("test_distributed_rate_limiter_deposit_logic_3".to_string())
+            .mode(Mode::Relaxed)
+            .deposited_tokens(vec![5, 5, 5, 5, 5]),
         ];
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
