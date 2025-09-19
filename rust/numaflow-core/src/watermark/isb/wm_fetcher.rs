@@ -152,7 +152,7 @@ impl ISBWatermarkFetcher {
         Watermark::from_timestamp_millis(min_wm).expect("failed to parse time")
     }
 
-    /// Fetches the head idle WMB for the given partition.Returns the minimum idle WMB across all
+    /// Fetches the head idle WMB for the given partition. Returns the minimum idle WMB across all
     /// processors for the specified partition, but only if all active processors are idle for that
     /// partition.
     pub(crate) fn fetch_head_idle_wmb(&mut self, partition_idx: u16) -> Option<WMB> {

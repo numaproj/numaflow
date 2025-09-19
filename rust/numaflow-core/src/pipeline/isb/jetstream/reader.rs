@@ -308,25 +308,38 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                         )
                         .await?;
 
-                    if let Some(watermark_handle) = self.watermark_handle.as_mut()
-                        && read_messages.is_empty()
-                    {
-                        let idle_wmb = watermark_handle
-                            .fetch_head_idle_wmb(self.stream.partition)
-                            .await;
+                    // set idle status if we did not read any messages
+                    if let Some(watermark_handle) = self.watermark_handle.as_mut() {
+                        if read_messages.is_empty() {
+                            // to set idle status and make sure it is truly idling in concurrent world,
+                            // we need to make sure the state at which we have marked the stream as idle
+                            // is the same when we are checking for idle status.
+                            // we achieve this by adding the Head WMB offset into the idle status and
+                            // when checking for idle status, we fetch Head WMB and compare if the offset
+                            // matches.
+                            let idle_wmb = watermark_handle
+                                .fetch_head_idle_wmb(self.stream.partition)
+                                .await;
 
-                        match idle_wmb {
-                            Some(wmb) => {
-                                self.tracker_handle
-                                    .set_idle_offset(self.stream.partition, Some(wmb.offset))
-                                    .await?;
-                                self.create_and_write_wmb_message(wmb, &messages_tx).await?;
+                            match idle_wmb {
+                                Some(wmb) => {
+                                    self.tracker_handle
+                                        .set_idle_offset(self.stream.partition, Some(wmb.offset))
+                                        .await?;
+                                    self.create_and_write_wmb_message(wmb, &messages_tx).await?;
+                                }
+                                None => {
+                                    // no Head WMB yet, we have not gotten any WMB from upstream yet.
+                                    self.tracker_handle
+                                        .set_idle_offset(self.stream.partition, None)
+                                        .await?;
+                                }
                             }
-                            None => {
-                                self.tracker_handle
-                                    .set_idle_offset(self.stream.partition, None)
-                                    .await?;
-                            }
+                        } else {
+                            // the moment we read a message, we are not idling
+                            self.tracker_handle
+                                .set_idle_offset(self.stream.partition, None)
+                                .await?;
                         }
                     }
 

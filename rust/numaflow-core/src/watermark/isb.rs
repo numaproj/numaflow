@@ -185,22 +185,31 @@ impl ISBWatermarkActor {
         Ok(())
     }
 
-    /// publishes idle watermark
+    /// Publishes idle watermark. We can directly publish idle watermark with min watermark any time
+    /// of because we are publishing based on the lowest watermark in the system. This cannot be true
+    /// if min-watermark is -1. This means that we do not have data
     async fn handle_publish_idle_watermark(&mut self) -> Result<()> {
         // Compute the minimum watermark
-        let mut min_wm = self.compute_min_watermark().await;
+        let min_wm = self.compute_min_watermark().await;
 
         // if the computed min watermark is -1, means there is no data (no windows and inflight messages)
-        // we should also check if the tracker indicates the source is idling before fetching head idle watermark
-        if min_wm.timestamp_millis() == -1 {
+        // we should also check if the tracker indicates the prev-vertex is idling
+        let min_wm = if min_wm.timestamp_millis() == -1 {
             // Check if the tracker indicates the reader is idling, only when we are completely idle
             // we can fetch and publish the head idle watermark.
-            min_wm = self.get_idle_watermark().await;
-        }
+            let idle_head_wmb = self.get_idle_watermark().await;
 
-        if min_wm.timestamp_millis() == -1 {
-            return Ok(());
-        }
+            // -1 does not strictly represent idling, so we cannot publish the idle watermark
+            if idle_head_wmb.timestamp_millis() == -1 {
+                return Ok(());
+            }
+            idle_head_wmb
+        } else {
+            min_wm
+        };
+
+        // Now that we know that the system is idling, we can publish the idle watermark for the idling
+        // streams.
 
         // Identify the streams that are idle and publish the idle watermark
         let idle_streams = self.idle_manager.fetch_idle_streams().await;
@@ -217,7 +226,10 @@ impl ISBWatermarkActor {
         Ok(())
     }
 
-    /// Computes the minimum watermark based on window manager and inflight messages.
+    /// Computes the minimum watermark based on window manager and inflight messages. This will return
+    /// -1 if there are no windows and no inflight messages. That means we are not doing anything, this
+    /// does not mean we are idling, it could be just that we cannot read from ISB due to errors, etc.
+    /// If it returns -1, we should check if the tracker indicates the reader is idling.
     async fn compute_min_watermark(&self) -> Watermark {
         // If window manager is configured, we can use the oldest window's end time - 1ms as the
         // watermark.
@@ -250,7 +262,11 @@ impl ISBWatermarkActor {
             .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap())
     }
 
-    /// Gets the lowest idle watermark among all the partitions.
+    /// Gets the lowest idle watermark among all the partitions. If we cannot determine the lowest
+    /// watermark, we return -1.
+    /// We achieve this via "optimistic locking", when we set idle status to true in tracker, we will
+    /// be setting the Head WMB offset. Here we will make sure that for every partition, the Head WMB
+    /// saved in the idle status matches the Head WMB offset in the partition's timeline.
     async fn get_idle_watermark(&mut self) -> Watermark {
         let idle_offsets = self
             .tracker_handle
