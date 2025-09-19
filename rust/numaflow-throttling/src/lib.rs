@@ -31,8 +31,8 @@ pub trait RateLimiter {
     async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize;
 
     /// Deposit tokens into the rate limiter.
-    /// This will be used to deposit tokens into the rate limiter.
-    ///
+    /// This will be used to deposit tokens into the rate limiter. If we should not be adding tokens
+    /// if the deposit does not happen in the same epoch as the tokens were acquired.
     async fn deposit_unused(&self, n: usize, cur_epoch: u64);
 
     /// Shutdown the rate limiter and clean up resources.
@@ -106,7 +106,7 @@ impl<W> RateLimit<W> {
 
     /// Computes the number of tokens to be refilled for the next epoch based on various modes
     /// and returns the number of tokens to be used for refilling token pool.
-    /// <br>
+    ///
     /// Takes following arguments:
     /// * `requested_token_size` - Tokens requested by the caller
     /// * `cur_epoch` - Current epoch
@@ -242,6 +242,7 @@ impl RateLimit<WithoutState> {
         // Update the epoch to current time after refilling
         self.last_queried_epoch
             .store(cur_epoch, std::sync::atomic::Ordering::Release);
+
         // Reset the deposited tokens back to 0
         self.deposited_tokens
             .store(0, std::sync::atomic::Ordering::Release);
@@ -383,18 +384,23 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithSta
             .unwrap_or(0)
     }
 
-    async fn deposit_unused(&self, n: usize, cur_epoch: u64) {
+    /// Deposit unused tokens back into the rate limiter only if the tokens were acquired in the
+    /// same epoch used to acquire the tokens.
+    async fn deposit_unused(&self, n: usize, token_grabbed_epoch: u64) {
         if self
             .last_queried_epoch
             .load(std::sync::atomic::Ordering::Acquire)
-            == cur_epoch
+            == token_grabbed_epoch
         {
             let known_pool_size = self
                 .state
                 .0
                 .known_pool_size
                 .load(std::sync::atomic::Ordering::Acquire);
-            // Track the unused tokens
+
+            // Track the unused tokens. We multiply by pool size because while grabbing tokens,
+            // we divide by pool size thinking every other processor will be grabbing the same amount
+            // of tokens.
             self.deposited_tokens
                 .fetch_add(n * known_pool_size, std::sync::atomic::Ordering::Release);
         }
