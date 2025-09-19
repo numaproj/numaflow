@@ -160,7 +160,7 @@ impl<W> RateLimit<W> {
     fn only_if_used_slope_increase(
         &self,
         requested_token_size: Option<usize>,
-        mut max_ever_filled: &mut f32,
+        max_ever_filled: &mut f32,
         used_token_percentage: usize,
         threshold_percentage: usize,
     ) -> usize {
@@ -169,12 +169,12 @@ impl<W> RateLimit<W> {
         if let Some(n) = requested_token_size
             && n <= *max_ever_filled as usize
         {
-            (*max_ever_filled as usize).max(self.token_calc_bounds.max)
+            *max_ever_filled as usize
         } else {
             // If the unused token percentage is less than 10%, then we'll increase the tokens
             // by slope. Otherwise, we'll keep the tokens as it is.
             if used_token_percentage >= threshold_percentage {
-                self.relaxed_slope_increase(&mut max_ever_filled)
+                self.relaxed_slope_increase(max_ever_filled)
             } else {
                 *max_ever_filled as usize
             }
@@ -197,7 +197,7 @@ impl<W> RateLimit<W> {
         if let Some(n) = requested_token_size
             && n <= *max_ever_filled as usize
         {
-            (*max_ever_filled as usize).max(self.token_calc_bounds.max)
+            *max_ever_filled as usize
         } else {
             // If the tokens haven't been refilled for a while then reduce the amount to be refilled
             // equivalent to slope * (time_diff - 1)
@@ -207,31 +207,27 @@ impl<W> RateLimit<W> {
             // Make sure we do not go below the min
             let refill = reduced_refill.max(self.token_calc_bounds.min as f32);
             // Make sure we do not go above the max
-            if refill >= self.token_calc_bounds.max as f32 {
-                self.token_calc_bounds.max
-            } else {
-                refill as usize
-            }
+            (refill as usize).min(self.token_calc_bounds.max)
         }
     }
 
     fn reset_to_used_slope_increase(
         &self,
-        mut max_ever_filled: &mut f32,
+        max_ever_filled: &mut f32,
         used_token_percentage: usize,
         threshold_percentage: usize,
     ) -> usize {
         // If the used token percentage is greater than threshold%, then we'll increase the tokens by slope.
         // Otherwise, we'll reduce the amount of tokens to refill by slope.
         if used_token_percentage >= threshold_percentage {
-            self.relaxed_slope_increase(&mut max_ever_filled)
+            self.relaxed_slope_increase(max_ever_filled)
         } else {
             // Reduce the amount of tokens to refill by previously unused tokens
             let reduced_refill = *max_ever_filled - self.token_calc_bounds.slope;
             // Make sure we do not go below the min
             *max_ever_filled = reduced_refill.max(self.token_calc_bounds.min as f32);
             // Make sure we do not go above the max
-            (*max_ever_filled as usize).max(self.token_calc_bounds.max)
+            (*max_ever_filled as usize).min(self.token_calc_bounds.max)
         }
     }
 }
@@ -673,7 +669,6 @@ impl RateLimiter for NoOpRateLimiter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::test_utils::StoreType::Redis;
     use std::time::SystemTime;
     use tokio::time::Duration;
 
