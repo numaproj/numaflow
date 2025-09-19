@@ -2376,7 +2376,7 @@ mod tests {
                 ],
                 vec![2, 2, 7, 2, 9, 2, 10, 10],
             )
-            .test_name("test_distributed_rate_limiter_only_scheduled_mode_1".to_string())
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis1".to_string())
             .mode(Mode::Scheduled)
             .store_type(Redis),
             // Integer slope with multiple pods
@@ -2396,7 +2396,7 @@ mod tests {
                 ],
                 vec![5, 5, 7, 8, 10, 10],
             )
-            .test_name("test_distributed_rate_limiter_only_scheduled_mode_2".to_string())
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis2".to_string())
             .mode(Mode::Scheduled)
             .store_type(Redis),
             // Fractional slope (>1) with multiple pods
@@ -2423,7 +2423,7 @@ mod tests {
                 ],
                 vec![7, 9, 0, 12, 14, 16, 18, 21, 23, 25, 27, 30],
             )
-            .test_name("test_distributed_rate_limiter_only_scheduled_mode_3".to_string())
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis3".to_string())
             .mode(Mode::Scheduled)
             .store_type(Redis),
             // Fractional slope (>1) with multiple pods
@@ -2436,7 +2436,7 @@ mod tests {
                 vec![(None, 1); 11],
                 vec![7, 9, 12, 14, 16, 18, 21, 23, 25, 27, 30],
             )
-            .test_name("test_distributed_rate_limiter_only_scheduled_mode_4".to_string())
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis4".to_string())
             .mode(Mode::Scheduled)
             .store_type(Redis),
             // Fractional slope (>1) with multiple pods
@@ -2449,7 +2449,7 @@ mod tests {
                 vec![(Some(20), 1); 11],
                 vec![7, 9, 12, 14, 16, 18, 20, 20, 20, 20, 20],
             )
-            .test_name("test_distributed_rate_limiter_only_scheduled_mode_5".to_string())
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis5".to_string())
             .mode(Mode::Scheduled)
             .store_type(Redis),
             // Fractional slope (<1) with multiple pods
@@ -2476,7 +2476,7 @@ mod tests {
                 ],
                 vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
             )
-            .test_name("test_distributed_rate_limiter_only_scheduled_mode_6".to_string())
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis6".to_string())
             .mode(Mode::Scheduled)
             .store_type(Redis),
             // Fractional slope (<1) with multiple pods
@@ -2489,7 +2489,7 @@ mod tests {
                 vec![(None, 1); 11],
                 vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
             )
-            .test_name("test_distributed_rate_limiter_only_scheduled_mode_7".to_string())
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis7".to_string())
             .mode(Mode::Scheduled)
             .store_type(Redis),
             // Fractional slope (<1) with multiple pods
@@ -2502,7 +2502,7 @@ mod tests {
                 vec![(Some(1), 1); 11],
                 vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
             )
-            .test_name("test_distributed_rate_limiter_only_scheduled_mode_8".to_string())
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis8".to_string())
             .mode(Mode::Scheduled)
             .store_type(Redis),
             // Integer slope with multiple pods
@@ -2515,7 +2515,7 @@ mod tests {
                 vec![(Some(30), 1); 11],
                 vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
             )
-            .test_name("test_distributed_rate_limiter_only_scheduled_mode_9".to_string())
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis9".to_string())
             .mode(Mode::Scheduled)
             .store_type(Redis),
             // Integer slope with multiple pods
@@ -2528,7 +2528,7 @@ mod tests {
                 vec![(None, 1); 11],
                 vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
             )
-            .test_name("test_distributed_rate_limiter_only_scheduled_mode_10".to_string())
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis10".to_string())
             .mode(Mode::Scheduled)
             .store_type(Redis),
             // Integer slope with multiple pods
@@ -2560,7 +2560,7 @@ mod tests {
                 ],
                 vec![1, 2, 1, 3, 1, 4, 1, 6, 2, 5, 8, 8, 9, 9, 10, 5, 10],
             )
-            .test_name("test_distributed_rate_limiter_only_scheduled_mode_11".to_string())
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis11".to_string())
             .mode(Mode::Scheduled)
             .store_type(Redis),
             // Integer slope with multiple pods
@@ -2573,7 +2573,7 @@ mod tests {
                 vec![(Some(1), 1); 11],
                 vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
             )
-            .test_name("test_distributed_rate_limiter_only_scheduled_mode_12".to_string())
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis12".to_string())
             .mode(Mode::Scheduled)
             .store_type(Redis),
             // Fractional slope with single pod
@@ -2586,7 +2586,7 @@ mod tests {
                 vec![(None, 1); 11],
                 vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
             )
-            .test_name("test_distributed_rate_limiter_only_scheduled_mode_13".to_string())
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis13".to_string())
             .mode(Mode::Scheduled)
             .store_type(Redis),
             // Fractional slope with single pod
@@ -2599,7 +2599,7 @@ mod tests {
                 vec![(Some(5), 1); 11],
                 vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
             )
-            .test_name("test_distributed_rate_limiter_only_scheduled_mode_14".to_string())
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis14".to_string())
             .mode(Mode::Scheduled)
             .store_type(Redis),
             // Fractional slope with single pod
@@ -2612,7 +2612,7 @@ mod tests {
                 vec![(Some(1), 1); 11],
                 vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
             )
-            .test_name("test_distributed_rate_limiter_only_scheduled_mode_15".to_string())
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis15".to_string())
             .mode(Mode::Scheduled)
             .store_type(Redis),
         ];
