@@ -51,7 +51,7 @@ enum ISBWaterMarkActorMessage {
     Publish {
         stream: Stream,
         offset: IntOffset,
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
+        oneshot_tx: tokio::sync::oneshot::Sender<()>,
     },
     FetchHead {
         partition_idx: u16,
@@ -62,7 +62,7 @@ enum ISBWaterMarkActorMessage {
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Option<WMB>>>,
     },
     PublishIdleWatermark {
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
+        oneshot_tx: tokio::sync::oneshot::Sender<()>,
     },
 }
 
@@ -130,9 +130,9 @@ impl ISBWatermarkActor {
                 offset,
                 oneshot_tx,
             } => {
-                let result = self.handle_publish_watermark(stream, offset).await;
+                self.handle_publish_watermark(stream, offset).await;
                 oneshot_tx
-                    .send(result)
+                    .send(())
                     .map_err(|_| Error::Watermark("failed to send response".to_string()))
             }
 
@@ -162,16 +162,16 @@ impl ISBWatermarkActor {
 
             // publishes idle watermark
             ISBWaterMarkActorMessage::PublishIdleWatermark { oneshot_tx } => {
-                let result = self.handle_publish_idle_watermark().await;
+                self.handle_publish_idle_watermark().await;
                 oneshot_tx
-                    .send(result)
+                    .send(())
                     .map_err(|_| Error::Watermark("failed to send response".to_string()))
             }
         }
     }
 
     /// publishes the watermark for the given stream and offset
-    async fn handle_publish_watermark(&mut self, stream: Stream, offset: IntOffset) -> Result<()> {
+    async fn handle_publish_watermark(&mut self, stream: Stream, offset: IntOffset) {
         // Compute the minimum watermark
         let min_wm = self.compute_min_watermark().await;
 
@@ -182,13 +182,12 @@ impl ISBWatermarkActor {
 
         // Reset idle state for this stream
         self.idle_manager.reset_idle(&stream).await;
-        Ok(())
     }
 
     /// Publishes idle watermark. We can directly publish idle watermark with min watermark any time
     /// of because we are publishing based on the lowest watermark in the system. This cannot be true
     /// if min-watermark is -1. This means that we do not have data
-    async fn handle_publish_idle_watermark(&mut self) -> Result<()> {
+    async fn handle_publish_idle_watermark(&mut self) {
         // Compute the minimum watermark
         let min_wm = self.compute_min_watermark().await;
 
@@ -201,7 +200,7 @@ impl ISBWatermarkActor {
 
             // -1 does not strictly represent idling, so we cannot publish the idle watermark
             if idle_head_wmb.timestamp_millis() == -1 {
-                return Ok(());
+                return;
             }
             idle_head_wmb
         } else {
@@ -223,7 +222,6 @@ impl ISBWatermarkActor {
                 self.idle_manager.update_idle_metadata(stream, offset).await;
             }
         }
-        Ok(())
     }
 
     /// Computes the minimum watermark based on window manager and inflight messages. This will return
