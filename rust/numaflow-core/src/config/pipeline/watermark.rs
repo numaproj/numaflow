@@ -1,3 +1,4 @@
+use crate::config::get_vertex_replica;
 use crate::config::pipeline::{FromVertexConfig, ToVertexConfig, VertexConfig};
 use numaflow_models::models::Watermark;
 use std::time::Duration;
@@ -38,7 +39,7 @@ impl WatermarkConfig {
         // Helper function to create bucket config for to_vertex
         let create_to_vertex_bucket_config = |to: &ToVertexConfig| BucketConfig {
             vertex: to.name,
-            partitions: to.partitions,
+            partitions: (0..to.partitions).collect(),
             ot_bucket: Box::leak(
                 format!(
                     "{}-{}-{}-{}_OT",
@@ -58,7 +59,7 @@ impl WatermarkConfig {
 
         // Helper function to create bucket config for from_vertex
         let create_from_vertex_bucket_config =
-            |from: &FromVertexConfig, partitions: u16| BucketConfig {
+            |from: &FromVertexConfig, partitions: Vec<u16>| BucketConfig {
                 vertex: from.name,
                 partitions,
                 ot_bucket: Box::leak(
@@ -83,7 +84,7 @@ impl WatermarkConfig {
                 max_delay: Duration::from_millis(max_delay),
                 source_bucket_config: BucketConfig {
                     vertex: Box::leak(vertex_name.to_string().into_boxed_str()),
-                    partitions: 1, // source will have only one partition
+                    partitions: vec![0], // source will have only one partition
                     ot_bucket: Box::leak(
                         format!("{namespace}-{pipeline_name}-{vertex_name}_SOURCE_OT")
                             .into_boxed_str(),
@@ -104,7 +105,9 @@ impl WatermarkConfig {
                 Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
                     from_vertex_config: from_vertex_config
                         .iter()
-                        .map(|from| create_from_vertex_bucket_config(from, from.partitions))
+                        .map(|from| {
+                            create_from_vertex_bucket_config(from, (0..from.partitions).collect())
+                        })
                         .collect(),
                     to_vertex_config: to_vertex_config
                         .iter()
@@ -116,7 +119,10 @@ impl WatermarkConfig {
                 Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
                     from_vertex_config: from_vertex_config
                         .iter()
-                        .map(|from| create_from_vertex_bucket_config(from, 1)) // reduce will have only one partition
+                        .map(|from| {
+                            // reduce will have only one partition which is the same as the vertex replica
+                            create_from_vertex_bucket_config(from, vec![*get_vertex_replica()])
+                        }) // reduce will have only one partition
                         .collect(),
                     to_vertex_config: to_vertex_config
                         .iter()
@@ -161,7 +167,7 @@ impl Default for IdleConfig {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct BucketConfig {
     pub(crate) vertex: &'static str,
-    pub(crate) partitions: u16,
+    pub(crate) partitions: Vec<u16>,
     /// Offset Timeline (OT) bucket.
     pub(crate) ot_bucket: &'static str,
     /// Heartbeat bucket for processor heartbeats.

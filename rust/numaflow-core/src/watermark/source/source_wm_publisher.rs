@@ -151,7 +151,7 @@ mod tests {
 
         let source_config = BucketConfig {
             vertex: "source_vertex",
-            partitions: 2,
+            partitions: vec![0, 1],
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
             delay: None,
@@ -228,7 +228,7 @@ mod tests {
 
         let source_config = BucketConfig {
             vertex: "source_vertex",
-            partitions: 2,
+            partitions: vec![0, 1],
             ot_bucket: source_ot_bucket_name,
             hb_bucket: source_hb_bucket_name,
             delay: None,
@@ -236,7 +236,7 @@ mod tests {
 
         let edge_config = BucketConfig {
             vertex: "edge_vertex",
-            partitions: 2,
+            partitions: vec![0, 1],
             ot_bucket: edge_ot_bucket_name,
             hb_bucket: edge_hb_bucket_name,
             delay: None,
@@ -343,7 +343,7 @@ mod tests {
 
         let source_config = BucketConfig {
             vertex: "source_vertex",
-            partitions: 2,
+            partitions: vec![0, 1],
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
             delay: None,
@@ -421,7 +421,7 @@ mod tests {
 
         let source_config = BucketConfig {
             vertex: "source_vertex",
-            partitions: 2,
+            partitions: vec![0, 1],
             ot_bucket: source_ot_bucket_name,
             hb_bucket: source_hb_bucket_name,
             delay: None,
@@ -429,7 +429,7 @@ mod tests {
 
         let edge_config = BucketConfig {
             vertex: "edge_vertex",
-            partitions: 2,
+            partitions: vec![0, 1],
             ot_bucket: edge_ot_bucket_name,
             hb_bucket: edge_hb_bucket_name,
             delay: None,

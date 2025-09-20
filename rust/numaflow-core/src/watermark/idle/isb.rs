@@ -115,7 +115,7 @@ impl ISBIdleDetector {
             .wmb_msg_offset = None;
     }
 
-    /// fetches the offset to be used for publishing the idle watermark. Only a WMB (idle=true) can be used
+    /// Fetches the offset to be used for publishing the idle watermark. Only a WMB (idle=true) can be used
     /// to send idle watermark, hence if no such WMB's are published, we publish a WMB and return its
     /// offset, or return the current "active" WMB's offset.
     pub(crate) async fn fetch_idle_offset(&self, stream: &Stream) -> crate::error::Result<i64> {
@@ -153,7 +153,7 @@ impl ISBIdleDetector {
         Ok(offset as i64)
     }
 
-    /// updates the idle stream's metadata, by setting the ctrl message offset and updates the last published time.
+    /// Updates the idle stream's metadata, by setting the ctrl message offset and updates the last published time.
     pub(crate) async fn update_idle_metadata(&mut self, stream: &Stream, offset: i64) {
         let mut write_guard = self
             .last_published_wm_state

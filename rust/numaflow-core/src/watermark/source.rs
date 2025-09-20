@@ -628,7 +628,7 @@ mod tests {
             max_delay: Default::default(),
             source_bucket_config: BucketConfig {
                 vertex: "source_vertex",
-                partitions: 1, // partitions is always one for source
+                partitions: vec![0], // partitions is always vec![0] for source
                 ot_bucket: ot_bucket_name,
                 hb_bucket: hb_bucket_name,
                 delay: None,
@@ -759,14 +759,14 @@ mod tests {
             max_delay: Default::default(),
             source_bucket_config: BucketConfig {
                 vertex: "source_vertex",
-                partitions: 2,
+                partitions: vec![0, 1],
                 ot_bucket: source_ot_bucket_name,
                 hb_bucket: source_hb_bucket_name,
                 delay: None,
             },
             to_vertex_bucket_config: vec![BucketConfig {
                 vertex: "edge_vertex",
-                partitions: 2,
+                partitions: vec![0, 1],
                 ot_bucket: edge_ot_bucket_name,
                 hb_bucket: edge_hb_bucket_name,
                 delay: None,
@@ -942,7 +942,7 @@ mod tests {
 
         let source_bucket_config = BucketConfig {
             vertex: "v1",
-            partitions: 1,
+            partitions: vec![0],
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
             delay: None,
@@ -950,7 +950,7 @@ mod tests {
 
         let to_vertex_bucket_config = BucketConfig {
             vertex: "edge_vertex",
-            partitions: 1,
+            partitions: vec![0],
             ot_bucket: to_vertex_ot_bucket_name,
             hb_bucket: to_vertex_hb_bucket_name,
             delay: None,
@@ -1135,7 +1135,7 @@ mod tests {
 
         let source_bucket_config = BucketConfig {
             vertex: "v1",
-            partitions: 1,
+            partitions: vec![0],
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
             delay: None,
@@ -1143,7 +1143,7 @@ mod tests {
 
         let to_vertex_bucket_config = BucketConfig {
             vertex: "edge_vertex",
-            partitions: 1,
+            partitions: vec![0],
             ot_bucket: to_vertex_ot_bucket_name,
             hb_bucket: to_vertex_hb_bucket_name,
             delay: None,
@@ -1308,7 +1308,7 @@ mod tests {
             max_delay: Default::default(),
             source_bucket_config: BucketConfig {
                 vertex: "source_vertex",
-                partitions: 1,
+                partitions: vec![0],
                 ot_bucket: ot_bucket_name,
                 hb_bucket: hb_bucket_name,
                 delay: None,

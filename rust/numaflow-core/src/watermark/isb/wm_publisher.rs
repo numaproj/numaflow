@@ -58,7 +58,7 @@ pub(crate) struct ISBWatermarkPublisher {
     /// handle to the heartbeat publishing task.
     hb_handle: tokio::task::JoinHandle<()>,
     /// last published watermark for each vertex and partition.
-    last_published_wm: HashMap<&'static str, Vec<LastPublishedState>>,
+    last_published_wm: HashMap<&'static str, HashMap<u16, LastPublishedState>>,
     /// map of vertex to its ot bucket.
     ot_buckets: HashMap<&'static str, async_nats::jetstream::kv::Store>,
 }
@@ -95,16 +95,18 @@ impl ISBWatermarkPublisher {
 
             ot_buckets.insert(config.vertex, ot_bucket);
             hb_buckets.push(hb_bucket);
-            last_published_wm.insert(
-                config.vertex,
-                vec![
+
+            let partition_state = HashMap::from_iter(config.partitions.iter().map(|partition| {
+                (
+                    *partition,
                     LastPublishedState {
                         delay: config.delay,
                         ..Default::default()
-                    };
-                    config.partitions as usize
-                ],
-            );
+                    },
+                )
+            }));
+
+            last_published_wm.insert(config.vertex, partition_state);
         }
 
         // start publishing heartbeats
@@ -172,7 +174,7 @@ impl ISBWatermarkPublisher {
         // NOTE: in idling case since we reuse the control message offset, we can have the same offset
         // with larger watermark (we should publish it).
         let last_state = last_published_wm_state
-            .get_mut(stream.partition as usize)
+            .get_mut(&stream.partition)
             .expect("should have partition");
         if offset < last_state.offset {
             last_state.watermark = last_state.watermark.max(watermark);
@@ -224,7 +226,7 @@ impl ISBWatermarkPublisher {
 
         // update the last published watermark state
         *last_published_wm_state
-            .get_mut(stream.partition as usize)
+            .get_mut(&stream.partition)
             .expect("should have partition") = LastPublishedState {
             offset,
             watermark,
@@ -255,7 +257,7 @@ mod tests {
 
         let bucket_configs = vec![BucketConfig {
             vertex: "v1",
-            partitions: 2,
+            partitions: vec![0, 1],
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
             delay: None,
@@ -374,14 +376,14 @@ mod tests {
         let bucket_configs = vec![
             BucketConfig {
                 vertex: "v1",
-                partitions: 1,
+                partitions: vec![0],
                 ot_bucket: ot_bucket_name_v1,
                 hb_bucket: hb_bucket_name_v1,
                 delay: None,
             },
             BucketConfig {
                 vertex: "v2",
-                partitions: 1,
+                partitions: vec![0],
                 ot_bucket: ot_bucket_name_v2,
                 hb_bucket: hb_bucket_name_v2,
                 delay: None,
@@ -508,7 +510,7 @@ mod tests {
 
         let bucket_configs = vec![BucketConfig {
             vertex: "v1",
-            partitions: 1,
+            partitions: vec![0],
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
             delay: None,
