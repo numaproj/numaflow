@@ -9,4 +9,9 @@ type SqsSink struct {
 
 	// QueueOwnerAWSAccountID is the queue owner aws account id
 	QueueOwnerAWSAccountID string `json:"queueOwnerAWSAccountID" protobuf:"bytes,3,name=queueOwnerAWSAccountID"`
+
+	// AssumeRole contains the configuration for AWS STS assume role.
+	// When specified, the SQS client will assume the specified role for authentication.
+	// +optional
+	AssumeRole *AWSAssumeRole `json:"assumeRole,omitempty" protobuf:"bytes,4,opt,name=assumeRole"`
 }

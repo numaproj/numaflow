@@ -28,6 +28,7 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AWSAssumeRole":                    schema_pkg_apis_numaflow_v1alpha1_AWSAssumeRole(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractPodTemplate":              schema_pkg_apis_numaflow_v1alpha1_AbstractPodTemplate(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink":                     schema_pkg_apis_numaflow_v1alpha1_AbstractSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex":                   schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref),
@@ -147,6 +148,71 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Window":                           schema_pkg_apis_numaflow_v1alpha1_Window(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.containerBuilder":                 schema_pkg_apis_numaflow_v1alpha1_containerBuilder(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.getContainerReq":                  schema_pkg_apis_numaflow_v1alpha1_getContainerReq(ref),
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_AWSAssumeRole(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AWSAssumeRole contains the configuration for AWS STS assume role authentication This can be used with any AWS service (SQS, S3, DynamoDB, etc.)",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"roleArn": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RoleARN is the Amazon Resource Name (ARN) of the role to assume. This is a required field when assume role is enabled. Example: \"arn:aws:iam::123456789012:role/CrossAccount-Service-Role\"",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"sessionName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SessionName is an identifier for the assumed role session. This appears in AWS CloudTrail logs to help identify the source of API calls. If not specified, a default session name will be generated based on the service context.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"durationSeconds": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DurationSeconds is the duration (in seconds) of the role session. Valid values: 900-43200 (15 minutes to 12 hours) Defaults to 3600 (1 hour) if not specified. The actual session duration is constrained by the maximum session duration setting of the IAM role being assumed.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"externalId": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ExternalID is a unique identifier that might be required when you assume a role in another account. This is commonly used as an additional security measure for cross-account role access.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"policy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Policy is an IAM policy document (JSON string) that you want to use as an inline session policy. This parameter is optional. When specified, the session permissions are the intersection of the IAM role's identity-based policy and the session policies. This allows further restriction of permissions for the specific service operations.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"policyArns": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PolicyARNs is a list of Amazon Resource Names (ARNs) of IAM managed policies that you want to use as managed session policies. The policies must exist in the same account as the role. This allows attaching existing managed policies to further restrict session permissions.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"roleArn"},
+			},
+		},
 	}
 }
 
@@ -5684,10 +5750,18 @@ func schema_pkg_apis_numaflow_v1alpha1_SqsSink(ref common.ReferenceCallback) com
 							Format:      "",
 						},
 					},
+					"assumeRole": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AssumeRole contains the configuration for AWS STS assume role. When specified, the SQS client will assume the specified role for authentication.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AWSAssumeRole"),
+						},
+					},
 				},
 				Required: []string{"awsRegion", "queueName", "queueOwnerAWSAccountID"},
 			},
 		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AWSAssumeRole"},
 	}
 }
 
@@ -5780,10 +5854,18 @@ func schema_pkg_apis_numaflow_v1alpha1_SqsSource(ref common.ReferenceCallback) c
 							},
 						},
 					},
+					"assumeRole": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AssumeRole contains the configuration for AWS STS assume role. When specified, the SQS client will assume the specified role for authentication.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AWSAssumeRole"),
+						},
+					},
 				},
 				Required: []string{"awsRegion", "queueName", "queueOwnerAWSAccountID"},
 			},
 		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AWSAssumeRole"},
 	}
 }
 
