@@ -487,6 +487,7 @@ mod tests {
             queue_name: "test-queue",
             region: "us-west-2",
             queue_owner_aws_account_id: "123456789012",
+            assume_role_config: None,
         };
         let sink_config = SinkConfig {
             sink_type: SinkType::Sqs(sqs_config.clone()),

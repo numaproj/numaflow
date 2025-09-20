@@ -279,6 +279,7 @@ pub mod tests {
             region: SQS_DEFAULT_REGION,
             queue_name: "test-q",
             queue_owner_aws_account_id: "12345678912",
+            assume_role_config: None,
         })
         .client(sqs_client)
         .build()
