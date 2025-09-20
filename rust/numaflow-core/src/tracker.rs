@@ -591,7 +591,10 @@ impl TrackerHandle {
         response.await.map_err(|e| Error::Tracker(format!("{e:?}")))
     }
 
-    /// Sets the idle status of the tracker.
+    /// Sets the idle status of the tracker. Setting idle offset to None means the partition is not
+    /// idling. This offset is the Head WMB offset which is used for "optimistic locking" on the idle
+    /// status and Head WMB. Bear in mind that the watermark itself is not stored because the Watermark
+    /// can monotonically increase for the same Head MWB offset.
     pub(crate) async fn set_idle_offset(
         &self,
         partition_idx: u16,
@@ -608,7 +611,8 @@ impl TrackerHandle {
         Ok(())
     }
 
-    /// Gets the idle wmb status of the tracker.
+    /// Gets the idle wmb status of the tracker. It returns a map of partition index to the idle offset.
+    /// This idle offset is compared against the newly fetch Head WMB as part of the optimistic locking.
     pub(crate) async fn get_idle_offset(&self) -> Result<HashMap<u16, Option<i64>>> {
         let (respond_to, response) = oneshot::channel();
         let message = ActorMessage::GetIdleStatus { respond_to };

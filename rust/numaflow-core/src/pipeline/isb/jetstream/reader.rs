@@ -326,7 +326,8 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                                     self.tracker_handle
                                         .set_idle_offset(self.stream.partition, Some(wmb.offset))
                                         .await?;
-                                    self.create_and_write_wmb_message(wmb, &messages_tx).await?;
+                                    self.create_and_write_wmb_message_for_reduce(wmb, &messages_tx)
+                                        .await?;
                                 }
                                 None => {
                                     // no Head WMB yet, we have not gotten any WMB from upstream yet.
@@ -689,20 +690,23 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
         self.stream.name
     }
 
-    /// Creates a WMB message with the by fetching the head idle WMB for the current partition.
-    async fn create_and_write_wmb_message(
+    /// Creates a WMB message by fetching the head idle WMB for the current partition and write it to
+    /// the Reduce component.
+    /// We only need to create wmb messages for Reduce vertices because they have to also close the
+    /// Windows. The background idle publisher will take care of publishing the idle watermark to the Reduce
+    /// so we just need to close idle Windows.
+    async fn create_and_write_wmb_message_for_reduce(
         &mut self,
         idle_wmb: WMB,
         messages_tx: &Sender<Message>,
     ) -> Result<()> {
-        // Create a watermark from the validated WMB
-        let idle_watermark = chrono::DateTime::from_timestamp_millis(idle_wmb.watermark)
-            .expect("Failed to create watermark from WMB");
-
-        // we only need to create wmb messages for reduce vertices because they have to close windows
         if self.vertex_type != ReduceUDF.as_str() {
             return Ok(());
         }
+
+        // Create a watermark from the validated WMB
+        let idle_watermark = chrono::DateTime::from_timestamp_millis(idle_wmb.watermark)
+            .expect("Failed to create watermark from WMB");
 
         // Create a WMB message with the validated idle watermark
         let message = Message {

@@ -153,7 +153,7 @@ impl ISBIdleDetector {
         Ok(offset as i64)
     }
 
-    /// updates the idle stream's metadata, by setting the ctrl message offset and updates the last published time.
+    /// Updates the idle stream's metadata, by setting the ctrl message offset and updates the last published time.
     pub(crate) async fn update_idle_metadata(&mut self, stream: &Stream, offset: i64) {
         let mut write_guard = self
             .last_published_wm_state

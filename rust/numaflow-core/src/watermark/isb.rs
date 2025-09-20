@@ -207,8 +207,8 @@ impl ISBWatermarkActor {
             min_wm
         };
 
-        // Now that we know that the system is idling, we can publish the idle watermark for the idling
-        // streams.
+        // we now know the lowest watermark to publish to the streams that are idling and we have a
+        // barrier offset which can be used safely to publish the idle watermark.
 
         // Identify the streams that are idle and publish the idle watermark
         let idle_streams = self.idle_manager.fetch_idle_streams().await;
