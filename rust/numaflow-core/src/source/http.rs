@@ -100,6 +100,30 @@ impl SourceAcker for CoreHttpSource {
             .await
             .map_err(|e| e.into())
     }
+
+    async fn nack(&mut self, offsets: Vec<Offset>) -> Result<()> {
+        // extract the ids from the offsets, id was used to create the offset
+        let ids = offsets
+            .into_iter()
+            .filter_map(|o| match o {
+                Offset::String(s) => Some(s.offset),
+                Offset::Int(_) => {
+                    // this should not happen since we create the offsets
+                    error!("HTTP offsets should be string");
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        self.http_source
+            .nack(
+                ids.into_iter()
+                    .map(|o| String::from_utf8(o.to_vec()).expect("UTF-8 error"))
+                    .collect(),
+            )
+            .await
+            .map_err(|e| e.into())
+    }
 }
 
 impl source::LagReader for CoreHttpSource {

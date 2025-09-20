@@ -50,22 +50,19 @@ impl<C: NumaflowTypeConfig> ReduceForwarder<C> {
     }
 
     pub(crate) async fn start(self, cln_token: CancellationToken) -> Result<()> {
-        let child_token = cln_token.child_token();
-
         // Start the PBQ reader
-        let (read_messages_stream, pbq_handle) =
-            self.pbq.streaming_read(child_token.clone()).await?;
+        let (read_messages_stream, pbq_handle) = self.pbq.streaming_read(cln_token.clone()).await?;
 
         // Start the reducer
         let processor_handle = match self.reducer {
             Reducer::Aligned(reducer) => {
                 reducer
-                    .start(read_messages_stream, child_token.clone())
+                    .start(read_messages_stream, cln_token.clone())
                     .await?
             }
             Reducer::Unaligned(reducer) => {
                 reducer
-                    .start(read_messages_stream, child_token.clone())
+                    .start(read_messages_stream, cln_token.clone())
                     .await?
             }
         };
@@ -81,12 +78,10 @@ impl<C: NumaflowTypeConfig> ReduceForwarder<C> {
 
         processor_result.inspect_err(|e| {
             error!(?e, "Error in reducer");
-            cln_token.cancel();
         })?;
 
         pbq_result.inspect_err(|e| {
             error!(?e, "Error in PBQ reader");
-            cln_token.cancel();
         })?;
 
         info!("Reduce forwarder completed successfully");

@@ -89,6 +89,20 @@ impl SourceAcker for JetstreamSource {
         self.ack_messages(jetstream_offsets).await?;
         Ok(())
     }
+
+    async fn nack(&mut self, offsets: Vec<Offset>) -> Result<()> {
+        let mut jetstream_offsets = Vec::with_capacity(offsets.len());
+        for offset in offsets {
+            let Offset::Int(seq_num) = offset else {
+                return Err(Error::Source(format!(
+                    "Expected integer offset for Jetstream source. Got: {offset:?}"
+                )));
+            };
+            jetstream_offsets.push(seq_num.offset as u64);
+        }
+        self.nack_messages(jetstream_offsets).await?;
+        Ok(())
+    }
 }
 
 impl super::LagReader for JetstreamSource {

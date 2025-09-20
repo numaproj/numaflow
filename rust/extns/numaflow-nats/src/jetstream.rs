@@ -168,6 +168,10 @@ enum JetstreamActorMessage {
         offsets: Vec<u64>,
         respond_to: oneshot::Sender<Result<()>>,
     },
+    Nack {
+        offsets: Vec<u64>,
+        respond_to: oneshot::Sender<Result<()>>,
+    },
     Pending {
         respond_to: oneshot::Sender<Result<Option<usize>>>,
     },
@@ -301,6 +305,13 @@ impl JetstreamActor {
                 let status = self.ack_messages(offsets).await;
                 let _ = respond_to.send(status);
             }
+            JetstreamActorMessage::Nack {
+                offsets,
+                respond_to,
+            } => {
+                let status = self.nack_messages(offsets).await;
+                let _ = respond_to.send(status);
+            }
             JetstreamActorMessage::Pending { respond_to } => {
                 let pending = self.pending_messages().await;
                 let _ = respond_to.send(pending);
@@ -374,6 +385,33 @@ impl JetstreamActor {
         Ok(())
     }
 
+    async fn nack_messages(&mut self, offsets: Vec<u64>) -> Result<()> {
+        let mut tasks = Vec::with_capacity(offsets.len());
+
+        for offset in offsets {
+            let msg_task = self.in_progress_messages.remove(&offset);
+            let Some(msg_task) = msg_task else {
+                warn!(offset, "Received NACK request for unknown offset");
+                continue;
+            };
+
+            // msg_task.nack() involves sending on a oneshot channel to an already running tokio task
+            // This results in sending Nack to Nats server (within the tokio task) and awaiting for
+            // the task to finish. We spawn tasks here so that nacks happens concurrently.
+            let task = tokio::spawn(async move {
+                msg_task.nack().await;
+            });
+            tasks.push(task);
+        }
+
+        for task in tasks {
+            if let Err(err) = task.await {
+                return Err(Error::Other(format!("Error in nack task: {err:?}")));
+            }
+        }
+        Ok(())
+    }
+
     async fn process_message(&mut self, js_message: JetstreamMessage) -> Result<Message> {
         // we need to clone because the message should be held around for ack
         let message: Message = js_message.clone().try_into().map_err(|e| {
@@ -441,6 +479,17 @@ impl JetstreamSource {
             .map_err(|_| Error::Other("Actor task terminated".into()))?
     }
 
+    pub async fn nack_messages(&self, offsets: Vec<u64>) -> Result<()> {
+        let (tx, rx) = oneshot::channel();
+        let msg = JetstreamActorMessage::Nack {
+            offsets,
+            respond_to: tx,
+        };
+        let _ = self.actor_tx.send(msg).await;
+        rx.await
+            .map_err(|_| Error::Other("Actor task terminated".into()))?
+    }
+
     pub async fn pending_messages(&self) -> Result<Option<usize>> {
         let (tx, rx) = oneshot::channel();
         let msg = JetstreamActorMessage::Pending { respond_to: tx };
@@ -459,7 +508,7 @@ impl JetstreamSource {
 /// work-in-progress task.
 struct MessageProcessingTracker {
     in_progress_task: JoinHandle<()>,
-    ack_signal_tx: oneshot::Sender<()>,
+    ack_signal_tx: oneshot::Sender<AckKind>,
 }
 
 // same as rust/numaflow-core/src/pipeline/isb/jestream/reader.rs
@@ -486,7 +535,7 @@ impl MessageProcessingTracker {
     async fn start_work_in_progress(
         msg: JetstreamMessage,
         tick: Duration,
-        ack_signal_rx: oneshot::Receiver<()>,
+        ack_signal_rx: oneshot::Receiver<AckKind>,
         cancel_token: CancellationToken,
     ) {
         let start = Instant::now();
@@ -515,11 +564,14 @@ impl MessageProcessingTracker {
                 },
             };
 
-            if let Err(e) = ack {
-                error!(error=?e, "Received error while waiting for Ack on oneshot channel");
-                Self::invoke_ack_with_retry(&msg, AckKind::Nak(None), &cancel_token).await;
-            } else {
-                Self::invoke_ack_with_retry(&msg, AckKind::Ack, &cancel_token).await;
+            match ack {
+                Ok(ack_kind) => {
+                    Self::invoke_ack_with_retry(&msg, ack_kind, &cancel_token).await;
+                }
+                Err(e) => {
+                    error!(?e, "Received error while waiting for Ack oneshot channel");
+                    Self::invoke_ack_with_retry(&msg, AckKind::Nak(None), &cancel_token).await;
+                }
             }
             break;
         }
@@ -568,8 +620,23 @@ impl MessageProcessingTracker {
             in_progress_task,
             ack_signal_tx,
         } = self;
-        if let Err(err) = ack_signal_tx.send(()) {
-            tracing::error!(
+        if let Err(err) = ack_signal_tx.send(AckKind::Ack) {
+            error!(
+                ?err,
+                "Background task to mark the message status as in-progress is already terminated"
+            );
+            return;
+        }
+        let _ = in_progress_task.await;
+    }
+
+    async fn nack(self) {
+        let Self {
+            in_progress_task,
+            ack_signal_tx,
+        } = self;
+        if let Err(err) = ack_signal_tx.send(AckKind::Nak(None)) {
+            error!(
                 ?err,
                 "Background task to mark the message status as in-progress is already terminated"
             );
@@ -605,7 +672,7 @@ mod tests {
             stream
                 .get_or_create_consumer(
                     stream_name,
-                    async_nats::jetstream::consumer::pull::Config {
+                    Config {
                         durable_name: Some(stream_name.to_string()),
                         ..Default::default()
                     },

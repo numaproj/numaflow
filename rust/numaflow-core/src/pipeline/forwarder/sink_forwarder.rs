@@ -44,17 +44,16 @@ impl<C: crate::typ::NumaflowTypeConfig> SinkForwarder<C> {
     }
 
     pub(crate) async fn start(self, cln_token: CancellationToken) -> Result<()> {
-        let child_token = cln_token.child_token();
         // only the reader need to listen on the cancellation token, if the reader stops all
         // other components will stop gracefully because they are chained using tokio streams.
         let (read_messages_stream, reader_handle) = self
             .jetstream_reader
-            .streaming_read(child_token.clone())
+            .streaming_read(cln_token.clone())
             .await?;
 
         let sink_writer_handle = self
             .sink_writer
-            .streaming_write(read_messages_stream, child_token)
+            .streaming_write(read_messages_stream, cln_token.clone())
             .await?;
 
         // Join the reader and sink writer
@@ -66,12 +65,10 @@ impl<C: crate::typ::NumaflowTypeConfig> SinkForwarder<C> {
 
         sink_writer_result.inspect_err(|e| {
             error!(?e, "Error while writing messages");
-            cln_token.cancel();
         })?;
 
         reader_result.inspect_err(|e| {
             error!(?e, "Error while reading messages");
-            cln_token.cancel();
         })?;
 
         Ok(())

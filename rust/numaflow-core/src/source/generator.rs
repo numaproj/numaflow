@@ -393,6 +393,11 @@ impl source::SourceAcker for GeneratorAck {
     async fn ack(&mut self, _: Vec<Offset>) -> crate::error::Result<()> {
         Ok(())
     }
+
+    async fn nack(&mut self, _: Vec<Offset>) -> crate::error::Result<()> {
+        // Generator source doesn't support nack - no-op
+        Ok(())
+    }
 }
 
 #[derive(Clone)]

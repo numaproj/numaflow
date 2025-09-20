@@ -1399,6 +1399,8 @@ mod tests {
 
         async fn ack(&self, _: Vec<Offset>) {}
 
+        async fn nack(&self, _offsets: Vec<Offset>) {}
+
         async fn pending(&self) -> Option<usize> {
             Some(0)
         }
@@ -1507,6 +1509,7 @@ mod tests {
             5,
             Duration::from_millis(1000),
             cln_token.clone(),
+            true,
         )
         .await
         .expect("Failed to create source reader");
