@@ -511,11 +511,11 @@ mod tests {
         use numaflow_models::models::SqsSink;
 
         // Test case 1: Valid configuration
-        let valid_sqs_sink = Box::new(SqsSink {
-            aws_region: "us-west-2".to_string(),
-            queue_name: "test-queue".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
-        });
+        let valid_sqs_sink = Box::new(SqsSink::new(
+            "us-west-2".to_string(),
+            "test-queue".to_string(),
+            "123456789012".to_string(),
+        ));
 
         let result = SinkType::try_from(valid_sqs_sink);
         assert!(result.is_ok());
@@ -528,11 +528,11 @@ mod tests {
         }
 
         // Test case 2: Missing required fields
-        let invalid_sqs_sink = Box::new(SqsSink {
-            aws_region: "".to_string(),
-            queue_name: "test-queue".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
-        });
+        let invalid_sqs_sink = Box::new(SqsSink::new(
+            "".to_string(),
+            "test-queue".to_string(),
+            "123456789012".to_string(),
+        ));
 
         let result = SinkType::try_from(invalid_sqs_sink);
         assert!(result.is_err());
@@ -558,11 +558,11 @@ mod tests {
                 log: None,
                 blackhole: None,
                 serve: None,
-                sqs: Some(Box::new(SqsSink {
-                    aws_region: "us-west-2".to_string(),
-                    queue_name: "fallback-queue".to_string(),
-                    queue_owner_aws_account_id: "123456789012".to_string(),
-                })),
+                sqs: Some(Box::new(SqsSink::new(
+                    "us-west-2".to_string(),
+                    "fallback-queue".to_string(),
+                    "123456789012".to_string(),
+                ))),
                 kafka: None,
                 pulsar: None,
             })),
@@ -613,11 +613,11 @@ mod tests {
                 log: None,
                 blackhole: None,
                 serve: None,
-                sqs: Some(Box::new(SqsSink {
-                    aws_region: "".to_string(),
-                    queue_name: "fallback-queue".to_string(),
-                    queue_owner_aws_account_id: "123456789012".to_string(),
-                })),
+                sqs: Some(Box::new(SqsSink::new(
+                    "".to_string(),
+                    "fallback-queue".to_string(),
+                    "123456789012".to_string(),
+                ))),
                 kafka: None,
                 pulsar: None,
             })),
