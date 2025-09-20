@@ -591,6 +591,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         };
 
         let result = crate::create_sqs_client(SqsConfig::Source(config.clone())).await;
@@ -609,6 +610,7 @@ mod tests {
             endpoint_url: Some("http://localhost:4566".to_string()),
             attribute_names: vec!["All".to_string()],
             message_attribute_names: vec!["All".to_string()],
+            assume_role_config: None,
         };
 
         let result = crate::create_sqs_client(SqsConfig::Source(config.clone())).await;
@@ -644,6 +646,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![MessageSystemAttributeName::SentTimestamp.to_string()],
             message_attribute_names: vec![MessageSystemAttributeName::AwsTraceHeader.to_string()],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -686,6 +689,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -725,6 +729,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![MessageSystemAttributeName::SentTimestamp.to_string()],
             message_attribute_names: vec![MessageSystemAttributeName::AwsTraceHeader.to_string()],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -771,6 +776,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -808,6 +814,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -845,6 +852,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -880,6 +888,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -912,6 +921,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -954,6 +964,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         };
         let builder = SqsSourceBuilder::default().config(config);
         assert_eq!(builder.config.region, "us-east-2");

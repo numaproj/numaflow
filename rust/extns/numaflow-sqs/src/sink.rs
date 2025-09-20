@@ -209,6 +209,7 @@ mod tests {
             region: "us-west-2",
             queue_name: "test-queue",
             queue_owner_aws_account_id: "123456789012",
+            assume_role_config: None,
         };
 
         let result = crate::create_sqs_client(SqsConfig::Sink(config.clone())).await;
@@ -235,6 +236,7 @@ mod tests {
             region: SQS_DEFAULT_REGION,
             queue_name: "test-q",
             queue_owner_aws_account_id: "123456789012",
+            assume_role_config: None,
         };
 
         let sink = SqsSinkBuilder::new(config.clone())
@@ -267,6 +269,7 @@ mod tests {
             region: SQS_DEFAULT_REGION,
             queue_name: "test-q",
             queue_owner_aws_account_id: "123456789012",
+            assume_role_config: None,
         };
 
         let sink = SqsSinkBuilder::new(config.clone())
@@ -309,6 +312,7 @@ mod tests {
             region: SQS_DEFAULT_REGION,
             queue_name: "test-q",
             queue_owner_aws_account_id: "123456789012",
+            assume_role_config: None,
         };
 
         let sink = SqsSinkBuilder::new(config.clone())
@@ -360,6 +364,7 @@ mod tests {
             region: SQS_DEFAULT_REGION,
             queue_name: "test-q",
             queue_owner_aws_account_id: "123456789012",
+            assume_role_config: None,
         };
 
         let sink = SqsSinkBuilder::new(config.clone())

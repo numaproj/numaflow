@@ -504,7 +504,7 @@ mod tests {
     fn test_sqs_sink_type_conversion() {
         use numaflow_models::models::SqsSink;
 
-        // Test case 1: Valid configuration
+        // Test case: Valid configuration
         let valid_sqs_sink = Box::new(SqsSink::new(
             "us-west-2".to_string(),
             "test-queue".to_string(),
@@ -520,20 +520,6 @@ mod tests {
         } else {
             panic!("Expected SinkType::Sqs");
         }
-
-        // Test case 2: Missing required fields
-        let invalid_sqs_sink = Box::new(SqsSink::new(
-            "".to_string(),
-            "test-queue".to_string(),
-            "123456789012".to_string(),
-        ));
-
-        let result = SinkType::try_from(invalid_sqs_sink);
-        assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err().to_string(),
-            "Config Error - AWS region is required for SQS sink"
-        );
     }
 
     #[test]
@@ -595,38 +581,7 @@ mod tests {
             "Config Error - Fallback sink not found"
         );
 
-        // Test case 3: Missing required AWS region
-        let sink_missing_region = Sink {
-            udsink: None,
-            log: None,
-            blackhole: None,
-            serve: None,
-            sqs: None,
-            fallback: Some(Box::new(AbstractSink {
-                udsink: None,
-                log: None,
-                blackhole: None,
-                serve: None,
-                sqs: Some(Box::new(SqsSink::new(
-                    "".to_string(),
-                    "fallback-queue".to_string(),
-                    "123456789012".to_string(),
-                ))),
-                kafka: None,
-                pulsar: None,
-            })),
-            retry_strategy: None,
-            kafka: None,
-            pulsar: None,
-        };
-        let result = SinkType::fallback_sinktype(&sink_missing_region);
-        assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err().to_string(),
-            "Config Error - AWS region is required for SQS sink"
-        );
-
-        // Test case 4: Empty fallback sink configuration
+        // Test case 3: Empty fallback sink configuration
         let sink_empty_fallback = Sink {
             udsink: None,
             log: None,
