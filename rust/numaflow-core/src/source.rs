@@ -542,7 +542,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         .expect("send should not fail");
                 }
             }
-            info!(status=?result, "Source stopped, waiting for inflight messages to be acked");
+            info!(status=?result, "Source stopped, waiting for inflight messages to be acked/nacked");
             // wait for all the ack tasks to be completed before stopping the source, since we give
             // a permit for each ack task all the permits should be released when the ack tasks are
             // done, we can verify this by trying to acquire the permit for max_ack_tasks.
@@ -550,7 +550,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 .acquire_many_owned(max_ack_tasks as u32)
                 .await
                 .expect("acquiring permit should not fail");
-            info!("All inflight messages are acked. Source stopped.");
+            info!("All inflight messages are acked/nacked. Source stopped.");
 
             // Shutdown rate limiter if configured
             if let Some(ref rate_limiter) = self.rate_limiter {
