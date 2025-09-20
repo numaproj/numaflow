@@ -353,6 +353,9 @@ impl HttpSourceActor {
             }
         }
 
+        // we make sure that the `self.inflight_requests.len() == 0` are empty during shutdown when
+        // the actor is dropped.
+
         Ok(())
     }
 

@@ -339,36 +339,37 @@ impl SourceAcker for UserDefinedSourceAck {
 
     /// Negatively acknowledge the offsets.
     /// This method checks if the SDK supports nack functionality using a pre-computed flag.
-    /// For older SDK versions (< 0.10.2), it logs a warning and returns Ok() for backward compatibility.
-    /// For newer SDK versions (>= 0.10.2), it calls the actual nack gRPC method.
+    /// For older SDK versions (< 0.11), it logs a warning and returns Ok() for backward compatibility.
+    /// For newer SDK versions (>= 0.11), it calls the actual nack gRPC method.
     async fn nack(&mut self, offsets: Vec<Offset>) -> Result<()> {
-        if self.supports_nack {
-            // SDK supports nack, call the actual gRPC method
-            let nack_offsets: Result<Vec<source::Offset>> =
-                offsets.into_iter().map(TryInto::try_into).collect();
-
-            let response = self
-                .client
-                .nack_fn(NackRequest {
-                    request: Some(source::nack_request::Request {
-                        offsets: nack_offsets?,
-                    }),
-                })
-                .await
-                .map_err(|e| Error::Grpc(Box::new(e)))?;
-
-            response
-                .into_inner()
-                .result
-                .ok_or(Error::Source("failed to receive nack response".to_string()))?;
-            Ok(())
-        } else {
+        if !self.supports_nack {
             warn!(
                 offset_count = offsets.len(),
                 "SDK version does not support nack functionality, ignoring nack request for backward compatibility"
             );
-            Ok(())
+            return Ok(());
         }
+
+        // SDK supports nack, call the actual gRPC method
+        let nack_offsets: Result<Vec<source::Offset>> =
+            offsets.into_iter().map(TryInto::try_into).collect();
+
+        let response = self
+            .client
+            .nack_fn(NackRequest {
+                request: Some(source::nack_request::Request {
+                    offsets: nack_offsets?,
+                }),
+            })
+            .await
+            .map_err(|e| Error::Grpc(Box::new(e)))?;
+
+        response
+            .into_inner()
+            .result
+            .ok_or(Error::Source("failed to receive nack response".to_string()))?;
+
+        Ok(())
     }
 }
 

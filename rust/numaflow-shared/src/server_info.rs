@@ -463,6 +463,7 @@ async fn read_server_info(
 }
 
 /// Checks if the given SDK version supports nack functionality
+// DEPRECATE(0.12): We added this in 0.11
 pub fn supports_nack(sdk_version: &str, sdk_language: &str) -> bool {
     // If version or language is empty, assume no nack support for safety
     if sdk_version.is_empty() || sdk_language.is_empty() {
@@ -577,9 +578,9 @@ mod version {
     pub(crate) static NACK_SUPPORT_SDK_VERSIONS: LazyLock<HashMap<String, String>> =
         LazyLock::new(|| {
             let mut m = HashMap::new();
-            m.insert("go".to_string(), "0.10.2-z".to_string());
-            m.insert("python".to_string(), "0.10.2rc100".to_string());
-            m.insert("java".to_string(), "0.10.2-z".to_string());
+            m.insert("go".to_string(), "0.11.0-z".to_string());
+            m.insert("python".to_string(), "0.11.0rc100".to_string());
+            m.insert("java".to_string(), "0.11.0-z".to_string());
             m.insert("rust".to_string(), "0.4.0-z".to_string());
             m
         });
