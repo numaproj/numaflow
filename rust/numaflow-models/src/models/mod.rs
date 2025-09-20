@@ -8,6 +8,8 @@ pub mod accumulator_window;
 pub use self::accumulator_window::AccumulatorWindow;
 pub mod authorization;
 pub use self::authorization::Authorization;
+pub mod aws_assume_role;
+pub use self::aws_assume_role::AwsAssumeRole;
 pub mod backoff;
 pub use self::backoff::Backoff;
 pub mod basic_auth;

@@ -64,4 +64,9 @@ type SqsSource struct {
 	// MessageAttributeNames is a list of message attributes that need to be returned along with each message.
 	// +optional
 	MessageAttributeNames []string `json:"messageAttributeNames,omitempty" protobuf:"bytes,9,rep,name=messageAttributeNames"`
+
+	// AssumeRole contains the configuration for AWS STS assume role.
+	// When specified, the SQS client will assume the specified role for authentication.
+	// +optional
+	AssumeRole *AWSAssumeRole `json:"assumeRole,omitempty" protobuf:"bytes,10,opt,name=assumeRole"`
 }

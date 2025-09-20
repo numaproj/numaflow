@@ -18,6 +18,8 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SqsSink {
+    #[serde(rename = "assumeRole", skip_serializing_if = "Option::is_none")]
+    pub assume_role: Option<Box<crate::models::AwsAssumeRole>>,
     /// AWSRegion is the AWS Region where the SQS queue is located
     #[serde(rename = "awsRegion")]
     pub aws_region: String,
@@ -36,6 +38,7 @@ impl SqsSink {
         queue_owner_aws_account_id: String,
     ) -> SqsSink {
         SqsSink {
+            assume_role: None,
             aws_region,
             queue_name,
             queue_owner_aws_account_id,

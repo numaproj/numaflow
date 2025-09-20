@@ -19483,6 +19483,43 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.AWSAssumeRole": {
+      "description": "AWSAssumeRole contains the configuration for AWS STS assume role authentication This can be used with any AWS service (SQS, S3, DynamoDB, etc.)",
+      "type": "object",
+      "required": [
+        "roleArn"
+      ],
+      "properties": {
+        "durationSeconds": {
+          "description": "DurationSeconds is the duration (in seconds) of the role session. Valid values: 900-43200 (15 minutes to 12 hours) Defaults to 3600 (1 hour) if not specified. The actual session duration is constrained by the maximum session duration setting of the IAM role being assumed.",
+          "type": "integer",
+          "format": "int32"
+        },
+        "externalId": {
+          "description": "ExternalID is a unique identifier that might be required when you assume a role in another account. This is commonly used as an additional security measure for cross-account role access.",
+          "type": "string"
+        },
+        "policy": {
+          "description": "Policy is an IAM policy document (JSON string) that you want to use as an inline session policy. This parameter is optional. When specified, the session permissions are the intersection of the IAM role's identity-based policy and the session policies. This allows further restriction of permissions for the specific service operations.",
+          "type": "string"
+        },
+        "policyArns": {
+          "description": "PolicyARNs is a list of Amazon Resource Names (ARNs) of IAM managed policies that you want to use as managed session policies. The policies must exist in the same account as the role. This allows attaching existing managed policies to further restrict session permissions.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "roleArn": {
+          "description": "RoleARN is the Amazon Resource Name (ARN) of the role to assume. This is a required field when assume role is enabled. Example: \"arn:aws:iam::123456789012:role/CrossAccount-Service-Role\"",
+          "type": "string"
+        },
+        "sessionName": {
+          "description": "SessionName is an identifier for the assumed role session. This appears in AWS CloudTrail logs to help identify the source of API calls. If not specified, a default session name will be generated based on the service context.",
+          "type": "string"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.AbstractPodTemplate": {
       "description": "AbstractPodTemplate provides a template for pod customization in vertices, daemon deployments and so on.",
       "type": "object",
@@ -22464,6 +22501,10 @@
         "queueOwnerAWSAccountID"
       ],
       "properties": {
+        "assumeRole": {
+          "description": "AssumeRole contains the configuration for AWS STS assume role. When specified, the SQS client will assume the specified role for authentication.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.AWSAssumeRole"
+        },
         "awsRegion": {
           "description": "AWSRegion is the AWS Region where the SQS queue is located",
           "type": "string"
@@ -22487,6 +22528,10 @@
         "queueOwnerAWSAccountID"
       ],
       "properties": {
+        "assumeRole": {
+          "description": "AssumeRole contains the configuration for AWS STS assume role. When specified, the SQS client will assume the specified role for authentication.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.AWSAssumeRole"
+        },
         "attributeNames": {
           "description": "AttributeNames is a list of attributes that need to be returned along with each message. Valid values: All | Policy | VisibilityTimeout | MaximumMessageSize | MessageRetentionPeriod | ApproximateNumberOfMessages | ApproximateNumberOfMessagesNotVisible | CreatedTimestamp | LastModifiedTimestamp | QueueArn | ApproximateNumberOfMessagesDelayed | DelaySeconds | ReceiveMessageWaitTimeSeconds | RedrivePolicy | FifoQueue | ContentBasedDeduplication | KmsMasterKeyId | KmsDataKeyReusePeriodSeconds | DeduplicationScope | FifoThroughputLimit | RedriveAllowPolicy | SqsManagedSseEnabled",
           "type": "array",
