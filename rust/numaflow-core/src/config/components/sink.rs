@@ -123,23 +123,15 @@ impl TryFrom<Box<SqsSink>> for SinkType {
     type Error = Error;
 
     fn try_from(value: Box<SqsSink>) -> Result<Self> {
-        if value.aws_region.is_empty() {
-            return Err(Error::Config(
-                "AWS region is required for SQS sink".to_string(),
-            ));
-        }
-
-        if value.queue_name.is_empty() {
-            return Err(Error::Config(
-                "Queue name is required for SQS sink".to_string(),
-            ));
-        }
-
-        if value.queue_owner_aws_account_id.is_empty() {
-            return Err(Error::Config(
-                "Queue owner AWS account ID is required for SQS sink".to_string(),
-            ));
-        }
+        // Convert assume role configuration if present
+        let assume_role_config = value.assume_role.map(|ar| numaflow_sqs::AssumeRoleConfig {
+            role_arn: ar.role_arn,
+            session_name: ar.session_name,
+            duration_seconds: ar.duration_seconds,
+            external_id: ar.external_id,
+            policy: ar.policy,
+            policy_arns: ar.policy_arns,
+        });
 
         let sqs_sink_config = SqsSinkConfig {
             queue_name: Box::leak(value.queue_name.into_boxed_str()),
@@ -147,6 +139,7 @@ impl TryFrom<Box<SqsSink>> for SinkType {
             queue_owner_aws_account_id: Box::leak(
                 value.queue_owner_aws_account_id.into_boxed_str(),
             ),
+            assume_role_config,
         };
         Ok(SinkType::Sqs(sqs_sink_config))
     }

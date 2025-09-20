@@ -40,6 +40,9 @@ impl From<numaflow_sqs::SqsSourceError> for Error {
             numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::Sqs(e)) => {
                 Error::Source(e.to_string())
             }
+            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::Sts(e)) => {
+                Error::Source(e.to_string())
+            }
             numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::ActorTaskTerminated(_)) => {
                 Error::ActorPatternRecv(value.to_string())
             }
@@ -186,6 +189,7 @@ pub mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(1))

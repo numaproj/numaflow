@@ -22,7 +22,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 use crate::Error::ActorTaskTerminated;
-use crate::{Error, SqsConfig, SqsSourceError};
+use crate::{AssumeRoleConfig, Error, SqsConfig, SqsSourceError};
 
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 
@@ -45,6 +45,7 @@ pub struct SqsSourceConfig {
     pub endpoint_url: Option<String>,
     pub attribute_names: Vec<String>,
     pub message_attribute_names: Vec<String>,
+    pub assume_role_config: Option<AssumeRoleConfig>,
 }
 
 /// Internal message types for the actor implementation.
@@ -419,6 +420,7 @@ impl Default for SqsSourceBuilder {
             endpoint_url: None,
             attribute_names: Vec::new(),
             message_attribute_names: Vec::new(),
+            assume_role_config: None,
         })
     }
 }
@@ -570,7 +572,6 @@ impl SqsSource {
 #[cfg(test)]
 mod tests {
     use aws_sdk_sqs::Config;
-    use aws_sdk_sqs::config::BehaviorVersion;
     use aws_sdk_sqs::types::MessageAttributeValue;
     use aws_smithy_mocks::{MockResponseInterceptor, Rule, RuleMode, mock};
     use aws_smithy_types::error::ErrorMetadata;
@@ -1101,7 +1102,7 @@ mod tests {
 
     fn get_test_config_with_interceptor(interceptor: MockResponseInterceptor) -> Config {
         aws_sdk_sqs::Config::builder()
-            .behavior_version(BehaviorVersion::v2025_01_17())
+            .behavior_version(crate::aws_behavior_version())
             .credentials_provider(make_sqs_test_credentials())
             .region(aws_sdk_sqs::config::Region::new(SQS_DEFAULT_REGION))
             .interceptor(interceptor)
