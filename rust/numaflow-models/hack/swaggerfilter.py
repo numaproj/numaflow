@@ -33,12 +33,13 @@ def main():
 
         if k in [
             "io.numaproj.numaflow.v1alpha1.Blackhole",
-            "io.numaproj.numaflow.v1alpha1.RateLimiterInMemoryStore",
-            "io.numaproj.numaflow.v1alpha1.RaterLimiterRelaxed",
             "io.numaproj.numaflow.v1alpha1.Log",
             "io.numaproj.numaflow.v1alpha1.NoStore",
             "io.numaproj.numaflow.v1alpha1.ServeSink",
             "io.numaproj.numaflow.v1alpha1.ServingSource",
+            "io.numaproj.numaflow.v1alpha1.RateLimiterInMemoryStore",
+            "io.numaproj.numaflow.v1alpha1.RateLimiterRelaxed",
+            "io.numaproj.numaflow.v1alpha1.RateLimiterScheduled",
         ]:
             defs[k]["allOf"] = []
 

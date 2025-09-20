@@ -108,13 +108,31 @@ impl<W> RateLimit<W> {
     pub(crate) fn compute_refill(
         &self,
         _requested_token_size: Option<usize>,
-        _cur_epoch: u64,
+        cur_epoch: u64,
     ) -> usize {
         let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
 
         match self.token_calc_bounds.mode {
             Mode::Relaxed => self.relaxed_slope_increase(&mut max_ever_filled),
-            Mode::Scheduled | Mode::OnlyIfUsed => unimplemented!(),
+            Mode::Scheduled => {
+                // let's make sure we do not go beyond the max
+                if *max_ever_filled >= self.token_calc_bounds.max as f32 {
+                    self.token_calc_bounds.max
+                } else {
+                    let prev_epoch = self
+                        .last_queried_epoch
+                        .load(std::sync::atomic::Ordering::Relaxed);
+                    let time_diff = cur_epoch.checked_sub(prev_epoch).unwrap_or(0) as f32;
+                    let refill = *max_ever_filled + self.token_calc_bounds.slope * (time_diff);
+                    let capped_refill = refill.min(self.token_calc_bounds.max as f32);
+
+                    // Update the fractional value
+                    *max_ever_filled = capped_refill;
+
+                    capped_refill as usize
+                }
+            }
+            Mode::OnlyIfUsed => unimplemented!(),
         }
     }
 }
@@ -510,6 +528,7 @@ impl RateLimiter for NoOpRateLimiter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::test_utils::StoreType::Redis;
     use std::time::SystemTime;
     use tokio::time::Duration;
 
@@ -665,16 +684,20 @@ mod tests {
                         .await;
                     assert_eq!(
                         tokens, expected_tokens[i],
-                        "Number of tokens fetched in each iteration \
+                        "Test Name: {}\n\
+                        Number of tokens fetched in each iteration \
                 should increase by slope/pod_count until ramp up",
+                        test_name
                     );
                     total_got_tokens += tokens;
                     total_expected_tokens += expected_tokens[i];
                 }
                 assert_eq!(
                     total_got_tokens, total_expected_tokens,
-                    "Total number of tokens fetched in each iteration \
+                    "Test Name: {}\n\
+                    Total number of tokens fetched in each iteration \
                 should be less than or equal to total expected tokens for each processor",
+                    test_name
                 );
 
                 // Determines after how many epochs next pull is going to be made.
@@ -1400,6 +1423,257 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_distributed_rate_limiter_only_scheduled_mode() {
+        let test_cases = vec![
+            // Integer slope with multiple pods
+            // Keep acquiring min tokens with regular gaps in epochs between calls
+            // Acquire None tokens here and there to check the max tokens shelled out.
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(2), 2),
+                    (Some(2), 2),
+                    (None, 2),
+                    (Some(2), 2),
+                    (None, 2),
+                    (Some(2), 2),
+                    (None, 2),
+                    (None, 2),
+                ],
+                vec![2, 2, 7, 2, 9, 2, 10, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_1".to_string())
+            .mode(Mode::Scheduled),
+            // Integer slope with multiple pods
+            // Acquire tokens more than max tokens after extended gaps between epochs
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(30), 1),
+                    (Some(30), 3),
+                    (Some(30), 2),
+                    (Some(30), 4),
+                    (Some(30), 1),
+                    (Some(30), 1),
+                ],
+                vec![5, 5, 7, 8, 10, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_2".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope (>1) with multiple pods
+            // Acquire all tokens at each epoch
+            // Immediately ask for tokens after first epoch
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![7, 9, 0, 12, 14, 16, 18, 21, 23, 25, 27, 30],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_3".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope (>1) with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![7, 9, 12, 14, 16, 18, 21, 23, 25, 27, 30],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_4".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope (>1) with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(20), 1); 11],
+                vec![7, 9, 12, 14, 16, 18, 20, 20, 20, 20, 20],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_5".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope (<1) with multiple pods
+            // Acquire all tokens
+            // Immediately ask for tokens in the same epoch after receiving 1 token
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                ],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_6".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope (<1) with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_7".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope (<1) with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(1), 1); 11],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_8".to_string())
+            .mode(Mode::Scheduled),
+            // Integer slope with multiple pods
+            // Acquire tokens more than max
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(30), 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_9".to_string())
+            .mode(Mode::Scheduled),
+            // Integer slope with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_10".to_string())
+            .mode(Mode::Scheduled),
+            // Integer slope with multiple pods
+            // Acquire tokens less than max
+            // Combination of immediate and non-immediate token requests
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(1), 0),
+                    (Some(2), 1),
+                    (Some(1), 0),
+                    (Some(3), 1),
+                    (Some(1), 0),
+                    (Some(4), 2),
+                    (Some(1), 0),
+                    (Some(10), 1),
+                    (Some(2), 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (Some(5), 1),
+                    (None, 1),
+                ],
+                vec![1, 2, 1, 3, 1, 4, 1, 6, 2, 5, 8, 8, 9, 9, 10, 5, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_11".to_string())
+            .mode(Mode::Scheduled),
+            // Integer slope with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(1), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_12".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope with single pod
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(None, 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_13".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope with single pod
+            // Acquire tokens more than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(Some(5), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_14".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope with single pod
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(Some(1), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_15".to_string())
+            .mode(Mode::Scheduled),
+        ];
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
+    }
+
+    #[tokio::test]
     async fn test_distributed_rate_limiter_time_based_refill() {
         use crate::state::OptimisticValidityUpdateSecs;
         use crate::state::store::in_memory_store::InMemoryStore;
@@ -2074,6 +2348,273 @@ mod tests {
             ),
         ];
 
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "redis-tests")]
+    async fn test_distributed_rate_limiter_only_scheduled_mode_redis() {
+        let test_cases = vec![
+            // Integer slope with multiple pods
+            // Keep acquiring min tokens with regular gaps in epochs between calls
+            // Acquire None tokens here and there to check the max tokens shelled out.
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(2), 2),
+                    (Some(2), 2),
+                    (None, 2),
+                    (Some(2), 2),
+                    (None, 2),
+                    (Some(2), 2),
+                    (None, 2),
+                    (None, 2),
+                ],
+                vec![2, 2, 7, 2, 9, 2, 10, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis1".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Integer slope with multiple pods
+            // Acquire tokens more than max tokens after extended gaps between epochs
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(30), 1),
+                    (Some(30), 3),
+                    (Some(30), 2),
+                    (Some(30), 4),
+                    (Some(30), 1),
+                    (Some(30), 1),
+                ],
+                vec![5, 5, 7, 8, 10, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis2".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope (>1) with multiple pods
+            // Acquire all tokens at each epoch
+            // Immediately ask for tokens after first epoch
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![7, 9, 0, 12, 14, 16, 18, 21, 23, 25, 27, 30],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis3".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope (>1) with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![7, 9, 12, 14, 16, 18, 21, 23, 25, 27, 30],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis4".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope (>1) with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(20), 1); 11],
+                vec![7, 9, 12, 14, 16, 18, 20, 20, 20, 20, 20],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis5".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope (<1) with multiple pods
+            // Acquire all tokens
+            // Immediately ask for tokens in the same epoch after receiving 1 token
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                ],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis6".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope (<1) with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis7".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope (<1) with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(1), 1); 11],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis8".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Integer slope with multiple pods
+            // Acquire tokens more than max
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(30), 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis9".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Integer slope with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis10".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Integer slope with multiple pods
+            // Acquire tokens less than max
+            // Combination of immediate and non-immediate token requests
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(1), 0),
+                    (Some(2), 1),
+                    (Some(1), 0),
+                    (Some(3), 1),
+                    (Some(1), 0),
+                    (Some(4), 2),
+                    (Some(1), 0),
+                    (Some(10), 1),
+                    (Some(2), 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (Some(5), 1),
+                    (None, 1),
+                ],
+                vec![1, 2, 1, 3, 1, 4, 1, 6, 2, 5, 8, 8, 9, 9, 10, 5, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis11".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Integer slope with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(1), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis12".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope with single pod
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(None, 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis13".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope with single pod
+            // Acquire tokens more than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(Some(5), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis14".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope with single pod
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(Some(1), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis15".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+        ];
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
 }
