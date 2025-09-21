@@ -827,7 +827,7 @@ mod tests {
             watermark_config: Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
                 from_vertex_config: vec![BucketConfig {
                     vertex: "in",
-                    partitions: 1,
+                    partitions: vec![0],
                     ot_bucket: "default-simple-pipeline-in-out_OT",
                     hb_bucket: "default-simple-pipeline-in-out_PROCESSORS",
                     delay: Some(Duration::from_millis(100)),
@@ -1057,14 +1057,14 @@ mod tests {
                 max_delay: Default::default(),
                 source_bucket_config: BucketConfig {
                     vertex: "in",
-                    partitions: 1,
+                    partitions: vec![0],
                     ot_bucket: "default-simple-pipeline-in_SOURCE_OT",
                     hb_bucket: "default-simple-pipeline-in_SOURCE_PROCESSORS",
                     delay: Some(Duration::from_millis(100)),
                 },
                 to_vertex_bucket_config: vec![BucketConfig {
                     vertex: "out",
-                    partitions: 1,
+                    partitions: vec![0],
                     ot_bucket: "default-simple-pipeline-in-out_OT",
                     hb_bucket: "default-simple-pipeline-in-out_PROCESSORS",
                     delay: Some(Duration::from_millis(100)),
@@ -1158,7 +1158,7 @@ mod tests {
             watermark_config: Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
                 from_vertex_config: vec![BucketConfig {
                     vertex: "in",
-                    partitions: 1,
+                    partitions: vec![0],
                     ot_bucket: "default-simple-pipeline-in-map_OT",
                     hb_bucket: "default-simple-pipeline-in-map_PROCESSORS",
                     delay: Some(Duration::from_millis(100)),

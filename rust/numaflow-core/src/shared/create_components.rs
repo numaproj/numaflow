@@ -754,6 +754,7 @@ pub async fn create_edge_watermark_handle(
     cln_token: &CancellationToken,
     window_manager: Option<WindowManager>,
     tracker_handle: TrackerHandle,
+    from_partitions: Vec<u16>,
 ) -> error::Result<Option<ISBWatermarkHandle>> {
     match &config.watermark_config {
         Some(WatermarkConfig::Edge(edge_config)) => {
@@ -768,6 +769,7 @@ pub async fn create_edge_watermark_handle(
                 cln_token.clone(),
                 window_manager,
                 tracker_handle,
+                from_partitions,
             )
             .await?;
             Ok(Some(handle))
