@@ -93,19 +93,6 @@ func TestUpdateCount(t *testing.T) {
 		assert.Equal(t, 10.0, q.Items()[0].podReadCounts["pod1"])
 		assert.Equal(t, 20.0, q.Items()[1].podReadCounts["pod1"])
 	})
-
-	t.Run("givenTimeNotExistsCountNotAvailable_whenUpdate_thenAddEmptyItem", func(t *testing.T) {
-		q := sharedqueue.New[*TimestampedCounts](1800)
-		tc := NewTimestampedCounts(TestTime)
-		tc.Update(&PodMetricsCount{"pod1", 10.0})
-		q.Append(tc)
-
-		UpdateCount(q, TestTime+1, nil)
-
-		assert.Equal(t, 2, q.Length())
-		assert.Equal(t, 10.0, q.Items()[0].podReadCounts["pod1"])
-		assert.Equal(t, 0, len(q.Items()[1].podReadCounts))
-	})
 }
 
 func TestCalculatePending(t *testing.T) {

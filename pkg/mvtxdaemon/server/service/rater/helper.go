@@ -34,8 +34,11 @@ const (
 
 // UpdateCount updates the count for a given timestamp in the queue.
 func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podReadCounts *PodMetricsCount) {
-	items := q.Items()
+	if podReadCounts == nil {
+		return
+	}
 
+	items := q.Items()
 	// find the element matching the input timestamp and update it
 	for _, i := range items {
 		if i.timestamp == time {
