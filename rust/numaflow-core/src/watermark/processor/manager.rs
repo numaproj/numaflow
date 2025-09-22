@@ -42,7 +42,7 @@ pub(crate) struct Processor {
     /// [Status] of the processor.
     pub(crate) status: Status,
     /// OffsetTimeline for each partition.
-    pub(crate) timelines: Vec<OffsetTimeline>,
+    pub(crate) timelines: HashMap<u16, OffsetTimeline>,
 }
 
 impl Debug for Processor {
@@ -52,18 +52,18 @@ impl Debug for Processor {
             "Processor: {:?}, Status: {:?}, Timelines: ",
             self.name, self.status
         )?;
-        for timeline in &self.timelines {
-            writeln!(f, "{timeline:?}")?;
+        for (partition, timeline) in &self.timelines {
+            writeln!(f, "Partition {partition}: {timeline:?}")?;
         }
         Ok(())
     }
 }
 
 impl Processor {
-    pub(crate) fn new(name: Bytes, status: Status, partition_count: usize) -> Self {
-        let mut timelines = Vec::with_capacity(partition_count);
-        for _ in 0..partition_count {
-            timelines.push(OffsetTimeline::new(10));
+    pub(crate) fn new(name: Bytes, status: Status, partitions: &[u16]) -> Self {
+        let mut timelines = HashMap::new();
+        for &partition in partitions {
+            timelines.insert(partition, OffsetTimeline::new(10));
         }
         Processor {
             name,
@@ -165,7 +165,7 @@ impl ProcessorManager {
         // start the hb watcher, to listen to the HB bucket and update the list of
         // active processors
         let hb_handle = tokio::spawn(Self::start_hb_watcher(
-            bucket_config.partitions,
+            bucket_config.partitions.clone(),
             hb_bucket,
             Arc::clone(&heartbeats),
             Arc::clone(&processors),
@@ -213,7 +213,7 @@ impl ProcessorManager {
             let processor = Processor::new(
                 processor_name.clone(),
                 Status::Active,
-                bucket_config.partitions as usize,
+                &bucket_config.partitions,
             );
             processors.insert(processor_name.clone(), processor);
 
@@ -264,11 +264,9 @@ impl ProcessorManager {
 
             match vertex_type {
                 VertexType::Source | VertexType::Sink | VertexType::MapUDF => {
-                    processor
-                        .timelines
-                        .get_mut(wmb.partition as usize)
-                        .expect("should have partition")
-                        .put(wmb);
+                    if let Some(timeline) = processor.timelines.get_mut(&wmb.partition) {
+                        timeline.put(wmb);
+                    }
                 }
                 VertexType::ReduceUDF => {
                     // reduce vertex only reads from one partition so we should only consider wmbs
@@ -276,11 +274,9 @@ impl ProcessorManager {
                     if wmb.partition != vertex_replica {
                         continue;
                     }
-                    processor
-                        .timelines
-                        .get_mut(0)
-                        .expect("should have partition 0")
-                        .put(wmb);
+                    if let Some(timeline) = processor.timelines.get_mut(&vertex_replica) {
+                        timeline.put(wmb);
+                    }
                 }
             }
         }
@@ -358,11 +354,9 @@ impl ProcessorManager {
 
                     match vertex_type {
                         VertexType::Source | VertexType::Sink | VertexType::MapUDF => {
-                            processor
-                                .timelines
-                                .get_mut(wmb.partition as usize)
-                                .expect("should have partition")
-                                .put(wmb);
+                            if let Some(timeline) = processor.timelines.get_mut(&wmb.partition) {
+                                timeline.put(wmb);
+                            }
                         }
                         // reduce vertex only reads from one partition so we should only consider wmbs
                         // which belong to this vertex replica
@@ -370,11 +364,9 @@ impl ProcessorManager {
                             if wmb.partition != vertex_replica {
                                 continue;
                             }
-                            processor
-                                .timelines
-                                .get_mut(0)
-                                .expect("should have partition 0")
-                                .put(wmb);
+                            if let Some(timeline) = processor.timelines.get_mut(&vertex_replica) {
+                                timeline.put(wmb);
+                            }
                         }
                     }
                 }
@@ -389,7 +381,7 @@ impl ProcessorManager {
     /// Starts the hb watcher, to listen to the HB bucket, will also create the processor if it
     /// doesn't exist.
     async fn start_hb_watcher(
-        partition_count: u16,
+        partitions: Vec<u16>,
         hb_bucket: async_nats::jetstream::kv::Store,
         heartbeats: Arc<RwLock<HashMap<Bytes, i64>>>,
         processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
@@ -432,11 +424,7 @@ impl ProcessorManager {
                         }
                     } else {
                         info!(processor = ?processor_name, "Processor not found, adding it");
-                        let processor = Processor::new(
-                            processor_name,
-                            Status::Active,
-                            partition_count as usize,
-                        );
+                        let processor = Processor::new(processor_name, Status::Active, &partitions);
                         processors.insert(processor.name.clone(), processor);
                     }
                 }
@@ -544,7 +532,7 @@ mod tests {
             vertex: "test",
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
-            partitions: 1,
+            partitions: vec![0],
             delay: None,
         };
 
@@ -598,7 +586,7 @@ mod tests {
             if let Some(processor) = processors.get(&processor_name)
                 && processor.status == Status::Active
             {
-                let timeline = &processor.timelines[0];
+                let timeline = &processor.timelines[&0];
                 if let Some(head_wmb) = timeline.get_head_wmb()
                     && head_wmb.watermark == 200
                     && head_wmb.offset == 1
@@ -635,7 +623,7 @@ mod tests {
             vertex: "test",
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
-            partitions: 1,
+            partitions: vec![0],
             delay: None,
         };
 
@@ -720,7 +708,7 @@ mod tests {
                     async move {
                         if let Some(processor) = processor
                             && processor.status == Status::Active
-                            && let Some(head_wmb) = processor.timelines[0].get_head_wmb()
+                            && let Some(head_wmb) = processor.timelines[&0].get_head_wmb()
                         {
                             return head_wmb.watermark == 200 && head_wmb.offset == 1;
                         }
@@ -768,7 +756,7 @@ mod tests {
             vertex: "test",
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
-            partitions: 3,
+            partitions: vec![1], // For reduce UDF, WMBs are stored in timeline 0
             delay: None,
         };
 
@@ -861,27 +849,17 @@ mod tests {
                 .expect("failed to acquire lock");
 
             if let Some(processor) = processors.get(&processor_name)
-                && let Some(head_wmb) = processor.timelines[0].get_head_wmb()
+                && let Some(head_wmb) = processor.timelines[&1].get_head_wmb()
                 && head_wmb.watermark == 200
                 && head_wmb.partition == 1
             {
                 // Also check that other timelines don't have the filtered WMBs
-                let timeline_1_wmb = processor.timelines[1]
-                    .get_head_wmb()
-                    .expect("Timeline should have default WMB");
-                let timeline_2_wmb = processor.timelines[2]
-                    .get_head_wmb()
-                    .expect("Timeline should have default WMB");
+                let timeline_1_wmb = processor.timelines.get(&0);
+                assert!(timeline_1_wmb.is_none());
 
-                // These should still be default WMBs (watermark -1) since the WMBs with partitions 0 and 2 should be filtered out
-                if timeline_1_wmb.watermark == -1 && timeline_2_wmb.watermark == -1 {
-                    break;
-                } else {
-                    panic!(
-                        "Filtered WMBs found in timelines: timeline_1 watermark={}, timeline_2 watermark={}",
-                        timeline_1_wmb.watermark, timeline_2_wmb.watermark
-                    );
-                }
+                let timeline_2_wmb = processor.timelines.get(&2);
+                assert!(timeline_2_wmb.is_none());
+                break;
             }
 
             if start_time.elapsed() > Duration::from_secs(1) {
@@ -899,8 +877,8 @@ mod tests {
             .get(&processor_name)
             .expect("Processor should exist");
 
-        // For reduce UDF, WMBs should be stored in timeline 0 regardless of partition
-        let timeline_0 = &processor.timelines[0];
+        // For reduce UDF, WMBs should be stored in timeline 1 because that is replica
+        let timeline_0 = &processor.timelines[&1];
         let head_wmb = timeline_0
             .get_head_wmb()
             .expect("Should have a WMB in timeline 0");
@@ -910,17 +888,17 @@ mod tests {
         assert_eq!(head_wmb.partition, 1);
         assert_eq!(head_wmb.offset, 2);
 
-        // Other timelines should only have default WMBs (watermark -1) since we only store in timeline 0 for reduce UDF
-        for i in 1..processor.timelines.len() {
-            let head_wmb = processor.timelines[i]
-                .get_head_wmb()
-                .expect("Timeline should have default WMB");
-            assert_eq!(
-                head_wmb.watermark, -1,
-                "Timeline {} should only have default WMB (watermark -1) for reduce UDF",
-                i
-            );
-        }
+        // For reduce UDF, we should only have timeline 0, and WMBs are stored in timeline 0
+        // Since this test uses partitions: vec![0], there should only be one timeline with key 0
+        assert_eq!(
+            processor.timelines.len(),
+            1,
+            "Reduce UDF should only have one timeline"
+        );
+        assert!(
+            processor.timelines.contains_key(&1),
+            "Timeline should exist for partition 1"
+        );
 
         hb_task.abort();
     }

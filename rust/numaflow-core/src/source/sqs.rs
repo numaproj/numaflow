@@ -102,6 +102,11 @@ impl source::SourceAcker for SqsSource {
         }
         self.ack_offsets(sqs_offsets).await.map_err(Into::into)
     }
+
+    async fn nack(&mut self, _offsets: Vec<Offset>) -> crate::error::Result<()> {
+        // SQS doesn't support nack - no-op
+        Ok(())
+    }
 }
 
 impl source::LagReader for SqsSource {

@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use numaflow_kafka::source::{KafkaMessage, KafkaSource, KafkaSourceConfig};
+use tracing::info;
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
@@ -142,6 +143,12 @@ impl source::SourceAcker for KafkaSource {
             });
         }
         self.ack_messages(kafka_offsets).await.map_err(Into::into)
+    }
+
+    async fn nack(&mut self, offsets: Vec<Offset>) -> crate::error::Result<()> {
+        info!(?offsets, "Nack invoked for offsets (no-op for Kafka)");
+        // Kafka doesn't support nack - no-op
+        Ok(())
     }
 }
 

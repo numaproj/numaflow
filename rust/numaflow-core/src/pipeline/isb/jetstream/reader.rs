@@ -17,6 +17,7 @@ use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
+use crate::watermark::wmb::WMB;
 use async_nats::jetstream::{
     AckKind, Context, Message as JetstreamMessage, consumer::PullConsumer,
 };
@@ -26,6 +27,7 @@ use bytes::Bytes;
 use flate2::read::GzDecoder;
 use numaflow_throttling::RateLimiter;
 use prost::Message as ProtoMessage;
+use tokio::sync::mpsc::Sender;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
@@ -306,12 +308,40 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                         )
                         .await?;
 
-                    // if it's a reduce vertex, we should send wmb messages to the reduce component so
-                    // that it can close the windows when we are idling.
-                    if read_messages.is_empty()
-                        && let Some(idle_wmb_message) = self.create_wmb_message().await
-                    {
-                        let _ = messages_tx.send(idle_wmb_message).await;
+                    // set idle status if we did not read any messages
+                    if let Some(watermark_handle) = self.watermark_handle.as_mut() {
+                        if read_messages.is_empty() {
+                            // to set idle status and make sure it is truly idling in concurrent world,
+                            // we need to make sure the state at which we have marked the stream as idle
+                            // is the same when we are checking for idle status.
+                            // we achieve this by adding the Head WMB offset into the idle status and
+                            // when checking for idle status, we fetch Head WMB and compare if the offset
+                            // matches.
+                            let idle_wmb = watermark_handle
+                                .fetch_head_idle_wmb(self.stream.partition)
+                                .await;
+
+                            match idle_wmb {
+                                Some(wmb) => {
+                                    self.tracker_handle
+                                        .set_idle_offset(self.stream.partition, Some(wmb.offset))
+                                        .await?;
+                                    self.create_and_write_wmb_message_for_reduce(wmb, &messages_tx)
+                                        .await?;
+                                }
+                                None => {
+                                    // no Head WMB yet, we have not gotten any WMB from upstream yet.
+                                    self.tracker_handle
+                                        .set_idle_offset(self.stream.partition, None)
+                                        .await?;
+                                }
+                            }
+                        } else {
+                            // the moment we read a message, we are not idling
+                            self.tracker_handle
+                                .set_idle_offset(self.stream.partition, None)
+                                .await?;
+                        }
                     }
 
                     for message in read_messages {
@@ -683,32 +713,36 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
         self.stream.name
     }
 
-    /// Creates a WMB message with the by fetching the head idle WMB for the current partition.
-    async fn create_wmb_message(&mut self) -> Option<Message> {
-        let watermark_handle = self.watermark_handle.as_mut()?;
-
-        // we only need to create wmb messages for reduce vertices because they have to close windows
+    /// Creates a WMB message by fetching the head idle WMB for the current partition and write it to
+    /// the Reduce component.
+    /// We only need to create wmb messages for Reduce vertices because they have to also close the
+    /// Windows. The background idle publisher will take care of publishing the idle watermark to the Reduce
+    /// so we just need to close idle Windows.
+    async fn create_and_write_wmb_message_for_reduce(
+        &mut self,
+        idle_wmb: WMB,
+        messages_tx: &Sender<Message>,
+    ) -> Result<()> {
         if self.vertex_type != ReduceUDF.as_str() {
-            return None;
+            return Ok(());
         }
-
-        // Fetch the head idle WMB for the current partition
-        let idle_wmb = watermark_handle
-            .fetch_head_idle_wmb(self.stream.partition)
-            .await?;
 
         // Create a watermark from the validated WMB
         let idle_watermark = chrono::DateTime::from_timestamp_millis(idle_wmb.watermark)
             .expect("Failed to create watermark from WMB");
 
         // Create a WMB message with the validated idle watermark
-        Some(Message {
+        let message = Message {
             typ: MessageType::WMB,
             watermark: Some(idle_watermark),
             offset: Offset::Int(IntOffset::new(idle_wmb.offset, self.stream.partition)),
             event_time: idle_watermark,
             ..Default::default()
-        })
+        };
+        messages_tx
+            .send(message)
+            .await
+            .map_err(|_| Error::ISB("Failed to send wmb message to channel".to_string()))
     }
 }
 
