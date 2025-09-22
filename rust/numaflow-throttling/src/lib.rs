@@ -2688,6 +2688,7 @@ mod tests {
     #[tokio::test]
     #[cfg(feature = "redis-tests")]
     async fn test_distributed_rate_limiter_only_scheduled_mode_redis() {
+        use test_utils::StoreType::Redis;
         let test_cases = vec![
             // Integer slope with multiple pods
             // Keep acquiring min tokens with regular gaps in epochs between calls
