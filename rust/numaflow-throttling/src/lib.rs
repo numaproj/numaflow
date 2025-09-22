@@ -863,11 +863,13 @@ mod tests {
                         .attempt_acquire_n(asked_tokens[i].0, cur_epoch)
                         .await;
                     assert_eq!(
-                        tokens, expected_tokens[i],
+                        tokens,
+                        expected_tokens[i],
                         "Test Name: {}, Iteration: {}\n\
                         Number of tokens fetched in each iteration \
                 should increase by slope/pod_count until ramp up",
-                        test_name, i + 1
+                        test_name,
+                        i + 1
                     );
                     total_got_tokens += tokens;
                     total_expected_tokens += expected_tokens[i];
@@ -877,7 +879,8 @@ mod tests {
                         "Test Name: {}, Iteration: {}\n\
                         Invalid test case. Number of tokens deposited back ({}) can't \
                         be greater that tokens given by the rate limiter ({})",
-                        test_name, i + 1,
+                        test_name,
+                        i + 1,
                         deposited_tokens[i],
                         tokens
                     );
@@ -887,11 +890,13 @@ mod tests {
                 }
 
                 assert_eq!(
-                    total_got_tokens, total_expected_tokens,
+                    total_got_tokens,
+                    total_expected_tokens,
                     "Test Name: {}, Iteration: {}\n\
                     Total number of tokens fetched in each iteration \
                 should be less than or equal to total expected tokens for each processor",
-                    test_name, i + 1
+                    test_name,
+                    i + 1
                 );
 
                 // Determines after how many epochs next pull is going to be made.
@@ -2153,7 +2158,6 @@ mod tests {
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
 
-
     #[tokio::test]
     async fn test_distributed_rate_limiter_only_reset_to_used_mode() {
         use test_utils::StoreType;
@@ -2210,9 +2214,9 @@ mod tests {
                 ],
                 vec![5, 4, 2, 5, 5, 6, 6, 7, 7, 8, 8, 9],
             )
-                .test_name("test_distributed_rate_limiter_only_reset_to_used_mode_2".to_string())
-                .mode(Mode::ResetToUsed(100))
-                .store_type(StoreType::InMemory),
+            .test_name("test_distributed_rate_limiter_only_reset_to_used_mode_2".to_string())
+            .mode(Mode::ResetToUsed(100))
+            .store_type(StoreType::InMemory),
             // Integer slope with multiple pods
             // Keep acquiring tokens without any gaps
             // Increase in max_ever_filled should stall whenever usage threshold isn't crossed.
@@ -2238,10 +2242,10 @@ mod tests {
                 ],
                 vec![5, 4, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5],
             )
-                .test_name("test_distributed_rate_limiter_only_reset_to_used_mode_3".to_string())
-                .mode(Mode::ResetToUsed(100))
-                .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
-                .store_type(StoreType::InMemory),
+            .test_name("test_distributed_rate_limiter_only_reset_to_used_mode_3".to_string())
+            .mode(Mode::ResetToUsed(100))
+            .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+            .store_type(StoreType::InMemory),
             // Integer slope with multiple pods
             // Keep acquiring tokens without any gaps
             // Increase in max_ever_filled should decrease whenever usage threshold isn't crossed.
@@ -2267,10 +2271,10 @@ mod tests {
                 ],
                 vec![5, 4, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5],
             )
-                .test_name("test_distributed_rate_limiter_only_reset_to_used_mode_4".to_string())
-                .mode(Mode::ResetToUsed(90))
-                .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
-                .store_type(StoreType::InMemory),
+            .test_name("test_distributed_rate_limiter_only_reset_to_used_mode_4".to_string())
+            .mode(Mode::ResetToUsed(90))
+            .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+            .store_type(StoreType::InMemory),
             // Integer slope with multiple pods
             // Keep acquiring tokens without any gaps
             // Increase max_ever_filled whenever usage threshold is crossed
@@ -2295,10 +2299,10 @@ mod tests {
                 ],
                 vec![5, 4, 2, 5, 5, 6, 6, 7, 7, 8, 8, 9],
             )
-                .test_name("test_distributed_rate_limiter_only_reset_to_used_mode_5".to_string())
-                .mode(Mode::ResetToUsed(80))
-                .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
-                .store_type(StoreType::InMemory),
+            .test_name("test_distributed_rate_limiter_only_reset_to_used_mode_5".to_string())
+            .mode(Mode::ResetToUsed(80))
+            .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+            .store_type(StoreType::InMemory),
             // Integer slope with multiple pods
             // Keep acquiring tokens without any gaps
             // max_ever_filled should decrease whenever the usage threshold is not crossed
@@ -2352,7 +2356,8 @@ mod tests {
                     (None, 1),
                     (None, 1),
                     (None, 1),
-                ],vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 9, 8, 8, 7, 7, 6],
+                ],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 9, 8, 8, 7, 7, 6],
             )
             .test_name("test_distributed_rate_limiter_only_reset_to_used_mode_7".to_string())
             .mode(Mode::ResetToUsed(100))
