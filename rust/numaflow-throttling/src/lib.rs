@@ -105,23 +105,46 @@ impl<W> RateLimit<W> {
         let used_token_percentage =
             ((1.0 - unused_tokens / *max_ever_filled) * 100.0).round() as usize;
 
+        // We need to compensate for the unusable tokens in the pool that the rate limiter cannot give out.
+        // This is because the rate limiter cannot give out fractional tokens.
+        // E.g., given the following scenario:
+        // min=10, max=20, slope=1, pods=2
+        // After the first refill, the max_ever_refill will be 11,
+        // but the rate limiter can only give out 10 tokens in total, across the 2 processors.
+        // Thus, we need to account for unused token in the pool that the processor cannot give out.
+        let error_percentage =
+            ((self.token_calc_bounds.slope / *max_ever_filled) * 100.0).round() as usize;
+
+        // The rate limiter cannot give out all the tokens only when the max_ever_filled
+        // but since the known_pool_size is not available we'll just add the error_percentage
+        // to the used_token_percentage.
+        //
+        // TODO: fix me
+        let used_token_percentage = (used_token_percentage + error_percentage).min(100).max(0);
+
         match self.token_calc_bounds.mode {
             Mode::Relaxed => self.relaxed_slope_increase(&mut max_ever_filled),
             Mode::Scheduled => self.scheduled_slope_increase(cur_epoch, &mut max_ever_filled),
-            Mode::OnlyIfUsed(threshold_percentage) => self.only_if_used_slope_increase(
-                requested_token_size,
-                &mut max_ever_filled,
-                used_token_percentage,
-                threshold_percentage,
-            ),
+            Mode::OnlyIfUsed(threshold_percentage) => {
+                let threshold_percentage = threshold_percentage.min(100).max(0);
+                self.only_if_used_slope_increase(
+                    requested_token_size,
+                    &mut max_ever_filled,
+                    used_token_percentage,
+                    threshold_percentage,
+                )
+            }
             Mode::GoBackN => {
                 self.go_back_n_slope_increase(requested_token_size, cur_epoch, &mut max_ever_filled)
             }
-            Mode::ResetToUsed(threshold_percentage) => self.reset_to_used_slope_increase(
-                &mut max_ever_filled,
-                used_token_percentage,
-                threshold_percentage,
-            ),
+            Mode::ResetToUsed(threshold_percentage) => {
+                let threshold_percentage = threshold_percentage.min(100).max(0);
+                self.reset_to_used_slope_increase(
+                    &mut max_ever_filled,
+                    used_token_percentage,
+                    threshold_percentage,
+                )
+            }
         }
     }
 
@@ -163,7 +186,7 @@ impl<W> RateLimit<W> {
         requested_token_size: Option<usize>,
         max_ever_filled: &mut f32,
         used_token_percentage: usize,
-        threshold_percentage: usize,
+        used_threshold_percentage: usize,
     ) -> usize {
         // If the requested token size is less than the max_ever_filled
         // then we won't increase the token pool size
@@ -174,7 +197,7 @@ impl<W> RateLimit<W> {
         } else {
             // If the unused token percentage is less than 10%, then we'll increase the tokens
             // by slope. Otherwise, we'll keep the tokens as it is.
-            if used_token_percentage >= threshold_percentage {
+            if used_token_percentage >= used_threshold_percentage {
                 self.relaxed_slope_increase(max_ever_filled)
             } else {
                 *max_ever_filled as usize
@@ -220,11 +243,11 @@ impl<W> RateLimit<W> {
         &self,
         max_ever_filled: &mut f32,
         used_token_percentage: usize,
-        threshold_percentage: usize,
+        used_threshold_percentage: usize,
     ) -> usize {
         // If the used token percentage is greater than threshold%, then we'll increase the tokens by slope.
         // Otherwise, we'll reduce the amount of tokens to refill by slope.
-        if used_token_percentage >= threshold_percentage {
+        if used_token_percentage >= used_threshold_percentage {
             self.relaxed_slope_increase(max_ever_filled)
         } else {
             // Reduce the amount of tokens to refill by previously unused tokens
@@ -1921,6 +1944,209 @@ mod tests {
             )
             .test_name("test_distributed_rate_limiter_only_go_back_n_mode_4".to_string())
             .mode(Mode::GoBackN)
+            .store_type(StoreType::InMemory),
+            // Integer slope with multiple pods
+            // Drop in max_ever_filled should be large for large gaps in epochs
+            // then continue where it left off
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 5),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 5, 6, 6, 7, 7, 8, 6, 7, 7],
+            )
+            .test_name("test_distributed_rate_limiter_only_go_back_n_mode_5".to_string())
+            .mode(Mode::GoBackN)
+            .store_type(StoreType::InMemory),
+        ];
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
+    }
+
+    #[tokio::test]
+    async fn test_distributed_rate_limiter_only_only_if_used_mode() {
+        use test_utils::StoreType;
+
+        let test_cases = vec![
+            // Integer slope with multiple pods
+            // Keep acquiring max tokens without any gaps
+            // The fetched tokens should follow relaxed mode if all tokens are used
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_only_if_used_mode_1".to_string())
+            .mode(Mode::OnlyIfUsed(100))
+            .store_type(StoreType::InMemory),
+            // Integer slope with multiple pods
+            // Keep acquiring tokens without any gaps
+            // Increase in max_ever_filled should stall whenever max tokens aren't acquired.
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (Some(4), 1),
+                    (Some(2), 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 4, 2, 5, 5, 6, 6, 7, 7, 8, 8, 9],
+            )
+            .test_name("test_distributed_rate_limiter_only_only_if_used_mode_2".to_string())
+            .mode(Mode::OnlyIfUsed(100))
+            .store_type(StoreType::InMemory),
+            // Integer slope with multiple pods
+            // Keep acquiring tokens without any gaps
+            // Increase in max_ever_filled should stall whenever usage threshold isn't crossed.
+            // Usage threshold here isn't crossed because we're constantly depositing tokens back.
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (Some(4), 1),
+                    (Some(2), 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 4, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+            )
+            .test_name("test_distributed_rate_limiter_only_only_if_used_mode_3".to_string())
+            .mode(Mode::OnlyIfUsed(100))
+            .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+            .store_type(StoreType::InMemory),
+            // Integer slope with multiple pods
+            // Keep acquiring tokens without any gaps
+            // Increase in max_ever_filled should stall whenever usage threshold isn't crossed.
+            // Even though the threshold percentage is 90%, since we're depositing tokens back,
+            // the actual usage threshold doesn't get crossed (hovers around 82%).
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (Some(4), 1),
+                    (Some(2), 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 4, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+            )
+            .test_name("test_distributed_rate_limiter_only_only_if_used_mode_4".to_string())
+            .mode(Mode::OnlyIfUsed(90))
+            .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+            .store_type(StoreType::InMemory),
+            // Integer slope with multiple pods
+            // Keep acquiring tokens without any gaps
+            // Increase max_ever_filled whenever usage threshold is crossed
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (Some(4), 1),
+                    (Some(2), 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 4, 2, 5, 5, 6, 6, 7, 7, 8, 8, 9],
+            )
+            .test_name("test_distributed_rate_limiter_only_only_if_used_mode_5".to_string())
+            .mode(Mode::OnlyIfUsed(80))
+            .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+            .store_type(StoreType::InMemory),
+            // Integer slope with multiple pods
+            // Keep acquiring tokens without any gaps
+            // Increase max_ever_filled should stall whenever the usage threshold is not crossed
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (Some(4), 1),
+                    (Some(2), 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 4, 2, 5, 5, 5, 6, 6, 6, 7, 7, 8],
+            )
+            .test_name("test_distributed_rate_limiter_only_only_if_used_mode_6".to_string())
+            .mode(Mode::OnlyIfUsed(80))
+            .deposited_tokens(vec![1, 1, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1])
             .store_type(StoreType::InMemory),
         ];
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
