@@ -40,12 +40,11 @@ impl<C: crate::typ::NumaflowTypeConfig> SourceForwarder<C> {
 
     /// Start the forwarder by starting the streaming source, transformer, and writer.
     pub(crate) async fn start(self, cln_token: CancellationToken) -> error::Result<()> {
-        let child_token = cln_token.child_token();
-        let (messages_stream, reader_handle) = self.source.streaming_read(child_token.clone())?;
+        let (messages_stream, reader_handle) = self.source.streaming_read(cln_token.clone())?;
 
         let writer_handle = self
             .writer
-            .streaming_write(messages_stream, child_token)
+            .streaming_write(messages_stream, cln_token.clone())
             .await?;
 
         let (reader_result, sink_writer_result) = tokio::try_join!(reader_handle, writer_handle)
@@ -56,12 +55,10 @@ impl<C: crate::typ::NumaflowTypeConfig> SourceForwarder<C> {
 
         sink_writer_result.inspect_err(|e| {
             error!(?e, "Error while writing messages");
-            cln_token.cancel();
         })?;
 
         reader_result.inspect_err(|e| {
             error!(?e, "Error while reading messages");
-            cln_token.cancel();
         })?;
 
         Ok(())
@@ -301,6 +298,8 @@ mod tests {
             }
         }
 
+        async fn nack(&self, _offsets: Vec<Offset>) {}
+
         async fn pending(&self) -> Option<usize> {
             Some(
                 self.num - self.sent_count.load(Ordering::SeqCst)
@@ -388,11 +387,16 @@ mod tests {
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let (src_read, src_ack, lag_reader) =
-            new_source(client, 5, Duration::from_millis(1000), cln_token.clone())
-                .await
-                .map_err(|e| panic!("failed to create source reader: {:?}", e))
-                .unwrap();
+        let (src_read, src_ack, lag_reader) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
 
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,
