@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"sync"
 	"testing"
 	"time"
 
@@ -55,25 +54,10 @@ func (s *UserDefinedSourceSuite) testSimpleSourceRust() {
 }
 
 func (s *UserDefinedSourceSuite) TestUDSource() {
-	var wg sync.WaitGroup
-	wg.Add(4)
-	go func() {
-		defer wg.Done()
-		s.testSimpleSourcePython()
-	}()
-	go func() {
-		defer wg.Done()
-		s.testSimpleSourceJava()
-	}()
-	go func() {
-		defer wg.Done()
-		s.testSimpleSourceGo()
-	}()
-	go func() {
-		defer wg.Done()
-		s.testSimpleSourceRust()
-	}()
-	wg.Wait()
+	s.testSimpleSourcePython()
+	s.testSimpleSourceJava()
+	s.testSimpleSourceGo()
+	s.testSimpleSourceRust()
 }
 
 func (s *UserDefinedSourceSuite) testSimpleSource(lang string, verifyRate bool) {
