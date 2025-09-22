@@ -86,6 +86,10 @@ pub(crate) trait SourceReader {
 pub(crate) trait SourceAcker {
     /// acknowledge an offset. The implementor might choose to do it in an asynchronous way.
     async fn ack(&mut self, _: Vec<Offset>) -> Result<()>;
+
+    /// negatively acknowledge an offset. The implementor might choose to do it in an asynchronous way.
+    /// For sources that don't support nack, this should be a no-op.
+    async fn nack(&mut self, _: Vec<Offset>) -> Result<()>;
 }
 
 pub(crate) enum SourceType {
@@ -116,6 +120,10 @@ enum ActorMessage {
         respond_to: oneshot::Sender<Option<Result<Vec<Message>>>>,
     },
     Ack {
+        respond_to: oneshot::Sender<Result<()>>,
+        offsets: Vec<Offset>,
+    },
+    Nack {
         respond_to: oneshot::Sender<Result<()>>,
         offsets: Vec<Offset>,
     },
@@ -165,6 +173,13 @@ where
             } => {
                 let ack = self.acker.ack(offsets).await;
                 let _ = respond_to.send(ack);
+            }
+            ActorMessage::Nack {
+                respond_to,
+                offsets,
+            } => {
+                let nack = self.acker.nack(offsets).await;
+                let _ = respond_to.send(nack);
             }
             ActorMessage::Pending { respond_to } => {
                 let pending = self.lag_reader.pending().await;
@@ -317,6 +332,21 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     async fn ack(source_handle: mpsc::Sender<ActorMessage>, offsets: Vec<Offset>) -> Result<()> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Ack {
+            respond_to: sender,
+            offsets,
+        };
+        // Ignore send errors. If send fails, so does the recv.await below. There's no reason
+        // to check for the same failure twice.
+        let _ = source_handle.send(msg).await;
+        receiver
+            .await
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
+    }
+
+    /// nack the offsets by communicating with the nack actor.
+    async fn nack(source_handle: mpsc::Sender<ActorMessage>, offsets: Vec<Offset>) -> Result<()> {
+        let (sender, receiver) = oneshot::channel();
+        let msg = ActorMessage::Nack {
             respond_to: sender,
             offsets,
         };
@@ -512,7 +542,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         .expect("send should not fail");
                 }
             }
-            info!(status=?result, "Source stopped, waiting for inflight messages to be acked");
+            info!(status=?result, "Source stopped, waiting for inflight messages to be acked/nacked");
             // wait for all the ack tasks to be completed before stopping the source, since we give
             // a permit for each ack task all the permits should be released when the ack tasks are
             // done, we can verify this by trying to acquire the permit for max_ack_tasks.
@@ -520,7 +550,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 .acquire_many_owned(max_ack_tasks as u32)
                 .await
                 .expect("acquiring permit should not fail");
-            info!("All inflight messages are acked. Source stopped.");
+            info!("All inflight messages are acked/nacked. Source stopped.");
 
             // Shutdown rate limiter if configured
             if let Some(ref rate_limiter) = self.rate_limiter {
@@ -535,7 +565,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         Ok((ReceiverStream::new(messages_rx), handle))
     }
 
-    /// Listens to the oneshot receivers and invokes ack on the source for the offsets that are acked.
+    /// Listens to the oneshot receivers and invokes ack/nack on the source for the offsets.
     async fn invoke_ack(
         e2e_start_time: Instant,
         source_handle: mpsc::Sender<ActorMessage>,
@@ -545,6 +575,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     ) -> Result<()> {
         let n = ack_rx_batch.len();
         let mut offsets_to_ack = Vec::with_capacity(n);
+        let mut offsets_to_nack = Vec::with_capacity(n);
 
         for (offset, oneshot_rx) in ack_rx_batch {
             match oneshot_rx.await {
@@ -553,6 +584,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 }
                 Ok(ReadAck::Nak) => {
                     warn!(?offset, "Nak received for offset");
+                    offsets_to_nack.push(offset);
                 }
                 Err(e) => {
                     error!(?offset, err=?e, "Error receiving ack for offset");
@@ -562,7 +594,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
         let start = Instant::now();
         if !offsets_to_ack.is_empty() {
-            Self::ack_with_retry(source_handle, offsets_to_ack, &cancel_token).await;
+            Self::ack_with_retry(source_handle.clone(), offsets_to_ack, &cancel_token).await;
+        }
+        if !offsets_to_nack.is_empty() {
+            Self::nack_with_retry(source_handle, offsets_to_nack, &cancel_token).await;
         }
         Self::send_ack_metrics(e2e_start_time, n, start);
 
@@ -586,6 +621,34 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         error!(
                             ?result,
                             "Cancellation token received, stopping the ack retry loop"
+                        );
+                        return Ok(());
+                    }
+                }
+                result
+            },
+            |_: &Error| !cancel_token.is_cancelled(),
+        )
+        .await;
+    }
+
+    /// Invokes nack with infinite retries until the cancellation token is cancelled.
+    async fn nack_with_retry(
+        source_handle: mpsc::Sender<ActorMessage>,
+        offsets: Vec<Offset>,
+        cancel_token: &CancellationToken,
+    ) {
+        let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
+        let _ = Retry::new(
+            interval,
+            async || {
+                let result = Self::nack(source_handle.clone(), offsets.clone()).await;
+                if result.is_err() {
+                    error!(?result, "Failed to send nack to source, retrying...");
+                    if cancel_token.is_cancelled() {
+                        error!(
+                            ?result,
+                            "Cancellation token received, stopping the nack retry loop"
                         );
                         return Ok(());
                     }
@@ -719,6 +782,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
 #[cfg(test)]
 mod tests {
+    use crate::shared::grpc::create_rpc_channel;
+    use crate::source::user_defined::new_source;
+    use crate::source::{Source, SourceType};
+    use crate::tracker::TrackerHandle;
     use chrono::Utc;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
@@ -730,15 +797,11 @@ mod tests {
     use tokio_stream::StreamExt;
     use tokio_util::sync::CancellationToken;
 
-    use crate::shared::grpc::create_rpc_channel;
-    use crate::source::user_defined::new_source;
-    use crate::source::{Source, SourceType};
-    use crate::tracker::TrackerHandle;
-
     struct SimpleSource {
         num: usize,
         sent_count: AtomicUsize,
         yet_to_ack: std::sync::RwLock<HashSet<String>>,
+        nacked: std::sync::RwLock<HashSet<String>>,
     }
 
     impl SimpleSource {
@@ -747,6 +810,20 @@ mod tests {
                 num,
                 sent_count: AtomicUsize::new(0),
                 yet_to_ack: std::sync::RwLock::new(HashSet::new()),
+                nacked: std::sync::RwLock::new(HashSet::new()),
+            }
+        }
+
+        async fn create_message(&self, offset: String) -> Message {
+            Message {
+                value: b"hello".to_vec(),
+                event_time: Utc::now(),
+                offset: Offset {
+                    offset: offset.clone().into_bytes(),
+                    partition_id: 0,
+                },
+                keys: vec![],
+                headers: Default::default(),
             }
         }
     }
@@ -757,6 +834,23 @@ mod tests {
             let event_time = Utc::now();
             let mut message_offsets = Vec::with_capacity(request.count);
 
+            // if there are nacked message send them first and remove them from the nacked set
+            // and return early
+            let nacked = self.nacked.read().unwrap().clone();
+            if !nacked.is_empty() {
+                for offset in nacked {
+                    transmitter
+                        .send(self.create_message(offset).await)
+                        .await
+                        .unwrap();
+                    self.sent_count.fetch_add(1, Ordering::SeqCst);
+                }
+
+                // clear the nacked set
+                self.nacked.write().unwrap().clear();
+                return;
+            }
+
             for i in 0..request.count {
                 if self.sent_count.load(Ordering::SeqCst) >= self.num {
                     return;
@@ -764,16 +858,7 @@ mod tests {
 
                 let offset = format!("{}-{}", event_time.timestamp_nanos_opt().unwrap(), i);
                 transmitter
-                    .send(Message {
-                        value: b"hello".to_vec(),
-                        event_time,
-                        offset: Offset {
-                            offset: offset.clone().into_bytes(),
-                            partition_id: 0,
-                        },
-                        keys: vec![],
-                        headers: Default::default(),
-                    })
+                    .send(self.create_message(offset.clone()).await)
                     .await
                     .unwrap();
                 message_offsets.push(offset);
@@ -784,15 +869,27 @@ mod tests {
 
         async fn ack(&self, offsets: Vec<Offset>) {
             for offset in offsets {
-                self.yet_to_ack
-                    .write()
-                    .unwrap()
-                    .remove(&String::from_utf8(offset.offset).unwrap());
+                let offset = &String::from_utf8(offset.offset).unwrap();
+                self.yet_to_ack.write().unwrap().remove(offset);
             }
         }
 
         async fn pending(&self) -> Option<usize> {
-            Some(self.yet_to_ack.read().unwrap().len())
+            Some(self.yet_to_ack.read().unwrap().len() + self.nacked.read().unwrap().len())
+        }
+
+        async fn nack(&self, offsets: Vec<Offset>) {
+            for offset in offsets {
+                self.yet_to_ack
+                    .write()
+                    .unwrap()
+                    .remove(&String::from_utf8(offset.offset.clone()).unwrap());
+                self.nacked
+                    .write()
+                    .unwrap()
+                    .insert(String::from_utf8(offset.offset).unwrap());
+                self.sent_count.fetch_sub(1, Ordering::SeqCst);
+            }
         }
 
         async fn partitions(&self) -> Option<Vec<i32>> {
@@ -827,11 +924,16 @@ mod tests {
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let (src_read, src_ack, lag_reader) =
-            new_source(client, 5, Duration::from_millis(1000), cln_token.clone())
-                .await
-                .map_err(|e| panic!("failed to create source reader: {:?}", e))
-                .unwrap();
+        let (src_read, src_ack, lag_reader) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
 
         let tracker = TrackerHandle::new(None);
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
@@ -855,23 +957,59 @@ mod tests {
             offsets.push(message.offset.clone());
         }
 
-        // ack all the messages
-        Source::<crate::typ::WithoutRateLimiter>::ack(sender.clone(), offsets.clone())
-            .await
-            .unwrap();
-
-        for offset in offsets {
-            tracker.discard(offset).await.unwrap();
+        // ack 50 messages by invoking delete on tracker
+        for offset in offsets.iter().take(50) {
+            tracker.delete(offset.clone()).await.unwrap();
         }
 
-        // since we acked all the messages, pending should be 0
-        let pending = source.pending().await.unwrap();
-        assert_eq!(pending, Some(0));
+        // wait for upto 1s with 10ms sleep between each check to make sure the pending becomes 50
+        let x = tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                let pending = source.pending().await.unwrap();
+                if pending == Some(50) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        assert!(x.is_ok(), "Timeout occurred before pending became 50");
 
         let partitions = Source::<crate::typ::WithoutRateLimiter>::partitions(sender.clone())
             .await
             .unwrap();
         assert_eq!(partitions, vec![1, 2]);
+
+        // tracker discard will invoke nack
+        for offset in offsets.iter().skip(50) {
+            tracker.discard(offset.clone()).await.unwrap();
+        }
+
+        // read should return 50 nacked messages
+        for _ in 0..50 {
+            let message = stream.next().await.unwrap();
+            assert_eq!(message.value, "hello".as_bytes());
+        }
+
+        // ack them all now
+        for offset in offsets.iter().skip(50) {
+            tracker.delete(offset.clone()).await.unwrap();
+        }
+
+        // pending should be 0 now
+        let x = tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                let pending = source.pending().await.unwrap();
+                if pending == Some(0) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        assert!(x.is_ok(), "Timeout occurred before pending became 0");
 
         drop(source);
         drop(sender);

@@ -95,6 +95,19 @@ impl source::SourceAcker for PulsarSource {
         }
         self.ack_offsets(pulsar_offsets).await.map_err(Into::into)
     }
+
+    async fn nack(&mut self, offsets: Vec<Offset>) -> crate::error::Result<()> {
+        let mut pulsar_offsets = Vec::with_capacity(offsets.len());
+        for offset in offsets {
+            let Offset::Int(int_offset) = offset else {
+                return Err(Error::Source(format!(
+                    "Expected Offset::Int type for Pulsar. offset={offset:?}"
+                )));
+            };
+            pulsar_offsets.push(int_offset.offset as u64);
+        }
+        self.nack_offsets(pulsar_offsets).await.map_err(Into::into)
+    }
 }
 
 impl source::LagReader for PulsarSource {
