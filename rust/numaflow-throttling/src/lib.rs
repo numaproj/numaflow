@@ -115,11 +115,9 @@ impl<W> RateLimit<W> {
         let error_percentage =
             ((self.token_calc_bounds.slope / *max_ever_filled) * 100.0).round() as usize;
 
-        // The rate limiter cannot give out all the tokens only when the max_ever_filled
-        // but since the known_pool_size is not available we'll just add the error_percentage
-        // to the used_token_percentage.
-        //
-        // TODO: fix me
+        // The rate limiter cannot give out all the tokens only when the max_ever_filled is indivisible
+        // between the known_pool_size, but since the known_pool_size is not available here we'll just
+        // add the error_percentage to the used_token_percentage.
         let used_token_percentage = (used_token_percentage + error_percentage).min(100).max(0);
 
         match self.token_calc_bounds.mode {
