@@ -169,7 +169,7 @@ pub(crate) enum PipelineComponents<C: crate::typ::NumaflowTypeConfig> {
 #[derive(Clone)]
 pub(crate) struct WatermarkFetcherState {
     pub(crate) watermark_handle: WatermarkHandle,
-    pub(crate) partition_count: u16,
+    pub(crate) partitions: Vec<u16>,
 }
 
 /// MetricsState holds both component health checks and optional watermark fetcher state
@@ -1085,8 +1085,8 @@ pub async fn watermark_handler<C: crate::typ::NumaflowTypeConfig>(
             // For reduce vertices, only return partition 0 since they read from single partition
             // For other vertex types, fetch watermarks for all partitions
             // watermark_fetcher_state.partition_count will already be set to 1 for reduce vertex
-            for partition_idx in 0..watermark_fetcher_state.partition_count {
-                let watermark = handle_clone.fetch_head_watermark(partition_idx).await;
+            for partition_idx in watermark_fetcher_state.partitions.iter() {
+                let watermark = handle_clone.fetch_head_watermark(*partition_idx).await;
                 partitions.insert(partition_idx.to_string(), watermark.timestamp_millis());
             }
         }

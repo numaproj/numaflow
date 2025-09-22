@@ -196,7 +196,7 @@ async fn run_source_forwarder<C: NumaflowTypeConfig>(
             ))),
             watermark_fetcher_state: source_watermark_handle.map(|handle| WatermarkFetcherState {
                 watermark_handle: WatermarkHandle::Source(handle),
-                partition_count: 1, // Source vertices always have partition count = 1
+                partitions: vec![0], // Source vertices always have single partition
             }),
         },
     )
