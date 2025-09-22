@@ -37,6 +37,10 @@ enum ConsumerActorMessage {
         offsets: Vec<u64>,
         respond_to: oneshot::Sender<Result<()>>,
     },
+    Nack {
+        offsets: Vec<u64>,
+        respond_to: oneshot::Sender<Result<()>>,
+    },
 }
 
 pub struct PulsarMessage {
@@ -141,6 +145,13 @@ impl ConsumerReaderActor {
                 let status = self.ack_messages(offsets).await;
                 let _ = respond_to.send(status);
             }
+            ConsumerActorMessage::Nack {
+                offsets,
+                respond_to,
+            } => {
+                let status = self.nack_messages(offsets).await;
+                let _ = respond_to.send(status);
+            }
         }
     }
 
@@ -235,6 +246,28 @@ impl ConsumerReaderActor {
         }
         Ok(())
     }
+
+    async fn nack_messages(&mut self, offsets: Vec<u64>) -> Result<()> {
+        for offset in offsets {
+            let msg_id = self.message_ids.remove(&offset);
+
+            let Some(msg_id) = msg_id else {
+                return Err(Error::UnknownOffset(offset));
+            };
+
+            let Err(e) = self
+                .consumer
+                .nack_with_id(&self.topic, msg_id.clone())
+                .await
+            else {
+                continue;
+            };
+            // Insert offset back
+            self.message_ids.insert(offset, msg_id);
+            return Err(Error::Pulsar(e.into()));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
@@ -284,6 +317,18 @@ impl PulsarSource {
         let _ = self
             .actor_tx
             .send(ConsumerActorMessage::Ack {
+                offsets,
+                respond_to: tx,
+            })
+            .await;
+        rx.await.map_err(Error::ActorTaskTerminated)?
+    }
+
+    pub async fn nack_offsets(&self, offsets: Vec<u64>) -> Result<()> {
+        let (tx, rx) = oneshot::channel();
+        let _ = self
+            .actor_tx
+            .send(ConsumerActorMessage::Nack {
                 offsets,
                 respond_to: tx,
             })

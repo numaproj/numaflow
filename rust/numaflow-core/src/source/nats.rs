@@ -68,6 +68,11 @@ impl SourceAcker for NatsSource {
         // NATS ack is a no-op
         Ok(())
     }
+
+    async fn nack(&mut self, _offsets: Vec<Offset>) -> crate::Result<()> {
+        // NATS nack is a no-op (plain NATS doesn't support nack)
+        Ok(())
+    }
 }
 
 impl super::LagReader for NatsSource {

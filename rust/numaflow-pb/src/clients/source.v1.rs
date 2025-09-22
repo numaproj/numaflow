@@ -210,6 +210,36 @@ pub mod ack_response {
         pub success: ::core::option::Option<()>,
     }
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct NackRequest {
+    /// Required field holding the request. The list will be ordered and will have the same order as the original Read response.
+    #[prost(message, optional, tag = "1")]
+    pub request: ::core::option::Option<nack_request::Request>,
+}
+/// Nested message and enum types in `NackRequest`.
+pub mod nack_request {
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct Request {
+        /// Required field holding the offset to be nacked
+        #[prost(message, repeated, tag = "1")]
+        pub offsets: ::prost::alloc::vec::Vec<super::Offset>,
+    }
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct NackResponse {
+    /// Required field holding the result.
+    #[prost(message, optional, tag = "1")]
+    pub result: ::core::option::Option<nack_response::Result>,
+}
+/// Nested message and enum types in `NackResponse`.
+pub mod nack_response {
+    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
+    pub struct Result {
+        /// Required field indicating the nack request is successful.
+        #[prost(message, optional, tag = "1")]
+        pub success: ::core::option::Option<()>,
+    }
+}
 ///
 /// ReadyResponse is the health check result for user defined source.
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
@@ -412,6 +442,26 @@ pub mod source_client {
             let mut req = request.into_streaming_request();
             req.extensions_mut().insert(GrpcMethod::new("source.v1.Source", "AckFn"));
             self.inner.streaming(req, path, codec).await
+        }
+        /// NackFn negatively acknowledges a batch of offsets. Invoked during a critical error in the mono vertex or pipeline.
+        /// Unlike AckFn its not a streaming rpc because this is only invoked when there is a critical error (error path).
+        pub async fn nack_fn(
+            &mut self,
+            request: impl tonic::IntoRequest<super::NackRequest>,
+        ) -> std::result::Result<tonic::Response<super::NackResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/source.v1.Source/NackFn");
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new("source.v1.Source", "NackFn"));
+            self.inner.unary(req, path, codec).await
         }
         /// PendingFn returns the number of pending records at the user defined source.
         pub async fn pending_fn(
