@@ -126,14 +126,13 @@ impl<W> RateLimit<W> {
             Mode::OnlyIfUsed(threshold_percentage) => {
                 let threshold_percentage = threshold_percentage.min(100).max(0);
                 self.only_if_used_slope_increase(
-                    requested_token_size,
                     &mut max_ever_filled,
                     used_token_percentage,
                     threshold_percentage,
                 )
             }
             Mode::GoBackN => {
-                self.go_back_n_slope_increase(requested_token_size, cur_epoch, &mut max_ever_filled)
+                self.go_back_n_slope_increase(&mut max_ever_filled, requested_token_size, cur_epoch)
             }
             Mode::ResetToUsed(threshold_percentage) => {
                 let threshold_percentage = threshold_percentage.min(100).max(0);
@@ -181,33 +180,24 @@ impl<W> RateLimit<W> {
 
     fn only_if_used_slope_increase(
         &self,
-        requested_token_size: Option<usize>,
         max_ever_filled: &mut f32,
         used_token_percentage: usize,
         used_threshold_percentage: usize,
     ) -> usize {
-        // If the requested token size is less than the max_ever_filled
-        // then we won't increase the token pool size
-        if let Some(n) = requested_token_size
-            && n <= *max_ever_filled as usize
-        {
-            *max_ever_filled as usize
+        // If the used token percentage is greater than the threshold provided in config, then
+        // we'll increase the tokens by slope. Otherwise, we'll keep the tokens as it is.
+        if used_token_percentage >= used_threshold_percentage {
+            self.relaxed_slope_increase(max_ever_filled)
         } else {
-            // If the used token percentage is greater than the threshold provided in config, then
-            // we'll increase the tokens by slope. Otherwise, we'll keep the tokens as it is.
-            if used_token_percentage >= used_threshold_percentage {
-                self.relaxed_slope_increase(max_ever_filled)
-            } else {
-                *max_ever_filled as usize
-            }
+            *max_ever_filled as usize
         }
     }
 
     fn go_back_n_slope_increase(
         &self,
+        max_ever_filled: &mut f32,
         requested_token_size: Option<usize>,
         cur_epoch: u64,
-        max_ever_filled: &mut f32,
     ) -> usize {
         let prev_epoch = self
             .last_queried_epoch
@@ -2031,7 +2021,7 @@ mod tests {
                     (None, 1),
                     (None, 1),
                 ],
-                vec![5, 4, 2, 5, 5, 6, 6, 7, 7, 8, 8, 9],
+                vec![5, 4, 2, 5, 6, 6, 7, 7, 8, 8, 9, 9],
             )
             .test_name("test_distributed_rate_limiter_only_only_if_used_mode_2".to_string())
             .mode(Mode::OnlyIfUsed(100))
@@ -2117,7 +2107,7 @@ mod tests {
                     (None, 1),
                     (None, 1),
                 ],
-                vec![5, 4, 2, 5, 5, 6, 6, 7, 7, 8, 8, 9],
+                vec![5, 4, 2, 5, 6, 6, 7, 7, 8, 8, 9, 9],
             )
             .test_name("test_distributed_rate_limiter_only_only_if_used_mode_5".to_string())
             .mode(Mode::OnlyIfUsed(80))
@@ -2145,7 +2135,7 @@ mod tests {
                     (None, 1),
                     (None, 1),
                 ],
-                vec![5, 4, 2, 5, 5, 5, 6, 6, 6, 7, 7, 8],
+                vec![5, 4, 2, 5, 6, 6, 6, 6, 7, 7, 8, 8],
             )
             .test_name("test_distributed_rate_limiter_only_only_if_used_mode_6".to_string())
             .mode(Mode::OnlyIfUsed(80))
