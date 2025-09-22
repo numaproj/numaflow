@@ -407,7 +407,7 @@ impl GeneratorLagReader {
 impl reader::LagReader for GeneratorLagReader {
     async fn pending(&mut self) -> crate::error::Result<Option<usize>> {
         // Generator is not meant to auto-scale.
-        Ok(None)
+        Ok(Some(0))
     }
 }
 

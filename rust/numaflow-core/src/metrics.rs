@@ -4,6 +4,7 @@ use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Router, routing::get};
 use axum_server::tls_rustls::RustlsConfig;
+use chrono::Utc;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;

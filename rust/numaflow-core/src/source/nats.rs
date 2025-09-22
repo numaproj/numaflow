@@ -73,7 +73,7 @@ impl SourceAcker for NatsSource {
 impl super::LagReader for NatsSource {
     async fn pending(&mut self) -> crate::error::Result<Option<usize>> {
         // NATS pending is always None
-        Ok(None)
+        Ok(Some(0))
     }
 }
 
