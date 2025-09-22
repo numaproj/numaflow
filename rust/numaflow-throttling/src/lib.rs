@@ -98,7 +98,8 @@ impl<W> RateLimit<W> {
     ) -> usize {
         let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
 
-        // Whatever remains in the token pool after previous epoch are the unused tokens
+        // Whatever remains in the token pool after previous epoch are the unused tokens,
+        // irrespective of whether the tokens were deposited back or never asked for.
         let unused_tokens = self.token.load(std::sync::atomic::Ordering::Relaxed) as f32;
         // Calculate the percentage of tokens that were left unused in previous epoch
         let used_token_percentage =
@@ -201,13 +202,17 @@ impl<W> RateLimit<W> {
         } else {
             // If the tokens haven't been refilled for a while then reduce the amount to be refilled
             // equivalent to slope * (time_diff - 1)
+            // We're using (time_diff - 1) here to make sure we don't decrease the amount to be
+            // refilled if the calls were made between subsequent epochs
             // reduced_refill = max_ever_filled + slope - slope * (time_diff - 1)
             let reduced_refill =
                 *max_ever_filled + self.token_calc_bounds.slope * (2.0 - time_diff);
-            // Make sure we do not go below the min
-            let refill = reduced_refill.max(self.token_calc_bounds.min as f32);
-            // Make sure we do not go above the max
-            (refill as usize).min(self.token_calc_bounds.max)
+            // Make sure we do not go below the min or above the max
+            let capped_refill = reduced_refill
+                .max(self.token_calc_bounds.min as f32)
+                .min(self.token_calc_bounds.max as f32);
+            *max_ever_filled = capped_refill;
+            capped_refill as usize
         }
     }
 
@@ -226,8 +231,7 @@ impl<W> RateLimit<W> {
             let reduced_refill = *max_ever_filled - self.token_calc_bounds.slope;
             // Make sure we do not go below the min
             *max_ever_filled = reduced_refill.max(self.token_calc_bounds.min as f32);
-            // Make sure we do not go above the max
-            (*max_ever_filled as usize).min(self.token_calc_bounds.max)
+            *max_ever_filled as usize
         }
     }
 }
@@ -1836,6 +1840,88 @@ mod tests {
             )
             .test_name("test_distributed_rate_limiter_only_scheduled_mode_15".to_string())
             .mode(Mode::Scheduled),
+        ];
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
+    }
+
+    #[tokio::test]
+    async fn test_distributed_rate_limiter_only_go_back_n_mode() {
+        use test_utils::StoreType;
+
+        let test_cases = vec![
+            // Integer slope with multiple pods
+            // Keep acquiring min tokens without any gaps
+            // The fetched tokens should follow relaxed mode
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(2), 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![2, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_go_back_n_mode_1".to_string())
+            .mode(Mode::GoBackN)
+            .store_type(StoreType::InMemory),
+            // Integer slope with multiple pods
+            // Refill amount should not increase when the requested tokens are <= max_ever_filled
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1), (Some(2), 1), (Some(5), 1), (None, 1), (None, 1)],
+                vec![5, 2, 5, 5, 6],
+            )
+            .test_name("test_distributed_rate_limiter_only_go_back_n_mode_2".to_string())
+            .mode(Mode::GoBackN)
+            .store_type(StoreType::InMemory),
+            // Integer slope with multiple pods
+            // Increase in slope is delayed when there is a gap in epochs > 1
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1), (None, 2), (None, 1), (None, 1)],
+                vec![5, 5, 5, 6],
+            )
+            .test_name("test_distributed_rate_limiter_only_go_back_n_mode_3".to_string())
+            .mode(Mode::GoBackN)
+            .store_type(StoreType::InMemory),
+            // Integer slope with multiple pods
+            // The max_ever_filled should be not go below burst
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 3),
+                    (None, 2),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 5, 5, 5, 5, 6],
+            )
+            .test_name("test_distributed_rate_limiter_only_go_back_n_mode_4".to_string())
+            .mode(Mode::GoBackN)
+            .store_type(StoreType::InMemory),
         ];
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
