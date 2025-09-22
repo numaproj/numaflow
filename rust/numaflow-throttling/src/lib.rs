@@ -101,7 +101,7 @@ impl<W> RateLimit<W> {
         // Whatever remains in the token pool after previous epoch are the unused tokens,
         // irrespective of whether the tokens were deposited back or never asked for.
         let unused_tokens = self.token.load(std::sync::atomic::Ordering::Relaxed) as f32;
-        // Calculate the percentage of tokens that were left unused in previous epoch
+        // Calculate the percentage of tokens that were used in previous epoch
         let used_token_percentage =
             ((1.0 - unused_tokens / *max_ever_filled) * 100.0).round() as usize;
 
