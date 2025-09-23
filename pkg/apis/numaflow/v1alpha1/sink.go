@@ -145,5 +145,5 @@ func (s Sink) getFallbackUDSinkContainer(mainContainerReq getContainerReq) corev
 
 // IsAnySinkSpecified returns true if any sink is specified.
 func (a *AbstractSink) IsAnySinkSpecified() bool {
-	return a.Log != nil || a.Kafka != nil || a.Blackhole != nil || a.UDSink != nil || a.Sqs != nil || a.Pulsar != nil
+	return a.Log != nil || a.Kafka != nil || a.Blackhole != nil || a.UDSink != nil || a.Sqs != nil
 }

@@ -21,7 +21,7 @@ use tokio::time::Instant;
 use tracing::error;
 
 use crate::Error::ActorTaskTerminated;
-use crate::{Error, SqsConfig, SqsSourceError};
+use crate::{AssumeRoleConfig, Error, SqsConfig, SqsSourceError};
 
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 
@@ -44,6 +44,7 @@ pub struct SqsSourceConfig {
     pub endpoint_url: Option<String>,
     pub attribute_names: Vec<String>,
     pub message_attribute_names: Vec<String>,
+    pub assume_role_config: Option<AssumeRoleConfig>,
 }
 
 /// Internal message types for the actor implementation.
@@ -407,6 +408,7 @@ impl Default for SqsSourceBuilder {
             endpoint_url: None,
             attribute_names: Vec::new(),
             message_attribute_names: Vec::new(),
+            assume_role_config: None,
         })
     }
 }
@@ -562,7 +564,6 @@ impl SqsSource {
 #[cfg(test)]
 mod tests {
     use aws_sdk_sqs::Config;
-    use aws_sdk_sqs::config::BehaviorVersion;
     use aws_sdk_sqs::types::MessageAttributeValue;
     use aws_smithy_mocks_experimental::{MockResponseInterceptor, Rule, RuleMode, mock};
     use aws_smithy_types::error::ErrorMetadata;
@@ -582,6 +583,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         };
 
         let result = crate::create_sqs_client(SqsConfig::Source(config.clone())).await;
@@ -600,6 +602,7 @@ mod tests {
             endpoint_url: Some("http://localhost:4566".to_string()),
             attribute_names: vec!["All".to_string()],
             message_attribute_names: vec!["All".to_string()],
+            assume_role_config: None,
         };
 
         let result = crate::create_sqs_client(SqsConfig::Source(config.clone())).await;
@@ -635,6 +638,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![MessageSystemAttributeName::SentTimestamp.to_string()],
             message_attribute_names: vec![MessageSystemAttributeName::AwsTraceHeader.to_string()],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -677,6 +681,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -716,6 +721,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![MessageSystemAttributeName::SentTimestamp.to_string()],
             message_attribute_names: vec![MessageSystemAttributeName::AwsTraceHeader.to_string()],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -761,6 +767,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -798,6 +805,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -835,6 +843,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -870,6 +879,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -902,6 +912,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -944,6 +955,7 @@ mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         };
         let builder = SqsSourceBuilder::default().config(config);
         assert_eq!(builder.config.region, "us-east-2");
@@ -1092,7 +1104,7 @@ mod tests {
 
     fn get_test_config_with_interceptor(interceptor: MockResponseInterceptor) -> Config {
         aws_sdk_sqs::Config::builder()
-            .behavior_version(BehaviorVersion::v2025_01_17())
+            .behavior_version(crate::aws_behavior_version())
             .credentials_provider(make_sqs_test_credentials())
             .region(aws_sdk_sqs::config::Region::new(SQS_DEFAULT_REGION))
             .interceptor(interceptor)

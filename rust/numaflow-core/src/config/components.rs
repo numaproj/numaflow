@@ -129,24 +129,6 @@ pub(crate) mod source {
         type Error = Error;
 
         fn try_from(value: Box<SqsSource>) -> Result<Self> {
-            if value.aws_region.is_empty() {
-                return Err(Error::Config(
-                    "aws_region is required for SQS source".to_string(),
-                ));
-            }
-
-            if value.queue_name.is_empty() {
-                return Err(Error::Config(
-                    "queue_name is required for SQS source".to_string(),
-                ));
-            }
-
-            if value.queue_owner_aws_account_id.is_empty() {
-                return Err(Error::Config(
-                    "queue_owner_aws_account_id is required for SQS source".to_string(),
-                ));
-            }
-
             if let Some(timeout) = value.visibility_timeout {
                 if !(0..=43200).contains(&timeout) {
                     return Err(Error::Config(format!(
@@ -174,6 +156,16 @@ pub(crate) mod source {
                 }
             }
 
+            // Convert assume role configuration if present
+            let assume_role_config = value.assume_role.map(|ar| numaflow_sqs::AssumeRoleConfig {
+                role_arn: ar.role_arn,
+                session_name: ar.session_name,
+                duration_seconds: ar.duration_seconds,
+                external_id: ar.external_id,
+                policy: ar.policy,
+                policy_arns: ar.policy_arns,
+            });
+
             let sqs_source_config = SqsSourceConfig {
                 queue_name: Box::leak(value.queue_name.into_boxed_str()),
                 region: Box::leak(value.aws_region.into_boxed_str()),
@@ -186,6 +178,7 @@ pub(crate) mod source {
                 wait_time_seconds: Some(value.wait_time_seconds.unwrap_or(0)),
                 visibility_timeout: Some(value.visibility_timeout.unwrap_or(30)),
                 endpoint_url: value.endpoint_url,
+                assume_role_config,
             };
 
             Ok(SourceType::Sqs(sqs_source_config))
@@ -366,7 +359,7 @@ pub(crate) mod source {
 
         fn try_from(mut source: Box<Source>) -> Result<Self> {
             if let Some(generator) = source.generator.take() {
-                return Ok(generator.try_into()?);
+                return generator.try_into();
             }
 
             if source.udsource.is_some() {
@@ -594,23 +587,15 @@ pub(crate) mod sink {
         type Error = Error;
 
         fn try_from(value: Box<SqsSink>) -> Result<Self> {
-            if value.aws_region.is_empty() {
-                return Err(Error::Config(
-                    "AWS region is required for SQS sink".to_string(),
-                ));
-            }
-
-            if value.queue_name.is_empty() {
-                return Err(Error::Config(
-                    "Queue name is required for SQS sink".to_string(),
-                ));
-            }
-
-            if value.queue_owner_aws_account_id.is_empty() {
-                return Err(Error::Config(
-                    "Queue owner AWS account ID is required for SQS sink".to_string(),
-                ));
-            }
+            // Convert assume role configuration if present
+            let assume_role_config = value.assume_role.map(|ar| numaflow_sqs::AssumeRoleConfig {
+                role_arn: ar.role_arn,
+                session_name: ar.session_name,
+                duration_seconds: ar.duration_seconds,
+                external_id: ar.external_id,
+                policy: ar.policy,
+                policy_arns: ar.policy_arns,
+            });
 
             let sqs_sink_config = SqsSinkConfig {
                 queue_name: Box::leak(value.queue_name.into_boxed_str()),
@@ -618,6 +603,7 @@ pub(crate) mod sink {
                 queue_owner_aws_account_id: Box::leak(
                     value.queue_owner_aws_account_id.into_boxed_str(),
                 ),
+                assume_role_config,
             };
             Ok(SinkType::Sqs(sqs_sink_config))
         }
@@ -1558,6 +1544,7 @@ mod sink_tests {
             queue_name: "test-queue",
             region: "us-west-2",
             queue_owner_aws_account_id: "123456789012",
+            assume_role_config: None,
         };
         let sink_config = SinkConfig {
             sink_type: SinkType::Sqs(sqs_config.clone()),
@@ -1576,6 +1563,7 @@ mod sink_tests {
 
         // Test case 1: Valid configuration
         let valid_sqs_sink = Box::new(SqsSink {
+            assume_role: None,
             aws_region: "us-west-2".to_string(),
             queue_name: "test-queue".to_string(),
             queue_owner_aws_account_id: "123456789012".to_string(),
@@ -1593,6 +1581,7 @@ mod sink_tests {
 
         // Test case 2: Missing required fields
         let invalid_sqs_sink = Box::new(SqsSink {
+            assume_role: None,
             aws_region: "".to_string(),
             queue_name: "test-queue".to_string(),
             queue_owner_aws_account_id: "123456789012".to_string(),
@@ -1623,6 +1612,7 @@ mod sink_tests {
                 blackhole: None,
                 serve: None,
                 sqs: Some(Box::new(SqsSink {
+                    assume_role: None,
                     aws_region: "us-west-2".to_string(),
                     queue_name: "fallback-queue".to_string(),
                     queue_owner_aws_account_id: "123456789012".to_string(),
@@ -1675,6 +1665,7 @@ mod sink_tests {
                 blackhole: None,
                 serve: None,
                 sqs: Some(Box::new(SqsSink {
+                    assume_role: None,
                     aws_region: "".to_string(),
                     queue_name: "fallback-queue".to_string(),
                     queue_owner_aws_account_id: "123456789012".to_string(),

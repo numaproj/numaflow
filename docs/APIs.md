@@ -26,6 +26,185 @@ Resource Types:
 
 </ul>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.AWSAssumeRole">
+
+AWSAssumeRole
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.SqsSink">SqsSink</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.SqsSource">SqsSource</a>)
+</p>
+
+<p>
+
+<p>
+
+AWSAssumeRole contains the configuration for AWS STS assume role
+authentication This can be used with any AWS service (SQS, S3, DynamoDB,
+etc.)
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>roleArn</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+RoleARN is the Amazon Resource Name (ARN) of the role to assume. This is
+a required field when assume role is enabled. Example:
+“arn:aws:iam::123456789012:role/CrossAccount-Service-Role”
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>sessionName</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+SessionName is an identifier for the assumed role session. This appears
+in AWS CloudTrail logs to help identify the source of API calls. If not
+specified, a default session name will be generated based on the service
+context.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>durationSeconds</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+DurationSeconds is the duration (in seconds) of the role session. Valid
+values: 900-43200 (15 minutes to 12 hours) Defaults to 3600 (1 hour) if
+not specified. The actual session duration is constrained by the maximum
+session duration setting of the IAM role being assumed.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>externalID</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+ExternalID is a unique identifier that might be required when you assume
+a role in another account. This is commonly used as an additional
+security measure for cross-account role access.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>policy</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Policy is an IAM policy document (JSON string) that you want to use as
+an inline session policy. This parameter is optional. When specified,
+the session permissions are the intersection of the IAM role’s
+identity-based policy and the session policies. This allows further
+restriction of permissions for the specific service operations.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>policyArns</code></br> <em> \[\]string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+PolicyARNs is a list of Amazon Resource Names (ARNs) of IAM managed
+policies that you want to use as managed session policies. The policies
+must exist in the same account as the role. This allows attaching
+existing managed policies to further restrict session permissions.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
 
 AbstractPodTemplate
@@ -11917,6 +12096,29 @@ QueueOwnerAWSAccountID is the queue owner aws account id
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>assumeRole</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AWSAssumeRole"> AWSAssumeRole
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+AssumeRole contains the configuration for AWS STS assume role. When
+specified, the SQS client will assume the specified role for
+authentication.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -12142,6 +12344,29 @@ FifoThroughputLimit \| RedriveAllowPolicy \| SqsManagedSseEnabled
 
 MessageAttributeNames is a list of message attributes that need to be
 returned along with each message.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>assumeRole</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AWSAssumeRole"> AWSAssumeRole
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+AssumeRole contains the configuration for AWS STS assume role. When
+specified, the SQS client will assume the specified role for
+authentication.
 </p>
 
 </td>

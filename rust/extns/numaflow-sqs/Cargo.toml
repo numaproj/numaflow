@@ -13,8 +13,10 @@ bytes.workspace = true
 aws-config = "1.6.2"
 aws-sdk-sqs = "1.65.0"
 aws-smithy-types = "1.3.1"
-chrono = "0.4.41"
-thiserror = "2.0.12"
+aws-sdk-sts = "1.86.0"
+aws-credential-types = "1.2.6"
+chrono = "0.4.42"
+thiserror = "2.0.16"
 
 
 [dev-dependencies]
