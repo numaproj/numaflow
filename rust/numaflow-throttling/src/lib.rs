@@ -3388,6 +3388,493 @@ mod tests {
 
     #[tokio::test]
     #[cfg(feature = "redis-tests")]
+    async fn test_distributed_rate_limiter_go_back_n_mode_redis() {
+        use test_utils::StoreType;
+
+        let test_cases = vec![
+            // Integer slope with multiple pods
+            // Keep acquiring min tokens without any gaps
+            // The fetched tokens should follow relaxed mode
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(2), 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![2, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            )
+            .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_1".to_string())
+            .mode(Mode::GoBackN(100))
+            .store_type(StoreType::Redis),
+            // Integer slope with multiple pods
+            // Refill amount should not increase when token utilization is less than threshold
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1), (Some(2), 1), (Some(5), 1), (None, 1), (None, 1)],
+                vec![5, 2, 5, 5, 6],
+            )
+            .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_2".to_string())
+            .mode(Mode::GoBackN(100))
+            .store_type(StoreType::Redis),
+            // Integer slope with multiple pods
+            // Increase in slope is delayed when there is a gap in epochs > 1
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1), (None, 2), (None, 1), (None, 1)],
+                vec![5, 5, 5, 6],
+            )
+            .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_3".to_string())
+            .mode(Mode::GoBackN(100))
+            .store_type(StoreType::Redis),
+            // Integer slope with multiple pods
+            // The max_ever_filled should be not go below burst
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 3),
+                    (None, 2),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 5, 5, 5, 5, 6],
+            )
+            .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_4".to_string())
+            .mode(Mode::GoBackN(100))
+            .store_type(StoreType::Redis),
+            // Integer slope with multiple pods
+            // Drop in max_ever_filled should be large for large gaps in epochs
+            // then continue where it left off
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 5),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 5, 6, 6, 7, 7, 8, 6, 7, 7],
+            )
+            .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_5".to_string())
+            .mode(Mode::GoBackN(100))
+            .store_type(StoreType::Redis),
+            // Integer slope with multiple pods
+            // Keep acquiring max tokens without any gaps
+            // The fetched tokens should follow relaxed mode if all tokens are used
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10],
+            )
+            .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_6".to_string())
+            .mode(Mode::GoBackN(100))
+            .store_type(StoreType::Redis),
+            // Integer slope with multiple pods
+            // Keep acquiring tokens without any gaps
+            // Increase in max_ever_filled should stall whenever max tokens aren't acquired.
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (Some(4), 1),
+                    (Some(2), 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 4, 2, 5, 5, 6, 6, 7, 7, 8, 8, 9],
+            )
+            .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_7".to_string())
+            .mode(Mode::GoBackN(100))
+            .store_type(StoreType::Redis),
+            // Integer slope with multiple pods
+            // Keep acquiring tokens without any gaps
+            // Increase in max_ever_filled should stall whenever usage threshold isn't crossed.
+            // Usage threshold here isn't crossed because we're constantly depositing tokens back.
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (Some(4), 1),
+                    (Some(2), 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 4, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+            )
+            .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_8".to_string())
+            .mode(Mode::GoBackN(100))
+            .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+            .store_type(StoreType::Redis),
+            // Integer slope with multiple pods
+            // Keep acquiring tokens without any gaps
+            // Increase in max_ever_filled should decrease whenever usage threshold isn't crossed.
+            // Since, we can't go below the burst, the max_ever_filled stays at the burst here.
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (Some(4), 1),
+                    (Some(2), 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 4, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+            )
+            .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_9".to_string())
+            .mode(Mode::GoBackN(90))
+            .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+            .store_type(StoreType::Redis),
+            // Integer slope with multiple pods
+            // Keep acquiring tokens without any gaps
+            // Increase max_ever_filled whenever usage threshold is crossed
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (Some(4), 1),
+                    (Some(2), 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 4, 2, 5, 5, 6, 6, 7, 7, 8, 8, 9],
+            )
+            .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_10".to_string())
+            .mode(Mode::GoBackN(80))
+            .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+            .store_type(StoreType::Redis),
+            // Integer slope with multiple pods
+            // Keep acquiring tokens without any gaps
+            // max_ever_filled should decrease whenever the usage threshold is not crossed
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (Some(4), 1),
+                    (Some(2), 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 4, 2, 5, 5, 5, 5, 6, 5, 6, 6, 7],
+            )
+            .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_11".to_string())
+            .mode(Mode::GoBackN(80))
+            .deposited_tokens(vec![1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1])
+            .store_type(StoreType::Redis),
+            // Integer slope with multiple pods
+            // Keep acquiring tokens without any gaps
+            // max_ever_filled should decrease whenever the usage threshold is not crossed
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 9, 8, 8, 7, 7, 6],
+            )
+            .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_12".to_string())
+            .mode(Mode::GoBackN(100))
+            .deposited_tokens(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 8, 7, 7, 6])
+            .store_type(StoreType::Redis),
+        ];
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "redis-tests")]
+    async fn test_distributed_rate_limiter_only_if_used_mode_redis() {
+        use test_utils::StoreType;
+
+        let test_cases = vec![
+            // Integer slope with multiple pods
+            // Keep acquiring max tokens without any gaps
+            // The fetched tokens should follow relaxed mode if all tokens are used
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_if_used_mode_redis_1".to_string())
+            .mode(Mode::OnlyIfUsed(100))
+            .store_type(StoreType::Redis),
+            // Integer slope with multiple pods
+            // Keep acquiring tokens without any gaps
+            // Increase in max_ever_filled should stall whenever max tokens aren't acquired.
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (Some(4), 1),
+                    (Some(2), 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 4, 2, 5, 6, 6, 7, 7, 8, 8, 9, 9],
+            )
+            .test_name("test_distributed_rate_limiter_only_if_used_mode_redis_2".to_string())
+            .mode(Mode::OnlyIfUsed(100))
+            .store_type(StoreType::Redis),
+            // Integer slope with multiple pods
+            // Keep acquiring tokens without any gaps
+            // Increase in max_ever_filled should stall whenever usage threshold isn't crossed.
+            // Usage threshold here isn't crossed because we're constantly depositing tokens back.
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (Some(4), 1),
+                    (Some(2), 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 4, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+            )
+            .test_name("test_distributed_rate_limiter_only_if_used_mode_redis_3".to_string())
+            .mode(Mode::OnlyIfUsed(100))
+            .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+            .store_type(StoreType::Redis),
+            // Integer slope with multiple pods
+            // Keep acquiring tokens without any gaps
+            // Increase in max_ever_filled should stall whenever usage threshold isn't crossed.
+            // Even though the threshold percentage is 90%, since we're depositing tokens back,
+            // the actual usage threshold doesn't get crossed (hovers around 82%).
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (Some(4), 1),
+                    (Some(2), 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 4, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+            )
+            .test_name("test_distributed_rate_limiter_only_if_used_mode_redis_4".to_string())
+            .mode(Mode::OnlyIfUsed(90))
+            .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+            .store_type(StoreType::Redis),
+            // Integer slope with multiple pods
+            // Keep acquiring tokens without any gaps
+            // Increase max_ever_filled whenever usage threshold is crossed
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (Some(4), 1),
+                    (Some(2), 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 4, 2, 5, 6, 6, 7, 7, 8, 8, 9, 9],
+            )
+            .test_name("test_distributed_rate_limiter_only_if_used_mode_redis_5".to_string())
+            .mode(Mode::OnlyIfUsed(80))
+            .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+            .store_type(StoreType::Redis),
+            // Integer slope with multiple pods
+            // Keep acquiring tokens without any gaps
+            // Increase max_ever_filled should stall whenever the usage threshold is not crossed
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (Some(4), 1),
+                    (Some(2), 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![5, 4, 2, 5, 6, 6, 6, 6, 7, 7, 8, 8],
+            )
+            .test_name("test_distributed_rate_limiter_only_if_used_mode_redis_6".to_string())
+            .mode(Mode::OnlyIfUsed(80))
+            .deposited_tokens(vec![1, 1, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1])
+            .store_type(StoreType::Redis),
+        ];
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "redis-tests")]
     async fn test_distributed_rate_limiter_deposit_logic_redis() {
         use test_utils::StoreType;
         let test_cases = vec![
