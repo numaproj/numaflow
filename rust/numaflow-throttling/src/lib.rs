@@ -224,7 +224,7 @@ impl<W> RateLimit<W> {
 
         let GoBackNConfig {
             cool_down_period,
-            ramp_down_strength,
+            ramp_down_percentage,
             utilization_threshold,
         } = go_back_n_config;
 
@@ -232,13 +232,15 @@ impl<W> RateLimit<W> {
         // then we'll reduce the amount to be refilled
         //
         // - penalize for delay in usage
-        if time_diff > cool_down_period.clone() {
+        if time_diff > cool_down_period.clone() as f32 {
             // If the tokens haven't been refilled for a while then reduce the amount to be refilled
             // equivalent to slope * (time_diff - 1)
             // We're using (time_diff - 1) here to make sure we don't decrease the amount to be
             // refilled if the calls were made between subsequent epochs
             let reduced_refill = *max_ever_filled
-                - ramp_down_strength.clone() * self.token_calc_bounds.slope * (time_diff - 1.0);
+                - (ramp_down_percentage.clone() as f32 / 100.0)
+                    * self.token_calc_bounds.slope
+                    * (time_diff - 1.0);
             // Make sure we do not go below the min or above the max
             let capped_refill = reduced_refill
                 .max(self.token_calc_bounds.min as f32)
@@ -628,11 +630,11 @@ pub struct GoBackNConfig {
     /// Cool down period in seconds
     /// Time in seconds for which, if no call is made to the rate_limiter,
     /// the token pool size will be ramped down
-    pub cool_down_period: f32,
-    /// Ramp down strength
-    /// The amount by which the token pool size will be ramped down. Ranges between 0 and 1.
-    /// 0 means no ramp down, else token pool is reduced by ramp_down_strength * slope * (cool_down_period - 1)
-    pub ramp_down_strength: f32,
+    pub cool_down_period: usize,
+    /// Ramp down percentage is the percentage of slope by which the token pool size will be ramped down.
+    /// The amount by which the token pool size will be ramped down. Ranges between 0 and 100.
+    /// 0 means no ramp down, else token pool is reduced by (ramp_down_strength / 100) * slope * (cool_down_period - 1)
+    pub ramp_down_percentage: usize,
     /// Utilization threshold
     /// The capacity utilization percentage that should be consumed before ramping down the token pool size
     /// by ramp_down_strength
@@ -1899,8 +1901,8 @@ mod tests {
         use test_utils::StoreType;
 
         let default_go_back_n_config = GoBackNConfig {
-            cool_down_period: 1.0,
-            ramp_down_strength: 1.0,
+            cool_down_period: 1,
+            ramp_down_percentage: 100,
             utilization_threshold: 100,
         };
 
@@ -2113,8 +2115,8 @@ mod tests {
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_9".to_string())
             .mode(Mode::GoBackN(GoBackNConfig {
-                cool_down_period: 1.0,
-                ramp_down_strength: 1.0,
+                cool_down_period: 1,
+                ramp_down_percentage: 100,
                 utilization_threshold: 90,
             }))
             .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
@@ -2145,8 +2147,8 @@ mod tests {
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_10".to_string())
             .mode(Mode::GoBackN(GoBackNConfig {
-                cool_down_period: 1.0,
-                ramp_down_strength: 1.0,
+                cool_down_period: 1,
+                ramp_down_percentage: 100,
                 utilization_threshold: 80,
             }))
             .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
@@ -2177,8 +2179,8 @@ mod tests {
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_11".to_string())
             .mode(Mode::GoBackN(GoBackNConfig {
-                cool_down_period: 1.0,
-                ramp_down_strength: 1.0,
+                cool_down_period: 1,
+                ramp_down_percentage: 100,
                 utilization_threshold: 80,
             }))
             .deposited_tokens(vec![1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1])
@@ -3430,8 +3432,8 @@ mod tests {
         use test_utils::StoreType;
 
         let default_go_back_n_config = GoBackNConfig {
-            cool_down_period: 1.0,
-            ramp_down_strength: 1.0,
+            cool_down_period: 1,
+            ramp_down_percentage: 100,
             utilization_threshold: 100,
         };
 
@@ -3644,8 +3646,8 @@ mod tests {
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_9".to_string())
             .mode(Mode::GoBackN(GoBackNConfig {
-                cool_down_period: 1.0,
-                ramp_down_strength: 1.0,
+                cool_down_period: 1,
+                ramp_down_percentage: 100,
                 utilization_threshold: 90,
             }))
             .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
@@ -3676,8 +3678,8 @@ mod tests {
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_10".to_string())
             .mode(Mode::GoBackN(GoBackNConfig {
-                cool_down_period: 1.0,
-                ramp_down_strength: 1.0,
+                cool_down_period: 1,
+                ramp_down_percentage: 100,
                 utilization_threshold: 80,
             }))
             .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
@@ -3708,8 +3710,8 @@ mod tests {
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_11".to_string())
             .mode(Mode::GoBackN(GoBackNConfig {
-                cool_down_period: 1.0,
-                ramp_down_strength: 1.0,
+                cool_down_period: 1,
+                ramp_down_percentage: 100,
                 utilization_threshold: 80,
             }))
             .deposited_tokens(vec![1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1])
