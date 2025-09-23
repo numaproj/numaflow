@@ -120,23 +120,22 @@ impl<W> RateLimit<W> {
             .min(100)
             .max(0);
 
-        match self.token_calc_bounds.mode {
+        match &self.token_calc_bounds.mode {
             Mode::Relaxed => self.relaxed_slope_increase(&mut max_ever_filled),
             Mode::Scheduled => self.scheduled_slope_increase(cur_epoch, &mut max_ever_filled),
             Mode::OnlyIfUsed(threshold_percentage) => {
-                let threshold_percentage = threshold_percentage.min(100).max(0);
+                let threshold_percentage = threshold_percentage.clone().min(100).max(0);
                 self.only_if_used_slope_increase(
                     &mut max_ever_filled,
                     used_token_percentage,
                     threshold_percentage,
                 )
             }
-            Mode::GoBackN(threshold_percentage) => {
-                let threshold_percentage = threshold_percentage.min(100).max(0);
+            Mode::GoBackN(go_back_n_config) => {
                 self.go_back_n_slope_increase(
                     &mut max_ever_filled,
                     used_token_percentage,
-                    threshold_percentage,
+                    &go_back_n_config,
                     cur_epoch,
                 )
             }
@@ -217,7 +216,7 @@ impl<W> RateLimit<W> {
         &self,
         max_ever_filled: &mut f32,
         used_token_percentage: usize,
-        used_threshold_percentage: usize,
+        go_back_n_config: &GoBackNConfig,
         cur_epoch: u64,
     ) -> usize {
         let prev_epoch = self
@@ -225,25 +224,30 @@ impl<W> RateLimit<W> {
             .load(std::sync::atomic::Ordering::Relaxed);
         let time_diff = cur_epoch.checked_sub(prev_epoch).unwrap_or(0) as f32;
 
-        // if the call is being made after a gap of more than 1 second
+        let GoBackNConfig{
+            cool_down_period,
+            ramp_down_strength,
+            utilization_threshold,
+        } = go_back_n_config;
+
+        // if the call is being made after a gap of more than cool down period seconds
         // then we'll reduce the amount to be refilled
         //
         // - penalize for delay in usage
-        if time_diff > 1.0 {
+        if time_diff > cool_down_period.clone() {
             // If the tokens haven't been refilled for a while then reduce the amount to be refilled
             // equivalent to slope * (time_diff - 1)
             // We're using (time_diff - 1) here to make sure we don't decrease the amount to be
             // refilled if the calls were made between subsequent epochs
-            // reduced_refill = max_ever_filled + slope - slope * (time_diff - 1)
             let reduced_refill =
-                *max_ever_filled + self.token_calc_bounds.slope * (2.0 - time_diff);
+                *max_ever_filled - ramp_down_strength.clone() * self.token_calc_bounds.slope * (time_diff - 1.0);
             // Make sure we do not go below the min or above the max
             let capped_refill = reduced_refill
                 .max(self.token_calc_bounds.min as f32)
                 .min(self.token_calc_bounds.max as f32);
             *max_ever_filled = capped_refill;
             capped_refill as usize
-        } else if used_token_percentage >= used_threshold_percentage {
+        } else if used_token_percentage >= utilization_threshold.clone() {
             // If consecutive calls have been made and the used token percentage is greater than
             // the threshold provided in config, then we'll increase the tokens according to relaxed mode.
             self.relaxed_slope_increase(max_ever_filled)
@@ -619,6 +623,22 @@ impl<S: Store> RateLimit<WithState<S>> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct GoBackNConfig {
+    /// Cool down period in seconds
+    /// Time in seconds for which, if no call is made to the rate_limiter,
+    /// the token pool size will be ramped down
+    pub cool_down_period: f32,
+    /// Ramp down strength
+    /// The amount by which the token pool size will be ramped down. Ranges between 0 and 1.
+    /// 0 means no ramp down, else token pool is reduced by ramp_down_strength * slope * (cool_down_period - 1)
+    pub ramp_down_strength: f32,
+    /// Utilization threshold
+    /// The capacity utilization percentage that should be consumed before ramping down the token pool size
+    /// by ramp_down_strength
+    pub utilization_threshold: usize,
+}
+
 /// Rate limiting/Throttling mode
 #[derive(Clone, Debug)]
 pub enum Mode {
@@ -639,7 +659,7 @@ pub enum Mode {
     ///
     /// Penalty for delayed usage <br>
     /// Penalty for underutilization
-    GoBackN(usize),
+    GoBackN(GoBackNConfig),
 }
 
 /// Mathematical Boundaries of Token Computation
@@ -1878,6 +1898,12 @@ mod tests {
     async fn test_distributed_rate_limiter_go_back_n_mode() {
         use test_utils::StoreType;
 
+        let default_go_back_n_config = GoBackNConfig {
+            cool_down_period: 1.0,
+            ramp_down_strength: 1.0,
+            utilization_threshold: 100,
+        };
+
         let test_cases = vec![
             // Integer slope with multiple pods
             // Keep acquiring min tokens without any gaps
@@ -1904,7 +1930,7 @@ mod tests {
                 vec![2, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_1".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .store_type(StoreType::InMemory),
             // Integer slope with multiple pods
             // Refill amount should not increase when token utilization is less than threshold
@@ -1917,7 +1943,7 @@ mod tests {
                 vec![5, 2, 5, 5, 6],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_2".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .store_type(StoreType::InMemory),
             // Integer slope with multiple pods
             // Increase in slope is delayed when there is a gap in epochs > 1
@@ -1927,10 +1953,10 @@ mod tests {
                 Duration::from_secs(10),
                 2,
                 vec![(None, 1), (None, 2), (None, 1), (None, 1)],
-                vec![5, 5, 5, 6],
+                vec![5, 5, 5, 5],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_3".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .store_type(StoreType::InMemory),
             // Integer slope with multiple pods
             // The max_ever_filled should be not go below burst
@@ -1950,7 +1976,7 @@ mod tests {
                 vec![5, 5, 5, 5, 5, 6],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_4".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .store_type(StoreType::InMemory),
             // Integer slope with multiple pods
             // Drop in max_ever_filled should be large for large gaps in epochs
@@ -1972,10 +1998,10 @@ mod tests {
                     (None, 1),
                     (None, 1),
                 ],
-                vec![5, 5, 6, 6, 7, 7, 8, 6, 7, 7],
+                vec![5, 5, 6, 6, 7, 7, 8, 6, 6, 7],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_5".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .store_type(StoreType::InMemory),
             // Integer slope with multiple pods
             // Keep acquiring max tokens without any gaps
@@ -2002,7 +2028,7 @@ mod tests {
                 vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_6".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .store_type(StoreType::InMemory),
             // Integer slope with multiple pods
             // Keep acquiring tokens without any gaps
@@ -2029,7 +2055,7 @@ mod tests {
                 vec![5, 4, 2, 5, 5, 6, 6, 7, 7, 8, 8, 9],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_7".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .store_type(StoreType::InMemory),
             // Integer slope with multiple pods
             // Keep acquiring tokens without any gaps
@@ -2057,7 +2083,7 @@ mod tests {
                 vec![5, 4, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_8".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
             .store_type(StoreType::InMemory),
             // Integer slope with multiple pods
@@ -2086,7 +2112,11 @@ mod tests {
                 vec![5, 4, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_9".to_string())
-            .mode(Mode::GoBackN(90))
+            .mode(Mode::GoBackN(GoBackNConfig {
+                cool_down_period: 1.0,
+                ramp_down_strength: 1.0,
+                utilization_threshold: 90,
+            }))
             .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
             .store_type(StoreType::InMemory),
             // Integer slope with multiple pods
@@ -2114,7 +2144,11 @@ mod tests {
                 vec![5, 4, 2, 5, 5, 6, 6, 7, 7, 8, 8, 9],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_10".to_string())
-            .mode(Mode::GoBackN(80))
+            .mode(Mode::GoBackN(GoBackNConfig {
+                cool_down_period: 1.0,
+                ramp_down_strength: 1.0,
+                utilization_threshold: 80,
+            }))
             .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
             .store_type(StoreType::InMemory),
             // Integer slope with multiple pods
@@ -2142,7 +2176,11 @@ mod tests {
                 vec![5, 4, 2, 5, 5, 5, 5, 6, 5, 6, 6, 7],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_11".to_string())
-            .mode(Mode::GoBackN(80))
+            .mode(Mode::GoBackN(GoBackNConfig {
+                cool_down_period: 1.0,
+                ramp_down_strength: 1.0,
+                utilization_threshold: 80,
+            }))
             .deposited_tokens(vec![1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1])
             .store_type(StoreType::InMemory),
             // Integer slope with multiple pods
@@ -2174,7 +2212,7 @@ mod tests {
                 vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 9, 8, 8, 7, 7, 6],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_12".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .deposited_tokens(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 8, 7, 7, 6])
             .store_type(StoreType::InMemory),
         ];
