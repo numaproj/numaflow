@@ -630,15 +630,29 @@ pub struct GoBackNConfig {
     /// Cool down period in seconds
     /// Time in seconds for which, if no call is made to the rate_limiter,
     /// the token pool size will be ramped down
-    pub cool_down_period: usize,
+    pub(crate) cool_down_period: usize,
     /// Ramp down percentage is the percentage of slope by which the token pool size will be ramped down.
     /// The amount by which the token pool size will be ramped down. Ranges between 0 and 100.
     /// 0 means no ramp down, else token pool is reduced by (ramp_down_strength / 100) * slope * (cool_down_period - 1)
-    pub ramp_down_percentage: usize,
+    pub(crate) ramp_down_percentage: usize,
     /// Utilization threshold
     /// The capacity utilization percentage that should be consumed before ramping down the token pool size
     /// by ramp_down_strength
-    pub utilization_threshold: usize,
+    pub(crate) utilization_threshold: usize,
+}
+
+impl GoBackNConfig {
+    pub fn new(
+        cool_down_period: usize,
+        ramp_down_percentage: usize,
+        utilization_threshold: usize,
+    ) -> Self {
+        GoBackNConfig {
+            cool_down_period,
+            ramp_down_percentage,
+            utilization_threshold,
+        }
+    }
 }
 
 /// Rate limiting/Throttling mode
