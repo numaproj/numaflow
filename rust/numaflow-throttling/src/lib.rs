@@ -909,7 +909,7 @@ mod tests {
                 rate_limiter
                     .shutdown()
                     .await
-                    .expect("Rate limiter failed to shutdownj");
+                    .expect("Rate limiter failed to shutdown");
             }
         }
 
