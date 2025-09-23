@@ -21765,6 +21765,17 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.RateLimiterGoBackN": {
+      "description": "RateLimiterGoBackN is for the GoBackN mode. Releases additional tokens only when previously released tokens have been utilized above the configured threshold otherwise triggers a ramp-down. Ramp-down is also triggered when the request is made after quite a while.",
+      "type": "object",
+      "properties": {
+        "thresholdPercentage": {
+          "description": "ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter, that should be consumed at any instance to allow the rate limiter to unlock additional capacity. For example, given the following configuration: - max = 100 - min = 10 - rampUpDuration = 10s i.e.--\u003e slope = 10 messages/second - thresholdPercentage = 50 at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock additional capacity of 10 messages at t = 1 to make the total capacity of 20.",
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.RateLimiterInMemoryStore": {
       "type": "object"
     },
@@ -21772,6 +21783,14 @@
       "description": "RateLimiterModes defines the modes for rate limiting.",
       "type": "object",
       "properties": {
+        "goBackN": {
+          "description": "Releases additional tokens only when previously released tokens have been utilized above the configured threshold otherwise triggers a ramp-down. Ramp-down is also triggered when the request is made after quite a while.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterGoBackN"
+        },
+        "onlyIfUsed": {
+          "description": "Releases additional tokens only when previously released tokens have been utilized above the configured threshold",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterOnlyIfUsed"
+        },
         "relaxed": {
           "description": "If there is some traffic, then release the max possible tokens.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterRelaxed"
@@ -21779,6 +21798,17 @@
         "scheduled": {
           "description": "Irrespective of the traffic, the rate limiter releases max possible tokens based on ramp-up duration.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterScheduled"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.RateLimiterOnlyIfUsed": {
+      "description": "RateLimiterOnlyIfUsed is for the OnlyIfUsed mode. Releases additional tokens only when previously released tokens have been utilized above the configured threshold",
+      "type": "object",
+      "properties": {
+        "thresholdPercentage": {
+          "description": "ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter, that should be consumed at any instance to allow the rate limiter to unlock additional capacity. For example, given the following configuration: - max = 100 - min = 10 - rampUpDuration = 10s i.e.--\u003e slope = 10 messages/second - thresholdPercentage = 50 at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock additional capacity of 10 messages at t = 1 to make the total capacity of 20.",
+          "type": "integer",
+          "format": "int64"
         }
       }
     },
