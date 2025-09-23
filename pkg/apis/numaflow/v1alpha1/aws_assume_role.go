@@ -42,7 +42,7 @@ type AWSAssumeRole struct {
 	// in another account. This is commonly used as an additional security measure
 	// for cross-account role access.
 	// +optional
-	ExternalID *string `json:"externalId,omitempty" protobuf:"bytes,4,opt,name=externalId"`
+	ExternalID *string `json:"externalID,omitempty" protobuf:"bytes,4,opt,name=externalID"`
 
 	// Policy is an IAM policy document (JSON string) that you want to use as an inline session policy.
 	// This parameter is optional. When specified, the session permissions are the intersection of

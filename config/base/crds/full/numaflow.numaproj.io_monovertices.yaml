@@ -3939,7 +3939,7 @@ spec:
                               durationSeconds:
                                 format: int32
                                 type: integer
-                              externalId:
+                              externalID:
                                 type: string
                               policy:
                                 type: string
@@ -4623,7 +4623,7 @@ spec:
                           durationSeconds:
                             format: int32
                             type: integer
-                          externalId:
+                          externalID:
                             type: string
                           policy:
                             type: string
@@ -5575,7 +5575,7 @@ spec:
                           durationSeconds:
                             format: int32
                             type: integer
-                          externalId:
+                          externalID:
                             type: string
                           policy:
                             type: string

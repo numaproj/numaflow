@@ -24,7 +24,7 @@ pub struct AwsAssumeRole {
     #[serde(rename = "durationSeconds", skip_serializing_if = "Option::is_none")]
     pub duration_seconds: Option<i32>,
     /// ExternalID is a unique identifier that might be required when you assume a role in another account. This is commonly used as an additional security measure for cross-account role access.
-    #[serde(rename = "externalId", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "externalID", skip_serializing_if = "Option::is_none")]
     pub external_id: Option<String>,
     /// Policy is an IAM policy document (JSON string) that you want to use as an inline session policy. This parameter is optional. When specified, the session permissions are the intersection of the IAM role's identity-based policy and the session policies. This allows further restriction of permissions for the specific service operations.
     #[serde(rename = "policy", skip_serializing_if = "Option::is_none")]

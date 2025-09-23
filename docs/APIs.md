@@ -139,7 +139,7 @@ session duration setting of the IAM role being assumed.
 
 <td>
 
-<code>externalId</code></br> <em> string </em>
+<code>externalID</code></br> <em> string </em>
 </td>
 
 <td>

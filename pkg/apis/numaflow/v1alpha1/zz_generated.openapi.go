@@ -180,7 +180,7 @@ func schema_pkg_apis_numaflow_v1alpha1_AWSAssumeRole(ref common.ReferenceCallbac
 							Format:      "int32",
 						},
 					},
-					"externalId": {
+					"externalID": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ExternalID is a unique identifier that might be required when you assume a role in another account. This is commonly used as an additional security measure for cross-account role access.",
 							Type:        []string{"string"},

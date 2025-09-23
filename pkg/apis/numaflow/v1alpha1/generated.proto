@@ -57,7 +57,7 @@ message AWSAssumeRole {
   // in another account. This is commonly used as an additional security measure
   // for cross-account role access.
   // +optional
-  optional string externalId = 4;
+  optional string externalID = 4;
 
   // Policy is an IAM policy document (JSON string) that you want to use as an inline session policy.
   // This parameter is optional. When specified, the session permissions are the intersection of
