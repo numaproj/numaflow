@@ -5,7 +5,7 @@ use aws_sdk_sqs::Client;
 use aws_sdk_sqs::types::SendMessageBatchRequestEntry;
 use bytes::Bytes;
 
-use crate::{Error, SqsConfig, SqsSinkError};
+use crate::{AssumeRoleConfig, Error, SqsConfig, SqsSinkError};
 
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 
@@ -20,6 +20,8 @@ pub struct SqsSinkConfig {
     pub queue_name: &'static str,
     /// AWS account ID of the queue owner
     pub queue_owner_aws_account_id: &'static str,
+    /// Assume role configuration for AWS credentials
+    pub assume_role_config: Option<AssumeRoleConfig>,
 }
 
 /// Message to be sent to SQS.
@@ -62,6 +64,7 @@ impl Default for SqsSinkBuilder {
             region: SQS_DEFAULT_REGION,
             queue_name: "",
             queue_owner_aws_account_id: "",
+            assume_role_config: None,
         })
     }
 }
@@ -189,7 +192,6 @@ impl SqsSink {
 
 #[cfg(test)]
 mod tests {
-    use aws_config::BehaviorVersion;
     use aws_sdk_sqs::types::BatchResultErrorEntry;
     use aws_sdk_sqs::{Client, Config};
     use aws_smithy_mocks::{MockResponseInterceptor, Rule, RuleMode, mock};
@@ -207,6 +209,7 @@ mod tests {
             region: "us-west-2",
             queue_name: "test-queue",
             queue_owner_aws_account_id: "123456789012",
+            assume_role_config: None,
         };
 
         let result = crate::create_sqs_client(SqsConfig::Sink(config.clone())).await;
@@ -233,6 +236,7 @@ mod tests {
             region: SQS_DEFAULT_REGION,
             queue_name: "test-q",
             queue_owner_aws_account_id: "123456789012",
+            assume_role_config: None,
         };
 
         let sink = SqsSinkBuilder::new(config.clone())
@@ -265,6 +269,7 @@ mod tests {
             region: SQS_DEFAULT_REGION,
             queue_name: "test-q",
             queue_owner_aws_account_id: "123456789012",
+            assume_role_config: None,
         };
 
         let sink = SqsSinkBuilder::new(config.clone())
@@ -307,6 +312,7 @@ mod tests {
             region: SQS_DEFAULT_REGION,
             queue_name: "test-q",
             queue_owner_aws_account_id: "123456789012",
+            assume_role_config: None,
         };
 
         let sink = SqsSinkBuilder::new(config.clone())
@@ -358,6 +364,7 @@ mod tests {
             region: SQS_DEFAULT_REGION,
             queue_name: "test-q",
             queue_owner_aws_account_id: "123456789012",
+            assume_role_config: None,
         };
 
         let sink = SqsSinkBuilder::new(config.clone())
@@ -479,7 +486,7 @@ mod tests {
 
     fn get_test_config_with_interceptor(interceptor: MockResponseInterceptor) -> Config {
         aws_sdk_sqs::Config::builder()
-            .behavior_version(BehaviorVersion::v2025_01_17())
+            .behavior_version(crate::aws_behavior_version())
             .credentials_provider(make_sqs_test_credentials())
             .region(aws_sdk_sqs::config::Region::new(SQS_DEFAULT_REGION))
             .interceptor(interceptor)
