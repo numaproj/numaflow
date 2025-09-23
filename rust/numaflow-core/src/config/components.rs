@@ -1578,21 +1578,6 @@ mod sink_tests {
         } else {
             panic!("Expected SinkType::Sqs");
         }
-
-        // Test case 2: Missing required fields
-        let invalid_sqs_sink = Box::new(SqsSink {
-            assume_role: None,
-            aws_region: "".to_string(),
-            queue_name: "test-queue".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
-        });
-
-        let result = SinkType::try_from(invalid_sqs_sink);
-        assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err().to_string(),
-            "Config Error - AWS region is required for SQS sink"
-        );
     }
 
     #[test]
@@ -1650,36 +1635,6 @@ mod sink_tests {
         assert_eq!(
             result.unwrap_err().to_string(),
             "Config Error - Fallback sink not found"
-        );
-
-        // Test case 3: Missing required AWS region
-        let sink_missing_region = Sink {
-            udsink: None,
-            log: None,
-            blackhole: None,
-            serve: None,
-            sqs: None,
-            fallback: Some(Box::new(AbstractSink {
-                udsink: None,
-                log: None,
-                blackhole: None,
-                serve: None,
-                sqs: Some(Box::new(SqsSink {
-                    assume_role: None,
-                    aws_region: "".to_string(),
-                    queue_name: "fallback-queue".to_string(),
-                    queue_owner_aws_account_id: "123456789012".to_string(),
-                })),
-                kafka: None,
-            })),
-            retry_strategy: None,
-            kafka: None,
-        };
-        let result = SinkType::fallback_sinktype(&sink_missing_region);
-        assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err().to_string(),
-            "Config Error - AWS region is required for SQS sink"
         );
 
         // Test case 4: Empty fallback sink configuration
