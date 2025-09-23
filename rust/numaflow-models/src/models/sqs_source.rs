@@ -20,6 +20,8 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SqsSource {
+    #[serde(rename = "assumeRole", skip_serializing_if = "Option::is_none")]
+    pub assume_role: Option<Box<crate::models::AwsAssumeRole>>,
     /// AttributeNames is a list of attributes that need to be returned along with each message. Valid values: All | Policy | VisibilityTimeout | MaximumMessageSize | MessageRetentionPeriod | ApproximateNumberOfMessages | ApproximateNumberOfMessagesNotVisible | CreatedTimestamp | LastModifiedTimestamp | QueueArn | ApproximateNumberOfMessagesDelayed | DelaySeconds | ReceiveMessageWaitTimeSeconds | RedrivePolicy | FifoQueue | ContentBasedDeduplication | KmsMasterKeyId | KmsDataKeyReusePeriodSeconds | DeduplicationScope | FifoThroughputLimit | RedriveAllowPolicy | SqsManagedSseEnabled
     #[serde(rename = "attributeNames", skip_serializing_if = "Option::is_none")]
     pub attribute_names: Option<Vec<String>>,
@@ -63,6 +65,7 @@ impl SqsSource {
         queue_owner_aws_account_id: String,
     ) -> SqsSource {
         SqsSource {
+            assume_role: None,
             attribute_names: None,
             aws_region,
             endpoint_url: None,
