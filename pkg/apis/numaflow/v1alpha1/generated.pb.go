@@ -5386,18 +5386,16 @@ func (m *ForwardConditions) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.Tags != nil {
-		{
-			size, err := m.Tags.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintGenerated(dAtA, i, uint64(size))
+	{
+		size, err := m.Tags.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i -= size
+		i = encodeVarintGenerated(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -11774,7 +11772,7 @@ func (m *ForwardConditions) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Tags != nil {
+	{
 		l = m.Tags.Size()
 		n += 1 + l + sovGenerated(uint64(l))
 	}
@@ -19652,9 +19650,7 @@ func (m *ForwardConditions) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Tags == nil {
-				m.Tags = &TagConditions{}
-			}
+			// Tags is now mandatory, no need to check for nil
 			if err := m.Tags.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
