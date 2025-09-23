@@ -56,12 +56,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
     }
 
     pub(crate) async fn start(self, cln_token: CancellationToken) -> crate::Result<()> {
-        let child_token = cln_token.child_token();
-        let (messages_stream, reader_handle) = self.source.streaming_read(child_token.clone())?;
+        let (messages_stream, reader_handle) = self.source.streaming_read(cln_token.clone())?;
 
         let sink_writer_handle = self
             .sink_writer
-            .streaming_write(messages_stream, child_token)
+            .streaming_write(messages_stream, cln_token.clone())
             .await?;
 
         // Join the reader and sink writer
@@ -73,12 +72,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
 
         sink_writer_result.inspect_err(|e| {
             error!(?e, "Error while writing messages");
-            cln_token.cancel();
         })?;
 
         reader_result.inspect_err(|e| {
             error!(?e, "Error while reading messages");
-            cln_token.cancel();
         })?;
 
         Ok(())
@@ -87,6 +84,14 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
 
 #[cfg(test)]
 mod tests {
+    use crate::Result;
+    use crate::monovertex::forwarder::Forwarder;
+    use crate::shared::grpc::create_rpc_channel;
+    use crate::sink::{SinkClientType, SinkWriterBuilder};
+    use crate::source::user_defined::new_source;
+    use crate::source::{Source, SourceType};
+    use crate::tracker::TrackerHandle;
+    use crate::transformer::Transformer;
     use chrono::Utc;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{source, sourcetransform};
@@ -100,15 +105,6 @@ mod tests {
     use tokio::sync::oneshot;
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
-
-    use crate::Result;
-    use crate::monovertex::forwarder::Forwarder;
-    use crate::shared::grpc::create_rpc_channel;
-    use crate::sink::{SinkClientType, SinkWriterBuilder};
-    use crate::source::user_defined::new_source;
-    use crate::source::{Source, SourceType};
-    use crate::tracker::TrackerHandle;
-    use crate::transformer::Transformer;
 
     struct SimpleSource {
         num: usize,
@@ -165,6 +161,8 @@ mod tests {
                     .remove(&String::from_utf8(offset.offset).unwrap());
             }
         }
+
+        async fn nack(&self, _offsets: Vec<Offset>) {}
 
         async fn pending(&self) -> Option<usize> {
             Some(
@@ -253,10 +251,16 @@ mod tests {
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let (src_read, src_ack, lag_reader) = new_source(client, 5, Duration::from_millis(1000))
-            .await
-            .map_err(|e| panic!("failed to create source reader: {:?}", e))
-            .unwrap();
+        let (src_read, src_ack, lag_reader) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
         let tracker_handle = TrackerHandle::new(None);
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,
@@ -391,10 +395,16 @@ mod tests {
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let (src_read, src_ack, lag_reader) = new_source(client, 5, Duration::from_millis(1000))
-            .await
-            .map_err(|e| panic!("failed to create source reader: {:?}", e))
-            .unwrap();
+        let (src_read, src_ack, lag_reader) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
 
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,

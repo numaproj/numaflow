@@ -21,7 +21,6 @@ package e2e
 import (
 	"fmt"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 
@@ -35,26 +34,10 @@ type TransformerSuite struct {
 }
 
 func (s *TransformerSuite) TestSourceTransformer() {
-
-	var wg sync.WaitGroup
-	wg.Add(4)
-	go func() {
-		defer wg.Done()
-		s.testSourceTransformer("python")
-	}()
-	go func() {
-		defer wg.Done()
-		s.testSourceTransformer("java")
-	}()
-	go func() {
-		defer wg.Done()
-		s.testSourceTransformer("go")
-	}()
-	go func() {
-		defer wg.Done()
-		s.testSourceTransformer("rust")
-	}()
-	wg.Wait()
+	s.testSourceTransformer("python")
+	s.testSourceTransformer("java")
+	s.testSourceTransformer("go")
+	s.testSourceTransformer("rust")
 }
 
 func (s *TransformerSuite) testSourceTransformer(lang string) {

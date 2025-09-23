@@ -1,13 +1,13 @@
 //! Type configuration trait for Numaflow components.
 
+use crate::Result;
 use crate::config::components::ratelimit::RateLimitConfig;
 use crate::error::Error;
-use crate::{Result, error};
 use numaflow_throttling::state::OptimisticValidityUpdateSecs;
 use numaflow_throttling::state::store::in_memory_store::InMemoryStore;
 use numaflow_throttling::state::store::redis_store::{RedisMode, RedisStore};
 use numaflow_throttling::{
-    NoOpRateLimiter, RateLimit, RateLimiter, TokenCalcBounds, WithDistributedState,
+    Mode, NoOpRateLimiter, RateLimit, RateLimiter, TokenCalcBounds, WithState,
 };
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
@@ -18,18 +18,18 @@ pub trait NumaflowTypeConfig: Send + Sync + Clone + 'static {
 
 #[derive(Clone)]
 pub struct WithRedisRateLimiter {
-    pub throttling_config: RateLimit<WithDistributedState<RedisStore>>,
+    pub throttling_config: RateLimit<WithState<RedisStore>>,
 }
 impl NumaflowTypeConfig for WithRedisRateLimiter {
-    type RateLimiter = RateLimit<WithDistributedState<RedisStore>>;
+    type RateLimiter = RateLimit<WithState<RedisStore>>;
 }
 
 #[derive(Clone)]
 pub struct WithInMemoryRateLimiter {
-    pub throttling_config: RateLimit<WithDistributedState<InMemoryStore>>,
+    pub throttling_config: RateLimit<WithState<InMemoryStore>>,
 }
 impl NumaflowTypeConfig for WithInMemoryRateLimiter {
-    type RateLimiter = RateLimit<WithDistributedState<InMemoryStore>>;
+    type RateLimiter = RateLimit<WithState<InMemoryStore>>;
 }
 
 #[derive(Clone)]
@@ -42,7 +42,7 @@ impl NumaflowTypeConfig for WithoutRateLimiter {
 pub async fn build_redis_rate_limiter(
     rate_limit_config: &RateLimitConfig,
     cln_token: CancellationToken,
-) -> Result<RateLimit<WithDistributedState<RedisStore>>> {
+) -> Result<RateLimit<WithState<RedisStore>>> {
     let redis_store_config = rate_limit_config
         .store
         .as_ref()
@@ -55,7 +55,7 @@ pub async fn build_redis_rate_limiter(
 
     let store = RedisStore::new(rate_limit_config.key_prefix, redis_mode)
         .await
-        .map_err(|e| error::Error::Config(format!("Failed to create Redis store: {}", e)))?;
+        .map_err(|e| Error::Config(format!("Failed to create Redis store: {}", e)))?;
 
     let limiter = create_rate_limiter(rate_limit_config, store, cln_token).await?;
     Ok(limiter)
@@ -76,7 +76,7 @@ pub async fn build_redis_rate_limiter_config(
 pub async fn build_in_memory_rate_limiter(
     rate_limit_config: &RateLimitConfig,
     cln_token: CancellationToken,
-) -> Result<RateLimit<WithDistributedState<InMemoryStore>>> {
+) -> Result<RateLimit<WithState<InMemoryStore>>> {
     // Create in-memory store
     let store = InMemoryStore::new();
     let limiter = create_rate_limiter(rate_limit_config, store, cln_token).await?;
@@ -108,20 +108,32 @@ pub async fn create_rate_limiter<S>(
     rate_limit_config: &RateLimitConfig,
     store: S,
     cancel_token: CancellationToken,
-) -> Result<RateLimit<WithDistributedState<S>>>
+) -> Result<RateLimit<WithState<S>>>
 where
     S: numaflow_throttling::state::Store + Sync + 'static,
 {
+    let mode = if rate_limit_config
+        .modes
+        .as_ref()
+        .and_then(|m| m.scheduled.as_ref())
+        .is_some()
+    {
+        Mode::Scheduled
+    } else {
+        Mode::Relaxed
+    };
+
     let bounds = TokenCalcBounds::new(
         rate_limit_config.max,
         rate_limit_config.min,
         rate_limit_config.ramp_up_duration,
+        mode,
     );
 
     let refresh_interval = Duration::from_millis(100);
     let runway_update = OptimisticValidityUpdateSecs::default();
 
-    RateLimit::<WithDistributedState<S>>::new(
+    RateLimit::<WithState<S>>::new(
         bounds,
         store,
         rate_limit_config.processor_id,

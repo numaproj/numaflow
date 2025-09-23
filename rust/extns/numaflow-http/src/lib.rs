@@ -16,6 +16,7 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
+use axum_server::Handle as AxumHandle;
 use axum_server::tls_rustls::RustlsConfig;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
@@ -32,6 +33,8 @@ use tokio::sync::{Mutex, mpsc, oneshot};
 use tracing::{debug, error, info, trace, warn};
 use uuid::Uuid;
 
+use tokio_util::sync::CancellationToken;
+
 /// Map that tracks inflight HTTP requests. This is passed to ack actor to send response back to
 /// the client. The entries are inserted at [axum::handler].
 type InflightRequestsMap = Arc<Mutex<HashMap<String, oneshot::Sender<StatusCode>>>>;
@@ -39,7 +42,7 @@ type InflightRequestsMap = Arc<Mutex<HashMap<String, oneshot::Sender<StatusCode>
 /// HTTP source that manages incoming HTTP requests and forwards them to a processing channel
 struct HttpSourceActor {
     server_rx: mpsc::Receiver<HttpMessage>,
-    _server_handle: tokio::task::JoinHandle<Result<()>>,
+    shutdown_handle: tokio::task::JoinHandle<()>,
     timeout: Duration,
     /// Map of inflight requests and their response channels
     inflight_requests: InflightRequestsMap,
@@ -85,6 +88,7 @@ pub struct HttpSourceConfig {
     pub addr: SocketAddr,
     pub timeout: Duration,
     pub token: Option<&'static str>,
+    pub graceful_shutdown_time: Duration,
 }
 
 impl Debug for HttpSourceConfig {
@@ -106,6 +110,7 @@ impl Default for HttpSourceConfig {
             addr: "0.0.0.0:8443".parse().expect("Invalid address"),
             timeout: Duration::from_millis(5),
             token: None,
+            graceful_shutdown_time: Duration::from_secs(20),
         }
     }
 }
@@ -116,6 +121,7 @@ pub struct HttpSourceConfigBuilder {
     addr: Option<SocketAddr>,
     timeout: Option<Duration>,
     token: Option<&'static str>,
+    graceful_shutdown_time: Option<Duration>,
 }
 
 impl HttpSourceConfigBuilder {
@@ -126,6 +132,7 @@ impl HttpSourceConfigBuilder {
             addr: None,
             timeout: None,
             token: None,
+            graceful_shutdown_time: None,
         }
     }
 
@@ -149,6 +156,11 @@ impl HttpSourceConfigBuilder {
         self
     }
 
+    pub fn graceful_shutdown_time(mut self, graceful_shutdown_time: Duration) -> Self {
+        self.graceful_shutdown_time = Some(graceful_shutdown_time);
+        self
+    }
+
     pub fn build(self) -> HttpSourceConfig {
         HttpSourceConfig {
             vertex_name: self.vertex_name,
@@ -158,6 +170,10 @@ impl HttpSourceConfigBuilder {
                 .unwrap_or_else(|| "0.0.0.0:8443".parse().expect("Invalid address")),
             timeout: self.timeout.unwrap_or(Duration::from_millis(5)),
             token: self.token,
+            // FIXME: As of today we have a hard timeout of 30 secs from K8s, we have not exposed a way to increase it.
+            graceful_shutdown_time: self
+                .graceful_shutdown_time
+                .unwrap_or(Duration::from_secs(20)),
         }
     }
 }
@@ -166,9 +182,13 @@ impl HttpSourceConfigBuilder {
 pub enum HttpActorMessage {
     Read {
         size: usize,
-        response_tx: oneshot::Sender<Result<Vec<HttpMessage>>>,
+        response_tx: oneshot::Sender<Option<Result<Vec<HttpMessage>>>>,
     },
     Ack {
+        offsets: Vec<String>,
+        response_tx: oneshot::Sender<Result<()>>,
+    },
+    Nack {
         offsets: Vec<String>,
         response_tx: oneshot::Sender<Result<()>>,
     },
@@ -176,9 +196,12 @@ pub enum HttpActorMessage {
 }
 
 impl HttpSourceActor {
-    async fn new(http_source_config: HttpSourceConfig) -> Self {
+    /// Create a new HttpSourceActor and also start a background task to shut down the server when
+    /// the CancellationToken is cancelled.
+    async fn new(http_source_config: HttpSourceConfig, cancel_token: CancellationToken) -> Self {
         let (tx, rx) = mpsc::channel(http_source_config.buffer_size); // Increased buffer size for better throughput
         let inflight_requests = Arc::new(Mutex::new(HashMap::new()));
+        let axum_handle = AxumHandle::new();
 
         let server_handle = tokio::spawn(start_server(
             http_source_config.vertex_name,
@@ -186,12 +209,23 @@ impl HttpSourceActor {
             http_source_config.addr,
             http_source_config.token,
             Arc::clone(&inflight_requests),
+            axum_handle.clone(),
         ));
+
+        let graceful_shutdown_time = http_source_config.graceful_shutdown_time;
+        let shutdown_handle = tokio::spawn(async move {
+            cancel_token.cancelled().await;
+            info!("CancellationToken cancelled; initiating HTTP graceful shutdown");
+            axum_handle.graceful_shutdown(Some(graceful_shutdown_time));
+            if let Err(e) = server_handle.await.expect("server handle failed") {
+                error!(?e, "HTTP server failed");
+            }
+        });
 
         Self {
             server_rx: rx,
             timeout: http_source_config.timeout,
-            _server_handle: server_handle,
+            shutdown_handle,
             inflight_requests,
         }
     }
@@ -200,6 +234,7 @@ impl HttpSourceActor {
     async fn run(mut self, mut actor_rx: mpsc::Receiver<HttpActorMessage>) -> Result<()> {
         info!("HttpSource processor started");
 
+        // rx will be closed when server has shutdown (shutdown has a grace period too)
         while let Some(msg) = actor_rx.recv().await {
             match msg {
                 HttpActorMessage::Read { size, response_tx } => {
@@ -216,6 +251,15 @@ impl HttpSourceActor {
                         .send(self.ack(offsets).await)
                         .expect("rx should be open");
                 }
+                HttpActorMessage::Nack {
+                    offsets,
+                    response_tx,
+                } => {
+                    debug!(count = offsets.len(), "Nack'ing messages from HttpSource");
+                    response_tx
+                        .send(self.nack(offsets).await)
+                        .expect("rx should be open");
+                }
                 HttpActorMessage::Pending(response_tx) => {
                     let pending = self.pending().await;
                     debug!(?pending, "Pending messages from HttpSource");
@@ -224,8 +268,10 @@ impl HttpSourceActor {
             }
         }
 
-        // Send error responses to any pending requests during shutdown
+        // Send error responses to any pending requests after shutdown
         self.fail_pending_requests().await;
+
+        self.shutdown_handle.await.expect("shutdown handle failed");
 
         info!("HttpSource processor stopped");
         Ok(())
@@ -235,7 +281,7 @@ impl HttpSourceActor {
         Some(self.server_rx.len())
     }
 
-    async fn read(&mut self, count: usize) -> Result<Vec<HttpMessage>> {
+    async fn read(&mut self, count: usize) -> Option<Result<Vec<HttpMessage>>> {
         // return all the messages in self.server_rx as long as timeout is not reached and not
         // exceeding the count.
 
@@ -249,20 +295,31 @@ impl HttpSourceActor {
                 biased;
 
                 _ =  &mut timeout => {
-                    return Ok(messages);
+                    return Some(Ok(messages));
                 }
 
                 message = self.server_rx.recv() => {
                     // stream ended
-                    let Some(message) = message else {
-                        return Ok(messages);
-                    };
-                    messages.push(message);
+                    match message {
+                        Some(message) => messages.push(message),
+                        // channel closed
+                        None => {
+                            // channel is closed and we do not have any more messages to send
+                            // in case we have read ahead.
+                            return if messages.is_empty() {
+                                None
+                            } else {
+                                // we have read ahead, return the messages, and in the next read,
+                                // we will return None.
+                                Some(Ok(messages))
+                            }
+                        }
+                    }
                 }
             }
 
             if messages.len() >= count {
-                return Ok(messages);
+                return Some(Ok(messages));
             }
         }
     }
@@ -283,10 +340,26 @@ impl HttpSourceActor {
         Ok(())
     }
 
-    /// Send error responses to all pending requests during shutdown.
-    /// We cannot avoid this today because HTTP reads ahead (has a channel buffer) and the
-    /// current Source trait does not support "initiate shutdown".
-    /// https://github.com/numaproj/numaflow/issues/2734
+    /// Negatively acknowledge messages and send HTTP error responses back to clients
+    async fn nack(&self, offsets: Vec<String>) -> Result<()> {
+        let mut pending_responses = self.inflight_requests.lock().await;
+
+        for offset in offsets {
+            if let Some(response_tx) = pending_responses.remove(&offset) {
+                // Send can fail, when the client disconnects because timeout etc. (buffer full case)
+                let _ = response_tx.send(StatusCode::INTERNAL_SERVER_ERROR).map_err(|_| {
+                    warn!(message_id = %offset, "Failed to send nack response for message - client may have disconnected");
+                });
+            }
+        }
+
+        // we make sure that the `self.inflight_requests.len() == 0` are empty during shutdown when
+        // the actor is dropped.
+
+        Ok(())
+    }
+
+    /// Send error responses to all pending requests during shutdown
     async fn fail_pending_requests(&self) {
         let mut pending_responses = self.inflight_requests.lock().await;
         if pending_responses.is_empty() {
@@ -295,8 +368,8 @@ impl HttpSourceActor {
 
         error!(
             pending_count = pending_responses.len(),
-            "Sending error responses to pending requests during shutdown. \
-            This is a known issue (https://github.com/numaproj/numaflow/issues/2734)."
+            "Sending error responses to pending requests during shutdown, this should not happen \
+            unless messages take longer than the graceful shutdown timeout to be processed."
         );
 
         for (_, response_tx) in pending_responses.drain() {
@@ -313,11 +386,14 @@ pub struct HttpSourceHandle {
 
 impl HttpSourceHandle {
     /// Create a new HttpSourceHandle
-    pub async fn new(http_source_config: HttpSourceConfig) -> Self {
+    pub async fn new(
+        http_source_config: HttpSourceConfig,
+        cancel_token: CancellationToken,
+    ) -> Self {
         let (actor_tx, actor_rx) =
             mpsc::channel::<HttpActorMessage>(http_source_config.buffer_size);
 
-        let http_source = HttpSourceActor::new(http_source_config).await;
+        let http_source = HttpSourceActor::new(http_source_config, cancel_token).await;
 
         // the tokio task will stop when tx is dropped
         tokio::spawn(async move { http_source.run(actor_rx).await });
@@ -326,7 +402,7 @@ impl HttpSourceHandle {
     }
 
     /// Read messages from the HttpSource.
-    pub async fn read(&self, size: usize) -> Result<Vec<HttpMessage>> {
+    pub async fn read(&self, size: usize) -> Option<Result<Vec<HttpMessage>>> {
         let (tx, rx) = oneshot::channel();
         self.actor_tx
             .send(HttpActorMessage::Read {
@@ -335,7 +411,9 @@ impl HttpSourceHandle {
             })
             .await
             .expect("actor should be running");
-        rx.await.map_err(|e| Error::ChannelRecv(e.to_string()))?
+        rx.await
+            .map_err(|e| Error::ChannelRecv(e.to_string()))
+            .unwrap_or_else(|e| Some(Err(e)))
     }
 
     /// Ack messages to the HttpSource.
@@ -343,6 +421,19 @@ impl HttpSourceHandle {
         let (tx, rx) = oneshot::channel();
         self.actor_tx
             .send(HttpActorMessage::Ack {
+                offsets,
+                response_tx: tx,
+            })
+            .await
+            .expect("actor should be running");
+        rx.await.map_err(|e| Error::ChannelRecv(e.to_string()))?
+    }
+
+    /// Nack messages to the HttpSource.
+    pub async fn nack(&self, offsets: Vec<String>) -> Result<()> {
+        let (tx, rx) = oneshot::channel();
+        self.actor_tx
+            .send(HttpActorMessage::Nack {
                 offsets,
                 response_tx: tx,
             })
@@ -437,6 +528,7 @@ pub async fn start_server(
     addr: SocketAddr,
     token: Option<&'static str>,
     inflight_requests: InflightRequestsMap,
+    axum_handle: AxumHandle,
 ) -> Result<()> {
     let router = create_router(vertex_name, token, tx, inflight_requests);
 
@@ -450,6 +542,7 @@ pub async fn start_server(
         .map_err(|e| Error::Server(format!("Creating TLS config from PEM: {e}")))?;
 
     axum_server::bind_rustls(addr, tls_config)
+        .handle(axum_handle)
         .serve(router.into_make_service())
         .await
         .map_err(|e| Error::Server(format!("HTTPS server error: {e}")))?;
@@ -536,8 +629,6 @@ async fn data_handler(
             )
                 .into_response();
         }
-
-        //pending_responses.insert(id.clone(), response_tx);
     }
 
     // Create the HTTP message
@@ -841,6 +932,7 @@ mod tests {
     async fn test_http_source_read_with_real_server() {
         // Setup the CryptoProvider for rustls
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        let cln_token = CancellationToken::new();
 
         // Bind to a random available port
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -850,7 +942,7 @@ mod tests {
         // Create HttpSource with the address
         let http_source_config = HttpSourceConfigBuilder::new("test").addr(addr).build();
 
-        let http_source = HttpSourceActor::new(http_source_config).await;
+        let http_source = HttpSourceActor::new(http_source_config, cln_token.clone()).await;
 
         // Create actor channel for communicating with HttpSource
         let (actor_tx, actor_rx) = mpsc::channel::<HttpActorMessage>(10);
@@ -918,7 +1010,7 @@ mod tests {
                     .unwrap();
 
                 // Wait for the read response
-                let messages = read_rx.await.unwrap().unwrap();
+                let messages = read_rx.await.unwrap().unwrap().unwrap();
                 all_messages.extend(messages);
 
                 if all_messages.len() >= expected_count {
@@ -988,6 +1080,7 @@ mod tests {
 
         // Note: We already tested ack above when we acked the messages to complete the HTTP requests
 
+        cln_token.cancel();
         // Clean up
         drop(actor_tx);
         let _ = source_handle.await;
@@ -999,10 +1092,11 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
         drop(listener);
+        let cln_token = CancellationToken::new();
 
         let http_source_config = HttpSourceConfigBuilder::new("test").addr(addr).build();
 
-        let http_source = HttpSourceActor::new(http_source_config).await;
+        let http_source = HttpSourceActor::new(http_source_config, cln_token.clone()).await;
 
         let (actor_tx, actor_rx) = mpsc::channel::<HttpActorMessage>(10);
 
@@ -1018,9 +1112,10 @@ mod tests {
             .await
             .unwrap();
 
-        let messages = read_rx.await.unwrap().unwrap();
+        let messages = read_rx.await.unwrap().unwrap().unwrap();
         assert_eq!(messages.len(), 0); // Should be empty due to timeout
 
+        cln_token.cancel();
         // Clean up
         drop(actor_tx);
         let _ = source_handle.await;
@@ -1043,7 +1138,8 @@ mod tests {
             .build();
 
         // Create HttpSourceHandle
-        let handle = HttpSourceHandle::new(http_source_config.clone()).await;
+        let handle =
+            HttpSourceHandle::new(http_source_config.clone(), CancellationToken::new()).await;
 
         // Wait a bit for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -1090,7 +1186,7 @@ mod tests {
         assert_eq!(pending, Some(5), "Should have 5 pending messages");
 
         // Test read method
-        let messages = handle.read(3).await.unwrap();
+        let messages = handle.read(3).await.unwrap().unwrap();
         assert_eq!(messages.len(), 3, "Should read 3 messages");
 
         let expected_event_time = DateTime::from_timestamp_millis(1431628200000).unwrap(); // May 15, 2015
@@ -1120,7 +1216,7 @@ mod tests {
         assert!(ack_result.is_ok(), "Ack should succeed");
 
         // Read remaining messages
-        let remaining_messages = handle.read(5).await.unwrap();
+        let remaining_messages = handle.read(5).await.unwrap().unwrap();
         assert_eq!(
             remaining_messages.len(),
             2,

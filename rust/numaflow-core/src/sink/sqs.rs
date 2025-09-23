@@ -23,6 +23,9 @@ impl From<numaflow_sqs::SqsSinkError> for Error {
             numaflow_sqs::SqsSinkError::Error(numaflow_sqs::Error::Sqs(e)) => {
                 Error::Sink(e.to_string())
             }
+            numaflow_sqs::SqsSinkError::Error(numaflow_sqs::Error::Sts(e)) => {
+                Error::Sink(e.to_string())
+            }
             numaflow_sqs::SqsSinkError::Error(numaflow_sqs::Error::ActorTaskTerminated(_)) => {
                 Error::ActorPatternRecv(value.to_string())
             }
@@ -158,6 +161,8 @@ pub mod tests {
             }
         }
 
+        async fn nack(&self, _offsets: Vec<Offset>) {}
+
         async fn pending(&self) -> Option<usize> {
             Some(
                 self.num - self.sent_count.load(Ordering::SeqCst)
@@ -173,13 +178,15 @@ pub mod tests {
     #[tokio::test]
     async fn test_sqs_sink_e2e() {
         let tracker_handle = TrackerHandle::new(None);
-        let (source, src_handle, src_shutdown_tx) = get_simple_source(tracker_handle.clone()).await;
+        let cln_token = CancellationToken::new();
+
+        let (source, src_handle, src_shutdown_tx) =
+            get_simple_source(tracker_handle.clone(), cln_token.clone()).await;
         // let source = get_sqs_source().await;
         let sink_writer = get_sqs_sink(tracker_handle.clone()).await;
         // create the forwarder with the source, transformer, and writer
         let forwarder = Forwarder::new(source.clone(), sink_writer);
 
-        let cln_token = CancellationToken::new();
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<crate::error::Result<()>> = tokio::spawn(async move {
             forwarder.start(cancel_token).await?;
@@ -211,6 +218,7 @@ pub mod tests {
 
     async fn get_simple_source(
         tracker_handle: TrackerHandle,
+        cln_token: CancellationToken,
     ) -> (
         Source<crate::typ::WithoutRateLimiter>,
         JoinHandle<()>,
@@ -239,10 +247,11 @@ pub mod tests {
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let (src_read, src_ack, lag_reader) = new_source(client, 5, Duration::from_millis(100))
-            .await
-            .map_err(|e| panic!("failed to create source reader: {:?}", e))
-            .unwrap();
+        let (src_read, src_ack, lag_reader) =
+            new_source(client, 5, Duration::from_millis(100), cln_token, true)
+                .await
+                .map_err(|e| panic!("failed to create source reader: {:?}", e))
+                .unwrap();
         (
             Source::new(
                 5,
@@ -272,6 +281,7 @@ pub mod tests {
             region: SQS_DEFAULT_REGION,
             queue_name: "test-q",
             queue_owner_aws_account_id: "12345678912",
+            assume_role_config: None,
         })
         .client(sqs_client)
         .build()
@@ -295,7 +305,8 @@ pub mod tests {
         let mut successful = vec![];
         for i in 0..count {
             let msg_id = format!("msg-id-source-testsinke2e-{}", i.clone());
-            let id = format!("source-testsinke2e-{}", i.clone());
+            // IMPORTANT: id must match the sink's generated batch entry IDs (e.g., "msg_{i}")
+            let id = format!("msg_{}", i.clone());
             let entry = aws_sdk_sqs::types::SendMessageBatchResultEntry::builder()
                 .id(id)
                 .message_id(msg_id)

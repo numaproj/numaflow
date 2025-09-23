@@ -5,7 +5,7 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-/// Store module contains the implementation of the external store.
+/// Store module contains the implementation of the external store which may or may not be distributed.
 pub mod store;
 
 /// Consensus represents the consensus reached by the distributed processors.
@@ -19,7 +19,7 @@ pub enum Consensus {
 
 /// The state the [RateLimiter] always relies on to compute the available tokens.
 #[derive(Clone, Debug)]
-pub struct RateLimiterDistributedState<S> {
+pub struct RateLimiterState<S> {
     /// Timestamp (epoch) for which we have the pool size computed and beyond this timestamp the state is
     /// invalid. This is a moving timestamp and will be updated as we get updated data from the
     /// external store.
@@ -37,7 +37,7 @@ pub struct RateLimiterDistributedState<S> {
     store: S,
 }
 
-/// Defines what is the optimistic forward-looking updates we can make to the [RateLimiterDistributedState].
+/// Defines what is the optimistic forward-looking updates we can make to the [RateLimiterState].
 /// This should be tweaked based on the refresh-interval.
 #[derive(Clone)]
 pub struct OptimisticValidityUpdateSecs {
@@ -56,7 +56,7 @@ impl Default for OptimisticValidityUpdateSecs {
     }
 }
 
-impl<S: Store> RateLimiterDistributedState<S> {
+impl<S: Store> RateLimiterState<S> {
     pub(crate) async fn new(
         s: S,
         processor_id: &str,
@@ -69,7 +69,7 @@ impl<S: Store> RateLimiterDistributedState<S> {
         let pool_size =
             Self::wait_for_consensus(&s, processor_id, initial_pool_size, &cancel).await?;
 
-        let rlds = RateLimiterDistributedState {
+        let rlds = RateLimiterState {
             valid_till_epoch: Arc::new(AtomicU64::new(
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)

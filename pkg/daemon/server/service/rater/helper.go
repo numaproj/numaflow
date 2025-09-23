@@ -33,8 +33,11 @@ const (
 
 // UpdatePendingCount updates the pending count for a pod at a given time
 func UpdatePendingCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podPendingCounts *PodPendingCount) {
-	items := q.Items()
+	if podPendingCounts == nil {
+		return
+	}
 
+	items := q.Items()
 	// find the element matching the input timestamp and update it
 	for _, i := range items {
 		if i.timestamp == time {
@@ -51,8 +54,11 @@ func UpdatePendingCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time i
 
 // UpdateCount updates the count of processed messages for a pod at a given time
 func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podReadCounts *PodReadCount) {
-	items := q.Items()
+	if podReadCounts == nil {
+		return
+	}
 
+	items := q.Items()
 	// find the element matching the input timestamp and update it
 	for _, i := range items {
 		if i.timestamp == time {
@@ -158,11 +164,13 @@ func calculatePartitionDelta(tc1, tc2 *TimestampedCounts, partitionName string) 
 	currPodReadCount := tc2.PodPartitionCountSnapshot()
 	for podName, partitionReadCounts := range currPodReadCount {
 		currCount := partitionReadCounts[partitionName]
+
 		prevCount := prevPodReadCount[podName][partitionName]
 		// pod delta will be equal to current count in case of restart
 		podDelta := currCount
 		if currCount >= prevCount {
 			podDelta = currCount - prevCount
+
 		}
 		delta += podDelta
 	}
@@ -172,7 +180,7 @@ func calculatePartitionDelta(tc1, tc2 *TimestampedCounts, partitionName string) 
 // findStartIndex finds the index of the first element in the queue that is within the lookback seconds
 func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	n := len(counts)
-	now := time.Now().Truncate(CountWindow).Unix()
+	now := time.Now().Unix()
 	if n < 2 || now-counts[n-2].timestamp > lookbackSeconds {
 		// if the second last element is already outside the lookback window, we return indexNotFound
 		return indexNotFound

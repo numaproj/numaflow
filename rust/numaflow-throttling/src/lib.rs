@@ -1,6 +1,6 @@
 use crate::state::OptimisticValidityUpdateSecs;
 use crate::state::store::Store;
-use state::RateLimiterDistributedState;
+use state::RateLimiterState;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -12,15 +12,15 @@ pub(crate) mod error;
 pub(crate) use error::Error;
 pub(crate) use error::Result;
 
-/// State module contains the implementation of the [RateLimiterDistributedState] which has the
+/// State module contains the implementation of the [RateLimiterState] which has the
 /// holds distributed consensus state required to compute the available tokens.
 pub mod state;
 
 #[derive(Clone)]
-pub struct WithoutDistributedState;
+pub struct WithoutState;
 
 #[derive(Clone)]
-pub struct WithDistributedState<S>(RateLimiterDistributedState<S>);
+pub struct WithState<S>(RateLimiterState<S>);
 
 /// RateLimiter will expose methods to query the tokens available per unit time
 #[trait_variant::make(Send)]
@@ -36,8 +36,8 @@ pub trait RateLimiter {
 }
 
 /// RateLimit is the main struct that will be used by the user to get the tokens available for the
-/// current time window. It has to be clonable so it can be used across multiple tasks (e.g., pipeline
-/// with multiple partitions).
+/// current time window. It has to be clonable so it can be used across multiple process-a-stream
+/// tasks (e.g., pipeline with multiple partitions).
 #[derive(Clone)]
 pub struct RateLimit<W> {
     token_calc_bounds: TokenCalcBounds,
@@ -51,7 +51,7 @@ pub struct RateLimit<W> {
     /// Last time the token was queried. The tokens are replenished based on the time elapsed since
     /// the last query.
     last_queried_epoch: Arc<AtomicU64>,
-    /// Optional [RateLimiterDistributedState] to query for the pool-size in a distributed setting.
+    /// Optional [RateLimiterState] to query for the pool-size in a distributed setting.
     state: W,
 }
 
@@ -81,10 +81,7 @@ enum TokenAvailability {
 }
 
 impl<W> RateLimit<W> {
-    /// Computes the number of tokens to be refilled for the next epoch.
-    pub(crate) fn compute_refill(&self) -> usize {
-        let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
-
+    fn relaxed_slope_increase(&self, max_ever_filled: &mut f32) -> usize {
         // let's make sure we do not go beyond the max
         if *max_ever_filled >= self.token_calc_bounds.max as f32 {
             self.token_calc_bounds.max
@@ -94,13 +91,53 @@ impl<W> RateLimit<W> {
 
             // Update the fractional value
             *max_ever_filled = capped_refill;
-
             capped_refill as usize
+        }
+    }
+
+    /// Computes the number of tokens to be refilled for the next epoch based on various modes
+    ///
+    /// # Arguments
+    ///
+    /// * `requested_token_size` - Tokens requested by the caller
+    /// * `cur_epoch` - Current epoch
+    ///
+    /// # Returns
+    ///
+    /// * `usize` - Number of tokens to be refilled
+    pub(crate) fn compute_refill(
+        &self,
+        _requested_token_size: Option<usize>,
+        cur_epoch: u64,
+    ) -> usize {
+        let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
+
+        match self.token_calc_bounds.mode {
+            Mode::Relaxed => self.relaxed_slope_increase(&mut max_ever_filled),
+            Mode::Scheduled => {
+                // let's make sure we do not go beyond the max
+                if *max_ever_filled >= self.token_calc_bounds.max as f32 {
+                    self.token_calc_bounds.max
+                } else {
+                    let prev_epoch = self
+                        .last_queried_epoch
+                        .load(std::sync::atomic::Ordering::Relaxed);
+                    let time_diff = cur_epoch.checked_sub(prev_epoch).unwrap_or(0) as f32;
+                    let refill = *max_ever_filled + self.token_calc_bounds.slope * (time_diff);
+                    let capped_refill = refill.min(self.token_calc_bounds.max as f32);
+
+                    // Update the fractional value
+                    *max_ever_filled = capped_refill;
+
+                    capped_refill as usize
+                }
+            }
+            Mode::OnlyIfUsed => unimplemented!(),
         }
     }
 }
 
-impl RateLimit<WithoutDistributedState> {
+impl RateLimit<WithoutState> {
     /// Create a new [RateLimit] without a distributed state.
     pub fn new(token_calc_bounds: TokenCalcBounds) -> Result<Self> {
         let burst = token_calc_bounds.min;
@@ -108,29 +145,19 @@ impl RateLimit<WithoutDistributedState> {
             token_calc_bounds,
             token: Arc::new(AtomicUsize::new(burst)),
             max_ever_filled: Arc::new(Mutex::new(burst as f32)),
-            last_queried_epoch: Arc::new(AtomicU64::new(
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("Time went backwards")
-                    .as_secs(),
-            )),
-            state: WithoutDistributedState,
+            last_queried_epoch: Arc::new(AtomicU64::new(0)),
+            state: WithoutState,
         })
     }
 
     /// Get the number of tokens available for the current time provided it is already refilled.
     /// Since pool size is always one, we don't have to divide the tokens by pool size.
-    pub(crate) fn get_tokens(&self, n: Option<usize>) -> TokenAvailability {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs();
-
+    pub(crate) fn get_tokens(&self, n: Option<usize>, cur_epoch: u64) -> TokenAvailability {
         let previous_epoch = self
             .last_queried_epoch
             .load(std::sync::atomic::Ordering::Relaxed);
 
-        if previous_epoch < now {
+        if previous_epoch < cur_epoch {
             return TokenAvailability::Recompute;
         }
 
@@ -164,48 +191,47 @@ impl RateLimit<WithoutDistributedState> {
 }
 
 /// Helper to sleep until the start of the next second.
-async fn sleep_until_next_sec() {
+async fn sleep_until_next_sec() -> u64 {
     let now = std::time::SystemTime::now();
     let since_epoch = now
         .duration_since(std::time::UNIX_EPOCH)
         .expect("Time went backwards");
 
-    // Calculate the start of the next second
-    let next_sec = since_epoch.as_secs() + 1;
-    let next_sec_duration = Duration::from_secs(next_sec);
+    // Calculate the start of the next second truncated to the next second so we sleep only
+    // till the top of the second
+    let start_of_next_sec = since_epoch.as_secs() + 1;
+
+    // delta till the top of the next second
+    let delta_till_next_sec = Duration::from_secs(start_of_next_sec) - since_epoch;
 
     tokio::time::sleep_until(tokio::time::Instant::from_std(
-        std::time::Instant::now() + (next_sec_duration - since_epoch),
+        std::time::Instant::now() + (delta_till_next_sec),
     ))
     .await;
+
+    start_of_next_sec
 }
 
-impl RateLimit<WithoutDistributedState> {
+impl RateLimit<WithoutState> {
     /// Tries to acquire tokens(non-blocking)
-    async fn attempt_acquire_n(&self, n: Option<usize>) -> usize {
+    async fn attempt_acquire_n(&self, n: Option<usize>, cur_epoch: u64) -> usize {
         // let's try to acquire the tokens
-        match self.get_tokens(n) {
+        match self.get_tokens(n, cur_epoch) {
             TokenAvailability::Available(t) => return t,
             TokenAvailability::Exhausted => return 0,
             TokenAvailability::Recompute => {}
         }
 
-        // recompute the number of tokens available
-        let now_epoch = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs();
-
-        let new_token_count = self.compute_refill();
+        let new_token_count = self.compute_refill(n, cur_epoch);
         self.token
             .store(new_token_count, std::sync::atomic::Ordering::Release);
 
         // Update the epoch to current time after refilling
         self.last_queried_epoch
-            .store(now_epoch, std::sync::atomic::Ordering::Release);
+            .store(cur_epoch, std::sync::atomic::Ordering::Release);
 
         // try to acquire the tokens again
-        match self.get_tokens(n) {
+        match self.get_tokens(n, cur_epoch) {
             TokenAvailability::Available(tokens) => tokens,
             other => {
                 warn!(
@@ -218,14 +244,19 @@ impl RateLimit<WithoutDistributedState> {
     }
 }
 
-impl RateLimiter for RateLimit<WithoutDistributedState> {
+impl RateLimiter for RateLimit<WithoutState> {
     /// Acquire `n` tokens. If `n` is not provided, it will acquire all the tokens.
     /// If timeout is None, returns immediately with available tokens (non-blocking).
     /// If timeout is Some, will wait up to the specified duration for some tokens to be available.
     /// Timeout is only considered when token size is zero.
     async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize {
+        let cur_epoch = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
+
         // First attempt - try to get tokens immediately
-        let tokens = self.attempt_acquire_n(n).await;
+        let tokens = self.attempt_acquire_n(n, cur_epoch).await;
         if tokens > 0 {
             return tokens;
         }
@@ -239,8 +270,8 @@ impl RateLimiter for RateLimit<WithoutDistributedState> {
         let acquisition_loop = async {
             loop {
                 // Wait for the next epoch to try again
-                sleep_until_next_sec().await;
-                let tokens = self.attempt_acquire_n(n).await;
+                let cur_epoch = sleep_until_next_sec().await;
+                let tokens = self.attempt_acquire_n(n, cur_epoch).await;
                 if tokens > 0 {
                     return tokens;
                 }
@@ -257,33 +288,29 @@ impl RateLimiter for RateLimit<WithoutDistributedState> {
     }
 }
 
-impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithDistributedState<S>> {
+impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithState<S>> {
     /// Tries to acquire tokens (non-blocking)
-    async fn attempt_acquire_n(&self, n: Option<usize>) -> usize {
+    async fn attempt_acquire_n(&self, n: Option<usize>, cur_epoch: u64) -> usize {
         // Try the hot-path first: consume from the current window.
-        match self.get_tokens(n) {
+        match self.get_tokens(n, cur_epoch) {
             TokenAvailability::Available(t) => return t,
             TokenAvailability::Exhausted => return 0,
             TokenAvailability::Recompute => {}
         }
 
-        // We crossed a new epoch; recompute this second's budget.
-        let now_epoch = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs();
-
-        let next_total_tokens = self.compute_refill();
+        // We crossed a new epoch; we gave to recompute the budget i.e., recompute the number of
+        // new tokens available
+        let next_total_tokens = self.compute_refill(n, cur_epoch);
 
         // Store the total tokens (division happens in get_tokens)
         self.token
             .store(next_total_tokens, std::sync::atomic::Ordering::Release);
 
         self.last_queried_epoch
-            .store(now_epoch, std::sync::atomic::Ordering::Release);
+            .store(cur_epoch, std::sync::atomic::Ordering::Release);
 
         // Try to take after refill.
-        match self.get_tokens(n) {
+        match self.get_tokens(n, cur_epoch) {
             TokenAvailability::Available(tokens) => tokens,
             other => {
                 warn!(
@@ -296,14 +323,19 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithDistributedState<S>
     }
 }
 
-impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDistributedState<S>> {
+impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithState<S>> {
     /// Acquire `n` tokens. If `n` is not provided, it will acquire all the tokens.
     /// If timeout is None, returns immediately with available tokens (non-blocking).
     /// If timeout is Some, will wait up to the specified duration for some tokens to be available.
     /// Timeout is only considered when token size is zero.
     async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize {
+        let mut cur_epoch = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
+
         // First attempt - try to get tokens immediately
-        let tokens = self.attempt_acquire_n(n).await;
+        let tokens = self.attempt_acquire_n(n, cur_epoch).await;
         if tokens > 0 {
             return tokens;
         }
@@ -317,8 +349,8 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDis
         let acquisition_loop = async {
             loop {
                 // Wait for the next epoch to try again
-                sleep_until_next_sec().await;
-                let tokens = self.attempt_acquire_n(n).await;
+                cur_epoch = sleep_until_next_sec().await;
+                let tokens = self.attempt_acquire_n(n, cur_epoch).await;
                 if tokens > 0 {
                     return tokens;
                 }
@@ -330,12 +362,12 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDis
             .unwrap_or(0)
     }
 
-    async fn shutdown(&self) -> crate::Result<()> {
+    async fn shutdown(&self) -> Result<()> {
         self.state.0.shutdown().await
     }
 }
 
-impl<S: Store> RateLimit<WithDistributedState<S>> {
+impl<S: Store> RateLimit<WithState<S>> {
     /// Create a new [RateLimit] with a distributed state.
     pub async fn new(
         token_calc_bounds: TokenCalcBounds,
@@ -346,7 +378,7 @@ impl<S: Store> RateLimit<WithDistributedState<S>> {
         runway_update_len: OptimisticValidityUpdateSecs,
     ) -> Result<Self> {
         // Registers and blocks until initial consensus (AGREE) inside state::new(...)
-        let state = RateLimiterDistributedState::new(
+        let state = RateLimiterState::new(
             store,
             processor_id,
             cancel,
@@ -365,28 +397,18 @@ impl<S: Store> RateLimit<WithDistributedState<S>> {
             // Store the full burst amount, we divide by pool size when querying tokens
             token: Arc::new(AtomicUsize::new(burst)),
             max_ever_filled: Arc::new(Mutex::new(burst as f32)),
-            last_queried_epoch: Arc::new(AtomicU64::new(
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("Time went backwards")
-                    .as_secs(),
-            )),
-            state: WithDistributedState(state),
+            last_queried_epoch: Arc::new(AtomicU64::new(0)),
+            state: WithState(state),
         })
     }
 
     /// Get the number of tokens available for the current time provided it is already refilled.
-    pub(crate) fn get_tokens(&self, n: Option<usize>) -> TokenAvailability {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs();
-
+    pub(crate) fn get_tokens(&self, n: Option<usize>, cur_epoch: u64) -> TokenAvailability {
         let previous_epoch = self
             .last_queried_epoch
             .load(std::sync::atomic::Ordering::Relaxed);
 
-        if previous_epoch < now {
+        if previous_epoch < cur_epoch {
             return TokenAvailability::Recompute;
         }
 
@@ -439,6 +461,18 @@ impl<S: Store> RateLimit<WithDistributedState<S>> {
     }
 }
 
+/// Rate limiting/Throttling mode
+#[derive(Clone, Debug)]
+pub enum Mode {
+    /// If there is some traffic, then release the max possible tokens
+    Relaxed,
+    /// We will release/increase tokens on a schedule even if it is not used
+    Scheduled,
+    /// If the max token is not used, then we will give the same previously allocated token.
+    /// If the tokens used are within +/-10% threshold of max, then we’ll increase by slope
+    OnlyIfUsed,
+}
+
 /// Mathematical Boundaries of Token Computation
 #[derive(Clone, Debug)]
 pub struct TokenCalcBounds {
@@ -448,6 +482,8 @@ pub struct TokenCalcBounds {
     max: usize,
     /// Minimum number of tokens available at t=0 (origin)
     min: usize,
+    /// Mode of operation
+    mode: Mode,
 }
 
 impl Default for TokenCalcBounds {
@@ -456,6 +492,7 @@ impl Default for TokenCalcBounds {
             slope: 1.0,
             max: 1,
             min: 1,
+            mode: Mode::Relaxed,
         }
     }
 }
@@ -463,11 +500,12 @@ impl Default for TokenCalcBounds {
 impl TokenCalcBounds {
     /// `Maximum` number of tokens that can be added in a unit of time with an initial `burst`.
     /// The `duration` (in seconds) at with we can add `max` tokens.
-    pub fn new(max: usize, min: usize, duration: Duration) -> Self {
+    pub fn new(max: usize, min: usize, duration: Duration, mode: Mode) -> Self {
         TokenCalcBounds {
             slope: (max - min) as f32 / duration.as_secs_f32(),
             max,
             min,
+            mode,
         }
     }
 }
@@ -490,13 +528,222 @@ impl RateLimiter for NoOpRateLimiter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::test_utils::StoreType::Redis;
     use std::time::SystemTime;
     use tokio::time::Duration;
 
-    /// Test utilities for Redis integration tests
-    #[cfg(feature = "redis-tests")]
+    /// Test utilities for integration tests
     mod test_utils {
+        use crate::state::store::in_memory_store::InMemoryStore;
         use crate::state::store::redis_store::{RedisMode, RedisStore};
+        use crate::state::{OptimisticValidityUpdateSecs, Store};
+        use crate::{Mode, RateLimit, RateLimiter, TokenCalcBounds, WithState};
+        use std::time::Duration;
+        use tokio_util::sync::CancellationToken;
+
+        #[derive(Clone)]
+        pub(super) enum StoreType {
+            InMemory,
+            Redis,
+        }
+
+        /// Test case struct for distributed rate limiter tests
+        /// Takes in the test parameters to be used for each test case.
+        ///
+        /// - [crate::tests::test_distributed_rate_limiter_multiple_pods_in_memory]
+        /// - [crate::tests::test_distributed_rate_limiter_multiple_pods_redis]
+        ///
+        pub(super) struct TestCase {
+            /// The maximum number of tokens that can be stored in the bucket
+            pub(super) max_tokens: usize,
+            /// The number of tokens that can be burst in a single second
+            pub(super) burst_tokens: usize,
+            /// The duration of the bucket
+            pub(super) duration: Duration,
+            /// The number of pods
+            pub(super) pod_count: usize,
+            /// The store name (String) to initialize for the test
+            pub(super) store_type: StoreType,
+            /// The name of the test
+            pub(super) test_name: String,
+            /// Tuple of tokens asked in each iteration by *each* pod and count of epochs after which
+            /// the next set of tokens are asked.
+            /// Second item in the tuple refers to the number of epochs after which the next set of
+            /// tokens are going to be fetched, not the tokens specified in the current tuple.
+            /// Eg:
+            /// This test case: [(None, 3), (Some(2), 1)], specifies that fetch all tokens at 0th
+            /// epoch and fetch 2 tokens after 3 epochs.
+            pub(super) asked_tokens: Vec<(Option<usize>, usize)>,
+            // Tokens expected to be returned by rate limiter in each iteration to *each* pod
+            pub(super) expected_tokens: Vec<usize>,
+            // The throttling mode of the rate limiter
+            // defaults to Relaxed
+            pub(super) mode: Mode,
+        }
+
+        impl TestCase {
+            // Creates a new test case with certain default values
+            // Created to make it easier to add new params to test cases
+            // without changing initialization of it in existing tests.
+            pub(super) fn new(
+                max_tokens: usize,
+                burst_tokens: usize,
+                duration: Duration,
+                pod_count: usize,
+                asked_tokens: Vec<(Option<usize>, usize)>,
+                expected_tokens: Vec<usize>,
+            ) -> Self {
+                TestCase {
+                    max_tokens,
+                    burst_tokens,
+                    duration,
+                    pod_count,
+                    asked_tokens,
+                    expected_tokens,
+                    store_type: StoreType::InMemory,
+                    test_name: String::new(),
+                    mode: Mode::Relaxed,
+                }
+            }
+
+            pub(super) fn store_type(mut self, store_type: StoreType) -> Self {
+                self.store_type = store_type;
+                self
+            }
+
+            pub(super) fn test_name(mut self, test_name: String) -> Self {
+                self.test_name = test_name;
+                self
+            }
+
+            pub(super) fn mode(mut self, mode: Mode) -> Self {
+                self.mode = mode;
+                self
+            }
+        }
+
+        /// A generic utility function to test rate limiter with generic state
+        /// Test runner for:
+        /// - [crate::tests::test_distributed_rate_limiter_multiple_pods_in_memory]
+        /// - [crate::tests::test_distributed_rate_limiter_multiple_pods_redis]
+        ///
+        async fn test_rate_limiter_with_state<S: Store + Sync>(
+            // A trait object that implements the [Store] trait
+            store: S,
+            // A struct containing the test parameters
+            test_case: TestCase,
+        ) {
+            let TestCase {
+                max_tokens,
+                burst_tokens,
+                duration,
+                pod_count,
+                store_type: _store_type,
+                test_name,
+                asked_tokens,
+                expected_tokens,
+                mode,
+            } = test_case;
+            let cancel = CancellationToken::new();
+            let refresh_interval = Duration::from_millis(50);
+            let runway_update = OptimisticValidityUpdateSecs::default();
+            let bounds = TokenCalcBounds::new(max_tokens, burst_tokens, duration, mode);
+
+            assert_eq!(
+                asked_tokens.len(),
+                expected_tokens.len(),
+                "asked_tokens and expected_tokens should have same length for test: {}",
+                test_name
+            );
+
+            // create pod_count number of rate limiters with passed store
+            let mut rate_limiters = Vec::with_capacity(pod_count);
+            for i in 0..pod_count {
+                rate_limiters.push(
+                    RateLimit::<WithState<S>>::new(
+                        bounds.clone(),
+                        store.clone(),
+                        &format!("processor_{}", i),
+                        cancel.clone(),
+                        refresh_interval,
+                        runway_update.clone(),
+                    )
+                    .await
+                    .expect("Failed to create rate limiters"),
+                );
+            }
+
+            let iterations = asked_tokens.len();
+            let mut cur_epoch = 0;
+            for i in 0..iterations {
+                let mut total_got_tokens = 0;
+                let mut total_expected_tokens = 0;
+                for rate_limiter in rate_limiters.iter() {
+                    let tokens = rate_limiter
+                        .attempt_acquire_n(asked_tokens[i].0, cur_epoch)
+                        .await;
+                    assert_eq!(
+                        tokens, expected_tokens[i],
+                        "Test Name: {}\n\
+                        Number of tokens fetched in each iteration \
+                should increase by slope/pod_count until ramp up",
+                        test_name
+                    );
+                    total_got_tokens += tokens;
+                    total_expected_tokens += expected_tokens[i];
+                }
+                assert_eq!(
+                    total_got_tokens, total_expected_tokens,
+                    "Test Name: {}\n\
+                    Total number of tokens fetched in each iteration \
+                should be less than or equal to total expected tokens for each processor",
+                    test_name
+                );
+
+                // Determines after how many epochs next pull is going to be made.
+                cur_epoch += asked_tokens[i].1 as u64;
+            }
+
+            for rate_limiter in rate_limiters.iter() {
+                rate_limiter
+                    .shutdown()
+                    .await
+                    .expect("Rate limiter failed to shutdownj");
+            }
+        }
+
+        /// Utility function to run distributed rate limiter multiple pods test cases
+        /// Only here to iterate over the different test cases and initialize stores to
+        /// be used by the test cases.
+        pub(super) async fn run_distributed_rate_limiter_multiple_pods_test_cases(
+            // The test cases to run
+            test_cases: Vec<TestCase>,
+        ) {
+            for test_case in test_cases {
+                let store_type = test_case.store_type.clone();
+                let test_name = test_case.test_name.clone();
+                let temp_test_name = test_name.clone();
+
+                // Determining/initializing the store based on the store type here
+                // instead of passing a cloned store so that each test case gets its own store
+                // Necessary for redis store test cases.
+                match store_type {
+                    StoreType::InMemory => {
+                        let store = InMemoryStore::new();
+                        test_rate_limiter_with_state(store, test_case).await;
+                    }
+                    StoreType::Redis => {
+                        let store = match create_test_redis_store(temp_test_name.as_str()).await {
+                            Some(store) => store,
+                            None => return, // Skip test if Redis is not available
+                        };
+
+                        test_rate_limiter_with_state(store, test_case).await;
+                        cleanup_redis_keys(test_name.as_str());
+                    }
+                }
+            }
+        }
 
         /// Creates a Redis store for testing with a unique key prefix
         /// Returns None if Redis is not available
@@ -544,9 +791,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_acquire_all_tokens() {
-        let bounds = TokenCalcBounds::new(10, 5, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
-
+        let bounds = TokenCalcBounds::new(10, 5, Duration::from_secs(1), Mode::Relaxed);
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
         // Should get all 5 burst tokens initially
         let tokens = rate_limiter.acquire_n(None, None).await;
         assert_eq!(tokens, 5);
@@ -567,8 +820,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_acquire_specific_tokens() {
-        let bounds = TokenCalcBounds::new(10, 5, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let bounds = TokenCalcBounds::new(10, 5, Duration::from_secs(1), Mode::Relaxed);
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
 
         // Acquire 3 tokens
         let tokens = rate_limiter.acquire_n(Some(3), None).await;
@@ -585,8 +845,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_acquire_more_than_available() {
-        let bounds = TokenCalcBounds::new(10, 3, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let bounds = TokenCalcBounds::new(10, 3, Duration::from_secs(1), Mode::Relaxed);
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
 
         // Try to acquire 5 tokens when only 3 are available
         let tokens = rate_limiter.acquire_n(Some(5), None).await;
@@ -599,8 +866,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_token_refill_gradual() {
-        let bounds = TokenCalcBounds::new(10, 2, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let bounds = TokenCalcBounds::new(10, 2, Duration::from_secs(1), Mode::Relaxed);
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
 
         // Consume initial burst tokens
         let tokens = rate_limiter.acquire_n(None, None).await;
@@ -618,8 +892,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_token_refill_capped_at_max() {
-        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1), Mode::Relaxed);
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
 
         // Consume initial tokens
         rate_limiter.acquire_n(None, None).await;
@@ -640,19 +914,26 @@ mod tests {
         assert_eq!(bounds.max, 1);
         assert_eq!(bounds.min, 1);
 
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
         let tokens = rate_limiter.acquire_n(None, None).await;
         assert_eq!(tokens, 1);
     }
 
     #[tokio::test]
     async fn test_custom_token_calc_bounds() {
-        let bounds = TokenCalcBounds::new(20, 5, Duration::from_secs(2));
+        let bounds = TokenCalcBounds::new(20, 5, Duration::from_secs(2), Mode::Relaxed);
         assert_eq!(bounds.max, 20);
         assert_eq!(bounds.min, 5);
         assert_eq!(bounds.slope, 7.5); // (20-5)/2
 
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
         let tokens = rate_limiter.acquire_n(None, None).await;
         assert_eq!(tokens, 5);
     }
@@ -661,12 +942,19 @@ mod tests {
     async fn test_fractional_slope_accumulation() {
         // Test case: max=2, min=1, ramp_up=10s
         // slope = (2-1)/10 = 0.1 tokens per second
-        let bounds = TokenCalcBounds::new(2, 1, Duration::from_secs(10));
+        let bounds = TokenCalcBounds::new(2, 1, Duration::from_secs(10), Mode::Relaxed);
         assert_eq!(bounds.max, 2);
         assert_eq!(bounds.min, 1);
         assert_eq!(bounds.slope, 0.1); // (2-1)/10
 
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
 
         // Initially should have 1 token (burst)
         let tokens = rate_limiter.acquire_n(None, None).await;
@@ -719,8 +1007,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_concurrent_token_acquisition() {
-        let bounds = TokenCalcBounds::new(10, 10, Duration::from_secs(1));
-        let rate_limiter = Arc::new(RateLimit::<WithoutDistributedState>::new(bounds).unwrap());
+        let bounds = TokenCalcBounds::new(10, 10, Duration::from_secs(1), Mode::Relaxed);
+        let rate_limiter = Arc::new(RateLimit::<WithoutState>::new(bounds).unwrap());
 
         let mut join_set = tokio::task::JoinSet::new();
 
@@ -739,8 +1027,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_timeout_with_available_tokens() {
-        let bounds = TokenCalcBounds::new(5, 3, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let bounds = TokenCalcBounds::new(5, 3, Duration::from_secs(1), Mode::Relaxed);
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
 
         // Should return immediately when tokens are available
         let start = std::time::Instant::now();
@@ -755,8 +1043,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_timeout_when_tokens_exhausted() {
-        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1), Mode::Relaxed);
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
 
         rate_limiter.last_queried_epoch.store(
             SystemTime::now()
@@ -777,8 +1065,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_no_timeout_returns_immediately() {
-        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1), Mode::Relaxed);
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
 
         // Consume all available tokens
         let tokens = rate_limiter.acquire_n(None, None).await;
@@ -796,8 +1091,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_timeout_waits_for_next_epoch() {
-        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
+        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1), Mode::Relaxed);
+        let rate_limiter = RateLimit::<WithoutState>::new(bounds).unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
 
         // Consume all available tokens
         let tokens = rate_limiter.acquire_n(None, None).await;
@@ -821,18 +1123,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_distributed_rate_limiter_single_pod() {
+    async fn test_attempt_acquire_n_with_state_rate_limiter_single_pod() {
         use crate::state::OptimisticValidityUpdateSecs;
         use crate::state::store::in_memory_store::InMemoryStore;
 
-        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(1));
+        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(10), Mode::Relaxed);
+        // time 0 -> 10
+        // time 1 -> 11
+        // time 2 -> 12
+        // time 3 -> 13
+        // time 10 -> 20
         let store = InMemoryStore::new();
         let cancel = CancellationToken::new();
         let refresh_interval = Duration::from_millis(100);
         let runway_update = OptimisticValidityUpdateSecs::default();
 
+        // expected = [10,11,12 .. .20]
+        // input = for from=time to=time+end
+        // result = [] populated while running for loop
+        // assert_eq!(result, expected)
+
         // Create a single distributed rate limiter
-        let rate_limiter = RateLimit::<WithDistributedState<InMemoryStore>>::new(
+        let rate_limiter = RateLimit::<WithState<InMemoryStore>>::new(
             bounds,
             store.clone(),
             "processor_1",
@@ -842,6 +1154,63 @@ mod tests {
         )
         .await
         .unwrap();
+
+        // initial state(0th second) we can acquire min number of tokens.
+        let mut cur_epoch = 0;
+        let attempt = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
+        assert_eq!(attempt, 10, "Single pod should get full burst tokens");
+
+        // Since the slope is 1, we should get 1 more token each second until we reach
+        // the max rate limit (20).
+        for i in 1..10 {
+            cur_epoch += 1;
+            let attempt = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
+            assert_eq!(
+                attempt,
+                10 + i,
+                "No tokens should be available in same epoch"
+            );
+        }
+
+        let attempt = rate_limiter.attempt_acquire_n(None, cur_epoch).await;
+        assert_eq!(attempt, 0, "No tokens should be available in same epoch");
+
+        let attempt = rate_limiter.attempt_acquire_n(None, cur_epoch + 1).await;
+        assert_eq!(attempt, 20, "No tokens should be available in same epoch");
+
+        // Clean up
+        cancel.cancel();
+    }
+
+    #[tokio::test]
+    async fn test_distributed_rate_limiter_single_pod() {
+        use crate::state::OptimisticValidityUpdateSecs;
+        use crate::state::store::in_memory_store::InMemoryStore;
+
+        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(1), Mode::Relaxed);
+        let store = InMemoryStore::new();
+        let cancel = CancellationToken::new();
+        let refresh_interval = Duration::from_millis(100);
+        let runway_update = OptimisticValidityUpdateSecs::default();
+
+        // Create a single distributed rate limiter
+        let rate_limiter = RateLimit::<WithState<InMemoryStore>>::new(
+            bounds,
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update,
+        )
+        .await
+        .unwrap();
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
 
         // With a single pod, it should get the full burst allocation
         let tokens = rate_limiter.acquire_n(None, None).await;
@@ -867,125 +1236,441 @@ mod tests {
         cancel.cancel();
     }
 
-    // ignore this test for now since it is flaky
+    /// Test distributed rate limiter with multiple pods (1 or more)
+    /// using InMemoryStore as the state store
     #[tokio::test]
-    #[ignore]
-    async fn test_distributed_rate_limiter_multiple_pods() {
-        use crate::state::OptimisticValidityUpdateSecs;
-        use crate::state::store::in_memory_store::InMemoryStore;
+    async fn test_distributed_rate_limiter_multiple_pods_in_memory() {
+        let test_cases = vec![
+            // Fractional slope (>1) with multiple pods
+            // Acquire all tokens at each epoch
+            // Immediately ask for tokens after first epoch
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![7, 9, 0, 12, 14, 16, 18, 21, 23, 25, 27, 30],
+            ),
+            // Fractional slope (>1) with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![7, 9, 12, 14, 16, 18, 21, 23, 25, 27, 30],
+            ),
+            // Fractional slope (>1) with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(20), 1); 11],
+                vec![7, 9, 12, 14, 16, 18, 20, 20, 20, 20, 20],
+            ),
+            // Fractional slope (<1) with multiple pods
+            // Acquire all tokens
+            // Immediately ask for tokens in the same epoch after receiving 1 token
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                ],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+            ),
+            // Fractional slope (<1) with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            ),
+            // Fractional slope (<1) with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(1), 1); 11],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            ),
+            // Integer slope with multiple pods
+            // Acquire tokens more than max
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(30), 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            ),
+            // Integer slope with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            ),
+            // Integer slope with multiple pods
+            // Acquire tokens less than max
+            // Combination of immediate and non-immediate token requests
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(1), 0),
+                    (Some(2), 1),
+                    (Some(1), 0),
+                    (Some(3), 1),
+                    (Some(1), 0),
+                    (Some(4), 2),
+                    (Some(1), 0),
+                    (Some(10), 1),
+                    (Some(2), 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (Some(5), 1),
+                    (None, 1),
+                ],
+                vec![1, 2, 1, 3, 1, 4, 1, 5, 2, 5, 7, 8, 8, 9, 9, 5, 10],
+            ),
+            // Integer slope with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(1), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            ),
+            // Fractional slope with single pod
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(None, 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+            ),
+            // Fractional slope with single pod
+            // Acquire tokens more than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(Some(5), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+            ),
+            // Fractional slope with single pod
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(Some(1), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            ),
+        ];
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
+    }
 
-        let bounds = TokenCalcBounds::new(30, 15, Duration::from_secs(1));
-        let store = InMemoryStore::new();
-        let cancel = CancellationToken::new();
-        let refresh_interval = Duration::from_millis(50);
-        let runway_update = OptimisticValidityUpdateSecs::default();
-
-        // Create three distributed rate limiters (simulating 3 pods)
-        let rate_limiter_1 = RateLimit::<WithDistributedState<InMemoryStore>>::new(
-            bounds.clone(),
-            store.clone(),
-            "processor_1",
-            cancel.clone(),
-            refresh_interval,
-            runway_update.clone(),
-        )
-        .await
-        .unwrap();
-
-        let rate_limiter_2 = RateLimit::<WithDistributedState<InMemoryStore>>::new(
-            bounds.clone(),
-            store.clone(),
-            "processor_2",
-            cancel.clone(),
-            refresh_interval,
-            runway_update.clone(),
-        )
-        .await
-        .unwrap();
-
-        let rate_limiter_3 = RateLimit::<WithDistributedState<InMemoryStore>>::new(
-            bounds.clone(),
-            store.clone(),
-            "processor_3",
-            cancel.clone(),
-            refresh_interval,
-            runway_update,
-        )
-        .await
-        .unwrap();
-
-        // Wait for consensus to be reached among all pods
-        tokio::time::sleep(Duration::from_millis(300)).await;
-
-        // Each pod should get 1/3 of the burst tokens (15/3 = 5)
-        let tokens_1 = rate_limiter_1.acquire_n(None, None).await;
-        let tokens_2 = rate_limiter_2.acquire_n(None, None).await;
-        let tokens_3 = rate_limiter_3.acquire_n(None, None).await;
-
-        // Each pod should get equal share
-        assert_eq!(tokens_1, 5, "Pod 1 should get 1/3 of burst tokens");
-        assert_eq!(tokens_2, 5, "Pod 2 should get 1/3 of burst tokens");
-        assert_eq!(tokens_3, 5, "Pod 3 should get 1/3 of burst tokens");
-
-        // Total tokens distributed should equal burst
-        assert_eq!(
-            tokens_1 + tokens_2 + tokens_3,
-            15,
-            "Total distributed should equal burst"
-        );
-
-        // Force time passage for all pods to trigger refill
-        rate_limiter_1
-            .last_queried_epoch
-            .store(0, std::sync::atomic::Ordering::Release);
-        rate_limiter_2
-            .last_queried_epoch
-            .store(0, std::sync::atomic::Ordering::Release);
-        rate_limiter_3
-            .last_queried_epoch
-            .store(0, std::sync::atomic::Ordering::Release);
-
-        // After refill, each pod should get 1/3 of max tokens (30/3 = 10)
-        let tokens_1_refill = rate_limiter_1.acquire_n(None, None).await;
-        let tokens_2_refill = rate_limiter_2.acquire_n(None, None).await;
-        let tokens_3_refill = rate_limiter_3.acquire_n(None, None).await;
-
-        assert_eq!(
-            tokens_1_refill, 10,
-            "Pod 1 should get 1/3 of max tokens after refill"
-        );
-        assert_eq!(
-            tokens_2_refill, 10,
-            "Pod 2 should get 1/3 of max tokens after refill"
-        );
-        assert_eq!(
-            tokens_3_refill, 10,
-            "Pod 3 should get 1/3 of max tokens after refill"
-        );
-
-        // Total tokens after refill should equal max
-        assert_eq!(
-            tokens_1_refill + tokens_2_refill + tokens_3_refill,
-            30,
-            "Total distributed after refill should equal max"
-        );
-
-        // Test partial token acquisition
-        rate_limiter_1
-            .last_queried_epoch
-            .store(0, std::sync::atomic::Ordering::Release);
-
-        let partial_tokens = rate_limiter_1.acquire_n(Some(3), None).await;
-        assert_eq!(
-            partial_tokens, 3,
-            "Should acquire exactly 3 tokens when requested"
-        );
-
-        let remaining_tokens = rate_limiter_1.acquire_n(None, None).await;
-        assert_eq!(remaining_tokens, 7, "Should get remaining 7 tokens");
-
-        // Clean up
-        cancel.cancel();
+    #[tokio::test]
+    async fn test_distributed_rate_limiter_only_scheduled_mode() {
+        let test_cases = vec![
+            // Integer slope with multiple pods
+            // Keep acquiring min tokens with regular gaps in epochs between calls
+            // Acquire None tokens here and there to check the max tokens shelled out.
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(2), 2),
+                    (Some(2), 2),
+                    (None, 2),
+                    (Some(2), 2),
+                    (None, 2),
+                    (Some(2), 2),
+                    (None, 2),
+                    (None, 2),
+                ],
+                vec![2, 2, 7, 2, 9, 2, 10, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_1".to_string())
+            .mode(Mode::Scheduled),
+            // Integer slope with multiple pods
+            // Acquire tokens more than max tokens after extended gaps between epochs
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(30), 1),
+                    (Some(30), 3),
+                    (Some(30), 2),
+                    (Some(30), 4),
+                    (Some(30), 1),
+                    (Some(30), 1),
+                ],
+                vec![5, 5, 7, 8, 10, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_2".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope (>1) with multiple pods
+            // Acquire all tokens at each epoch
+            // Immediately ask for tokens after first epoch
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![7, 9, 0, 12, 14, 16, 18, 21, 23, 25, 27, 30],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_3".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope (>1) with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![7, 9, 12, 14, 16, 18, 21, 23, 25, 27, 30],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_4".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope (>1) with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(20), 1); 11],
+                vec![7, 9, 12, 14, 16, 18, 20, 20, 20, 20, 20],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_5".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope (<1) with multiple pods
+            // Acquire all tokens
+            // Immediately ask for tokens in the same epoch after receiving 1 token
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                ],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_6".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope (<1) with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_7".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope (<1) with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(1), 1); 11],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_8".to_string())
+            .mode(Mode::Scheduled),
+            // Integer slope with multiple pods
+            // Acquire tokens more than max
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(30), 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_9".to_string())
+            .mode(Mode::Scheduled),
+            // Integer slope with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_10".to_string())
+            .mode(Mode::Scheduled),
+            // Integer slope with multiple pods
+            // Acquire tokens less than max
+            // Combination of immediate and non-immediate token requests
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(1), 0),
+                    (Some(2), 1),
+                    (Some(1), 0),
+                    (Some(3), 1),
+                    (Some(1), 0),
+                    (Some(4), 2),
+                    (Some(1), 0),
+                    (Some(10), 1),
+                    (Some(2), 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (Some(5), 1),
+                    (None, 1),
+                ],
+                vec![1, 2, 1, 3, 1, 4, 1, 6, 2, 5, 8, 8, 9, 9, 10, 5, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_11".to_string())
+            .mode(Mode::Scheduled),
+            // Integer slope with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(1), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_12".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope with single pod
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(None, 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_13".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope with single pod
+            // Acquire tokens more than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(Some(5), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_14".to_string())
+            .mode(Mode::Scheduled),
+            // Fractional slope with single pod
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(Some(1), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_15".to_string())
+            .mode(Mode::Scheduled),
+        ];
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
 
     #[tokio::test]
@@ -994,14 +1679,14 @@ mod tests {
         use crate::state::store::in_memory_store::InMemoryStore;
 
         // Create a rate limiter with 30 max tokens, 15 burst, over 2 seconds
-        let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9));
+        let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9), Mode::Relaxed);
         let store = InMemoryStore::new();
         let cancel = CancellationToken::new();
         let refresh_interval = Duration::from_millis(50);
         let runway_update = OptimisticValidityUpdateSecs::default();
 
         // Create three distributed rate limiters (simulating 3 pods)
-        let rate_limiter_1 = RateLimit::<WithDistributedState<InMemoryStore>>::new(
+        let rate_limiter_1 = RateLimit::<WithState<InMemoryStore>>::new(
             bounds.clone(),
             store.clone(),
             "processor_1",
@@ -1012,7 +1697,7 @@ mod tests {
         .await
         .unwrap();
 
-        let rate_limiter_2 = RateLimit::<WithDistributedState<InMemoryStore>>::new(
+        let rate_limiter_2 = RateLimit::<WithState<InMemoryStore>>::new(
             bounds.clone(),
             store.clone(),
             "processor_2",
@@ -1023,7 +1708,7 @@ mod tests {
         .await
         .unwrap();
 
-        let rate_limiter_3 = RateLimit::<WithDistributedState<InMemoryStore>>::new(
+        let rate_limiter_3 = RateLimit::<WithState<InMemoryStore>>::new(
             bounds.clone(),
             store.clone(),
             "processor_3",
@@ -1034,36 +1719,24 @@ mod tests {
         .await
         .unwrap();
 
-        // Wait for consensus to be reached among all pods
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        let mut cur_epoch = 1;
 
         // Phase 1: Each pod requests a specific number of tokens
-        let tokens_1_phase1 = rate_limiter_1.acquire_n(Some(2), None).await;
-        let tokens_2_phase1 = rate_limiter_2.acquire_n(Some(2), None).await;
-        let tokens_3_phase1 = rate_limiter_3.acquire_n(Some(2), None).await;
-
-        println!("Phase 1 - Specific token requests:");
-        println!("Pod 1 got: {} tokens", tokens_1_phase1);
-        println!("Pod 2 got: {} tokens", tokens_2_phase1);
-        println!("Pod 3 got: {} tokens", tokens_3_phase1);
+        let tokens_1_phase1 = rate_limiter_1.attempt_acquire_n(Some(2), cur_epoch).await;
+        let tokens_2_phase1 = rate_limiter_2.attempt_acquire_n(Some(2), cur_epoch).await;
+        let tokens_3_phase1 = rate_limiter_3.attempt_acquire_n(Some(2), cur_epoch).await;
 
         // Each pod should get some tokens (may not be exactly 2 due to pool division)
         assert!(tokens_1_phase1 > 0, "Pod 1 should get some tokens");
         assert!(tokens_2_phase1 > 0, "Pod 2 should get some tokens");
         assert!(tokens_3_phase1 > 0, "Pod 3 should get some tokens");
 
-        println!("Waiting for token refill...");
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        cur_epoch += 2;
 
         // Phase 2: Each pod tries to acquire all available tokens
-        let tokens_1_phase2 = rate_limiter_1.acquire_n(None, None).await;
-        let tokens_2_phase2 = rate_limiter_2.acquire_n(None, None).await;
-        let tokens_3_phase2 = rate_limiter_3.acquire_n(None, None).await;
-
-        println!("Phase 2 - Acquire all available tokens:");
-        println!("Pod 1 got: {} tokens", tokens_1_phase2);
-        println!("Pod 2 got: {} tokens", tokens_2_phase2);
-        println!("Pod 3 got: {} tokens", tokens_3_phase2);
+        let tokens_1_phase2 = rate_limiter_1.attempt_acquire_n(None, cur_epoch).await;
+        let tokens_2_phase2 = rate_limiter_2.attempt_acquire_n(None, cur_epoch).await;
+        let tokens_3_phase2 = rate_limiter_3.attempt_acquire_n(None, cur_epoch).await;
 
         // After refill, each pod should get more tokens
         assert!(tokens_1_phase2 > 0, "Pod 1 should get tokens after refill");
@@ -1074,27 +1747,128 @@ mod tests {
         let total_phase1 = tokens_1_phase1 + tokens_2_phase1 + tokens_3_phase1;
         let total_phase2 = tokens_1_phase2 + tokens_2_phase2 + tokens_3_phase2;
 
-        println!("Total tokens phase 1: {}", total_phase1);
-        println!("Total tokens phase 2: {}", total_phase2);
-
         // Due to time-based truncation and distributed consensus, we can't expect exact values,
         // but we should see reasonable token distribution
         assert!(total_phase1 > 0, "Should distribute some tokens in phase 1");
         assert!(total_phase2 > 0, "Should distribute some tokens in phase 2");
 
         // Phase 3: Try to acquire more tokens immediately (should get 0 or very few)
-        let tokens_1_phase3 = rate_limiter_1.acquire_n(Some(5), None).await;
-        let tokens_2_phase3 = rate_limiter_2.acquire_n(Some(5), None).await;
-        let tokens_3_phase3 = rate_limiter_3.acquire_n(Some(5), None).await;
-
-        println!("Phase 3 - Immediate retry:");
-        println!("Pod 1 got: {} tokens", tokens_1_phase3);
-        println!("Pod 2 got: {} tokens", tokens_2_phase3);
-        println!("Pod 3 got: {} tokens", tokens_3_phase3);
+        let tokens_1_phase3 = rate_limiter_1.attempt_acquire_n(Some(5), cur_epoch).await;
+        let tokens_2_phase3 = rate_limiter_2.attempt_acquire_n(Some(5), cur_epoch).await;
+        let tokens_3_phase3 = rate_limiter_3.attempt_acquire_n(Some(5), cur_epoch).await;
 
         // Should get very few or no tokens immediately after exhausting the pool
         let total_phase3 = tokens_1_phase3 + tokens_2_phase3 + tokens_3_phase3;
-        println!("Total tokens phase 3: {}", total_phase3);
+
+        assert_eq!(total_phase3, 0, "Should distribute no tokens in phase 3");
+
+        // Clean up
+        cancel.cancel();
+    }
+
+    // Simple test for acquire_n with in-memory store
+    #[tokio::test]
+    async fn test_distributed_rate_limiter_simple_acquire_n_in_memory_store() {
+        use crate::state::OptimisticValidityUpdateSecs;
+        use crate::state::store::in_memory_store::InMemoryStore;
+
+        // Create a rate limiter with 30 max tokens, 15 burst, over 2 seconds
+        let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9), Mode::Relaxed);
+        let store = InMemoryStore::new();
+        let cancel = CancellationToken::new();
+        let refresh_interval = Duration::from_millis(50);
+        let runway_update = OptimisticValidityUpdateSecs::default();
+        let pod_count = 3;
+
+        // create pod_count number of rate limiters with in memory store
+        let mut rate_limiters = Vec::with_capacity(pod_count);
+        for i in 0..pod_count {
+            rate_limiters.push(
+                RateLimit::<WithState<InMemoryStore>>::new(
+                    bounds.clone(),
+                    store.clone(),
+                    &format!("processor_{}", i),
+                    cancel.clone(),
+                    refresh_interval,
+                    runway_update.clone(),
+                )
+                .await
+                .expect("Failed to create rate limiters"),
+            );
+        }
+
+        // Phase 1: Each pod requests all tokens
+        let mut total_got_tokens_phase1 = 0;
+        let mut total_expected_tokens_phase1 = 0;
+        for rate_limiter in rate_limiters.iter() {
+            let tokens = rate_limiter.acquire_n(None, None).await;
+            assert_eq!(
+                tokens, 16,
+                "Number of tokens fetched in each iteration \
+                should increase by slope/pod_count until ramp up",
+            );
+            total_got_tokens_phase1 += tokens;
+            total_expected_tokens_phase1 += 16;
+        }
+        assert_eq!(
+            total_got_tokens_phase1, total_expected_tokens_phase1,
+            "Total number of tokens fetched in each iteration \
+                should be equal to total expected tokens for each processor",
+        );
+
+        // Phase 2: Wait for some time to allow token refill
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        // Phase 2: Each pod tries to acquire all available tokens
+        let mut total_got_tokens_phase2 = 0;
+        let mut total_expected_tokens_phase2 = 0;
+        for rate_limiter in rate_limiters.iter() {
+            let tokens = rate_limiter.acquire_n(None, None).await;
+            assert_eq!(
+                tokens, 18,
+                "Number of tokens fetched in each iteration \
+                should increase by slope/pod_count until ramp up",
+            );
+            total_got_tokens_phase2 += tokens;
+            total_expected_tokens_phase2 += 18;
+        }
+        assert_eq!(
+            total_got_tokens_phase2, total_expected_tokens_phase2,
+            "Total number of tokens fetched in each iteration \
+                should be equal to total expected tokens for each processor",
+        );
+
+        // Phase 2 should have more tokens than phase 1
+        assert!(total_got_tokens_phase2 > total_got_tokens_phase1);
+
+        // Phase 3: Wait for some time to allow token refill
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        // Phase 3: Each pod tries to acquire some available tokens
+        let mut total_got_tokens_phase3 = 0;
+        let mut total_expected_tokens_phase3 = 0;
+        for rate_limiter in rate_limiters.iter() {
+            let tokens = rate_limiter.acquire_n(Some(2), None).await;
+            assert_eq!(
+                tokens, 2,
+                "Number of tokens fetched in each iteration \
+                should be exactly what we asked for",
+            );
+            total_got_tokens_phase3 += tokens;
+            total_expected_tokens_phase3 += 2;
+        }
+        assert_eq!(
+            total_got_tokens_phase3, total_expected_tokens_phase3,
+            "Total number of tokens fetched in each iteration \
+                should be equal to total expected tokens for each processor",
+        );
+
+        for rate_limiter in rate_limiters.iter() {
+            rate_limiter
+                .shutdown()
+                .await
+                .expect("Rate limiter failed to shutdown");
+        }
 
         // Clean up
         cancel.cancel();
@@ -1113,14 +1887,14 @@ mod tests {
         };
 
         // Create a rate limiter with 90 max tokens, 45 burst, over 9 seconds
-        let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9));
+        let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9), Mode::Relaxed);
 
         let cancel = CancellationToken::new();
         let refresh_interval = Duration::from_millis(50);
         let runway_update = OptimisticValidityUpdateSecs::default();
 
         // Create three distributed rate limiters (simulating 3 pods)
-        let rate_limiter_1 = RateLimit::<WithDistributedState<RedisStore>>::new(
+        let rate_limiter_1 = RateLimit::<WithState<RedisStore>>::new(
             bounds.clone(),
             store.clone(),
             "processor_1",
@@ -1131,7 +1905,7 @@ mod tests {
         .await
         .unwrap();
 
-        let rate_limiter_2 = RateLimit::<WithDistributedState<RedisStore>>::new(
+        let rate_limiter_2 = RateLimit::<WithState<RedisStore>>::new(
             bounds.clone(),
             store.clone(),
             "processor_2",
@@ -1142,7 +1916,7 @@ mod tests {
         .await
         .unwrap();
 
-        let rate_limiter_3 = RateLimit::<WithDistributedState<RedisStore>>::new(
+        let rate_limiter_3 = RateLimit::<WithState<RedisStore>>::new(
             bounds.clone(),
             store.clone(),
             "processor_3",
@@ -1154,17 +1928,12 @@ mod tests {
         .unwrap();
 
         // Wait for consensus to be reached among all pods
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        let mut cur_epoch = 1;
 
         // Phase 1: Each pod requests a specific number of tokens
-        let tokens_1_phase1 = rate_limiter_1.acquire_n(Some(2), None).await;
-        let tokens_2_phase1 = rate_limiter_2.acquire_n(Some(2), None).await;
-        let tokens_3_phase1 = rate_limiter_3.acquire_n(Some(2), None).await;
-
-        println!("Phase 1 - Specific token requests:");
-        println!("Pod 1 got: {} tokens", tokens_1_phase1);
-        println!("Pod 2 got: {} tokens", tokens_2_phase1);
-        println!("Pod 3 got: {} tokens", tokens_3_phase1);
+        let tokens_1_phase1 = rate_limiter_1.attempt_acquire_n(Some(2), cur_epoch).await;
+        let tokens_2_phase1 = rate_limiter_2.attempt_acquire_n(Some(2), cur_epoch).await;
+        let tokens_3_phase1 = rate_limiter_3.attempt_acquire_n(Some(2), cur_epoch).await;
 
         // Each pod should get some tokens (may not be exactly 2 due to pool division)
         assert!(tokens_1_phase1 > 0, "Pod 1 should get some tokens");
@@ -1180,17 +1949,12 @@ mod tests {
         );
 
         // Phase 2: Wait for some time to allow token refill
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        cur_epoch += 2;
 
         // Phase 2: Request tokens again to test refill
-        let tokens_1_phase2 = rate_limiter_1.acquire_n(Some(3), None).await;
-        let tokens_2_phase2 = rate_limiter_2.acquire_n(Some(3), None).await;
-        let tokens_3_phase2 = rate_limiter_3.acquire_n(Some(3), None).await;
-
-        println!("Phase 2 - After refill:");
-        println!("Pod 1 got: {} tokens", tokens_1_phase2);
-        println!("Pod 2 got: {} tokens", tokens_2_phase2);
-        println!("Pod 3 got: {} tokens", tokens_3_phase2);
+        let tokens_1_phase2 = rate_limiter_1.attempt_acquire_n(Some(3), cur_epoch).await;
+        let tokens_2_phase2 = rate_limiter_2.attempt_acquire_n(Some(3), cur_epoch).await;
+        let tokens_3_phase2 = rate_limiter_3.attempt_acquire_n(Some(3), cur_epoch).await;
 
         // Should get more tokens due to refill
         let total_tokens_phase2 = tokens_1_phase2 + tokens_2_phase2 + tokens_3_phase2;
@@ -1200,14 +1964,9 @@ mod tests {
         );
 
         // Phase 3: Test exhaustion - try to get many tokens
-        let tokens_1_phase3 = rate_limiter_1.acquire_n(Some(50), None).await;
-        let tokens_2_phase3 = rate_limiter_2.acquire_n(Some(50), None).await;
-        let tokens_3_phase3 = rate_limiter_3.acquire_n(Some(50), None).await;
-
-        println!("Phase 3 - Exhaustion test:");
-        println!("Pod 1 got: {} tokens", tokens_1_phase3);
-        println!("Pod 2 got: {} tokens", tokens_2_phase3);
-        println!("Pod 3 got: {} tokens", tokens_3_phase3);
+        let tokens_1_phase3 = rate_limiter_1.attempt_acquire_n(Some(50), cur_epoch).await;
+        let tokens_2_phase3 = rate_limiter_2.attempt_acquire_n(Some(50), cur_epoch).await;
+        let tokens_3_phase3 = rate_limiter_3.attempt_acquire_n(Some(50), cur_epoch).await;
 
         // Should get fewer tokens as the bucket is getting exhausted
         let total_tokens_phase3 = tokens_1_phase3 + tokens_2_phase3 + tokens_3_phase3;
@@ -1222,5 +1981,640 @@ mod tests {
 
         // Clean up
         cancel.cancel();
+    }
+
+    // Simple test for acquire_n with redis store
+    #[tokio::test]
+    #[cfg(feature = "redis-tests")]
+    async fn test_distributed_rate_limiter_simple_acquire_n_redis_store() {
+        use crate::state::OptimisticValidityUpdateSecs;
+        use crate::state::store::redis_store::RedisStore;
+
+        // Create a rate limiter with 30 max tokens, 15 burst, over 2 seconds
+        let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9), Mode::Relaxed);
+        // Create Redis store for testing
+        let store =
+            match test_utils::create_test_redis_store("simple_acquire_n_rate_limiter_test").await {
+                Some(store) => store,
+                None => return, // Skip test if Redis is not available
+            };
+        let cancel = CancellationToken::new();
+        let refresh_interval = Duration::from_millis(50);
+        let runway_update = OptimisticValidityUpdateSecs::default();
+        let pod_count = 3;
+
+        // create pod_count number of rate limiters with in memory store
+        let mut rate_limiters = Vec::with_capacity(pod_count);
+        for i in 0..pod_count {
+            rate_limiters.push(
+                RateLimit::<WithState<RedisStore>>::new(
+                    bounds.clone(),
+                    store.clone(),
+                    &format!("processor_{}", i),
+                    cancel.clone(),
+                    refresh_interval,
+                    runway_update.clone(),
+                )
+                .await
+                .expect("Failed to create rate limiters"),
+            );
+        }
+
+        // Phase 1: Each pod requests all tokens
+        let mut total_got_tokens_phase1 = 0;
+        let mut total_expected_tokens_phase1 = 0;
+        for rate_limiter in rate_limiters.iter() {
+            let tokens = rate_limiter.acquire_n(None, None).await;
+            assert_eq!(
+                tokens, 16,
+                "Number of tokens fetched in each iteration \
+                should increase by slope/pod_count until ramp up",
+            );
+            total_got_tokens_phase1 += tokens;
+            total_expected_tokens_phase1 += 16;
+        }
+        assert_eq!(
+            total_got_tokens_phase1, total_expected_tokens_phase1,
+            "Total number of tokens fetched in each iteration \
+                should be equal to total expected tokens for each processor",
+        );
+
+        // Phase 2: Wait for some time to allow token refill
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        // Phase 2: Each pod tries to acquire all available tokens
+        let mut total_got_tokens_phase2 = 0;
+        let mut total_expected_tokens_phase2 = 0;
+        for rate_limiter in rate_limiters.iter() {
+            let tokens = rate_limiter.acquire_n(None, None).await;
+            assert_eq!(
+                tokens, 18,
+                "Number of tokens fetched in each iteration \
+                should increase by slope/pod_count until ramp up",
+            );
+            total_got_tokens_phase2 += tokens;
+            total_expected_tokens_phase2 += 18;
+        }
+        assert_eq!(
+            total_got_tokens_phase2, total_expected_tokens_phase2,
+            "Total number of tokens fetched in each iteration \
+                should be equal to total expected tokens for each processor",
+        );
+
+        // Phase 2 should have more tokens than phase 1
+        assert!(total_got_tokens_phase2 > total_got_tokens_phase1);
+
+        // Phase 3: Wait for some time to allow token refill
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        // Phase 3: Each pod tries to acquire some available tokens
+        let mut total_got_tokens_phase3 = 0;
+        let mut total_expected_tokens_phase3 = 0;
+        for rate_limiter in rate_limiters.iter() {
+            let tokens = rate_limiter.acquire_n(Some(2), None).await;
+            assert_eq!(
+                tokens, 2,
+                "Number of tokens fetched in each iteration \
+                should be exactly what we asked for",
+            );
+            total_got_tokens_phase3 += tokens;
+            total_expected_tokens_phase3 += 2;
+        }
+        assert_eq!(
+            total_got_tokens_phase3, total_expected_tokens_phase3,
+            "Total number of tokens fetched in each iteration \
+                should be equal to total expected tokens for each processor",
+        );
+
+        for rate_limiter in rate_limiters.iter() {
+            rate_limiter
+                .shutdown()
+                .await
+                .expect("Rate limiter failed to shutdownj");
+        }
+
+        test_utils::cleanup_redis_keys("simple_acquire_n_rate_limiter_test");
+        // Clean up
+        cancel.cancel();
+    }
+
+    /// Test distributed rate limiter with multiple pods (1 or more) using Redis as the state store
+    #[tokio::test]
+    #[cfg(feature = "redis-tests")]
+    async fn test_distributed_rate_limiter_multiple_pods_redis() {
+        let test_cases = vec![
+            // Fractional slope (>1) with multiple pods
+            // Acquire all tokens at each epoch
+            // Immediately ask for tokens after first epoch
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![7, 9, 0, 12, 14, 16, 18, 21, 23, 25, 27, 30],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=60, burst_tokens=15, duration=10s, pod_count=2"
+                    .to_string(),
+            )
+            .mode(Mode::Relaxed),
+            // Fractional slope (>1) with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![7, 9, 12, 14, 16, 18, 21, 23, 25, 27, 30],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=60, burst_tokens=15, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
+            // Fractional slope (>1) with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(20), 1); 11],
+                vec![7, 9, 12, 14, 16, 18, 20, 20, 20, 20, 20],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=60, burst_tokens=15, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
+            // Fractional slope (<1) with multiple pods
+            // Acquire all tokens
+            // Immediately ask for tokens in the same epoch after receiving 1 token
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                ],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
+            // Fractional slope (<1) with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
+            // Fractional slope (<1) with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(1), 1); 11],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
+            // Integer slope with multiple pods
+            // Acquire tokens more than max
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(30), 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
+            // Integer slope with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
+            // Integer slope with multiple pods
+            // Acquire tokens less than max
+            // Combination of immediate and non-immediate token requests
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(1), 0),
+                    (Some(2), 1),
+                    (Some(1), 0),
+                    (Some(3), 1),
+                    (Some(1), 0),
+                    (Some(4), 2),
+                    (Some(1), 0),
+                    (Some(10), 1),
+                    (Some(2), 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (Some(5), 1),
+                    (None, 1),
+                ],
+                vec![1, 2, 1, 3, 1, 4, 1, 5, 2, 5, 7, 8, 8, 9, 9, 5, 10],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
+            // Integer slope with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(1), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=20, burst_tokens=10, duration=10s, pod_count=2"
+                    .to_string(),
+            ),
+            // Fractional slope with single pod
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(None, 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1"
+                    .to_string(),
+            ),
+            // Fractional slope with single pod
+            // Acquire tokens more than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(Some(5), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1"
+                    .to_string(),
+            ),
+            // Fractional slope with single pod
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(Some(1), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            )
+            .store_type(test_utils::StoreType::Redis)
+            .test_name(
+                "RedisStore Test params: max_tokens=2, burst_tokens=1, duration=10s, pod_count=1"
+                    .to_string(),
+            ),
+        ];
+
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "redis-tests")]
+    async fn test_distributed_rate_limiter_only_scheduled_mode_redis() {
+        let test_cases = vec![
+            // Integer slope with multiple pods
+            // Keep acquiring min tokens with regular gaps in epochs between calls
+            // Acquire None tokens here and there to check the max tokens shelled out.
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(2), 2),
+                    (Some(2), 2),
+                    (None, 2),
+                    (Some(2), 2),
+                    (None, 2),
+                    (Some(2), 2),
+                    (None, 2),
+                    (None, 2),
+                ],
+                vec![2, 2, 7, 2, 9, 2, 10, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis1".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Integer slope with multiple pods
+            // Acquire tokens more than max tokens after extended gaps between epochs
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(30), 1),
+                    (Some(30), 3),
+                    (Some(30), 2),
+                    (Some(30), 4),
+                    (Some(30), 1),
+                    (Some(30), 1),
+                ],
+                vec![5, 5, 7, 8, 10, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis2".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope (>1) with multiple pods
+            // Acquire all tokens at each epoch
+            // Immediately ask for tokens after first epoch
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                ],
+                vec![7, 9, 0, 12, 14, 16, 18, 21, 23, 25, 27, 30],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis3".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope (>1) with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![7, 9, 12, 14, 16, 18, 21, 23, 25, 27, 30],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis4".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope (>1) with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                60,
+                15,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(20), 1); 11],
+                vec![7, 9, 12, 14, 16, 18, 20, 20, 20, 20, 20],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis5".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope (<1) with multiple pods
+            // Acquire all tokens
+            // Immediately ask for tokens in the same epoch after receiving 1 token
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 0),
+                    (None, 1),
+                ],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis6".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope (<1) with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis7".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope (<1) with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(1), 1); 11],
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis8".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Integer slope with multiple pods
+            // Acquire tokens more than max
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(30), 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis9".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Integer slope with multiple pods
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(None, 1); 11],
+                vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis10".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Integer slope with multiple pods
+            // Acquire tokens less than max
+            // Combination of immediate and non-immediate token requests
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![
+                    (Some(1), 0),
+                    (Some(2), 1),
+                    (Some(1), 0),
+                    (Some(3), 1),
+                    (Some(1), 0),
+                    (Some(4), 2),
+                    (Some(1), 0),
+                    (Some(10), 1),
+                    (Some(2), 0),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (None, 1),
+                    (Some(5), 1),
+                    (None, 1),
+                ],
+                vec![1, 2, 1, 3, 1, 4, 1, 6, 2, 5, 8, 8, 9, 9, 10, 5, 10],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis11".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Integer slope with multiple pods
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                20,
+                10,
+                Duration::from_secs(10),
+                2,
+                vec![(Some(1), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis12".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope with single pod
+            // Acquire all tokens
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(None, 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis13".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope with single pod
+            // Acquire tokens more than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(Some(5), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis14".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+            // Fractional slope with single pod
+            // Acquire tokens less than max
+            test_utils::TestCase::new(
+                2,
+                1,
+                Duration::from_secs(10),
+                1,
+                vec![(Some(1), 1); 11],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            )
+            .test_name("test_distributed_rate_limiter_only_scheduled_mode_redis15".to_string())
+            .mode(Mode::Scheduled)
+            .store_type(Redis),
+        ];
+        test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
     }
 }

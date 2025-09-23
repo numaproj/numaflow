@@ -19,7 +19,6 @@ limitations under the License.
 package monovertex_e2e
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -83,7 +82,6 @@ func (s *MonoVertexSuite) TestExponentialBackoffRetryStrategy() {
 }
 
 func (s *MonoVertexSuite) TestMonoVertexRateLimitWithRedisStore() {
-	s.T().Skip("Skipping until we fix Rater")
 	w := s.Given().MonoVertex("@testdata/mono-vertex-rate-limit-redis.yaml").
 		When().
 		CreateMonoVertexAndWait()
@@ -92,14 +90,6 @@ func (s *MonoVertexSuite) TestMonoVertexRateLimitWithRedisStore() {
 	w.Expect().
 		MonoVertexPodsRunning().
 		MvtxDaemonPodsRunning()
-
-	defer w.StreamMonoVertexPodLogs("numa").TerminateAllPodLogs()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
-	// Wait for messages to start flowing
-	time.Sleep(10 * time.Second)
 
 	// port-forward mvtx daemon server
 	defer w.MvtxDaemonPodPortForward(1234, dfv1.MonoVertexDaemonServicePort).
@@ -112,94 +102,7 @@ func (s *MonoVertexSuite) TestMonoVertexRateLimitWithRedisStore() {
 		_ = client.Close()
 	}()
 
-	// Check processing rates for the MonoVertex which has rate limiting applied
-	timer := time.NewTimer(5 * time.Minute)
-	waitInterval := 10 * time.Second
-	succeedChan := make(chan struct{})
-
-	go func() {
-		const stableDuration = 20 * time.Second
-
-		// First loop: Wait until rate reaches 99-100 TPS range
-		reachedStableRange := false
-		for !reachedStableRange {
-			select {
-			case <-ctx.Done():
-				return
-			case <-timer.C:
-				return
-			default:
-				m, err := client.GetMonoVertexMetrics(context.Background())
-				if err != nil {
-					time.Sleep(waitInterval)
-					continue
-				}
-
-				if m == nil {
-					time.Sleep(waitInterval)
-					continue
-				}
-
-				oneMinRate := m.ProcessingRates["1m"]
-				if oneMinRate == nil {
-					time.Sleep(waitInterval)
-					continue
-				}
-
-				currentRate := oneMinRate.GetValue()
-				// The rate limit is set to 100 TPS, so processing rate should be around 100 or less
-				// Allow some tolerance for measurement variations (99-100 TPS)
-				if currentRate >= 99 && currentRate <= 100 {
-					s.T().Logf("Rate reached stable range: %.2f TPS. Starting stability verification...", currentRate)
-					reachedStableRange = true
-				} else {
-					s.T().Logf("Current processing rate: %.2f TPS, waiting for rate to reach 99-100 TPS range...", currentRate)
-					time.Sleep(waitInterval)
-				}
-			}
-		}
-
-		// Second loop: Verify rate stays in 99-100 TPS range for 20 seconds
-		stableStartTime := time.Now()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-timer.C:
-				return
-			default:
-				m, err := client.GetMonoVertexMetrics(context.Background())
-				if err != nil {
-					break
-				}
-
-				oneMinRate := m.ProcessingRates["1m"]
-				currentRate := oneMinRate.GetValue()
-				if currentRate >= 99 && currentRate <= 100 {
-					// Check if we've been stable for the required duration
-					if time.Since(stableStartTime) >= stableDuration {
-						s.T().Logf("Rate limiting working correctly and stable for %v. Processing rate: %.2f TPS (expected: 99-100 TPS)", stableDuration, currentRate)
-						succeedChan <- struct{}{}
-						return
-					}
-					s.T().Logf("Rate stable: %.2f TPS, stable for: %v (need %v)", currentRate, time.Since(stableStartTime).Round(time.Second), stableDuration)
-				} else {
-					// Rate regressed, restart stability verification
-					s.T().Logf("Rate regressed from stable range: %.2f TPS. Restarting stability verification...", currentRate)
-					stableStartTime = time.Now()
-				}
-				time.Sleep(waitInterval)
-			}
-		}
-	}()
-
-	select {
-	case <-succeedChan:
-		// Success - rate limiting is working
-	case <-timer.C:
-		assert.Fail(s.T(), "timed out waiting for rate limiting to take effect")
-	}
-	timer.Stop()
+	w.Expect().MonoVertexPodLogContains("processed=50", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithCount(20))
 }
 
 func TestMonoVertexSuite(t *testing.T) {

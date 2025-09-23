@@ -9,12 +9,16 @@ workspace = true
 [dependencies]
 tokio.workspace = true
 tracing.workspace = true
+tokio-util.workspace = true
+
 bytes.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
 aws-config = "1.6.2"
 aws-sdk-sqs = "1.65.0"
 aws-smithy-types = "1.3.1"
+aws-sdk-sts = "1.86.0"
+aws-credential-types = "1.2.6"
 
 
 [dev-dependencies]

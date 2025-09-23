@@ -10,6 +10,8 @@ use tokio::{
     sync::{mpsc, oneshot},
     time,
 };
+use tokio_util::sync::CancellationToken;
+
 use tokio_stream::StreamExt;
 use tracing::info;
 
@@ -29,9 +31,13 @@ enum ConsumerActorMessage {
     Read {
         count: usize,
         timeout_at: Instant,
-        respond_to: oneshot::Sender<Result<Vec<PulsarMessage>>>,
+        respond_to: oneshot::Sender<Option<Result<Vec<PulsarMessage>>>>,
     },
     Ack {
+        offsets: Vec<u64>,
+        respond_to: oneshot::Sender<Result<()>>,
+    },
+    Nack {
         offsets: Vec<u64>,
         respond_to: oneshot::Sender<Result<()>>,
     },
@@ -51,14 +57,16 @@ struct ConsumerReaderActor {
     message_ids: BTreeMap<u64, MessageIdData>,
     max_unack: usize,
     topic: String,
+    cancel_token: CancellationToken,
 }
 
 impl ConsumerReaderActor {
     async fn start(
         config: PulsarSourceConfig,
         handler_rx: mpsc::Receiver<ConsumerActorMessage>,
+        cancel_token: CancellationToken,
     ) -> Result<()> {
-        tracing::info!(
+        info!(
             addr = &config.pulsar_server_addr,
             "Pulsar connection details"
         );
@@ -107,6 +115,7 @@ impl ConsumerReaderActor {
                 message_ids: BTreeMap::new(),
                 max_unack: config.max_unack,
                 topic: config.topic,
+                cancel_token,
             };
             consumer_actor.run().await;
         });
@@ -136,6 +145,13 @@ impl ConsumerReaderActor {
                 let status = self.ack_messages(offsets).await;
                 let _ = respond_to.send(status);
             }
+            ConsumerActorMessage::Nack {
+                offsets,
+                respond_to,
+            } => {
+                let status = self.nack_messages(offsets).await;
+                let _ = respond_to.send(status);
+            }
         }
     }
 
@@ -143,15 +159,19 @@ impl ConsumerReaderActor {
         &mut self,
         count: usize,
         timeout_at: Instant,
-    ) -> Result<Vec<PulsarMessage>> {
+    ) -> Option<Result<Vec<PulsarMessage>>> {
+        if self.cancel_token.is_cancelled() {
+            return None;
+        }
+
         if self.message_ids.len() >= self.max_unack {
-            return Err(Error::AckPendingExceeded(self.message_ids.len()));
+            return Some(Err(Error::AckPendingExceeded(self.message_ids.len())));
         }
         let mut messages = vec![];
         for _ in 0..count {
             let remaining_time = timeout_at - Instant::now();
             let Ok(msg) = time::timeout(remaining_time, self.consumer.try_next()).await else {
-                return Ok(messages);
+                return Some(Ok(messages));
             };
             let msg = match msg {
                 Ok(Some(msg)) => msg,
@@ -163,7 +183,7 @@ impl ConsumerReaderActor {
                         time::sleep(Duration::from_millis(50)).await; // FIXME: add error metrics. Also, respect the timeout
                         continue;
                     }
-                    return Err(Error::Pulsar(e));
+                    return Some(Err(Error::Pulsar(e)));
                 }
             };
             let offset = msg.message_id().entry_id;
@@ -202,10 +222,10 @@ impl ConsumerReaderActor {
 
             // stop reading as soon as we hit max_unack
             if messages.len() >= self.max_unack {
-                return Ok(messages);
+                return Some(Ok(messages));
             }
         }
-        Ok(messages)
+        Some(Ok(messages))
     }
 
     // TODO: Identify the longest continuous batch and use cumulative_ack_with_id() to ack them all.
@@ -218,6 +238,28 @@ impl ConsumerReaderActor {
             };
 
             let Err(e) = self.consumer.ack_with_id(&self.topic, msg_id.clone()).await else {
+                continue;
+            };
+            // Insert offset back
+            self.message_ids.insert(offset, msg_id);
+            return Err(Error::Pulsar(e.into()));
+        }
+        Ok(())
+    }
+
+    async fn nack_messages(&mut self, offsets: Vec<u64>) -> Result<()> {
+        for offset in offsets {
+            let msg_id = self.message_ids.remove(&offset);
+
+            let Some(msg_id) = msg_id else {
+                return Err(Error::UnknownOffset(offset));
+            };
+
+            let Err(e) = self
+                .consumer
+                .nack_with_id(&self.topic, msg_id.clone())
+                .await
+            else {
                 continue;
             };
             // Insert offset back
@@ -243,9 +285,10 @@ impl PulsarSource {
         batch_size: usize,
         timeout: Duration,
         vertex_replica: u16,
+        cancel_token: CancellationToken,
     ) -> Result<Self> {
         let (tx, rx) = mpsc::channel(10);
-        ConsumerReaderActor::start(config, rx).await?;
+        ConsumerReaderActor::start(config, rx, cancel_token).await?;
         Ok(Self {
             actor_tx: tx,
             batch_size,
@@ -256,8 +299,7 @@ impl PulsarSource {
 }
 
 impl PulsarSource {
-    pub async fn read_messages(&self) -> Result<Vec<PulsarMessage>> {
-        let start = Instant::now();
+    pub async fn read_messages(&self) -> Option<Result<Vec<PulsarMessage>>> {
         let (tx, rx) = oneshot::channel();
         let msg = ConsumerActorMessage::Read {
             count: self.batch_size,
@@ -265,14 +307,9 @@ impl PulsarSource {
             respond_to: tx,
         };
         let _ = self.actor_tx.send(msg).await;
-        let messages = rx.await.map_err(Error::ActorTaskTerminated)??;
-        tracing::debug!(
-            count = messages.len(),
-            requested_count = self.batch_size,
-            time_taken_ms = start.elapsed().as_millis(),
-            "Got messages from pulsar"
-        );
-        Ok(messages)
+        rx.await
+            .map_err(Error::ActorTaskTerminated)
+            .unwrap_or_else(|e| Some(Err(e)))
     }
 
     pub async fn ack_offsets(&self, offsets: Vec<u64>) -> Result<()> {
@@ -280,6 +317,18 @@ impl PulsarSource {
         let _ = self
             .actor_tx
             .send(ConsumerActorMessage::Ack {
+                offsets,
+                respond_to: tx,
+            })
+            .await;
+        rx.await.map_err(Error::ActorTaskTerminated)?
+    }
+
+    pub async fn nack_offsets(&self, offsets: Vec<u64>) -> Result<()> {
+        let (tx, rx) = oneshot::channel();
+        let _ = self
+            .actor_tx
+            .send(ConsumerActorMessage::Nack {
                 offsets,
                 respond_to: tx,
             })

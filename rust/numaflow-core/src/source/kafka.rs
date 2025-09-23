@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use numaflow_kafka::source::{KafkaMessage, KafkaSource, KafkaSourceConfig};
+use tracing::info;
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
@@ -75,8 +76,9 @@ pub(crate) async fn new_kafka_source(
     cfg: KafkaSourceConfig,
     batch_size: usize,
     timeout: Duration,
+    cancel_token: tokio_util::sync::CancellationToken,
 ) -> crate::Result<KafkaSource> {
-    Ok(KafkaSource::connect(cfg, batch_size, timeout).await?)
+    Ok(KafkaSource::connect(cfg, batch_size, timeout, cancel_token).await?)
 }
 
 impl source::SourceReader for KafkaSource {
@@ -84,12 +86,16 @@ impl source::SourceReader for KafkaSource {
         "Kafka"
     }
 
-    async fn read(&mut self) -> crate::Result<Vec<Message>> {
-        self.read_messages()
-            .await?
-            .into_iter()
-            .map(|msg| msg.try_into())
-            .collect()
+    async fn read(&mut self) -> Option<crate::Result<Vec<Message>>> {
+        match self.read_messages().await {
+            Some(Ok(messages)) => {
+                let result: crate::Result<Vec<Message>> =
+                    messages.into_iter().map(|msg| msg.try_into()).collect();
+                Some(result)
+            }
+            Some(Err(e)) => Some(Err(e.into())),
+            None => None,
+        }
     }
 
     async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
@@ -142,6 +148,12 @@ impl source::SourceAcker for KafkaSource {
             });
         }
         self.ack_messages(kafka_offsets).await.map_err(Into::into)
+    }
+
+    async fn nack(&mut self, offsets: Vec<Offset>) -> crate::error::Result<()> {
+        info!(?offsets, "Nack invoked for offsets (no-op for Kafka)");
+        // Kafka doesn't support nack - no-op
+        Ok(())
     }
 }
 
@@ -256,14 +268,19 @@ mod tests {
         };
 
         let read_timeout = Duration::from_secs(5);
-        let mut source = super::new_kafka_source(config, 20, read_timeout)
-            .await
-            .unwrap();
+        let mut source = super::new_kafka_source(
+            config,
+            20,
+            read_timeout,
+            tokio_util::sync::CancellationToken::new(),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(source.partitions().await.unwrap(), vec![0]);
 
         // Test SourceReader::read
-        let messages = source.read().await.unwrap();
+        let messages = source.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 20, "Should read 20 messages in a batch");
         assert_eq!(messages[0].value, Bytes::from("message 0"));
         assert_eq!(messages[19].value, Bytes::from("message 19"));
@@ -281,7 +298,7 @@ mod tests {
         );
 
         // Read and ack remaining messages
-        let messages = source.read().await.unwrap();
+        let messages = source.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 20, "Should read another 20 messages");
         let offsets: Vec<Offset> = messages.iter().map(|msg| msg.offset.clone()).collect();
         source.ack(offsets).await.unwrap();
@@ -293,7 +310,7 @@ mod tests {
             "Pending messages should be 10 after acking another 20 messages"
         );
 
-        let messages = source.read().await.unwrap();
+        let messages = source.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 10, "Should read the last 10 messages");
         let offsets: Vec<Offset> = messages.iter().map(|msg| msg.offset.clone()).collect();
         source.ack(offsets).await.unwrap();

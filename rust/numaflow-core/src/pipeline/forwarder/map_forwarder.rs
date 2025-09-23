@@ -50,22 +50,21 @@ impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
     }
 
     pub(crate) async fn start(self, cln_token: CancellationToken) -> Result<()> {
-        let child_token = cln_token.child_token();
         // only the reader need to listen on the cancellation token, if the reader stops all
         // other components will stop gracefully because they are chained using tokio streams.
         let (read_messages_stream, reader_handle) = self
             .jetstream_reader
-            .streaming_read(child_token.clone())
+            .streaming_read(cln_token.clone())
             .await?;
 
         let (mapped_messages_stream, mapper_handle) = self
             .mapper
-            .streaming_map(read_messages_stream, child_token.clone())
+            .streaming_map(read_messages_stream, cln_token.clone())
             .await?;
 
         let writer_handle = self
             .jetstream_writer
-            .streaming_write(mapped_messages_stream, child_token)
+            .streaming_write(mapped_messages_stream, cln_token.clone())
             .await?;
 
         // Join the reader, mapper, and writer
@@ -79,17 +78,14 @@ impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
 
         writer_result.inspect_err(|e| {
             error!(?e, "Error while writing messages");
-            cln_token.cancel();
         })?;
 
         mapper_result.inspect_err(|e| {
             error!(?e, "Error while mapping messages");
-            cln_token.cancel();
         })?;
 
         reader_result.inspect_err(|e| {
             error!(?e, "Error while reading messages");
-            cln_token.cancel();
         })?;
 
         Ok(())
@@ -116,22 +112,24 @@ pub async fn start_map_forwarder(
         None
     };
 
-    let tracker_handle = TrackerHandle::new(serving_callback_handler.clone());
+    let reader_config = &config
+        .from_vertex_config
+        .first()
+        .ok_or_else(|| Error::Config("No from vertex config found".to_string()))?
+        .reader_config;
 
+    let from_partitions: Vec<u16> = (0..reader_config.streams.len() as u16).collect();
+
+    let tracker_handle = TrackerHandle::new(serving_callback_handler.clone());
     let watermark_handle = create_components::create_edge_watermark_handle(
         &config,
         &js_context,
         &cln_token,
         None,
         tracker_handle.clone(),
+        from_partitions.clone(),
     )
     .await?;
-
-    let reader_config = &config
-        .from_vertex_config
-        .first()
-        .ok_or_else(|| Error::Config("No from vertex config found".to_string()))?
-        .reader_config;
 
     let context = PipelineContext {
         cln_token: cln_token.clone(),
@@ -192,7 +190,7 @@ pub async fn start_map_forwarder(
             ))),
             watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
                 watermark_handle: WatermarkHandle::ISB(handle),
-                partition_count: reader_config.streams.len() as u16, // Number of partitions = number of streams
+                partitions: from_partitions,
             }),
         },
     )

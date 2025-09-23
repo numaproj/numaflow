@@ -46,7 +46,9 @@ use numaflow_pb::clients::sessionreduce::session_reduce_client::SessionReduceCli
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use numaflow_shared::server_info::{ContainerType, Protocol, sdk_server_info};
+use numaflow_shared::server_info::{
+    ContainerType, Protocol, ServerInfo, sdk_server_info, supports_nack,
+};
 use numaflow_sqs::sink::SqsSinkBuilder;
 use std::path::PathBuf;
 use tokio_util::sync::CancellationToken;
@@ -377,7 +379,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
     match &source_config.source_type {
         SourceType::Generator(generator_config) => {
             let (generator, generator_ack, generator_lag) =
-                new_generator(generator_config.clone(), batch_size)?;
+                new_generator(generator_config.clone(), batch_size, cln_token.clone())?;
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Generator(generator, generator_ack, generator_lag),
@@ -394,6 +396,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 batch_size,
                 read_timeout,
                 *get_vertex_replica(),
+                cln_token.clone(),
             )
             .await?;
             Ok(crate::source::Source::new(
@@ -412,6 +415,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 batch_size,
                 read_timeout,
                 *get_vertex_replica(),
+                cln_token.clone(),
             )
             .await?;
             Ok(Source::new(
@@ -429,7 +433,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 jetstream_config.clone(),
                 batch_size,
                 read_timeout,
-                cln_token,
+                cln_token.clone(),
             )
             .await?;
             Ok(Source::new(
@@ -443,7 +447,13 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             ))
         }
         SourceType::Nats(nats_config) => {
-            let nats = new_nats_source(nats_config.clone(), batch_size, read_timeout).await?;
+            let nats = new_nats_source(
+                nats_config.clone(),
+                batch_size,
+                read_timeout,
+                cln_token.clone(),
+            )
+            .await?;
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Nats(nats),
@@ -456,7 +466,8 @@ pub async fn create_source<C: NumaflowTypeConfig>(
         }
         SourceType::Kafka(kafka_config) => {
             let config = *kafka_config.clone();
-            let kafka = new_kafka_source(config, batch_size, read_timeout).await?;
+            let kafka =
+                new_kafka_source(config, batch_size, read_timeout, cln_token.clone()).await?;
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Kafka(kafka),
@@ -469,7 +480,8 @@ pub async fn create_source<C: NumaflowTypeConfig>(
         }
         SourceType::Http(http_source_config) => {
             let http_source =
-                numaflow_http::HttpSourceHandle::new(http_source_config.clone()).await;
+                numaflow_http::HttpSourceHandle::new(http_source_config.clone(), cln_token.clone())
+                    .await;
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Http(CoreHttpSource::new(batch_size, http_source)),
@@ -482,10 +494,18 @@ pub async fn create_source<C: NumaflowTypeConfig>(
         }
 
         SourceType::UserDefined(user_defined_config) => {
-            let source_client =
+            let (source_client, server_info) =
                 create_source_client(user_defined_config, cln_token.clone()).await?;
-            let (ud_read, ud_ack, ud_lag) =
-                new_source(source_client, batch_size, read_timeout).await?;
+            // Check if the SDK version supports nack functionality
+            let supports_nack = supports_nack(&server_info.version, &server_info.language);
+            let (ud_read, ud_ack, ud_lag) = new_source(
+                source_client,
+                batch_size,
+                read_timeout,
+                cln_token.clone(),
+                supports_nack,
+            )
+            .await?;
             Ok(Source::new(
                 batch_size,
                 source::SourceType::UserDefinedSource(Box::new(ud_read), Box::new(ud_ack), ud_lag),
@@ -500,10 +520,11 @@ pub async fn create_source<C: NumaflowTypeConfig>(
 }
 
 /// Creates a source client from user-defined config
+/// Returns both the client and server info for version-aware functionality
 async fn create_source_client(
     user_defined_config: &config::components::source::UserDefinedConfig,
     cln_token: CancellationToken,
-) -> error::Result<SourceClient<Channel>> {
+) -> error::Result<(SourceClient<Channel>, ServerInfo)> {
     let server_info = sdk_server_info(
         user_defined_config.server_info_path.clone().into(),
         cln_token.clone(),
@@ -513,8 +534,8 @@ async fn create_source_client(
     let metric_labels = metrics::sdk_info_labels(
         config::get_component_type().to_string(),
         config::get_vertex_name().to_string(),
-        server_info.language,
-        server_info.version,
+        server_info.language.clone(),
+        server_info.version.clone(),
         ContainerType::Sourcer.to_string(),
     );
     metrics::global_metrics()
@@ -526,7 +547,7 @@ async fn create_source_client(
         create_rpc_channel(PathBuf::from(user_defined_config.socket_path.clone())).await?;
     let mut client = SourceClient::new(channel);
     wait_until_source_ready(&cln_token, &mut client).await?;
-    Ok(client)
+    Ok((client, server_info))
 }
 
 /// Creates a user-defined aligned reducer client
@@ -744,6 +765,7 @@ pub async fn create_edge_watermark_handle(
     cln_token: &CancellationToken,
     window_manager: Option<WindowManager>,
     tracker_handle: TrackerHandle,
+    from_partitions: Vec<u16>,
 ) -> error::Result<Option<ISBWatermarkHandle>> {
     match &config.watermark_config {
         Some(WatermarkConfig::Edge(edge_config)) => {
@@ -751,13 +773,14 @@ pub async fn create_edge_watermark_handle(
                 config.vertex_name,
                 config.replica,
                 config.vertex_type,
-                config.read_timeout,
+                2 * config.read_timeout,
                 js_context.clone(),
                 edge_config,
                 &config.to_vertex_config,
                 cln_token.clone(),
                 window_manager,
                 tracker_handle,
+                from_partitions,
             )
             .await?;
             Ok(Some(handle))
@@ -792,6 +815,8 @@ mod tests {
         async fn read(&self, _request: SourceReadRequest, _transmitter: Sender<Message>) {}
 
         async fn ack(&self, _offset: Vec<Offset>) {}
+
+        async fn nack(&self, _offsets: Vec<Offset>) {}
 
         async fn pending(&self) -> Option<usize> {
             Some(0)

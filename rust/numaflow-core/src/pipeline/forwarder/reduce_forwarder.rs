@@ -50,22 +50,19 @@ impl<C: NumaflowTypeConfig> ReduceForwarder<C> {
     }
 
     pub(crate) async fn start(self, cln_token: CancellationToken) -> Result<()> {
-        let child_token = cln_token.child_token();
-
         // Start the PBQ reader
-        let (read_messages_stream, pbq_handle) =
-            self.pbq.streaming_read(child_token.clone()).await?;
+        let (read_messages_stream, pbq_handle) = self.pbq.streaming_read(cln_token.clone()).await?;
 
         // Start the reducer
         let processor_handle = match self.reducer {
             Reducer::Aligned(reducer) => {
                 reducer
-                    .start(read_messages_stream, child_token.clone())
+                    .start(read_messages_stream, cln_token.clone())
                     .await?
             }
             Reducer::Unaligned(reducer) => {
                 reducer
-                    .start(read_messages_stream, child_token.clone())
+                    .start(read_messages_stream, cln_token.clone())
                     .await?
             }
         };
@@ -81,12 +78,10 @@ impl<C: NumaflowTypeConfig> ReduceForwarder<C> {
 
         processor_result.inspect_err(|e| {
             error!(?e, "Error in reducer");
-            cln_token.cancel();
         })?;
 
         pbq_result.inspect_err(|e| {
             error!(?e, "Error in PBQ reader");
-            cln_token.cancel();
         })?;
 
         info!("Reduce forwarder completed successfully");
@@ -136,6 +131,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         &cln_token,
         Some(WindowManager::Aligned(window_manager.clone())),
         tracker_handle.clone(),
+        vec![*get_vertex_replica()], // in reduce, we consume from a single partition
     )
     .await?;
 
@@ -197,7 +193,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
                 .clone()
                 .map(|handle| WatermarkFetcherState {
                     watermark_handle: WatermarkHandle::ISB(handle),
-                    partition_count: 1, // Reduce vertices always read from single partition (partition 0)
+                    partitions: vec![*get_vertex_replica()], // Reduce vertices always read from single partition (partition 0)
                 }),
         },
     )
@@ -211,9 +207,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
             gc_wal,
             aligned_config.window_config.allowed_lateness,
             config.graceful_shutdown_time,
-            config.read_timeout,
             reduce_vtx_config.keyed,
-            watermark_handle,
         )
         .await,
     );
@@ -262,6 +256,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         &cln_token,
         Some(WindowManager::Unaligned(window_manager.clone())),
         tracker_handle.clone(),
+        vec![*get_vertex_replica()], // in reduce, we consume from a single partition
     )
     .await?;
 
@@ -321,7 +316,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
                 .clone()
                 .map(|handle| WatermarkFetcherState {
                     watermark_handle: WatermarkHandle::ISB(handle),
-                    partition_count: 1, // Reduce vertices always read from single partition (partition 0)
+                    partitions: vec![*get_vertex_replica()], // Reduce vertices always read from single partition (partition replica)
                 }),
         },
     )
@@ -335,9 +330,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
             unaligned_config.window_config.allowed_lateness,
             gc_wal,
             config.graceful_shutdown_time,
-            config.read_timeout,
             reduce_vtx_config.keyed,
-            watermark_handle,
         )
         .await,
     );
@@ -1058,7 +1051,7 @@ mod tests {
             watermark_config: Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
                 from_vertex_config: vec![BucketConfig {
                     vertex: "input-vertex",
-                    partitions: 1,
+                    partitions: vec![0],
                     ot_bucket,
                     hb_bucket,
                     delay: Some(Duration::from_millis(100)),

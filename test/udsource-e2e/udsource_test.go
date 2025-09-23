@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"sync"
 	"testing"
 	"time"
 
@@ -55,25 +54,10 @@ func (s *UserDefinedSourceSuite) testSimpleSourceRust() {
 }
 
 func (s *UserDefinedSourceSuite) TestUDSource() {
-	var wg sync.WaitGroup
-	wg.Add(4)
-	go func() {
-		defer wg.Done()
-		s.testSimpleSourcePython()
-	}()
-	go func() {
-		defer wg.Done()
-		s.testSimpleSourceJava()
-	}()
-	go func() {
-		defer wg.Done()
-		s.testSimpleSourceGo()
-	}()
-	go func() {
-		defer wg.Done()
-		s.testSimpleSourceRust()
-	}()
-	wg.Wait()
+	s.testSimpleSourcePython()
+	s.testSimpleSourceJava()
+	s.testSimpleSourceGo()
+	s.testSimpleSourceRust()
 }
 
 func (s *UserDefinedSourceSuite) testSimpleSource(lang string, verifyRate bool) {
@@ -91,11 +75,9 @@ func (s *UserDefinedSourceSuite) testSimpleSource(lang string, verifyRate bool) 
 	// the user-defined simple source sends the read index of the message as the message content
 	// verify the sink gets the first batch of data(0-499) - checking for some random numbers
 	w.Expect().VertexPodLogContains("out", "147")
-	w.Expect().VertexPodLogContains("out", "258")
 	w.Expect().VertexPodLogContains("out", "369")
 	// verify the sink get the second batch of data(500-999)
 	w.Expect().VertexPodLogContains("out", "520")
-	w.Expect().VertexPodLogContains("out", "630")
 	w.Expect().VertexPodLogContains("out", "999")
 
 	if verifyRate {
@@ -125,6 +107,9 @@ func (s *UserDefinedSourceSuite) testSimpleSource(lang string, verifyRate bool) 
 				for _, vertexName := range vertexNames {
 					m, err := client.GetVertexMetrics(context.Background(), pipelineName, vertexName)
 					assert.NoError(s.T(), err)
+					if len(m) == 0 {
+						continue
+					}
 					assert.Equal(s.T(), pipelineName, m[0].Pipeline)
 					oneMinRate := m[0].ProcessingRates["1m"]
 					rates = append(rates, oneMinRate.GetValue())

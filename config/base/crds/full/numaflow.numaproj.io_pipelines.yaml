@@ -161,6 +161,13 @@ spec:
                         default: 1
                         format: int64
                         type: integer
+                      modes:
+                        properties:
+                          relaxed:
+                            type: object
+                          scheduled:
+                            type: object
+                        type: object
                       rampUpDuration:
                         default: 1s
                         type: string
@@ -7208,6 +7215,13 @@ spec:
                               default: 1
                               format: int64
                               type: integer
+                            modes:
+                              properties:
+                                relaxed:
+                                  type: object
+                                scheduled:
+                                  type: object
+                              type: object
                             rampUpDuration:
                               default: 1s
                               type: string
@@ -8820,6 +8834,26 @@ spec:
                               type: object
                             sqs:
                               properties:
+                                assumeRole:
+                                  properties:
+                                    durationSeconds:
+                                      format: int32
+                                      type: integer
+                                    externalID:
+                                      type: string
+                                    policy:
+                                      type: string
+                                    policyArns:
+                                      items:
+                                        type: string
+                                      type: array
+                                    roleArn:
+                                      type: string
+                                    sessionName:
+                                      type: string
+                                  required:
+                                  - roleArn
+                                  type: object
                                 awsRegion:
                                   type: string
                                 queueName:
@@ -9484,6 +9518,26 @@ spec:
                           type: object
                         sqs:
                           properties:
+                            assumeRole:
+                              properties:
+                                durationSeconds:
+                                  format: int32
+                                  type: integer
+                                externalID:
+                                  type: string
+                                policy:
+                                  type: string
+                                policyArns:
+                                  items:
+                                    type: string
+                                  type: array
+                                roleArn:
+                                  type: string
+                                sessionName:
+                                  type: string
+                              required:
+                              - roleArn
+                              type: object
                             awsRegion:
                               type: string
                             queueName:
@@ -10416,6 +10470,26 @@ spec:
                           type: object
                         sqs:
                           properties:
+                            assumeRole:
+                              properties:
+                                durationSeconds:
+                                  format: int32
+                                  type: integer
+                                externalID:
+                                  type: string
+                                policy:
+                                  type: string
+                                policyArns:
+                                  items:
+                                    type: string
+                                  type: array
+                                roleArn:
+                                  type: string
+                                sessionName:
+                                  type: string
+                              required:
+                              - roleArn
+                              type: object
                             attributeNames:
                               items:
                                 type: string

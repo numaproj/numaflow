@@ -94,10 +94,7 @@ impl Sink for UserDefinedSink {
 
         // write requests to the server
         for request in requests {
-            self.sink_tx
-                .send(request)
-                .await
-                .map_err(|e| Error::Sink(format!("failed to send request: {e}")))?;
+            let _ = self.sink_tx.send(request).await;
         }
 
         // send eot request to indicate the end of the stream

@@ -63,7 +63,7 @@ async-trait = "0.1.88"
 
 [dev-dependencies]
 tempfile = "3.11.0"
-numaflow = "0.3.0"
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "d5cfdaa4a659954d3924b3081cf03ac9d4f84c44" }
 pulsar = { version = "6.3.0", default-features = false, features = ["tokio-rustls-runtime"] }
 hyper = "1.6.0"
 hyper-rustls = "0.27.5"

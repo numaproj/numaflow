@@ -40,6 +40,9 @@ impl From<numaflow_sqs::SqsSourceError> for Error {
             numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::Sqs(e)) => {
                 Error::Source(e.to_string())
             }
+            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::Sts(e)) => {
+                Error::Source(e.to_string())
+            }
             numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::ActorTaskTerminated(_)) => {
                 Error::ActorPatternRecv(value.to_string())
             }
@@ -56,12 +59,13 @@ pub(crate) async fn new_sqs_source(
     batch_size: usize,
     timeout: Duration,
     vertex_replica: u16,
+    cancel_token: tokio_util::sync::CancellationToken,
 ) -> crate::Result<SqsSource> {
     Ok(SqsSourceBuilder::new(cfg)
         .batch_size(batch_size)
         .timeout(timeout)
         .vertex_replica(vertex_replica)
-        .build()
+        .build(cancel_token)
         .await?)
 }
 
@@ -70,12 +74,16 @@ impl source::SourceReader for SqsSource {
         "SQS"
     }
 
-    async fn read(&mut self) -> crate::Result<Vec<Message>> {
-        self.read_messages()
-            .await?
-            .into_iter()
-            .map(|msg| msg.try_into())
-            .collect()
+    async fn read(&mut self) -> Option<crate::Result<Vec<Message>>> {
+        match self.read_messages().await {
+            Some(Ok(messages)) => {
+                let result: crate::Result<Vec<Message>> =
+                    messages.into_iter().map(|msg| msg.try_into()).collect();
+                Some(result)
+            }
+            Some(Err(e)) => Some(Err(e.into())),
+            None => None,
+        }
     }
 
     // if source doesn't support partitions, we should return the vec![vertex_replica]
@@ -96,6 +104,11 @@ impl source::SourceAcker for SqsSource {
             sqs_offsets.push(string_offset.offset);
         }
         self.ack_offsets(sqs_offsets).await.map_err(Into::into)
+    }
+
+    async fn nack(&mut self, _offsets: Vec<Offset>) -> crate::error::Result<()> {
+        // SQS doesn't support nack - no-op
+        Ok(())
     }
 }
 
@@ -181,17 +194,20 @@ pub mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(1))
         .client(sqs_client)
-        .build()
+        .build(CancellationToken::new())
         .await
         .unwrap();
 
         // create SQS source with test client
         use crate::tracker::TrackerHandle;
         let tracker_handle = TrackerHandle::new(None);
+        let cln_token = CancellationToken::new();
+
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             1,
             SourceType::Sqs(sqs_source),
@@ -202,7 +218,6 @@ pub mod tests {
             None,
         );
 
-        let cln_token = CancellationToken::new();
         // create sink writer
         use crate::sink::{SinkClientType, SinkWriterBuilder};
         let sink_writer = SinkWriterBuilder::new(

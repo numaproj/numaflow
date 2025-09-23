@@ -152,24 +152,6 @@ impl TryFrom<Box<SqsSource>> for SourceType {
     type Error = Error;
 
     fn try_from(value: Box<SqsSource>) -> Result<Self> {
-        if value.aws_region.is_empty() {
-            return Err(Error::Config(
-                "aws_region is required for SQS source".to_string(),
-            ));
-        }
-
-        if value.queue_name.is_empty() {
-            return Err(Error::Config(
-                "queue_name is required for SQS source".to_string(),
-            ));
-        }
-
-        if value.queue_owner_aws_account_id.is_empty() {
-            return Err(Error::Config(
-                "queue_owner_aws_account_id is required for SQS source".to_string(),
-            ));
-        }
-
         if let Some(timeout) = value.visibility_timeout
             && !(0..=43200).contains(&timeout)
         {
@@ -194,6 +176,16 @@ impl TryFrom<Box<SqsSource>> for SourceType {
             )));
         }
 
+        // Convert assume role configuration if present
+        let assume_role_config = value.assume_role.map(|ar| numaflow_sqs::AssumeRoleConfig {
+            role_arn: ar.role_arn,
+            session_name: ar.session_name,
+            duration_seconds: ar.duration_seconds,
+            external_id: ar.external_id,
+            policy: ar.policy,
+            policy_arns: ar.policy_arns,
+        });
+
         let sqs_source_config = SqsSourceConfig {
             queue_name: Box::leak(value.queue_name.into_boxed_str()),
             region: Box::leak(value.aws_region.into_boxed_str()),
@@ -206,6 +198,7 @@ impl TryFrom<Box<SqsSource>> for SourceType {
             wait_time_seconds: Some(value.wait_time_seconds.unwrap_or(0)),
             visibility_timeout: Some(value.visibility_timeout.unwrap_or(30)),
             endpoint_url: value.endpoint_url,
+            assume_role_config,
         };
 
         Ok(SourceType::Sqs(sqs_source_config))
@@ -458,8 +451,8 @@ mod tests {
             source,
             SourceType::Generator(GeneratorConfig {
                 content: Bytes::from("hello world\n"),
-                duration: Duration::from(Duration::from_secs(1)),
-                jitter: Duration::from(Duration::from_secs(0)),
+                duration: Duration::from_secs(1),
+                jitter: Duration::from_secs(0),
                 key_count: 0,
                 rpu: 1,
                 value: None,
@@ -990,7 +983,6 @@ mod nats_source_tests {
     use k8s_openapi::api::core::v1::SecretKeySelector;
     use numaflow_models::models::NatsSource;
     use numaflow_models::models::{BasicAuth, NatsAuth};
-    use numaflow_nats;
 
     const SECRET_BASE_PATH: &str = "/tmp/numaflow";
 

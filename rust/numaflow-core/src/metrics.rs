@@ -169,7 +169,7 @@ pub(crate) enum PipelineComponents<C: crate::typ::NumaflowTypeConfig> {
 #[derive(Clone)]
 pub(crate) struct WatermarkFetcherState {
     pub(crate) watermark_handle: WatermarkHandle,
-    pub(crate) partition_count: u16,
+    pub(crate) partitions: Vec<u16>,
 }
 
 /// MetricsState holds both component health checks and optional watermark fetcher state
@@ -1085,8 +1085,8 @@ pub async fn watermark_handler<C: crate::typ::NumaflowTypeConfig>(
             // For reduce vertices, only return partition 0 since they read from single partition
             // For other vertex types, fetch watermarks for all partitions
             // watermark_fetcher_state.partition_count will already be set to 1 for reduce vertex
-            for partition_idx in 0..watermark_fetcher_state.partition_count {
-                let watermark = handle_clone.fetch_head_watermark(partition_idx).await;
+            for partition_idx in watermark_fetcher_state.partitions.iter() {
+                let watermark = handle_clone.fetch_head_watermark(*partition_idx).await;
                 partitions.insert(partition_idx.to_string(), watermark.timestamp_millis());
             }
         }
@@ -1379,18 +1379,18 @@ async fn fetch_isb_pending<C: crate::typ::NumaflowTypeConfig>(
 mod tests {
     use std::net::SocketAddr;
 
-    use numaflow::source::{Message, Offset, SourceReadRequest};
-    use numaflow::{sink, source, sourcetransform};
-    use numaflow_pb::clients::sink::sink_client::SinkClient;
-    use numaflow_pb::clients::source::source_client::SourceClient;
-    use tokio::sync::mpsc::Sender;
-
     use super::*;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::SourceType;
     use crate::source::user_defined::new_source;
     use crate::tracker::TrackerHandle;
+    use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow::{sink, source, sourcetransform};
+    use numaflow_pb::clients::sink::sink_client::SinkClient;
+    use numaflow_pb::clients::source::source_client::SourceClient;
+    use tokio::sync::mpsc::Sender;
+    use tokio_util::sync::CancellationToken;
 
     struct SimpleSource;
     #[tonic::async_trait]
@@ -1398,6 +1398,8 @@ mod tests {
         async fn read(&self, _: SourceReadRequest, _: Sender<Message>) {}
 
         async fn ack(&self, _: Vec<Offset>) {}
+
+        async fn nack(&self, _offsets: Vec<Offset>) {}
 
         async fn pending(&self) -> Option<usize> {
             Some(0)
@@ -1434,6 +1436,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_start_metrics_https_server() {
+        let cln_token = CancellationToken::new();
         let (src_shutdown_tx, src_shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let src_sock_file = tmp_dir.path().join("source.sock");
@@ -1501,10 +1504,15 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let src_client = SourceClient::new(create_rpc_channel(src_sock_file).await.unwrap());
-        let (src_read, src_ack, lag_reader) =
-            new_source(src_client, 5, Duration::from_millis(1000))
-                .await
-                .expect("Failed to create source reader");
+        let (src_read, src_ack, lag_reader) = new_source(
+            src_client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .expect("Failed to create source reader");
 
         let tracker = TrackerHandle::new(None);
         let source = Source::new(

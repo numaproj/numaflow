@@ -25,6 +25,9 @@ pub struct RedisStore {
     sync_pool_size_script: Script,
 }
 
+/// Different ways to connect to Redis based on different Redis deployments.
+// We will not be supporting Redis Cluster mode because our key space is too small, and we cannot
+// do key ops across multiple nodes. This means mostly all keys are in the same node.
 pub enum RedisMode {
     SingleUrl {
         url: String,
