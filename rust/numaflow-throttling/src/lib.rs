@@ -91,6 +91,9 @@ impl<W> RateLimit<W> {
     /// Takes following arguments:
     /// * `cur_epoch` - Current epoch
     pub(crate) fn compute_refill(&self, cur_epoch: u64) -> usize {
+        // The lock needs to be held for the entire duration of the refill computation
+        // since we can't lock the max_ever_filled within each utility function as it can lead to
+        // deadlocks, due to utility functions calling each other.
         let mut max_ever_filled = self.max_ever_filled.lock().unwrap();
 
         // Whatever remains in the token pool after previous epoch are the unused tokens,
@@ -107,13 +110,15 @@ impl<W> RateLimit<W> {
         // After the first refill, the max_ever_refill will be 11,
         // but the rate limiter can only give out 10 tokens in total, across the 2 processors.
         // Thus, we need to account for unused token in the pool that the processor cannot give out.
-        let error_percentage =
+        let floor_normalization =
             ((self.token_calc_bounds.slope / *max_ever_filled) * 100.0).round() as usize;
 
         // The rate limiter cannot give out all the tokens only when the max_ever_filled is indivisible
         // between the known_pool_size, but since the known_pool_size is not available here we'll just
         // add the error_percentage to the used_token_percentage.
-        let used_token_percentage = (used_token_percentage + error_percentage).min(100).max(0);
+        let used_token_percentage = (used_token_percentage + floor_normalization)
+            .min(100)
+            .max(0);
 
         match self.token_calc_bounds.mode {
             Mode::Relaxed => self.relaxed_slope_increase(&mut max_ever_filled),
@@ -138,6 +143,9 @@ impl<W> RateLimit<W> {
         }
     }
 
+    /// Computes the number of tokens to be refilled for the next epoch for relaxed mode.
+    ///
+    /// If there is some traffic, then release the max possible tokens
     fn relaxed_slope_increase(&self, max_ever_filled: &mut f32) -> usize {
         // let's make sure we do not go beyond the max
         if *max_ever_filled >= self.token_calc_bounds.max as f32 {
@@ -152,6 +160,9 @@ impl<W> RateLimit<W> {
         }
     }
 
+    /// Computes the number of tokens to be refilled for the next epoch for scheduled mode.
+    ///
+    /// We will release/increase tokens on a schedule even if it is not used
     fn scheduled_slope_increase(&self, cur_epoch: u64, max_ever_filled: &mut f32) -> usize {
         // let's make sure we do not go beyond the max
         if *max_ever_filled >= self.token_calc_bounds.max as f32 {
@@ -171,6 +182,11 @@ impl<W> RateLimit<W> {
         }
     }
 
+    /// Computes the number of tokens to be refilled for the next epoch for only-if-used mode.
+    ///
+    /// If the max available tokens are not used, then we will refill the token pool size by the same
+    /// amount as max_ever_filled.
+    /// If the tokens used are within the threshold % of max_ever_filled, then we’ll increase by slope
     fn only_if_used_slope_increase(
         &self,
         max_ever_filled: &mut f32,
@@ -186,6 +202,17 @@ impl<W> RateLimit<W> {
         }
     }
 
+    /// Computes the number of tokens to be refilled for the next epoch for go-back-n mode.
+    ///
+    /// If the tokens aren't used within the last n epochs
+    /// - then we will reduce the token pool size by slope * (n - 1) before calculating the next increase.
+    /// If the tokens are used within next epoch,
+    /// - then we'll check if the tokens used are lower than threshold % of max_ever_filled,
+    ///     - then we’ll reduce the token pool size by slope for that iteration,
+    /// - otherwise we'll increase the token pool size by slope.
+    ///
+    /// Penalty for delayed usage <br>
+    /// Penalty for underutilization
     fn go_back_n_slope_increase(
         &self,
         max_ever_filled: &mut f32,
