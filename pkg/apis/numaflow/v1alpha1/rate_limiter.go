@@ -29,14 +29,19 @@ type RateLimit struct {
 
 // RateLimiterModes defines the modes for rate limiting.
 type RateLimiterModes struct {
+	// Irrespective of the traffic, the rate limiter releases max possible tokens based on ramp-up duration.
+	// +optional
+	RateLimiterScheduled *RateLimiterScheduled `json:"scheduled,omitempty" protobuf:"varint,2,opt,name=scheduled"`
 	// If there is some traffic, then release the max possible tokens.
 	// +optional
 	RateLimiterRelaxed *RateLimiterRelaxed `json:"relaxed,omitempty" protobuf:"varint,1,opt,name=relaxed"`
-	// Irrespective of the traffic, the rate limiter releases max possible tokens based on ramp-up duration.
+	// Releases additional tokens only when previously released tokens have been utilized above the configured threshold
 	// +optional
-	RateLimiterScheduled  *RateLimiterScheduled  `json:"scheduled,omitempty" protobuf:"varint,2,opt,name=scheduled"`
 	RateLimiterOnlyIfUsed *RateLimiterOnlyIfUsed `json:"onlyIfUsed,omitempty" protobuf:"bytes,3,opt,name=onlyIfUsed"`
-	RateLimiterGoBackN    *RateLimiterGoBackN    `json:"goBackN,omitempty" protobuf:"bytes,4,opt,name=goBackN"`
+	// Releases additional tokens only when previously released tokens have been utilized above the configured threshold
+	// otherwise triggers a ramp-down. Ramp-down is also triggered when the request is made after quite a while.
+	// +optional
+	RateLimiterGoBackN *RateLimiterGoBackN `json:"goBackN,omitempty" protobuf:"bytes,4,opt,name=goBackN"`
 }
 
 // RateLimiterRelaxed is for the relaxed mode. It will release the max possible tokens if there is some traffic.
@@ -46,6 +51,8 @@ type RateLimiterRelaxed struct{}
 // It will release the max possible tokens based on ramp-up duration irrespective of traffic encountered.
 type RateLimiterScheduled struct{}
 
+// RateLimiterOnlyIfUsed is for the OnlyIfUsed mode.
+// Releases additional tokens only when previously released tokens have been utilized above the configured threshold
 type RateLimiterOnlyIfUsed struct {
 	// ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter,
 	// that should be consumed at any instance to allow the rate limiter to unlock additional capacity.
@@ -58,6 +65,10 @@ type RateLimiterOnlyIfUsed struct {
 	// additional capacity of 10 messages at t = 1 to make the total capacity of 20.
 	ThresholdPercentage *uint64 `json:"thresholdPercentage,omitempty" protobuf:"varint,1,opt,name=thresholdPercentage"`
 }
+
+// RateLimiterGoBackN is for the GoBackN mode.
+// Releases additional tokens only when previously released tokens have been utilized above the configured threshold
+// otherwise triggers a ramp-down. Ramp-down is also triggered when the request is made after quite a while.
 type RateLimiterGoBackN struct {
 	// ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter,
 	// that should be consumed at any instance to allow the rate limiter to unlock additional capacity.

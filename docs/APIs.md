@@ -9049,6 +9049,14 @@ RateLimiterGoBackN
 
 <p>
 
+<p>
+
+RateLimiterGoBackN is for the GoBackN mode. Releases additional tokens
+only when previously released tokens have been utilized above the
+configured threshold otherwise triggers a ramp-down. Ramp-down is also
+triggered when the request is made after quite a while.
+</p>
+
 </p>
 
 <table>
@@ -9163,27 +9171,6 @@ Description
 
 <td>
 
-<code>relaxed</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterRelaxed">
-RateLimiterRelaxed </a> </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-<p>
-
-If there is some traffic, then release the max possible tokens.
-</p>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
 <code>scheduled</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RateLimiterScheduled">
 RateLimiterScheduled </a> </em>
@@ -9206,12 +9193,40 @@ tokens based on ramp-up duration.
 
 <td>
 
+<code>relaxed</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterRelaxed">
+RateLimiterRelaxed </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+If there is some traffic, then release the max possible tokens.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>onlyIfUsed</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RateLimiterOnlyIfUsed">
 RateLimiterOnlyIfUsed </a> </em>
 </td>
 
 <td>
+
+<em>(Optional)</em>
+<p>
+
+Releases additional tokens only when previously released tokens have
+been utilized above the configured threshold
+</p>
 
 </td>
 
@@ -9227,6 +9242,15 @@ RateLimiterGoBackN </a> </em>
 </td>
 
 <td>
+
+<em>(Optional)</em>
+<p>
+
+Releases additional tokens only when previously released tokens have
+been utilized above the configured threshold otherwise triggers a
+ramp-down. Ramp-down is also triggered when the request is made after
+quite a while.
+</p>
 
 </td>
 
@@ -9248,6 +9272,13 @@ RateLimiterOnlyIfUsed
 </p>
 
 <p>
+
+<p>
+
+RateLimiterOnlyIfUsed is for the OnlyIfUsed mode. Releases additional
+tokens only when previously released tokens have been utilized above the
+configured threshold
+</p>
 
 </p>
 

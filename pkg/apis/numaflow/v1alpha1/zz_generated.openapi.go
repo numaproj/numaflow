@@ -4326,7 +4326,8 @@ func schema_pkg_apis_numaflow_v1alpha1_RateLimiterGoBackN(ref common.ReferenceCa
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "RateLimiterGoBackN is for the GoBackN mode. Releases additional tokens only when previously released tokens have been utilized above the configured threshold otherwise triggers a ramp-down. Ramp-down is also triggered when the request is made after quite a while.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"thresholdPercentage": {
 						SchemaProps: spec.SchemaProps{
@@ -4358,26 +4359,28 @@ func schema_pkg_apis_numaflow_v1alpha1_RateLimiterModes(ref common.ReferenceCall
 				Description: "RateLimiterModes defines the modes for rate limiting.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"relaxed": {
-						SchemaProps: spec.SchemaProps{
-							Description: "If there is some traffic, then release the max possible tokens.",
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRelaxed"),
-						},
-					},
 					"scheduled": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Irrespective of the traffic, the rate limiter releases max possible tokens based on ramp-up duration.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterScheduled"),
 						},
 					},
+					"relaxed": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If there is some traffic, then release the max possible tokens.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRelaxed"),
+						},
+					},
 					"onlyIfUsed": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterOnlyIfUsed"),
+							Description: "Releases additional tokens only when previously released tokens have been utilized above the configured threshold",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterOnlyIfUsed"),
 						},
 					},
 					"goBackN": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterGoBackN"),
+							Description: "Releases additional tokens only when previously released tokens have been utilized above the configured threshold otherwise triggers a ramp-down. Ramp-down is also triggered when the request is made after quite a while.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterGoBackN"),
 						},
 					},
 				},
@@ -4392,7 +4395,8 @@ func schema_pkg_apis_numaflow_v1alpha1_RateLimiterOnlyIfUsed(ref common.Referenc
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "RateLimiterOnlyIfUsed is for the OnlyIfUsed mode. Releases additional tokens only when previously released tokens have been utilized above the configured threshold",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"thresholdPercentage": {
 						SchemaProps: spec.SchemaProps{

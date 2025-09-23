@@ -1407,6 +1407,9 @@ message RateLimit {
   optional RateLimiterModes modes = 5;
 }
 
+// RateLimiterGoBackN is for the GoBackN mode.
+// Releases additional tokens only when previously released tokens have been utilized above the configured threshold
+// otherwise triggers a ramp-down. Ramp-down is also triggered when the request is made after quite a while.
 message RateLimiterGoBackN {
   // ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter,
   // that should be consumed at any instance to allow the rate limiter to unlock additional capacity.
@@ -1425,19 +1428,26 @@ message RateLimiterInMemoryStore {
 
 // RateLimiterModes defines the modes for rate limiting.
 message RateLimiterModes {
-  // If there is some traffic, then release the max possible tokens.
-  // +optional
-  optional RateLimiterRelaxed relaxed = 1;
-
   // Irrespective of the traffic, the rate limiter releases max possible tokens based on ramp-up duration.
   // +optional
   optional RateLimiterScheduled scheduled = 2;
 
+  // If there is some traffic, then release the max possible tokens.
+  // +optional
+  optional RateLimiterRelaxed relaxed = 1;
+
+  // Releases additional tokens only when previously released tokens have been utilized above the configured threshold
+  // +optional
   optional RateLimiterOnlyIfUsed onlyIfUsed = 3;
 
+  // Releases additional tokens only when previously released tokens have been utilized above the configured threshold
+  // otherwise triggers a ramp-down. Ramp-down is also triggered when the request is made after quite a while.
+  // +optional
   optional RateLimiterGoBackN goBackN = 4;
 }
 
+// RateLimiterOnlyIfUsed is for the OnlyIfUsed mode.
+// Releases additional tokens only when previously released tokens have been utilized above the configured threshold
 message RateLimiterOnlyIfUsed {
   // ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter,
   // that should be consumed at any instance to allow the rate limiter to unlock additional capacity.
