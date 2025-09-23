@@ -128,10 +128,10 @@ where
         match rate_limit_config
             .modes
             .as_ref()
-            .unwrap()
+            .expect("Rate limiter mode is required in config in order to specify onlyIfUsed")
             .only_if_used
             .as_ref()
-            .unwrap()
+            .expect("onlyIfUsed section is required in rate limiter config in order to specify thresholdPercentage")
             .threshold_percentage
         {
             Some(threshold_percentage) => Mode::OnlyIfUsed(threshold_percentage as usize),
@@ -146,10 +146,10 @@ where
         match rate_limit_config
             .modes
             .as_ref()
-            .unwrap()
+            .expect("Rate limiter mode is required in config in order to specify goBackN")
             .go_back_n
             .as_ref()
-            .unwrap()
+            .expect("goBackN section is required in rate limiter config in order to specify thresholdPercentage")
             .threshold_percentage
         {
             Some(threshold_percentage) => Mode::GoBackN(threshold_percentage as usize),
