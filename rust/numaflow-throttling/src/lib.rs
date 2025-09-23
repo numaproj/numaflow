@@ -131,14 +131,12 @@ impl<W> RateLimit<W> {
                     threshold_percentage,
                 )
             }
-            Mode::GoBackN(go_back_n_config) => {
-                self.go_back_n_slope_increase(
-                    &mut max_ever_filled,
-                    used_token_percentage,
-                    &go_back_n_config,
-                    cur_epoch,
-                )
-            }
+            Mode::GoBackN(go_back_n_config) => self.go_back_n_slope_increase(
+                &mut max_ever_filled,
+                used_token_percentage,
+                &go_back_n_config,
+                cur_epoch,
+            ),
         }
     }
 
@@ -224,7 +222,7 @@ impl<W> RateLimit<W> {
             .load(std::sync::atomic::Ordering::Relaxed);
         let time_diff = cur_epoch.checked_sub(prev_epoch).unwrap_or(0) as f32;
 
-        let GoBackNConfig{
+        let GoBackNConfig {
             cool_down_period,
             ramp_down_strength,
             utilization_threshold,
@@ -239,8 +237,8 @@ impl<W> RateLimit<W> {
             // equivalent to slope * (time_diff - 1)
             // We're using (time_diff - 1) here to make sure we don't decrease the amount to be
             // refilled if the calls were made between subsequent epochs
-            let reduced_refill =
-                *max_ever_filled - ramp_down_strength.clone() * self.token_calc_bounds.slope * (time_diff - 1.0);
+            let reduced_refill = *max_ever_filled
+                - ramp_down_strength.clone() * self.token_calc_bounds.slope * (time_diff - 1.0);
             // Make sure we do not go below the min or above the max
             let capped_refill = reduced_refill
                 .max(self.token_calc_bounds.min as f32)
@@ -623,6 +621,8 @@ impl<S: Store> RateLimit<WithState<S>> {
     }
 }
 
+/// Configuration for GoBackN mode
+/// This needs to be pub since
 #[derive(Clone, Debug)]
 pub struct GoBackNConfig {
     /// Cool down period in seconds
@@ -3429,6 +3429,12 @@ mod tests {
     async fn test_distributed_rate_limiter_go_back_n_mode_redis() {
         use test_utils::StoreType;
 
+        let default_go_back_n_config = GoBackNConfig {
+            cool_down_period: 1.0,
+            ramp_down_strength: 1.0,
+            utilization_threshold: 100,
+        };
+
         let test_cases = vec![
             // Integer slope with multiple pods
             // Keep acquiring min tokens without any gaps
@@ -3455,7 +3461,7 @@ mod tests {
                 vec![2, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_1".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .store_type(StoreType::Redis),
             // Integer slope with multiple pods
             // Refill amount should not increase when token utilization is less than threshold
@@ -3468,7 +3474,7 @@ mod tests {
                 vec![5, 2, 5, 5, 6],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_2".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .store_type(StoreType::Redis),
             // Integer slope with multiple pods
             // Increase in slope is delayed when there is a gap in epochs > 1
@@ -3478,10 +3484,10 @@ mod tests {
                 Duration::from_secs(10),
                 2,
                 vec![(None, 1), (None, 2), (None, 1), (None, 1)],
-                vec![5, 5, 5, 6],
+                vec![5, 5, 5, 5],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_3".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .store_type(StoreType::Redis),
             // Integer slope with multiple pods
             // The max_ever_filled should be not go below burst
@@ -3501,7 +3507,7 @@ mod tests {
                 vec![5, 5, 5, 5, 5, 6],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_4".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .store_type(StoreType::Redis),
             // Integer slope with multiple pods
             // Drop in max_ever_filled should be large for large gaps in epochs
@@ -3523,10 +3529,10 @@ mod tests {
                     (None, 1),
                     (None, 1),
                 ],
-                vec![5, 5, 6, 6, 7, 7, 8, 6, 7, 7],
+                vec![5, 5, 6, 6, 7, 7, 8, 6, 6, 7],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_5".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .store_type(StoreType::Redis),
             // Integer slope with multiple pods
             // Keep acquiring max tokens without any gaps
@@ -3553,7 +3559,7 @@ mod tests {
                 vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_6".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .store_type(StoreType::Redis),
             // Integer slope with multiple pods
             // Keep acquiring tokens without any gaps
@@ -3580,7 +3586,7 @@ mod tests {
                 vec![5, 4, 2, 5, 5, 6, 6, 7, 7, 8, 8, 9],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_7".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .store_type(StoreType::Redis),
             // Integer slope with multiple pods
             // Keep acquiring tokens without any gaps
@@ -3608,7 +3614,7 @@ mod tests {
                 vec![5, 4, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_8".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
             .store_type(StoreType::Redis),
             // Integer slope with multiple pods
@@ -3637,7 +3643,11 @@ mod tests {
                 vec![5, 4, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_9".to_string())
-            .mode(Mode::GoBackN(90))
+            .mode(Mode::GoBackN(GoBackNConfig {
+                cool_down_period: 1.0,
+                ramp_down_strength: 1.0,
+                utilization_threshold: 90,
+            }))
             .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
             .store_type(StoreType::Redis),
             // Integer slope with multiple pods
@@ -3665,7 +3675,11 @@ mod tests {
                 vec![5, 4, 2, 5, 5, 6, 6, 7, 7, 8, 8, 9],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_10".to_string())
-            .mode(Mode::GoBackN(80))
+            .mode(Mode::GoBackN(GoBackNConfig {
+                cool_down_period: 1.0,
+                ramp_down_strength: 1.0,
+                utilization_threshold: 80,
+            }))
             .deposited_tokens(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
             .store_type(StoreType::Redis),
             // Integer slope with multiple pods
@@ -3693,7 +3707,11 @@ mod tests {
                 vec![5, 4, 2, 5, 5, 5, 5, 6, 5, 6, 6, 7],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_11".to_string())
-            .mode(Mode::GoBackN(80))
+            .mode(Mode::GoBackN(GoBackNConfig {
+                cool_down_period: 1.0,
+                ramp_down_strength: 1.0,
+                utilization_threshold: 80,
+            }))
             .deposited_tokens(vec![1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1])
             .store_type(StoreType::Redis),
             // Integer slope with multiple pods
@@ -3725,7 +3743,7 @@ mod tests {
                 vec![5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 9, 8, 8, 7, 7, 6],
             )
             .test_name("test_distributed_rate_limiter_go_back_n_mode_redis_12".to_string())
-            .mode(Mode::GoBackN(100))
+            .mode(Mode::GoBackN(default_go_back_n_config.clone()))
             .deposited_tokens(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 8, 7, 7, 6])
             .store_type(StoreType::Redis),
         ];
