@@ -34,7 +34,9 @@ type RateLimiterModes struct {
 	RateLimiterRelaxed *RateLimiterRelaxed `json:"relaxed,omitempty" protobuf:"varint,1,opt,name=relaxed"`
 	// Irrespective of the traffic, the rate limiter releases max possible tokens based on ramp-up duration.
 	// +optional
-	RateLimiterScheduled *RateLimiterScheduled `json:"scheduled,omitempty" protobuf:"varint,2,opt,name=scheduled"`
+	RateLimiterScheduled  *RateLimiterScheduled  `json:"scheduled,omitempty" protobuf:"varint,2,opt,name=scheduled"`
+	RateLimiterOnlyIfUsed *RateLimiterOnlyIfUsed `json:"onlyIfUsed,omitempty" protobuf:"bytes,3,opt,name=onlyIfUsed"`
+	RateLimiterGoBackN    *RateLimiterGoBackN    `json:"goBackN,omitempty" protobuf:"bytes,4,opt,name=goBackN"`
 }
 
 // RateLimiterRelaxed is for the relaxed mode. It will release the max possible tokens if there is some traffic.
@@ -43,6 +45,31 @@ type RateLimiterRelaxed struct{}
 // RateLimiterScheduled is for the scheduled mode.
 // It will release the max possible tokens based on ramp-up duration irrespective of traffic encountered.
 type RateLimiterScheduled struct{}
+
+type RateLimiterOnlyIfUsed struct {
+	// ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter,
+	// that should be consumed at any instance to allow the rate limiter to unlock additional capacity.
+	// For example, given the following configuration:
+	// - max = 100
+	// - min = 10
+	// - rampUpDuration = 10s i.e.--> slope = 10 messages/second
+	// - thresholdPercentage = 50
+	// at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock
+	// additional capacity of 10 messages at t = 1 to make the total capacity of 20.
+	ThresholdPercentage *uint64 `json:"thresholdPercentage,omitempty" protobuf:"varint,1,opt,name=thresholdPercentage"`
+}
+type RateLimiterGoBackN struct {
+	// ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter,
+	// that should be consumed at any instance to allow the rate limiter to unlock additional capacity.
+	// For example, given the following configuration:
+	// - max = 100
+	// - min = 10
+	// - rampUpDuration = 10s i.e.--> slope = 10 messages/second
+	// - thresholdPercentage = 50
+	// at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock
+	// additional capacity of 10 messages at t = 1 to make the total capacity of 20.
+	ThresholdPercentage *uint64 `json:"thresholdPercentage,omitempty" protobuf:"varint,1,opt,name=thresholdPercentage"`
+}
 
 type RateLimiterStore struct {
 	// RedisStore is used to define the redis store for the rate limit.

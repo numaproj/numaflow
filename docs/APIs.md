@@ -9036,6 +9036,72 @@ RateLimiterModes is used to define the modes for rate limiting.
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.RateLimiterGoBackN">
+
+RateLimiterGoBackN
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterModes">RateLimiterModes</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>thresholdPercentage</code></br> <em> uint64 </em>
+</td>
+
+<td>
+
+<p>
+
+ThresholdPercentage specifies the minimum percentage of capacity,
+availed by the rate limiter, that should be consumed at any instance to
+allow the rate limiter to unlock additional capacity. For example, given
+the following configuration: - max = 100 - min = 10 - rampUpDuration =
+10s i.e.–\> slope = 10 messages/second - thresholdPercentage = 50 at t =
+0, the rate limiter will release 10 messages and at least 5 of those
+should be consumed to unlock additional capacity of 10 messages at t = 1
+to make the total capacity of 20.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.RateLimiterInMemoryStore">
 
 RateLimiterInMemoryStore
@@ -9130,6 +9196,102 @@ RateLimiterScheduled </a> </em>
 
 Irrespective of the traffic, the rate limiter releases max possible
 tokens based on ramp-up duration.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>onlyIfUsed</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterOnlyIfUsed">
+RateLimiterOnlyIfUsed </a> </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>goBackN</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterGoBackN">
+RateLimiterGoBackN </a> </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.RateLimiterOnlyIfUsed">
+
+RateLimiterOnlyIfUsed
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.RateLimiterModes">RateLimiterModes</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>thresholdPercentage</code></br> <em> uint64 </em>
+</td>
+
+<td>
+
+<p>
+
+ThresholdPercentage specifies the minimum percentage of capacity,
+availed by the rate limiter, that should be consumed at any instance to
+allow the rate limiter to unlock additional capacity. For example, given
+the following configuration: - max = 100 - min = 10 - rampUpDuration =
+10s i.e.–\> slope = 10 messages/second - thresholdPercentage = 50 at t =
+0, the rate limiter will release 10 messages and at least 5 of those
+should be consumed to unlock additional capacity of 10 messages at t = 1
+to make the total capacity of 20.
 </p>
 
 </td>

@@ -142,6 +142,18 @@ spec:
                             type: integer
                           modes:
                             properties:
+                              goBackN:
+                                properties:
+                                  thresholdPercentage:
+                                    format: int64
+                                    type: integer
+                                type: object
+                              onlyIfUsed:
+                                properties:
+                                  thresholdPercentage:
+                                    format: int64
+                                    type: integer
+                                type: object
                               relaxed:
                                 type: object
                               scheduled:
@@ -7196,6 +7208,18 @@ spec:
                                   type: integer
                                 modes:
                                   properties:
+                                    goBackN:
+                                      properties:
+                                        thresholdPercentage:
+                                          format: int64
+                                          type: integer
+                                      type: object
+                                    onlyIfUsed:
+                                      properties:
+                                        thresholdPercentage:
+                                          format: int64
+                                          type: integer
+                                      type: object
                                     relaxed:
                                       type: object
                                     scheduled:

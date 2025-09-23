@@ -1407,6 +1407,19 @@ message RateLimit {
   optional RateLimiterModes modes = 5;
 }
 
+message RateLimiterGoBackN {
+  // ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter,
+  // that should be consumed at any instance to allow the rate limiter to unlock additional capacity.
+  // For example, given the following configuration:
+  // - max = 100
+  // - min = 10
+  // - rampUpDuration = 10s i.e.--> slope = 10 messages/second
+  // - thresholdPercentage = 50
+  // at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock
+  // additional capacity of 10 messages at t = 1 to make the total capacity of 20.
+  optional uint64 thresholdPercentage = 1;
+}
+
 message RateLimiterInMemoryStore {
 }
 
@@ -1419,6 +1432,23 @@ message RateLimiterModes {
   // Irrespective of the traffic, the rate limiter releases max possible tokens based on ramp-up duration.
   // +optional
   optional RateLimiterScheduled scheduled = 2;
+
+  optional RateLimiterOnlyIfUsed onlyIfUsed = 3;
+
+  optional RateLimiterGoBackN goBackN = 4;
+}
+
+message RateLimiterOnlyIfUsed {
+  // ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter,
+  // that should be consumed at any instance to allow the rate limiter to unlock additional capacity.
+  // For example, given the following configuration:
+  // - max = 100
+  // - min = 10
+  // - rampUpDuration = 10s i.e.--> slope = 10 messages/second
+  // - thresholdPercentage = 50
+  // at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock
+  // additional capacity of 10 messages at t = 1 to make the total capacity of 20.
+  optional uint64 thresholdPercentage = 1;
 }
 
 message RateLimiterRedisStore {

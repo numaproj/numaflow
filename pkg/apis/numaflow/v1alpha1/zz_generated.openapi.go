@@ -95,8 +95,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSink":                       schema_pkg_apis_numaflow_v1alpha1_PulsarSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSource":                     schema_pkg_apis_numaflow_v1alpha1_PulsarSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimit":                        schema_pkg_apis_numaflow_v1alpha1_RateLimit(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterGoBackN":               schema_pkg_apis_numaflow_v1alpha1_RateLimiterGoBackN(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterInMemoryStore":         schema_pkg_apis_numaflow_v1alpha1_RateLimiterInMemoryStore(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterModes":                 schema_pkg_apis_numaflow_v1alpha1_RateLimiterModes(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterOnlyIfUsed":            schema_pkg_apis_numaflow_v1alpha1_RateLimiterOnlyIfUsed(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRedisStore":            schema_pkg_apis_numaflow_v1alpha1_RateLimiterRedisStore(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRelaxed":               schema_pkg_apis_numaflow_v1alpha1_RateLimiterRelaxed(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterScheduled":             schema_pkg_apis_numaflow_v1alpha1_RateLimiterScheduled(ref),
@@ -4320,6 +4322,25 @@ func schema_pkg_apis_numaflow_v1alpha1_RateLimit(ref common.ReferenceCallback) c
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_RateLimiterGoBackN(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"thresholdPercentage": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter, that should be consumed at any instance to allow the rate limiter to unlock additional capacity. For example, given the following configuration: - max = 100 - min = 10 - rampUpDuration = 10s i.e.--> slope = 10 messages/second - thresholdPercentage = 50 at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock additional capacity of 10 messages at t = 1 to make the total capacity of 20.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_RateLimiterInMemoryStore(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -4349,11 +4370,40 @@ func schema_pkg_apis_numaflow_v1alpha1_RateLimiterModes(ref common.ReferenceCall
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterScheduled"),
 						},
 					},
+					"onlyIfUsed": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterOnlyIfUsed"),
+						},
+					},
+					"goBackN": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterGoBackN"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRelaxed", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterScheduled"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterGoBackN", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterOnlyIfUsed", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterRelaxed", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterScheduled"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_RateLimiterOnlyIfUsed(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"thresholdPercentage": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter, that should be consumed at any instance to allow the rate limiter to unlock additional capacity. For example, given the following configuration: - max = 100 - min = 10 - rampUpDuration = 10s i.e.--> slope = 10 messages/second - thresholdPercentage = 50 at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock additional capacity of 10 messages at t = 1 to make the total capacity of 20.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
