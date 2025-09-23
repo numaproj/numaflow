@@ -212,7 +212,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sqs_error_conversion() {
-        let modeled_error = mock!(aws_sdk_sqs::Client::get_queue_url).then_error(|| {
+        let modeled_error = mock!(Client::get_queue_url).then_error(|| {
             aws_sdk_sqs::operation::get_queue_url::GetQueueUrlError::generic(
                 ErrorMetadata::builder().code("InvalidAddress").build(),
             )
@@ -222,7 +222,7 @@ mod tests {
             .rule_mode(RuleMode::MatchAny)
             .with_rule(&modeled_error);
 
-        let sqs = aws_sdk_sqs::Client::from_conf(
+        let sqs = Client::from_conf(
             aws_sdk_sqs::Config::builder()
                 .behavior_version(aws_behavior_version())
                 .region(aws_sdk_sqs::config::Region::new("us-east-1"))
