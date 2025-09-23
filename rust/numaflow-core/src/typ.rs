@@ -119,6 +119,42 @@ where
         .is_some()
     {
         Mode::Scheduled
+    } else if rate_limit_config
+        .modes
+        .as_ref()
+        .and_then(|m| m.only_if_used.as_ref())
+        .is_some()
+    {
+        match rate_limit_config
+            .modes
+            .as_ref()
+            .unwrap()
+            .only_if_used
+            .as_ref()
+            .unwrap()
+            .threshold_percentage
+        {
+            Some(threshold_percentage) => Mode::OnlyIfUsed(threshold_percentage as usize),
+            None => Mode::Relaxed,
+        }
+    } else if rate_limit_config
+        .modes
+        .as_ref()
+        .and_then(|m| m.go_back_n.as_ref())
+        .is_some()
+    {
+        match rate_limit_config
+            .modes
+            .as_ref()
+            .unwrap()
+            .go_back_n
+            .as_ref()
+            .unwrap()
+            .threshold_percentage
+        {
+            Some(threshold_percentage) => Mode::GoBackN(threshold_percentage as usize),
+            None => Mode::Relaxed,
+        }
     } else {
         Mode::Relaxed
     };
