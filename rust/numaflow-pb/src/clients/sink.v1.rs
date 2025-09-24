@@ -33,6 +33,9 @@ pub mod sink_request {
             ::prost::alloc::string::String,
             ::prost::alloc::string::String,
         >,
+        /// Metadata is the metadata of the message
+        #[prost(message, optional, tag = "7")]
+        pub metadata: ::core::option::Option<crate::common::metadata::Metadata>,
     }
 }
 ///

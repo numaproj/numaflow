@@ -8,7 +8,8 @@ use crate::config::get_vertex_name;
 use crate::config::pipeline::VertexType::ReduceUDF;
 use crate::config::pipeline::isb::{BufferReaderConfig, CompressionType, ISBConfig, Stream};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
+use crate::message::{IntOffset, Message, MessageID, MessageType, Offset, ReadAck};
+use crate::metadata::Metadata;
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
     jetstream_isb_metrics_labels, pipeline_metric_labels, pipeline_metrics,
