@@ -414,12 +414,6 @@ impl UserDefinedStreamMap {
                 .remove(&resp.id)
                 .expect("map entry should always be present");
 
-            pipeline_metrics()
-                .forwarder
-                .udf_write_total
-                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                .inc();
-
             // once we get eot, we can drop the sender to let the callee
             // know that we are done sending responses
             if let Some(map::TransmissionStatus { eot: true }) = resp.status {
@@ -442,6 +436,11 @@ impl UserDefinedStreamMap {
                     .await
                     .expect("failed to send response");
                 message_info.current_index += 1;
+                pipeline_metrics()
+                    .forwarder
+                    .udf_write_total
+                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                    .inc();
             }
 
             // Write the sender back to the map, because we need to send
