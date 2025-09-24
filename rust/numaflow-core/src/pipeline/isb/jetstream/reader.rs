@@ -445,18 +445,12 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
         // deposit the unused tokens back to the rate limiter
         // utilize the cur_epoch we calculated when we initially acquired the tokens
         // to ensure that the tokens are deposited for the correct epoch.
-        match &self.rate_limiter {
-            Some(rate_limiter) => {
-                rate_limiter
-                    .deposit_unused(
-                        effective_batch_size
-                            .checked_sub(jetstream_messages.len())
-                            .unwrap_or(0),
-                        token_grabbed_epoch,
-                    )
-                    .await;
-            }
-            None => {}
+        if let Some(rate_limiter) = &self.rate_limiter {
+            rate_limiter.deposit_unused(
+                effective_batch_size.saturating_sub(jetstream_messages.len()),
+                token_grabbed_epoch,
+            )
+            .await;
         }
 
         pipeline_metrics()
