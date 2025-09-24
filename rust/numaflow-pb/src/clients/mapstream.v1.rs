@@ -16,6 +16,9 @@ pub struct MapStreamRequest {
         ::prost::alloc::string::String,
         ::prost::alloc::string::String,
     >,
+    /// Metadata is the metadata of the message
+    #[prost(message, optional, tag = "6")]
+    pub metadata: ::core::option::Option<crate::common::metadata::Metadata>,
 }
 /// *
 /// MapStreamResponse represents a response element.
@@ -34,6 +37,9 @@ pub mod map_stream_response {
         pub value: ::prost::alloc::vec::Vec<u8>,
         #[prost(string, repeated, tag = "3")]
         pub tags: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+        /// Metadata is the metadata of the message
+        #[prost(message, optional, tag = "4")]
+        pub metadata: ::core::option::Option<crate::common::metadata::Metadata>,
     }
 }
 /// *

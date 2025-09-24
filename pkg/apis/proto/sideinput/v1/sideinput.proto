@@ -20,6 +20,7 @@ option go_package = "github.com/numaproj/numaflow-go/pkg/apis/proto/sideinput/v1
 option java_package = "io.numaproj.numaflow.sideinput.v1";
 
 import "google/protobuf/empty.proto";
+import "metadata.proto";
 
 package sideinput.v1;
 
@@ -28,9 +29,9 @@ package sideinput.v1;
 // which allows access to slow updated data or configuration without needing to retrieve
 // it during each message processing.
 // Through this service we should be able to:-
-// 1) Invoke retrieval request for a single Side Input parameter, which in turn should
+// (1) Invoke retrieval request for a single Side Input parameter, which in turn should
 //    check for updates and return its latest value.
-// 2) Provide a health check endpoint to indicate whether the service is ready to be used.
+// (2) Provide a health check endpoint to indicate whether the service is ready to be used.
 service SideInput {
   // RetrieveSideInput is the endpoint to retrieve the latest value of a given Side Input.
   rpc RetrieveSideInput(google.protobuf.Empty) returns (SideInputResponse);
@@ -49,6 +50,8 @@ message SideInputResponse {
   // True if value should not be broadcasted
   // False if value should be broadcasted
   bool no_broadcast = 2;
+  // Metadata is the metadata of the message
+  metadata.Metadata metadata = 3;
 }
 
 /**

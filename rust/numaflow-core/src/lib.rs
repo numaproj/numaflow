@@ -28,6 +28,8 @@ mod config;
 
 /// Internal message structure that is passed around.
 mod message;
+/// Metadata conversion utilities and types.
+mod metadata;
 /// Shared entities that can be used orthogonal to different modules.
 mod shared;
 /// [Sink] serves as the endpoint for processed data that has been outputted from the platform,

@@ -21,6 +21,7 @@ option java_package = "io.numaproj.numaflow.reduce.v1";
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
+import "metadata.proto";
 
 
 package reduce.v1;
@@ -55,6 +56,8 @@ message ReduceRequest {
     google.protobuf.Timestamp event_time = 3;
     google.protobuf.Timestamp watermark = 4;
     map<string, string> headers = 5;
+    // Metadata is the metadata of the message
+    metadata.Metadata metadata = 6;
   }
 
   Payload payload = 1;
@@ -77,6 +80,8 @@ message ReduceResponse {
     repeated string keys = 1;
     bytes value = 2;
     repeated string tags = 3;
+    // Metadata is the metadata of the message
+    metadata.Metadata metadata = 4;
   }
 
   Result result = 1;
