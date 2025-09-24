@@ -9269,6 +9269,7 @@ Description
 
 <td>
 
+<em>(Optional)</em>
 <p>
 
 CoolDownPeriod is the duration after which the rate limiter will start
@@ -9288,6 +9289,7 @@ ramping down if the request is made after the cool-down period.
 
 <td>
 
+<em>(Optional)</em>
 <p>
 
 RampDownStrength is the strength of the ramp-down. It is a value between
@@ -9308,6 +9310,7 @@ the rate of slope=(max - min)/duration.
 
 <td>
 
+<em>(Optional)</em>
 <p>
 
 ThresholdPercentage specifies the minimum percentage of capacity,
@@ -9531,16 +9534,26 @@ Description
 
 <td>
 
+<em>(Optional)</em>
 <p>
 
 ThresholdPercentage specifies the minimum percentage of capacity,
 availed by the rate limiter, that should be consumed at any instance to
-allow the rate limiter to unlock additional capacity. For example, given
-the following configuration: - max = 100 - min = 10 - rampUpDuration =
-10s i.e.–\> slope = 10 messages/second - thresholdPercentage = 50 at t =
-0, the rate limiter will release 10 messages and at least 5 of those
-should be consumed to unlock additional capacity of 10 messages at t = 1
-to make the total capacity of 20.
+allow the rate limiter to unlock additional capacity.
+</p>
+
+<p>
+
+Defaults to 50%
+</p>
+
+<p>
+
+For example, given the following configuration: - max = 100 - min = 10 -
+rampUpDuration = 10s i.e.–\> slope = 10 messages/second -
+thresholdPercentage = 50 at t = 0, the rate limiter will release 10
+messages and at least 5 of those should be consumed to unlock additional
+capacity of 10 messages at t = 1 to make the total capacity of 20.
 </p>
 
 </td>

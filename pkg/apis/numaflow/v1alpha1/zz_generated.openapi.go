@@ -4480,7 +4480,7 @@ func schema_pkg_apis_numaflow_v1alpha1_RateLimiterOnlyIfUsed(ref common.Referenc
 				Properties: map[string]spec.Schema{
 					"thresholdPercentage": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter, that should be consumed at any instance to allow the rate limiter to unlock additional capacity. For example, given the following configuration: - max = 100 - min = 10 - rampUpDuration = 10s i.e.--> slope = 10 messages/second - thresholdPercentage = 50 at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock additional capacity of 10 messages at t = 1 to make the total capacity of 20.",
+							Description: "ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter, that should be consumed at any instance to allow the rate limiter to unlock additional capacity.\n\nDefaults to 50%\n\nFor example, given the following configuration: - max = 100 - min = 10 - rampUpDuration = 10s i.e.--> slope = 10 messages/second - thresholdPercentage = 50 at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock additional capacity of 10 messages at t = 1 to make the total capacity of 20.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},

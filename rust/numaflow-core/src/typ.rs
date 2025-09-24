@@ -125,18 +125,15 @@ where
         .and_then(|m| m.only_if_used.as_ref())
         .is_some()
     {
-        match rate_limit_config
+        let threshold_percentage = rate_limit_config
             .modes
             .as_ref()
             .expect("Rate limiter mode is required in config in order to specify onlyIfUsed")
             .only_if_used
             .as_ref()
             .expect("onlyIfUsed section is required in rate limiter config in order to specify thresholdPercentage")
-            .threshold_percentage
-        {
-            Some(threshold_percentage) => Mode::OnlyIfUsed(threshold_percentage as usize),
-            None => Mode::Relaxed,
-        }
+            .threshold_percentage.unwrap_or(50) as usize;
+        Mode::OnlyIfUsed(threshold_percentage)
     } else if rate_limit_config
         .modes
         .as_ref()
@@ -178,6 +175,8 @@ where
     } else {
         Mode::Relaxed
     };
+
+    println!("Rate limiter mode: {}", mode);
 
     let bounds = TokenCalcBounds::new(
         rate_limit_config.max,

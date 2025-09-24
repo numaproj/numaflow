@@ -56,6 +56,9 @@ type RateLimiterScheduled struct{}
 type RateLimiterOnlyIfUsed struct {
 	// ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter,
 	// that should be consumed at any instance to allow the rate limiter to unlock additional capacity.
+	//
+	// Defaults to 50%
+	//
 	// For example, given the following configuration:
 	// - max = 100
 	// - min = 10
@@ -63,6 +66,8 @@ type RateLimiterOnlyIfUsed struct {
 	// - thresholdPercentage = 50
 	// at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock
 	// additional capacity of 10 messages at t = 1 to make the total capacity of 20.
+	// +optional
+	// +kubebuilder:default=50
 	ThresholdPercentage *uint32 `json:"thresholdPercentage,omitempty" protobuf:"varint,1,opt,name=thresholdPercentage"`
 }
 
@@ -72,9 +77,13 @@ type RateLimiterOnlyIfUsed struct {
 type RateLimiterGoBackN struct {
 	// CoolDownPeriod is the duration after which the rate limiter will start ramping down if the request is made after
 	// the cool-down period.
+	// +optional
+	// +kubebuilder:default=5
 	CoolDownPeriod *uint32 `json:"coolDownPeriod,omitempty" protobuf:"varint,1,opt,name=coolDownPeriod"`
 	// RampDownStrength is the strength of the ramp-down. It is a value between 0 and 1. 0 means no ramp-down and 1 means
 	// token pool is ramped down at the rate of slope=(max - min)/duration.
+	// +optional
+	// +kubebuilder:default=50
 	RampDownPercentage *uint32 `json:"rampDownPercentage,omitempty" protobuf:"varint,2,opt,name=rampDownPercentage"`
 	// ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter,
 	// that should be consumed at any instance to allow the rate limiter to unlock additional capacity.
@@ -85,6 +94,8 @@ type RateLimiterGoBackN struct {
 	// - thresholdPercentage = 50
 	// at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock
 	// additional capacity of 10 messages at t = 1 to make the total capacity of 20.
+	// +optional
+	// +kubebuilder:default=50
 	ThresholdPercentage *uint32 `json:"thresholdPercentage,omitempty" protobuf:"varint,3,opt,name=thresholdPercentage"`
 }
 

@@ -1456,10 +1456,14 @@ message RateLimit {
 message RateLimiterGoBackN {
   // CoolDownPeriod is the duration after which the rate limiter will start ramping down if the request is made after
   // the cool-down period.
+  // +optional
+  // +kubebuilder:default=5
   optional uint32 coolDownPeriod = 1;
 
   // RampDownStrength is the strength of the ramp-down. It is a value between 0 and 1. 0 means no ramp-down and 1 means
   // token pool is ramped down at the rate of slope=(max - min)/duration.
+  // +optional
+  // +kubebuilder:default=50
   optional uint32 rampDownPercentage = 2;
 
   // ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter,
@@ -1471,6 +1475,8 @@ message RateLimiterGoBackN {
   // - thresholdPercentage = 50
   // at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock
   // additional capacity of 10 messages at t = 1 to make the total capacity of 20.
+  // +optional
+  // +kubebuilder:default=50
   optional uint32 thresholdPercentage = 3;
 }
 
@@ -1502,6 +1508,9 @@ message RateLimiterModes {
 message RateLimiterOnlyIfUsed {
   // ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter,
   // that should be consumed at any instance to allow the rate limiter to unlock additional capacity.
+  //
+  // Defaults to 50%
+  //
   // For example, given the following configuration:
   // - max = 100
   // - min = 10
@@ -1509,6 +1518,8 @@ message RateLimiterOnlyIfUsed {
   // - thresholdPercentage = 50
   // at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock
   // additional capacity of 10 messages at t = 1 to make the total capacity of 20.
+  // +optional
+  // +kubebuilder:default=50
   optional uint32 thresholdPercentage = 1;
 }
 

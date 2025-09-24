@@ -20,7 +20,7 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RateLimiterOnlyIfUsed {
-    /// ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter, that should be consumed at any instance to allow the rate limiter to unlock additional capacity. For example, given the following configuration: - max = 100 - min = 10 - rampUpDuration = 10s i.e.--> slope = 10 messages/second - thresholdPercentage = 50 at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock additional capacity of 10 messages at t = 1 to make the total capacity of 20.
+    /// ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter, that should be consumed at any instance to allow the rate limiter to unlock additional capacity.  Defaults to 50%  For example, given the following configuration: - max = 100 - min = 10 - rampUpDuration = 10s i.e.--> slope = 10 messages/second - thresholdPercentage = 50 at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock additional capacity of 10 messages at t = 1 to make the total capacity of 20.
     #[serde(
         rename = "thresholdPercentage",
         skip_serializing_if = "Option::is_none"

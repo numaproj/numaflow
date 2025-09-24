@@ -2560,18 +2560,22 @@ spec:
                           goBackN:
                             properties:
                               coolDownPeriod:
+                                default: 5
                                 format: int32
                                 type: integer
                               rampDownPercentage:
+                                default: 50
                                 format: int32
                                 type: integer
                               thresholdPercentage:
+                                default: 50
                                 format: int32
                                 type: integer
                             type: object
                           onlyIfUsed:
                             properties:
                               thresholdPercentage:
+                                default: 50
                                 format: int32
                                 type: integer
                             type: object
