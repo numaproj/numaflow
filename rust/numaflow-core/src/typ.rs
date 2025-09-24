@@ -176,8 +176,6 @@ where
         Mode::Relaxed
     };
 
-    println!("Rate limiter mode: {}", mode);
-
     let bounds = TokenCalcBounds::new(
         rate_limit_config.max,
         rate_limit_config.min,
