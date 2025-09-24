@@ -188,6 +188,10 @@ pub enum HttpActorMessage {
         offsets: Vec<String>,
         response_tx: oneshot::Sender<Result<()>>,
     },
+    Nack {
+        offsets: Vec<String>,
+        response_tx: oneshot::Sender<Result<()>>,
+    },
     Pending(oneshot::Sender<Option<usize>>),
 }
 
@@ -245,6 +249,15 @@ impl HttpSourceActor {
                     debug!(count = offsets.len(), "Ack'ing messages from HttpSource");
                     response_tx
                         .send(self.ack(offsets).await)
+                        .expect("rx should be open");
+                }
+                HttpActorMessage::Nack {
+                    offsets,
+                    response_tx,
+                } => {
+                    debug!(count = offsets.len(), "Nack'ing messages from HttpSource");
+                    response_tx
+                        .send(self.nack(offsets).await)
                         .expect("rx should be open");
                 }
                 HttpActorMessage::Pending(response_tx) => {
@@ -327,6 +340,25 @@ impl HttpSourceActor {
         Ok(())
     }
 
+    /// Negatively acknowledge messages and send HTTP error responses back to clients
+    async fn nack(&self, offsets: Vec<String>) -> Result<()> {
+        let mut pending_responses = self.inflight_requests.lock().await;
+
+        for offset in offsets {
+            if let Some(response_tx) = pending_responses.remove(&offset) {
+                // Send can fail, when the client disconnects because timeout etc. (buffer full case)
+                let _ = response_tx.send(StatusCode::INTERNAL_SERVER_ERROR).map_err(|_| {
+                    warn!(message_id = %offset, "Failed to send nack response for message - client may have disconnected");
+                });
+            }
+        }
+
+        // we make sure that the `self.inflight_requests.len() == 0` are empty during shutdown when
+        // the actor is dropped.
+
+        Ok(())
+    }
+
     /// Send error responses to all pending requests during shutdown
     async fn fail_pending_requests(&self) {
         let mut pending_responses = self.inflight_requests.lock().await;
@@ -389,6 +421,19 @@ impl HttpSourceHandle {
         let (tx, rx) = oneshot::channel();
         self.actor_tx
             .send(HttpActorMessage::Ack {
+                offsets,
+                response_tx: tx,
+            })
+            .await
+            .expect("actor should be running");
+        rx.await.map_err(|e| Error::ChannelRecv(e.to_string()))?
+    }
+
+    /// Nack messages to the HttpSource.
+    pub async fn nack(&self, offsets: Vec<String>) -> Result<()> {
+        let (tx, rx) = oneshot::channel();
+        self.actor_tx
+            .send(HttpActorMessage::Nack {
                 offsets,
                 response_tx: tx,
             })

@@ -40,6 +40,10 @@ service Source {
   // Clients sends n requests and expects n responses.
   rpc AckFn(stream AckRequest) returns (stream AckResponse);
 
+  // NackFn negatively acknowledges a batch of offsets. Invoked during a critical error in the mono vertex or pipeline.
+  // Unlike AckFn its not a streaming rpc because this is only invoked when there is a critical error (error path).
+  rpc NackFn(NackRequest) returns (NackResponse);
+
   // PendingFn returns the number of pending records at the user defined source.
   rpc PendingFn(google.protobuf.Empty) returns (PendingResponse);
 
@@ -156,6 +160,24 @@ message AckResponse {
   Result result = 1;
   // Handshake message between client and server to indicate the start of transmission.
   optional Handshake handshake = 2;
+}
+
+message NackRequest {
+  message Request {
+    // Required field holding the offset to be nacked
+    repeated Offset offsets = 1;
+  }
+  // Required field holding the request. The list will be ordered and will have the same order as the original Read response.
+  Request request = 1;
+}
+
+message NackResponse {
+  message Result {
+    // Required field indicating the nack request is successful.
+    google.protobuf.Empty success = 1;
+  }
+  // Required field holding the result.
+  Result result = 1;
 }
 
 /*

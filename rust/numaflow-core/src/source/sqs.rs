@@ -40,6 +40,9 @@ impl From<numaflow_sqs::SqsSourceError> for Error {
             numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::Sqs(e)) => {
                 Error::Source(e.to_string())
             }
+            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::Sts(e)) => {
+                Error::Source(e.to_string())
+            }
             numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::ActorTaskTerminated(_)) => {
                 Error::ActorPatternRecv(value.to_string())
             }
@@ -101,6 +104,11 @@ impl source::SourceAcker for SqsSource {
             sqs_offsets.push(string_offset.offset);
         }
         self.ack_offsets(sqs_offsets).await.map_err(Into::into)
+    }
+
+    async fn nack(&mut self, _offsets: Vec<Offset>) -> crate::error::Result<()> {
+        // SQS doesn't support nack - no-op
+        Ok(())
     }
 }
 
@@ -186,6 +194,7 @@ pub mod tests {
             endpoint_url: None,
             attribute_names: vec![],
             message_attribute_names: vec![],
+            assume_role_config: None,
         })
         .batch_size(1)
         .timeout(Duration::from_secs(1))

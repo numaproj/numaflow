@@ -23,6 +23,9 @@ impl From<numaflow_sqs::SqsSinkError> for Error {
             numaflow_sqs::SqsSinkError::Error(numaflow_sqs::Error::Sqs(e)) => {
                 Error::Sink(e.to_string())
             }
+            numaflow_sqs::SqsSinkError::Error(numaflow_sqs::Error::Sts(e)) => {
+                Error::Sink(e.to_string())
+            }
             numaflow_sqs::SqsSinkError::Error(numaflow_sqs::Error::ActorTaskTerminated(_)) => {
                 Error::ActorPatternRecv(value.to_string())
             }
@@ -158,6 +161,8 @@ pub mod tests {
             }
         }
 
+        async fn nack(&self, _offsets: Vec<Offset>) {}
+
         async fn pending(&self) -> Option<usize> {
             Some(
                 self.num - self.sent_count.load(Ordering::SeqCst)
@@ -243,7 +248,7 @@ pub mod tests {
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
         let (src_read, src_ack, lag_reader) =
-            new_source(client, 5, Duration::from_millis(100), cln_token)
+            new_source(client, 5, Duration::from_millis(100), cln_token, true)
                 .await
                 .map_err(|e| panic!("failed to create source reader: {:?}", e))
                 .unwrap();
@@ -276,6 +281,7 @@ pub mod tests {
             region: SQS_DEFAULT_REGION,
             queue_name: "test-q",
             queue_owner_aws_account_id: "12345678912",
+            assume_role_config: None,
         })
         .client(sqs_client)
         .build()
