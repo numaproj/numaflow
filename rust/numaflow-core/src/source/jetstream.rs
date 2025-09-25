@@ -142,7 +142,7 @@ mod tests {
         assert_eq!(message.value, Bytes::from("test_value"));
         assert_eq!(message.offset.to_string(), "42-0");
         assert_eq!(message.headers.get("key"), Some(&"value".to_string()));
-        assert_eq!(message.metadata.unwrap().previous_vertex, get_vertex_name());
+        assert_eq!(message.metadata.unwrap().previous_vertex, "");
 
         // Verify that the published timestamp is correctly used as event_time
         assert_eq!(message.event_time, test_timestamp);
