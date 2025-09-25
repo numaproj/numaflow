@@ -25,6 +25,7 @@ impl From<Message> for accumulator::Payload {
             watermark: msg.watermark.map(prost_timestamp_from_utc),
             id: msg.id.to_string(),
             headers: msg.headers,
+            metadata: msg.metadata.map(|m| m.into()),
         }
     }
 }

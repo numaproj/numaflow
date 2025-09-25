@@ -11,6 +11,9 @@ pub struct SideInputResponse {
     /// False if value should be broadcasted
     #[prost(bool, tag = "2")]
     pub no_broadcast: bool,
+    /// Metadata is the metadata of the message
+    #[prost(message, optional, tag = "3")]
+    pub metadata: ::core::option::Option<crate::common::metadata::Metadata>,
 }
 /// *
 /// ReadyResponse is the health check result.
@@ -35,9 +38,9 @@ pub mod side_input_client {
     /// which allows access to slow updated data or configuration without needing to retrieve
     /// it during each message processing.
     /// Through this service we should be able to:-
-    /// 1) Invoke retrieval request for a single Side Input parameter, which in turn should
+    /// (1) Invoke retrieval request for a single Side Input parameter, which in turn should
     ///    check for updates and return its latest value.
-    /// 2) Provide a health check endpoint to indicate whether the service is ready to be used.
+    /// (2) Provide a health check endpoint to indicate whether the service is ready to be used.
     #[derive(Debug, Clone)]
     pub struct SideInputClient<T> {
         inner: tonic::client::Grpc<T>,
