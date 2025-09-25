@@ -36,11 +36,8 @@ impl From<NatsMessage> for Message {
                 index: 0,
             },
             headers: Default::default(),
-            metadata: Some(Metadata {
-                previous_vertex: get_vertex_name().to_string(),
-                sys_metadata: Default::default(),
-                user_metadata: Default::default(),
-            }),
+            // Set default metadata so that metadata is always present.
+            metadata: Some(Metadata::default()),
             is_late: false,
         }
     }
@@ -109,7 +106,7 @@ mod tests {
 
         assert_eq!(message.value, Bytes::from("test_value"));
         assert_eq!(message.offset.to_string(), "msg-id-123-0");
-        assert_eq!(message.metadata.unwrap().previous_vertex, get_vertex_name());
+        assert_eq!(message.metadata.unwrap().previous_vertex, "");
         assert_eq!(message.event_time, test_timestamp);
         assert_eq!(message.event_time.timestamp(), 1672576245);
         assert_eq!(message.event_time.timestamp_subsec_nanos(), 123456789);

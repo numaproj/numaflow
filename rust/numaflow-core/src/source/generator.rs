@@ -195,11 +195,8 @@ mod stream_generator {
                     index: Default::default(),
                 },
                 headers: Default::default(),
-                metadata: Some(crate::metadata::Metadata {
-                    previous_vertex: crate::config::get_vertex_name().to_string(),
-                    sys_metadata: Default::default(),
-                    user_metadata: Default::default(),
-                }),
+                // Set default metadata so that metadata is always present.
+                metadata: Some(crate::metadata::Metadata::default()),
                 is_late: false,
             }
         }
