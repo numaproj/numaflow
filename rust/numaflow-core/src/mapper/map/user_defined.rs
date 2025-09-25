@@ -13,7 +13,7 @@ use tracing::error;
 use crate::config::get_vertex_name;
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
-use crate::message::{Message, MessageID, Metadata, Offset};
+use crate::message::{Message, MessageID, Offset};
 use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 use crate::shared::grpc::prost_timestamp_from_utc;
 
@@ -32,7 +32,6 @@ struct ParentMessageInfo {
     /// this remains 0 for all except map-streaming because in map-streaming there could be more than
     /// one response for a single request.
     current_index: i32,
-    metadata: Option<Metadata>,
 }
 
 impl From<Message> for MapRequest {
@@ -44,6 +43,7 @@ impl From<Message> for MapRequest {
                 event_time: Some(prost_timestamp_from_utc(message.event_time)),
                 watermark: message.watermark.map(prost_timestamp_from_utc),
                 headers: message.headers,
+                metadata: message.metadata.map(|m| m.into()),
             }),
             id: message.offset.to_string(),
             handshake: None,
@@ -134,7 +134,6 @@ impl UserDefinedUnaryMap {
             is_late: message.is_late,
             start_time: Instant::now(),
             current_index: 0,
-            metadata: message.metadata.clone(),
         };
 
         pipeline_metrics()
@@ -247,7 +246,6 @@ impl UserDefinedBatchMap {
                 is_late: message.is_late,
                 start_time: Instant::now(),
                 current_index: 0,
-                metadata: message.metadata.clone(),
             };
 
             pipeline_metrics()
@@ -414,12 +412,6 @@ impl UserDefinedStreamMap {
                 .remove(&resp.id)
                 .expect("map entry should always be present");
 
-            pipeline_metrics()
-                .forwarder
-                .udf_write_total
-                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                .inc();
-
             // once we get eot, we can drop the sender to let the callee
             // know that we are done sending responses
             if let Some(map::TransmissionStatus { eot: true }) = resp.status {
@@ -442,6 +434,11 @@ impl UserDefinedStreamMap {
                     .await
                     .expect("failed to send response");
                 message_info.current_index += 1;
+                pipeline_metrics()
+                    .forwarder
+                    .udf_write_total
+                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                    .inc();
             }
 
             // Write the sender back to the map, because we need to send
@@ -467,7 +464,6 @@ impl UserDefinedStreamMap {
             start_time: Instant::now(),
             is_late: message.is_late,
             current_index: 0,
-            metadata: message.metadata.clone(),
         };
 
         pipeline_metrics()
@@ -509,7 +505,7 @@ impl From<UserDefinedMessage<'_>> for Message {
             headers: value.1.headers.clone(),
             watermark: None,
             is_late: value.1.is_late,
-            metadata: value.1.metadata.clone(),
+            metadata: value.0.metadata.map(|m| m.into()),
         }
     }
 }

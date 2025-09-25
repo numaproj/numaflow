@@ -4,6 +4,7 @@ use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Router, routing::get};
 use axum_server::tls_rustls::RustlsConfig;
+use chrono::Utc;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
@@ -1297,31 +1298,34 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
         match &mut lag_reader {
             LagReader::Source(source) => match fetch_source_pending::<C>(source).await {
                 Ok(pending) => {
-                    if pending != -1 {
-                        if last_logged.elapsed().as_secs() >= 60 {
-                            info!("Pending messages {:?}", pending);
-                            last_logged = std::time::Instant::now();
-                        } else {
-                            debug!("Pending messages {:?}", pending);
-                        }
-                        if is_mono_vertex {
-                            let metric_labels = mvtx_forward_metric_labels().clone();
-                            monovertex_metrics()
-                                .pending_raw
-                                .get_or_create(&metric_labels)
-                                .set(pending);
-                        } else {
-                            let mut metric_labels =
-                                pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
-                            metric_labels.push((
-                                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                                "Source".to_string(),
-                            ));
-                            pipeline_metrics()
-                                .pending_raw
-                                .get_or_create(&metric_labels)
-                                .set(pending);
-                        }
+                    if last_logged.elapsed().as_secs() >= 60 {
+                        info!(
+                            "Pending messages {:?}",
+                            if pending != -1 { Some(pending) } else { None }
+                        );
+                        last_logged = std::time::Instant::now();
+                    } else {
+                        debug!(
+                            "Pending messages {:?}",
+                            if pending != -1 { Some(pending) } else { None }
+                        );
+                    }
+                    if is_mono_vertex {
+                        let metric_labels = mvtx_forward_metric_labels().clone();
+                        monovertex_metrics()
+                            .pending_raw
+                            .get_or_create(&metric_labels)
+                            .set(pending);
+                    } else {
+                        let mut metric_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
+                        metric_labels.push((
+                            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                            "Source".to_string(),
+                        ));
+                        pipeline_metrics()
+                            .pending_raw
+                            .get_or_create(&metric_labels)
+                            .set(pending);
                     }
                 }
                 Err(err) => {
@@ -1332,24 +1336,29 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
                 for reader in readers {
                     match fetch_isb_pending(reader).await {
                         Ok(pending) => {
-                            if pending != -1 {
-                                if last_logged.elapsed().as_secs() >= 60 {
-                                    info!(partition=?reader.name(), "Pending messages {:?}", pending);
-                                    last_logged = std::time::Instant::now();
-                                } else {
-                                    debug!(partition=?reader.name(), "Pending messages {:?}", pending);
-                                }
-                                let mut metric_labels =
-                                    pipeline_metric_labels(reader.name()).clone();
-                                metric_labels.push((
-                                    PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                                    reader.name().to_string(),
-                                ));
-                                pipeline_metrics()
-                                    .pending_raw
-                                    .get_or_create(&metric_labels)
-                                    .set(pending);
+                            if last_logged.elapsed().as_secs() >= 60 {
+                                info!(
+                                    "Pending messages {:?}, partition: {}",
+                                    if pending != -1 { Some(pending) } else { None },
+                                    reader.name(),
+                                );
+                                last_logged = std::time::Instant::now();
+                            } else {
+                                debug!(
+                                    "Pending messages {:?}, partition: {}",
+                                    if pending != -1 { Some(pending) } else { None },
+                                    reader.name(),
+                                );
                             }
+                            let mut metric_labels = pipeline_metric_labels(reader.name()).clone();
+                            metric_labels.push((
+                                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                                reader.name().to_string(),
+                            ));
+                            pipeline_metrics()
+                                .pending_raw
+                                .get_or_create(&metric_labels)
+                                .set(pending);
                         }
                         Err(err) => {
                             error!("Failed to get pending messages: {:?}", err);

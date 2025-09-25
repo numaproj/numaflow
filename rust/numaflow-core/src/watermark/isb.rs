@@ -155,6 +155,14 @@ impl ISBWatermarkActor {
             } => {
                 let wmb = self.fetcher.fetch_head_idle_wmb(partition_idx);
 
+                if let Some(wmb) = wmb {
+                    self.latest_fetched_wm = std::cmp::max(
+                        self.latest_fetched_wm,
+                        Watermark::from_timestamp_millis(wmb.watermark)
+                            .expect("failed to parse time"),
+                    );
+                }
+
                 oneshot_tx
                     .send(Ok(wmb))
                     .map_err(|_| Error::Watermark("failed to send response".to_string()))

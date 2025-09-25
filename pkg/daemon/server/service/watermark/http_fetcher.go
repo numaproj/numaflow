@@ -37,14 +37,14 @@ type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// WatermarkResponse represents the JSON response from the /runtime/watermark endpoint
+// Response represents the JSON response from the /runtime/watermark endpoint
 // Example: {"0": 1752314641078, "1": 1752314641079}
-type WatermarkResponse struct {
+type Response struct {
 	Partitions map[string]int64 `json:"-"` // Use custom unmarshaling
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for WatermarkResponse
-func (w *WatermarkResponse) UnmarshalJSON(data []byte) error {
+func (w *Response) UnmarshalJSON(data []byte) error {
 	w.Partitions = make(map[string]int64)
 	return json.Unmarshal(data, &w.Partitions)
 }
@@ -217,8 +217,9 @@ func (h *HTTPWatermarkFetcher) fetchFromAllPods(partitionCount int) {
 			continue // Keep existing cache value for this partition
 		}
 
+		partitionKey := fmt.Sprintf("%d", i)
 		// For reduce vertices, we expect only partition "0" in the response
-		if wm, exists := watermarkMap["0"]; exists && wm != -1 {
+		if wm, exists := watermarkMap[partitionKey]; exists && wm != -1 {
 			h.updateCache(i, wm)
 		}
 		// If watermark is -1 or missing, keep existing cache value
@@ -242,7 +243,7 @@ func (h *HTTPWatermarkFetcher) fetchFromURL(ctx context.Context, url string) (ma
 		return nil, fmt.Errorf("HTTP request failed with status: %d", resp.StatusCode)
 	}
 
-	var watermarkResp WatermarkResponse
+	var watermarkResp Response
 	if err := json.NewDecoder(resp.Body).Decode(&watermarkResp); err != nil {
 		return nil, fmt.Errorf("failed to decode JSON response: %w", err)
 	}

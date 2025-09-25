@@ -8,7 +8,8 @@ use crate::config::get_vertex_name;
 use crate::config::pipeline::VertexType::ReduceUDF;
 use crate::config::pipeline::isb::{BufferReaderConfig, CompressionType, ISBConfig, Stream};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
+use crate::message::{IntOffset, Message, MessageID, MessageType, Offset, ReadAck};
+use crate::metadata::Metadata;
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
     jetstream_isb_metrics_labels, pipeline_metric_labels, pipeline_metrics,
@@ -385,8 +386,14 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
             .map_err(|e| Error::ISB(format!("Failed to acquire semaphore permit: {e}")))?;
 
         // Apply rate limiting if configured.
-        let effective_batch_size = match &self.rate_limiter {
+        let (effective_batch_size, token_grabbed_epoch) = match &self.rate_limiter {
             Some(rate_limiter) => {
+                // Note the epoch at which we got the estimated batch size from the rate limiter
+                let cur_epoch = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("Time went backwards beyond unix epoch")
+                    .as_secs();
+
                 let tokens_acquired = rate_limiter
                     .acquire_n(Some(batch_size), Some(Duration::from_secs(1)))
                     .await;
@@ -396,9 +403,9 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                     return Ok(vec![]);
                 }
 
-                effective_batch_size
+                (effective_batch_size, cur_epoch)
             }
-            None => batch_size,
+            None => (batch_size, 0),
         };
 
         let start = Instant::now();
@@ -435,6 +442,23 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
                 vec![]
             }
         };
+
+        // deposit the unused tokens back to the rate limiter
+        // utilize the cur_epoch we calculated when we initially acquired the tokens
+        // to ensure that the tokens are deposited for the correct epoch.
+        match &self.rate_limiter {
+            Some(rate_limiter) => {
+                rate_limiter
+                    .deposit_unused(
+                        effective_batch_size
+                            .checked_sub(jetstream_messages.len())
+                            .unwrap_or(0),
+                        token_grabbed_epoch,
+                    )
+                    .await;
+            }
+            None => {}
+        }
 
         pipeline_metrics()
             .jetstream_isb

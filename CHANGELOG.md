@@ -109,6 +109,23 @@
  * shrivardhan
  * yogesh
 
+## v1.5.3 (2025-09-23)
+
+ * [01f244f9](https://github.com/numaproj/numaflow/commit/01f244f99327cf788d46b1632c74be125198e937) Update manifests to v1.5.3
+ * [80f4282d](https://github.com/numaproj/numaflow/commit/80f4282d4a58a9fe73cfd14ecea21d46d27fa29f) fix: sqs invalid unit tests
+ * [e69d2bbb](https://github.com/numaproj/numaflow/commit/e69d2bbbcb6bea9dfaefc2b2306cf1be2e7170aa) feat: add assume role for SQS (#2963)
+ * [15cfc474](https://github.com/numaproj/numaflow/commit/15cfc474b78121bc1ac9102e596caf94f89ec04f) fix: sqs sink batch entry ID (#2951)
+ * [d9e768d4](https://github.com/numaproj/numaflow/commit/d9e768d435639e7dbccf013c72f9ccd321486f92) fix: fallback sink validation (#2947)
+ * [37df8e03](https://github.com/numaproj/numaflow/commit/37df8e0395bbc15403aeeff220df0703df4cc53a) fix: Add `spec.replicas` field to minimal CRDs (#2910)
+ * [33a58c2d](https://github.com/numaproj/numaflow/commit/33a58c2d65ebb57e982774b0996a1e769c429597) fix: requeue reconciliation after seeing container restart (#2855)
+
+### Contributors
+
+ * Derek Wang
+ * Julie Vogelman
+ * Yashash H L
+ * shrivardhan
+
 ## v1.5.2 (2025-08-01)
 
  * [27e8e0ca](https://github.com/numaproj/numaflow/commit/27e8e0cac1a4820110d7e9e2d886bf27e66c3ccb) Update manifests to v1.5.2

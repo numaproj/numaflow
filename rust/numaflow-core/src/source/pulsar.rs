@@ -6,6 +6,7 @@ use numaflow_pulsar::source::{PulsarMessage, PulsarSource, PulsarSourceConfig};
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, Offset};
+use crate::metadata::Metadata;
 use crate::source;
 
 impl TryFrom<PulsarMessage> for Message {
@@ -28,7 +29,8 @@ impl TryFrom<PulsarMessage> for Message {
                 index: 0,
             },
             headers: message.headers,
-            metadata: None,
+            // Set default metadata so that metadata is always present.
+            metadata: Some(Metadata::default()),
             is_late: false,
         })
     }
