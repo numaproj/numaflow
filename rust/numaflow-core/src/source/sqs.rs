@@ -28,7 +28,8 @@ impl TryFrom<SqsMessage> for Message {
                 index: 0,
             },
             headers: message.headers,
-            metadata: None,
+            // Set default metadata so that metadata is always present.
+            metadata: Some(crate::metadata::Metadata::default()),
             is_late: false,
         })
     }
