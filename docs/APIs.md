@@ -9264,7 +9264,9 @@ Description
 
 <td>
 
-<code>coolDownPeriod</code></br> <em> uint32 </em>
+<code>coolDownPeriod</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
 </td>
 
 <td>

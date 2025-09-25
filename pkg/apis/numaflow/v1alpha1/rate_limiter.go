@@ -78,8 +78,8 @@ type RateLimiterGoBackN struct {
 	// CoolDownPeriod is the duration after which the rate limiter will start ramping down if the request is made after
 	// the cool-down period.
 	// +optional
-	// +kubebuilder:default=5
-	CoolDownPeriod *uint32 `json:"coolDownPeriod,omitempty" protobuf:"varint,1,opt,name=coolDownPeriod"`
+	// +kubebuilder:default="5s"
+	CoolDownPeriod *metav1.Duration `json:"coolDownPeriod,omitempty" protobuf:"bytes,1,opt,name=coolDownPeriod"`
 	// RampDownStrength is the strength of the ramp-down. It is a value between 0 and 1. 0 means no ramp-down and 1 means
 	// token pool is ramped down at the rate of slope=(max - min)/duration.
 	// +optional

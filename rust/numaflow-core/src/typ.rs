@@ -147,7 +147,8 @@ where
             .go_back_n
             .as_ref()
             .expect("goBackN section is required in rate limiter config in order to specify cooldownPeriod")
-            .cool_down_period.unwrap_or(5) as usize;
+            .cool_down_period.map(|x|
+            Duration::from(x).as_secs() as usize).unwrap_or(5);
 
         let ramp_down_percentage = rate_limit_config
             .modes

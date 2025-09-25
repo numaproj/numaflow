@@ -2209,7 +2209,7 @@ func (in *RateLimiterGoBackN) DeepCopyInto(out *RateLimiterGoBackN) {
 	*out = *in
 	if in.CoolDownPeriod != nil {
 		in, out := &in.CoolDownPeriod, &out.CoolDownPeriod
-		*out = new(uint32)
+		*out = new(metav1.Duration)
 		**out = **in
 	}
 	if in.RampDownPercentage != nil {

@@ -20,9 +20,8 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RateLimiterGoBackN {
-    /// CoolDownPeriod is the duration after which the rate limiter will start ramping down if the request is made after the cool-down period.
     #[serde(rename = "coolDownPeriod", skip_serializing_if = "Option::is_none")]
-    pub cool_down_period: Option<i64>,
+    pub cool_down_period: Option<kube::core::Duration>,
     /// RampDownStrength is the strength of the ramp-down. It is a value between 0 and 1. 0 means no ramp-down and 1 means token pool is ramped down at the rate of slope=(max - min)/duration.
     #[serde(rename = "rampDownPercentage", skip_serializing_if = "Option::is_none")]
     pub ramp_down_percentage: Option<i64>,

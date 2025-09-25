@@ -4086,9 +4086,8 @@ spec:
                           goBackN:
                             properties:
                               coolDownPeriod:
-                                default: 5
-                                format: int32
-                                type: integer
+                                default: 5s
+                                type: string
                               rampDownPercentage:
                                 default: 50
                                 format: int32
@@ -8839,9 +8838,8 @@ spec:
                           goBackN:
                             properties:
                               coolDownPeriod:
-                                default: 5
-                                format: int32
-                                type: integer
+                                default: 5s
+                                type: string
                               rampDownPercentage:
                                 default: 50
                                 format: int32
@@ -15915,9 +15913,8 @@ spec:
                                 goBackN:
                                   properties:
                                     coolDownPeriod:
-                                      default: 5
-                                      format: int32
-                                      type: integer
+                                      default: 5s
+                                      type: string
                                     rampDownPercentage:
                                       default: 50
                                       format: int32
@@ -21265,9 +21262,8 @@ spec:
                               goBackN:
                                 properties:
                                   coolDownPeriod:
-                                    default: 5
-                                    format: int32
-                                    type: integer
+                                    default: 5s
+                                    type: string
                                   rampDownPercentage:
                                     default: 50
                                     format: int32
@@ -28341,9 +28337,8 @@ spec:
                                     goBackN:
                                       properties:
                                         coolDownPeriod:
-                                          default: 5
-                                          format: int32
-                                          type: integer
+                                          default: 5s
+                                          type: string
                                         rampDownPercentage:
                                           default: 50
                                           format: int32
@@ -35507,9 +35502,8 @@ spec:
                                 goBackN:
                                   properties:
                                     coolDownPeriod:
-                                      default: 5
-                                      format: int32
-                                      type: integer
+                                      default: 5s
+                                      type: string
                                     rampDownPercentage:
                                       default: 50
                                       format: int32
@@ -35756,9 +35750,8 @@ spec:
                                 goBackN:
                                   properties:
                                     coolDownPeriod:
-                                      default: 5
-                                      format: int32
-                                      type: integer
+                                      default: 5s
+                                      type: string
                                     rampDownPercentage:
                                       default: 50
                                       format: int32
@@ -36955,9 +36948,8 @@ spec:
                           goBackN:
                             properties:
                               coolDownPeriod:
-                                default: 5
-                                format: int32
-                                type: integer
+                                default: 5s
+                                type: string
                               rampDownPercentage:
                                 default: 50
                                 format: int32
@@ -40925,9 +40917,8 @@ spec:
                                 goBackN:
                                   properties:
                                     coolDownPeriod:
-                                      default: 5
-                                      format: int32
-                                      type: integer
+                                      default: 5s
+                                      type: string
                                     rampDownPercentage:
                                       default: 50
                                       format: int32
@@ -41174,9 +41165,8 @@ spec:
                                 goBackN:
                                   properties:
                                     coolDownPeriod:
-                                      default: 5
-                                      format: int32
-                                      type: integer
+                                      default: 5s
+                                      type: string
                                     rampDownPercentage:
                                       default: 50
                                       format: int32

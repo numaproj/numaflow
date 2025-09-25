@@ -4398,8 +4398,7 @@ func schema_pkg_apis_numaflow_v1alpha1_RateLimiterGoBackN(ref common.ReferenceCa
 					"coolDownPeriod": {
 						SchemaProps: spec.SchemaProps{
 							Description: "CoolDownPeriod is the duration after which the rate limiter will start ramping down if the request is made after the cool-down period.",
-							Type:        []string{"integer"},
-							Format:      "int64",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
 					"rampDownPercentage": {
@@ -4419,6 +4418,8 @@ func schema_pkg_apis_numaflow_v1alpha1_RateLimiterGoBackN(ref common.ReferenceCa
 				},
 			},
 		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
