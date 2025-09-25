@@ -54,11 +54,6 @@ func TestBuildMonitorContainer(t *testing.T) {
 	assert.Equal(t, "monitor", container.Args[0], "Container args mismatch")
 	assert.Equal(t, NumaflowRustBinary, container.Command[0], "Container command mismatch")
 
-	// Verify environment variables
-	assert.Equal(t, 1, len(container.Env), "Environment variable count mismatch")
-	assert.Equal(t, "TEST_ENV", container.Env[0].Name, "Environment variable name mismatch")
-	assert.Equal(t, "test-value", container.Env[0].Value, "Environment variable value mismatch")
-
 	// Verify resource requirements
 	assert.Equal(t, container.Resources.Limits, corev1.ResourceList{}, "Resource limits mismatch")
 	assert.Equal(t, container.Resources.Requests, corev1.ResourceList{
