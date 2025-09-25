@@ -172,17 +172,11 @@ impl TryFrom<read_response::Result> for Message {
             },
             headers: result.headers,
             watermark: None,
+            // If we receive metadata in the response, we use it, otherwise we use the default metadata so that metadata is always present.
+            // We do not set previous_vertex to current vertex name here because we already set it while writing to isb.
             metadata: Some(match result.metadata {
-                Some(source_metadata) => {
-                    let mut metadata: Metadata = source_metadata.into();
-                    metadata.previous_vertex = config::get_vertex_name().to_string();
-                    metadata
-                }
-                None => Metadata {
-                    previous_vertex: config::get_vertex_name().to_string(),
-                    sys_metadata: Default::default(),
-                    user_metadata: Default::default(),
-                },
+                Some(source_metadata) => source_metadata.into(),
+                None => Metadata::default(),
             }),
             is_late: false,
         })
