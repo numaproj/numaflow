@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -333,6 +334,23 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 
 	for i := 0; i < len(sidecarContainers); i++ { // udf, udsink, udsource, or source vertex specifies a udtransformer
 		sidecarContainers[i].Env = append(sidecarContainers[i].Env, v.commonEnvs()...)
+
+		// pass read limits as envs into UDSource container
+		if sidecarContainers[i].Name == CtrUdsource {
+			var bs uint64 = DefaultReadBatchSize
+			if v.Spec.Limits != nil && v.Spec.Limits.ReadBatchSize != nil {
+				bs = *v.Spec.Limits.ReadBatchSize
+			}
+			toDur := DefaultReadTimeout
+			if v.Spec.Limits != nil && v.Spec.Limits.ReadTimeout != nil {
+				toDur = v.Spec.Limits.ReadTimeout.Duration
+			}
+			sidecarContainers[i].Env = append(sidecarContainers[i].Env,
+				corev1.EnvVar{Name: EnvReadBatchSize, Value: strconv.FormatUint(bs, 10)},
+				corev1.EnvVar{Name: EnvReadTimeoutMs, Value: strconv.FormatInt(toDur.Milliseconds(), 10)},
+			)
+		}
+
 	}
 
 	initContainers := v.getInitContainers(req)
