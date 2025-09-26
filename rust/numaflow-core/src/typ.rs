@@ -7,7 +7,7 @@ use numaflow_throttling::state::OptimisticValidityUpdateSecs;
 use numaflow_throttling::state::store::in_memory_store::InMemoryStore;
 use numaflow_throttling::state::store::redis_store::{RedisMode, RedisStore};
 use numaflow_throttling::{
-    Mode, NoOpRateLimiter, RateLimit, RateLimiter, TokenCalcBounds, WithState,
+    GoBackNConfig, Mode, NoOpRateLimiter, RateLimit, RateLimiter, TokenCalcBounds, WithState,
 };
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
@@ -119,6 +119,60 @@ where
         .is_some()
     {
         Mode::Scheduled
+    } else if rate_limit_config
+        .modes
+        .as_ref()
+        .and_then(|m| m.only_if_used.as_ref())
+        .is_some()
+    {
+        let threshold_percentage = rate_limit_config
+            .modes
+            .as_ref()
+            .expect("Rate limiter mode is required in config in order to specify onlyIfUsed")
+            .only_if_used
+            .as_ref()
+            .expect("onlyIfUsed section is required in rate limiter config in order to specify thresholdPercentage")
+            .threshold_percentage.unwrap_or(50) as usize;
+        Mode::OnlyIfUsed(threshold_percentage)
+    } else if rate_limit_config
+        .modes
+        .as_ref()
+        .and_then(|m| m.go_back_n.as_ref())
+        .is_some()
+    {
+        let cool_down_period = rate_limit_config
+            .modes
+            .as_ref()
+            .expect("Rate limiter mode is required in config in order to specify goBackN")
+            .go_back_n
+            .as_ref()
+            .expect("goBackN section is required in rate limiter config in order to specify cooldownPeriod")
+            .cool_down_period.map(|x|
+            Duration::from(x).as_secs() as usize).unwrap_or(5);
+
+        let ramp_down_percentage = rate_limit_config
+            .modes
+            .as_ref()
+            .expect("Rate limiter mode is required in config in order to specify goBackN")
+            .go_back_n
+            .as_ref()
+            .expect("goBackN section is required in rate limiter config in order to specify rampDownPercentage")
+            .ramp_down_percentage.unwrap_or(50) as usize;
+
+        let utilization_threshold = rate_limit_config
+            .modes
+            .as_ref()
+            .expect("Rate limiter mode is required in config in order to specify goBackN")
+            .go_back_n
+            .as_ref()
+            .expect("goBackN section is required in rate limiter config in order to specify thresholdPercentage")
+            .threshold_percentage.unwrap_or(50) as usize;
+
+        Mode::GoBackN(GoBackNConfig::new(
+            cool_down_period,
+            ramp_down_percentage,
+            utilization_threshold,
+        ))
     } else {
         Mode::Relaxed
     };

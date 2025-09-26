@@ -20,6 +20,10 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RateLimiterModes {
+    #[serde(rename = "goBackN", skip_serializing_if = "Option::is_none")]
+    pub go_back_n: Option<Box<crate::models::RateLimiterGoBackN>>,
+    #[serde(rename = "onlyIfUsed", skip_serializing_if = "Option::is_none")]
+    pub only_if_used: Option<Box<crate::models::RateLimiterOnlyIfUsed>>,
     #[serde(rename = "relaxed", skip_serializing_if = "Option::is_none")]
     pub relaxed: Option<Box<crate::models::RateLimiterRelaxed>>,
     #[serde(rename = "scheduled", skip_serializing_if = "Option::is_none")]
@@ -30,6 +34,8 @@ impl RateLimiterModes {
     /// RateLimiterModes defines the modes for rate limiting.
     pub fn new() -> RateLimiterModes {
         RateLimiterModes {
+            go_back_n: None,
+            only_if_used: None,
             relaxed: None,
             scheduled: None,
         }

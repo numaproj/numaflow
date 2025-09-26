@@ -29,12 +29,19 @@ type RateLimit struct {
 
 // RateLimiterModes defines the modes for rate limiting.
 type RateLimiterModes struct {
-	// If there is some traffic, then release the max possible tokens.
-	// +optional
-	RateLimiterRelaxed *RateLimiterRelaxed `json:"relaxed,omitempty" protobuf:"varint,1,opt,name=relaxed"`
 	// Irrespective of the traffic, the rate limiter releases max possible tokens based on ramp-up duration.
 	// +optional
 	RateLimiterScheduled *RateLimiterScheduled `json:"scheduled,omitempty" protobuf:"varint,2,opt,name=scheduled"`
+	// If there is some traffic, then release the max possible tokens.
+	// +optional
+	RateLimiterRelaxed *RateLimiterRelaxed `json:"relaxed,omitempty" protobuf:"varint,1,opt,name=relaxed"`
+	// Releases additional tokens only when previously released tokens have been utilized above the configured threshold
+	// +optional
+	RateLimiterOnlyIfUsed *RateLimiterOnlyIfUsed `json:"onlyIfUsed,omitempty" protobuf:"bytes,3,opt,name=onlyIfUsed"`
+	// Releases additional tokens only when previously released tokens have been utilized above the configured threshold
+	// otherwise triggers a ramp-down. Ramp-down is also triggered when the request is made after quite a while.
+	// +optional
+	RateLimiterGoBackN *RateLimiterGoBackN `json:"goBackN,omitempty" protobuf:"bytes,4,opt,name=goBackN"`
 }
 
 // RateLimiterRelaxed is for the relaxed mode. It will release the max possible tokens if there is some traffic.
@@ -43,6 +50,54 @@ type RateLimiterRelaxed struct{}
 // RateLimiterScheduled is for the scheduled mode.
 // It will release the max possible tokens based on ramp-up duration irrespective of traffic encountered.
 type RateLimiterScheduled struct{}
+
+// RateLimiterOnlyIfUsed is for the OnlyIfUsed mode.
+// Releases additional tokens only when previously released tokens have been utilized above the configured threshold
+type RateLimiterOnlyIfUsed struct {
+	// ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter,
+	// that should be consumed at any instance to allow the rate limiter to unlock additional capacity.
+	//
+	// Defaults to 50%
+	//
+	// For example, given the following configuration:
+	// - max = 100
+	// - min = 10
+	// - rampUpDuration = 10s i.e.--> slope = 10 messages/second
+	// - thresholdPercentage = 50
+	// at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock
+	// additional capacity of 10 messages at t = 1 to make the total capacity of 20.
+	// +optional
+	// +kubebuilder:default=50
+	ThresholdPercentage *uint32 `json:"thresholdPercentage,omitempty" protobuf:"varint,1,opt,name=thresholdPercentage"`
+}
+
+// RateLimiterGoBackN is for the GoBackN mode.
+// Releases additional tokens only when previously released tokens have been utilized above the configured threshold
+// otherwise triggers a ramp-down. Ramp-down is also triggered when the request is made after quite a while.
+type RateLimiterGoBackN struct {
+	// CoolDownPeriod is the duration after which the rate limiter will start ramping down if the request is made after
+	// the cool-down period.
+	// +optional
+	// +kubebuilder:default="5s"
+	CoolDownPeriod *metav1.Duration `json:"coolDownPeriod,omitempty" protobuf:"bytes,1,opt,name=coolDownPeriod"`
+	// RampDownStrength is the strength of the ramp-down. It is a value between 0 and 1. 0 means no ramp-down and 1 means
+	// token pool is ramped down at the rate of slope=(max - min)/duration.
+	// +optional
+	// +kubebuilder:default=50
+	RampDownPercentage *uint32 `json:"rampDownPercentage,omitempty" protobuf:"varint,2,opt,name=rampDownPercentage"`
+	// ThresholdPercentage specifies the minimum percentage of capacity, availed by the rate limiter,
+	// that should be consumed at any instance to allow the rate limiter to unlock additional capacity.
+	// For example, given the following configuration:
+	// - max = 100
+	// - min = 10
+	// - rampUpDuration = 10s i.e.--> slope = 10 messages/second
+	// - thresholdPercentage = 50
+	// at t = 0, the rate limiter will release 10 messages and at least 5 of those should be consumed to unlock
+	// additional capacity of 10 messages at t = 1 to make the total capacity of 20.
+	// +optional
+	// +kubebuilder:default=50
+	ThresholdPercentage *uint32 `json:"thresholdPercentage,omitempty" protobuf:"varint,3,opt,name=thresholdPercentage"`
+}
 
 type RateLimiterStore struct {
 	// RedisStore is used to define the redis store for the rate limit.

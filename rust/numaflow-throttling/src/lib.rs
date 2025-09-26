@@ -116,15 +116,13 @@ impl<W> RateLimit<W> {
         // The rate limiter cannot give out all the tokens only when the max_ever_filled is indivisible
         // between the known_pool_size, but since the known_pool_size is not available here we'll just
         // add the error_percentage to the used_token_percentage.
-        let used_token_percentage = (used_token_percentage + floor_normalization)
-            .min(100)
-            .max(0);
+        let used_token_percentage = (used_token_percentage + floor_normalization).clamp(0, 100);
 
         match &self.token_calc_bounds.mode {
             Mode::Relaxed => self.relaxed_slope_increase(&mut max_ever_filled),
             Mode::Scheduled => self.scheduled_slope_increase(cur_epoch, &mut max_ever_filled),
             Mode::OnlyIfUsed(threshold_percentage) => {
-                let threshold_percentage = threshold_percentage.clone().min(100).max(0);
+                let threshold_percentage = (*threshold_percentage).clamp(0, 100);
                 self.only_if_used_slope_increase(
                     &mut max_ever_filled,
                     used_token_percentage,
@@ -134,7 +132,7 @@ impl<W> RateLimit<W> {
             Mode::GoBackN(go_back_n_config) => self.go_back_n_slope_increase(
                 &mut max_ever_filled,
                 used_token_percentage,
-                &go_back_n_config,
+                go_back_n_config,
                 cur_epoch,
             ),
         }
@@ -168,7 +166,7 @@ impl<W> RateLimit<W> {
             let prev_epoch = self
                 .last_queried_epoch
                 .load(std::sync::atomic::Ordering::Relaxed);
-            let time_diff = cur_epoch.checked_sub(prev_epoch).unwrap_or(0) as f32;
+            let time_diff = cur_epoch.saturating_sub(prev_epoch) as f32;
             let refill = *max_ever_filled + self.token_calc_bounds.slope * (time_diff);
             let capped_refill = refill.min(self.token_calc_bounds.max as f32);
 
@@ -203,6 +201,7 @@ impl<W> RateLimit<W> {
     ///
     /// If the tokens aren't used within the last n epochs
     /// - then we will reduce the token pool size by slope * (n - 1) before calculating the next increase.
+    ///
     /// If the tokens are used within next epoch,
     /// - then we'll check if the tokens used are lower than threshold % of max_ever_filled,
     ///     - then we’ll reduce the token pool size by slope for that iteration,
@@ -220,7 +219,7 @@ impl<W> RateLimit<W> {
         let prev_epoch = self
             .last_queried_epoch
             .load(std::sync::atomic::Ordering::Relaxed);
-        let time_diff = cur_epoch.checked_sub(prev_epoch).unwrap_or(0) as f32;
+        let time_diff = cur_epoch.saturating_sub(prev_epoch) as f32;
 
         let GoBackNConfig {
             cool_down_period,
@@ -232,13 +231,13 @@ impl<W> RateLimit<W> {
         // then we'll reduce the amount to be refilled
         //
         // - penalize for delay in usage
-        if time_diff > cool_down_period.clone() as f32 {
+        if time_diff > *cool_down_period as f32 {
             // If the tokens haven't been refilled for a while then reduce the amount to be refilled
             // equivalent to slope * (time_diff - 1)
             // We're using (time_diff - 1) here to make sure we don't decrease the amount to be
             // refilled if the calls were made between subsequent epochs
             let reduced_refill = *max_ever_filled
-                - (ramp_down_percentage.clone() as f32 / 100.0)
+                - (*ramp_down_percentage as f32 / 100.0)
                     * self.token_calc_bounds.slope
                     * (time_diff - 1.0);
             // Make sure we do not go below the min or above the max
@@ -247,7 +246,7 @@ impl<W> RateLimit<W> {
                 .min(self.token_calc_bounds.max as f32);
             *max_ever_filled = capped_refill;
             capped_refill as usize
-        } else if used_token_percentage >= utilization_threshold.clone() {
+        } else if used_token_percentage >= *utilization_threshold {
             // If consecutive calls have been made and the used token percentage is greater than
             // the threshold provided in config, then we'll increase the tokens according to relaxed mode.
             self.relaxed_slope_increase(max_ever_filled)
@@ -664,16 +663,19 @@ pub enum Mode {
     Relaxed,
     /// If the max available tokens are not used, then we will refill the token pool size by the same
     /// amount as max_ever_filled.
+    ///
     /// If the tokens used are within the threshold % of max_ever_filled, then we’ll increase by slope
     OnlyIfUsed(usize),
     /// If the tokens aren't used within the last n epochs
     /// - then we will reduce the token pool size by slope * (n - 1) before calculating the next increase.
+    ///
     /// If the tokens are used within next epoch,
     /// - then we'll check if the tokens used are lower than threshold % of max_ever_filled,
     ///     - then we’ll reduce the token pool size by slope for that iteration,
     /// - otherwise we'll increase the token pool size by slope.
     ///
-    /// Penalty for delayed usage <br>
+    /// Penalty for delayed usage
+    ///
     /// Penalty for underutilization
     GoBackN(GoBackNConfig),
 }
