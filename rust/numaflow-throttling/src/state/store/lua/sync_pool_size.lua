@@ -18,11 +18,12 @@ Returns:
 --]]
 
 -- Define the stale age in seconds
-local STALE_AGE = 180
+local STALE_AGE = tonumber(ARGV[4])
 
 -- Construct the full key names from the provided prefix
 local heartbeat_key = KEYS[1] .. ":heartbeats"
 local poolsize_key = KEYS[1] .. ":poolsize"
+local steady_state_key = KEYS[1] .. ":steady_states"
 
 -- Step 1: Insert or update the data for the current processor
 redis.call('ZADD', heartbeat_key, ARGV[2], ARGV[1])
@@ -40,6 +41,10 @@ if #stale_members > 0 then
     -- The unpack function passes the table elements as individual arguments to ZREM
     redis.call('ZREM', heartbeat_key, unpack(stale_members))
     redis.call('ZREM', poolsize_key, unpack(stale_members))
+    -- We're utilizing the stale check for removing steady_state info for processors and not redis TTL
+    -- because redis TTL is only refreshed for keys on SET operations while currently a processor's steady
+    -- state is only set when max tokens are reached.
+    redis.call('HDEL', steady_state_key, unpack(stale_members))
 end
 
 -- Step 3: Check for agreement among the remaining (active) processors
