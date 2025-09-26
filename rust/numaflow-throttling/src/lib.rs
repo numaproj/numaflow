@@ -437,9 +437,29 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithState<S>> {
             TokenAvailability::Recompute => {}
         }
 
+        // We're not holding the lock here and only reading the value at the pointer location
+        // so it is safe to call compute_refill after this.
+        // Eg: The following example runs to completion without any deadlock
+        //     let a = Arc::new(Mutex::<f32>::new(1.2));
+        //     let b = *a.lock().unwrap();
+        //     println!("{}", b);
+        //     println!("{}", *a.lock().unwrap());
+        //     println!("{}", b);
+        let prev_max_ever_filled = *self.max_ever_filled.lock().unwrap();
+
         // We crossed a new epoch; we gave to recompute the budget i.e., recompute the number of
         // new tokens available
         let next_total_tokens = self.compute_refill(cur_epoch);
+
+        if !self.state.0.steady_state() && next_total_tokens == self.token_calc_bounds.max {
+            // if we have reached the max tokens, then we've reached the steady state.
+            // Update only if we've not reached the steady state before.
+            self.state.0.set_steady_state(true).await;
+        } else if self.state.0.steady_state() && next_total_tokens < prev_max_ever_filled as usize {
+            // If we were in the steady state, i.e., dispersing max tokens but reduced the tokens
+            // dispersed in this epoch then we're no longer in the steady state.
+            self.state.0.set_steady_state(false).await;
+        }
 
         // Store the total tokens (division happens in get_tokens)
         self.token
@@ -551,7 +571,14 @@ impl<S: Store> RateLimit<WithState<S>> {
         // Add 1-second sleep after initial agreement so we don't get inconsistent results within
         // the same second because race conditions among multiple processors initializing.
         tokio::time::sleep(Duration::from_secs(1)).await;
-        let burst = token_calc_bounds.min;
+        let mut burst = token_calc_bounds.min;
+
+        // Finally, the line for which all the steady_state changes are for...
+        // If we are in the steady state, then we can dispense max tokens already.
+        // Otherwise, we will start from min tokens.
+        if state.steady_state() {
+            burst = token_calc_bounds.max;
+        }
 
         Ok(RateLimit {
             token_calc_bounds,
@@ -968,7 +995,7 @@ mod tests {
                 // Necessary for redis store test cases.
                 match store_type {
                     StoreType::InMemory => {
-                        let store = InMemoryStore::new();
+                        let store = InMemoryStore::default();
                         test_rate_limiter_with_state(store, test_case).await;
                     }
                     StoreType::Redis => {
@@ -1004,7 +1031,7 @@ mod tests {
                 .build()
                 .unwrap();
 
-            match RedisStore::new(test_key_prefix, redis_mode).await {
+            match RedisStore::new(test_key_prefix, 180, redis_mode).await {
                 Ok(store) => Some(store),
                 Err(e) => {
                     println!("Skipping Redis test - Failed to connect to Redis: {}", e);
@@ -1372,7 +1399,7 @@ mod tests {
         // time 2 -> 12
         // time 3 -> 13
         // time 10 -> 20
-        let store = InMemoryStore::new();
+        let store = InMemoryStore::default();
         let cancel = CancellationToken::new();
         let refresh_interval = Duration::from_millis(100);
         let runway_update = OptimisticValidityUpdateSecs::default();
@@ -1427,7 +1454,7 @@ mod tests {
         use crate::state::store::in_memory_store::InMemoryStore;
 
         let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(1), Mode::Relaxed);
-        let store = InMemoryStore::new();
+        let store = InMemoryStore::default();
         let cancel = CancellationToken::new();
         let refresh_interval = Duration::from_millis(100);
         let runway_update = OptimisticValidityUpdateSecs::default();
@@ -2503,7 +2530,7 @@ mod tests {
 
         // Create a rate limiter with 30 max tokens, 15 burst, over 2 seconds
         let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9), Mode::Relaxed);
-        let store = InMemoryStore::new();
+        let store = InMemoryStore::default();
         let cancel = CancellationToken::new();
         let refresh_interval = Duration::from_millis(50);
         let runway_update = OptimisticValidityUpdateSecs::default();
@@ -2597,7 +2624,7 @@ mod tests {
 
         // Create a rate limiter with 30 max tokens, 15 burst, over 2 seconds
         let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9), Mode::Relaxed);
-        let store = InMemoryStore::new();
+        let store = InMemoryStore::default();
         let cancel = CancellationToken::new();
         let refresh_interval = Duration::from_millis(50);
         let runway_update = OptimisticValidityUpdateSecs::default();

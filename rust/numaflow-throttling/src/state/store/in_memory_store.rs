@@ -28,17 +28,19 @@ struct ProcessorsTimeline {
     heartbeats: HashMap<String, Instant>,
     /// processor_id -> reported pool size
     reported_pool: HashMap<String, usize>,
+    /// processor_id -> steady state
+    steady_states: HashMap<String, bool>,
 }
 
 impl Default for InMemoryStore {
     fn default() -> Self {
-        Self::new()
+        Self::with_ttl(Duration::from_secs(180))
     }
 }
 
 impl InMemoryStore {
-    pub fn new() -> Self {
-        Self::with_ttl(Duration::from_secs(180))
+    pub fn new(stale_age: u64) -> Self {
+        Self::with_ttl(Duration::from_secs(stale_age))
     }
 
     /// Create a new in-memory store with custom TTL for heartbeats
@@ -63,6 +65,7 @@ impl InMemoryStore {
         for id in stale_ids {
             inner.heartbeats.remove(&id);
             inner.reported_pool.remove(&id);
+            inner.steady_states.remove(&id);
         }
     }
 
@@ -104,7 +107,7 @@ impl Store for InMemoryStore {
         &self,
         processor_id: &str,
         _cancel: CancellationToken,
-    ) -> crate::Result<usize> {
+    ) -> crate::Result<(usize, bool)> {
         info!("Registering processor: {processor_id}");
 
         let mut inner = self.inner.lock().await;
@@ -121,7 +124,16 @@ impl Store for InMemoryStore {
             .and_modify(|e| *e += 1)
             .or_insert(1);
 
-        Ok(pool_size)
+        let mut steady_state = false;
+        if let Some(&ss) = inner.steady_states.get(processor_id) {
+            steady_state = ss;
+        } else {
+            inner
+                .steady_states
+                .insert(processor_id.to_string(), steady_state);
+        }
+
+        Ok((pool_size, steady_state))
     }
 
     /// Deregister a processor from the store.
@@ -135,6 +147,24 @@ impl Store for InMemoryStore {
         let mut inner = self.inner.lock().await;
         inner.heartbeats.remove(processor_id);
         inner.reported_pool.remove(processor_id);
+        // steady state will be updated by pruning stale processors later on
+
+        Ok(())
+    }
+
+    async fn set_steady_state(
+        &self,
+        processor_id: &str,
+        steady_state: bool,
+        _cancel: CancellationToken,
+    ) -> crate::Result<()> {
+        info!("Setting steady state for processor: {processor_id}");
+
+        self.inner
+            .lock()
+            .await
+            .steady_states
+            .insert(processor_id.to_string(), steady_state);
 
         Ok(())
     }
@@ -176,7 +206,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_consensus_agree_when_all_report_active_count() {
-        let store = InMemoryStore::new();
+        let store = InMemoryStore::default();
         let cancel = CancellationToken::new();
 
         store.register("processor_a", cancel.clone()).await.unwrap();
@@ -200,7 +230,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_consensus_disagree_when_reports_differ() {
-        let store = InMemoryStore::new();
+        let store = InMemoryStore::default();
         let cancel = CancellationToken::new();
 
         store.register("processor_a", cancel.clone()).await.unwrap();
@@ -220,7 +250,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_consensus_agree_when_same_size_reported() {
-        let store = InMemoryStore::new();
+        let store = InMemoryStore::default();
         let cancel = CancellationToken::new();
 
         store.register("processor_a", cancel.clone()).await.unwrap();
@@ -266,7 +296,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_deregister_removes_processor() {
-        let store = InMemoryStore::new();
+        let store = InMemoryStore::default();
         let cancel = CancellationToken::new();
 
         store.register("processor_a", cancel.clone()).await.unwrap();

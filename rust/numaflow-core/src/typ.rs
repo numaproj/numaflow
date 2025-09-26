@@ -53,7 +53,8 @@ pub async fn build_redis_rate_limiter(
     let redis_mode = RedisMode::new(redis_store_config)
         .map_err(|e| Error::Config(format!("Failed to create Redis mode: {}", e)))?;
 
-    let store = RedisStore::new(rate_limit_config.key_prefix, redis_mode)
+    // TODO: read stale age from config
+    let store = RedisStore::new(rate_limit_config.key_prefix, 180, redis_mode)
         .await
         .map_err(|e| Error::Config(format!("Failed to create Redis store: {}", e)))?;
 
@@ -78,7 +79,7 @@ pub async fn build_in_memory_rate_limiter(
     cln_token: CancellationToken,
 ) -> Result<RateLimit<WithState<InMemoryStore>>> {
     // Create in-memory store
-    let store = InMemoryStore::new();
+    let store = InMemoryStore::default();
     let limiter = create_rate_limiter(rate_limit_config, store, cln_token).await?;
     Ok(limiter)
 }

@@ -13,6 +13,7 @@ use tokio_util::sync::CancellationToken;
 const REGISTER_SCRIPT: &str = include_str!("lua/register.lua");
 const DEREGISTER_SCRIPT: &str = include_str!("lua/deregister.lua");
 const SYNC_POOL_SIZE_SCRIPT: &str = include_str!("lua/sync_pool_size.lua");
+const SET_STEADY_STATE_SCRIPT: &str = include_str!("lua/set_steady_state.lua");
 
 #[derive(Clone)]
 pub struct RedisStore {
@@ -23,6 +24,8 @@ pub struct RedisStore {
     register_script: Script,
     deregister_script: Script,
     sync_pool_size_script: Script,
+    set_steady_state_script: Script,
+    stale_age: usize,
 }
 
 /// Different ways to connect to Redis based on different Redis deployments.
@@ -253,13 +256,18 @@ impl SentinelBuilder {
 }
 
 impl RedisStore {
-    pub async fn new(key_prefix: &'static str, mode: RedisMode) -> Result<Self, RedisError> {
+    pub async fn new(
+        key_prefix: &'static str,
+        stale_age: usize,
+        mode: RedisMode,
+    ) -> Result<Self, RedisError> {
         let client = Self::make_client(mode).await?;
 
         // Create script objects
         let register_script = Script::new(REGISTER_SCRIPT);
         let deregister_script = Script::new(DEREGISTER_SCRIPT);
         let sync_pool_size_script = Script::new(SYNC_POOL_SIZE_SCRIPT);
+        let set_steady_state_script = Script::new(SET_STEADY_STATE_SCRIPT);
 
         let store = Self {
             key_prefix,
@@ -267,6 +275,8 @@ impl RedisStore {
             register_script,
             deregister_script,
             sync_pool_size_script,
+            set_steady_state_script,
+            stale_age,
         };
 
         // Load scripts into Redis
@@ -406,6 +416,10 @@ impl RedisStore {
             .load_async(&mut conn)
             .await
             .map_err(|e| crate::Error::Redis(e.to_string()))?;
+        self.set_steady_state_script
+            .load_async(&mut conn)
+            .await
+            .map_err(|e| crate::Error::Redis(e.to_string()))?;
 
         Ok(())
     }
@@ -533,13 +547,31 @@ impl Store for RedisStore {
         &self,
         processor_id: &str,
         _cancel: CancellationToken,
-    ) -> crate::Result<usize> {
-        let pool_size: usize = self
+    ) -> crate::Result<(usize, bool)> {
+        let result: Vec<String> = self
             .exec_lua_script(&self.register_script, &[self.key_prefix], &[processor_id])
             .await
             .map_err(|e| Error::Redis(e.to_string()))?;
 
-        Ok(pool_size)
+        if result.len() != 2 {
+            return Err(Error::Redis(
+                "Invalid response from register script".to_string(),
+            ));
+        }
+
+        let pool_size: usize = result
+            .first()
+            .expect("should have pool size")
+            .parse()
+            .map_err(|_| Error::Redis("Invalid pool size in response".to_string()))?;
+
+        let steady_state: bool = result
+            .get(1)
+            .expect("should have steady state")
+            .parse()
+            .map_err(|_| Error::Redis("Invalid steady state in response".to_string()))?;
+
+        Ok((pool_size, steady_state))
     }
 
     async fn deregister(
@@ -549,6 +581,24 @@ impl Store for RedisStore {
     ) -> crate::Result<()> {
         let _: String = self
             .exec_lua_script(&self.deregister_script, &[self.key_prefix], &[processor_id])
+            .await
+            .map_err(|e| Error::Redis(e.to_string()))?;
+
+        Ok(())
+    }
+
+    async fn set_steady_state(
+        &self,
+        processor_id: &str,
+        steady_state: bool,
+        _cancel: CancellationToken,
+    ) -> crate::Result<()> {
+        let _: String = self
+            .exec_lua_script(
+                &self.set_steady_state_script,
+                &[self.key_prefix],
+                &[processor_id, &steady_state.to_string()],
+            )
             .await
             .map_err(|e| Error::Redis(e.to_string()))?;
 
@@ -568,12 +618,13 @@ impl Store for RedisStore {
             .to_string();
 
         let pool_size_str = pool_size.to_string();
+        let stale_age_str = self.stale_age.to_string();
 
         let result: Vec<String> = self
             .exec_lua_script(
                 &self.sync_pool_size_script,
                 &[self.key_prefix],
-                &[processor_id, &timestamp, &pool_size_str],
+                &[processor_id, &timestamp, &pool_size_str, &stale_age_str],
             )
             .await
             .map_err(|e| Error::Redis(e.to_string()))?;
