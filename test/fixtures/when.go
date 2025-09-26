@@ -512,6 +512,7 @@ func (w *When) Expect() *Expect {
 		monoVertexClient: w.monoVertexClient,
 		isbSvc:           w.isbSvc,
 		pipeline:         w.pipeline,
+		servingPipeline:  w.servingPipeline,
 		monoVertex:       w.monoVertex,
 		restConfig:       w.restConfig,
 		kubeClient:       w.kubeClient,
