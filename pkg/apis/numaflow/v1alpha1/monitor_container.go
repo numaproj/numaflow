@@ -30,7 +30,9 @@ func getRuntimeVolumeMount() []corev1.VolumeMount {
 	}
 }
 func buildMonitorContainer(req getContainerReq) corev1.Container {
-	return containerBuilder{}.init(req).
+	return containerBuilder{}.
+		image(req.image).
+		imagePullPolicy(req.imagePullPolicy).
 		resources(corev1.ResourceRequirements{
 			Limits: corev1.ResourceList{},
 			Requests: corev1.ResourceList{
