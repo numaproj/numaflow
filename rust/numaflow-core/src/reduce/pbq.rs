@@ -1,6 +1,6 @@
 use crate::error::Result;
 use crate::message::Message;
-use crate::pipeline::isb::jetstream::reader::JetStreamReader;
+use crate::pipeline::isb::reader::ISBReader as OrchestratorReader;
 use crate::reduce::wal::WalMessage;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::reduce::wal::segment::compactor::Compactor;
@@ -24,14 +24,14 @@ pub(crate) struct WAL {
 
 /// PBQBuilder is a builder for PBQ.
 pub(crate) struct PBQBuilder<C: crate::typ::NumaflowTypeConfig> {
-    isb_reader: JetStreamReader<C>,
+    isb_reader: OrchestratorReader<C>,
     tracker_handle: TrackerHandle,
     wal: Option<WAL>,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> PBQBuilder<C> {
     /// Creates a new PBQBuilder.
-    pub(crate) fn new(isb_reader: JetStreamReader<C>, tracker_handle: TrackerHandle) -> Self {
+    pub(crate) fn new(isb_reader: OrchestratorReader<C>, tracker_handle: TrackerHandle) -> Self {
         Self {
             isb_reader,
             tracker_handle,
@@ -56,7 +56,7 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQBuilder<C> {
 /// PBQ is a persistent buffer queue.
 #[allow(clippy::upper_case_acronyms)]
 pub(crate) struct PBQ<C: crate::typ::NumaflowTypeConfig> {
-    isb_reader: JetStreamReader<C>,
+    isb_reader: OrchestratorReader<C>,
     wal: Option<WAL>,
     tracker_handle: TrackerHandle,
 }
@@ -98,7 +98,7 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
     /// Replays any persisted data from WAL and then starts reading new messages from the ISB and
     /// keeps persisting them to WAL and acknowledges the messages from ISB after writing to WAL.
     async fn read_isb_with_wal(
-        isb_reader: JetStreamReader<C>,
+        isb_reader: OrchestratorReader<C>,
         wal: WAL,
         tracker_handle: TrackerHandle,
         tx: Sender<Message>,
@@ -194,7 +194,7 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
 
     /// Reads messages from ISB and immediately acks it by invoking the tracker delete.
     async fn read_isb_without_wal(
-        isb_reader: JetStreamReader<C>,
+        isb_reader: OrchestratorReader<C>,
         tracker_handle: TrackerHandle,
         tx: Sender<Message>,
         cancellation_token: CancellationToken,
@@ -276,7 +276,7 @@ mod tests {
             ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
-        use crate::pipeline::isb::jetstream::reader::ISBReaderComponents;
+        use crate::pipeline::isb::reader::ISBReaderComponents;
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
             stream: stream.clone(),
@@ -399,7 +399,7 @@ mod tests {
             ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
-        use crate::pipeline::isb::jetstream::reader::ISBReaderComponents;
+        use crate::pipeline::isb::reader::ISBReaderComponents;
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
             stream: stream.clone(),
@@ -636,7 +636,7 @@ mod tests {
             ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
-        use crate::pipeline::isb::jetstream::reader::ISBReaderComponents;
+        use crate::pipeline::isb::reader::ISBReaderComponents;
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
             stream: stream.clone(),

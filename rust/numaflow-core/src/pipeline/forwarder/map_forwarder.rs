@@ -10,9 +10,9 @@ use crate::metrics::{
 };
 use crate::pipeline::PipelineContext;
 
-use crate::pipeline::isb::jetstream::reader::{ISBReaderComponents, JetStreamReader, Reader as ThinJSReader};
+use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::writer::{ISBWriterComponents, JetstreamWriter};
-use crate::pipeline::isb::reader::Reader as OrchestratorReader;
+use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::TrackerHandle;
@@ -32,14 +32,14 @@ use tracing::{error, info};
 /// Map forwarder is a component which starts a streaming reader, a mapper, and a writer
 /// and manages the lifecycle of these components.
 pub(crate) struct MapForwarder<C: crate::typ::NumaflowTypeConfig> {
-    jetstream_reader: OrchestratorReader<C>,
+    jetstream_reader: ISBReader<C>,
     mapper: MapHandle,
     jetstream_writer: JetstreamWriter,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
     pub(crate) async fn new(
-        jetstream_reader: OrchestratorReader<C>,
+        jetstream_reader: ISBReader<C>,
         mapper: MapHandle,
         jetstream_writer: JetstreamWriter,
     ) -> Self {
@@ -226,7 +226,7 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
     PendingReaderTasks,
 )> {
     let mut forwarder_tasks = vec![];
-    let mut isb_lag_readers: Vec<JetStreamReader<C>> = vec![];
+    let mut isb_lag_readers: Vec<ISBReader<C>> = vec![];
     let mut mapper_handle = None;
 
     for stream in reader_config.streams.clone() {
@@ -283,18 +283,11 @@ async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig>(
     mapper: crate::mapper::map::MapHandle,
     buffer_writer: JetstreamWriter,
     rate_limiter: Option<C::RateLimiter>,
-) -> Result<(tokio::task::JoinHandle<Result<()>>, JetStreamReader<C>)> {
+) -> Result<(tokio::task::JoinHandle<Result<()>>, ISBReader<C>)> {
     let cln_token = reader_components.cln_token.clone();
 
-    // Create a JS reader for metrics only
-    let metrics_reader = JetStreamReader::<C>::new(
-        reader_components.clone(),
-        rate_limiter.clone(),
-    )
-    .await?;
-
     // Create thin JS reader for orchestrator
-    let thin_reader = ThinJSReader::new(
+    let js_reader = JetStreamReader::new(
         reader_components.stream.clone(),
         reader_components.js_ctx.clone(),
         reader_components.isb_config.clone(),
@@ -302,12 +295,12 @@ async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig>(
     .await?;
 
     // Create orchestrator reader for actual streaming
-    let orchestrator_reader = OrchestratorReader::<C>::new(reader_components, thin_reader, rate_limiter).await?;
+    let isb_reader = ISBReader::<C>::new(reader_components, js_reader, rate_limiter).await?;
 
-    let forwarder = MapForwarder::<C>::new(orchestrator_reader, mapper, buffer_writer).await;
+    let forwarder = MapForwarder::<C>::new(isb_reader.clone(), mapper, buffer_writer).await;
 
     let task = tokio::spawn(async move { forwarder.start(cln_token).await });
-    Ok((task, metrics_reader))
+    Ok((task, isb_reader))
 }
 
 #[cfg(test)]

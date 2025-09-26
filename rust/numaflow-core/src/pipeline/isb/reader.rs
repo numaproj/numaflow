@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 use crate::Result;
 use crate::config::get_vertex_name;
 use crate::config::pipeline::VertexType::ReduceUDF;
-use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
+use crate::config::pipeline::isb::{BufferReaderConfig, ISBConfig, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageType, Offset, ReadAck};
 use crate::metrics::{
@@ -22,6 +22,7 @@ use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
 
 use crate::watermark::wmb::WMB;
+use async_nats::jetstream::Context;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use numaflow_throttling::RateLimiter;
@@ -31,7 +32,7 @@ const ACK_RETRY_INTERVAL: u64 = 100; // ms
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 
 // Alias the thin JS reader as JSReader to avoid name clashes
-use crate::pipeline::isb::jetstream::reader::{ISBReaderComponents, Reader as JSReader};
+use crate::pipeline::isb::jetstream::reader::JetStreamReader as JSReader;
 
 // Compact container to avoid clippy::too_many_arguments in wip_loop
 struct WipParams {
@@ -47,7 +48,8 @@ struct WipParams {
 }
 
 /// Orchestrator that drives fetching, WIP, ack/nack, watermark/idle handling over a thin JS reader.
-pub(crate) struct Reader<C: NumaflowTypeConfig> {
+#[derive(Clone)]
+pub(crate) struct ISBReader<C: NumaflowTypeConfig> {
     vertex_type: String,
     stream: Stream,
     cfg: BufferReaderConfig,
@@ -59,7 +61,7 @@ pub(crate) struct Reader<C: NumaflowTypeConfig> {
     rate_limiter: Option<C::RateLimiter>,
 }
 
-impl<C: NumaflowTypeConfig> Reader<C> {
+impl<C: NumaflowTypeConfig> ISBReader<C> {
     pub(crate) async fn new(
         components: ISBReaderComponents,
         inner: JSReader,
@@ -205,7 +207,7 @@ impl<C: NumaflowTypeConfig> Reader<C> {
                     }
 
                     // Update per-message read metrics
-                    Self::update_read_metrics(&labels, &message);
+                    Self::publish_read_metrics(&labels, &message);
 
                     // Insert into tracker and spawn WIP loop
                     let (ack_tx, ack_rx) = oneshot::channel();
@@ -258,6 +260,10 @@ impl<C: NumaflowTypeConfig> Reader<C> {
         self.inner.pending().await
     }
 
+    pub(crate) fn name(&mut self) -> &'static str {
+        self.inner.name()
+    }
+
     // Periodically mark WIP until ack/nack received, then perform final ack/nack and publish metrics.
     async fn wip_loop(mut params: WipParams) {
         let mut interval = time::interval(params.tick);
@@ -271,7 +277,7 @@ impl<C: NumaflowTypeConfig> Reader<C> {
                         ReadAck::Ack => {
                             let ack_start = Instant::now();
                             Self::ack_with_retry(params.jsr.clone(), params.offset.clone(), params.cancel.clone()).await;
-                            Self::update_ack_metrics(
+                            Self::publish_ack_metrics(
                                 params.stream_name,
                                 &params.labels,
                                 ack_start,
@@ -366,7 +372,7 @@ impl<C: NumaflowTypeConfig> Reader<C> {
             .map_err(|_| Error::ISB("Failed to send wmb message to channel".to_string()))
     }
 
-    fn update_ack_metrics(
+    fn publish_ack_metrics(
         stream_name: &'static str,
         labels: &[(String, String)],
         ack_start: Instant,
@@ -395,7 +401,7 @@ impl<C: NumaflowTypeConfig> Reader<C> {
             .observe(message_processing_start.elapsed().as_micros() as f64);
     }
 
-    fn update_read_metrics(labels: &[(String, String)], message: &Message) {
+    fn publish_read_metrics(labels: &[(String, String)], message: &Message) {
         let message_bytes = message.value.len();
         let labels_vec = labels.to_vec();
         pipeline_metrics()
@@ -418,5 +424,42 @@ impl<C: NumaflowTypeConfig> Reader<C> {
             .data_read_bytes_total
             .get_or_create(&labels_vec)
             .inc_by(message_bytes as u64);
+    }
+}
+
+/// Components needed to create a JetStreamReader.
+#[derive(Clone)]
+pub(crate) struct ISBReaderComponents {
+    pub vertex_type: String,
+    pub stream: Stream,
+    pub js_ctx: Context,
+    pub config: BufferReaderConfig,
+    pub tracker_handle: TrackerHandle,
+    pub batch_size: usize,
+    pub read_timeout: Duration,
+    pub watermark_handle: Option<ISBWatermarkHandle>,
+    pub isb_config: Option<ISBConfig>,
+    pub cln_token: CancellationToken,
+}
+
+impl ISBReaderComponents {
+    pub fn new(
+        stream: Stream,
+        reader_config: BufferReaderConfig,
+        watermark_handle: Option<ISBWatermarkHandle>,
+        context: &crate::pipeline::PipelineContext<'_>,
+    ) -> Self {
+        Self {
+            vertex_type: context.config.vertex_type.to_string(),
+            stream,
+            js_ctx: context.js_context.clone(),
+            config: reader_config,
+            tracker_handle: context.tracker_handle.clone(),
+            batch_size: context.config.batch_size,
+            read_timeout: context.config.read_timeout,
+            watermark_handle,
+            isb_config: context.config.isb_config.clone(),
+            cln_token: context.cln_token.clone(),
+        }
     }
 }

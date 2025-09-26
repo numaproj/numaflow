@@ -1,107 +1,27 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::io::Read;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::Result;
 use crate::config::get_vertex_name;
-use crate::config::pipeline::VertexType::ReduceUDF;
 use crate::config::pipeline::isb::{BufferReaderConfig, CompressionType, ISBConfig, Stream};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, MessageType, Offset, ReadAck};
+use crate::message::{IntOffset, Message, MessageID, MessageType, Offset};
 use crate::metadata::Metadata;
-use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
-    jetstream_isb_metrics_labels, pipeline_metric_labels, pipeline_metrics,
-};
 use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
-use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
-use crate::watermark::wmb::WMB;
 use async_nats::jetstream::{
     AckKind, Context, Message as JetstreamMessage, consumer::PullConsumer,
 };
-use backoff::retry::Retry;
-use backoff::strategy::fixed;
 use bytes::Bytes;
 use flate2::read::GzDecoder;
-use numaflow_throttling::RateLimiter;
 use prost::Message as ProtoMessage;
-use tokio::sync::mpsc::Sender;
-use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
-use tokio::task::JoinHandle;
-use tokio::time::{self, Instant};
 use tokio_stream::StreamExt;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, warn};
-use tracing::{error, info};
-
-/// Components needed to create a JetStreamReader.
-#[derive(Clone)]
-pub(crate) struct ISBReaderComponents {
-    pub vertex_type: String,
-    pub stream: Stream,
-    pub js_ctx: Context,
-    pub config: BufferReaderConfig,
-    pub tracker_handle: TrackerHandle,
-    pub batch_size: usize,
-    pub read_timeout: Duration,
-    pub watermark_handle: Option<ISBWatermarkHandle>,
-    pub isb_config: Option<ISBConfig>,
-    pub cln_token: CancellationToken,
-}
-
-impl ISBReaderComponents {
-    pub fn new(
-        stream: Stream,
-        reader_config: BufferReaderConfig,
-        watermark_handle: Option<ISBWatermarkHandle>,
-        context: &crate::pipeline::PipelineContext<'_>,
-    ) -> Self {
-        Self {
-            vertex_type: context.config.vertex_type.to_string(),
-            stream,
-            js_ctx: context.js_context.clone(),
-            config: reader_config,
-            tracker_handle: context.tracker_handle.clone(),
-            batch_size: context.config.batch_size,
-            read_timeout: context.config.read_timeout,
-            watermark_handle,
-            isb_config: context.config.isb_config.clone(),
-            cln_token: context.cln_token.clone(),
-        }
-    }
-}
-
-const ACK_RETRY_INTERVAL: u64 = 100;
-const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
-
-/// The JetStreamReader is a handle to the background actor that continuously fetches messages from JetStream.
-/// It can be used to cancel the background task and stop reading from JetStream.
-///
-/// The sender end of the channel is not stored in this struct, since the struct is clone-able and the mpsc channel
-/// is only closed when all the senders are dropped. Storing the Sender end of channel in this struct would make it
-/// difficult to close the channel with `cancel` method.
-///
-/// Error handling and shutdown: The JetStreamReader will stop reading from JetStream when the cancellation token is
-/// cancelled(critical error in downstream or SIGTERM), there can't be any other cases where the JetStreamReader
-/// should stop reading messages. We just drop the tokio stream so that the downstream components can stop gracefully
-/// and before exiting we make sure all the work-in-progress(tasks) are completed.
-#[derive(Clone)]
-pub(crate) struct JetStreamReader<C: NumaflowTypeConfig> {
-    stream: Stream,
-    config: BufferReaderConfig,
-    consumer: PullConsumer,
-    tracker_handle: TrackerHandle,
-    batch_size: usize,
-    read_timeout: Duration,
-    watermark_handle: Option<ISBWatermarkHandle>,
-    vertex_type: String,
-    compression_type: Option<CompressionType>,
-    rate_limiter: Option<C::RateLimiter>,
-}
+use tracing::warn;
 
 /// JSWrappedMessage is a wrapper around the JetStream message that includes the
 /// partition index and the vertex name.
@@ -208,21 +128,15 @@ impl JSWrappedMessage {
     }
 }
 
-// Thin, cloneable JetStream reader adapter intended for use by the orchestrator.
-// Responsibilities:
-// - Fetch raw JS messages in batches and convert to core Message (including decompression)
-// - Maintain an internal Offset -> JS message handle map so orchestrator can call mark_wip/ack/nack by offset
-// - No watermark logic, no tracker interaction, no WIP loop; orchestrator owns those policies
 #[derive(Clone)]
-pub(crate) struct Reader {
+pub(crate) struct JetStreamReader {
     stream: Stream,
     consumer: PullConsumer,
     compression_type: Option<CompressionType>,
-    // Map offset string -> JS message handle; Arc<Mutex<..>> to allow cloning
-    handles: Arc<tokio::sync::Mutex<std::collections::HashMap<String, JetstreamMessage>>>,
+    handles: Arc<Mutex<HashMap<String, JetstreamMessage>>>,
 }
 
-impl Reader {
+impl JetStreamReader {
     pub(crate) async fn new(
         stream: Stream,
         js_ctx: Context,
@@ -237,7 +151,7 @@ impl Reader {
             stream,
             consumer,
             compression_type: isb_config.map(|c| c.compression.compress_type),
-            handles: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            handles: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -297,7 +211,7 @@ impl Reader {
 
             // Track handle for later ack/nack/wip by offset
             {
-                let mut map = self.handles.lock().await;
+                let mut map = self.handles.lock().expect("handles mutex poisoned");
                 map.insert(offset_key, js_msg);
             }
 
@@ -311,7 +225,7 @@ impl Reader {
     pub(crate) async fn mark_wip(&self, offsets: &[Offset]) -> Result<()> {
         // Collect handles outside of mutex before awaiting
         let handles: Vec<JetstreamMessage> = {
-            let map = self.handles.lock().await;
+            let map = self.handles.lock().expect("handles mutex poisoned");
             offsets
                 .iter()
                 .filter_map(|o| map.get(&o.to_string()).cloned())
@@ -326,7 +240,7 @@ impl Reader {
     // Ack and remove handles
     pub(crate) async fn ack(&self, offsets: &[Offset]) -> Result<()> {
         let handles: Vec<JetstreamMessage> = {
-            let mut map = self.handles.lock().await;
+            let mut map = self.handles.lock().expect("handles mutex poisoned");
             let mut v = Vec::with_capacity(offsets.len());
             for o in offsets {
                 if let Some(h) = map.remove(&o.to_string()) {
@@ -344,7 +258,7 @@ impl Reader {
     // Nack and remove handles
     pub(crate) async fn nack(&self, offsets: &[Offset]) -> Result<()> {
         let handles: Vec<JetstreamMessage> = {
-            let mut map = self.handles.lock().await;
+            let mut map = self.handles.lock().expect("handles mutex poisoned");
             let mut v = Vec::with_capacity(offsets.len());
             for o in offsets {
                 if let Some(h) = map.remove(&o.to_string()) {
@@ -370,550 +284,6 @@ impl Reader {
     }
 }
 
-impl<C: NumaflowTypeConfig> JetStreamReader<C> {
-    pub(crate) async fn new(
-        reader_components: ISBReaderComponents,
-        rate_limiter: Option<C::RateLimiter>,
-    ) -> Result<Self> {
-        let mut buffer_config = reader_components.config;
-
-        let mut consumer: PullConsumer = reader_components
-            .js_ctx
-            .get_consumer_from_stream(
-                &reader_components.stream.name,
-                &reader_components.stream.name,
-            )
-            .await
-            .map_err(|e| Error::ISB(format!("Failed to get consumer for stream {e}")))?;
-
-        let consumer_info = consumer
-            .info()
-            .await
-            .map_err(|e| Error::ISB(format!("Failed to get consumer info {e}")))?;
-
-        // Calculate inProgressTickSeconds based on the ack_wait_seconds.
-        let ack_wait_seconds = consumer_info.config.ack_wait.as_secs();
-        let wip_ack_interval = Duration::from_secs(std::cmp::max(
-            buffer_config.wip_ack_interval.as_secs(),
-            ack_wait_seconds * 2 / 3,
-        ));
-        buffer_config.wip_ack_interval = wip_ack_interval;
-
-        // Consider the minimum of the max ack pending and the consumer's max ack pending.
-        buffer_config.max_ack_pending = std::cmp::min(
-            buffer_config.max_ack_pending,
-            consumer_info.config.max_ack_pending as usize,
-        );
-
-        Ok(Self {
-            vertex_type: reader_components.vertex_type,
-            stream: reader_components.stream,
-            config: buffer_config,
-            consumer,
-            tracker_handle: reader_components.tracker_handle,
-            batch_size: reader_components.batch_size,
-            read_timeout: reader_components.read_timeout,
-            watermark_handle: reader_components.watermark_handle,
-            compression_type: reader_components
-                .isb_config
-                .map(|c| c.compression.compress_type),
-            rate_limiter,
-        })
-    }
-
-    /// streaming_read is a background task that continuously fetches messages from JetStream and
-    /// emits them on a channel. When we encounter an error, we log the error and return from the
-    /// function. This drops the sender end of the channel. The closing of the channel should propagate
-    /// to the receiver end and the receiver should exit gracefully. Within the loop, we only consider
-    /// cancellationToken cancellation during the permit reservation and fetching messages,
-    /// since rest of the operations should finish immediately.
-    pub(crate) async fn streaming_read(
-        mut self,
-        cancel_token: CancellationToken,
-    ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
-        let read_timeout = self.read_timeout;
-        let max_ack_pending = self.config.max_ack_pending;
-
-        let batch_size = if max_ack_pending < self.batch_size {
-            warn!(
-                "read_batch_size ({max_ack_pending}) should be <= max_ack_pending ({}) for ISB. \
-                Setting batch_size to max_ack_pending",
-                self.batch_size
-            );
-            max_ack_pending
-        } else {
-            self.batch_size
-        };
-
-        let (messages_tx, messages_rx) = mpsc::channel(batch_size);
-        let handle: JoinHandle<Result<()>> = tokio::spawn({
-            async move {
-                let mut labels = pipeline_metric_labels(&self.vertex_type).clone();
-                labels.push((
-                    PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                    self.stream.name.to_string(),
-                ));
-
-                let semaphore = Arc::new(Semaphore::new(max_ack_pending));
-                loop {
-                    if cancel_token.is_cancelled() {
-                        info!(stream=?self.stream, "Cancellation token received, stopping the reader.");
-                        break;
-                    }
-
-                    let read_messages = self
-                        .fetch_messages(
-                            batch_size,
-                            read_timeout,
-                            &semaphore,
-                            &labels,
-                            &cancel_token,
-                        )
-                        .await?;
-
-                    // set idle status if we did not read any messages
-                    if let Some(watermark_handle) = self.watermark_handle.as_mut() {
-                        if read_messages.is_empty() {
-                            // to set idle status and make sure it is truly idling in concurrent world,
-                            // we need to make sure the state at which we have marked the stream as idle
-                            // is the same when we are checking for idle status.
-                            // we achieve this by adding the Head WMB offset into the idle status and
-                            // when checking for idle status, we fetch Head WMB and compare if the offset
-                            // matches.
-                            let idle_wmb = watermark_handle
-                                .fetch_head_idle_wmb(self.stream.partition)
-                                .await;
-
-                            match idle_wmb {
-                                Some(wmb) => {
-                                    self.tracker_handle
-                                        .set_idle_offset(self.stream.partition, Some(wmb.offset))
-                                        .await?;
-                                    self.create_and_write_wmb_message_for_reduce(wmb, &messages_tx)
-                                        .await?;
-                                }
-                                None => {
-                                    // no Head WMB yet, we have not gotten any WMB from upstream yet.
-                                    self.tracker_handle
-                                        .set_idle_offset(self.stream.partition, None)
-                                        .await?;
-                                }
-                            }
-                        } else {
-                            // the moment we read a message, we are not idling
-                            self.tracker_handle
-                                .set_idle_offset(self.stream.partition, None)
-                                .await?;
-                        }
-                    }
-
-                    for message in read_messages {
-                        Self::update_metrics(&labels, &message);
-                        if let Err(e) = messages_tx.send(message).await {
-                            error!(?e, "Failed to send message to channel");
-                            break;
-                        }
-                    }
-                }
-
-                self.wait_for_ack_completion(semaphore).await;
-
-                // Shutdown rate limiter if configured
-                if let Some(ref rate_limiter) = self.rate_limiter {
-                    rate_limiter
-                        .shutdown()
-                        .await
-                        .map_err(|e| Error::ISB(format!("Failed to shutdown rate limiter: {e}")))?;
-                }
-
-                Ok(())
-            }
-        });
-        Ok((ReceiverStream::new(messages_rx), handle))
-    }
-
-    /// fetches messages in batch from JetStream.
-    async fn fetch_messages(
-        &mut self,
-        batch_size: usize,
-        read_timeout: Duration,
-        semaphore: &Arc<Semaphore>,
-        labels: &[(String, String)],
-        cancel_token: &CancellationToken,
-    ) -> Result<Vec<Message>> {
-        // try acquiring the batch size number of permits before fetching messages.
-        let mut permits = Arc::clone(semaphore)
-            .acquire_many_owned(batch_size as u32)
-            .await
-            .map_err(|e| Error::ISB(format!("Failed to acquire semaphore permit: {e}")))?;
-
-        // Apply rate limiting if configured.
-        let (effective_batch_size, token_grabbed_epoch) = match &self.rate_limiter {
-            Some(rate_limiter) => {
-                // Note the epoch at which we got the estimated batch size from the rate limiter
-                let cur_epoch = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("Time went backwards beyond unix epoch")
-                    .as_secs();
-
-                let tokens_acquired = rate_limiter
-                    .acquire_n(Some(batch_size), Some(Duration::from_secs(1)))
-                    .await;
-                let effective_batch_size = std::cmp::min(tokens_acquired, batch_size);
-                // return early if we don't have any tokens.
-                if effective_batch_size == 0 {
-                    return Ok(vec![]);
-                }
-
-                (effective_batch_size, cur_epoch)
-            }
-            None => (batch_size, 0),
-        };
-
-        let start = Instant::now();
-        let jetstream_messages = match self
-            .consumer
-            .batch()
-            .max_messages(effective_batch_size)
-            .expires(read_timeout)
-            .messages()
-            .await
-        {
-            Ok(mut messages) => {
-                let mut batch = Vec::with_capacity(effective_batch_size);
-                while let Some(message) = messages.next().await {
-                    match message {
-                        Ok(msg) => batch.push(msg),
-                        Err(e) => {
-                            warn!(?e, stream=?self.stream, "Failed to fetch a message from batch (ignoring, will be retried)");
-                        }
-                    }
-                }
-                batch
-            }
-            Err(e) => {
-                pipeline_metrics()
-                    .jetstream_isb
-                    .read_error_total
-                    .get_or_create(&jetstream_isb_error_metrics_labels(
-                        self.stream.name,
-                        e.kind().to_string(),
-                    ))
-                    .inc();
-                warn!(?e, stream=?self.stream, "Failed to get message batch from Jetstream (ignoring, will be retried)");
-                vec![]
-            }
-        };
-
-        // deposit the unused tokens back to the rate limiter
-        // utilize the cur_epoch we calculated when we initially acquired the tokens
-        // to ensure that the tokens are deposited for the correct epoch.
-        if let Some(rate_limiter) = &self.rate_limiter {
-            rate_limiter
-                .deposit_unused(
-                    effective_batch_size.saturating_sub(jetstream_messages.len()),
-                    token_grabbed_epoch,
-                )
-                .await;
-        }
-
-        pipeline_metrics()
-            .jetstream_isb
-            .read_time_total
-            .get_or_create(&jetstream_isb_metrics_labels(self.stream.name))
-            .observe(start.elapsed().as_micros() as f64);
-
-        debug!(
-            time_taken_ms = ?start.elapsed().as_millis(),
-            count = ?jetstream_messages.len(),
-            "Fetched messages from Jetstream"
-        );
-
-        let mut read_messages = Vec::with_capacity(jetstream_messages.len());
-        for jetstream_message in jetstream_messages {
-            let js_message = JSWrappedMessage {
-                partition_idx: self.stream.partition,
-                message: jetstream_message.clone(),
-                vertex_name: get_vertex_name().to_string(),
-                compression_type: self.compression_type,
-            };
-
-            let mut message: Message = js_message.into_message().await.map_err(|e| {
-                error!(
-                    ?e,
-                    "Failed to convert Jetstream message to Numaflow message"
-                );
-                e
-            })?;
-
-            // we can ignore the wmb messages
-            if let MessageType::WMB = message.typ {
-                // ack the message and continue
-                if let Err(e) = jetstream_message.ack().await {
-                    error!(?e, "Failed to ack the wmb message");
-                }
-                continue;
-            }
-
-            if let Some(watermark_handle) = &mut self.watermark_handle {
-                let watermark = watermark_handle
-                    .fetch_watermark(message.offset.clone())
-                    .await;
-                message.watermark = Some(watermark);
-            }
-
-            // Insert into tracker and start work in progress
-            let (ack_tx, ack_rx) = oneshot::channel();
-            self.tracker_handle.insert(&message, ack_tx).await?;
-
-            // get one permit from the acquired permits to release after acking the offsets.
-            let permit = permits.split(1).expect("Failed to split permit");
-            tokio::spawn(Self::start_work_in_progress(
-                self.name(),
-                labels.to_vec(),
-                message.offset.clone(),
-                jetstream_message,
-                ack_rx,
-                self.config.wip_ack_interval,
-                permit,
-                cancel_token.clone(),
-                start,
-            ));
-
-            read_messages.push(message);
-        }
-
-        pipeline_metrics()
-            .forwarder
-            .read_processing_time
-            .get_or_create(&labels.to_vec())
-            .observe(start.elapsed().as_micros() as f64);
-
-        Ok(read_messages)
-    }
-
-    /// Waits for all the work-in-progress tasks to be completed.
-    async fn wait_for_ack_completion(&self, semaphore: Arc<Semaphore>) {
-        info!(stream=?self.stream, "Jetstream reader stopped, waiting for ack tasks to complete");
-        let _permit = Arc::clone(&semaphore)
-            .acquire_many_owned(self.config.max_ack_pending as u32)
-            .await
-            .expect("Failed to acquire semaphore permit");
-        info!(stream=?self.stream, "All inflight messages are successfully acked/nacked");
-    }
-
-    fn update_metrics(labels: &[(String, String)], message: &Message) {
-        let message_bytes = message.value.len();
-        let labels_vec = labels.to_vec();
-        pipeline_metrics()
-            .forwarder
-            .read_total
-            .get_or_create(&labels_vec)
-            .inc();
-        pipeline_metrics()
-            .forwarder
-            .data_read_total
-            .get_or_create(&labels_vec)
-            .inc();
-        pipeline_metrics()
-            .forwarder
-            .read_bytes_total
-            .get_or_create(&labels_vec)
-            .inc_by(message_bytes as u64);
-        pipeline_metrics()
-            .forwarder
-            .data_read_bytes_total
-            .get_or_create(&labels_vec)
-            .inc_by(message_bytes as u64);
-    }
-
-    /// A background task which waits for the `Ack`, meanwhile it continuously sends `WIP` acks
-    /// until the final ack/nak is received. This will continuously retry if there is an error in acknowledging.
-    /// If the sender's end of the ack_rx channel was dropped before
-    /// sending the final `Ack` or `Nak` (due to some unhandled/unknown failure), we will send `Nak` to Jetstream.
-    #[allow(clippy::too_many_arguments)]
-    async fn start_work_in_progress(
-        stream_name: &str,
-        labels: Vec<(String, String)>,
-        offset: Offset,
-        msg: JetstreamMessage,
-        mut ack_rx: oneshot::Receiver<ReadAck>,
-        tick: Duration,
-        _permit: OwnedSemaphorePermit, // permit to release after acking the offsets.
-        cancel_token: CancellationToken,
-        message_processing_start: Instant,
-    ) {
-        let start = Instant::now();
-        let mut interval = time::interval_at(start + tick, tick);
-
-        loop {
-            let wip = async {
-                interval.tick().await;
-                let ack_result = msg.ack_with(AckKind::Progress).await;
-                if let Err(e) = ack_result {
-                    error!(
-                        ?e,
-                        ?offset,
-                        "Failed to send InProgress Ack to Jetstream for message"
-                    );
-                }
-            };
-
-            let ack = tokio::select! {
-                ack = &mut ack_rx => ack,
-                _ = wip => continue,
-            };
-
-            let ack = ack.unwrap_or_else(|e| {
-                error!(
-                    ?e,
-                    ?offset,
-                    "Received error while waiting for Ack oneshot channel"
-                );
-                ReadAck::Nak
-            });
-
-            match ack {
-                ReadAck::Ack => {
-                    let ack_start = Instant::now();
-                    Self::invoke_ack_with_retry(&msg, AckKind::Ack, &cancel_token, offset.clone())
-                        .await;
-
-                    pipeline_metrics()
-                        .jetstream_isb
-                        .ack_time_total
-                        .get_or_create(&jetstream_isb_metrics_labels(stream_name))
-                        .observe(ack_start.elapsed().as_micros() as f64);
-                    pipeline_metrics()
-                        .forwarder
-                        .ack_processing_time
-                        .get_or_create(&labels)
-                        .observe(ack_start.elapsed().as_micros() as f64);
-                    pipeline_metrics()
-                        .forwarder
-                        .ack_total
-                        .get_or_create(&labels)
-                        .inc();
-                    pipeline_metrics()
-                        .forwarder
-                        .e2e_time
-                        .get_or_create(&labels)
-                        .observe(message_processing_start.elapsed().as_micros() as f64);
-                    return;
-                }
-                ReadAck::Nak => {
-                    Self::invoke_ack_with_retry(
-                        &msg,
-                        AckKind::Nak(None),
-                        &cancel_token,
-                        offset.clone(),
-                    )
-                    .await;
-                    warn!(?offset, "Sent Nak to Jetstream for message");
-                    return;
-                }
-            }
-        }
-    }
-
-    // invokes the ack with infinite retries until the cancellation token is cancelled.
-    async fn invoke_ack_with_retry(
-        msg: &JetstreamMessage,
-        ack_kind: AckKind,
-        cancel_token: &CancellationToken,
-        offset: Offset,
-    ) {
-        let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
-        let _ = Retry::new(
-            interval,
-            async || {
-                let result = match ack_kind {
-                    AckKind::Ack => msg.double_ack().await, // double ack is used for exactly once semantics
-                    _ => msg.ack_with(ack_kind).await,
-                };
-
-                result.map_err(|e| {
-                    Error::Connection(format!("Failed to send {ack_kind:?} to Jetstream: {e}"))
-                })
-            },
-            |e: &Error| {
-                if cancel_token.is_cancelled() {
-                    error!(
-                        ?e,
-                        ?offset,
-                        "Cancellation token received, stopping the {ack_kind:?} retry loop",
-                    );
-                    return false;
-                }
-
-                warn!(
-                    ?e,
-                    ?offset,
-                    "Failed to send {ack_kind:?} Ack to Jetstream for message, retrying...",
-                );
-                true
-            },
-        )
-        .await;
-    }
-
-    pub(crate) async fn pending(&mut self) -> Result<Option<usize>> {
-        let x = self.consumer.info().await.map_err(|e| {
-            Error::ISB(format!(
-                "Failed to get consumer info for stream {}: {}",
-                self.stream.name, e
-            ))
-        })?;
-        Ok(Some(x.num_pending as usize + x.num_ack_pending))
-    }
-
-    pub(crate) fn name(&self) -> &'static str {
-        self.stream.name
-    }
-
-    /// Creates a WMB message by fetching the head idle WMB for the current partition and write it to
-    /// the Reduce component.
-    /// We only need to create wmb messages for Reduce vertices because they have to also close the
-    /// Windows. The background idle publisher will take care of publishing the idle watermark to the Reduce
-    /// so we just need to close idle Windows.
-    async fn create_and_write_wmb_message_for_reduce(
-        &mut self,
-        idle_wmb: WMB,
-        messages_tx: &Sender<Message>,
-    ) -> Result<()> {
-        if self.vertex_type != ReduceUDF.as_str() {
-            return Ok(());
-        }
-
-        // Create a watermark from the validated WMB
-        let idle_watermark = chrono::DateTime::from_timestamp_millis(idle_wmb.watermark)
-            .expect("Failed to create watermark from WMB");
-
-        // Create a WMB message with the validated idle watermark
-        let message = Message {
-            typ: MessageType::WMB,
-            watermark: Some(idle_watermark),
-            offset: Offset::Int(IntOffset::new(idle_wmb.offset, self.stream.partition)),
-            event_time: idle_watermark,
-            ..Default::default()
-        };
-        messages_tx
-            .send(message)
-            .await
-            .map_err(|_| Error::ISB("Failed to send wmb message to channel".to_string()))
-    }
-}
-
-impl<C: NumaflowTypeConfig> fmt::Display for JetStreamReader<C> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "JetstreamReader {{ stream_name: {}, partition_idx: {}, config: {:?} }}",
-            self.stream, self.stream.partition, self.config
-        )
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::io::Write;
@@ -929,6 +299,7 @@ mod tests {
 
     use super::*;
     use crate::message::{Message, MessageID};
+    use crate::pipeline::isb::reader::ISBReaderComponents;
 
     #[tokio::test]
     async fn simple_permit_test() {

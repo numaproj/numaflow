@@ -8,8 +8,9 @@ use crate::metrics::{
     ComponentHealthChecks, LagReader, MetricsState, PipelineComponents, WatermarkFetcherState,
 };
 use crate::pipeline::PipelineContext;
-use crate::pipeline::isb::jetstream::reader::{ISBReaderComponents, JetStreamReader};
+use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::writer::{ISBWriterComponents, JetstreamWriter};
+use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
 use crate::reduce::pbq::{PBQ, PBQBuilder, WAL};
 use crate::reduce::reducer::aligned::reducer::AlignedReducer;
 use crate::reduce::reducer::aligned::windower::AlignedWindowManager;
@@ -357,18 +358,25 @@ async fn run_reduce_forwarder<C: NumaflowTypeConfig>(
     reducer: Reducer,
     wal: Option<WAL>,
     rate_limiter: Option<C::RateLimiter>,
-) -> crate::error::Result<()> {
-    let buffer_reader = JetStreamReader::<C>::new(reader_components, rate_limiter).await?;
+) -> Result<()> {
+    let js_reader = JetStreamReader::new(
+        reader_components.stream.clone(),
+        reader_components.js_ctx.clone(),
+        reader_components.isb_config.clone(),
+    )
+    .await?;
+
+    let isb_reader = ISBReader::<C>::new(reader_components, js_reader, rate_limiter).await?;
 
     // Create lag reader with the single buffer reader (reduce only reads from one stream)
     let pending_reader = shared::metrics::create_pending_reader(
         &context.config.metrics_config,
-        LagReader::ISB(vec![buffer_reader.clone()]),
+        LagReader::ISB(vec![isb_reader.clone()]),
     )
     .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
-    let pbq_builder = PBQBuilder::<C>::new(buffer_reader, context.tracker_handle.clone());
+    let pbq_builder = PBQBuilder::<C>::new(isb_reader, context.tracker_handle.clone());
     let pbq = match wal {
         Some(wal) => pbq_builder.wal(wal).build(),
         None => pbq_builder.build(),
