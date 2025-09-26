@@ -60,7 +60,7 @@ func InvokeE2EAPIPOST(format string, body string, args ...interface{}) string {
 	var resp *http.Response
 	// Invoking POST can fail due to "500 Internal Server Error". It's because the server is still booting up and not ready to serve requests.
 	// To prevent such issue, we apply retry strategy.
-	// 6 attempts with 30 second fixed wait time are tested sufficient for it.
+	// 6 attempts with 5 second fixed wait time are tested sufficient for it.
 	var retryBackOff = wait.Backoff{
 		Factor:   1,
 		Jitter:   0,
