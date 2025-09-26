@@ -13,9 +13,14 @@ use crate::config::pipeline::VertexType::ReduceUDF;
 use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageType, Offset, ReadAck};
+use crate::metrics::{
+    PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
+    jetstream_isb_metrics_labels, pipeline_metric_labels, pipeline_metrics,
+};
 use crate::tracker::TrackerHandle;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
+
 use crate::watermark::wmb::WMB;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
@@ -27,6 +32,19 @@ const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 
 // Alias the thin JS reader as JSReader to avoid name clashes
 use crate::pipeline::isb::jetstream::reader::{ISBReaderComponents, Reader as JSReader};
+
+// Compact container to avoid clippy::too_many_arguments in wip_loop
+struct WipParams {
+    stream_name: &'static str,
+    labels: Vec<(String, String)>,
+    jsr: JSReader,
+    offset: Offset,
+    ack_rx: oneshot::Receiver<ReadAck>,
+    tick: Duration,
+    permit: tokio::sync::OwnedSemaphorePermit,
+    cancel: CancellationToken,
+    message_processing_start: Instant,
+}
 
 /// Orchestrator that drives fetching, WIP, ack/nack, watermark/idle handling over a thin JS reader.
 pub(crate) struct Reader<C: NumaflowTypeConfig> {
@@ -67,6 +85,11 @@ impl<C: NumaflowTypeConfig> Reader<C> {
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let max_ack_pending = self.cfg.max_ack_pending;
         let batch_size = std::cmp::min(self.batch_size, max_ack_pending);
+        let mut labels = pipeline_metric_labels(&self.vertex_type).clone();
+        labels.push((
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            self.stream.name.to_string(),
+        ));
         let (tx, rx) = mpsc::channel(batch_size);
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             let semaphore = Arc::new(Semaphore::new(max_ack_pending));
@@ -102,10 +125,31 @@ impl<C: NumaflowTypeConfig> Reader<C> {
                 let mut batch = if effective_batch_size == 0 {
                     Vec::new()
                 } else {
-                    self.inner
+                    match self
+                        .inner
                         .fetch(effective_batch_size, self.read_timeout)
-                        .await?
+                        .await
+                    {
+                        Ok(v) => v,
+                        Err(e) => {
+                            pipeline_metrics()
+                                .jetstream_isb
+                                .read_error_total
+                                .get_or_create(&jetstream_isb_error_metrics_labels(
+                                    self.stream.name,
+                                    e.to_string(),
+                                ))
+                                .inc();
+                            warn!(?e, stream=?self.stream, "Failed to get message batch from Jetstream (ignoring, will be retried)");
+                            Vec::new()
+                        }
+                    }
                 };
+                pipeline_metrics()
+                    .jetstream_isb
+                    .read_time_total
+                    .get_or_create(&jetstream_isb_metrics_labels(self.stream.name))
+                    .observe(start.elapsed().as_micros() as f64);
 
                 // Deposit unused tokens back if any
                 if let Some(rl) = &self.rate_limiter {
@@ -160,25 +204,39 @@ impl<C: NumaflowTypeConfig> Reader<C> {
                         message.watermark = Some(watermark);
                     }
 
+                    // Update per-message read metrics
+                    Self::update_read_metrics(&labels, &message);
+
                     // Insert into tracker and spawn WIP loop
                     let (ack_tx, ack_rx) = oneshot::channel();
                     self.tracker.insert(&message, ack_tx).await?;
 
-                    let permit = permits.split(1).expect("Failed to split permit");
-                    let jsr = self.inner.clone();
-                    let offset = message.offset.clone();
-                    let tick = self.cfg.wip_ack_interval;
-                    let cancel_clone = cancel.clone();
-
+                    let params = WipParams {
+                        stream_name: self.stream.name,
+                        labels: labels.clone(),
+                        jsr: self.inner.clone(),
+                        offset: message.offset.clone(),
+                        ack_rx,
+                        tick: self.cfg.wip_ack_interval,
+                        permit: permits.split(1).expect("Failed to split permit"),
+                        cancel: cancel.clone(),
+                        message_processing_start: start,
+                    };
                     tokio::spawn(async move {
-                        Self::wip_loop(jsr, offset, ack_rx, tick, permit, cancel_clone, start)
-                            .await;
+                        Self::wip_loop(params).await;
                     });
 
                     if tx.send(message).await.is_err() {
                         break;
                     }
                 }
+
+                // Update per-batch processing time metric
+                pipeline_metrics()
+                    .forwarder
+                    .read_processing_time
+                    .get_or_create(&labels)
+                    .observe(start.elapsed().as_micros() as f64);
             }
             // Drain: wait for inflight to finish
             let _ = Arc::clone(&semaphore)
@@ -200,24 +258,29 @@ impl<C: NumaflowTypeConfig> Reader<C> {
         self.inner.pending().await
     }
 
-    // Periodically mark WIP until ack/nack received, then perform final ack/nack.
-    async fn wip_loop(
-        jsr: JSReader,
-        offset: Offset,
-        mut ack_rx: oneshot::Receiver<ReadAck>,
-        tick: Duration,
-        _permit: tokio::sync::OwnedSemaphorePermit,
-        cancel: CancellationToken,
-        _started: Instant,
-    ) {
-        let mut interval = time::interval(tick);
+    // Periodically mark WIP until ack/nack received, then perform final ack/nack and publish metrics.
+    async fn wip_loop(mut params: WipParams) {
+        let mut interval = time::interval(params.tick);
         loop {
             tokio::select! {
-                _ = interval.tick() => { let _ = jsr.mark_wip(std::slice::from_ref(&offset)).await; },
-                res = &mut ack_rx => {
+                _ = interval.tick() => {
+                    let _ = params.jsr.mark_wip(std::slice::from_ref(&params.offset)).await;
+                },
+                res = &mut params.ack_rx => {
                     match res.unwrap_or(ReadAck::Nak) {
-                        ReadAck::Ack => { Self::ack_with_retry(jsr.clone(), offset.clone(), cancel.clone()).await; },
-                        ReadAck::Nak => { Self::nak_with_retry(jsr.clone(), offset.clone(), cancel.clone()).await; },
+                        ReadAck::Ack => {
+                            let ack_start = Instant::now();
+                            Self::ack_with_retry(params.jsr.clone(), params.offset.clone(), params.cancel.clone()).await;
+                            Self::update_ack_metrics(
+                                params.stream_name,
+                                &params.labels,
+                                ack_start,
+                                params.message_processing_start,
+                            );
+                        },
+                        ReadAck::Nak => {
+                            Self::nak_with_retry(params.jsr.clone(), params.offset.clone(), params.cancel.clone()).await;
+                        },
                     }
                     break;
                 }
@@ -301,5 +364,59 @@ impl<C: NumaflowTypeConfig> Reader<C> {
         tx.send(msg)
             .await
             .map_err(|_| Error::ISB("Failed to send wmb message to channel".to_string()))
+    }
+
+    fn update_ack_metrics(
+        stream_name: &'static str,
+        labels: &[(String, String)],
+        ack_start: Instant,
+        message_processing_start: Instant,
+    ) {
+        let labels_vec = labels.to_vec();
+        pipeline_metrics()
+            .jetstream_isb
+            .ack_time_total
+            .get_or_create(&jetstream_isb_metrics_labels(stream_name))
+            .observe(ack_start.elapsed().as_micros() as f64);
+        pipeline_metrics()
+            .forwarder
+            .ack_processing_time
+            .get_or_create(&labels_vec)
+            .observe(ack_start.elapsed().as_micros() as f64);
+        pipeline_metrics()
+            .forwarder
+            .ack_total
+            .get_or_create(&labels_vec)
+            .inc();
+        pipeline_metrics()
+            .forwarder
+            .e2e_time
+            .get_or_create(&labels_vec)
+            .observe(message_processing_start.elapsed().as_micros() as f64);
+    }
+
+    fn update_read_metrics(labels: &[(String, String)], message: &Message) {
+        let message_bytes = message.value.len();
+        let labels_vec = labels.to_vec();
+        pipeline_metrics()
+            .forwarder
+            .read_total
+            .get_or_create(&labels_vec)
+            .inc();
+        pipeline_metrics()
+            .forwarder
+            .data_read_total
+            .get_or_create(&labels_vec)
+            .inc();
+        pipeline_metrics()
+            .forwarder
+            .read_bytes_total
+            .get_or_create(&labels_vec)
+            .inc_by(message_bytes as u64);
+        pipeline_metrics()
+            .forwarder
+            .data_read_bytes_total
+            .get_or_create(&labels_vec)
+            .inc_by(message_bytes as u64);
     }
 }
