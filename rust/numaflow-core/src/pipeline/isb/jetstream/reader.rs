@@ -208,6 +208,168 @@ impl JSWrappedMessage {
     }
 }
 
+// Thin, cloneable JetStream reader adapter intended for use by the orchestrator.
+// Responsibilities:
+// - Fetch raw JS messages in batches and convert to core Message (including decompression)
+// - Maintain an internal Offset -> JS message handle map so orchestrator can call mark_wip/ack/nack by offset
+// - No watermark logic, no tracker interaction, no WIP loop; orchestrator owns those policies
+#[derive(Clone)]
+pub(crate) struct Reader {
+    stream: Stream,
+    consumer: PullConsumer,
+    compression_type: Option<CompressionType>,
+    // Map offset string -> JS message handle; Arc<Mutex<..>> to allow cloning
+    handles: Arc<tokio::sync::Mutex<std::collections::HashMap<String, JetstreamMessage>>>,
+}
+
+impl Reader {
+    pub(crate) async fn new(
+        stream: Stream,
+        js_ctx: Context,
+        isb_config: Option<ISBConfig>,
+    ) -> Result<Self> {
+        let consumer: PullConsumer = js_ctx
+            .get_consumer_from_stream(&stream.name, &stream.name)
+            .await
+            .map_err(|e| Error::ISB(format!("Failed to get consumer for stream {e}")))?;
+
+        Ok(Self {
+            stream,
+            consumer,
+            compression_type: isb_config.map(|c| c.compression.compress_type),
+            handles: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+        })
+    }
+
+    pub(crate) fn name(&self) -> &'static str {
+        self.stream.name
+    }
+
+    // Fetch up to `max` messages within `timeout`, convert to core Message, and retain JS handles by offset.
+    pub(crate) async fn fetch(&mut self, max: usize, timeout: Duration) -> Result<Vec<Message>> {
+        let mut out = Vec::with_capacity(max);
+        let msgs = match self
+            .consumer
+            .batch()
+            .max_messages(max)
+            .expires(timeout)
+            .messages()
+            .await
+        {
+            Ok(mut stream) => {
+                let mut v = Vec::new();
+                while let Some(next) = stream.next().await {
+                    if let Ok(m) = next {
+                        v.push(m);
+                    }
+                }
+                v
+            }
+            Err(e) => {
+                warn!(?e, stream=?self.stream, "Failed to fetch message batch from Jetstream (ignoring)");
+                Vec::new()
+            }
+        };
+
+        for js_msg in msgs {
+            // Derive offset key (seq-partition) and store handle
+            let info = js_msg.info().map_err(|e| {
+                Error::ISB(format!("Failed to get message info from JetStream: {e}"))
+            })?;
+            let offset = Offset::Int(IntOffset::new(
+                info.stream_sequence as i64,
+                self.stream.partition,
+            ));
+            let offset_key = offset.to_string();
+
+            // Convert to core Message (including decompression) using existing wrapper
+            let mut message = JSWrappedMessage {
+                partition_idx: self.stream.partition,
+                message: js_msg.clone(),
+                vertex_name: get_vertex_name().to_string(),
+                compression_type: self.compression_type,
+            }
+            .into_message()
+            .await?;
+
+            // Ensure offset is populated even for WMB types
+            message.offset = offset.clone();
+
+            // Track handle for later ack/nack/wip by offset
+            {
+                let mut map = self.handles.lock().await;
+                map.insert(offset_key, js_msg);
+            }
+
+            out.push(message);
+        }
+
+        Ok(out)
+    }
+
+    // Send progress/WIP for the provided offsets; does not remove handles
+    pub(crate) async fn mark_wip(&self, offsets: &[Offset]) -> Result<()> {
+        // Collect handles outside of mutex before awaiting
+        let handles: Vec<JetstreamMessage> = {
+            let map = self.handles.lock().await;
+            offsets
+                .iter()
+                .filter_map(|o| map.get(&o.to_string()).cloned())
+                .collect()
+        };
+        for h in handles {
+            let _ = h.ack_with(AckKind::Progress).await;
+        }
+        Ok(())
+    }
+
+    // Ack and remove handles
+    pub(crate) async fn ack(&self, offsets: &[Offset]) -> Result<()> {
+        let handles: Vec<JetstreamMessage> = {
+            let mut map = self.handles.lock().await;
+            let mut v = Vec::with_capacity(offsets.len());
+            for o in offsets {
+                if let Some(h) = map.remove(&o.to_string()) {
+                    v.push(h);
+                }
+            }
+            v
+        };
+        for h in handles {
+            let _ = h.double_ack().await;
+        }
+        Ok(())
+    }
+
+    // Nack and remove handles
+    pub(crate) async fn nack(&self, offsets: &[Offset]) -> Result<()> {
+        let handles: Vec<JetstreamMessage> = {
+            let mut map = self.handles.lock().await;
+            let mut v = Vec::with_capacity(offsets.len());
+            for o in offsets {
+                if let Some(h) = map.remove(&o.to_string()) {
+                    v.push(h);
+                }
+            }
+            v
+        };
+        for h in handles {
+            let _ = h.ack_with(AckKind::Nak(None)).await;
+        }
+        Ok(())
+    }
+
+    pub(crate) async fn pending(&mut self) -> Result<Option<usize>> {
+        let info = self.consumer.info().await.map_err(|e| {
+            Error::ISB(format!(
+                "Failed to get consumer info for stream {}: {}",
+                self.stream.name, e
+            ))
+        })?;
+        Ok(Some(info.num_pending as usize + info.num_ack_pending))
+    }
+}
+
 impl<C: NumaflowTypeConfig> JetStreamReader<C> {
     pub(crate) async fn new(
         reader_components: ISBReaderComponents,
