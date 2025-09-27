@@ -57,14 +57,14 @@ pub(crate) struct ISBReader<C: NumaflowTypeConfig> {
     read_timeout: Duration,
     tracker: TrackerHandle,
     watermark: Option<ISBWatermarkHandle>,
-    inner: JSReader,
+    js_reader: JSReader,
     rate_limiter: Option<C::RateLimiter>,
 }
 
 impl<C: NumaflowTypeConfig> ISBReader<C> {
     pub(crate) async fn new(
         components: ISBReaderComponents,
-        inner: JSReader,
+        js_reader: JSReader,
         rate_limiter: Option<C::RateLimiter>,
     ) -> Result<Self> {
         Ok(Self {
@@ -75,7 +75,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
             read_timeout: components.read_timeout,
             tracker: components.tracker_handle,
             watermark: components.watermark_handle,
-            inner,
+            js_reader,
             rate_limiter,
         })
     }
@@ -128,7 +128,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                     Vec::new()
                 } else {
                     match self
-                        .inner
+                        .js_reader
                         .fetch(effective_batch_size, self.read_timeout)
                         .await
                     {
@@ -196,11 +196,10 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                 for mut message in batch.drain(..) {
                     if let MessageType::WMB = message.typ {
                         // Ack and skip JS WMB control messages
-                        self.inner.ack(&[message.offset.clone()]).await?;
+                        self.js_reader.ack(&[message.offset.clone()]).await?;
                         continue;
                     }
 
-                    // Fetch watermark per message (orchestrator-level concern)
                     if let Some(wm) = self.watermark.as_mut() {
                         let watermark = wm.fetch_watermark(message.offset.clone()).await;
                         message.watermark = Some(watermark);
@@ -216,7 +215,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                     let params = WipParams {
                         stream_name: self.stream.name,
                         labels: labels.clone(),
-                        jsr: self.inner.clone(),
+                        jsr: self.js_reader.clone(),
                         offset: message.offset.clone(),
                         ack_rx,
                         tick: self.cfg.wip_ack_interval,
@@ -257,11 +256,11 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         Ok((ReceiverStream::new(rx), handle))
     }
     pub(crate) async fn pending(&mut self) -> Result<Option<usize>> {
-        self.inner.pending().await
+        self.js_reader.pending().await
     }
 
     pub(crate) fn name(&mut self) -> &'static str {
-        self.inner.name()
+        self.js_reader.name()
     }
 
     // Periodically mark WIP until ack/nack received, then perform final ack/nack and publish metrics.

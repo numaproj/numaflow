@@ -286,7 +286,6 @@ async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig>(
 ) -> Result<(tokio::task::JoinHandle<Result<()>>, ISBReader<C>)> {
     let cln_token = reader_components.cln_token.clone();
 
-    // Create thin JS reader for orchestrator
     let js_reader = JetStreamReader::new(
         reader_components.stream.clone(),
         reader_components.js_ctx.clone(),
@@ -294,7 +293,6 @@ async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig>(
     )
     .await?;
 
-    // Create orchestrator reader for actual streaming
     let isb_reader = ISBReader::<C>::new(reader_components, js_reader, rate_limiter).await?;
 
     let forwarder = MapForwarder::<C>::new(isb_reader.clone(), mapper, buffer_writer).await;

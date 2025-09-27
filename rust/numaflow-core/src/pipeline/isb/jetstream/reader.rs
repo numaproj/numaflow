@@ -1,18 +1,15 @@
 use std::collections::HashMap;
-use std::fmt;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::Result;
 use crate::config::get_vertex_name;
-use crate::config::pipeline::isb::{BufferReaderConfig, CompressionType, ISBConfig, Stream};
+use crate::config::pipeline::isb::{CompressionType, ISBConfig, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, MessageType, Offset};
 use crate::metadata::Metadata;
 use crate::shared::grpc::utc_from_timestamp;
-use crate::tracker::TrackerHandle;
-use crate::watermark::isb::ISBWatermarkHandle;
 use async_nats::jetstream::{
     AckKind, Context, Message as JetstreamMessage, consumer::PullConsumer,
 };
@@ -20,7 +17,6 @@ use bytes::Bytes;
 use flate2::read::GzDecoder;
 use prost::Message as ProtoMessage;
 use tokio_stream::StreamExt;
-use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 /// JSWrappedMessage is a wrapper around the JetStream message that includes the
@@ -298,11 +294,16 @@ mod tests {
     use tokio::time::sleep;
 
     use super::*;
+    use crate::config::pipeline::isb::BufferReaderConfig;
     use crate::message::{Message, MessageID};
-    use crate::pipeline::isb::reader::ISBReaderComponents;
+    use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
+    use crate::tracker::TrackerHandle;
+    use tokio_util::sync::CancellationToken;
 
     #[tokio::test]
     async fn simple_permit_test() {
+        use tokio::sync::Semaphore;
+
         let sem = Arc::new(Semaphore::new(20));
         let mut permit = Arc::clone(&sem).acquire_many_owned(10).await.unwrap();
         assert_eq!(sem.available_permits(), 10);
@@ -367,26 +368,31 @@ mod tests {
             ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
-        let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> = JetStreamReader::new(
-            ISBReaderComponents {
-                vertex_type: "Map".to_string(),
-                stream: stream.clone(),
-                js_ctx: context.clone(),
-                config: buf_reader_config,
-                tracker_handle: tracker.clone(),
-                batch_size: 500,
-                read_timeout: Duration::from_millis(100),
-                watermark_handle: None,
-                isb_config: None,
-                cln_token: CancellationToken::new(),
-            },
-            None,
-        )
-        .await
-        .unwrap();
+
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+            .await
+            .unwrap();
+
+        let isb_reader_components = ISBReaderComponents {
+            vertex_type: "Map".to_string(),
+            stream: stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker.clone(),
+            batch_size: 500,
+            read_timeout: Duration::from_millis(100),
+            watermark_handle: None,
+            isb_config: None,
+            cln_token: CancellationToken::new(),
+        };
+
+        let isb_reader: ISBReader<crate::typ::WithoutRateLimiter> =
+            ISBReader::new(isb_reader_components, js_reader, None)
+                .await
+                .unwrap();
 
         let reader_cancel_token = CancellationToken::new();
-        let (mut js_reader_rx, js_reader_task) = js_reader
+        let (mut js_reader_rx, js_reader_task) = isb_reader
             .streaming_read(reader_cancel_token.clone())
             .await
             .unwrap();
@@ -478,26 +484,31 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
             ..Default::default()
         };
-        let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> = JetStreamReader::new(
-            ISBReaderComponents {
-                vertex_type: "Map".to_string(),
-                stream: js_stream.clone(),
-                js_ctx: context.clone(),
-                config: buf_reader_config,
-                tracker_handle: tracker_handle.clone(),
-                batch_size: 1,
-                read_timeout: Duration::from_millis(100),
-                watermark_handle: None,
-                isb_config: None,
-                cln_token: CancellationToken::new(),
-            },
-            None,
-        )
-        .await
-        .unwrap();
+
+        let js_reader = JetStreamReader::new(js_stream.clone(), context.clone(), None)
+            .await
+            .unwrap();
+
+        let isb_reader_components = ISBReaderComponents {
+            vertex_type: "Map".to_string(),
+            stream: js_stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker_handle.clone(),
+            batch_size: 1,
+            read_timeout: Duration::from_millis(100),
+            watermark_handle: None,
+            isb_config: None,
+            cln_token: CancellationToken::new(),
+        };
+
+        let isb_reader: ISBReader<crate::typ::WithoutRateLimiter> =
+            ISBReader::new(isb_reader_components, js_reader, None)
+                .await
+                .unwrap();
 
         let reader_cancel_token = CancellationToken::new();
-        let (mut js_reader_rx, js_reader_task) = js_reader
+        let (mut js_reader_rx, js_reader_task) = isb_reader
             .streaming_read(reader_cancel_token.clone())
             .await
             .unwrap();
@@ -634,26 +645,32 @@ mod tests {
             ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
-        let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> = JetStreamReader::new(
-            ISBReaderComponents {
-                vertex_type: "Map".to_string(),
-                stream: stream.clone(),
-                js_ctx: context.clone(),
-                config: buf_reader_config,
-                tracker_handle: tracker.clone(),
-                batch_size: 500,
-                read_timeout: Duration::from_millis(100),
-                watermark_handle: None,
-                isb_config: Some(isb_config.clone()),
-                cln_token: CancellationToken::new(),
-            },
-            None,
-        )
-        .await
-        .unwrap();
+
+        let js_reader =
+            JetStreamReader::new(stream.clone(), context.clone(), Some(isb_config.clone()))
+                .await
+                .unwrap();
+
+        let isb_reader_components = ISBReaderComponents {
+            vertex_type: "Map".to_string(),
+            stream: stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker.clone(),
+            batch_size: 500,
+            read_timeout: Duration::from_millis(100),
+            watermark_handle: None,
+            isb_config: Some(isb_config.clone()),
+            cln_token: CancellationToken::new(),
+        };
+
+        let isb_reader: ISBReader<crate::typ::WithoutRateLimiter> =
+            ISBReader::new(isb_reader_components, js_reader, None)
+                .await
+                .unwrap();
 
         let reader_cancel_token = CancellationToken::new();
-        let (mut js_reader_rx, js_reader_task) = js_reader
+        let (mut js_reader_rx, js_reader_task) = isb_reader
             .streaming_read(reader_cancel_token.clone())
             .await
             .unwrap();
