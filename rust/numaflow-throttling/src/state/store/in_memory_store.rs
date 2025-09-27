@@ -28,8 +28,8 @@ struct ProcessorsTimeline {
     heartbeats: HashMap<String, Instant>,
     /// processor_id -> reported pool size
     reported_pool: HashMap<String, usize>,
-    /// processor_id -> steady state
-    steady_states: HashMap<String, bool>,
+    /// processor_id -> (deregistration time, previous max_ever_filled)
+    prev_max_filled: HashMap<String, (Instant, f32)>,
 }
 
 impl Default for InMemoryStore {
@@ -65,7 +65,26 @@ impl InMemoryStore {
         for id in stale_ids {
             inner.heartbeats.remove(&id);
             inner.reported_pool.remove(&id);
-            inner.steady_states.remove(&id);
+        }
+    }
+
+    /// Remove stale processors based on prev_max_filled TTL
+    /// Separate function for pruning stale prev_max_filled elements is introduced for separation of duties
+    /// prev_max_filled is updated when a processor is deregistered, unlike heartbeats which are updated on every sync.
+    fn prune_stale_prev_max_filled(inner: &mut ProcessorsTimeline, ttl: Duration) {
+        // Prevent unnecessary iteration if prev_max_filled is empty
+        if !inner.prev_max_filled.is_empty() {
+            let now = Instant::now();
+            let mut stale_ids = Vec::new();
+
+            for (id, &(last_heartbeat, _)) in &inner.prev_max_filled {
+                if now.duration_since(last_heartbeat) > ttl {
+                    stale_ids.push(id.clone());
+                }
+            }
+            for id in stale_ids {
+                inner.prev_max_filled.remove(&id);
+            }
         }
     }
 
@@ -107,11 +126,12 @@ impl Store for InMemoryStore {
         &self,
         processor_id: &str,
         _cancel: CancellationToken,
-    ) -> crate::Result<(usize, bool)> {
+    ) -> crate::Result<(usize, f32)> {
         info!("Registering processor: {processor_id}");
 
         let mut inner = self.inner.lock().await;
         Self::prune_stale(&mut inner, self.stale_age);
+        Self::prune_stale_prev_max_filled(&mut inner, self.stale_age);
         inner
             .heartbeats
             .insert(processor_id.to_string(), Instant::now());
@@ -124,22 +144,20 @@ impl Store for InMemoryStore {
             .and_modify(|e| *e += 1)
             .or_insert(1);
 
-        let mut steady_state = false;
-        if let Some(&ss) = inner.steady_states.get(processor_id) {
-            steady_state = ss;
-        } else {
-            inner
-                .steady_states
-                .insert(processor_id.to_string(), steady_state);
+        // Initialize max_filled to -1 to mimic redis response on key not found/expired
+        let mut max_filled = -1.0;
+        if let Some(&(_, prev_max_filled)) = inner.prev_max_filled.get(processor_id) {
+            max_filled = prev_max_filled;
         }
 
-        Ok((pool_size, steady_state))
+        Ok((pool_size, max_filled))
     }
 
     /// Deregister a processor from the store.
     async fn deregister(
         &self,
         processor_id: &str,
+        prev_max_filled: f32,
         _cancel: CancellationToken,
     ) -> crate::Result<()> {
         info!("Deregistering processor: {processor_id}");
@@ -147,24 +165,9 @@ impl Store for InMemoryStore {
         let mut inner = self.inner.lock().await;
         inner.heartbeats.remove(processor_id);
         inner.reported_pool.remove(processor_id);
-        // steady state will be updated by pruning stale processors later on
-
-        Ok(())
-    }
-
-    async fn set_steady_state(
-        &self,
-        processor_id: &str,
-        steady_state: bool,
-        _cancel: CancellationToken,
-    ) -> crate::Result<()> {
-        info!("Setting steady state for processor: {processor_id}");
-
-        self.inner
-            .lock()
-            .await
-            .steady_states
-            .insert(processor_id.to_string(), steady_state);
+        inner
+            .prev_max_filled
+            .insert(processor_id.to_string(), (Instant::now(), prev_max_filled));
 
         Ok(())
     }
@@ -194,6 +197,7 @@ impl Store for InMemoryStore {
 
         // Prune stale processors and compute consensus among active ones
         Self::prune_stale(&mut inner, self.stale_age);
+        Self::prune_stale_prev_max_filled(&mut inner, self.stale_age);
 
         Ok(Self::compute_consensus(&inner))
     }
@@ -320,7 +324,7 @@ mod tests {
 
         // Deregister one processor
         store
-            .deregister("processor_a", cancel.clone())
+            .deregister("processor_a", 0.0, cancel.clone())
             .await
             .unwrap();
 

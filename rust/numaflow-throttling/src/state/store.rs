@@ -15,15 +15,13 @@ pub trait Store: Clone + 'static {
         &self,
         processor_id: &str,
         cancel: CancellationToken,
-    ) -> crate::Result<(usize, bool)>;
+    ) -> crate::Result<(usize, f32)>;
 
     /// Deregister the consumer with the external store. It decrements the pool size by 1.
-    async fn deregister(&self, processor_id: &str, cancel: CancellationToken) -> crate::Result<()>;
-
-    async fn set_steady_state(
+    async fn deregister(
         &self,
         processor_id: &str,
-        steady_state: bool,
+        prev_max_filled: f32,
         cancel: CancellationToken,
     ) -> crate::Result<()>;
 

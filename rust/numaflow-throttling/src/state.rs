@@ -1,6 +1,6 @@
 pub use crate::state::store::Store;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize};
+use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
@@ -34,8 +34,8 @@ pub struct RateLimiterState<S> {
     processor_id: String,
     /// Cancellation token for background tasks
     cancel_token: CancellationToken,
-    /// Steady state of the processor
-    steady_state: Arc<AtomicBool>,
+    /// Previously utilized max tokens by the processor
+    pub(super) prev_max_filled: Arc<f32>,
     store: S,
 }
 
@@ -67,7 +67,7 @@ impl<S: Store> RateLimiterState<S> {
         runway_update_len: OptimisticValidityUpdateSecs,
     ) -> crate::Result<Self> {
         // Register with the external store.
-        let (pool_size, steady_state) = s.register(processor_id, cancel.clone()).await?;
+        let (pool_size, prev_max_filled) = s.register(processor_id, cancel.clone()).await?;
         let pool_size = Self::wait_for_consensus(&s, processor_id, pool_size, &cancel).await?;
 
         let rlds = RateLimiterState {
@@ -82,7 +82,7 @@ impl<S: Store> RateLimiterState<S> {
             desired_pool_size: Arc::new(AtomicUsize::new(pool_size)),
             processor_id: processor_id.to_string(),
             cancel_token: cancel.clone(),
-            steady_state: Arc::new(AtomicBool::new(steady_state)),
+            prev_max_filled: Arc::new(prev_max_filled),
             store: s,
         };
 
@@ -124,24 +124,6 @@ impl<S: Store> RateLimiterState<S> {
         }
 
         Ok(rlds)
-    }
-
-    pub(crate) fn steady_state(&self) -> bool {
-        self.steady_state.load(std::sync::atomic::Ordering::Relaxed)
-    }
-
-    pub(crate) async fn set_steady_state(&self, steady_state: bool) {
-        // TODO: only set if resume is enabled
-        self.steady_state
-            .store(steady_state, std::sync::atomic::Ordering::Relaxed);
-        self.store
-            .set_steady_state(
-                self.processor_id.as_str(),
-                steady_state,
-                self.cancel_token.clone(),
-            )
-            .await
-            .unwrap();
     }
 
     /// Get the initial pool size from the external store. It will only return if there is AGREEMENT,
@@ -216,10 +198,14 @@ impl<S: Store> RateLimiterState<S> {
     }
 
     /// Shutdown the distributed state by deregistering from the store.
-    pub(crate) async fn shutdown(&self) -> crate::Result<()> {
+    pub(crate) async fn shutdown(&self, max_ever_filled: f32) -> crate::Result<()> {
         // Deregister from the store
         self.store
-            .deregister(&self.processor_id, self.cancel_token.clone())
+            .deregister(
+                &self.processor_id,
+                max_ever_filled,
+                self.cancel_token.clone(),
+            )
             .await
     }
 }

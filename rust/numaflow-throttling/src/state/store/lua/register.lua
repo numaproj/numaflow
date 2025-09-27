@@ -18,7 +18,7 @@ Returns:
 -- Construct the full key names from the provided prefix
 local heartbeat_key = KEYS[1] .. ":heartbeats"
 local poolsize_key = KEYS[1] .. ":poolsize"
-local steady_state_key = KEYS[1] .. ":steady_states"
+local pre_max_filled_key = KEYS[1] .. ":prev_max_filled"
 
 -- Get the current timestamp for the heartbeat
 local current_timestamp = redis.call('TIME')[1]
@@ -33,17 +33,15 @@ local new_pool_size = heartbeat_count
 -- Add the processor to the poolsize set with the calculated pool size
 redis.call('ZADD', poolsize_key, new_pool_size, ARGV[1])
 
--- Check if steady_state exists for the processor, return that if it does,
--- otherwise set it to false and return that
-local cur_steady_state = redis.call('HGET', steady_state_key, ARGV[1])
-local steady_state = false
-if cur_steady_state == nil then
-    redis.call('HSET', steady_state_key, ARGV[1], steady_state)
-else
-    steady_state = cur_steady_state
+-- Check if there exists a prev_max_filled for the processor
+-- return that if it exists, otherwise return -1
+local stored_prev_max_filled = redis.call('HGET', pre_max_filled_key, ARGV[1])
+local prev_max_filled = -1
+-- If the key doesn't exist, redis' nil gets converted to false in lua
+-- https://redis.io/docs/latest/develop/programmability/lua-api/#resp2-to-lua-type-conversion
+if stored_prev_max_filled ~= false then
+    prev_max_filled = stored_prev_max_filled
 end
 
-
 -- Return the pool size that was stored for this processor
-return {new_pool_size, steady_state}
-
+return {new_pool_size, prev_max_filled}

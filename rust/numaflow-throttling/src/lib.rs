@@ -437,29 +437,9 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithState<S>> {
             TokenAvailability::Recompute => {}
         }
 
-        // We're not holding the lock here and only reading the value at the pointer location
-        // so it is safe to call compute_refill after this.
-        // Eg: The following example runs to completion without any deadlock
-        //     let a = Arc::new(Mutex::<f32>::new(1.2));
-        //     let b = *a.lock().unwrap();
-        //     println!("{}", b);
-        //     println!("{}", *a.lock().unwrap());
-        //     println!("{}", b);
-        let prev_max_ever_filled = *self.max_ever_filled.lock().unwrap();
-
         // We crossed a new epoch; we gave to recompute the budget i.e., recompute the number of
         // new tokens available
         let next_total_tokens = self.compute_refill(cur_epoch);
-
-        if !self.state.0.steady_state() && next_total_tokens == self.token_calc_bounds.max {
-            // if we have reached the max tokens, then we've reached the steady state.
-            // Update only if we've not reached the steady state before.
-            self.state.0.set_steady_state(true).await;
-        } else if self.state.0.steady_state() && next_total_tokens < prev_max_ever_filled as usize {
-            // If we were in the steady state, i.e., dispersing max tokens but reduced the tokens
-            // dispersed in this epoch then we're no longer in the steady state.
-            self.state.0.set_steady_state(false).await;
-        }
 
         // Store the total tokens (division happens in get_tokens)
         self.token
@@ -544,7 +524,8 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithSta
     }
 
     async fn shutdown(&self) -> Result<()> {
-        self.state.0.shutdown().await
+        let max_ever_filled = *self.max_ever_filled.lock().unwrap();
+        self.state.0.shutdown(max_ever_filled).await
     }
 }
 
@@ -571,20 +552,15 @@ impl<S: Store> RateLimit<WithState<S>> {
         // Add 1-second sleep after initial agreement so we don't get inconsistent results within
         // the same second because race conditions among multiple processors initializing.
         tokio::time::sleep(Duration::from_secs(1)).await;
-        let mut burst = token_calc_bounds.min;
 
-        // Finally, the line for which all the steady_state changes are for...
-        // If we are in the steady state, then we can dispense max tokens already.
-        // Otherwise, we will start from min tokens.
-        if state.steady_state() {
-            burst = token_calc_bounds.max;
-        }
+        let burst_usize = token_calc_bounds.min.max(*state.prev_max_filled as usize);
+        let burst_f32 = (token_calc_bounds.min as f32).max(*state.prev_max_filled);
 
         Ok(RateLimit {
             token_calc_bounds,
             // Store the full burst amount, we divide by pool size when querying tokens
-            token: Arc::new(AtomicUsize::new(burst)),
-            max_ever_filled: Arc::new(Mutex::new(burst as f32)),
+            token: Arc::new(AtomicUsize::new(burst_usize)),
+            max_ever_filled: Arc::new(Mutex::new(burst_f32)),
             last_queried_epoch: Arc::new(AtomicU64::new(0)),
             state: WithState(state),
         })
@@ -1050,6 +1026,7 @@ mod tests {
                 let _: Result<(), _> = redis::cmd("DEL")
                     .arg(format!("{}:heartbeats", test_key_prefix))
                     .arg(format!("{}:poolsize", test_key_prefix))
+                    .arg(format!("{}:prev_max_filled", test_key_prefix))
                     .query(&mut conn);
             }
         }
