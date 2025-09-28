@@ -557,7 +557,7 @@ impl Store for RedisStore {
             .expect("should have pool size")
             .parse()
             .map_err(|_| Error::Redis("Invalid pool size in response".to_string()))?;
-        
+
         let prev_max_filled: f32 = result
             .get(1)
             .expect("should have prev_max_filled")
