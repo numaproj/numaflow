@@ -638,6 +638,60 @@ impl Store for RedisStore {
 mod tests {
     use super::*;
     use numaflow_models::models::{RedisSentinelConfig, Tls};
+    use std::time::Duration;
+
+    /// Test utilities for integration tests
+    mod test_utils {
+        use crate::state::store::redis_store::{RedisMode, RedisStore};
+
+        /// Creates a Redis store for testing with a unique key prefix
+        /// Returns None if Redis is not available
+        pub async fn create_test_redis_store(
+            test_name: &str,
+            stale_age: usize,
+        ) -> Option<RedisStore> {
+            let redis_url = "redis://127.0.0.1:6379";
+
+            // Check if Redis is available
+            if let Err(_) = redis::Client::open(redis_url) {
+                println!(
+                    "Skipping Redis test - Redis server not available at {}",
+                    redis_url
+                );
+                return None;
+            }
+
+            let test_key_prefix =
+                Box::leak(format!("test_{}_{}", test_name, std::process::id()).into_boxed_str());
+            let redis_mode = RedisMode::single_url(redis_url.to_string())
+                .build()
+                .unwrap();
+
+            match RedisStore::new(test_key_prefix, stale_age, redis_mode).await {
+                Ok(store) => Some(store),
+                Err(e) => {
+                    println!("Skipping Redis test - Failed to connect to Redis: {}", e);
+                    None
+                }
+            }
+        }
+
+        /// Cleans up Redis keys after a test
+        pub fn cleanup_redis_keys(test_name: &str) {
+            let redis_url = "redis://127.0.0.1:6379";
+            if let Ok(client) = redis::Client::open(redis_url)
+                && let Ok(mut conn) = client.get_connection()
+            {
+                let test_key_prefix = format!("test_{}_{}", test_name, std::process::id());
+                let _: Result<(), _> = redis::cmd("DEL")
+                    .arg(format!("{}:heartbeats", test_key_prefix))
+                    .arg(format!("{}:poolsize", test_key_prefix))
+                    .arg(format!("{}:prev_max_filled", test_key_prefix))
+                    .arg(format!("{}:prev_max_filled_ttl", test_key_prefix))
+                    .query(&mut conn);
+            }
+        }
+    }
 
     /// Comprehensive test for Redis mode creation from RateLimiterRedisStore configurations
     #[test]
@@ -1035,5 +1089,66 @@ mod tests {
             deregister_script.get_hash(),
             sync_pool_size_script.get_hash()
         );
+    }
+
+    #[tokio::test]
+    async fn test_previously_stored_max_filled_at_deregister_redis() {
+        let test_name = "test_previously_stored_max_filled_at_deregister_redis";
+        let store = match test_utils::create_test_redis_store(test_name, 180).await {
+            Some(store) => store,
+            None => return, // Skip test if Redis is not available
+        };
+
+        let cancel = CancellationToken::new();
+
+        store.register("processor_a", cancel.clone()).await.unwrap();
+        let _ = store
+            .sync_pool_size("processor_a", 1, cancel.clone())
+            .await
+            .unwrap();
+
+        // Deregister processor_a and store max_filled as 10
+        store
+            .deregister("processor_a", 10.0, cancel.clone())
+            .await
+            .unwrap();
+
+        // Register processor_a again and check if max_filled is 10
+        let (_, prev_max_filled) = store.register("processor_a", cancel.clone()).await.unwrap();
+
+        assert_eq!(prev_max_filled, 10.0);
+
+        test_utils::cleanup_redis_keys(test_name);
+    }
+
+    #[tokio::test]
+    async fn test_expired_stored_max_filled_at_deregister_redis() {
+        let test_name = "test_expired_stored_max_filled_at_deregister_redis";
+        let store = match test_utils::create_test_redis_store(test_name, 1).await {
+            Some(store) => store,
+            None => return, // Skip test if Redis is not available
+        };
+        let cancel = CancellationToken::new();
+
+        store.register("processor_a", cancel.clone()).await.unwrap();
+        let _ = store
+            .sync_pool_size("processor_a", 1, cancel.clone())
+            .await
+            .unwrap();
+
+        // Deregister processor_a and store max_filled as 10
+        store
+            .deregister("processor_a", 10.0, cancel.clone())
+            .await
+            .unwrap();
+
+        // Wait for the stored max_filled to expire
+        tokio::time::sleep(Duration::from_millis(2000)).await;
+
+        // Register processor_a again and check if max_filled is -1
+        let (_, prev_max_filled) = store.register("processor_a", cancel.clone()).await.unwrap();
+
+        assert_eq!(prev_max_filled, -1.0);
+        test_utils::cleanup_redis_keys(test_name);
     }
 }

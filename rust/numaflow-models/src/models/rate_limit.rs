@@ -28,8 +28,13 @@ pub struct RateLimit {
     pub modes: Option<Box<crate::models::RateLimiterModes>>,
     #[serde(rename = "rampUpDuration", skip_serializing_if = "Option::is_none")]
     pub ramp_up_duration: Option<kube::core::Duration>,
+    /// ResumedRampUp is used to enable the resume mode for rate limiting.  This, if true, will allow the processor to resume the ramp-up process from the last known state of the rate limiter, i.e., if the processor was allowed X tokens before shutting down, it will be allowed X tokens again after the processor restarts.  The resumed ramp-up process will be allowed until TTL time after the processor first deregisters with the rate limiter.
+    #[serde(rename = "resumedRampUp", skip_serializing_if = "Option::is_none")]
+    pub resumed_ramp_up: Option<bool>,
     #[serde(rename = "store", skip_serializing_if = "Option::is_none")]
     pub store: Option<Box<crate::models::RateLimiterStore>>,
+    #[serde(rename = "ttl", skip_serializing_if = "Option::is_none")]
+    pub ttl: Option<kube::core::Duration>,
 }
 
 impl RateLimit {
@@ -39,7 +44,9 @@ impl RateLimit {
             min: None,
             modes: None,
             ramp_up_duration: None,
+            resumed_ramp_up: None,
             store: None,
+            ttl: None,
         }
     }
 }

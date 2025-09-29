@@ -1448,6 +1448,27 @@ message RateLimit {
   // RateLimiterModes is used to define the modes for rate limiting.
   // +optional
   optional RateLimiterModes modes = 5;
+
+  // ResumedRampUp is used to enable the resume mode for rate limiting.
+  //
+  // This, if true, will allow the processor to
+  // resume the ramp-up process from the last known state of the rate limiter, i.e., if the processor was allowed X tokens
+  // before shutting down, it will be allowed X tokens again after the processor restarts.
+  //
+  // The resumed ramp-up process will be allowed until TTL time after the processor first deregisters with the rate limiter.
+  // +optional
+  // +kubebuilder:default=false
+  optional bool resumedRampUp = 6;
+
+  // TTL is used to define the duration after which a pod is considered stale and removed from the pool of pods if it
+  // doesn't sync with the rate limiter.
+  //
+  // Furthermore, if the ResumedRampUp is true, then TTL also defines the amount of time within which, if a pod
+  // re-registers / registers with the same name, with the rate limiter, it will be assigned the same rate limit as
+  // the previous pod with that name.
+  // +optional
+  // +kubebuilder:default="180s"
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration ttl = 7;
 }
 
 // RateLimiterGoBackN is for the GoBackN mode.

@@ -39,8 +39,8 @@ impl Default for InMemoryStore {
 }
 
 impl InMemoryStore {
-    pub fn new(stale_age: u64) -> Self {
-        Self::with_ttl(Duration::from_secs(stale_age))
+    pub fn new(stale_age: usize) -> Self {
+        Self::with_ttl(Duration::from_secs(stale_age as u64))
     }
 
     /// Create a new in-memory store with custom TTL for heartbeats
@@ -335,5 +335,54 @@ mod tests {
             .unwrap();
 
         assert!(matches!(consensus, Consensus::Agree(1)));
+    }
+
+    #[tokio::test]
+    async fn test_previously_stored_max_filled_at_deregister() {
+        let store = InMemoryStore::new(10);
+        let cancel = CancellationToken::new();
+
+        store.register("processor_a", cancel.clone()).await.unwrap();
+        let _ = store
+            .sync_pool_size("processor_a", 1, cancel.clone())
+            .await
+            .unwrap();
+
+        // Deregister processor_a and store max_filled as 10
+        store
+            .deregister("processor_a", 10.0, cancel.clone())
+            .await
+            .unwrap();
+
+        // Register processor_a again and check if max_filled is 10
+        let (_, prev_max_filled) = store.register("processor_a", cancel.clone()).await.unwrap();
+
+        assert_eq!(prev_max_filled, 10.0);
+    }
+
+    #[tokio::test]
+    async fn test_expired_stored_max_filled_at_deregister() {
+        let store = InMemoryStore::new(1);
+        let cancel = CancellationToken::new();
+
+        store.register("processor_a", cancel.clone()).await.unwrap();
+        let _ = store
+            .sync_pool_size("processor_a", 1, cancel.clone())
+            .await
+            .unwrap();
+
+        // Deregister processor_a and store max_filled as 10
+        store
+            .deregister("processor_a", 10.0, cancel.clone())
+            .await
+            .unwrap();
+
+        // Wait for the stored max_filled to expire
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+
+        // Register processor_a again and check if max_filled is -1
+        let (_, prev_max_filled) = store.register("processor_a", cancel.clone()).await.unwrap();
+
+        assert_eq!(prev_max_filled, -1.0);
     }
 }

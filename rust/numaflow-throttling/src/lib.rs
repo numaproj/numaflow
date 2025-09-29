@@ -538,6 +538,7 @@ impl<S: Store> RateLimit<WithState<S>> {
         cancel: CancellationToken,
         refresh_interval: Duration,
         runway_update_len: OptimisticValidityUpdateSecs,
+        resume_ramp_up: bool,
     ) -> Result<Self> {
         // Registers and blocks until initial consensus (AGREE) inside state::new(...)
         let state = RateLimiterState::new(
@@ -553,14 +554,17 @@ impl<S: Store> RateLimit<WithState<S>> {
         // the same second because race conditions among multiple processors initializing.
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        let burst_usize = token_calc_bounds.min.max(*state.prev_max_filled as usize);
-        let burst_f32 = (token_calc_bounds.min as f32).max(*state.prev_max_filled);
+        let burst = if resume_ramp_up {
+            token_calc_bounds.min.max(*state.prev_max_filled as usize)
+        } else {
+            token_calc_bounds.min
+        };
 
         Ok(RateLimit {
             token_calc_bounds,
             // Store the full burst amount, we divide by pool size when querying tokens
-            token: Arc::new(AtomicUsize::new(burst_usize)),
-            max_ever_filled: Arc::new(Mutex::new(burst_f32)),
+            token: Arc::new(AtomicUsize::new(burst)),
+            max_ever_filled: Arc::new(Mutex::new(burst as f32)),
             last_queried_epoch: Arc::new(AtomicU64::new(0)),
             state: WithState(state),
         })
@@ -794,6 +798,12 @@ mod tests {
             /// The throttling mode of the rate limiter
             /// defaults to Relaxed
             pub(super) mode: Mode,
+            /// Whether to resume ramp up or not
+            /// defaults to false
+            pub(super) resume_ramp_up: bool,
+            /// ttl for the rate limiter
+            /// defaults to 180 seconds
+            pub(super) ttl: usize,
         }
 
         impl TestCase {
@@ -820,6 +830,8 @@ mod tests {
                     test_name: String::new(),
                     mode: Mode::Relaxed,
                     deposited_tokens: vec![0; asked_tokens_len],
+                    resume_ramp_up: false,
+                    ttl: 180,
                 }
             }
 
@@ -842,6 +854,16 @@ mod tests {
                 self.deposited_tokens = deposited_tokens;
                 self
             }
+
+            pub(super) fn resume_ramp_up(mut self, resume_ramp_up: bool) -> Self {
+                self.resume_ramp_up = resume_ramp_up;
+                self
+            }
+
+            pub(super) fn ttl(mut self, ttl: usize) -> Self {
+                self.ttl = ttl;
+                self
+            }
         }
 
         /// A generic utility function to test rate limiter with generic state
@@ -860,12 +882,14 @@ mod tests {
                 burst_tokens,
                 duration,
                 pod_count,
-                store_type: _store_type,
+                store_type: _,
                 test_name,
                 asked_tokens,
                 expected_tokens,
                 mode,
                 deposited_tokens,
+                resume_ramp_up,
+                ttl: _,
             } = test_case;
             let cancel = CancellationToken::new();
             let refresh_interval = Duration::from_millis(50);
@@ -890,6 +914,7 @@ mod tests {
                         cancel.clone(),
                         refresh_interval,
                         runway_update.clone(),
+                        resume_ramp_up,
                     )
                     .await
                     .expect("Failed to create rate limiters"),
@@ -971,14 +996,17 @@ mod tests {
                 // Necessary for redis store test cases.
                 match store_type {
                     StoreType::InMemory => {
-                        let store = InMemoryStore::default();
+                        let store = InMemoryStore::new(test_case.ttl);
                         test_rate_limiter_with_state(store, test_case).await;
                     }
                     StoreType::Redis => {
-                        let store = match create_test_redis_store(temp_test_name.as_str()).await {
-                            Some(store) => store,
-                            None => return, // Skip test if Redis is not available
-                        };
+                        let store =
+                            match create_test_redis_store(temp_test_name.as_str(), test_case.ttl)
+                                .await
+                            {
+                                Some(store) => store,
+                                None => return, // Skip test if Redis is not available
+                            };
 
                         test_rate_limiter_with_state(store, test_case).await;
                         cleanup_redis_keys(test_name.as_str());
@@ -989,7 +1017,10 @@ mod tests {
 
         /// Creates a Redis store for testing with a unique key prefix
         /// Returns None if Redis is not available
-        pub async fn create_test_redis_store(test_name: &str) -> Option<RedisStore> {
+        pub async fn create_test_redis_store(
+            test_name: &str,
+            stale_age: usize,
+        ) -> Option<RedisStore> {
             let redis_url = "redis://127.0.0.1:6379";
 
             // Check if Redis is available
@@ -1007,7 +1038,7 @@ mod tests {
                 .build()
                 .unwrap();
 
-            match RedisStore::new(test_key_prefix, 180, redis_mode).await {
+            match RedisStore::new(test_key_prefix, stale_age, redis_mode).await {
                 Ok(store) => Some(store),
                 Err(e) => {
                     println!("Skipping Redis test - Failed to connect to Redis: {}", e);
@@ -1027,6 +1058,7 @@ mod tests {
                     .arg(format!("{}:heartbeats", test_key_prefix))
                     .arg(format!("{}:poolsize", test_key_prefix))
                     .arg(format!("{}:prev_max_filled", test_key_prefix))
+                    .arg(format!("{}:prev_max_filled_ttl", test_key_prefix))
                     .query(&mut conn);
             }
         }
@@ -1394,6 +1426,7 @@ mod tests {
             cancel.clone(),
             refresh_interval,
             runway_update,
+            false,
         )
         .await
         .unwrap();
@@ -1444,6 +1477,7 @@ mod tests {
             cancel.clone(),
             refresh_interval,
             runway_update,
+            false,
         )
         .await
         .unwrap();
@@ -2520,6 +2554,7 @@ mod tests {
             cancel.clone(),
             refresh_interval,
             runway_update.clone(),
+            false,
         )
         .await
         .unwrap();
@@ -2531,6 +2566,7 @@ mod tests {
             cancel.clone(),
             refresh_interval,
             runway_update.clone(),
+            false,
         )
         .await
         .unwrap();
@@ -2542,6 +2578,7 @@ mod tests {
             cancel.clone(),
             refresh_interval,
             runway_update,
+            false,
         )
         .await
         .unwrap();
@@ -2618,6 +2655,7 @@ mod tests {
                     cancel.clone(),
                     refresh_interval,
                     runway_update.clone(),
+                    false,
                 )
                 .await
                 .expect("Failed to create rate limiters"),
@@ -2708,7 +2746,7 @@ mod tests {
         use crate::state::store::redis_store::RedisStore;
 
         // Create Redis store for testing
-        let store = match test_utils::create_test_redis_store("rate_limiter_refill").await {
+        let store = match test_utils::create_test_redis_store("rate_limiter_refill", 180).await {
             Some(store) => store,
             None => return, // Skip test if Redis is not available
         };
@@ -2728,6 +2766,7 @@ mod tests {
             cancel.clone(),
             refresh_interval,
             runway_update.clone(),
+            false,
         )
         .await
         .unwrap();
@@ -2739,6 +2778,7 @@ mod tests {
             cancel.clone(),
             refresh_interval,
             runway_update.clone(),
+            false,
         )
         .await
         .unwrap();
@@ -2750,6 +2790,7 @@ mod tests {
             cancel.clone(),
             refresh_interval,
             runway_update,
+            false,
         )
         .await
         .unwrap();
@@ -2821,7 +2862,9 @@ mod tests {
         let bounds = TokenCalcBounds::new(90, 45, Duration::from_secs(9), Mode::Relaxed);
         // Create Redis store for testing
         let store =
-            match test_utils::create_test_redis_store("simple_acquire_n_rate_limiter_test").await {
+            match test_utils::create_test_redis_store("simple_acquire_n_rate_limiter_test", 180)
+                .await
+            {
                 Some(store) => store,
                 None => return, // Skip test if Redis is not available
             };
@@ -2841,6 +2884,7 @@ mod tests {
                     cancel.clone(),
                     refresh_interval,
                     runway_update.clone(),
+                    false,
                 )
                 .await
                 .expect("Failed to create rate limiters"),

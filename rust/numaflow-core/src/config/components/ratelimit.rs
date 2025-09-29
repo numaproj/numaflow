@@ -16,6 +16,10 @@ pub(crate) struct RateLimitConfig {
     pub(crate) store: Option<Box<numaflow_models::models::RateLimiterStore>>,
     /// Optional modes for rate limiting.
     pub(crate) modes: Option<Box<numaflow_models::models::RateLimiterModes>>,
+    /// Resume ramp up for a processor after pause.
+    pub(crate) resume: bool,
+    /// TTL for the rate limiter state in seconds.
+    pub(crate) ttl: usize,
 }
 
 impl Default for RateLimitConfig {
@@ -28,6 +32,8 @@ impl Default for RateLimitConfig {
             ramp_up_duration: std::time::Duration::from_secs(1),
             store: None,
             modes: None,
+            resume: false,
+            ttl: 180,
         }
     }
 }
@@ -77,6 +83,12 @@ impl RateLimitConfig {
                 .unwrap_or_default(),
             store: rate_limit.store,
             modes: rate_limit.modes,
+            resume: rate_limit.resumed_ramp_up.unwrap_or_default(),
+            ttl: rate_limit
+                .ttl
+                .map(std::time::Duration::from)
+                .unwrap_or(std::time::Duration::from_secs(180))
+                .as_secs() as usize,
         }
     }
 }
