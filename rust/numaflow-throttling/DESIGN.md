@@ -429,10 +429,6 @@ usage_threshold_percentage = 100 <br>
 </details>
 
 ## Token Deposit Logic
-Issue: https://github.com/numaproj/numaflow/issues/2913
-PRs
-https://github.com/numaproj/numaflow/pull/2962 
-https://github.com/numaproj/numaflow/pull/2973 
 
 Whenever a caller/processor requests for the number of messages they’re allowed to read, we want to keep track of whether they were successfully able to read the messages they were greenlit to read. The messages/tokens that were not read/not used should be returned back to the rate limiter so that the rate limiter can accurately keep track of the token utilization of each processor against the total token pool size. 
 
