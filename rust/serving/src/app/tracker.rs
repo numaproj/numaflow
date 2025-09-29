@@ -99,7 +99,9 @@ impl MessageGraph {
                 )));
             }
 
-            if callback.vertex == callback.from_vertex {
+            // If the vertex and from_vertex are the same, it is the source vertex
+            // OR if the from_vertex is empty, it is the source vertex
+            if callback.vertex == callback.from_vertex || callback.from_vertex.is_empty() {
                 source_vertex = Some(callback.vertex.clone());
             }
             callback_map
