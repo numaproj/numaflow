@@ -62,15 +62,19 @@ The number of tokens available in the token pool are increased at a fixed rate i
 
 Following chart shows how token pool is increased at a fixed rate irrespective of the token usage:
 
-<img width="600" height="371" alt="Scheduled Mode" src="https://github.com/user-attachments/assets/f9533d26-cf61-49ec-bd5d-3927e8fbaa49" />
+![Scheduled Mode](../../docs/assets/throttling/scheduled_mode.png)
 
 <details>
-max_tokens = 110 <br>         
-min_tokens = 10 <br>   
-duration = 10 <br>  
-slope = (max_tokens - min_tokens) / duration <br>    
-usage_threshold_percentage = 100 <br>   
 
+|         Parameter          |                 Value                  |
+|:--------------------------:|:--------------------------------------:|
+|         max_tokens         |                  110                   |         
+|         min_tokens         |                   10                   |   
+|          duration          |                   10                   | 
+|           slope            | `(max_tokens - min_tokens) / duration` |
+| usage_threshold_percentage |                  100                   |
+
+#### Sample Data
 | token_pool | tokens_used |
 |------------|-------------|
 | 10.00      | 10.00       |
@@ -97,16 +101,19 @@ usage_threshold_percentage = 100 <br>
 
 Following chart shows how token pool is increased at a fixed rate irrespective of whether there are gaps in requesting additional tokens:
 
-<img width="600" height="371" alt="Scheduled Mode with gaps" src="https://github.com/user-attachments/assets/edfa1d65-6c78-406f-bc7b-d9e1ba155ea2" />
+![Scheduled Mode](../../docs/assets/throttling/scheduled_mode_with_gaps.png)
 
 <details>
 
-max_tokens = 110  <br>           
-min_tokens = 10 <br>      
-duration = 10 <br>      
-slope = (max_tokens - min_tokens) / duration  <br>      
-usage_threshold_percentage = 100  <br>
+|         Parameter          |                 Value                  |
+|:--------------------------:|:--------------------------------------:|
+|         max_tokens         |                  110                   |         
+|         min_tokens         |                   10                   |   
+|          duration          |                   10                   | 
+|           slope            | `(max_tokens - min_tokens) / duration` |
+| usage_threshold_percentage |                  100                   |
 
+#### Sample Data
 | time | token_pool | tokens_used |
 |------|------------|-------------|
 | 1    | 10.00      | 10.00       |
@@ -145,7 +152,7 @@ If any calls are made to get additional tokens then the token pool size is incre
 
 For example, in the following chart, the token pool ramp-up looks similar to Scheduled mode ramp-up since calls are being made every epoch:
 
-<img width="600" height="371" alt="Relaxed mode" src="https://github.com/user-attachments/assets/f18257d4-ee78-447b-8af5-7f75309e9314" />
+![Relaxed Mode](../../docs/assets/throttling/relaxed_mode.png)
 
 <details>
 
@@ -184,15 +191,19 @@ For example, in the following chart, the token pool ramp-up looks similar to Sch
 
 But, in the following example, the token pool ramp-up is stalled if no calls are made for some time and resumes where it left off:
 
-<img width="600" height="371" alt="Relaxed mode with gaps" src="https://github.com/user-attachments/assets/ca51cb5d-4edf-47d1-88cd-b833567c0b35" />
+![Relaxed Mode with gaps](../../docs/assets/throttling/relaxed_mode_with_gaps.png)
 
 <details>
-max_tokens = 110 <br>         
-min_tokens = 10 <br>   
-duration = 10 <br>  
-slope = (max_tokens - min_tokens) / duration <br>    
-usage_threshold_percentage = 100 <br>   
 
+|         Parameter          |                 Value                  |
+|:--------------------------:|:--------------------------------------:|
+|         max_tokens         |                  110                   |         
+|         min_tokens         |                   10                   |   
+|          duration          |                   10                   | 
+|           slope            | `(max_tokens - min_tokens) / duration` |
+| usage_threshold_percentage |                  100                   |
+
+#### Sample Data
 | time | token_pool | tokens_used |
 |------|------------|-------------|
 | 1    | 10.00      | 10.00       |
@@ -234,15 +245,19 @@ Token utilization % = (1 - tokens left in token pool / total size of the token p
 
 For example, in the following chart, the token pool size ramp-up stalls whenever the token utilization % dips below 100%
 
-<img width="600" height="371" alt="OnlyIfUsed Mode" src="https://github.com/user-attachments/assets/07c334da-5012-44bd-980a-d82e24547196" />
+![OnlyIfUsed Mode](../../docs/assets/throttling/only_if_used_mode.png)
 
 <details>
-max_tokens = 110 <br>         
-min_tokens = 10 <br>   
-duration = 10 <br>  
-slope = (max_tokens - min_tokens) / duration <br>    
-usage_threshold_percentage = 100 <br>   
 
+|         Parameter          |                 Value                  |
+|:--------------------------:|:--------------------------------------:|
+|         max_tokens         |                  110                   |         
+|         min_tokens         |                   10                   |   
+|          duration          |                   10                   | 
+|           slope            | `(max_tokens - min_tokens) / duration` |
+| usage_threshold_percentage |                  100                   |
+
+#### Sample Data
 | token_pool | tokens_used |
 |------------|-------------|
 | 10.00      | 10.00       |
@@ -282,15 +297,19 @@ decreased by slope in the next epoch:
 For example, in the following chart, we’re taking the user specified threshold as 100%, so any time the token utilization
 falls below 100%, the token pool size is reduced in the next epoch:
 
-<img width="600" height="371" alt="GoBackN mode" src="https://github.com/user-attachments/assets/244998d4-81ad-401b-a60c-a0940e5962b9" />
+![GoBackN Mode](../../docs/assets/throttling/go_back_n_mode.png)
 
 <details>
-max_tokens = 110 <br>         
-min_tokens = 10 <br>   
-duration = 10 <br>  
-slope = (max_tokens - min_tokens) / duration <br>    
-usage_threshold_percentage = 100 <br>   
 
+|         Parameter          |                 Value                  |
+|:--------------------------:|:--------------------------------------:|
+|         max_tokens         |                  110                   |         
+|         min_tokens         |                   10                   |   
+|          duration          |                   10                   | 
+|           slope            | `(max_tokens - min_tokens) / duration` |
+| usage_threshold_percentage |                  100                   |
+
+#### Sample Data
 | token_pool | tokens_used |
 |------------|-------------|
 | 10         | 10          |
@@ -323,15 +342,19 @@ that was missed.
 In the following example, the calls stopped being made around t=18 and resumed at t=20. The time for which we missed 
 making these calls, the token pool size was reduced.
 
-<img width="600" height="371" alt="GoBackN with gaps" src="https://github.com/user-attachments/assets/4f5adb28-8b9f-466a-9e9c-42596fc4b2b4" />
+![GoBackN Mode with gaps](../../docs/assets/throttling/go_back_n_with_gaps.png)
 
 <details>
-max_tokens = 110 <br>
-min_tokens = 10 <br>   
-duration = 10 <br>  
-slope = (max_tokens - min_tokens) / duration <br>
-usage_threshold_percentage = 100 <br>
 
+|         Parameter          |                 Value                  |
+|:--------------------------:|:--------------------------------------:|
+|         max_tokens         |                  110                   |         
+|         min_tokens         |                   10                   |   
+|          duration          |                   10                   | 
+|           slope            | `(max_tokens - min_tokens) / duration` |
+| usage_threshold_percentage |                  100                   |
+
+#### Sample Data
 | time | token_pool | tokens_used |
 |------|------------|-------------|
 | 1    | 10         | 10          |
@@ -462,6 +485,6 @@ flowchart TD
 
 ## Autoscaling
 
-TODO:
-
-
+Autoscaling is performed as long as the total TPS < ~max bound.   
+Currently, autoscaling policy during ramp up isn't supported.  
+Issue [#2976](https://github.com/numaproj/numaflow/issues/2976)
