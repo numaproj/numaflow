@@ -90,12 +90,13 @@ impl MessageGraph {
         let mut source_vertex = None;
 
         // Find the source vertex, source vertex is the vertex that has the same vertex and from_vertex
+        // or if the from_vertex is empty
         for callback in callbacks {
             // Check if the vertex is present in the graph
-            if !self.dag.contains_key(&callback.from_vertex) {
+            if !self.dag.contains_key(&callback.vertex) {
                 return Err(Error::SubGraphInvalidInput(format!(
                     "Invalid callback: {}, vertex: {}",
-                    callback.id, callback.from_vertex
+                    callback.id, callback.vertex
                 )));
             }
 
