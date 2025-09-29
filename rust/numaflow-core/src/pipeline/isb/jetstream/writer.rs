@@ -271,7 +271,10 @@ impl JetstreamWriter {
 
                 let mut message = message;
                 // if compression is enabled, then compress and sent
-                message.value = Bytes::from(compression::compress(self.compression_type, &message.value)?);
+                message.value = Bytes::from(compression::compress(
+                    self.compression_type,
+                    &message.value,
+                )?);
 
                 // List of PAFs(one message can be written to multiple streams)
                 let mut pafs = vec![];
@@ -359,8 +362,6 @@ impl JetstreamWriter {
         });
         Ok(handle)
     }
-
-
 
     fn send_write_metrics(
         partition_name: &str,
@@ -1642,6 +1643,4 @@ mod tests {
 
         (streams, consumers)
     }
-
-
 }

@@ -1,18 +1,15 @@
 use std::io::Read;
 
+use crate::Result;
 use crate::config::pipeline::isb::CompressionType;
 use crate::error::Error;
-use crate::Result;
 
 /// Compress data based on the compression type.
-pub fn compress(
-    compression_type: Option<CompressionType>,
-    data: &[u8],
-) -> Result<Vec<u8>> {
+pub fn compress(compression_type: Option<CompressionType>, data: &[u8]) -> Result<Vec<u8>> {
     match compression_type {
         Some(CompressionType::Gzip) => {
-            use flate2::write::GzEncoder;
             use flate2::Compression;
+            use flate2::write::GzEncoder;
             use std::io::Write;
 
             let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
@@ -54,10 +51,7 @@ pub fn compress(
 }
 
 /// Decompress data based on the compression type.
-pub fn decompress(
-    compression_type: Option<CompressionType>,
-    data: &[u8],
-) -> Result<Vec<u8>> {
+pub fn decompress(compression_type: Option<CompressionType>, data: &[u8]) -> Result<Vec<u8>> {
     match compression_type {
         Some(CompressionType::Gzip) => {
             use flate2::read::GzDecoder;
@@ -216,7 +210,7 @@ mod tests {
 
         // First compress the data properly
         let compressed = compress(Some(CompressionType::Gzip), test_data).unwrap();
-        
+
         // Then truncate the compressed data to simulate corruption
         let mut truncated_data = compressed;
         truncated_data.truncate(truncated_data.len() / 2);
@@ -257,7 +251,11 @@ mod tests {
         for compression_type in compression_types {
             let compressed = compress(compression_type, &test_data).unwrap();
             let decompressed = decompress(compression_type, &compressed).unwrap();
-            assert_eq!(decompressed, test_data, "Failed for compression type: {:?}", compression_type);
+            assert_eq!(
+                decompressed, test_data,
+                "Failed for compression type: {:?}",
+                compression_type
+            );
         }
     }
 }

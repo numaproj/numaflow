@@ -66,7 +66,10 @@ impl JSWrappedMessage {
             typ: header.kind.into(),
             keys: Arc::from(header.keys.into_boxed_slice()),
             tags: None,
-            value: Bytes::from(compression::decompress(self.compression_type, &body.payload)?),
+            value: Bytes::from(compression::decompress(
+                self.compression_type,
+                &body.payload,
+            )?),
             offset: offset.clone(),
             event_time: message_info
                 .event_time
@@ -83,8 +86,6 @@ impl JSWrappedMessage {
             is_late: message_info.is_late,
         })
     }
-
-
 }
 
 /// JetStreamReader, exposes methods to read, ack, and nack messages from JetStream ISB.
@@ -243,4 +244,144 @@ impl JetStreamReader {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+    use std::sync::Arc;
+    use std::time::Duration;
 
+    use super::*;
+    use crate::config::pipeline::isb::{Compression, CompressionType, ISBConfig};
+    use crate::message::{IntOffset, Message, MessageID, Offset};
+    use async_nats::jetstream;
+    use async_nats::jetstream::{consumer, stream};
+    use bytes::{Bytes, BytesMut};
+    use chrono::Utc;
+    use flate2::write::GzEncoder;
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_reader_direct_fetch() {
+        let js_url = "localhost:4222";
+        // Create JetStream context
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_direct_fetch", "test", 0);
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        // Create ISB config with gzip compression
+        let isb_config = ISBConfig {
+            compression: Compression {
+                compress_type: CompressionType::Gzip,
+            },
+        };
+
+        let mut js_reader = JetStreamReader::new(stream.clone(), context.clone(), Some(isb_config))
+            .await
+            .unwrap();
+
+        let mut compressed = GzEncoder::new(Vec::new(), flate2::Compression::default());
+        compressed
+            .write_all(Bytes::from("test message for direct fetch").as_ref())
+            .map_err(|e| Error::ISB(format!("Failed to compress message (write_all): {}", e)))
+            .unwrap();
+
+        let body = Bytes::from(
+            compressed
+                .finish()
+                .map_err(|e| Error::ISB(format!("Failed to compress message (finish): {}", e)))
+                .unwrap(),
+        );
+
+        // Create a message with empty payload
+        let offset = Offset::Int(IntOffset::new(1, 0));
+        let message = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["test-key".to_string()]),
+            tags: None,
+            value: body, // Empty payload
+            offset: offset.clone(),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_1".into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+
+        // Convert message to bytes and publish it
+        let message_bytes: BytesMut = message.try_into().unwrap();
+        context
+            .publish(stream.name, message_bytes.into())
+            .await
+            .unwrap();
+
+        // Read the message using direct fetch
+        let messages = js_reader
+            .fetch(1, Duration::from_millis(1000))
+            .await
+            .unwrap();
+        assert_eq!(messages.len(), 1);
+
+        let message = &messages[0];
+        assert_eq!(
+            message.value.as_ref(),
+            "test message for direct fetch".as_bytes()
+        );
+        assert_eq!(message.keys.as_ref(), &["test-key".to_string()]);
+
+        // Test mark_wip, ack, and nack operations
+        let offset = message.offset.clone();
+        js_reader
+            .mark_wip(std::slice::from_ref(&offset))
+            .await
+            .unwrap();
+        js_reader.nack(std::slice::from_ref(&offset)).await.unwrap();
+        // pending should be one
+        let pending = js_reader.pending().await.unwrap();
+        assert_eq!(pending, Some(1));
+
+        // read again
+        let messages = js_reader
+            .fetch(1, Duration::from_millis(1000))
+            .await
+            .unwrap();
+        assert_eq!(messages.len(), 1);
+
+        // ack the message and check pending again
+        js_reader
+            .ack(std::slice::from_ref(&messages[0].offset))
+            .await
+            .unwrap();
+        // pending should be zero
+        let pending = js_reader.pending().await.unwrap();
+        assert_eq!(pending, Some(0));
+
+        context.delete_stream(stream.name).await.unwrap();
+    }
+}
