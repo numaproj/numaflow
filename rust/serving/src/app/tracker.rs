@@ -165,7 +165,11 @@ impl MessageGraph {
         // iterate over the callbacks for the current vertex and find the one that has not been visited,
         // and it is coming from the same vertex as the current vertex
         for callback in callbacks {
-            if callback.callback_request.from_vertex == from && !callback.visited {
+            // from_vertex will be empty for the source vertex
+            if (callback.callback_request.from_vertex.is_empty()
+                || callback.callback_request.from_vertex == from)
+                && !callback.visited
+            {
                 callback.visited = true;
                 current_callback = Some(Arc::clone(&callback.callback_request));
                 break;
@@ -513,7 +517,7 @@ mod tests {
         {
             "id": "xxxx",
             "vertex": "a",
-            "from_vertex": "a",
+            "from_vertex": "",
             "cb_time": 123456789,
             "responses": [{"tags": null}]
         },
@@ -652,7 +656,7 @@ mod tests {
         {
             "id": "xxxx",
             "vertex": "a",
-            "from_vertex": "a",
+            "from_vertex": "",
             "cb_time": 123456789,
             "responses": [{"tags": null}]
         },
@@ -791,7 +795,7 @@ mod tests {
         {
             "id": "xxxx",
             "vertex": "a",
-            "from_vertex": "a",
+            "from_vertex": "",
             "cb_time": 123456789,
             "responses": [{"tags": null}]
         },
@@ -907,7 +911,7 @@ mod tests {
             {
                 "id": "xxxx",
                 "vertex": "a",
-                "from_vertex": "a",
+                "from_vertex": "",
                 "cb_time": 123456789,
                 "responses": [{"tags": null}]
             },
@@ -1006,7 +1010,7 @@ mod tests {
         {
             "id": "xxxx",
             "vertex": "a",
-            "from_vertex": "a",
+            "from_vertex": "",
             "cb_time": 123456789,
             "responses": [
                 {"tags": null},
@@ -1188,7 +1192,7 @@ mod tests {
         {
             "id": "xxxx",
             "vertex": "a",
-            "from_vertex": "a",
+            "from_vertex": "",
             "cb_time": 123456789,
             "responses": [{"tags": null}]
         },
