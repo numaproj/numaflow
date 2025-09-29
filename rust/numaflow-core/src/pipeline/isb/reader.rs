@@ -21,6 +21,7 @@ use crate::tracker::TrackerHandle;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
 
+use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::watermark::wmb::WMB;
 use async_nats::jetstream::Context;
 use backoff::retry::Retry;
@@ -31,23 +32,9 @@ use tracing::{error, warn};
 const ACK_RETRY_INTERVAL: u64 = 100; // ms
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 
-// Alias the thin JS reader as JSReader to avoid name clashes
-use crate::pipeline::isb::jetstream::reader::JetStreamReader as JSReader;
-
-// Compact container to avoid clippy::too_many_arguments in wip_loop
-struct WipParams {
-    stream_name: &'static str,
-    labels: Vec<(String, String)>,
-    jsr: JSReader,
-    offset: Offset,
-    ack_rx: oneshot::Receiver<ReadAck>,
-    tick: Duration,
-    permit: tokio::sync::OwnedSemaphorePermit,
-    cancel: CancellationToken,
-    message_processing_start: Instant,
-}
-
-/// Orchestrator that drives fetching, WIP, ack/nack, watermark/idle handling over a thin JS reader.
+/// ISBReader component which reads messages from ISB, assigns watermark to the messages and starts
+/// tracking them using the tracker and also listens for ack/nack from the tracker and performs the
+/// ack/nack to the ISB.
 #[derive(Clone)]
 pub(crate) struct ISBReader<C: NumaflowTypeConfig> {
     vertex_type: String,
@@ -57,14 +44,14 @@ pub(crate) struct ISBReader<C: NumaflowTypeConfig> {
     read_timeout: Duration,
     tracker: TrackerHandle,
     watermark: Option<ISBWatermarkHandle>,
-    js_reader: JSReader,
+    js_reader: JetStreamReader,
     rate_limiter: Option<C::RateLimiter>,
 }
 
 impl<C: NumaflowTypeConfig> ISBReader<C> {
     pub(crate) async fn new(
         components: ISBReaderComponents,
-        js_reader: JSReader,
+        js_reader: JetStreamReader,
         rate_limiter: Option<C::RateLimiter>,
     ) -> Result<Self> {
         Ok(Self {
@@ -293,7 +280,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         }
     }
 
-    async fn ack_with_retry(jsr: JSReader, offset: Offset, cancel: CancellationToken) {
+    async fn ack_with_retry(jsr: JetStreamReader, offset: Offset, cancel: CancellationToken) {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
         let _ = Retry::new(
             interval,
@@ -318,7 +305,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         .await;
     }
 
-    async fn nak_with_retry(jsr: JSReader, offset: Offset, cancel: CancellationToken) {
+    async fn nak_with_retry(jsr: JetStreamReader, offset: Offset, cancel: CancellationToken) {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
         let _ = Retry::new(
             interval,
@@ -426,6 +413,18 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
     }
 }
 
+struct WipParams {
+    stream_name: &'static str,
+    labels: Vec<(String, String)>,
+    jsr: JetStreamReader,
+    offset: Offset,
+    ack_rx: oneshot::Receiver<ReadAck>,
+    tick: Duration,
+    permit: tokio::sync::OwnedSemaphorePermit,
+    cancel: CancellationToken,
+    message_processing_start: Instant,
+}
+
 /// Components needed to create a JetStreamReader.
 #[derive(Clone)]
 pub(crate) struct ISBReaderComponents {
@@ -460,5 +459,435 @@ impl ISBReaderComponents {
             isb_config: context.config.isb_config.clone(),
             cln_token: context.cln_token.clone(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::config::pipeline::isb::{BufferReaderConfig, CompressionType};
+    use crate::message::{Message, MessageID};
+    use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
+    use crate::tracker::TrackerHandle;
+    use async_nats::jetstream;
+    use async_nats::jetstream::consumer::PullConsumer;
+    use async_nats::jetstream::{consumer, stream};
+    use bytes::{Bytes, BytesMut};
+    use chrono::Utc;
+    use flate2::Compression;
+    use flate2::write::GzEncoder;
+    use tokio::time::sleep;
+    use tokio_stream::StreamExt;
+    use tokio_util::sync::CancellationToken;
+
+    #[tokio::test]
+    async fn simple_permit_test() {
+        use tokio::sync::Semaphore;
+
+        let sem = Arc::new(Semaphore::new(20));
+        let mut permit = Arc::clone(&sem).acquire_many_owned(10).await.unwrap();
+        assert_eq!(sem.available_permits(), 10);
+
+        assert_eq!(permit.num_permits(), 10);
+        let first_split = permit.split(5).unwrap();
+        assert_eq!(first_split.num_permits(), 5);
+        assert_eq!(permit.num_permits(), 5);
+
+        let second_split = permit.split(3).unwrap();
+        assert_eq!(second_split.num_permits(), 3);
+        assert_eq!(permit.num_permits(), 2);
+
+        assert_eq!(sem.available_permits(), 10);
+
+        drop(first_split);
+        assert_eq!(sem.available_permits(), 15);
+
+        drop(second_split);
+        assert_eq!(sem.available_permits(), 18);
+
+        drop(permit);
+        assert_eq!(sem.available_permits(), 20);
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_read() {
+        let js_url = "localhost:4222";
+        // Create JetStream context
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_jetstream_read", "test", 0);
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let buf_reader_config = BufferReaderConfig {
+            streams: vec![],
+            wip_ack_interval: Duration::from_millis(5),
+            ..Default::default()
+        };
+        let tracker = TrackerHandle::new(None);
+
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+            .await
+            .unwrap();
+
+        let isb_reader_components = ISBReaderComponents {
+            vertex_type: "Map".to_string(),
+            stream: stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker.clone(),
+            batch_size: 500,
+            read_timeout: Duration::from_millis(100),
+            watermark_handle: None,
+            isb_config: None,
+            cln_token: CancellationToken::new(),
+        };
+
+        let isb_reader: ISBReader<crate::typ::WithoutRateLimiter> =
+            ISBReader::new(isb_reader_components, js_reader, None)
+                .await
+                .unwrap();
+
+        let reader_cancel_token = CancellationToken::new();
+        let (mut js_reader_rx, js_reader_task) = isb_reader
+            .streaming_read(reader_cancel_token.clone())
+            .await
+            .unwrap();
+
+        let mut offsets = vec![];
+        for i in 0..10 {
+            let offset = Offset::Int(IntOffset::new(i + 1, 0));
+            offsets.push(offset.clone());
+            let message = Message {
+                typ: Default::default(),
+                keys: Arc::from(vec![format!("key_{}", i)]),
+                tags: None,
+                value: format!("message {}", i).as_bytes().to_vec().into(),
+                offset,
+                event_time: Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
+                    index: i as i32,
+                },
+                ..Default::default()
+            };
+            let message_bytes: BytesMut = message.try_into().unwrap();
+            context
+                .publish(stream.name, message_bytes.into())
+                .await
+                .unwrap();
+        }
+
+        let mut buffer = vec![];
+        for _ in 0..10 {
+            let Some(val) = js_reader_rx.next().await else {
+                break;
+            };
+            buffer.push(val);
+        }
+
+        assert_eq!(
+            buffer.len(),
+            10,
+            "Expected 10 messages from the jetstream reader"
+        );
+
+        reader_cancel_token.cancel();
+        for offset in offsets {
+            tracker.delete(offset).await.unwrap();
+        }
+        js_reader_task.await.unwrap().unwrap();
+        context.delete_stream(stream.name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_ack() {
+        let js_url = "localhost:4222";
+        // Create JetStream context
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let tracker_handle = TrackerHandle::new(None);
+
+        let js_stream = Stream::new("test-ack", "test", 0);
+        // Delete stream if it exists
+        let _ = context.delete_stream(js_stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: js_stream.to_string(),
+                subjects: vec![js_stream.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(js_stream.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                js_stream.name.to_string(),
+            )
+            .await
+            .unwrap();
+
+        let buf_reader_config = BufferReaderConfig {
+            streams: vec![],
+            wip_ack_interval: Duration::from_millis(5),
+            ..Default::default()
+        };
+
+        let js_reader = JetStreamReader::new(js_stream.clone(), context.clone(), None)
+            .await
+            .unwrap();
+
+        let isb_reader_components = ISBReaderComponents {
+            vertex_type: "Map".to_string(),
+            stream: js_stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker_handle.clone(),
+            batch_size: 1,
+            read_timeout: Duration::from_millis(100),
+            watermark_handle: None,
+            isb_config: None,
+            cln_token: CancellationToken::new(),
+        };
+
+        let isb_reader: ISBReader<crate::typ::WithoutRateLimiter> =
+            ISBReader::new(isb_reader_components, js_reader, None)
+                .await
+                .unwrap();
+
+        let reader_cancel_token = CancellationToken::new();
+        let (mut js_reader_rx, js_reader_task) = isb_reader
+            .streaming_read(reader_cancel_token.clone())
+            .await
+            .unwrap();
+
+        let mut offsets = vec![];
+        // write 5 messages
+        for i in 0..5 {
+            let message = Message {
+                typ: Default::default(),
+                keys: Arc::from(vec![format!("key_{}", i)]),
+                tags: None,
+                value: format!("message {}", i).as_bytes().to_vec().into(),
+                offset: Offset::Int(IntOffset::new(i + 1, 0)),
+                event_time: Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("{}-0", i + 1).into(),
+                    index: i as i32,
+                },
+                ..Default::default()
+            };
+            offsets.push(message.offset.clone());
+            let message_bytes: BytesMut = message.try_into().unwrap();
+            context
+                .publish(js_stream.name, message_bytes.into())
+                .await
+                .unwrap();
+        }
+
+        for _ in 0..5 {
+            let Some(_val) = js_reader_rx.next().await else {
+                break;
+            };
+        }
+
+        // after reading messages remove from the tracker so that the messages are acked
+        for offset in offsets {
+            tracker_handle.delete(offset).await.unwrap();
+        }
+
+        // wait until the tracker becomes empty, don't wait more than 1 second
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !tracker_handle.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("Tracker is not empty after 1 second");
+
+        let mut consumer: PullConsumer = context
+            .get_consumer_from_stream(js_stream.name, js_stream.name)
+            .await
+            .unwrap();
+
+        let consumer_info = consumer.info().await.unwrap();
+
+        assert_eq!(consumer_info.num_pending, 0);
+        assert_eq!(consumer_info.num_ack_pending, 0);
+
+        reader_cancel_token.cancel();
+        js_reader_task.await.unwrap().unwrap();
+
+        context.delete_stream(js_stream.name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_compression_with_empty_payload() {
+        let js_url = "localhost:4222";
+        // Create JetStream context
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_compression_empty", "test", 0);
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        // Create ISB config with gzip compression
+        let isb_config = ISBConfig {
+            compression: crate::config::pipeline::isb::Compression {
+                compress_type: CompressionType::Gzip,
+            },
+        };
+
+        let buf_reader_config = BufferReaderConfig {
+            streams: vec![],
+            wip_ack_interval: Duration::from_millis(5),
+            ..Default::default()
+        };
+        let tracker = TrackerHandle::new(None);
+
+        let js_reader =
+            JetStreamReader::new(stream.clone(), context.clone(), Some(isb_config.clone()))
+                .await
+                .unwrap();
+
+        let isb_reader_components = ISBReaderComponents {
+            vertex_type: "Map".to_string(),
+            stream: stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker.clone(),
+            batch_size: 500,
+            read_timeout: Duration::from_millis(100),
+            watermark_handle: None,
+            isb_config: Some(isb_config.clone()),
+            cln_token: CancellationToken::new(),
+        };
+
+        let isb_reader: ISBReader<crate::typ::WithoutRateLimiter> =
+            ISBReader::new(isb_reader_components, js_reader, None)
+                .await
+                .unwrap();
+
+        let reader_cancel_token = CancellationToken::new();
+        let (mut js_reader_rx, js_reader_task) = isb_reader
+            .streaming_read(reader_cancel_token.clone())
+            .await
+            .unwrap();
+
+        let mut compressed = GzEncoder::new(Vec::new(), Compression::default());
+        compressed
+            .write_all(Bytes::new().as_ref())
+            .map_err(|e| Error::ISB(format!("Failed to compress message (write_all): {}", e)))
+            .unwrap();
+
+        let body = Bytes::from(
+            compressed
+                .finish()
+                .map_err(|e| Error::ISB(format!("Failed to compress message (finish): {}", e)))
+                .unwrap(),
+        );
+
+        // Create a message with empty payload
+        let offset = Offset::Int(IntOffset::new(1, 0));
+        let message = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["empty_key".to_string()]),
+            tags: None,
+            value: body, // Empty payload
+            offset: offset.clone(),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_1".into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+
+        // Convert message to bytes and publish it
+        let message_bytes: BytesMut = message.try_into().unwrap();
+        context
+            .publish(stream.name, message_bytes.into())
+            .await
+            .unwrap();
+
+        // Read the message back
+        let received_message = js_reader_rx.next().await.expect("Should receive a message");
+
+        // Verify the message was correctly decompressed
+        assert_eq!(
+            received_message.value.len(),
+            0,
+            "Empty payload should remain empty after compression/decompression"
+        );
+        assert_eq!(received_message.keys.as_ref(), &["empty_key".to_string()]);
+        assert_eq!(received_message.offset.to_string(), offset.to_string());
+
+        // Clean up
+        tracker.delete(offset).await.unwrap();
+        reader_cancel_token.cancel();
+        js_reader_task.await.unwrap().unwrap();
+        context.delete_stream(stream.name).await.unwrap();
     }
 }
