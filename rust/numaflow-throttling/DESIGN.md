@@ -47,6 +47,346 @@ level.
   not cause any issues because for a new pod to join, it has to wait for the pool-size to be agreed upon. By that time
   all the consumers will be using the new pool-size.
 
+## Throttling Modes
+
+|    Modes     |                                                                                                Description                                                                                                |                          Notes                          |
+|:------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:-------------------------------------------------------:|
+|  SCHEDULED   |                                                                   If we will release/increase tokens on a schedule even if it not used                                                                    | (least restrictive) This has side effects on the callee |   
+|   RELAXED    |                                                                      If there is some traffic, then release the max possible tokens                                                                       |                                                         |
+| ONLY_IF_USED |                                                     If the tokens used are within +/- threshold % of max (user defined), then we’ll increase by slope                                                     |    +- threshold % (user defined), need not be exact     |
+|  GO_BACK_N   | If the user doesn’t query in the last n seconds then we go back the slope of n seconds. <br/>If the user doesn’t utilize upto threshold% of tokens in the pool, then we reduce the total tokens by slope. |    Token increase strategy is same as ONLY_IF_USED.     |
+
+### SCHEDULED
+Most unrestrictive mode amongst the available options.  
+The number of tokens available in the token pool are increased at a fixed rate irrespective of how many tokens are used or when are the tokens requested.
+
+Following chart shows how token pool is increased at a fixed rate irrespective of the token usage:
+
+<img width="600" height="371" alt="Scheduled Mode" src="https://github.com/user-attachments/assets/f9533d26-cf61-49ec-bd5d-3927e8fbaa49" />
+
+<details>
+max_tokens = 110 <br>         
+min_tokens = 10 <br>   
+duration = 10 <br>  
+slope = (max_tokens - min_tokens) / duration <br>    
+usage_threshold_percentage = 100 <br>   
+
+| token_pool | tokens_used |
+|------------|-------------|
+| 10.00      | 10.00       |
+| 20.00      | 10.00       |
+| 30.00      | 20.00       |
+| 40.00      | 30.00       |
+| 50.00      | 50.00       |
+| 60.00      | 40.00       |
+| 70.00      | 50.00       |
+| 80.00      | 60.00       |
+| 90.00      | 50.00       |
+| 100.00     | 70.00       |
+| 110.00     | 80.00       |
+| 110.00     | 85.00       |
+| 110.00     | 90.00       |
+| 110.00     | 80.00       |
+| 110.00     | 100.00      |
+| 110.00     | 100.00      |
+| 110.00     | 110.00      |
+| 110.00     | 110.00      |
+| 110.00     | 100.00      |
+| 110.00     | 90.00       |
+</details>
+
+Following chart shows how token pool is increased at a fixed rate irrespective of whether there are gaps in requesting additional tokens:
+
+<img width="600" height="371" alt="Scheduled Mode with gaps" src="https://github.com/user-attachments/assets/edfa1d65-6c78-406f-bc7b-d9e1ba155ea2" />
+
+<details>
+
+max_tokens = 110  <br>           
+min_tokens = 10 <br>      
+duration = 10 <br>      
+slope = (max_tokens - min_tokens) / duration  <br>      
+usage_threshold_percentage = 100  <br>
+
+| time | token_pool | tokens_used |
+|------|------------|-------------|
+| 1    | 10.00      | 10.00       |
+| 2    | 20.00      | 10.00       |
+| 3    | 30.00      | 20.00       |
+| 4    | 40.00      | 30.00       |
+| 5    | 50.00      | 50.00       |
+| 6    | 60.00      | 40.00       |
+| 7    | 70.00      |             |
+| 8    | 80.00      |             |
+| 9    | 90.00      |             |
+| 10   | 100.00     |             |
+| 11   | 110.00     | 50.00       |
+| 12   | 110.00     | 60.00       |
+| 13   | 110.00     | 50.00       |
+| 14   | 110.00     | 70.00       |
+| 15   | 110.00     | 80.00       |
+| 16   | 110.00     | 85.00       |
+| 17   | 110.00     | 90.00       |
+| 18   | 110.00     | 80.00       |
+| 19   | 110.00     | 100.00      |
+| 20   | 110.00     | 100.00      |
+| 21   | 110.00     | 110.00      |
+| 22   | 110.00     | 110.00      |
+| 23   | 110.00     | 100.00      |
+| 24   | 110.00     | 90.00       |
+
+</details>
+
+
+### RELAXED
+If there is some traffic, then release the max possible tokens
+
+When ramp-up is requested in this mode then the token pool size is “ramped-up” only when there is active traffic/actual calls are made to request additional tokens.
+If any calls are made to get additional tokens then the token pool size is increased irrespective of the token utilization in the previous epoch.
+
+For example, in the following chart, the token pool ramp-up looks similar to Scheduled mode ramp-up since calls are being made every epoch:
+
+<img width="600" height="371" alt="Relaxed mode" src="https://github.com/user-attachments/assets/f18257d4-ee78-447b-8af5-7f75309e9314" />
+
+<details>
+
+|         Parameter          |                 Value                  |
+|:--------------------------:|:--------------------------------------:|
+|         max_tokens         |                  110                   |         
+|         min_tokens         |                   10                   |   
+|          duration          |                   10                   | 
+|           slope            | `(max_tokens - min_tokens) / duration` |
+| usage_threshold_percentage |                  100                   |
+
+#### Sample Data
+| token_pool | tokens_used |
+|------------|-------------|
+| 10.00      | 10.00       |
+| 20.00      | 10.00       |
+| 30.00      | 20.00       |
+| 40.00      | 30.00       |
+| 50.00      | 50.00       |
+| 60.00      | 40.00       |
+| 70.00      | 50.00       |
+| 80.00      | 60.00       |
+| 90.00      | 50.00       |
+| 100.00     | 70.00       |
+| 110.00     | 80.00       |
+| 110.00     | 85.00       |
+| 110.00     | 90.00       |
+| 110.00     | 80.00       |
+| 110.00     | 100.00      |
+| 110.00     | 100.00      |
+| 110.00     | 110.00      |
+| 110.00     | 110.00      |
+| 110.00     | 100.00      |
+| 110.00     | 90.00       |
+</details>
+
+But, in the following example, the token pool ramp-up is stalled if no calls are made for some time and resumes where it left off:
+
+<img width="600" height="371" alt="Relaxed mode with gaps" src="https://github.com/user-attachments/assets/ca51cb5d-4edf-47d1-88cd-b833567c0b35" />
+
+<details>
+max_tokens = 110 <br>         
+min_tokens = 10 <br>   
+duration = 10 <br>  
+slope = (max_tokens - min_tokens) / duration <br>    
+usage_threshold_percentage = 100 <br>   
+
+| time | token_pool | tokens_used |
+|------|------------|-------------|
+| 1    | 10.00      | 10.00       |
+| 2    | 20.00      | 10.00       |
+| 3    | 30.00      | 20.00       |
+| 4    | 40.00      | 30.00       |
+| 5    | 50.00      | 50.00       |
+| 6    | 60.00      | 40.00       |
+| 7    | 70.00      | 50.00       |
+| 8    |            |             |
+| 9    |            |             |
+| 10   |            |             |
+| 11   |            |             |
+| 12   | 80.00      | 60.00       |
+| 13   | 90.00      | 50.00       |
+| 14   | 100.00     | 70.00       |
+| 15   | 110.00     | 80.00       |
+| 16   | 110.00     | 85.00       |
+| 17   | 110.00     | 90.00       |
+| 18   | 110.00     | 80.00       |
+| 19   | 110.00     | 100.00      |
+| 20   | 110.00     | 100.00      |
+| 21   | 110.00     | 110.00      |
+| 22   | 110.00     | 110.00      |
+| 23   | 110.00     | 100.00      |
+| 24   | 110.00     | 90.00       |
+
+
+</details>
+
+### ONLY_IF_USED
+Increase the max_ever_refilled only when the caller utilizes more tokens than the specified threshold.
+
+Similar to relaxed mode, the token pool size increase stalls during ramp-up if no calls are being made to the rate-limiter, 
+but its size also stalls when the token utilization is less than the user specified utilization threshold percentage in the previous epoch.
+
+The token utilization is calculated using the number of tokens left over in the token pool vs the total size of the token pool:
+Token utilization % = (1 - tokens left in token pool / total size of the token pool) * 100
+
+For example, in the following chart, the token pool size ramp-up stalls whenever the token utilization % dips below 100%
+
+<img width="600" height="371" alt="OnlyIfUsed Mode" src="https://github.com/user-attachments/assets/07c334da-5012-44bd-980a-d82e24547196" />
+
+<details>
+max_tokens = 110 <br>         
+min_tokens = 10 <br>   
+duration = 10 <br>  
+slope = (max_tokens - min_tokens) / duration <br>    
+usage_threshold_percentage = 100 <br>   
+
+| token_pool | tokens_used |
+|------------|-------------|
+| 10.00      | 10.00       |
+| 20.00      | 10.00       |
+| 20.00      | 20.00       |
+| 30.00      | 30.00       |
+| 40.00      | 30.00       |
+| 40.00      | 40.00       |
+| 50.00      | 50.00       |
+| 60.00      | 50.00       |
+| 60.00      | 50.00       |
+| 60.00      | 60.00       |
+| 70.00      | 60.00       |
+| 70.00      | 70.00       |
+| 80.00      | 70.00       |
+| 80.00      | 80.00       |
+| 90.00      | 90.00       |
+| 100.00     | 100.00      |
+| 110.00     | 100.00      |
+| 110.00     | 100.00      |
+| 110.00     | 100.00      |
+| 110.00     | 100.00      |
+</details>
+
+### GO_BACK_N
+
+Unlike the previously discussed modes this mode has penalty for underutilization of tokens and penalty for gaps between
+subsequent calls made to the rate limiter. The penalty is reduction in the size of the token pool by slope.
+Slope is calculated as follows, using the user specified values of max tokens, min tokens and ramp-up duration:
+
+Slope = (max - min)/ramp-up duration
+
+So, similar to OnlyIfUsed mode, if the token utilization % is greater than the user specified threshold %, then the token
+pool size increases by slope as usual, but if it falls below the user specified threshold %, then the token pool size is 
+decreased by slope in the next epoch:
+
+For example, in the following chart, we’re taking the user specified threshold as 100%, so any time the token utilization
+falls below 100%, the token pool size is reduced in the next epoch:
+
+<img width="600" height="371" alt="GoBackN mode" src="https://github.com/user-attachments/assets/244998d4-81ad-401b-a60c-a0940e5962b9" />
+
+<details>
+max_tokens = 110 <br>         
+min_tokens = 10 <br>   
+duration = 10 <br>  
+slope = (max_tokens - min_tokens) / duration <br>    
+usage_threshold_percentage = 100 <br>   
+
+| token_pool | tokens_used |
+|------------|-------------|
+| 10         | 10          |
+| 20         | 10          |
+| 10         | 10          |
+| 20         | 10          |
+| 10         | 10          |
+| 20         | 20          |
+| 30         | 20          |
+| 20         | 20          |
+| 30         | 20          |
+| 20         | 20          |
+| 30         | 30          |
+| 40         | 30          |
+| 30         | 30          |
+| 40         | 30          |
+| 30         | 20          |
+| 20         | 20          |
+| 30         | 30          |
+| 40         | 40          |
+| 50         | 50          |
+| 60         | 50          |
+
+</details>
+
+Furthermore, if there are gaps in calls being made to the rate-limiter, i.e., if there is a delay between subsequent c
+alls being made to the rate-limiter then the token pool size is reduced by slope amount for every subsequent epoch second
+that was missed.
+
+In the following example, the calls stopped being made around t=18 and resumed at t=20. The time for which we missed 
+making these calls, the token pool size was reduced.
+
+<img width="600" height="371" alt="GoBackN with gaps" src="https://github.com/user-attachments/assets/4f5adb28-8b9f-466a-9e9c-42596fc4b2b4" />
+
+<details>
+max_tokens = 110 <br>
+min_tokens = 10 <br>   
+duration = 10 <br>  
+slope = (max_tokens - min_tokens) / duration <br>
+usage_threshold_percentage = 100 <br>
+
+| time | token_pool | tokens_used |
+|------|------------|-------------|
+| 1    | 10         | 10          |
+| 2    | 20         | 20          |
+| 3    | 30         | 20          |
+| 4    | 20         | 20          |
+| 5    | 30         | 20          |
+| 6    | 20         | 20          |
+| 7    | 30         | 30          |
+| 8    | 40         | 30          |
+| 9    | 30         | 30          |
+| 10   | 40         | 30          |
+| 11   | 30         | 20          |
+| 12   | 20         | 20          |
+| 13   | 30         | 30          |
+| 14   | 40         | 40          |
+| 15   | 50         | 50          |
+| 16   | 60         | 60          |
+| 17   | 70         | 70          |
+| 18   | 80         |             |
+| 19   | 70         |             |
+| 20   | 60         | 60          |
+| 21   | 70         | 70          |
+| 22   | 80         | 80          |
+| 23   | 90         | 90          |
+| 24   | 100        | 100         |
+| 25   | 110        | 110         |
+| 26   | 110        | 110         |
+
+</details>
+
+## Token Deposit Logic
+
+Whenever a caller/processor requests for the number of messages they’re allowed to read, we want to keep track of whether
+they were successfully able to read the messages they were greenlit to read. The messages/tokens that were not read/not 
+used should be returned back to the rate limiter so that the rate limiter can accurately keep track of the token 
+utilization of each processor against the total token pool size.
+
+Tracking the token utilization allows the rate limiter to determine whether it should expand or contract the total token 
+pool size based on the rate limiting mode chosen.
+
+Usage:
+- Primarily used for OnlyIfUsed and GoBackN modes
+- After token acquisition from token bucket:
+    - Keep track of how many messages were successfully read. Count these as used tokens
+    - Deposit any unused tokens back to the token bucket.
+    - Used to calculate the token utilization percentage of the processor at any given epoch, i.e., `(1 - tokens left in bucket/Total token bucket capacity) * 100`
+- During token bucket refill:
+    - OnlyIfUsed Mode:
+        - If the token utilization is less than the user specified threshold then, during ramp-up phase, do not increase 
+        - the token bucket size for the next epoch.
+    - GoBackN Mode:
+        - If the token utilization is less than the user specified threshold then, during ramp-up phase, decrease the size of the token bucket.
+
+
 # Design Details
 
 To achieve high TPS, during happy path the decisions are made locally and all the information is available locally.
@@ -122,326 +462,6 @@ flowchart TD
 
 ## Autoscaling
 
-TODO: 
-
-## Throttling Modes
-
-|    Modes     |                                     Description                                      |                Notes                |
-|:------------:|:------------------------------------------------------------------------------------:|:-----------------------------------:|
-|  SCHEDULED   |         If we will release/increase tokens on a schedule even if it not used         |  (least restrictive) This has side effects on the callee |   
-|   RELAXED    |            If there is some traffic, then release the max possible tokens            |                                     |
-| ONLY_IF_USED | If the tokens used are within +/- threshold % of max (user defined), then we’ll increase by slope | +- threshold % (user defined), need not be exact  |
-|   GO_BACK_N    |            If the user doesn’t query in the last n seconds then we go back the slope of n seconds. If the user doesn’t utilize upto threshold% of tokens in the pool, then we reduce the total tokens by slope. |      Token increase strategy is same as ONLY_IF_USED.                                |
-
-### SCHEDULED mode
-Most unrestrictive mode amongst the available options.  
-The number of tokens available in the token pool are increased at a fixed rate irrespective of how many tokens are used or when are the tokens requested.  
-
-Following chart shows how token pool is increased at a fixed rate irrespective of the token usage:
-
-<img width="600" height="371" alt="Scheduled Mode" src="https://github.com/user-attachments/assets/f9533d26-cf61-49ec-bd5d-3927e8fbaa49" />
-
-<details>
-max_tokens = 110 <br>         
-min_tokens = 10 <br>   
-duration = 10 <br>  
-slope = (max_tokens - min_tokens) / duration <br>    
-usage_threshold_percentage = 100 <br>   
-
-|token_pool|tokens_used|
-|----------|-----------|
-|10.00     |10.00      |
-|20.00     |10.00      |
-|30.00     |20.00      |
-|40.00     |30.00      |
-|50.00     |50.00      |
-|60.00     |40.00      |
-|70.00     |50.00      |
-|80.00     |60.00      |
-|90.00     |50.00      |
-|100.00    |70.00      |
-|110.00    |80.00      |
-|110.00    |85.00      |
-|110.00    |90.00      |
-|110.00    |80.00      |
-|110.00    |100.00     |
-|110.00    |100.00     |
-|110.00    |110.00     |
-|110.00    |110.00     |
-|110.00    |100.00     |
-|110.00    |90.00      |
-</details>
-
-Following chart shows how token pool is increased at a fixed rate irrespective of whether there are gaps in requesting additional tokens:
-
-<img width="600" height="371" alt="Scheduled Mode with gaps" src="https://github.com/user-attachments/assets/edfa1d65-6c78-406f-bc7b-d9e1ba155ea2" />
-
-<details>
-
-max_tokens = 110  <br>           
-min_tokens = 10 <br>      
-duration = 10 <br>      
-slope = (max_tokens - min_tokens) / duration  <br>      
-usage_threshold_percentage = 100  <br>     
-
-|time|token_pool|tokens_used|
-|----|----------|-----------|
-|1   |10.00     |10.00      |
-|2   |20.00     |10.00      |
-|3   |30.00     |20.00      |
-|4   |40.00     |30.00      |
-|5   |50.00     |50.00      |
-|6   |60.00     |40.00      |
-|7   |70.00     |           |
-|8   |80.00     |           |
-|9   |90.00     |           |
-|10  |100.00    |           |
-|11  |110.00    |50.00      |
-|12  |110.00    |60.00      |
-|13  |110.00    |50.00      |
-|14  |110.00    |70.00      |
-|15  |110.00    |80.00      |
-|16  |110.00    |85.00      |
-|17  |110.00    |90.00      |
-|18  |110.00    |80.00      |
-|19  |110.00    |100.00     |
-|20  |110.00    |100.00     |
-|21  |110.00    |110.00     |
-|22  |110.00    |110.00     |
-|23  |110.00    |100.00     |
-|24  |110.00    |90.00      |
-
-</details>
+TODO:
 
 
-### RELAXED mode
-If there is some traffic, then release the max possible tokens
-
-When ramp-up is requested in this mode then the token pool size is “ramped-up” only when there is active traffic/actual calls are made to request additional tokens. 
-If any calls are made to get additional tokens then the token pool size is increased irrespective of the token utilization in the previous epoch. 
-
-For example, in the following chart, the token pool ramp-up looks similar to Scheduled mode ramp-up since calls are being made every epoch:
-
-<img width="600" height="371" alt="Relaxed mode" src="https://github.com/user-attachments/assets/f18257d4-ee78-447b-8af5-7f75309e9314" />
-
-<details>
-max_tokens = 110 <br>         
-min_tokens = 10 <br>   
-duration = 10 <br>  
-slope = (max_tokens - min_tokens) / duration <br>    
-usage_threshold_percentage = 100 <br>   
-
-|token_pool|tokens_used|
-|----------|-----------|
-|10.00     |10.00      |
-|20.00     |10.00      |
-|30.00     |20.00      |
-|40.00     |30.00      |
-|50.00     |50.00      |
-|60.00     |40.00      |
-|70.00     |50.00      |
-|80.00     |60.00      |
-|90.00     |50.00      |
-|100.00    |70.00      |
-|110.00    |80.00      |
-|110.00    |85.00      |
-|110.00    |90.00      |
-|110.00    |80.00      |
-|110.00    |100.00     |
-|110.00    |100.00     |
-|110.00    |110.00     |
-|110.00    |110.00     |
-|110.00    |100.00     |
-|110.00    |90.00      |
-</details>
-
-But, in the following example, the token pool ramp-up is stalled if no calls are made for some time and resumes where it left off:
-
-<img width="600" height="371" alt="Relaxed mode with gaps" src="https://github.com/user-attachments/assets/ca51cb5d-4edf-47d1-88cd-b833567c0b35" />
-
-<details>
-max_tokens = 110 <br>         
-min_tokens = 10 <br>   
-duration = 10 <br>  
-slope = (max_tokens - min_tokens) / duration <br>    
-usage_threshold_percentage = 100 <br>   
-
-|time|token_pool|tokens_used|
-|----|----------|-----------|
-|1   |10.00     |10.00      |
-|2   |20.00     |10.00      |
-|3   |30.00     |20.00      |
-|4   |40.00     |30.00      |
-|5   |50.00     |50.00      |
-|6   |60.00     |40.00      |
-|7   |70.00     |50.00      |
-|8   |          |           |
-|9   |          |           |
-|10  |          |           |
-|11  |          |           |
-|12  |80.00     |60.00      |
-|13  |90.00     |50.00      |
-|14  |100.00    |70.00      |
-|15  |110.00    |80.00      |
-|16  |110.00    |85.00      |
-|17  |110.00    |90.00      |
-|18  |110.00    |80.00      |
-|19  |110.00    |100.00     |
-|20  |110.00    |100.00     |
-|21  |110.00    |110.00     |
-|22  |110.00    |110.00     |
-|23  |110.00    |100.00     |
-|24  |110.00    |90.00      |
-
-
-</details>
-
-### ONLY_IF_USED mode
-Increase the max_ever_refilled only when the caller utilizes more tokens than the specified threshold.
-
-Similar to relaxed mode, the token pool size increase stalls during ramp-up if no calls are being made to the rate-limiter, but its size also stalls when the token utilization is less than the user specified utilization threshold percentage in the previous epoch.
-
-The token utilization is calculated using the number of tokens left over in the token pool vs the total size of the token pool:
-Token utilization % = (1 - tokens left in token pool / total size of the token pool) * 100
-
-For example, in the following chart, the token pool size ramp-up stalls whenever the token utilization % dips below 100%
-
-<img width="600" height="371" alt="OnlyIfUsed Mode" src="https://github.com/user-attachments/assets/07c334da-5012-44bd-980a-d82e24547196" />
-
-<details>
-max_tokens = 110 <br>         
-min_tokens = 10 <br>   
-duration = 10 <br>  
-slope = (max_tokens - min_tokens) / duration <br>    
-usage_threshold_percentage = 100 <br>   
-
-|token_pool|tokens_used|
-|----------|-----------|
-|10.00     |10.00      |
-|20.00     |10.00      |
-|20.00     |20.00      |
-|30.00     |30.00      |
-|40.00     |30.00      |
-|40.00     |40.00      |
-|50.00     |50.00      |
-|60.00     |50.00      |
-|60.00     |50.00      |
-|60.00     |60.00      |
-|70.00     |60.00      |
-|70.00     |70.00      |
-|80.00     |70.00      |
-|80.00     |80.00      |
-|90.00     |90.00      |
-|100.00    |100.00     |
-|110.00    |100.00     |
-|110.00    |100.00     |
-|110.00    |100.00     |
-|110.00    |100.00     |
-</details>
-
-### GO_BACK_N mode
-
-Unlike the previously discussed modes this mode has penalty for underutilization of tokens and penalty for gaps between subsequent calls made to the rate limiter. The penalty is reduction in the size of the token pool by slope. 
-Slope is calculated as follows, using the user specified values of max tokens, min tokens and ramp-up duration:
-
-Slope = (max - min)/ramp-up duration
-
-So, similar to OnlyIfUsed mode, if the token utilization % is greater than the user specified threshold %, then the token pool size increases by slope as usual, but if it falls below the user specified threshold %, then the token pool size is decreased by slope in the next epoch:
-
-For example, in the following chart, we’re taking the user specified threshold as 100%, so any time the token utilization falls below 100%, the token pool size is reduced in the next epoch:
-
-<img width="600" height="371" alt="GoBackN mode" src="https://github.com/user-attachments/assets/244998d4-81ad-401b-a60c-a0940e5962b9" />
-
-<details>
-max_tokens = 110 <br>         
-min_tokens = 10 <br>   
-duration = 10 <br>  
-slope = (max_tokens - min_tokens) / duration <br>    
-usage_threshold_percentage = 100 <br>   
-
-|token_pool|tokens_used|
-|----------|-----------|
-|10        |10         |
-|20        |10         |
-|10        |10         |
-|20        |10         |
-|10        |10         |
-|20        |20         |
-|30        |20         |
-|20        |20         |
-|30        |20         |
-|20        |20         |
-|30        |30         |
-|40        |30         |
-|30        |30         |
-|40        |30         |
-|30        |20         |
-|20        |20         |
-|30        |30         |
-|40        |40         |
-|50        |50         |
-|60        |50         |
-
-</details>
-
-Furthermore, if there are gaps in calls being made to the rate-limiter, i.e., if there is a delay between subsequent calls being made to the rate-limiter then the token pool size is reduced by slope amount for every subsequent epoch second that was missed.
-
-In the following example, the calls stopped being made around t=18 and resumed at t=20. The time for which we missed making these calls, the token pool size was reduced.
-
-<img width="600" height="371" alt="GoBackN with gaps" src="https://github.com/user-attachments/assets/4f5adb28-8b9f-466a-9e9c-42596fc4b2b4" />
-
-<details>
-max_tokens = 110 <br>
-min_tokens = 10 <br>   
-duration = 10 <br>  
-slope = (max_tokens - min_tokens) / duration <br>
-usage_threshold_percentage = 100 <br>
-
-|time|token_pool|tokens_used|
-|----|----------|-----------|
-|1   |10        |10         |
-|2   |20        |20         |
-|3   |30        |20         |
-|4   |20        |20         |
-|5   |30        |20         |
-|6   |20        |20         |
-|7   |30        |30         |
-|8   |40        |30         |
-|9   |30        |30         |
-|10  |40        |30         |
-|11  |30        |20         |
-|12  |20        |20         |
-|13  |30        |30         |
-|14  |40        |40         |
-|15  |50        |50         |
-|16  |60        |60         |
-|17  |70        |70         |
-|18  |80        |           |
-|19  |70        |           |
-|20  |60        |60         |
-|21  |70        |70         |
-|22  |80        |80         |
-|23  |90        |90         |
-|24  |100       |100        |
-|25  |110       |110        |
-|26  |110       |110        |
-
-</details>
-
-## Token Deposit Logic
-
-Whenever a caller/processor requests for the number of messages they’re allowed to read, we want to keep track of whether they were successfully able to read the messages they were greenlit to read. The messages/tokens that were not read/not used should be returned back to the rate limiter so that the rate limiter can accurately keep track of the token utilization of each processor against the total token pool size. 
-
-Tracking the token utilization allows the rate limiter to determine whether it should expand or contract the total token pool size based on the rate limiting mode chosen. 
-
-Usage:
-- Primarily used for OnlyIfUsed and GoBackN modes
-- After token acquisition from token bucket:
-  - Keep track of how many messages were successfully read. Count these as used tokens
-  - Deposit any unused tokens back to the token bucket.
-  - Used to calculate the token utilization percentage of the processor at any given epoch, i.e., (1 - tokens left in bucket/Total token bucket capacity) * 100
-- During token bucket refill:
-  - OnlyIfUsed Mode:
-    - If the token utilization is less than the user specified threshold then, during ramp-up phase, do not increase the token bucket size for the next epoch. 
-  - GoBackN Mode:
-    - If the token utilization is less than the user specified threshold then, during ramp-up phase, decrease the size of the token bucket. 
