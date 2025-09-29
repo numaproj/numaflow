@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"time"
 
 	appv1 "k8s.io/api/apps/v1"
@@ -435,6 +436,21 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 
 	for i := 0; i < len(sidecarContainers); i++ { // udsink, udsource, udtransformer ...
 		sidecarContainers[i].Env = append(sidecarContainers[i].Env, mv.commonEnvs()...)
+
+		// pass read limits as envs into UDSource container
+		if sidecarContainers[i].Name == CtrUdsource {
+			var bs uint64 = DefaultReadBatchSize
+			toDur := DefaultReadTimeout
+			if mv.Spec.Limits != nil {
+				bs = mv.Spec.Limits.GetReadBatchSize()
+				toDur = mv.Spec.Limits.GetReadTimeout()
+			}
+			sidecarContainers[i].Env = append(sidecarContainers[i].Env,
+				corev1.EnvVar{Name: EnvReadBatchSize, Value: strconv.FormatUint(bs, 10)},
+				corev1.EnvVar{Name: EnvReadTimeoutMs, Value: strconv.FormatInt(toDur.Milliseconds(), 10)},
+			)
+		}
+
 	}
 
 	initContainers := []corev1.Container{}
