@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::io::Read;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -9,12 +8,12 @@ use crate::config::pipeline::isb::{CompressionType, ISBConfig, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, MessageType, Offset};
 use crate::metadata::Metadata;
+use crate::pipeline::isb::compression;
 use crate::shared::grpc::utc_from_timestamp;
 use async_nats::jetstream::{
     AckKind, Context, Message as JetstreamMessage, consumer::PullConsumer,
 };
 use bytes::Bytes;
-use flate2::read::GzDecoder;
 use prost::Message as ProtoMessage;
 use tokio_stream::StreamExt;
 use tracing::warn;
@@ -67,7 +66,7 @@ impl JSWrappedMessage {
             typ: header.kind.into(),
             keys: Arc::from(header.keys.into_boxed_slice()),
             tags: None,
-            value: Bytes::from(Self::decompress(self.compression_type, body)?),
+            value: Bytes::from(compression::decompress(self.compression_type, &body.payload)?),
             offset: offset.clone(),
             event_time: message_info
                 .event_time
@@ -85,50 +84,20 @@ impl JSWrappedMessage {
         })
     }
 
-    /// Decompress the message body based on the compression type.
-    fn decompress(
-        compression_type: Option<CompressionType>,
-        body: numaflow_pb::objects::isb::Body,
-    ) -> Result<Vec<u8>> {
-        let body = match compression_type {
-            Some(CompressionType::Gzip) => {
-                let mut decoder: GzDecoder<&[u8]> = GzDecoder::new(body.payload.as_ref());
-                let mut decompressed = vec![];
-                decoder
-                    .read_to_end(&mut decompressed)
-                    .map_err(|e| Error::ISB(format!("Failed to decompress message: {e}")))?;
-                decompressed
-            }
-            Some(CompressionType::Zstd) => {
-                let mut decoder: zstd::Decoder<'static, std::io::BufReader<&[u8]>> =
-                    zstd::Decoder::new(body.payload.as_ref())
-                        .map_err(|e| Error::ISB(format!("Failed to create zstd encoder: {e:?}")))?;
-                let mut decompressed = vec![];
-                decoder
-                    .read_to_end(&mut decompressed)
-                    .map_err(|e| Error::ISB(format!("Failed to decompress message: {e}")))?;
-                decompressed
-            }
-            Some(CompressionType::LZ4) => {
-                let mut decoder: lz4::Decoder<&[u8]> = lz4::Decoder::new(body.payload.as_ref())
-                    .map_err(|e| Error::ISB(format!("Failed to create lz4 encoder: {e:?}")))?;
-                let mut decompressed = vec![];
-                decoder
-                    .read_to_end(&mut decompressed)
-                    .map_err(|e| Error::ISB(format!("Failed to decompress message: {e}")))?;
-                decompressed
-            }
-            None | Some(CompressionType::None) => body.payload,
-        };
-        Ok(body)
-    }
+
 }
 
+/// JetStreamReader, exposes methods to read, ack, and nack messages from JetStream ISB.
 #[derive(Clone)]
 pub(crate) struct JetStreamReader {
+    /// jetstream stream from which we are reading
     stream: Stream,
+    /// jetstream consumer used to read messages
     consumer: PullConsumer,
+    /// compression_type is used to decompress the message body
     compression_type: Option<CompressionType>,
+    /// jetstream needs complete message to ack/nack, so we need to keep track of them using the offset
+    /// so that we can ack/nack them later using the offset.
     handles: Arc<Mutex<HashMap<String, JetstreamMessage>>>,
 }
 
@@ -155,10 +124,10 @@ impl JetStreamReader {
         self.stream.name
     }
 
-    // Fetch up to `max` messages within `timeout`, convert to core Message, and retain JS handles by offset.
+    /// Fetches messages from JetStream ISB in batches, it honors the batch size and timeout.
     pub(crate) async fn fetch(&mut self, max: usize, timeout: Duration) -> Result<Vec<Message>> {
         let mut out = Vec::with_capacity(max);
-        let msgs = match self
+        let messages = match self
             .consumer
             .batch()
             .max_messages(max)
@@ -181,8 +150,7 @@ impl JetStreamReader {
             }
         };
 
-        for js_msg in msgs {
-            // Derive offset key (seq-partition) and store handle
+        for js_msg in messages {
             let info = js_msg.info().map_err(|e| {
                 Error::ISB(format!("Failed to get message info from JetStream: {e}"))
             })?;
@@ -202,10 +170,9 @@ impl JetStreamReader {
             .into_message()
             .await?;
 
-            // Ensure offset is populated even for WMB types
             message.offset = offset.clone();
 
-            // Track handle for later ack/nack/wip by offset
+            // Track the actual message for doing ack/nack/wip by offset
             {
                 let mut map = self.handles.lock().expect("handles mutex poisoned");
                 map.insert(offset_key, js_msg);
@@ -217,43 +184,36 @@ impl JetStreamReader {
         Ok(out)
     }
 
-    // Send progress/WIP for the provided offsets; does not remove handles
+    /// Mark messages as in progress by sending work in progress acks.
     pub(crate) async fn mark_wip(&self, offsets: &[Offset]) -> Result<()> {
-        // Collect handles outside of mutex before awaiting
-        let handles: Vec<JetstreamMessage> = {
-            let map = self.handles.lock().expect("handles mutex poisoned");
-            offsets
-                .iter()
-                .filter_map(|o| map.get(&o.to_string()).cloned())
-                .collect()
-        };
+        let handles = self.get_message_handles(offsets, false);
         for h in handles {
             let _ = h.ack_with(AckKind::Progress).await;
         }
         Ok(())
     }
 
-    // Ack and remove handles
+    /// Acknowledge the offsets
     pub(crate) async fn ack(&self, offsets: &[Offset]) -> Result<()> {
-        let handles: Vec<JetstreamMessage> = {
-            let mut map = self.handles.lock().expect("handles mutex poisoned");
-            let mut v = Vec::with_capacity(offsets.len());
-            for o in offsets {
-                if let Some(h) = map.remove(&o.to_string()) {
-                    v.push(h);
-                }
-            }
-            v
-        };
+        let handles = self.get_message_handles(offsets, true);
         for h in handles {
             let _ = h.double_ack().await;
         }
         Ok(())
     }
 
-    // Nack and remove handles
+    /// Negatively acknowledge the offsets
     pub(crate) async fn nack(&self, offsets: &[Offset]) -> Result<()> {
-        let handles: Vec<JetstreamMessage> = {
+        let handles = self.get_message_handles(offsets, true);
+        for h in handles {
+            let _ = h.ack_with(AckKind::Nak(None)).await;
+        }
+        Ok(())
+    }
+
+    /// Helper method to collect handles for given offsets, optionally removing them from the map
+    fn get_message_handles(&self, offsets: &[Offset], remove: bool) -> Vec<JetstreamMessage> {
+        if remove {
             let mut map = self.handles.lock().expect("handles mutex poisoned");
             let mut v = Vec::with_capacity(offsets.len());
             for o in offsets {
@@ -262,13 +222,16 @@ impl JetStreamReader {
                 }
             }
             v
-        };
-        for h in handles {
-            let _ = h.ack_with(AckKind::Nak(None)).await;
+        } else {
+            let map = self.handles.lock().expect("handles mutex poisoned");
+            offsets
+                .iter()
+                .filter_map(|o| map.get(&o.to_string()).cloned())
+                .collect()
         }
-        Ok(())
     }
 
+    /// Returns the number of pending messages in the stream.
     pub(crate) async fn pending(&mut self) -> Result<Option<usize>> {
         let info = self.consumer.info().await.map_err(|e| {
             Error::ISB(format!(
@@ -280,181 +243,4 @@ impl JetStreamReader {
     }
 }
 
-// Unit tests for the decompress function
-#[cfg(test)]
-mod decompress_tests {
-    use super::*;
-    use crate::config::pipeline::isb::CompressionType;
-    use flate2::Compression;
-    use flate2::write::GzEncoder;
-    use lz4::EncoderBuilder;
-    use std::io::Write;
-    use zstd::Encoder;
 
-    fn create_test_body(payload: Vec<u8>) -> numaflow_pb::objects::isb::Body {
-        numaflow_pb::objects::isb::Body { payload }
-    }
-
-    #[test]
-    fn test_decompress_none_compression() {
-        let test_data = b"Hello, World!".to_vec();
-        let body = create_test_body(test_data.clone());
-
-        let result = JSWrappedMessage::decompress(None, body).unwrap();
-        assert_eq!(result, test_data);
-    }
-
-    #[test]
-    fn test_decompress_none_compression_type() {
-        let test_data = b"Hello, World!".to_vec();
-        let body = create_test_body(test_data.clone());
-
-        let result = JSWrappedMessage::decompress(Some(CompressionType::None), body).unwrap();
-        assert_eq!(result, test_data);
-    }
-
-    #[test]
-    fn test_decompress_gzip() {
-        let test_data = b"Hello, World! This is a test message for gzip compression.";
-
-        // Compress the data with gzip
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(test_data).unwrap();
-        let compressed_data = encoder.finish().unwrap();
-
-        let body = create_test_body(compressed_data);
-        let result = JSWrappedMessage::decompress(Some(CompressionType::Gzip), body).unwrap();
-
-        assert_eq!(result, test_data.to_vec());
-    }
-
-    #[test]
-    fn test_decompress_zstd() {
-        let test_data = b"Hello, World! This is a test message for zstd compression.";
-
-        // Compress the data with zstd
-        let mut encoder = Encoder::new(Vec::new(), 3).unwrap();
-        encoder.write_all(test_data).unwrap();
-        let compressed_data = encoder.finish().unwrap();
-
-        let body = create_test_body(compressed_data);
-        let result = JSWrappedMessage::decompress(Some(CompressionType::Zstd), body).unwrap();
-
-        assert_eq!(result, test_data.to_vec());
-    }
-
-    #[test]
-    fn test_decompress_lz4() {
-        let test_data = b"Hello, World! This is a test message for lz4 compression.";
-
-        // Compress the data with lz4
-        let mut encoder = EncoderBuilder::new().build(Vec::new()).unwrap();
-        encoder.write_all(test_data).unwrap();
-        let (compressed_data, _) = encoder.finish();
-
-        let body = create_test_body(compressed_data);
-        let result = JSWrappedMessage::decompress(Some(CompressionType::LZ4), body).unwrap();
-
-        assert_eq!(result, test_data.to_vec());
-    }
-
-    #[test]
-    fn test_decompress_empty_payload_no_compression() {
-        let body = create_test_body(vec![]);
-        let result = JSWrappedMessage::decompress(None, body).unwrap();
-        assert_eq!(result, Vec::<u8>::new());
-    }
-
-    #[test]
-    fn test_decompress_empty_payload_gzip() {
-        // Create an empty gzip stream
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(&[]).unwrap();
-        let compressed_data = encoder.finish().unwrap();
-
-        let body = create_test_body(compressed_data);
-        let result = JSWrappedMessage::decompress(Some(CompressionType::Gzip), body).unwrap();
-        assert_eq!(result, Vec::<u8>::new());
-    }
-
-    #[test]
-    fn test_decompress_empty_payload_zstd() {
-        // Create an empty zstd stream
-        let mut encoder = Encoder::new(Vec::new(), 3).unwrap();
-        encoder.write_all(&[]).unwrap();
-        let compressed_data = encoder.finish().unwrap();
-
-        let body = create_test_body(compressed_data);
-        let result = JSWrappedMessage::decompress(Some(CompressionType::Zstd), body).unwrap();
-        assert_eq!(result, Vec::<u8>::new());
-    }
-
-    #[test]
-    fn test_decompress_empty_payload_lz4() {
-        // Create an empty lz4 stream
-        let mut encoder = EncoderBuilder::new().build(Vec::new()).unwrap();
-        encoder.write_all(&[]).unwrap();
-        let (compressed_data, _) = encoder.finish();
-
-        let body = create_test_body(compressed_data);
-        let result = JSWrappedMessage::decompress(Some(CompressionType::LZ4), body).unwrap();
-        assert_eq!(result, Vec::<u8>::new());
-    }
-
-    #[test]
-    fn test_decompress_invalid_lz4_data() {
-        let invalid_data = b"This is not lz4 compressed data".to_vec();
-        let body = create_test_body(invalid_data);
-
-        let result = JSWrappedMessage::decompress(Some(CompressionType::LZ4), body);
-        assert!(result.is_err());
-
-        if let Err(Error::ISB(msg)) = result {
-            assert!(
-                msg.contains("Failed to create lz4 encoder")
-                    || msg.contains("Failed to decompress message")
-            );
-        } else {
-            panic!("Expected ISB error with lz4 message");
-        }
-    }
-
-    #[test]
-    fn test_decompress_truncated_gzip_data() {
-        let test_data = b"Hello, World! This is a test message for gzip compression.";
-
-        // Compress the data with gzip
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(test_data).unwrap();
-        let mut compressed_data = encoder.finish().unwrap();
-
-        // Truncate the compressed data to simulate corruption
-        compressed_data.truncate(compressed_data.len() / 2);
-
-        let body = create_test_body(compressed_data);
-        let result = JSWrappedMessage::decompress(Some(CompressionType::Gzip), body);
-
-        assert!(result.is_err());
-        if let Err(Error::ISB(msg)) = result {
-            assert!(msg.contains("Failed to decompress message"));
-        } else {
-            panic!("Expected ISB error with decompression message");
-        }
-    }
-
-    #[test]
-    fn test_decompress_binary_data_zstd() {
-        // Create binary test data with various byte values
-        let test_data: Vec<u8> = (0..=255).collect();
-
-        // Compress the data with zstd
-        let mut encoder = Encoder::new(Vec::new(), 3).unwrap();
-        encoder.write_all(&test_data).unwrap();
-        let compressed_data = encoder.finish().unwrap();
-
-        let body = create_test_body(compressed_data);
-        let result = JSWrappedMessage::decompress(Some(CompressionType::Zstd), body).unwrap();
-
-        assert_eq!(result, test_data);
-    }
-}
