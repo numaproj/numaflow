@@ -24,6 +24,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/numaproj/numaflow/test/fixtures"
 )
@@ -35,8 +36,11 @@ type HttpController struct {
 func NewHttpController() *HttpController {
 	return &HttpController{
 		client: &http.Client{
+			Timeout: 30 * time.Second,
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+				IdleConnTimeout:     30 * time.Second,
+				TLSHandshakeTimeout: 10 * time.Second,
 			},
 		},
 	}
