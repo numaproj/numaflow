@@ -542,7 +542,11 @@ impl Store for RedisStore {
     ) -> crate::Result<(usize, f32)> {
         // Currently registration script returns a tuple (pool_size, prev_max_filled)
         let result: Vec<String> = self
-            .exec_lua_script(&self.register_script, &[self.key_prefix], &[processor_id])
+            .exec_lua_script(
+                &self.register_script,
+                &[self.key_prefix],
+                &[processor_id, &self.stale_age.to_string()],
+            )
             .await
             .map_err(|e| Error::Redis(e.to_string()))?;
 
@@ -577,11 +581,7 @@ impl Store for RedisStore {
             .exec_lua_script(
                 &self.deregister_script,
                 &[self.key_prefix],
-                &[
-                    processor_id,
-                    &prev_max_filled.to_string(),
-                    &self.stale_age.to_string(),
-                ],
+                &[processor_id, &prev_max_filled.to_string()],
             )
             .await
             .map_err(|e| Error::Redis(e.to_string()))?;

@@ -28,7 +28,7 @@ struct ProcessorsTimeline {
     heartbeats: HashMap<String, Instant>,
     /// processor_id -> reported pool size
     reported_pool: HashMap<String, usize>,
-    /// processor_id -> (deregistration time, previous max_ever_filled)
+    /// processor_id -> previous max_ever_filled
     prev_max_filled: HashMap<String, (Instant, f32)>,
 }
 
