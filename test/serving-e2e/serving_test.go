@@ -70,6 +70,12 @@ func (ss *ServingSuite) TestServingSource() {
 
 	w.Expect().ServingPodsRunning()
 
+	// Stream serving deployment and vertex logs for debugging in CI
+	w.StreamServingPodLogs("main")
+	w.StreamServingVertexPodLogs("serving-in", "numa")
+
+	defer w.TerminateAllPodLogs()
+
 	servingPipelineName := "serving-source"
 	serviceName := "serving-source-serving"
 	// Check Service
