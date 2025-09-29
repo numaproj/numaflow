@@ -23,7 +23,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"time"
 )
 
 type ServingController struct {
@@ -33,11 +32,8 @@ type ServingController struct {
 func NewServingController() *ServingController {
 	return &ServingController{
 		client: &http.Client{
-			Timeout: 30 * time.Second, // Add timeout for CI environments
 			Transport: &http.Transport{
-				TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
-				IdleConnTimeout:     30 * time.Second,
-				TLSHandshakeTimeout: 10 * time.Second,
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
 		},
 	}
