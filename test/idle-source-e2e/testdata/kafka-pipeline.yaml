@@ -15,7 +15,7 @@ spec:
       source:
         kafka:
           brokers:
-            - kafka-broker:9092
+            - kafka:9092
           topic: kafka-topic
           consumerGroup: test-idle-source
         transformer:
