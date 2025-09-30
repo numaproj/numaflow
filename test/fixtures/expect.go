@@ -39,6 +39,7 @@ type Expect struct {
 	monoVertexClient flowpkg.MonoVertexInterface
 	isbSvc           *dfv1.InterStepBufferService
 	pipeline         *dfv1.Pipeline
+	servingPipeline  *dfv1.ServingPipeline
 	monoVertex       *dfv1.MonoVertex
 	restConfig       *rest.Config
 	kubeClient       kubernetes.Interface
@@ -113,6 +114,23 @@ func (t *Expect) VertexPodsRunning() *Expect {
 	for _, v := range t.pipeline.Spec.Vertices {
 		if err := WaitForVertexPodRunning(t.kubeClient, t.vertexClient, Namespace, t.pipeline.Name, v.Name, timeout); err != nil {
 			t.t.Fatalf("Expected vertex %q pod running: %v", v.Name, err)
+		}
+	}
+	return t
+}
+
+func (t *Expect) ServingPodsRunning() *Expect {
+	t.t.Helper()
+	// Wait for serving server deployment pods
+	timeout := 2 * time.Minute
+	if err := WaitForServingServerPodsRunning(t.kubeClient, Namespace, t.servingPipeline.Name, timeout); err != nil {
+		t.t.Fatalf("Expected serving server pods of %q running: %v", t.servingPipeline.Name, err)
+	}
+	// Wait for internal pipeline vertex pods (pipeline name is s-<serving-name>)
+	plName := t.servingPipeline.GetPipelineName()
+	for _, v := range t.servingPipeline.Spec.Pipeline.Vertices {
+		if err := WaitForVertexPodRunning(t.kubeClient, t.vertexClient, Namespace, plName, v.Name, timeout); err != nil {
+			t.t.Fatalf("Expected vertex %q pod running in serving pipeline: %v", v.Name, err)
 		}
 	}
 	return t
