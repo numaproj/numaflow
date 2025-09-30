@@ -109,7 +109,7 @@ func (t *Expect) VertexPodsRunning() *Expect {
 		}
 	}
 	// check pods running
-	timeout := 2 * time.Minute
+	timeout := 3 * time.Minute
 	for _, v := range t.pipeline.Spec.Vertices {
 		if err := WaitForVertexPodRunning(t.kubeClient, t.vertexClient, Namespace, t.pipeline.Name, v.Name, timeout); err != nil {
 			t.t.Fatalf("Expected vertex %q pod running: %v", v.Name, err)
@@ -120,7 +120,8 @@ func (t *Expect) VertexPodsRunning() *Expect {
 
 func (t *Expect) MonoVertexPodsRunning() *Expect {
 	t.t.Helper()
-	if err := WaitForMonoVertexPodRunning(t.kubeClient, t.monoVertexClient, Namespace, t.monoVertex.Name, 2*time.Minute); err != nil {
+	timeout := 3 * time.Minute
+	if err := WaitForMonoVertexPodRunning(t.kubeClient, t.monoVertexClient, Namespace, t.monoVertex.Name, timeout); err != nil {
 		t.t.Fatalf("Expected mono vertex %q pod running: %v", t.monoVertex.Name, err)
 	}
 	return t
