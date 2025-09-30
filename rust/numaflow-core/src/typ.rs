@@ -53,7 +53,6 @@ pub async fn build_redis_rate_limiter(
     let redis_mode = RedisMode::new(redis_store_config)
         .map_err(|e| Error::Config(format!("Failed to create Redis mode: {}", e)))?;
 
-    // TODO: read stale age from config
     let store = RedisStore::new(
         rate_limit_config.key_prefix,
         rate_limit_config.ttl,
@@ -117,6 +116,7 @@ pub async fn create_rate_limiter<S>(
 where
     S: numaflow_throttling::state::Store + Sync + 'static,
 {
+    // Determine rate-limiter mode based on configuration
     let mode = if rate_limit_config
         .modes
         .as_ref()

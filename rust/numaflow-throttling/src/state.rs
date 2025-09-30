@@ -35,6 +35,8 @@ pub struct RateLimiterState<S> {
     /// Cancellation token for background tasks
     cancel_token: CancellationToken,
     /// Previously utilized max tokens by the processor
+    /// TODO: Find a way to remove this as it is only being used to pass value from
+    /// internal store to RateLimit<W> struct during initialization.
     pub(super) prev_max_filled: Arc<f32>,
     store: S,
 }

@@ -41,13 +41,13 @@ redis.call('ZADD', poolsize_key, new_pool_size, ARGV[1])
 
 
 -- Step 2: Clean up prev_max_filled hash set based on TTL (STALE_AGE)
--- A processor is stale if its last heartbeat is older than the threshold
+-- A processor's prev_max_filled is stale if it was deregistered more than STALE_AGE seconds ago
 local stale_threshold = current_timestamp - STALE_AGE
 
 -- Find all members with a score (timestamp) older than the threshold
 local stale_members = redis.call('ZRANGEBYSCORE', prev_max_filled_ttl_key, '-inf', '(' .. stale_threshold)
 
--- If any stale members were found, remove them from both sorted sets
+-- If any stale members were found, remove them from both sets
 if #stale_members > 0 then
     -- The unpack function passes the table elements as individual arguments to ZREM
     redis.call('ZREM', prev_max_filled_ttl_key, unpack(stale_members))

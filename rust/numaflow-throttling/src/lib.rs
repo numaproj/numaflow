@@ -554,8 +554,10 @@ impl<S: Store> RateLimit<WithState<S>> {
         // the same second because race conditions among multiple processors initializing.
         tokio::time::sleep(Duration::from_secs(1)).await;
 
+        // If resume ramp up is enabled, use the max filled from the recently deregistered processor
+        // with same name, otherwise, use the min tokens
         let burst = if resume_ramp_up {
-            token_calc_bounds.min.max(*state.prev_max_filled as usize)
+            (*state.prev_max_filled as usize).clamp(token_calc_bounds.min, token_calc_bounds.max)
         } else {
             token_calc_bounds.min
         };
@@ -1541,7 +1543,9 @@ mod tests {
                     (None, 1),
                 ],
                 vec![7, 9, 0, 12, 14, 16, 18, 21, 23, 25, 27, 30],
-            ),
+            )
+            .resume_ramp_up(false)
+            .ttl(180),
             // Fractional slope (>1) with multiple pods
             // Acquire all tokens
             test_utils::TestCase::new(
