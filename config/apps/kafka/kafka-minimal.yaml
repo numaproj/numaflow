@@ -2,93 +2,63 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: zookeeper
+  name: kafka
 spec:
   ports:
-    - name: client
-      port: 2181
+    - name: kafka-client
+      port: 9092
   selector:
-    app: zookeeper
+    app: kafka
 
 ---
-kind: StatefulSet
 apiVersion: apps/v1
+kind: StatefulSet
 metadata:
-  name: zookeeper
+  name: kafka
 spec:
+  serviceName: kafka
+  replicas: 1
   selector:
     matchLabels:
-      app: zookeeper
+      app: kafka
   template:
     metadata:
       labels:
-        app: zookeeper
+        app: kafka
     spec:
       containers:
-        - name: main
-          image: bitnami/zookeeper
-          imagePullPolicy: IfNotPresent
-          ports:
-            - containerPort: 2181
-          env:
-            - name: ZOOKEEPER_ID
-              value: "1"
-            - name: ZOOKEEPER_SERVER_1
-              value: zoo
-            - name: ALLOW_ANONYMOUS_LOGIN
-              value: "yes"
-          readinessProbe:
-            tcpSocket:
-              port: 2181
-  serviceName: zookeeper
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: kafka-broker
-spec:
-  ports:
-    - port: 9092
-  selector:
-    app: kafka-broker
----
-kind: StatefulSet
-apiVersion: apps/v1
-metadata:
-  name: kafka-broker
-spec:
-  template:
-    metadata:
-      labels:
-        app: kafka-broker
-    spec:
-      containers:
-        - name: main
-          image: bitnami/kafka
+        - name: kafka
+          image: apache/kafka:3.7.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 9092
-          env:
-            - name: KAFKA_CFG_BROKER_ID
-              value: "0"
-            - name: KAFKA_CFG_ZOOKEEPER_CONNECT
-              value: zookeeper:2181
-            - name: KAFKA_CFG_LISTENERS
-              value: PLAINTEXT://:9092
-            - name: KAFKA_CFG_ADVERTISED_LISTENERS
-              value: PLAINTEXT://kafka-broker:9092
-            - name: ALLOW_PLAINTEXT_LISTENER
-              value: "yes"
-            - name: KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE
-              value: "true"
-            - name: KAFKA_CFG_DELETE_TOPIC_ENABLE
-              value: "true"
-            - name: KAFKA_CFG_NUM_PARTITIONS
-              value: "2"
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+
+              # Format storage for KRaft mode (idempotent with --ignore-formatted)
+              /opt/kafka/bin/kafka-storage.sh format \
+                --ignore-formatted \
+                --cluster-id test-cluster \
+                --config /opt/kafka/config/kraft/server.properties
+
+              # Start Kafka with overrides (single broker, controller local)
+              exec /opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/kraft/server.properties \
+                --override process.roles=broker,controller \
+                --override node.id=1 \
+                --override controller.quorum.voters=1@localhost:9093 \
+                --override listeners=PLAINTEXT://:9092,CONTROLLER://:9093 \
+                --override advertised.listeners=PLAINTEXT://kafka:9092 \
+                --override listener.security.protocol.map=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+                --override controller.listener.names=CONTROLLER \
+                --override inter.broker.listener.name=PLAINTEXT \
+                --override auto.create.topics.enable=true \
+                --override delete.topic.enable=true \
+                --override num.partitions=2
           readinessProbe:
             tcpSocket:
               port: 9092
-  selector:
-    matchLabels:
-      app: kafka-broker
-  serviceName: kafka-broker
+            initialDelaySeconds: 10
+            periodSeconds: 5

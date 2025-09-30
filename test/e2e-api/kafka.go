@@ -28,7 +28,7 @@ import (
 	"github.com/IBM/sarama"
 )
 
-const bootstrapServers = "kafka-broker:9092"
+const bootstrapServers = "kafka:9092"
 
 type KafkaController struct {
 	brokers     []string
