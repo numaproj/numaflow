@@ -4501,7 +4501,7 @@ mod tests {
             Some(store) => store,
             None => return, // Skip test if Redis is not available
         };
-        let refresh_interval = Duration::from_millis(100);
+        let refresh_interval = Duration::from_millis(1000);
         let runway_update = OptimisticValidityUpdateSecs::default();
 
         // Create a single distributed rate limiter
@@ -4575,7 +4575,7 @@ mod tests {
             Some(store) => store,
             None => return, // Skip test if Redis is not available
         };
-        let refresh_interval = Duration::from_millis(100);
+        let refresh_interval = Duration::from_millis(1000);
         let runway_update = OptimisticValidityUpdateSecs::default();
 
         // Create a single distributed rate limiter
@@ -4670,7 +4670,7 @@ mod tests {
             Some(store) => store,
             None => return, // Skip test if Redis is not available
         };
-        let refresh_interval = Duration::from_millis(100);
+        let refresh_interval = Duration::from_millis(1000);
         let runway_update = OptimisticValidityUpdateSecs::default();
 
         // Create a single distributed rate limiter
