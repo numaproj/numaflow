@@ -55,7 +55,12 @@ impl From<UserDefinedTransformerMessage<'_>> for Message {
                 .expect("event time should be present"),
             headers: value.1.headers.clone(),
             watermark: None,
-            metadata: value.1.metadata.clone(),
+            // TODO: remove this once backwards compatibility is not needed for metadata, because
+            // it cannot be none, since the sdks will always send the default value.
+            metadata: match value.0.metadata {
+                None => value.1.metadata.clone(),
+                Some(m) => Some(m.into()),
+            },
             is_late: value.1.is_late,
         }
     }
@@ -324,4 +329,6 @@ mod tests {
         let request: SourceTransformRequest = message.into();
         assert!(request.request.is_some());
     }
+
+    // TODO(ajain60): add unit test for metadata once rust sdk supports it
 }
