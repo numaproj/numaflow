@@ -1,7 +1,8 @@
 pub use crate::state::store::Store;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
@@ -39,7 +40,9 @@ pub struct RateLimiterState<S> {
     /// internal store to RateLimit<W> struct during initialization.
     pub(super) prev_max_filled: Arc<f32>,
     /// Handle to the background task updating the pool size
-    background_task: Arc<tokio::task::JoinHandle<()>>,
+    /// Arc to update the background task across tokio tasks
+    /// Mutex to ensure thread safety for the rlds object
+    background_task: Arc<Mutex<Option<JoinHandle<()>>>>,
     store: S,
 }
 
@@ -88,9 +91,8 @@ impl<S: Store> RateLimiterState<S> {
             cancel_token: cancel.clone(),
             prev_max_filled: Arc::new(prev_max_filled),
             store: s,
-            // This is a placeholder for the background task
-            // TODO: Is there a better way to initialize this?
-            background_task: Arc::new(tokio::spawn(async move {})),
+            // Placeholder for the background task
+            background_task: Arc::new(Mutex::new(None)),
         };
 
         // Spawn a background task to update the pool size
@@ -133,8 +135,8 @@ impl<S: Store> RateLimiterState<S> {
             })
         };
 
-        rlds.set_background_task(Arc::new(background_task_handle))
-            .await;
+        // Set the background task for the state
+        rlds.set_background_task(background_task_handle).await;
 
         Ok(rlds)
     }
@@ -212,7 +214,9 @@ impl<S: Store> RateLimiterState<S> {
 
     /// Shutdown the distributed state by deregistering from the store.
     pub(crate) async fn shutdown(&self, max_ever_filled: f32) -> crate::Result<()> {
-        self.background_task.abort();
+        if let Some(ref bt) = *self.background_task.lock().unwrap() {
+            bt.abort();
+        }
         // Deregister from the store
         self.store
             .deregister(
@@ -224,7 +228,8 @@ impl<S: Store> RateLimiterState<S> {
     }
 
     /// Set the background task for the state.
-    async fn set_background_task(&mut self, background_task: Arc<tokio::task::JoinHandle<()>>) {
-        self.background_task = background_task;
+    async fn set_background_task(&mut self, background_task: JoinHandle<()>) {
+        let mut bt = self.background_task.lock().unwrap();
+        *bt = Some(background_task);
     }
 }
