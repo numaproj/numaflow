@@ -984,9 +984,7 @@ mod tests {
                     }
                     StoreType::Redis => {
                         let store =
-                            match create_test_redis_store(temp_test_name.as_str(), 180)
-                                .await
-                            {
+                            match create_test_redis_store(temp_test_name.as_str(), 180).await {
                                 Some(store) => store,
                                 None => return, // Skip test if Redis is not available
                             };
