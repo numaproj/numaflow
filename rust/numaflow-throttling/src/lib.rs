@@ -801,12 +801,6 @@ mod tests {
             /// The throttling mode of the rate limiter
             /// defaults to Relaxed
             pub(super) mode: Mode,
-            /// Whether to resume ramp up or not
-            /// defaults to false
-            pub(super) resume_ramp_up: bool,
-            /// ttl for the rate limiter
-            /// defaults to 180 seconds
-            pub(super) ttl: usize,
         }
 
         impl TestCase {
@@ -833,8 +827,6 @@ mod tests {
                     test_name: String::new(),
                     mode: Mode::Relaxed,
                     deposited_tokens: vec![0; asked_tokens_len],
-                    resume_ramp_up: false,
-                    ttl: 180,
                 }
             }
 
@@ -855,16 +847,6 @@ mod tests {
 
             pub(super) fn deposited_tokens(mut self, deposited_tokens: Vec<usize>) -> Self {
                 self.deposited_tokens = deposited_tokens;
-                self
-            }
-
-            pub(super) fn resume_ramp_up(mut self, resume_ramp_up: bool) -> Self {
-                self.resume_ramp_up = resume_ramp_up;
-                self
-            }
-
-            pub(super) fn ttl(mut self, ttl: usize) -> Self {
-                self.ttl = ttl;
                 self
             }
         }
@@ -891,8 +873,6 @@ mod tests {
                 expected_tokens,
                 mode,
                 deposited_tokens,
-                resume_ramp_up,
-                ttl: _,
             } = test_case;
             let cancel = CancellationToken::new();
             let refresh_interval = Duration::from_millis(50);
@@ -917,7 +897,7 @@ mod tests {
                         cancel.clone(),
                         refresh_interval,
                         runway_update.clone(),
-                        resume_ramp_up,
+                        false,
                     )
                     .await
                     .expect("Failed to create rate limiters"),
@@ -999,12 +979,12 @@ mod tests {
                 // Necessary for redis store test cases.
                 match store_type {
                     StoreType::InMemory => {
-                        let store = InMemoryStore::new(test_case.ttl);
+                        let store = InMemoryStore::new(180);
                         test_rate_limiter_with_state(store, test_case).await;
                     }
                     StoreType::Redis => {
                         let store =
-                            match create_test_redis_store(temp_test_name.as_str(), test_case.ttl)
+                            match create_test_redis_store(temp_test_name.as_str(), 180)
                                 .await
                             {
                                 Some(store) => store,
@@ -1544,9 +1524,7 @@ mod tests {
                     (None, 1),
                 ],
                 vec![7, 9, 0, 12, 14, 16, 18, 21, 23, 25, 27, 30],
-            )
-            .resume_ramp_up(false)
-            .ttl(180),
+            ),
             // Fractional slope (>1) with multiple pods
             // Acquire all tokens
             test_utils::TestCase::new(
