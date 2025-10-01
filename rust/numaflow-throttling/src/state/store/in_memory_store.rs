@@ -72,20 +72,11 @@ impl InMemoryStore {
     /// Separate function for pruning stale prev_max_filled elements is introduced for separation of duties
     /// prev_max_filled is updated when a processor is deregistered, unlike heartbeats which are updated on every sync.
     fn prune_stale_prev_max_filled(inner: &mut ProcessorsTimeline, ttl: Duration) {
-        // Prevent unnecessary iteration if prev_max_filled is empty
-        if !inner.prev_max_filled.is_empty() {
-            let now = Instant::now();
-            let mut stale_ids = Vec::new();
+        let now = Instant::now();
 
-            for (id, &(last_heartbeat, _)) in &inner.prev_max_filled {
-                if now.duration_since(last_heartbeat) > ttl {
-                    stale_ids.push(id.clone());
-                }
-            }
-            for id in stale_ids {
-                inner.prev_max_filled.remove(&id);
-            }
-        }
+        inner
+            .prev_max_filled
+            .retain(|_, (last_heartbeat, _)| now.duration_since(*last_heartbeat) <= ttl);
     }
 
     /// Compute consensus using only active processors
