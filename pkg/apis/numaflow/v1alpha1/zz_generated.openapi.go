@@ -1408,6 +1408,7 @@ func schema_pkg_apis_numaflow_v1alpha1_ForwardConditions(ref common.ReferenceCal
 					"tags": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Tags used to specify tags for conditional forwarding",
+							Default:     map[string]interface{}{},
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TagConditions"),
 						},
 					},
