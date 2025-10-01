@@ -63,13 +63,6 @@ impl Default for OptimisticValidityUpdateSecs {
 }
 
 impl<S: Store> RateLimiterState<S> {
-    async fn set_background_task(
-        mut self,
-        background_task: Arc<tokio::task::JoinHandle<()>>,
-    ) -> Self {
-        self.background_task = background_task;
-        self
-    }
     pub(crate) async fn new(
         s: S,
         processor_id: &str,
@@ -107,6 +100,9 @@ impl<S: Store> RateLimiterState<S> {
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(refresh_interval);
                 loop {
+                    // The interval tick is where this background task yields.
+                    // Calling abort on the corresponding JoinHandle for this task
+                    // will cancel the task on next interval tick.
                     interval.tick().await;
 
                     // sent the desired pool size to converge faster even though we might
@@ -137,8 +133,7 @@ impl<S: Store> RateLimiterState<S> {
             })
         };
 
-        rlds = rlds
-            .set_background_task(Arc::new(background_task_handle))
+        rlds.set_background_task(Arc::new(background_task_handle))
             .await;
 
         Ok(rlds)
@@ -217,7 +212,7 @@ impl<S: Store> RateLimiterState<S> {
 
     /// Shutdown the distributed state by deregistering from the store.
     pub(crate) async fn shutdown(&self, max_ever_filled: f32) -> crate::Result<()> {
-        (&self.background_task).abort();
+        self.background_task.abort();
         // Deregister from the store
         self.store
             .deregister(
@@ -226,5 +221,10 @@ impl<S: Store> RateLimiterState<S> {
                 self.cancel_token.clone(),
             )
             .await
+    }
+
+    /// Set the background task for the state.
+    async fn set_background_task(&mut self, background_task: Arc<tokio::task::JoinHandle<()>>) {
+        self.background_task = background_task;
     }
 }
