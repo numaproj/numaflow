@@ -746,6 +746,7 @@ impl RateLimiter for NoOpRateLimiter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::store::in_memory_store::InMemoryStore;
     use std::time::SystemTime;
     use tokio::time::Duration;
 
@@ -2744,6 +2745,360 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_resume_throttling_in_memory() {
+        let cancel = CancellationToken::new();
+        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(10), Mode::Scheduled);
+        let ttl = 2;
+        let store = InMemoryStore::new(ttl);
+        let refresh_interval = Duration::from_millis(100);
+        let runway_update = OptimisticValidityUpdateSecs::default();
+
+        // Create a single distributed rate limiter
+        let rate_limiter = RateLimit::<WithState<InMemoryStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        // With a single pod, it should get the full burst allocation
+        let tokens = rate_limiter.attempt_acquire_n(None, 5).await;
+        assert_eq!(
+            tokens, 15,
+            "The single pod should get all the tokens in scheduled fashion"
+        );
+
+        rate_limiter.shutdown().await.unwrap();
+
+        let rate_limiter = RateLimit::<WithState<InMemoryStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        let tokens = rate_limiter.attempt_acquire_n(None, 0).await;
+        assert_eq!(
+            tokens, 15,
+            "The processor should start from where it left off"
+        );
+
+        rate_limiter.shutdown().await.unwrap();
+
+        // Clean up
+        cancel.cancel();
+    }
+
+    #[tokio::test]
+    async fn test_resume_throttling_expired_in_memory() {
+        let cancel = CancellationToken::new();
+        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(10), Mode::Scheduled);
+        let ttl = 1;
+        let store = InMemoryStore::new(ttl);
+        let refresh_interval = Duration::from_millis(100);
+        let runway_update = OptimisticValidityUpdateSecs::default();
+
+        // Create a single distributed rate limiter
+        let rate_limiter = RateLimit::<WithState<InMemoryStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        // With a single pod, it should get the full burst allocation
+        let tokens = rate_limiter.attempt_acquire_n(None, 5).await;
+        assert_eq!(
+            tokens, 15,
+            "The single pod should get all the tokens in scheduled fashion"
+        );
+
+        rate_limiter.shutdown().await.unwrap();
+
+        cancel.cancel();
+
+        let cancel = CancellationToken::new();
+
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+
+        let rate_limiter = RateLimit::<WithState<InMemoryStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        let tokens = rate_limiter.attempt_acquire_n(None, 0).await;
+        assert_eq!(
+            tokens, 10,
+            "The processor should start from min as the previous processor expired"
+        );
+
+        rate_limiter.shutdown().await.unwrap();
+
+        // Clean up
+        cancel.cancel();
+    }
+
+    #[tokio::test]
+    async fn test_resume_throttling_different_processors_in_memory() {
+        let cancel = CancellationToken::new();
+        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(10), Mode::Scheduled);
+        let ttl = 10;
+        let store = InMemoryStore::new(ttl);
+        let refresh_interval = Duration::from_millis(100);
+        let runway_update = OptimisticValidityUpdateSecs::default();
+
+        // Create a single distributed rate limiter
+        let rate_limiter1 = RateLimit::<WithState<InMemoryStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        let rate_limiter2 = RateLimit::<WithState<InMemoryStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_2",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        // With a single pod, it should get the full burst allocation
+        let tokens = rate_limiter1.attempt_acquire_n(None, 5).await;
+        assert_eq!(tokens, 7);
+        let tokens = rate_limiter2.attempt_acquire_n(None, 2).await;
+        assert_eq!(tokens, 6);
+
+        rate_limiter1.shutdown().await.unwrap();
+        rate_limiter2.shutdown().await.unwrap();
+
+        cancel.cancel();
+
+        let cancel = CancellationToken::new();
+
+        let rate_limiter1 = RateLimit::<WithState<InMemoryStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+        let rate_limiter2 = RateLimit::<WithState<InMemoryStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_2",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        let tokens = rate_limiter1.attempt_acquire_n(None, 0).await;
+        assert_eq!(tokens, 7);
+        let tokens = rate_limiter2.attempt_acquire_n(None, 0).await;
+        assert_eq!(tokens, 6);
+
+        rate_limiter1.shutdown().await.unwrap();
+        rate_limiter2.shutdown().await.unwrap();
+
+        // Clean up
+        cancel.cancel();
+    }
+
+    #[tokio::test]
+    async fn test_resume_throttling_different_processors_expire_in_memory() {
+        let cancel = CancellationToken::new();
+        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(10), Mode::Scheduled);
+        let ttl = 1;
+        let store = InMemoryStore::new(ttl);
+        let refresh_interval = Duration::from_millis(100);
+        let runway_update = OptimisticValidityUpdateSecs::default();
+
+        // Create a single distributed rate limiter
+        let rate_limiter1 = RateLimit::<WithState<InMemoryStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        let rate_limiter2 = RateLimit::<WithState<InMemoryStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_2",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        // With a single pod, it should get the full burst allocation
+        let tokens = rate_limiter1.attempt_acquire_n(None, 5).await;
+        assert_eq!(tokens, 7);
+        let tokens = rate_limiter2.attempt_acquire_n(None, 2).await;
+        assert_eq!(tokens, 6);
+
+        rate_limiter1.shutdown().await.unwrap();
+        rate_limiter2.shutdown().await.unwrap();
+
+        cancel.cancel();
+
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        let cancel = CancellationToken::new();
+
+        let rate_limiter1 = RateLimit::<WithState<InMemoryStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+        let rate_limiter2 = RateLimit::<WithState<InMemoryStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_2",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        let tokens = rate_limiter1.attempt_acquire_n(None, 0).await;
+        assert_eq!(tokens, 5);
+        let tokens = rate_limiter2.attempt_acquire_n(None, 0).await;
+        assert_eq!(tokens, 5);
+
+        rate_limiter1.shutdown().await.unwrap();
+        rate_limiter2.shutdown().await.unwrap();
+
+        // Clean up
+        cancel.cancel();
+    }
+
+    #[tokio::test]
+    async fn test_resume_throttling_different_processors_reboot_in_memory() {
+        let cancel = CancellationToken::new();
+        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(10), Mode::Scheduled);
+        let ttl = 10;
+        let store = InMemoryStore::new(ttl);
+        let refresh_interval = Duration::from_millis(100);
+        let runway_update = OptimisticValidityUpdateSecs::default();
+
+        // Create a single distributed rate limiter
+        let rate_limiter1 = RateLimit::<WithState<InMemoryStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        let rate_limiter2 = RateLimit::<WithState<InMemoryStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_2",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        // With a single pod, it should get the full burst allocation
+        let tokens = rate_limiter1.attempt_acquire_n(None, 5).await;
+        assert_eq!(tokens, 7);
+        let tokens = rate_limiter2.attempt_acquire_n(None, 2).await;
+        assert_eq!(tokens, 6);
+
+        rate_limiter1.shutdown().await.unwrap();
+        rate_limiter2.shutdown().await.unwrap();
+
+        // Cancel the CancellationToken to stop the sync loop otherwise state of previously
+        // registered processor will be used
+        cancel.cancel();
+
+        let cancel = CancellationToken::new();
+
+        let rate_limiter1 = RateLimit::<WithState<InMemoryStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        let tokens = rate_limiter1.attempt_acquire_n(None, 0).await;
+        // Since only rate_limiter1 is registered, it should get the full burst allocation as it
+        // continues from where it left off.
+        assert_eq!(tokens, 15);
+
+        rate_limiter1.shutdown().await.unwrap();
+
+        // Clean up
+        cancel.cancel();
+    }
+
+    #[tokio::test]
     #[cfg(feature = "redis-tests")]
     async fn test_distributed_rate_limiter_time_based_refill_redis() {
         use crate::state::OptimisticValidityUpdateSecs;
@@ -4082,5 +4437,427 @@ mod tests {
             .deposited_tokens(vec![5, 5, 5, 5, 5]),
         ];
         test_utils::run_distributed_rate_limiter_multiple_pods_test_cases(test_cases).await;
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "redis-tests")]
+    async fn test_resume_throttling_redis() {
+        use crate::state::store::redis_store::RedisStore;
+
+        let test_name = "test_resume_throttling_redis";
+        let cancel = CancellationToken::new();
+        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(10), Mode::Scheduled);
+        let ttl = 2;
+        // Create Redis store for testing
+        let store = match test_utils::create_test_redis_store(test_name, ttl).await {
+            Some(store) => store,
+            None => return, // Skip test if Redis is not available
+        };
+        let refresh_interval = Duration::from_millis(100);
+        let runway_update = OptimisticValidityUpdateSecs::default();
+
+        // Create a single distributed rate limiter
+        let rate_limiter = RateLimit::<WithState<RedisStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        // With a single pod, it should get the full burst allocation
+        let tokens = rate_limiter.attempt_acquire_n(None, 5).await;
+        assert_eq!(
+            tokens, 15,
+            "The single pod should get all the tokens in scheduled fashion"
+        );
+
+        rate_limiter.shutdown().await.unwrap();
+
+        // Cancel the CancellationToken to stop the sync loop otherwise state of previously
+        // registered processor will be used
+        cancel.cancel();
+
+        let cancel = CancellationToken::new();
+
+        let rate_limiter = RateLimit::<WithState<RedisStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        let tokens = rate_limiter.attempt_acquire_n(None, 0).await;
+        assert_eq!(
+            tokens, 15,
+            "The processor should start from where it left off"
+        );
+
+        rate_limiter.shutdown().await.unwrap();
+
+        // Clean up Redis keys
+        test_utils::cleanup_redis_keys(test_name);
+
+        // Clean up
+        cancel.cancel();
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "redis-tests")]
+    async fn test_resume_throttling_expired_redis() {
+        use crate::state::store::redis_store::RedisStore;
+
+        let test_name = "test_resume_throttling_expired_redis";
+        let cancel = CancellationToken::new();
+        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(10), Mode::Scheduled);
+        let ttl = 1;
+        // Create Redis store for testing
+        let store = match test_utils::create_test_redis_store(test_name, ttl).await {
+            Some(store) => store,
+            None => return, // Skip test if Redis is not available
+        };
+        let refresh_interval = Duration::from_millis(100);
+        let runway_update = OptimisticValidityUpdateSecs::default();
+
+        // Create a single distributed rate limiter
+        let rate_limiter = RateLimit::<WithState<RedisStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        // With a single pod, it should get the full burst allocation
+        let tokens = rate_limiter.attempt_acquire_n(None, 5).await;
+        assert_eq!(
+            tokens, 15,
+            "The single pod should get all the tokens in scheduled fashion"
+        );
+
+        rate_limiter.shutdown().await.unwrap();
+
+        // Cancel the CancellationToken to stop the sync loop otherwise state of previously
+        // registered processor will be used
+        cancel.cancel();
+
+        let cancel = CancellationToken::new();
+
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+
+        let rate_limiter = RateLimit::<WithState<RedisStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        let tokens = rate_limiter.attempt_acquire_n(None, 0).await;
+        assert_eq!(
+            tokens, 10,
+            "The processor should start from min as the previous processor expired"
+        );
+
+        rate_limiter.shutdown().await.unwrap();
+
+        // Clean up Redis keys
+        test_utils::cleanup_redis_keys(test_name);
+
+        // Clean up
+        cancel.cancel();
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "redis-tests")]
+    async fn test_resume_throttling_different_processors_redis() {
+        use crate::state::store::redis_store::RedisStore;
+
+        let test_name = "test_resume_throttling_different_processors_redis";
+        let cancel = CancellationToken::new();
+        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(10), Mode::Scheduled);
+        let ttl = 10;
+        // Create Redis store for testing
+        let store = match test_utils::create_test_redis_store(test_name, ttl).await {
+            Some(store) => store,
+            None => return, // Skip test if Redis is not available
+        };
+        let refresh_interval = Duration::from_millis(100);
+        let runway_update = OptimisticValidityUpdateSecs::default();
+
+        // Create a single distributed rate limiter
+        let rate_limiter1 = RateLimit::<WithState<RedisStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        let rate_limiter2 = RateLimit::<WithState<RedisStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_2",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        // With a single pod, it should get the full burst allocation
+        let tokens = rate_limiter1.attempt_acquire_n(None, 5).await;
+        assert_eq!(tokens, 7);
+        let tokens = rate_limiter2.attempt_acquire_n(None, 2).await;
+        assert_eq!(tokens, 6);
+
+        rate_limiter1.shutdown().await.unwrap();
+        rate_limiter2.shutdown().await.unwrap();
+
+        // Cancel the CancellationToken to stop the sync loop otherwise state of previously
+        // registered processor will be used
+        cancel.cancel();
+
+        let cancel = CancellationToken::new();
+
+        let rate_limiter1 = RateLimit::<WithState<RedisStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+        let rate_limiter2 = RateLimit::<WithState<RedisStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_2",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        let tokens = rate_limiter1.attempt_acquire_n(None, 0).await;
+        assert_eq!(tokens, 7);
+        let tokens = rate_limiter2.attempt_acquire_n(None, 0).await;
+        assert_eq!(tokens, 6);
+
+        rate_limiter1.shutdown().await.unwrap();
+        rate_limiter2.shutdown().await.unwrap();
+
+        // Clean up Redis keys
+        test_utils::cleanup_redis_keys(test_name);
+
+        // Clean up
+        cancel.cancel();
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "redis-tests")]
+    async fn test_resume_throttling_different_processors_expire_redis() {
+        use crate::state::store::redis_store::RedisStore;
+
+        let test_name = "test_resume_throttling_different_processors_expire_redis";
+        let cancel = CancellationToken::new();
+        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(10), Mode::Scheduled);
+        let ttl = 1;
+        // Create Redis store for testing
+        let store = match test_utils::create_test_redis_store(test_name, ttl).await {
+            Some(store) => store,
+            None => return, // Skip test if Redis is not available
+        };
+        let refresh_interval = Duration::from_millis(100);
+        let runway_update = OptimisticValidityUpdateSecs::default();
+
+        // Create a single distributed rate limiter
+        let rate_limiter1 = RateLimit::<WithState<RedisStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        let rate_limiter2 = RateLimit::<WithState<RedisStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_2",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        // With a single pod, it should get the full burst allocation
+        let tokens = rate_limiter1.attempt_acquire_n(None, 5).await;
+        assert_eq!(tokens, 7);
+        let tokens = rate_limiter2.attempt_acquire_n(None, 2).await;
+        assert_eq!(tokens, 6);
+
+        rate_limiter1.shutdown().await.unwrap();
+        rate_limiter2.shutdown().await.unwrap();
+
+        // Cancel the CancellationToken to stop the sync loop otherwise state of previously
+        // registered processor will be used
+        cancel.cancel();
+
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        let cancel = CancellationToken::new();
+
+        let rate_limiter1 = RateLimit::<WithState<RedisStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+        let rate_limiter2 = RateLimit::<WithState<RedisStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_2",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        let tokens = rate_limiter1.attempt_acquire_n(None, 0).await;
+        assert_eq!(tokens, 5);
+        let tokens = rate_limiter2.attempt_acquire_n(None, 0).await;
+        assert_eq!(tokens, 5);
+
+        rate_limiter1.shutdown().await.unwrap();
+        rate_limiter2.shutdown().await.unwrap();
+
+        // Clean up Redis keys
+        test_utils::cleanup_redis_keys(test_name);
+
+        // Clean up
+        cancel.cancel();
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "redis-tests")]
+    async fn test_resume_throttling_different_processors_reboot_redis() {
+        use crate::state::store::redis_store::RedisStore;
+
+        let test_name = "test_resume_throttling_different_processors_reboot_redis";
+        let cancel = CancellationToken::new();
+        let bounds = TokenCalcBounds::new(20, 10, Duration::from_secs(10), Mode::Scheduled);
+        let ttl = 10;
+        // Create Redis store for testing
+        let store = match test_utils::create_test_redis_store(test_name, ttl).await {
+            Some(store) => store,
+            None => return, // Skip test if Redis is not available
+        };
+        // Increase the refresh interval to avoid flakiness
+        let refresh_interval = Duration::from_millis(1000);
+        let runway_update = OptimisticValidityUpdateSecs::default();
+
+        // Create a single distributed rate limiter
+        let rate_limiter1 = RateLimit::<WithState<RedisStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        let rate_limiter2 = RateLimit::<WithState<RedisStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_2",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        // With a single pod, it should get the full burst allocation
+        let tokens = rate_limiter1.attempt_acquire_n(None, 5).await;
+        assert_eq!(tokens, 7);
+        let tokens = rate_limiter2.attempt_acquire_n(None, 2).await;
+        assert_eq!(tokens, 6);
+
+        rate_limiter1.shutdown().await.unwrap();
+        rate_limiter2.shutdown().await.unwrap();
+
+        // Cancel the CancellationToken to stop the sync loop otherwise state of previously
+        // registered processor will be used
+        cancel.cancel();
+
+        let cancel = CancellationToken::new();
+
+        let rate_limiter1 = RateLimit::<WithState<RedisStore>>::new(
+            bounds.clone(),
+            store.clone(),
+            "processor_1",
+            cancel.clone(),
+            refresh_interval,
+            runway_update.clone(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        let tokens = rate_limiter1.attempt_acquire_n(None, 0).await;
+        // Since only rate_limiter1 is registered, it should get the full burst allocation as it
+        // continues from where it left off.
+        assert_eq!(tokens, 15);
+
+        rate_limiter1.shutdown().await.unwrap();
+
+        // Clean up Redis keys
+        test_utils::cleanup_redis_keys(test_name);
+
+        // Clean up
+        cancel.cancel();
     }
 }
