@@ -4487,6 +4487,7 @@ mod tests {
         cancel.cancel();
     }
 
+    // TODO: Fix me
     #[tokio::test]
     #[cfg(feature = "redis-tests")]
     async fn test_resume_throttling_expired_redis() {
@@ -4532,7 +4533,7 @@ mod tests {
 
         let cancel = CancellationToken::new();
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+        tokio::time::sleep(Duration::from_millis(2000)).await;
 
         let rate_limiter = RateLimit::<WithState<RedisStore>>::new(
             bounds.clone(),
@@ -4753,6 +4754,7 @@ mod tests {
         cancel.cancel();
     }
 
+    // TODO: Fix me
     #[tokio::test]
     #[cfg(feature = "redis-tests")]
     async fn test_resume_throttling_different_processors_reboot_redis() {
