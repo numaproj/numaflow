@@ -63,7 +63,7 @@ impl Default for OptimisticValidityUpdateSecs {
 }
 
 impl<S: Store> RateLimiterState<S> {
-    async fn update_pool_size(mut self, background_task: Arc<tokio::task::JoinHandle<()>>) -> Self {
+    async fn set_background_task(mut self, background_task: Arc<tokio::task::JoinHandle<()>>) -> Self {
         self.background_task = background_task;
         self
     }
@@ -134,7 +134,7 @@ impl<S: Store> RateLimiterState<S> {
             })
         };
 
-        rlds = rlds.update_pool_size(Arc::new(background_task_handle)).await;
+        rlds = rlds.set_background_task(Arc::new(background_task_handle)).await;
 
         Ok(rlds)
     }
