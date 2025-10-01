@@ -38,6 +38,8 @@ pub struct RateLimiterState<S> {
     /// TODO: Find a way to remove this as it is only being used to pass value from
     /// internal store to RateLimit<W> struct during initialization.
     pub(super) prev_max_filled: Arc<f32>,
+    /// Handle to the background task updating the pool size
+    background_task: Arc<tokio::task::JoinHandle<()>>,
     store: S,
 }
 
@@ -61,6 +63,10 @@ impl Default for OptimisticValidityUpdateSecs {
 }
 
 impl<S: Store> RateLimiterState<S> {
+    async fn update_pool_size(mut self, background_task: Arc<tokio::task::JoinHandle<()>>) -> Self {
+        self.background_task = background_task;
+        self
+    }
     pub(crate) async fn new(
         s: S,
         processor_id: &str,
@@ -72,7 +78,7 @@ impl<S: Store> RateLimiterState<S> {
         let (pool_size, prev_max_filled) = s.register(processor_id, cancel.clone()).await?;
         let pool_size = Self::wait_for_consensus(&s, processor_id, pool_size, &cancel).await?;
 
-        let rlds = RateLimiterState {
+        let mut rlds = RateLimiterState {
             valid_till_epoch: Arc::new(AtomicU64::new(
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -86,10 +92,13 @@ impl<S: Store> RateLimiterState<S> {
             cancel_token: cancel.clone(),
             prev_max_filled: Arc::new(prev_max_filled),
             store: s,
+            // This is a placeholder for the background task
+            // TODO: Is there a better way to initialize this?
+            background_task: Arc::new(tokio::spawn(async move {})),
         };
 
         // Spawn a background task to update the pool size
-        {
+        let background_task_handle = {
             let processor_id = processor_id.to_string();
             let mut rlds = rlds.clone();
             tokio::spawn(async move {
@@ -122,8 +131,10 @@ impl<S: Store> RateLimiterState<S> {
                         break;
                     }
                 }
-            });
-        }
+            })
+        };
+
+        rlds = rlds.update_pool_size(Arc::new(background_task_handle)).await;
 
         Ok(rlds)
     }
@@ -201,6 +212,7 @@ impl<S: Store> RateLimiterState<S> {
 
     /// Shutdown the distributed state by deregistering from the store.
     pub(crate) async fn shutdown(&self, max_ever_filled: f32) -> crate::Result<()> {
+        (&self.background_task).abort();
         // Deregister from the store
         self.store
             .deregister(

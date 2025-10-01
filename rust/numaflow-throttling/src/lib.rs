@@ -4487,7 +4487,6 @@ mod tests {
         cancel.cancel();
     }
 
-    // TODO: Fix me
     #[tokio::test]
     #[cfg(feature = "redis-tests")]
     async fn test_resume_throttling_expired_redis() {
@@ -4502,7 +4501,7 @@ mod tests {
             Some(store) => store,
             None => return, // Skip test if Redis is not available
         };
-        let refresh_interval = Duration::from_millis(1000);
+        let refresh_interval = Duration::from_millis(100);
         let runway_update = OptimisticValidityUpdateSecs::default();
 
         // Create a single distributed rate limiter
@@ -4576,7 +4575,7 @@ mod tests {
             Some(store) => store,
             None => return, // Skip test if Redis is not available
         };
-        let refresh_interval = Duration::from_millis(1000);
+        let refresh_interval = Duration::from_millis(100);
         let runway_update = OptimisticValidityUpdateSecs::default();
 
         // Create a single distributed rate limiter
@@ -4671,7 +4670,7 @@ mod tests {
             Some(store) => store,
             None => return, // Skip test if Redis is not available
         };
-        let refresh_interval = Duration::from_millis(1000);
+        let refresh_interval = Duration::from_millis(100);
         let runway_update = OptimisticValidityUpdateSecs::default();
 
         // Create a single distributed rate limiter
@@ -4754,7 +4753,6 @@ mod tests {
         cancel.cancel();
     }
 
-    // TODO: Fix me
     #[tokio::test]
     #[cfg(feature = "redis-tests")]
     async fn test_resume_throttling_different_processors_reboot_redis() {
@@ -4770,7 +4768,7 @@ mod tests {
             None => return, // Skip test if Redis is not available
         };
         // Increase the refresh interval to avoid flakiness
-        let refresh_interval = Duration::from_millis(1000);
+        let refresh_interval = Duration::from_millis(100);
         let runway_update = OptimisticValidityUpdateSecs::default();
 
         // Create a single distributed rate limiter
