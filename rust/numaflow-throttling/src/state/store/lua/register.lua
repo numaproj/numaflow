@@ -58,7 +58,7 @@ end
 -- Check if there exists a prev_max_filled for the processor
 -- return that if it exists, otherwise return -1
 local stored_prev_max_filled = redis.call('HGET', pre_max_filled_key, ARGV[1])
-local prev_max_filled = -1
+local prev_max_filled = 0
 -- If the key doesn't exist, redis' nil gets converted to false in lua
 -- https://redis.io/docs/latest/develop/programmability/lua-api/#resp2-to-lua-type-conversion
 if stored_prev_max_filled ~= false then

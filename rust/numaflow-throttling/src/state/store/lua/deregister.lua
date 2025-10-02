@@ -10,6 +10,7 @@ KEYS array:
 
 ARGV array:
   ARGV[1] - The name of the processor (e.g., "processor-alpha-1")
+  ARGV[2] - The max_ever_filled value of the processor that is deregistering
 
 Returns:
   "OK" after successfully removing the processor from both ZSETs.

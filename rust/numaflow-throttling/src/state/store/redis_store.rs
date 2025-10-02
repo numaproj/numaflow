@@ -1145,10 +1145,10 @@ mod tests {
         // Wait for the stored max_filled to expire
         tokio::time::sleep(Duration::from_millis(2000)).await;
 
-        // Register processor_a again and check if max_filled is -1
+        // Register processor_a again and check if max_filled is 0
         let (_, prev_max_filled) = store.register("processor_a", cancel.clone()).await.unwrap();
 
-        assert_eq!(prev_max_filled, -1.0);
+        assert_eq!(prev_max_filled, 0.0);
         test_utils::cleanup_redis_keys(test_name);
     }
 }

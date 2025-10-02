@@ -10,6 +10,7 @@ ARGV array:
   ARGV[1] - The name of the processor (e.g., "processor-alpha-1")
   ARGV[2] - The current Unix timestamp (score for the heartbeat)
   ARGV[3] - The total known pool size (score for the pool size)
+  ARGV[4] - The stale age in seconds
 
 Returns:
   A table with three elements:
