@@ -284,15 +284,8 @@ Token utilization % = (1 - tokens left in token pool / total size of the token p
 ```yaml
 modes:
   onlyIfUsed:
-    thresholdPercentage: 50     # at least 50% of tokens should be used before token pool is increased
+    thresholdPercentage: 10     # at least 10% of tokens should be used before token pool is increased (default is 50)
 ```
-
-`onlyIfUsed` mode spec using defaults:
-```yaml
-modes:
-  onlyIfUsed: {}                # default thresholdPercentage: 50
-```
-
 #### Example
 
 For example, in the following chart, the token pool size ramp-up stalls whenever the token utilization % dips below 100%
@@ -359,13 +352,6 @@ modes:
     thresholdPercentage: 50     # at least 50% of tokens should be used before token pool is increased, otherwise decreased
     coolDownPeriod: "5s"        # After more than 5s of no calls to the rate limiter, the token pool size is reduced
     rampDownPercentage: 50      # The % of slope by which the token pool size is reduced 
-```
-
-`goBackN` mode spec using defaults:
-
-```yaml
-modes:
-  goBackN: {}     # above-mentioned values are default values for respective params
 ```
 
 #### Examples
