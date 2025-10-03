@@ -4576,7 +4576,7 @@ mod tests {
         // registered processor will be used
         cancel.cancel();
 
-        tokio::time::sleep(Duration::from_millis(1500)).await;
+        tokio::time::sleep(Duration::from_secs(2)).await;
 
         let cancel = CancellationToken::new();
 
