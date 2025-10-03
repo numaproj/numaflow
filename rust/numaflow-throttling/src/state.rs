@@ -74,8 +74,9 @@ impl<S: Store> RateLimiterState<S> {
         runway_update_len: OptimisticValidityUpdateSecs,
     ) -> crate::Result<Self> {
         // Register with the external store.
-        let (pool_size, prev_max_filled) = s.register(processor_id, cancel.clone()).await?;
-        let pool_size = Self::wait_for_consensus(&s, processor_id, pool_size, &cancel).await?;
+        let (initial_pool_size, prev_max_filled) = s.register(processor_id, cancel.clone()).await?;
+        let pool_size =
+            Self::wait_for_consensus(&s, processor_id, initial_pool_size, &cancel).await?;
 
         let mut rlds = RateLimiterState {
             valid_till_epoch: Arc::new(AtomicU64::new(
