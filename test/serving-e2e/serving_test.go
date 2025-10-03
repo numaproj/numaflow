@@ -68,7 +68,10 @@ func (ss *ServingSuite) TestServingSource() {
 		CreateServingPipelineAndWait()
 	defer w.DeleteServingPipelineAndWait()
 
-	// w.Expect().VertexPodsRunning()
+	w.Expect().ServingPodsRunning()
+
+	w.StreamServingPodLogs("numa")
+	defer w.TerminateAllPodLogs()
 
 	servingPipelineName := "serving-source"
 	serviceName := "serving-source-serving"

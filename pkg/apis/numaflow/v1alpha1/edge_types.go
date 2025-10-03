@@ -72,7 +72,7 @@ func (ce CombinedEdge) GetToVertexPartitionCount() int {
 
 type ForwardConditions struct {
 	// Tags used to specify tags for conditional forwarding
-	Tags *TagConditions `json:"tags" protobuf:"bytes,1,opt,name=tags"`
+	Tags TagConditions `json:"tags" protobuf:"bytes,1,req,name=tags"`
 }
 
 type LogicOperator string

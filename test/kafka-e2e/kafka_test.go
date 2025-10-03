@@ -54,7 +54,7 @@ func (ks *KafkaSuite) TestKafkaSourceSink() {
 					Name: "input",
 					Source: &dfv1.Source{
 						Kafka: &dfv1.KafkaSource{
-							Brokers:           []string{"kafka-broker:9092"},
+							Brokers:           []string{"kafka:9092"},
 							Topic:             inputTopic,
 							ConsumerGroupName: "test-group",
 						},
@@ -65,7 +65,7 @@ func (ks *KafkaSuite) TestKafkaSourceSink() {
 					Sink: &dfv1.Sink{
 						AbstractSink: dfv1.AbstractSink{
 							Kafka: &dfv1.KafkaSink{
-								Brokers: []string{"kafka-broker:9092"},
+								Brokers: []string{"kafka:9092"},
 								Topic:   outputTopic,
 							},
 						},
