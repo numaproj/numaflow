@@ -49,6 +49,8 @@ level.
 
 ## Throttling Modes
 
+The different throttling modes that the rate limiter can be configured with, allows the user the control the behaviour of the rate-limiter during/post ramp-up from min to max tokens. 
+
 |    Modes     |                                                                                                Description                                                                                                |                          Notes                          |
 |:------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:-------------------------------------------------------:|
 |  SCHEDULED   |                                                                   If we will release/increase tokens on a schedule even if it not used                                                                    | (least restrictive) This has side effects on the callee |   
@@ -60,11 +62,26 @@ level.
 Most unrestrictive mode amongst the available options.  
 The number of tokens available in the token pool are increased at a fixed rate irrespective of how many tokens are used or when are the tokens requested.
 
+#### Spec
+
+Scheduled full spec example:
+
+```yaml
+modes:
+  scheduled: {}
+```
+
+#### Examples
+
 Following chart shows how token pool is increased at a fixed rate irrespective of the token usage:
 
 ![Scheduled Mode](../../docs/assets/throttling/scheduled_mode.png)
 
 <details>
+
+<summary>
+Example datapoints
+</summary>
 
 |         Parameter          |                 Value                  |
 |:--------------------------:|:--------------------------------------:|
@@ -104,6 +121,9 @@ Following chart shows how token pool is increased at a fixed rate irrespective o
 ![Scheduled Mode](../../docs/assets/throttling/scheduled_mode_with_gaps.png)
 
 <details>
+<summary>
+Example datapoints
+</summary>
 
 |         Parameter          |                 Value                  |
 |:--------------------------:|:--------------------------------------:|
@@ -150,11 +170,23 @@ If there is some traffic, then release the max possible tokens
 When ramp-up is requested in this mode then the token pool size is “ramped-up” only when there is active traffic/actual calls are made to request additional tokens.
 If any calls are made to get additional tokens then the token pool size is increased irrespective of the token utilization in the previous epoch.
 
+Relaxed mode full spec example:
+
+```yaml
+modes:
+  relaxed: {}       # This is the default mode utilized when no mode is specified.
+```
+
+#### Examples
+
 For example, in the following chart, the token pool ramp-up looks similar to Scheduled mode ramp-up since calls are being made every epoch:
 
 ![Relaxed Mode](../../docs/assets/throttling/relaxed_mode.png)
 
 <details>
+<summary>
+Example datapoints
+</summary>
 
 |         Parameter          |                 Value                  |
 |:--------------------------:|:--------------------------------------:|
@@ -194,6 +226,9 @@ But, in the following example, the token pool ramp-up is stalled if no calls are
 ![Relaxed Mode with gaps](../../docs/assets/throttling/relaxed_mode_with_gaps.png)
 
 <details>
+<summary>
+Example datapoints
+</summary>
 
 |         Parameter          |                 Value                  |
 |:--------------------------:|:--------------------------------------:|
@@ -243,11 +278,31 @@ but its size also stalls when the token utilization is less than the user specif
 The token utilization is calculated using the number of tokens left over in the token pool vs the total size of the token pool:
 Token utilization % = (1 - tokens left in token pool / total size of the token pool) * 100
 
+#### Spec
+
+`onlyIfUsed` mode full spec example:
+```yaml
+modes:
+  onlyIfUsed:
+    thresholdPercentage: 50     # at least 50% of tokens should be used before token pool is increased
+```
+
+`onlyIfUsed` mode spec using defaults:
+```yaml
+modes:
+  onlyIfUsed: {}                # default thresholdPercentage: 50
+```
+
+#### Example
+
 For example, in the following chart, the token pool size ramp-up stalls whenever the token utilization % dips below 100%
 
 ![OnlyIfUsed Mode](../../docs/assets/throttling/only_if_used_mode.png)
 
 <details>
+<summary>
+Example datapoints
+</summary>
 
 |         Parameter          |                 Value                  |
 |:--------------------------:|:--------------------------------------:|
@@ -294,12 +349,36 @@ So, similar to OnlyIfUsed mode, if the token utilization % is greater than the u
 pool size increases by slope as usual, but if it falls below the user specified threshold %, then the token pool size is 
 decreased by slope in the next epoch:
 
+#### Spec
+
+`goBackN` mode full spec example:
+
+```yaml
+modes:
+  goBackN:
+    thresholdPercentage: 50     # at least 50% of tokens should be used before token pool is increased, otherwise decreased
+    coolDownPeriod: "5s"        # After more than 5s of no calls to the rate limiter, the token pool size is reduced
+    rampDownPercentage: 50      # The % of slope by which the token pool size is reduced 
+```
+
+`goBackN` mode spec using defaults:
+
+```yaml
+modes:
+  goBackN: {}     # above-mentioned values are default values for respective params
+```
+
+#### Examples
+
 For example, in the following chart, we’re taking the user specified threshold as 100%, so any time the token utilization
 falls below 100%, the token pool size is reduced in the next epoch:
 
 ![GoBackN Mode](../../docs/assets/throttling/go_back_n_mode.png)
 
 <details>
+<summary>
+Example datapoints
+</summary>
 
 |         Parameter          |                 Value                  |
 |:--------------------------:|:--------------------------------------:|
@@ -335,8 +414,8 @@ falls below 100%, the token pool size is reduced in the next epoch:
 
 </details>
 
-Furthermore, if there are gaps in calls being made to the rate-limiter, i.e., if there is a delay between subsequent c
-alls being made to the rate-limiter then the token pool size is reduced by slope amount for every subsequent epoch second
+Furthermore, if there are gaps in calls being made to the rate-limiter, i.e., if there is a delay between subsequent 
+calls being made to the rate-limiter then the token pool size is reduced by slope amount for every subsequent epoch second
 that was missed.
 
 In the following example, the calls stopped being made around t=18 and resumed at t=20. The time for which we missed 
@@ -345,6 +424,9 @@ making these calls, the token pool size was reduced.
 ![GoBackN Mode with gaps](../../docs/assets/throttling/go_back_n_with_gaps.png)
 
 <details>
+<summary>
+Example datapoints
+</summary>
 
 |         Parameter          |                 Value                  |
 |:--------------------------:|:--------------------------------------:|
@@ -386,29 +468,55 @@ making these calls, the token pool size was reduced.
 
 </details>
 
-## Token Deposit Logic
+## Immediate ramp up during re-deployments
 
-Whenever a caller/processor requests for the number of messages they’re allowed to read, we want to keep track of whether
-they were successfully able to read the messages they were greenlit to read. The messages/tokens that were not read/not 
-used should be returned back to the rate limiter so that the rate limiter can accurately keep track of the token 
-utilization of each processor against the total token pool size.
+This is a toggleable feature that allows a pipeline that is using the rate limiter for controlled ramp-up and has already 
+ramped-up from the min to max tokens to immediately ramp up to max tokens when a re-deployment is triggered instead of 
+restarting from min tokens again. 
 
-Tracking the token utilization allows the rate limiter to determine whether it should expand or contract the total token 
-pool size based on the rate limiting mode chosen.
+Scenario:
+* Pipeline has a large ramp-up duration and a wide gap between the min and max tokens.
+* The pipeline is in steady state with current throughput at max tokens.
+* A re-deployment is triggered/pods are rotated.
+* With `resumedRampUp` disabled, the pipeline will ramp up from min tokens again, and we'll have to wait until 
+  the pipeline ramps-up to max tokens.
+* With `resumedRampUp` enabled, the pipeline will directly restart from max tokens if the disruption is brief (< TTL)
 
-Usage:
-- Primarily used for OnlyIfUsed and GoBackN modes
-- After token acquisition from token bucket:
-    - Keep track of how many messages were successfully read. Count these as used tokens
-    - Deposit any unused tokens back to the token bucket.
-    - Used to calculate the token utilization percentage of the processor at any given epoch, i.e., `(1 - tokens left in bucket/Total token bucket capacity) * 100`
-- During token bucket refill:
-    - OnlyIfUsed Mode:
-        - If the token utilization is less than the user specified threshold then, during ramp-up phase, do not increase 
-        - the token bucket size for the next epoch.
-    - GoBackN Mode:
-        - If the token utilization is less than the user specified threshold then, during ramp-up phase, decrease the size of the token bucket.
+#### Spec
 
+```yaml
+rateLimit:
+  resumedRampUp: false      # By default resumedRampUp is disabled
+  ttl: "180s"               # The default ttl is 180s. This is the time within which, if the pipeline restarts, it will be considered as a re-deployment and 
+                            # the pipeline will resume where it left off in case resumedRampUp is enabled.
+```
+
+
+<details> 
+<summary>
+
+#### Examples
+
+</summary>
+
+* With `resumedRampUp` disabled, the pipeline ramps up from min tokens again, after brief re-deployment, and we'll have 
+to wait until ramp-up duration reach max-tokens again. 
+![Without Resume](../../docs/assets/throttling/WithoutResumePrometheusMetric.png)
+
+
+* With `resumedRampUp` enabled, the pipeline resumes from max tokens if the re-deployment is brief (< TTL). 
+![WithResume](../../docs/assets/throttling/WthResumePrometheusMetric.png)
+
+
+* But even with `resumedRampUp` enabled, the pipeline ramps up from min tokens again if the re-deployment is not brief (>= TTL). 
+![With Resume > TTL](../../docs/assets/throttling/WithResumeTTLGap.png)
+
+
+</details>
+
+
+
+---
 
 # Design Details
 
@@ -482,6 +590,31 @@ flowchart TD
     Q --> R[Wait for next sync cycle]
     R --> C
 ```
+
+## Token Deposit Logic
+
+Whenever a caller/processor requests for the number of messages they’re allowed to read, we want to keep track of whether
+they were successfully able to read the messages they were greenlit to read. The messages/tokens that were not read/not
+used should be returned back to the rate limiter so that the rate limiter can accurately keep track of the token
+utilization of each processor against the total token pool size.
+
+Tracking the token utilization allows the rate limiter to determine whether it should expand or contract the total token
+pool size based on the rate limiting mode chosen.
+
+Usage:
+- Primarily used for OnlyIfUsed and GoBackN modes
+- After token acquisition from token bucket:
+    - Keep track of how many messages were successfully read. Count these as used tokens
+    - Deposit any unused tokens back to the token bucket.
+    - Used to calculate the token utilization percentage of the processor at any given epoch, i.e., `(1 - tokens left in bucket/Total token bucket capacity) * 100`
+- During token bucket refill:
+    - OnlyIfUsed Mode:
+        - If the token utilization is less than the user specified threshold then, during ramp-up phase, do not increase
+        - the token bucket size for the next epoch.
+    - GoBackN Mode:
+        - If the token utilization is less than the user specified threshold then, during ramp-up phase, decrease the size of the token bucket.
+
+
 
 ## Autoscaling
 
