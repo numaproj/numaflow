@@ -5,8 +5,8 @@ use crate::state::Consensus;
 use crate::state::store::Store;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -52,7 +52,9 @@ impl InMemoryStore {
     }
 
     /// Remove stale processors based on heartbeat TTL
-    fn prune_stale(inner: &mut ProcessorsTimeline, ttl: Duration) {
+    fn prune_stale(&self, ttl: Duration) {
+        let mut inner = self.inner.lock().expect("Thread panicked waiting for lock");
+
         let now = Instant::now();
         let mut stale_ids = Vec::new();
 
@@ -71,8 +73,9 @@ impl InMemoryStore {
     /// Remove stale processors based on prev_max_filled TTL
     /// Separate function for pruning stale prev_max_filled elements is introduced for separation of duties
     /// prev_max_filled is updated when a processor is deregistered, unlike heartbeats which are updated on every sync.
-    fn prune_stale_prev_max_filled(inner: &mut ProcessorsTimeline, ttl: Duration) {
+    fn prune_stale_prev_max_filled(&self, ttl: Duration) {
         let now = Instant::now();
+        let mut inner = self.inner.lock().expect("Thread panicked waiting for lock");
 
         inner
             .prev_max_filled
@@ -82,6 +85,7 @@ impl InMemoryStore {
     /// Compute consensus using only active processors
     fn compute_consensus(inner: &ProcessorsTimeline) -> Consensus {
         let active_count = inner.heartbeats.len();
+
         if active_count == 0 {
             return Consensus::Disagree(0);
         }
@@ -120,9 +124,11 @@ impl Store for InMemoryStore {
     ) -> crate::Result<(usize, f32)> {
         info!("Registering processor: {processor_id}");
 
-        let mut inner = self.inner.lock().await;
-        Self::prune_stale(&mut inner, self.stale_age);
-        Self::prune_stale_prev_max_filled(&mut inner, self.stale_age);
+        // Prune before registering to prevent deadlock
+        self.prune_stale(self.stale_age);
+        self.prune_stale_prev_max_filled(self.stale_age);
+
+        let mut inner = self.inner.lock().expect("Thread panicked waiting for lock");
         inner
             .heartbeats
             .insert(processor_id.to_string(), Instant::now());
@@ -152,7 +158,7 @@ impl Store for InMemoryStore {
     ) -> crate::Result<()> {
         info!("Deregistering processor: {processor_id}");
 
-        let mut inner = self.inner.lock().await;
+        let mut inner = self.inner.lock().expect("Thread panicked waiting for lock");
         inner.heartbeats.remove(processor_id);
         inner.reported_pool.remove(processor_id);
         inner
@@ -173,7 +179,12 @@ impl Store for InMemoryStore {
             return Err(crate::Error::Cancellation);
         }
 
-        let mut inner = self.inner.lock().await;
+        // Prune stale processors and compute consensus among active ones
+        // Prune before updating to prevent deadlock
+        self.prune_stale(self.stale_age);
+        self.prune_stale_prev_max_filled(self.stale_age);
+
+        let mut inner = self.inner.lock().expect("Thread panicked waiting for lock");
 
         // Update heartbeat and reported pool for this processor
         inner
@@ -184,10 +195,6 @@ impl Store for InMemoryStore {
         inner
             .reported_pool
             .insert(processor_id.to_string(), pool_size);
-
-        // Prune stale processors and compute consensus among active ones
-        Self::prune_stale(&mut inner, self.stale_age);
-        Self::prune_stale_prev_max_filled(&mut inner, self.stale_age);
 
         Ok(Self::compute_consensus(&inner))
     }

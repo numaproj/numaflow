@@ -215,6 +215,10 @@ impl<S: Store> RateLimiterState<S> {
 
     /// Shutdown the distributed state by deregistering from the store.
     pub(crate) async fn shutdown(&self, max_ever_filled: f32) -> crate::Result<()> {
+        // Abort the background task
+        // Note: The mutex held here is the std::sync::Mutex, and it is ok to
+        // hold it here before the store deregistration (await call) since the mutexGuard will be
+        // dropped by compiler before the await call, as bt is not used after this point.
         if let Some(ref bt) = *self.background_task.lock().unwrap() {
             bt.abort();
         }
