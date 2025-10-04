@@ -53,9 +53,13 @@ pub async fn build_redis_rate_limiter(
     let redis_mode = RedisMode::new(redis_store_config)
         .map_err(|e| Error::Config(format!("Failed to create Redis mode: {}", e)))?;
 
-    let store = RedisStore::new(rate_limit_config.key_prefix, redis_mode)
-        .await
-        .map_err(|e| Error::Config(format!("Failed to create Redis store: {}", e)))?;
+    let store = RedisStore::new(
+        rate_limit_config.key_prefix,
+        rate_limit_config.ttl,
+        redis_mode,
+    )
+    .await
+    .map_err(|e| Error::Config(format!("Failed to create Redis store: {}", e)))?;
 
     let limiter = create_rate_limiter(rate_limit_config, store, cln_token).await?;
     Ok(limiter)
@@ -78,7 +82,7 @@ pub async fn build_in_memory_rate_limiter(
     cln_token: CancellationToken,
 ) -> Result<RateLimit<WithState<InMemoryStore>>> {
     // Create in-memory store
-    let store = InMemoryStore::new();
+    let store = InMemoryStore::new(rate_limit_config.ttl);
     let limiter = create_rate_limiter(rate_limit_config, store, cln_token).await?;
     Ok(limiter)
 }
@@ -112,6 +116,7 @@ pub async fn create_rate_limiter<S>(
 where
     S: numaflow_throttling::state::Store + Sync + 'static,
 {
+    // Determine rate-limiter mode based on configuration
     let mode = if rate_limit_config
         .modes
         .as_ref()
@@ -194,6 +199,7 @@ where
         cancel_token,
         refresh_interval,
         runway_update,
+        rate_limit_config.resume,
     )
     .await
     .map_err(|e| Error::Config(format!("Failed to create rate limiter: {}", e)))
