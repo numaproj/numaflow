@@ -9,8 +9,9 @@ pub mod redis_store;
 #[trait_variant::make(Send)]
 pub trait Store: Clone + 'static {
     /// Register the consumer with the external store. It increments the pool size by 1, and returns
-    /// the initial pool size, consensus cannot be reached during registration.
-    /// TODO: Shall the return be changed to a struct?
+    /// the initial pool size, and the max_filled from the previous processor with the same name
+    /// if it exists.
+    /// Consensus cannot be reached during registration.
     async fn register(
         &self,
         processor_id: &str,
