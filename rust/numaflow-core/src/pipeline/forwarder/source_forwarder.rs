@@ -231,6 +231,7 @@ mod tests {
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
     use chrono::Utc;
+    use numaflow::shared::ServerExtras;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{source, sourcetransform};
     use numaflow_pb::clients::source::source_client::SourceClient;

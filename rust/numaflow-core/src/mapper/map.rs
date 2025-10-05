@@ -663,6 +663,7 @@ impl MapHandle {
 mod tests {
     use std::time::Duration;
 
+    use numaflow::shared::ServerExtras;
     use numaflow::{batchmap, map, mapstream};
     use numaflow_pb::clients::map::map_client::MapClient;
     use tempfile::TempDir;

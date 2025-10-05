@@ -528,6 +528,7 @@ mod tests {
 
     use numaflow::batchmap::Server;
     use numaflow::mapstream;
+    use numaflow::shared::ServerExtras;
     use numaflow::{batchmap, map};
     use numaflow_pb::clients::map::map_client::MapClient;
     use tempfile::TempDir;

@@ -273,6 +273,7 @@ mod tests {
 
     use chrono::{TimeZone, Utc};
     use numaflow::reduce;
+    use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
     use tempfile::TempDir;
     use tokio::sync::mpsc;
