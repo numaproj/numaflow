@@ -406,6 +406,7 @@ impl LagReader for UserDefinedSourceLagReader {
 #[cfg(test)]
 mod tests {
     use chrono::{TimeZone, Utc};
+    use numaflow::shared::ServerExtras;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;

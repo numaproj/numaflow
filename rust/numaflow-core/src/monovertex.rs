@@ -151,6 +151,7 @@ async fn start<C: crate::typ::NumaflowTypeConfig>(
 
 #[cfg(test)]
 mod tests {
+    use numaflow::shared::ServerExtras;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source};
     use tokio::sync::mpsc::Sender;

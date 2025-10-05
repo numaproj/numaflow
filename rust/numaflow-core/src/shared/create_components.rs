@@ -793,6 +793,7 @@ pub async fn create_edge_watermark_handle(
 mod tests {
     use std::time::Duration;
 
+    use numaflow::shared::ServerExtras;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
     use numaflow_pb::clients::sink::sink_client::SinkClient;

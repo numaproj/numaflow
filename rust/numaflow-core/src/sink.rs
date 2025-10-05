@@ -1100,6 +1100,7 @@ mod tests {
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
     use chrono::{TimeZone, Utc};
+    use numaflow::shared::ServerExtras;
     use numaflow::sink;
     use numaflow_pb::clients::sink::{SinkRequest, SinkResponse};
     use std::sync::Arc;

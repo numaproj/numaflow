@@ -158,6 +158,7 @@ mod tests {
     use std::sync::Arc;
 
     use chrono::offset::Utc;
+    use numaflow::shared::ServerExtras;
     use numaflow::sink;
     use tokio::sync::mpsc;
     use tracing::info;

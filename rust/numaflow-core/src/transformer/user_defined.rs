@@ -215,6 +215,7 @@ mod tests {
     use std::time::Duration;
 
     use chrono::{TimeZone, Utc};
+    use numaflow::shared::ServerExtras;
     use numaflow::sourcetransform;
     use tempfile::TempDir;
 
