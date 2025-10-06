@@ -6252,6 +6252,21 @@ Lifecycle defines the Lifecycle properties of a MonoVertex
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>udf</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
+UDF </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -6745,6 +6760,21 @@ MonoVertexLifecycle </a> </em>
 Lifecycle defines the Lifecycle properties of a MonoVertex
 </p>
 
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>udf</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
+UDF </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -13078,7 +13108,8 @@ UDF
 <p>
 
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>)
 </p>
 
 <p>

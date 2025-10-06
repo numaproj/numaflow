@@ -1076,6 +1076,9 @@ message MonoVertexSpec {
   // +kubebuilder:default={"desiredPhase": Running}
   // +optional
   optional MonoVertexLifecycle lifecycle = 13;
+
+  // +optional
+  optional UDF udf = 14;
 }
 
 message MonoVertexStatus {

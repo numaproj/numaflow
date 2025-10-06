@@ -1627,6 +1627,11 @@ func (in *MonoVertexSpec) DeepCopyInto(out *MonoVertexSpec) {
 	}
 	in.UpdateStrategy.DeepCopyInto(&out.UpdateStrategy)
 	out.Lifecycle = in.Lifecycle
+	if in.UDF != nil {
+		in, out := &in.UDF, &out.UDF
+		*out = new(UDF)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 

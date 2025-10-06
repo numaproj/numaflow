@@ -514,6 +514,8 @@ type MonoVertexSpec struct {
 	// +kubebuilder:default={"desiredPhase": Running}
 	// +optional
 	Lifecycle MonoVertexLifecycle `json:"lifecycle,omitempty" protobuf:"bytes,13,opt,name=lifecycle"`
+	// +optional
+	UDF *UDF `json:"udf,omitempty" protobuf:"bytes,14,opt,name=udf"`
 }
 
 func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {

@@ -4,6 +4,7 @@ use tracing::info;
 use crate::config::is_mono_vertex;
 use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self};
+use crate::mapper::map::MapHandle;
 use crate::metrics::{LagReader, PendingReaderTasks};
 use crate::shared::create_components;
 use crate::sink::SinkWriter;
@@ -81,6 +82,21 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
     )
     .await?;
 
+    let mapper = if let Some(map_config) = &config.map_config {
+        create_components::create_mapper(
+            config.batch_size,
+            config.read_timeout,
+            config.graceful_shutdown_time,
+            map_config.clone(),
+            tracker_handle.clone(),
+            cln_token.clone(),
+        )
+        .await
+        .ok()
+    } else {
+        None
+    };
+
     let sink_writer = create_components::create_sink_writer(
         config.batch_size,
         config.read_timeout,
@@ -111,7 +127,7 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
         shared::metrics::start_metrics_server::<C>(config.metrics_config.clone(), metrics_state)
             .await;
 
-    start::<C>(config.clone(), source, sink_writer, cln_token).await?;
+    start::<C>(config.clone(), source, mapper, sink_writer, cln_token).await?;
 
     // abort the metrics server
     metrics_server_handle.abort();
@@ -121,6 +137,7 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
 async fn start<C: crate::typ::NumaflowTypeConfig>(
     mvtx_config: MonovertexConfig,
     source: Source<C>,
+    mapper: Option<MapHandle>,
     sink: SinkWriter,
     cln_token: CancellationToken,
 ) -> error::Result<()> {
@@ -139,7 +156,7 @@ async fn start<C: crate::typ::NumaflowTypeConfig>(
         None
     };
 
-    let forwarder = forwarder::Forwarder::<C>::new(source, sink);
+    let forwarder = forwarder::Forwarder::<C>::new(source, mapper, sink);
 
     info!("Forwarder is starting...");
     // start the forwarder, it will return only on Signal
