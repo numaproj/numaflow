@@ -2478,6 +2478,20 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    Overview
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scale-subresource" class="md-nav__link">
+    Scale Subresource
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#numaflow-autoscaling" class="md-nav__link">
     Numaflow Autoscaling
   </a>
@@ -2660,6 +2674,20 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    Overview
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scale-subresource" class="md-nav__link">
+    Scale Subresource
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#numaflow-autoscaling" class="md-nav__link">
     Numaflow Autoscaling
   </a>
@@ -2713,43 +2741,104 @@
 
 
 <h1 id="autoscaling">Autoscaling<a class="headerlink" href="#autoscaling" title="Permanent link">&para;</a></h1>
-<p><a href="https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#scale-subresource">Scale Subresource</a> is enabled in <code>Vertex</code> <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Custom Resource</a>, which makes it possible to scale vertex pods. To be specifically, it is enabled by adding following comments to <code>Vertex</code> struct model, and then corresponding CRD definition is automatically generated.</p>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>Numaflow developed its own dedicated autoscaling mechanism because the native
+Kubernetes Horizontal Pod Autoscaler (HPA) is fundamentally suitable for
+event-driven stream processing.</p>
+<p>The need for a specialized solution stems from three core limitations of HPA:</p>
+<ul>
+<li>
+<p><strong>Metric Mismatch</strong>: HPA scales based on generic resource consumption like CPU
+  and memory utilization. In a streaming pipeline, the true measure of load is
+  the number of unprocessed messages (queue depth). A low CPU reading might just
+  mean a pod is waiting for data, and a high CPU reading doesn't tell you
+  whether the next stage can handle the output. We need a scaling mechanism that
+  correctly scales based on the actual backlog of work.</p>
+</li>
+<li>
+<p><strong>Lack of Pipeline Awareness</strong>: Unlike HPA, we need a holistic,
+  backpressure-aware solution. It doesn't just look at a single queue depth; it
+  analyzes the status of the entire pipeline. This is crucial for preventing
+  cascading failures by throttling upstream stages when downstream components
+  are overwhelmed, ensuring resilient and efficient data flow.</p>
+</li>
+<li>
+<p><strong>Architectural Independence</strong>: To enable fast, accurate, and self-sufficient
+  scaling, the autoscaler should not rely on external infrastructure like
+  Prometheus or the Kubernetes Metrics Server. We need a solution that gathers
+  all necessary data internally, providing immediate access to metrics and
+  simplifying operations.</p>
+</li>
+</ul>
+<p>By addressing these issues, Numaflow's autoscaler provides a scaling strategy
+that is precise, cost-efficient, and natively designed for the dynamics of
+real-time event streams.</p>
+<h2 id="scale-subresource">Scale Subresource<a class="headerlink" href="#scale-subresource" title="Permanent link">&para;</a></h2>
+<p><a href="https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#scale-subresource">Scale Subresource</a>
+is enabled in <code>Vertex</code>
+<a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Custom Resource</a>,
+which makes it possible to scale vertex pods. To be specifically, it is enabled
+by adding following comments to <code>Vertex</code> struct model, and then corresponding
+CRD definition is automatically generated.</p>
 <div class="highlight"><pre><span></span><code>// +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 </code></pre></div>
 <p>Pods management is done by vertex controller.</p>
 <p><img alt="Vertex Controller Reconciliation Loop" src="../../assets/vertex_controller_loop.png" /></p>
-<p>With <code>scale</code> subresource implemented, <code>vertex</code> object can be scaled by either horizontal or vertical pod autoscaling.</p>
+<p>With <code>scale</code> subresource implemented, <code>vertex</code> object can be scaled by either
+horizontal or vertical pod autoscaling.</p>
+<p>Similar capability is implemented for <code>MonoVertex</code>.</p>
 <h2 id="numaflow-autoscaling">Numaflow Autoscaling<a class="headerlink" href="#numaflow-autoscaling" title="Permanent link">&para;</a></h2>
-<p>The out of box Numaflow autoscaling is done by a <code>scaling</code> component running in the controller manager, you can find the source code <a href="https://github.com/numaproj/numaflow/tree/main/pkg/reconciler/vertex/scaling">here</a>. The autoscaling strategy is implemented according to different type of vertices.</p>
+<p>The out of box Numaflow autoscaling is done by a <code>scaling</code> component running in
+the controller manager, you can find the source code
+<a href="https://github.com/numaproj/numaflow/tree/main/pkg/reconciler/vertex/scaling">here</a>.
+The autoscaling strategy is implemented according to different type of vertices.</p>
 <h2 id="source-vertices">Source Vertices<a class="headerlink" href="#source-vertices" title="Permanent link">&para;</a></h2>
-<p>For source vertices, we define a target processing time (in seconds) to finish processing the pending messages based on the processing rate (tps) of the vertex.</p>
+<p>For source vertices, we define a target processing time (in seconds) to finish
+processing the pending messages based on the processing rate (tps) of the
+vertex.</p>
 <div class="highlight"><pre><span></span><code>  targetProcessingRate = pendingMessages / targetProcessingSeconds
   singlePodProcessingRate = currentProcessingRate / currentReplicas
   desiredReplicas =  targetProcessingRate / singlePodProcessingRate
 </code></pre></div>
-<p>For example, if <code>targetProcessingSeconds</code> is 3, current replica number is <code>2</code>, current <code>tps</code> is 10000/second, and the pending messages is 60000, so we calculate the desired replica number as following:</p>
+<p>For example, if <code>targetProcessingSeconds</code> is 3, current replica number is <code>2</code>,
+current <code>tps</code> is 10000/second, and the pending messages is 60000, so we
+calculate the desired replica number as following:</p>
 <div class="highlight"><pre><span></span><code>  desiredReplicas = 60000 / (3 * (10000 / 2)) = 4
 </code></pre></div>
-<p>Numaflow autoscaling does not work for those source vertices that can not calculate pending messages.</p>
+<p>Numaflow autoscaling does not work for those source vertices that can not
+calculate pending messages.</p>
 <h2 id="udf-and-sink-vertices">UDF and Sink Vertices<a class="headerlink" href="#udf-and-sink-vertices" title="Permanent link">&para;</a></h2>
-<p>Pending messages of a UDF or Sink vertex does not represent the real number because of the restrained writing caused by back pressure, so we use a different model to achieve autoscaling for them.</p>
-<p>For each of the vertices, we calculate the available buffer length, and consider it is contributed by all the replicas, so that we can get each replica's contribution.</p>
+<p>Pending messages of a UDF or Sink vertex does not represent the real number
+because of the restrained writing caused by back pressure, so we use a different
+model to achieve autoscaling for them.</p>
+<p>For each of the vertices, we calculate the available buffer length, and consider
+it is contributed by all the replicas, so that we can get each replica's
+contribution.</p>
 <div class="highlight"><pre><span></span><code>  availableBufferLength = totalBufferLength * bufferLimit(%) - pendingMessages
   singleReplicaContribution = availableBufferLength / currentReplicas
 </code></pre></div>
-<p>We define a target available buffer length, and then calculate how many replicas are needed to achieve the target.</p>
+<p>We define a target available buffer length, and then calculate how many replicas
+are needed to achieve the target.</p>
 <div class="highlight"><pre><span></span><code>  desiredReplicas = targetAvailableBufferLength / singleReplicaContribution
 </code></pre></div>
 <h2 id="back-pressure-impact">Back Pressure Impact<a class="headerlink" href="#back-pressure-impact" title="Permanent link">&para;</a></h2>
-<p>Back pressure is considered during autoscaling (which is only available for Source and UDF vertices).</p>
-<p>We measure the back pressure by defining a threshold of the buffer usage. For example, the total buffer length is 50000, buffer limit is 80%, and the back pressure threshold is 90%, if in the past period of time, the average pending messages is more than <code>36000 (50000 * 80% * 90%)</code>, we consider there's back pressure.</p>
+<p>Back pressure is considered during autoscaling (which is only available for
+Source and UDF vertices).</p>
+<p>We measure the back pressure by defining a threshold of the buffer usage. For
+example, the total buffer length is 50000, buffer limit is 80%, and the back
+pressure threshold is 90%, if in the past period of time, the average pending
+messages is more than <code>36000 (50000 * 80% * 90%)</code>, we consider there's back
+pressure.</p>
 <p>When the calculated desired replicas is greater than current replicas:</p>
 <ol>
-<li>For vertices which have back pressure from the directly connected vertices, instead of increasing the replica number, we decrease it by 1;</li>
-<li>For vertices which have back pressure in any of its downstream vertices, the replica number remains unchanged.</li>
+<li>For vertices which have back pressure from the directly connected vertices,
+   instead of increasing the replica number, we decrease it by 1;</li>
+<li>For vertices which have back pressure in any of its downstream vertices, the
+   replica number remains unchanged.</li>
 </ol>
 <h2 id="autoscaling-tuning">Autoscaling Tuning<a class="headerlink" href="#autoscaling-tuning" title="Permanent link">&para;</a></h2>
-<p>Numaflow autoscaling can be tuned by updating some parameters, find the details at the <a href="../../user-guide/reference/autoscaling/">doc</a>.</p>
+<p>Numaflow autoscaling can be tuned by updating some parameters, find the details
+at the <a href="../../user-guide/reference/autoscaling/">doc</a>.</p>
 
               
             </article>
