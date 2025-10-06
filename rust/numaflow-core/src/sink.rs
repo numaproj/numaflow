@@ -489,6 +489,7 @@ impl SinkWriter {
                         .into_iter()
                         .filter(|msg| !msg.dropped())
                         .collect::<Vec<_>>();
+
                     match self.write(batch.clone(), cln_token.clone()).await {
                         Ok(_) => {
                             for offset in offsets {
@@ -529,7 +530,7 @@ impl SinkWriter {
             return Ok(());
         }
 
-        let write_start_time = tokio::time::Instant::now();
+        let write_start_time = time::Instant::now();
         let total_msgs = messages.len();
         let mut retry_attempts = 0;
         let total_msgs_bytes: usize = messages.iter().map(|msg| msg.value.len()).sum();

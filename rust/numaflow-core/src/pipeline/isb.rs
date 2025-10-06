@@ -8,3 +8,4 @@
 pub(crate) mod compression;
 pub(crate) mod jetstream;
 pub(crate) mod reader;
+pub(crate) mod writer;

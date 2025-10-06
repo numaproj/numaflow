@@ -11,8 +11,8 @@ use crate::metrics::{
 use crate::pipeline::PipelineContext;
 
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
-use crate::pipeline::isb::jetstream::writer::{ISBWriterComponents, JetstreamWriter};
 use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
+use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::TrackerHandle;
@@ -34,14 +34,14 @@ use tracing::{error, info};
 pub(crate) struct MapForwarder<C: crate::typ::NumaflowTypeConfig> {
     jetstream_reader: ISBReader<C>,
     mapper: MapHandle,
-    jetstream_writer: JetstreamWriter,
+    jetstream_writer: ISBWriter,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
     pub(crate) async fn new(
         jetstream_reader: ISBReader<C>,
         mapper: MapHandle,
-        jetstream_writer: JetstreamWriter,
+        jetstream_writer: ISBWriter,
     ) -> Self {
         Self {
             jetstream_reader,
@@ -142,7 +142,7 @@ pub async fn start_map_forwarder(
     let writer_components =
         ISBWriterComponents::new(watermark_handle.clone().map(WatermarkHandle::ISB), &context);
 
-    let buffer_writer = JetstreamWriter::new(writer_components);
+    let buffer_writer = ISBWriter::new(writer_components);
     let (forwarder_tasks, mapper_handle, _pending_reader_task) = if let Some(rate_limit_config) =
         &config.rate_limit
     {
@@ -217,7 +217,7 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
     context: &PipelineContext<'_>,
     map_vtx_config: &MapVtxConfig,
     reader_config: &BufferReaderConfig,
-    buffer_writer: JetstreamWriter,
+    buffer_writer: ISBWriter,
     watermark_handle: Option<crate::watermark::isb::ISBWatermarkHandle>,
     rate_limiter: Option<C::RateLimiter>,
 ) -> Result<(
@@ -281,7 +281,7 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
 async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig>(
     reader_components: ISBReaderComponents,
     mapper: crate::mapper::map::MapHandle,
-    buffer_writer: JetstreamWriter,
+    buffer_writer: ISBWriter,
     rate_limiter: Option<C::RateLimiter>,
 ) -> Result<(tokio::task::JoinHandle<Result<()>>, ISBReader<C>)> {
     let cln_token = reader_components.cln_token.clone();

@@ -21,14 +21,13 @@ use crate::Result;
 use crate::config::pipeline::isb::{BufferFullStrategy, CompressionType, ISBConfig, Stream};
 use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Error;
-use crate::pipeline::isb::compression;
-
 use crate::message::{IntOffset, Message, Offset};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
     jetstream_isb_metrics_labels, pipeline_drop_metric_labels, pipeline_metric_labels,
     pipeline_metrics,
 };
+use crate::pipeline::isb::compression;
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;
 use crate::watermark::WatermarkHandle;
