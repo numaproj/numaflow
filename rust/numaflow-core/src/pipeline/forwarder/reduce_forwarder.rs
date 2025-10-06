@@ -9,8 +9,8 @@ use crate::metrics::{
 };
 use crate::pipeline::PipelineContext;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
-use crate::pipeline::isb::jetstream::writer::{ISBWriterComponents, JetstreamWriter};
 use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
+use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
 use crate::reduce::pbq::{PBQ, PBQBuilder, WAL};
 use crate::reduce::reducer::aligned::reducer::AlignedReducer;
 use crate::reduce::reducer::aligned::windower::AlignedWindowManager;
@@ -168,7 +168,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     let writer_components =
         ISBWriterComponents::new(watermark_handle.clone().map(WatermarkHandle::ISB), &context);
 
-    let buffer_writer = JetstreamWriter::new(writer_components);
+    let buffer_writer = ISBWriter::new(writer_components);
 
     // Create WAL if configured
     let (wal, gc_wal) = create_wal_components(
@@ -293,7 +293,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     let writer_components =
         ISBWriterComponents::new(watermark_handle.clone().map(WatermarkHandle::ISB), &context);
 
-    let buffer_writer = JetstreamWriter::new(writer_components);
+    let buffer_writer = ISBWriter::new(writer_components);
 
     // Create WAL if configured (use Unaligned WindowKind for unaligned reducers)
     let (wal, gc_wal) = create_wal_components(

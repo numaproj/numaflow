@@ -9,7 +9,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
 use crate::Result;
-use crate::config::pipeline::isb::{BufferFullStrategy, CompressionType, ISBConfig, Stream};
+use crate::config::pipeline::isb::{BufferFullStrategy, ISBConfig, Stream};
 use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, Offset};
@@ -17,8 +17,7 @@ use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_metric_labels,
     pipeline_metrics,
 };
-use crate::pipeline::isb::compression;
-use crate::pipeline::isb::jetstream::js_writer::{JetStreamWriter, WriteError};
+use crate::pipeline::isb::jetstream::writer::{JetStreamWriter, WriteError};
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;
 use crate::watermark::WatermarkHandle;
@@ -70,7 +69,6 @@ pub(crate) struct ISBWriter {
     sem: Arc<Semaphore>,
     paf_concurrency: usize,
     vertex_type: VertexType,
-    compression_type: Option<CompressionType>,
 }
 
 impl ISBWriter {
@@ -102,7 +100,6 @@ impl ISBWriter {
             sem: Arc::new(Semaphore::new(components.paf_concurrency)),
             paf_concurrency: components.paf_concurrency,
             vertex_type: components.vertex_type,
-            compression_type: components.isb_config.map(|c| c.compression.compress_type),
         }
     }
 
@@ -135,13 +132,6 @@ impl ISBWriter {
                         .inc();
                     continue;
                 }
-
-                let mut message = message;
-                // if compression is enabled, then compress and send
-                message.value = bytes::Bytes::from(compression::compress(
-                    self.compression_type,
-                    &message.value,
-                )?);
 
                 // Write message to appropriate streams and collect PAFs
                 let pafs = self
@@ -273,7 +263,7 @@ impl ISBWriter {
         let mut log_counter = 500u16;
 
         loop {
-            match writer.async_write(message.clone(), cln_token.clone()).await {
+            match writer.async_write(message.clone()).await {
                 Ok(paf) => return Some(paf),
                 Err(WriteError::BufferFull) => {
                     if log_counter >= 500 {
@@ -316,14 +306,15 @@ impl ISBWriter {
                         }
                     }
                 }
-                Err(WriteError::Cancelled) => {
-                    error!("Shutdown signal received, exiting write loop");
-                    return None;
-                }
                 Err(WriteError::PublishFailed(e)) => {
                     error!(?e, "Publishing failed, retrying");
                     // Continue retrying
                 }
+            }
+
+            if cln_token.is_cancelled() {
+                error!("Shutdown signal received, exiting write loop");
+                return None;
             }
 
             // Sleep to avoid busy looping
@@ -532,7 +523,7 @@ impl ISBWriter {
 mod tests {
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
-    use crate::message::{IntOffset, Message, MessageID, Offset};
+    use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
     use async_nats::jetstream;
     use async_nats::jetstream::consumer::{self, Config, Consumer};
     use async_nats::jetstream::stream;
@@ -603,9 +594,10 @@ mod tests {
             .await
             .unwrap();
 
+        let mut ack_rxs = vec![];
         // Send messages
         for i in 0..10 {
-            let (ack_tx, _ack_rx) = tokio::sync::oneshot::channel();
+            let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
             let message = Message {
                 typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
@@ -621,10 +613,15 @@ mod tests {
                 },
                 ..Default::default()
             };
+            ack_rxs.push(ack_rx);
             tracker_handle.insert(&message, ack_tx).await.unwrap();
             tx.send(message).await.unwrap();
         }
         drop(tx);
+
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
+        }
 
         write_handle.await.unwrap().unwrap();
 
@@ -696,9 +693,10 @@ mod tests {
             .await
             .unwrap();
 
+        let mut ack_rxs = vec![];
         // Send some messages
         for i in 0..5 {
-            let (ack_tx, _ack_rx) = tokio::sync::oneshot::channel();
+            let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
             let message = Message {
                 typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
@@ -714,6 +712,7 @@ mod tests {
                 },
                 ..Default::default()
             };
+            ack_rxs.push(ack_rx);
             tracker_handle.insert(&message, ack_tx).await.unwrap();
             tx.send(message).await.unwrap();
         }
@@ -721,6 +720,10 @@ mod tests {
         // Cancel after sending some messages
         cln_token.cancel();
         drop(tx);
+
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
+        }
 
         write_handle.await.unwrap().unwrap();
 
@@ -811,9 +814,10 @@ mod tests {
             .await
             .unwrap();
 
+        let mut ack_rxs = vec![];
         // Send messages with different tags
         for i in 0..10 {
-            let (ack_tx, _ack_rx) = tokio::sync::oneshot::channel();
+            let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
             let tags = if i % 3 == 0 {
                 Some(Arc::from(vec!["tag1".to_string()]))
             } else if i % 3 == 1 {
@@ -837,10 +841,15 @@ mod tests {
                 },
                 ..Default::default()
             };
+            ack_rxs.push(ack_rx);
             tracker_handle.insert(&message, ack_tx).await.unwrap();
             tx.send(message).await.unwrap();
         }
         drop(tx);
+
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
+        }
 
         write_handle.await.unwrap().unwrap();
 
