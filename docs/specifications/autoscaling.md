@@ -2,11 +2,17 @@
 
 ## Overview
 
-Numaflow does not exclusively rely on the native Kubernetes Horizontal Pod Autoscaler (HPA), instead it has its own built-in autoscaling mechanism that is specifically tailored for event-driven stream processing workloads.
+Numaflow developed its own dedicated autoscaling mechanism because the native Kubernetes Horizontal Pod Autoscaler (HPA) is fundamentally suitable for event-driven stream processing.
 
-- HPA is designed for scaling based on resource consumption (CPU/Memory), but the critical load indicator for event-driven systems is the number of unprocessed messages (queue depth), not how busy the pod's CPU is.
-- Numaflow built-in autoscaler uses a holistic approach that goes beyond simple queue depth analysis to ensure resilient and efficient stream processing. It is fundamentally designed to incorporate backpressure awareness and pipeline-level throttling to prevent cascading failures.
-- The built-in autoscaling mechanism is entirely self-sufficient: it does not rely on external infrastructure like Prometheus or the Metrics Server. Instead, the control plane gathers and uses all the necessary data internally to manage scaling.
+The need for a specialized solution stems from three core limitations of HPA:
+
+- **Metric Mismatch**: HPA scales based on generic resource consumption like CPU and memory utilization. In a streaming pipeline, the true measure of load is the number of unprocessed messages (queue depth). A low CPU reading might just mean a pod is waiting for data, and a high CPU reading doesn't tell you whether the next stage can handle the output. We need a scaling mechanism that correctly scales based on the actual backlog of work.
+
+- **Lack of Pipeline Awareness**: Unlike HPA, we need a holistic, backpressure-aware solution. It doesn't just look at a single queue depth; it analyzes the status of the entire pipeline. This is crucial for preventing cascading failures by throttling upstream stages when downstream components are overwhelmed, ensuring resilient and efficient data flow.
+
+- **Architectural Independence**: To enable fast, accurate, and self-sufficient scaling, the autoscaler should not rely on external infrastructure like Prometheus or the Kubernetes Metrics Server. We need a solution that gathers all necessary data internally, providing immediate access to metrics and simplifying operations.
+
+By addressing these issues, Numaflow's autoscaler provides a scaling strategy that is precise, cost-efficient, and natively designed for the dynamics of real-time event streams.
 
 ## Scale Subresource
 
