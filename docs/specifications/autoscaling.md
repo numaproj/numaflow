@@ -1,5 +1,15 @@
 # Autoscaling
 
+## Overview
+
+Numaflow does not exclusively rely on the native Kubernetes Horizontal Pod Autoscaler (HPA), instead it has its own built-in autoscaling mechanism that is specifically tailored for event-driven stream processing workloads.
+
+- HPA is designed for scaling based on resource consumption (CPU/Memory), but the critical load indicator for event-driven systems is the number of unprocessed messages (queue depth), not how busy the pod's CPU is.
+- Numaflow built-in autoscaler uses a holistic approach that goes beyond simple queue depth analysis to ensure resilient and efficient stream processing. It is fundamentally designed to incorporate backpressure awareness and pipeline-level throttling to prevent cascading failures.
+- The built-in autoscaling mechanism is entirely self-sufficient: it does not rely on external infrastructure like Prometheus or the Metrics Server. Instead, the control plane gathers and uses all the necessary data internally to manage scaling.
+
+## Scale Subresource
+
 [Scale Subresource](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#scale-subresource) is enabled in `Vertex` [Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/), which makes it possible to scale vertex pods. To be specifically, it is enabled by adding following comments to `Vertex` struct model, and then corresponding CRD definition is automatically generated.
 
 ```
@@ -11,6 +21,8 @@ Pods management is done by vertex controller.
 ![Vertex Controller Reconciliation Loop](../assets/vertex_controller_loop.png)
 
 With `scale` subresource implemented, `vertex` object can be scaled by either horizontal or vertical pod autoscaling.
+
+Similar capability is implemented for `MonoVertex`.
 
 ## Numaflow Autoscaling
 
