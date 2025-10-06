@@ -647,6 +647,7 @@ mod tests {
     use async_nats::jetstream::{self, consumer, stream};
     use chrono::{TimeZone, Utc};
     use numaflow::reduce;
+    use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
     use prost::Message as ProstMessage;
     use tempfile::TempDir;

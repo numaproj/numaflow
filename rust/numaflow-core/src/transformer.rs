@@ -326,6 +326,7 @@ impl Transformer {
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
+    use numaflow::shared::ServerExtras;
     use numaflow::sourcetransform;
     use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
     use std::time::Duration;

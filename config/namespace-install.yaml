@@ -4112,6 +4112,9 @@ spec:
                       rampUpDuration:
                         default: 1s
                         type: string
+                      resumedRampUp:
+                        default: false
+                        type: boolean
                       store:
                         properties:
                           inMemoryStore:
@@ -4293,6 +4296,9 @@ spec:
                             - mode
                             type: object
                         type: object
+                      ttl:
+                        default: 180s
+                        type: string
                     type: object
                   readBatchSize:
                     default: 500
@@ -9227,6 +9233,9 @@ spec:
                       rampUpDuration:
                         default: 1s
                         type: string
+                      resumedRampUp:
+                        default: false
+                        type: boolean
                       store:
                         properties:
                           inMemoryStore:
@@ -9408,6 +9417,9 @@ spec:
                             - mode
                             type: object
                         type: object
+                      ttl:
+                        default: 180s
+                        type: string
                     type: object
                   readBatchSize:
                     default: 500
@@ -16302,6 +16314,9 @@ spec:
                             rampUpDuration:
                               default: 1s
                               type: string
+                            resumedRampUp:
+                              default: false
+                              type: boolean
                             store:
                               properties:
                                 inMemoryStore:
@@ -16483,6 +16498,9 @@ spec:
                                   - mode
                                   type: object
                               type: object
+                            ttl:
+                              default: 180s
+                              type: string
                           type: object
                         readBatchSize:
                           format: int64
@@ -21651,6 +21669,9 @@ spec:
                           rampUpDuration:
                             default: 1s
                             type: string
+                          resumedRampUp:
+                            default: false
+                            type: boolean
                           store:
                             properties:
                               inMemoryStore:
@@ -21832,6 +21853,9 @@ spec:
                                 - mode
                                 type: object
                             type: object
+                          ttl:
+                            default: 180s
+                            type: string
                         type: object
                       readBatchSize:
                         default: 500
@@ -28726,6 +28750,9 @@ spec:
                                 rampUpDuration:
                                   default: 1s
                                   type: string
+                                resumedRampUp:
+                                  default: false
+                                  type: boolean
                                 store:
                                   properties:
                                     inMemoryStore:
@@ -28907,6 +28934,9 @@ spec:
                                       - mode
                                       type: object
                                   type: object
+                                ttl:
+                                  default: 180s
+                                  type: string
                               type: object
                             readBatchSize:
                               format: int64
@@ -35891,6 +35921,9 @@ spec:
                             rampUpDuration:
                               default: 1s
                               type: string
+                            resumedRampUp:
+                              default: false
+                              type: boolean
                             store:
                               properties:
                                 inMemoryStore:
@@ -36072,6 +36105,9 @@ spec:
                                   - mode
                                   type: object
                               type: object
+                            ttl:
+                              default: 180s
+                              type: string
                           type: object
                         readBatchSize:
                           format: int64
@@ -36139,6 +36175,9 @@ spec:
                             rampUpDuration:
                               default: 1s
                               type: string
+                            resumedRampUp:
+                              default: false
+                              type: boolean
                             store:
                               properties:
                                 inMemoryStore:
@@ -36320,6 +36359,9 @@ spec:
                                   - mode
                                   type: object
                               type: object
+                            ttl:
+                              default: 180s
+                              type: string
                           type: object
                         readBatchSize:
                           format: int64
@@ -37337,6 +37379,9 @@ spec:
                       rampUpDuration:
                         default: 1s
                         type: string
+                      resumedRampUp:
+                        default: false
+                        type: boolean
                       store:
                         properties:
                           inMemoryStore:
@@ -37518,6 +37563,9 @@ spec:
                             - mode
                             type: object
                         type: object
+                      ttl:
+                        default: 180s
+                        type: string
                     type: object
                   readBatchSize:
                     format: int64
@@ -41306,6 +41354,9 @@ spec:
                             rampUpDuration:
                               default: 1s
                               type: string
+                            resumedRampUp:
+                              default: false
+                              type: boolean
                             store:
                               properties:
                                 inMemoryStore:
@@ -41487,6 +41538,9 @@ spec:
                                   - mode
                                   type: object
                               type: object
+                            ttl:
+                              default: 180s
+                              type: string
                           type: object
                         readBatchSize:
                           format: int64
@@ -41554,6 +41608,9 @@ spec:
                             rampUpDuration:
                               default: 1s
                               type: string
+                            resumedRampUp:
+                              default: false
+                              type: boolean
                             store:
                               properties:
                                 inMemoryStore:
@@ -41735,6 +41792,9 @@ spec:
                                   - mode
                                   type: object
                               type: object
+                            ttl:
+                              default: 180s
+                              type: string
                           type: object
                         readBatchSize:
                           format: int64

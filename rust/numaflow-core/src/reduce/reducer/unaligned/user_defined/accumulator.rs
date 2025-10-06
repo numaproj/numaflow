@@ -188,6 +188,7 @@ mod tests {
 
     use chrono::{TimeZone, Utc};
     use numaflow::accumulator;
+    use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::accumulator::accumulator_client::AccumulatorClient;
     use tempfile::TempDir;
     use tokio::sync::mpsc;

@@ -2192,6 +2192,16 @@ func (in *RateLimit) DeepCopyInto(out *RateLimit) {
 		*out = new(RateLimiterModes)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.ResumedRampUp != nil {
+		in, out := &in.ResumedRampUp, &out.ResumedRampUp
+		*out = new(bool)
+		**out = **in
+	}
+	if in.TTL != nil {
+		in, out := &in.TTL, &out.TTL
+		*out = new(metav1.Duration)
+		**out = **in
+	}
 	return
 }
 

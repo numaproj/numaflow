@@ -787,6 +787,7 @@ mod tests {
     use crate::source::{Source, SourceType};
     use crate::tracker::TrackerHandle;
     use chrono::Utc;
+    use numaflow::shared::ServerExtras;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;

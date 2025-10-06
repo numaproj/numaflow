@@ -1,7 +1,8 @@
 pub use crate::state::store::Store;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
@@ -34,6 +35,14 @@ pub struct RateLimiterState<S> {
     processor_id: String,
     /// Cancellation token for background tasks
     cancel_token: CancellationToken,
+    /// Previously utilized max tokens by the processor
+    /// TODO: Find a way to remove this as it is only being used to pass value from
+    /// internal store to RateLimit<W> struct during initialization.
+    pub(super) prev_max_filled: Arc<f32>,
+    /// Handle to the background task updating the pool size
+    /// Arc to update the background task across tokio tasks
+    /// Mutex to ensure thread safety for the rlds object
+    background_task: Arc<Mutex<Option<JoinHandle<()>>>>,
     store: S,
 }
 
@@ -65,11 +74,11 @@ impl<S: Store> RateLimiterState<S> {
         runway_update_len: OptimisticValidityUpdateSecs,
     ) -> crate::Result<Self> {
         // Register with the external store.
-        let initial_pool_size = s.register(processor_id, cancel.clone()).await?;
+        let (initial_pool_size, prev_max_filled) = s.register(processor_id, cancel.clone()).await?;
         let pool_size =
             Self::wait_for_consensus(&s, processor_id, initial_pool_size, &cancel).await?;
 
-        let rlds = RateLimiterState {
+        let mut rlds = RateLimiterState {
             valid_till_epoch: Arc::new(AtomicU64::new(
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -81,16 +90,22 @@ impl<S: Store> RateLimiterState<S> {
             desired_pool_size: Arc::new(AtomicUsize::new(pool_size)),
             processor_id: processor_id.to_string(),
             cancel_token: cancel.clone(),
+            prev_max_filled: Arc::new(prev_max_filled),
             store: s,
+            // Placeholder for the background task
+            background_task: Arc::new(Mutex::new(None)),
         };
 
         // Spawn a background task to update the pool size
-        {
+        let background_task_handle = {
             let processor_id = processor_id.to_string();
             let mut rlds = rlds.clone();
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(refresh_interval);
                 loop {
+                    // The interval tick is where this background task yields.
+                    // Calling abort on the corresponding JoinHandle for this task
+                    // will cancel the task on next interval tick.
                     interval.tick().await;
 
                     // sent the desired pool size to converge faster even though we might
@@ -118,8 +133,11 @@ impl<S: Store> RateLimiterState<S> {
                         break;
                     }
                 }
-            });
-        }
+            })
+        };
+
+        // Set the background task for the state
+        rlds.set_background_task(background_task_handle).await;
 
         Ok(rlds)
     }
@@ -196,10 +214,27 @@ impl<S: Store> RateLimiterState<S> {
     }
 
     /// Shutdown the distributed state by deregistering from the store.
-    pub(crate) async fn shutdown(&self) -> crate::Result<()> {
+    pub(crate) async fn shutdown(&self, max_ever_filled: f32) -> crate::Result<()> {
+        // Abort the background task
+        // Note: The mutex held here is the std::sync::Mutex, and it is ok to
+        // hold it here before the store deregistration (await call) since the mutexGuard will be
+        // dropped by compiler before the await call, as bt is not used after this point.
+        if let Some(ref bt) = *self.background_task.lock().unwrap() {
+            bt.abort();
+        }
         // Deregister from the store
         self.store
-            .deregister(&self.processor_id, self.cancel_token.clone())
+            .deregister(
+                &self.processor_id,
+                max_ever_filled,
+                self.cancel_token.clone(),
+            )
             .await
+    }
+
+    /// Set the background task for the state.
+    async fn set_background_task(&mut self, background_task: JoinHandle<()>) {
+        let mut bt = self.background_task.lock().unwrap();
+        *bt = Some(background_task);
     }
 }

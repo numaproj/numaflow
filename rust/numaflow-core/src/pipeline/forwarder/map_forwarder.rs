@@ -306,6 +306,7 @@ mod tests {
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
     use numaflow::map;
+    use numaflow::shared::ServerExtras;
     use numaflow_shared::server_info::MapMode;
     use std::time::Duration;
     use tempfile::TempDir;

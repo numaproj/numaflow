@@ -4386,6 +4386,19 @@ func schema_pkg_apis_numaflow_v1alpha1_RateLimit(ref common.ReferenceCallback) c
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimiterModes"),
 						},
 					},
+					"resumedRampUp": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ResumedRampUp is used to enable the resume mode for rate limiting.\n\nThis, if true, will allow the processor to resume the ramp-up process from the last known state of the rate limiter, i.e., if the processor was allowed X tokens before shutting down, it will be allowed X tokens again after the processor restarts.\n\nThe resumed ramp-up process will be allowed until TTL time after the processor first deregisters with the rate limiter.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"ttl": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TTL is used to define the duration after which a pod is considered stale and removed from the pool of pods if it doesn't sync with the rate limiter.\n\nFurthermore, if the ResumedRampUp is true, then TTL also defines the amount of time within which, if a pod re-registers / registers with the same name, with the rate limiter, it will be assigned the same rate limit as the previous pod with that name.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
 				},
 			},
 		},

@@ -25,6 +25,25 @@ type RateLimit struct {
 	// RateLimiterModes is used to define the modes for rate limiting.
 	// +optional
 	RateLimiterModes *RateLimiterModes `json:"modes,omitempty" protobuf:"bytes,5,opt,name=modes"`
+	// ResumedRampUp is used to enable the resume mode for rate limiting.
+	//
+	// This, if true, will allow the processor to
+	// resume the ramp-up process from the last known state of the rate limiter, i.e., if the processor was allowed X tokens
+	// before shutting down, it will be allowed X tokens again after the processor restarts.
+	//
+	// The resumed ramp-up process will be allowed until TTL time after the processor first deregisters with the rate limiter.
+	// +optional
+	// +kubebuilder:default=false
+	ResumedRampUp *bool `json:"resumedRampUp,omitempty" protobuf:"bytes,6,opt,name=resumedRampUp"`
+	// TTL is used to define the duration after which a pod is considered stale and removed from the pool of pods if it
+	// doesn't sync with the rate limiter.
+	//
+	// Furthermore, if the ResumedRampUp is true, then TTL also defines the amount of time within which, if a pod
+	// re-registers / registers with the same name, with the rate limiter, it will be assigned the same rate limit as
+	// the previous pod with that name.
+	// +optional
+	// +kubebuilder:default="180s"
+	TTL *metav1.Duration `json:"ttl,omitempty" protobuf:"bytes,7,opt,name=ttl"`
 }
 
 // RateLimiterModes defines the modes for rate limiting.

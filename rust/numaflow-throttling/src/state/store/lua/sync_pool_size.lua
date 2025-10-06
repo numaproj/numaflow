@@ -10,6 +10,7 @@ ARGV array:
   ARGV[1] - The name of the processor (e.g., "processor-alpha-1")
   ARGV[2] - The current Unix timestamp (score for the heartbeat)
   ARGV[3] - The total known pool size (score for the pool size)
+  ARGV[4] - The stale age in seconds
 
 Returns:
   A table with three elements:
@@ -18,7 +19,7 @@ Returns:
 --]]
 
 -- Define the stale age in seconds
-local STALE_AGE = 180
+local STALE_AGE = tonumber(ARGV[4])
 
 -- Construct the full key names from the provided prefix
 local heartbeat_key = KEYS[1] .. ":heartbeats"
