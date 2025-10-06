@@ -32,10 +32,35 @@ import (
 func InvokeE2EAPI(format string, args ...interface{}) string {
 	url := "http://127.0.0.1:8378" + fmt.Sprintf(format, args...)
 	log.Printf("GET %s\n", url)
-	resp, err := http.Get(url)
+
+	var err error
+	var resp *http.Response
+	// Invoking GET can fail due to connection issues or server not ready. It's because the e2e-api-pod is still booting
+	// up and not ready to serve requests. To prevent such issue, we apply retry strategy.
+	var retryBackOff = wait.Backoff{
+		Factor:   1,
+		Jitter:   0,
+		Steps:    6,
+		Duration: time.Second * 5,
+	}
+	err = wait.ExponentialBackoff(retryBackOff, func() (done bool, err error) {
+		resp, err = http.Get(url)
+		if err == nil && resp.StatusCode < 300 {
+			return true, nil
+		}
+		if resp != nil {
+			body, _ := io.ReadAll(resp.Body)
+			log.Printf("Got error %v, response_text: %s,response: %+v, retrying.\n", err, body, *resp)
+		} else {
+			log.Printf("Got error %v, retrying.\n", err)
+		}
+		return false, nil
+	})
+
 	if err != nil {
 		panic(err)
 	}
+
 	log.Printf("> %s\n", resp.Status)
 	body := ""
 	defer resp.Body.Close()

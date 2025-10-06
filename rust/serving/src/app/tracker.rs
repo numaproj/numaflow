@@ -90,16 +90,11 @@ impl MessageGraph {
         let mut source_vertex = None;
 
         // Find the source vertex, source vertex is the vertex that has the same vertex and from_vertex
+        // or if the from_vertex is empty
         for callback in callbacks {
-            // Check if the vertex is present in the graph
-            if !self.dag.contains_key(&callback.from_vertex) {
-                return Err(Error::SubGraphInvalidInput(format!(
-                    "Invalid callback: {}, vertex: {}",
-                    callback.id, callback.from_vertex
-                )));
-            }
-
-            if callback.vertex == callback.from_vertex {
+            // If the vertex and from_vertex are the same, it is the source vertex
+            // OR if the from_vertex is empty, it is the source vertex
+            if callback.vertex == callback.from_vertex || callback.from_vertex.is_empty() {
                 source_vertex = Some(callback.vertex.clone());
             }
             callback_map
@@ -170,7 +165,11 @@ impl MessageGraph {
         // iterate over the callbacks for the current vertex and find the one that has not been visited,
         // and it is coming from the same vertex as the current vertex
         for callback in callbacks {
-            if callback.callback_request.from_vertex == from && !callback.visited {
+            // from_vertex will be empty for the source vertex
+            if (callback.callback_request.from_vertex.is_empty()
+                || callback.callback_request.from_vertex == from)
+                && !callback.visited
+            {
                 callback.visited = true;
                 current_callback = Some(Arc::clone(&callback.callback_request));
                 break;
@@ -518,7 +517,7 @@ mod tests {
         {
             "id": "xxxx",
             "vertex": "a",
-            "from_vertex": "a",
+            "from_vertex": "",
             "cb_time": 123456789,
             "responses": [{"tags": null}]
         },
@@ -657,7 +656,7 @@ mod tests {
         {
             "id": "xxxx",
             "vertex": "a",
-            "from_vertex": "a",
+            "from_vertex": "",
             "cb_time": 123456789,
             "responses": [{"tags": null}]
         },
@@ -796,7 +795,7 @@ mod tests {
         {
             "id": "xxxx",
             "vertex": "a",
-            "from_vertex": "a",
+            "from_vertex": "",
             "cb_time": 123456789,
             "responses": [{"tags": null}]
         },
@@ -912,7 +911,7 @@ mod tests {
             {
                 "id": "xxxx",
                 "vertex": "a",
-                "from_vertex": "a",
+                "from_vertex": "",
                 "cb_time": 123456789,
                 "responses": [{"tags": null}]
             },
@@ -977,37 +976,6 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_subgraph_from_callbacks_with_invalid_vertex() {
-        // Create a simple graph
-        let mut dag: Graph = HashMap::new();
-        dag.insert(
-            "a".to_string(),
-            vec![Edge {
-                from: "a".to_string(),
-                to: "b".to_string(),
-                conditions: None,
-            }],
-        );
-        let message_graph = MessageGraph { dag };
-
-        // Create a callback with an invalid vertex
-        let callbacks = vec![Arc::new(Callback {
-            id: "test".to_string(),
-            vertex: "invalid_vertex".to_string(),
-            from_vertex: "invalid_vertex".to_string(),
-            cb_time: 1,
-            responses: vec![Response { tags: None }],
-        })];
-
-        // Call the function with the invalid callback
-        let result = message_graph.generate_subgraph_from_callbacks("test".to_string(), callbacks);
-
-        // Check that the function returned an error
-        assert!(result.is_err());
-        assert!(matches!(result, Err(Error::SubGraphInvalidInput(_))));
-    }
-
-    #[test]
     fn test_flatmap_operation_with_simple_dag() {
         let pipeline = PipelineDCG {
             vertices: vec![
@@ -1042,7 +1010,7 @@ mod tests {
         {
             "id": "xxxx",
             "vertex": "a",
-            "from_vertex": "a",
+            "from_vertex": "",
             "cb_time": 123456789,
             "responses": [
                 {"tags": null},
@@ -1224,7 +1192,7 @@ mod tests {
         {
             "id": "xxxx",
             "vertex": "a",
-            "from_vertex": "a",
+            "from_vertex": "",
             "cb_time": 123456789,
             "responses": [{"tags": null}]
         },

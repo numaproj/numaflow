@@ -142,6 +142,8 @@ const (
 	EnvServingCallbackStore             = "NUMAFLOW_SERVING_CALLBACK_STORE"
 	EnvServingResponseStore             = "NUMAFLOW_SERVING_RESPONSE_STORE"
 	EnvServingStatusStore               = "NUMAFLOW_SERVING_STATUS_STORE"
+	EnvReadBatchSize                    = "NUMAFLOW_READ_BATCH_SIZE"
+	EnvReadTimeoutMs                    = "NUMAFLOW_READ_TIMEOUT_MS"
 
 	NumaflowRustBinary          = "/bin/numaflow-rs"
 	PathVarRun                  = "/var/run/numaflow"

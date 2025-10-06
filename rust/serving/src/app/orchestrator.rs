@@ -431,7 +431,7 @@ mod tests {
                 }
             }
             // put responses to datum store
-            let responses = vec![
+            let responses = [
                 Bytes::from_static(b"response1"),
                 Bytes::from_static(b"response2"),
             ];
@@ -603,7 +603,7 @@ mod tests {
                 }
             }
             // put responses to datum store
-            let responses = vec![
+            let responses = [
                 Bytes::from_static(b"response1"),
                 Bytes::from_static(b"response2"),
                 Bytes::from_static(b"response3"),

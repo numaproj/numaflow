@@ -969,8 +969,8 @@ mod tests {
             .unwrap();
 
         let settings = Settings {
-            tid_header: ID_HEADER.into(),
-            pod_hash: POD_HASH.into(),
+            tid_header: ID_HEADER,
+            pod_hash: POD_HASH,
             js_callback_store: store_name,
             js_response_store: store_name,
             js_status_store: store_name,
