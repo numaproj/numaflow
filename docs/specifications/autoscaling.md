@@ -3,7 +3,7 @@
 ## Overview
 
 Numaflow developed its own dedicated autoscaling mechanism because the native
-Kubernetes Horizontal Pod Autoscaler (HPA) is fundamentally suitable for
+Kubernetes Horizontal Pod Autoscaler (HPA) is fundamentally not suitable for
 event-driven stream processing.
 
 The need for a specialized solution stems from three core limitations of HPA:
