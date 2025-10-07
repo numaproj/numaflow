@@ -88,7 +88,9 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
         let (reader_result, mapper_handle_result, sink_writer_result) =
             tokio::try_join!(reader_handle, mapper_handle, sink_writer_handle).map_err(|e| {
                 error!(?e, "Error while joining reader, mapper and sink writer");
-                Error::Forwarder(format!("Error while joining reader, mapper and sink writer: {e:?}"))
+                Error::Forwarder(format!(
+                    "Error while joining reader, mapper and sink writer: {e:?}"
+                ))
             })?;
 
         sink_writer_result.inspect_err(|e| {
