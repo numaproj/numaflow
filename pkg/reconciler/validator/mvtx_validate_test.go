@@ -73,6 +73,11 @@ var (
 					},
 				},
 			},
+			UDF: &dfv1.UDF{
+				Container: &dfv1.Container{
+					Image: "my-udf-image:latest",
+				},
+			},
 		},
 	}
 )
@@ -160,5 +165,26 @@ func TestValidateMonoVertex(t *testing.T) {
 		err := ValidateMonoVertex(testObj)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid maxUnavailable")
+	})
+
+	t.Run("test udf spec validation", func(t *testing.T) {
+		testObj := testMvtx.DeepCopy()
+		err := ValidateMonoVertex(testObj)
+		assert.NoError(t, err)
+
+		// GroupBy is not allowed in MonoVertex UDF
+		testObj.Spec.UDF.GroupBy = &dfv1.GroupBy{
+			Storage: &dfv1.PBQStorage{
+				PersistentVolumeClaim: &dfv1.PersistenceStrategy{},
+			},
+		}
+		err = ValidateMonoVertex(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid udf: groupBy/reduce is not supported in monovertex")
+
+		// UDF is optional so nil should be allowed
+		testObj.Spec.UDF = nil
+		err = ValidateMonoVertex(testObj)
+		assert.NoError(t, err)
 	})
 }
