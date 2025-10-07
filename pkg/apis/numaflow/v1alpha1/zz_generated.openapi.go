@@ -3262,6 +3262,11 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexSpec(ref common.ReferenceCallba
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink"),
 						},
 					},
+					"udf": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF"),
+						},
+					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Metadata sets the pods's metadata, i.e. annotations and labels",
@@ -3482,11 +3487,6 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexSpec(ref common.ReferenceCallba
 							Description: "Lifecycle defines the Lifecycle properties of a MonoVertex",
 							Default:     map[string]interface{}{},
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexLifecycle"),
-						},
-					},
-					"udf": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF"),
 						},
 					},
 				},

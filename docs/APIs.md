@@ -6049,6 +6049,21 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
+<code>udf</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
+UDF </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>AbstractPodTemplate</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
 AbstractPodTemplate </a> </em>
@@ -6248,21 +6263,6 @@ MonoVertexLifecycle </a> </em>
 Lifecycle defines the Lifecycle properties of a MonoVertex
 </p>
 
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>udf</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
-UDF </a> </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
 </td>
 
 </tr>
@@ -6561,6 +6561,21 @@ Description
 
 <td>
 
+<code>udf</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
+UDF </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>AbstractPodTemplate</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
 AbstractPodTemplate </a> </em>
@@ -6760,21 +6775,6 @@ MonoVertexLifecycle </a> </em>
 Lifecycle defines the Lifecycle properties of a MonoVertex
 </p>
 
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>udf</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
-UDF </a> </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
 </td>
 
 </tr>

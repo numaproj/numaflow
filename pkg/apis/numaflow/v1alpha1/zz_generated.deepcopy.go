@@ -1587,6 +1587,11 @@ func (in *MonoVertexSpec) DeepCopyInto(out *MonoVertexSpec) {
 		*out = new(Sink)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.UDF != nil {
+		in, out := &in.UDF, &out.UDF
+		*out = new(UDF)
+		(*in).DeepCopyInto(*out)
+	}
 	in.AbstractPodTemplate.DeepCopyInto(&out.AbstractPodTemplate)
 	if in.ContainerTemplate != nil {
 		in, out := &in.ContainerTemplate, &out.ContainerTemplate
@@ -1627,11 +1632,6 @@ func (in *MonoVertexSpec) DeepCopyInto(out *MonoVertexSpec) {
 	}
 	in.UpdateStrategy.DeepCopyInto(&out.UpdateStrategy)
 	out.Lifecycle = in.Lifecycle
-	if in.UDF != nil {
-		in, out := &in.UDF, &out.UDF
-		*out = new(UDF)
-		(*in).DeepCopyInto(*out)
-	}
 	return
 }
 
