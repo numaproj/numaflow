@@ -232,7 +232,8 @@ pub mod tests {
         .unwrap();
 
         // create the forwarder with the source and sink writer
-        let forwarder = crate::monovertex::forwarder::Forwarder::new(source.clone(), None, sink_writer);
+        let forwarder =
+            crate::monovertex::forwarder::Forwarder::new(source.clone(), None, sink_writer);
 
         let cancel_token = cln_token.clone();
         let _forwarder_handle: JoinHandle<crate::error::Result<()>> = tokio::spawn(async move {
