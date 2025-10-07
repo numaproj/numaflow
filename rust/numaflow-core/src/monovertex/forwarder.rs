@@ -487,4 +487,6 @@ mod tests {
         source_handle.await.unwrap();
         transformer_handle.await.unwrap();
     }
+
+    // TODO: add unit tests similar to map_forwarder
 }

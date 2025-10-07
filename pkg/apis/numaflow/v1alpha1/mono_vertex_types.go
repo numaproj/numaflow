@@ -515,6 +515,8 @@ type MonoVertexSpec struct {
 	// +optional
 	Lifecycle MonoVertexLifecycle `json:"lifecycle,omitempty" protobuf:"bytes,13,opt,name=lifecycle"`
 	// +optional
+	// TODO: should we move near source and sink?
+	// controller level validation to make sure users doesn't set groupby for monovertex
 	UDF *UDF `json:"udf,omitempty" protobuf:"bytes,14,opt,name=udf"`
 }
 
@@ -539,6 +541,7 @@ func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Cont
 	if mvspec.Source.UDSource != nil { // Only support UDSource for now.
 		sidecarContainers = append(sidecarContainers, mvspec.Source.getUDSourceContainer(req))
 	}
+	// TODO: spin up udf container if configured
 	if mvspec.Source.UDTransformer != nil {
 		sidecarContainers = append(sidecarContainers, mvspec.Source.getUDTransformerContainer(req))
 	}
