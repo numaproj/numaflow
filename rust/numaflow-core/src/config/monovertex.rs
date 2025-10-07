@@ -161,7 +161,6 @@ impl MonovertexConfig {
 
         // Based on whether UDF config is present or not, obtain a Result<Box<Udf>>
         // Not checking whether this is Map or Reduce UDF, only considering Map UDF for now
-        // TODO: Add Reduce UDF support?
         let udf = mono_vertex_obj
             .spec
             .udf

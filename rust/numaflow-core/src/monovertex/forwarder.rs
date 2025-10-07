@@ -69,6 +69,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
         let (mapper_stream, mapper_handle) = match self.mapper {
             Some(mapper) => {
                 mapper
+                    // Performs respective map operation (unary, batch, stream) based on actor_sender
                     .streaming_map(read_messages_stream, cln_token.clone())
                     .await?
             }
