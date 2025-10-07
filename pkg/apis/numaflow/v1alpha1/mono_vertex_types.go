@@ -539,7 +539,9 @@ func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Cont
 	if mvspec.Source.UDSource != nil { // Only support UDSource for now.
 		sidecarContainers = append(sidecarContainers, mvspec.Source.getUDSourceContainer(req))
 	}
-	// TODO: spin up udf container if configured
+	if mvspec.UDF != nil {
+		sidecarContainers = append(sidecarContainers, mvspec.UDF.getUDFContainer(req))
+	}
 	if mvspec.Source.UDTransformer != nil {
 		sidecarContainers = append(sidecarContainers, mvspec.Source.getUDTransformerContainer(req))
 	}
