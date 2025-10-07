@@ -24,6 +24,13 @@ use crate::watermark::WatermarkHandle;
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 
+/// Result of a successful write operation to a stream.
+struct WriteResult {
+    stream: Stream,
+    paf: async_nats::jetstream::context::PublishAckFuture,
+    write_start: Instant,
+}
+
 /// Components needed to create an ISBWriter.
 #[derive(Clone)]
 pub(crate) struct ISBWriterComponents {
@@ -113,193 +120,150 @@ impl ISBWriter {
             let mut messages_stream = messages_stream;
 
             while let Some(message) = messages_stream.next().await {
-                let write_processing_start = Instant::now();
-                // if message needs to be dropped, ack and continue
-                if message.dropped() {
-                    // delete the entry from tracker
-                    self.tracker_handle
-                        .delete(message.offset)
-                        .await
-                        .expect("Failed to delete offset from tracker");
-                    pipeline_metrics()
-                        .forwarder
-                        .udf_drop_total
-                        .get_or_create(&pipeline_drop_metric_labels(
-                            self.vertex_type.as_str(),
-                            "n/a",
-                            "to_drop",
-                        ))
-                        .inc();
-                    continue;
-                }
-
-                // Write message to appropriate streams and collect PAFs
-                let pafs = self
-                    .write_message(message.clone(), write_processing_start, cln_token.clone())
-                    .await;
-
-                // pafs is empty means message should not be written to any stream, so we can delete
-                // and continue. The `to_drop()` case is already handled above.
-                // NOTE: PAFs can be empty during following scenarios:
-                //  1. Conditional forwarding conditions are not met.
-                //  2. Buffer is full and strategy is DiscardLatest.
-                if pafs.is_empty() {
-                    debug!(
-                        tags = ?message.tags,
-                        "message will be dropped because conditional forwarding rules are not met or buffer is full"
-                    );
-
-                    pipeline_metrics()
-                        .forwarder
-                        .udf_drop_total
-                        .get_or_create(&pipeline_drop_metric_labels(
-                            self.vertex_type.as_str(),
-                            "n/a",
-                            "forwarding-rules-not-met",
-                        ))
-                        .inc();
-
-                    // delete the entry from tracker
-                    self.tracker_handle
-                        .delete(message.offset)
-                        .await
-                        .expect("Failed to delete offset from tracker");
-                    continue;
-                }
-
-                self.resolve_pafs(pafs, message, cln_token.clone())
+                // Process each message through the orchestration pipeline
+                self.process_message(message, cln_token)
                     .await
                     .inspect_err(|e| {
-                        error!(?e, "Failed to resolve PAFs");
+                        error!(?e, "Failed to process message");
                         cln_token.cancel();
                     })?;
             }
 
-            // wait for all the paf resolvers to complete before returning
-            let _ = Arc::clone(&self.sem)
-                .acquire_many_owned(self.paf_concurrency as u32)
-                .await
-                .expect("Failed to acquire semaphore permit");
+            // Wait for all the PAF resolvers to complete before returning
+            self.wait_for_paf_resolvers().await?;
 
             Ok(())
         });
         Ok(handle)
     }
 
-    /// Writes a message to the appropriate streams based on routing logic.
-    /// Returns a list of PAFs (one per stream written to).
-    async fn write_message(
+    /// Process a single message through the complete write pipeline.
+    async fn process_message(&self, message: Message, cln_token: CancellationToken) -> Result<()> {
+        // Handle dropped messages
+        if message.dropped() {
+            self.handle_dropped_message(message).await;
+            return Ok(());
+        }
+
+        // Route and write to appropriate streams
+        let write_results = self
+            .route_and_write_message(message.clone(), cln_token.clone())
+            .await;
+
+        // Handle empty results (conditional forwarding not met or all writes failed)
+        if write_results.is_empty() {
+            debug!(
+                tags = ?message.tags,
+                "message will be dropped because conditional forwarding rules are not met or buffer is full"
+            );
+            self.tracker_handle
+                .delete(message.offset)
+                .await
+                .expect("Failed to delete offset from tracker");
+            self.publish_stream_drop_metric("n/a", "forwarding-rules-not-met", 0);
+            return Ok(());
+        }
+
+        // Resolve PAFs and finalize
+        self.resolve_and_finalize(write_results, message, cln_token)
+            .await
+    }
+
+    /// Routes a message to appropriate streams and writes to each.
+    /// Returns a list of WriteResults (one per successful write).
+    async fn route_and_write_message(
         &self,
         message: Message,
-        write_processing_start: Instant,
         cln_token: CancellationToken,
-    ) -> Vec<(
-        Stream,
-        Instant,
-        async_nats::jetstream::context::PublishAckFuture,
-    )> {
-        let mut pafs = vec![];
+    ) -> Vec<WriteResult> {
+        let mut results = vec![];
 
         for vertex in &*self.config {
-            // check whether we need to write to this downstream vertex
+            // Check whether we need to write to this downstream vertex
             if !forward::should_forward(message.tags.clone(), vertex.conditions.clone()) {
                 continue;
             }
 
-            // if the to_vertex is a reduce vertex, we should use the keys as the shuffle key
-            let shuffle_key = match vertex.to_vertex_type {
-                VertexType::MapUDF | VertexType::Sink | VertexType::Source => {
-                    String::from_utf8_lossy(&message.id.offset).to_string()
-                }
-                VertexType::ReduceUDF => message.keys.join(":"),
-            };
+            // Determine target stream based on partitioning
+            let stream = Self::determine_target_stream(&message, vertex);
 
-            // check to which partition the message should be written
-            let partition = forward::determine_partition(shuffle_key, vertex.partitions);
-
-            // write the message to the corresponding stream
-            let stream = vertex
-                .writer_config
-                .streams
-                .get(partition as usize)
-                .expect("stream should be present")
-                .clone();
-
-            // Get the appropriate JetStreamWriter for this stream
-            let writer = self
-                .writers
-                .get(stream.name)
-                .expect("writer should exist for stream");
-
-            // Try to write with retry logic based on buffer full strategy
-            let paf = self
-                .write_with_retry(
-                    writer,
-                    message.clone(),
+            // Write to the stream with retry logic
+            if let Some(write_result) = self
+                .write_to_stream(
+                    &message,
                     &stream,
                     vertex.writer_config.buffer_full_strategy.clone(),
                     cln_token.clone(),
                 )
-                .await;
-
-            if let Some(paf) = paf {
-                pafs.push((stream, write_processing_start, paf));
+                .await
+            {
+                results.push(write_result);
             }
         }
 
-        pafs
+        results
     }
 
-    /// Writes a message with retry logic based on buffer full strategy.
+    /// Determines the target stream for a message based on vertex configuration.
+    fn determine_target_stream(message: &Message, vertex: &ToVertexConfig) -> Stream {
+        // If the to_vertex is a reduce vertex, use the keys as the shuffle key
+        let shuffle_key = match vertex.to_vertex_type {
+            VertexType::MapUDF | VertexType::Sink | VertexType::Source => {
+                String::from_utf8_lossy(&message.id.offset).to_string()
+            }
+            VertexType::ReduceUDF => message.keys.join(":"),
+        };
+
+        // Determine partition
+        let partition = forward::determine_partition(shuffle_key, vertex.partitions);
+
+        // Get the stream for this partition
+        vertex
+            .writer_config
+            .streams
+            .get(partition as usize)
+            .expect("stream should be present")
+            .clone()
+    }
+
+    /// Writes a message to a single stream with retry logic.
     /// Returns None if the message should be dropped (DiscardLatest + buffer full or cancelled).
-    async fn write_with_retry(
+    async fn write_to_stream(
         &self,
-        writer: &JetStreamWriter,
-        message: Message,
+        message: &Message,
         stream: &Stream,
         buffer_full_strategy: BufferFullStrategy,
         cln_token: CancellationToken,
-    ) -> Option<async_nats::jetstream::context::PublishAckFuture> {
+    ) -> Option<WriteResult> {
+        let writer = self
+            .writers
+            .get(stream.name)
+            .expect("writer should exist for stream");
+        let write_start = Instant::now();
         let mut log_counter = 500u16;
 
         loop {
             match writer.async_write(message.clone()).await {
-                Ok(paf) => return Some(paf),
+                Ok(paf) => {
+                    return Some(WriteResult {
+                        stream: stream.clone(),
+                        paf,
+                        write_start,
+                    });
+                }
                 Err(WriteError::BufferFull) => {
+                    // Throttled logging for buffer full
                     if log_counter >= 500 {
                         warn!(stream = ?stream, "stream is full (throttled logging)");
                         log_counter = 0;
                     }
                     log_counter += 1;
 
+                    // Handle buffer full based on strategy
                     match buffer_full_strategy {
                         BufferFullStrategy::DiscardLatest => {
-                            let msg_bytes = message.value.len();
-                            // delete the entry from tracker
-                            self.tracker_handle
-                                .delete(message.offset.clone())
-                                .await
-                                .expect("Failed to delete offset from tracker");
-                            // increment drop metric
-                            pipeline_metrics()
-                                .forwarder
-                                .drop_total
-                                .get_or_create(&pipeline_drop_metric_labels(
-                                    self.vertex_type.as_str(),
-                                    stream.name,
-                                    "buffer-full",
-                                ))
-                                .inc();
-                            pipeline_metrics()
-                                .forwarder
-                                .drop_bytes_total
-                                .get_or_create(&pipeline_drop_metric_labels(
-                                    self.vertex_type.as_str(),
-                                    stream.name,
-                                    "buffer-full",
-                                ))
-                                .inc_by(msg_bytes as u64);
-                            return None;
+                            self.drop_message_due_to_buffer_full(message, stream).await;
+                            return None; // Don't retry
                         }
                         BufferFullStrategy::RetryUntilSuccess => {
                             // Continue retrying
@@ -307,8 +271,8 @@ impl ISBWriter {
                     }
                 }
                 Err(WriteError::PublishFailed(e)) => {
-                    error!(?e, "Publishing failed, retrying");
                     // Continue retrying
+                    error!(?e, "Publishing failed, retrying");
                 }
             }
 
@@ -322,10 +286,61 @@ impl ISBWriter {
         }
     }
 
-    fn send_write_metrics(
+    /// Handles a dropped message by removing from tracker and publishing metrics.
+    async fn handle_dropped_message(&self, message: Message) {
+        self.tracker_handle
+            .delete(message.offset)
+            .await
+            .expect("Failed to delete offset from tracker");
+        self.publish_stream_drop_metric("n/a", "to_drop", 0);
+    }
+
+    /// Drops a message due to buffer full and publishes metrics.
+    async fn drop_message_due_to_buffer_full(&self, message: &Message, stream: &Stream) {
+        let msg_bytes = message.value.len();
+        self.tracker_handle
+            .delete(message.offset.clone())
+            .await
+            .expect("Failed to delete offset from tracker");
+        self.publish_stream_drop_metric(stream.name, "buffer-full", msg_bytes);
+    }
+
+    /// Waits for all PAF resolvers to complete.
+    async fn wait_for_paf_resolvers(&self) -> Result<()> {
+        let _ = Arc::clone(&self.sem)
+            .acquire_many_owned(self.paf_concurrency as u32)
+            .await
+            .expect("Failed to acquire semaphore permit");
+        Ok(())
+    }
+
+    /// Publishes drop metrics for a specific stream.
+    fn publish_stream_drop_metric(&self, stream_name: &str, reason: &str, bytes: usize) {
+        pipeline_metrics()
+            .forwarder
+            .drop_total
+            .get_or_create(&pipeline_drop_metric_labels(
+                self.vertex_type.as_str(),
+                stream_name,
+                reason,
+            ))
+            .inc();
+        pipeline_metrics()
+            .forwarder
+            .drop_bytes_total
+            .get_or_create(&pipeline_drop_metric_labels(
+                self.vertex_type.as_str(),
+                stream_name,
+                reason,
+            ))
+            .inc_by(bytes as u64);
+    }
+
+    /// Publishes write metrics for a successful write.
+    fn publish_write_metrics(
         partition_name: &str,
         vertex_type: &str,
-        message: Message,
+        message: &Message,
         write_processing_start: Instant,
     ) {
         let mut labels = pipeline_metric_labels(vertex_type).clone();
@@ -359,133 +374,43 @@ impl ISBWriter {
             .observe(write_processing_start.elapsed().as_micros() as f64);
     }
 
-    /// resolve_pafs resolves the PAFs for the given result. It will try to resolve the PAFs
-    /// asynchronously, if it fails it will do a blocking write to resolve the PAFs.
-    /// At any point in time, we will only have X PAF resolvers running, this will help us create a
-    /// natural backpressure.
-    async fn resolve_pafs(
+    /// Resolves PAFs and finalizes the message processing.
+    /// Spawns a background task to resolve all PAFs, publish watermarks, and update tracker.
+    async fn resolve_and_finalize(
         &self,
-        pafs: Vec<(
-            Stream,
-            Instant,
-            async_nats::jetstream::context::PublishAckFuture,
-        )>,
+        write_results: Vec<WriteResult>,
         message: Message,
         cln_token: CancellationToken,
     ) -> Result<()> {
         let permit = Arc::clone(&self.sem)
             .acquire_owned()
             .await
-            .map_err(|_e| Error::ISB("Failed to acquire semaphore permit".to_string()))?;
+            .map_err(|_e| Error::ISB("Failed to acquire semaphore permit".to_string()));
 
-        let this = self.clone();
+        let mut this = self.clone();
 
         tokio::spawn(async move {
             let _permit = permit;
-            let mut offsets = Vec::new();
 
-            // resolve the pafs
-            for (stream, write_processing_start, paf) in pafs {
-                let writer = this
-                    .writers
-                    .get(stream.name)
-                    .expect("writer should exist for stream");
+            // Resolve all PAFs
+            let resolved_offsets = this
+                .resolve_all_pafs(write_results, &message, cln_token)
+                .await;
 
-                let ack = match paf.await {
-                    Ok(ack) => {
-                        Self::send_write_metrics(
-                            stream.name,
-                            this.vertex_type.as_str(),
-                            message.clone(),
-                            write_processing_start,
-                        );
-                        Ok(ack)
-                    }
-                    Err(e) => {
-                        error!(
-                            ?e, stream = ?stream,
-                            "Failed to resolve the future trying blocking write",
-                        );
-                        pipeline_metrics()
-                            .jetstream_isb
-                            .write_error_total
-                            .get_or_create(&crate::metrics::jetstream_isb_error_metrics_labels(
-                                stream.name,
-                                e.kind().to_string(),
-                            ))
-                            .inc();
-                        if let async_nats::jetstream::context::PublishErrorKind::TimedOut = e.kind()
-                        {
-                            pipeline_metrics()
-                                .jetstream_isb
-                                .write_timeout_total
-                                .get_or_create(&crate::metrics::jetstream_isb_error_metrics_labels(
-                                    stream.name,
-                                    e.kind().to_string(),
-                                ))
-                                .inc();
-                        }
-                        writer
-                            .blocking_write(message.clone(), cln_token.clone())
-                            .await
-                    }
-                };
-
-                match ack {
-                    Ok(ack) => {
-                        if ack.duplicate {
-                            warn!(
-                                message_id = ?message.id,
-                                ?stream,
-                                ?ack,
-                                "Duplicate message detected"
-                            );
-                            // Increment drop metric for duplicate messages
-                            pipeline_metrics()
-                                .forwarder
-                                .drop_total
-                                .get_or_create(&pipeline_drop_metric_labels(
-                                    this.vertex_type.as_str(),
-                                    stream.name,
-                                    "duplicate-id",
-                                ))
-                                .inc();
-                            pipeline_metrics()
-                                .forwarder
-                                .drop_bytes_total
-                                .get_or_create(&pipeline_drop_metric_labels(
-                                    this.vertex_type.as_str(),
-                                    stream.name,
-                                    "duplicate-id",
-                                ))
-                                .inc_by(message.value.len() as u64);
-                        }
-                        offsets.push((
-                            stream.clone(),
-                            Offset::Int(IntOffset::new(ack.sequence as i64, stream.partition)),
-                        ));
-                    }
-                    Err(e) => {
-                        error!(?e, stream = ?stream, "Blocking write failed");
-                        // Since we failed to write to the stream, we need to send a NAK to the reader
-                        this.tracker_handle
-                            .discard(message.offset.clone())
-                            .await
-                            .expect("Failed to discard offset from the tracker");
-                        return;
-                    }
-                }
+            // If all writes failed, NAK the message
+            if resolved_offsets.is_empty() {
+                this.tracker_handle
+                    .discard(message.offset.clone())
+                    .await
+                    .expect("Failed to discard offset from the tracker");
+                return;
             }
 
-            if let Some(mut watermark_handle) = this.watermark_handle.clone() {
-                // now the pafs have resolved, lets use the offsets to send watermark
-                for (stream, offset) in offsets {
-                    Self::publish_watermark(&mut watermark_handle, stream, offset, &message).await;
-                }
-            }
+            // Publish watermarks for successful writes
+            this.publish_watermarks_for_offsets(resolved_offsets, &message)
+                .await;
 
-            // Now that the PAF is resolved, we can delete the entry from the tracker which will send
-            // an ACK to the reader.
+            // Finalize by removing from tracker (sends ACK to reader)
             this.tracker_handle
                 .delete(message.offset.clone())
                 .await
@@ -495,25 +420,138 @@ impl ISBWriter {
         Ok(())
     }
 
-    /// publishes the watermark for the given stream and offset
-    async fn publish_watermark(
-        watermark_handle: &mut WatermarkHandle,
-        stream: Stream,
-        offset: Offset,
+    /// Resolves all PAFs and returns the offsets for successful writes.
+    async fn resolve_all_pafs(
+        &self,
+        write_results: Vec<WriteResult>,
+        message: &Message,
+        cln_token: CancellationToken,
+    ) -> Vec<(Stream, Offset)> {
+        let mut offsets = Vec::new();
+
+        for write_result in write_results {
+            let writer = self
+                .writers
+                .get(write_result.stream.name)
+                .expect("writer should exist for stream");
+
+            // Try to resolve the PAF
+            let paf_result = match write_result.paf.await {
+                Ok(ack) => Ok(ack),
+                Err(e) => {
+                    error!(
+                        ?e, stream = ?write_result.stream,
+                        "Failed to resolve the future, trying blocking write",
+                    );
+                    Self::publish_paf_error_metrics(write_result.stream.name, &e);
+                    writer
+                        .blocking_write(message.clone(), cln_token.clone())
+                        .await
+                }
+            };
+
+            // Handle the ack result
+            if let Some(offset) = self
+                .handle_paf_result(paf_result, &write_result.stream, message)
+                .await
+            {
+                // Publish write metrics for successful write
+                Self::publish_write_metrics(
+                    write_result.stream.name,
+                    self.vertex_type.as_str(),
+                    message,
+                    write_result.write_start,
+                );
+                offsets.push((write_result.stream.clone(), offset));
+            }
+        }
+
+        offsets
+    }
+
+    /// Handles the result of an ack operation.
+    /// Returns Some(offset) if successful, None if failed.
+    async fn handle_paf_result(
+        &self,
+        ack_result: Result<async_nats::jetstream::publish::PublishAck>,
+        stream: &Stream,
+        message: &Message,
+    ) -> Option<Offset> {
+        match ack_result {
+            Ok(ack) => {
+                if ack.duplicate {
+                    warn!(
+                        message_id = ?message.id,
+                        stream = ?stream,
+                        "Duplicate message detected"
+                    );
+                    self.publish_stream_drop_metric(
+                        stream.name,
+                        "duplicate-id",
+                        message.value.len(),
+                    );
+                }
+                Some(Offset::Int(IntOffset::new(
+                    ack.sequence as i64,
+                    stream.partition,
+                )))
+            }
+            Err(e) => {
+                error!(?e, stream = ?stream, "Blocking write failed");
+                None
+            }
+        }
+    }
+
+    /// Publishes error metrics for PAF resolution failures.
+    fn publish_paf_error_metrics(
+        stream_name: &str,
+        e: &async_nats::jetstream::context::PublishError,
+    ) {
+        pipeline_metrics()
+            .jetstream_isb
+            .write_error_total
+            .get_or_create(&crate::metrics::jetstream_isb_error_metrics_labels(
+                stream_name,
+                e.kind().to_string(),
+            ))
+            .inc();
+        if let async_nats::jetstream::context::PublishErrorKind::TimedOut = e.kind() {
+            pipeline_metrics()
+                .jetstream_isb
+                .write_timeout_total
+                .get_or_create(&crate::metrics::jetstream_isb_error_metrics_labels(
+                    stream_name,
+                    e.kind().to_string(),
+                ))
+                .inc();
+        }
+    }
+
+    /// Publishes watermarks for all resolved offsets.
+    async fn publish_watermarks_for_offsets(
+        &mut self,
+        offsets: Vec<(Stream, Offset)>,
         message: &Message,
     ) {
-        match watermark_handle {
-            WatermarkHandle::ISB(handle) => {
-                handle.publish_watermark(stream, offset).await;
-            }
-            WatermarkHandle::Source(handle) => {
-                let input_partition = match &message.offset {
-                    Offset::Int(offset) => offset.partition_idx,
-                    Offset::String(offset) => offset.partition_idx,
-                };
-                handle
-                    .publish_source_isb_watermark(stream, offset, input_partition)
-                    .await;
+        let Some(watermark_handle) = self.watermark_handle.as_mut() else {
+            return;
+        };
+
+        for (stream, offset) in offsets {
+            match watermark_handle {
+                WatermarkHandle::ISB(handle) => {
+                    handle.publish_watermark(stream, offset).await;
+                }
+                WatermarkHandle::Source(handle) => {
+                    let input_partition = match &message.offset {
+                        Offset::Int(offset) => offset.partition_idx,
+                        Offset::String(offset) => offset.partition_idx,
+                    };
+                    handle
+                        .publish_source_isb_watermark(stream, offset, input_partition)
+                        .await;
+                }
             }
         }
     }
