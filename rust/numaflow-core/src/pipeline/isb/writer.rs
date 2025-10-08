@@ -120,8 +120,7 @@ impl ISBWriter {
             let mut messages_stream = messages_stream;
 
             while let Some(message) = messages_stream.next().await {
-                // Process each message through the orchestration pipeline
-                self.process_message(message, cln_token)
+                self.process_message(message, cln_token.clone())
                     .await
                     .inspect_err(|e| {
                         error!(?e, "Failed to process message");
@@ -149,20 +148,6 @@ impl ISBWriter {
         let write_results = self
             .route_and_write_message(message.clone(), cln_token.clone())
             .await;
-
-        // Handle empty results (conditional forwarding not met or all writes failed)
-        if write_results.is_empty() {
-            debug!(
-                tags = ?message.tags,
-                "message will be dropped because conditional forwarding rules are not met or buffer is full"
-            );
-            self.tracker_handle
-                .delete(message.offset)
-                .await
-                .expect("Failed to delete offset from tracker");
-            self.publish_stream_drop_metric("n/a", "forwarding-rules-not-met", 0);
-            return Ok(());
-        }
 
         // Resolve PAFs and finalize
         self.resolve_and_finalize(write_results, message, cln_token)
@@ -199,6 +184,19 @@ impl ISBWriter {
             {
                 results.push(write_result);
             }
+        }
+
+        // Handle empty results (conditional forwarding not met or all writes failed)
+        if results.is_empty() {
+            debug!(
+                tags = ?message.tags,
+                "message will be dropped because conditional forwarding rules are not met or buffer is full"
+            );
+            self.tracker_handle
+                .delete(message.offset)
+                .await
+                .expect("Failed to delete offset from tracker");
+            self.publish_stream_drop_metric("n/a", "forwarding-rules-not-met", 0);
         }
 
         results
@@ -292,17 +290,16 @@ impl ISBWriter {
             .delete(message.offset)
             .await
             .expect("Failed to delete offset from tracker");
-        self.publish_stream_drop_metric("n/a", "to_drop", 0);
+        self.publish_stream_drop_metric("n/a", "to_drop", message.value.len());
     }
 
     /// Drops a message due to buffer full and publishes metrics.
     async fn drop_message_due_to_buffer_full(&self, message: &Message, stream: &Stream) {
-        let msg_bytes = message.value.len();
         self.tracker_handle
             .delete(message.offset.clone())
             .await
             .expect("Failed to delete offset from tracker");
-        self.publish_stream_drop_metric(stream.name, "buffer-full", msg_bytes);
+        self.publish_stream_drop_metric(stream.name, "buffer-full", message.value.len());
     }
 
     /// Waits for all PAF resolvers to complete.
@@ -388,17 +385,17 @@ impl ISBWriter {
             .map_err(|_e| Error::ISB("Failed to acquire semaphore permit".to_string()));
 
         let mut this = self.clone();
-
         tokio::spawn(async move {
             let _permit = permit;
 
+            let n = write_results.len();
             // Resolve all PAFs
             let resolved_offsets = this
                 .resolve_all_pafs(write_results, &message, cln_token)
                 .await;
 
-            // If all writes failed, NAK the message
-            if resolved_offsets.is_empty() {
+            // If any of the writes failed, NAK the message
+            if resolved_offsets.len() != n {
                 this.tracker_handle
                     .discard(message.offset.clone())
                     .await
