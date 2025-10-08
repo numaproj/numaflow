@@ -112,6 +112,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
 #[cfg(test)]
 mod tests {
     use crate::Result;
+    use crate::mapper::map::MapHandle;
     use crate::monovertex::forwarder::Forwarder;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sink::{SinkClientType, SinkWriterBuilder};
@@ -122,9 +123,11 @@ mod tests {
     use chrono::Utc;
     use numaflow::shared::ServerExtras;
     use numaflow::source::{Message, Offset, SourceReadRequest};
-    use numaflow::{source, sourcetransform};
+    use numaflow::{batchmap, map, mapstream, source, sourcetransform};
+    use numaflow_pb::clients::map::map_client::MapClient;
     use numaflow_pb::clients::source::source_client::SourceClient;
     use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+    use numaflow_shared::server_info::MapMode;
     use std::collections::HashSet;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
@@ -164,7 +167,7 @@ mod tests {
                 let offset = format!("{}-{}", event_time.timestamp_nanos_opt().unwrap(), i);
                 transmitter
                     .send(Message {
-                        value: b"hello".to_vec(),
+                        value: b"hello,world".to_vec(),
                         event_time,
                         offset: Offset {
                             offset: offset.clone().into_bytes(),
@@ -225,7 +228,7 @@ mod tests {
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
 
-        // create a transformer
+        // create a transformer for this source
         let (st_shutdown_tx, st_shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("sourcetransform.sock");
@@ -364,7 +367,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_flatmap_operation() {
+    async fn test_transformer_flatmap_operation() {
         let tracker_handle = TrackerHandle::new(None);
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
@@ -488,5 +491,433 @@ mod tests {
         transformer_handle.await.unwrap();
     }
 
-    // TODO: add unit tests similar to map_forwarder
+    struct Cat;
+
+    #[tonic::async_trait]
+    impl map::Mapper for Cat {
+        async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
+            let message = map::Message::new(input.value)
+                .with_keys(input.keys)
+                .with_tags(vec![]);
+            vec![message]
+        }
+    }
+
+    #[tonic::async_trait]
+    impl batchmap::BatchMapper for Cat {
+        async fn batchmap(
+            &self,
+            mut input: tokio::sync::mpsc::Receiver<batchmap::Datum>,
+        ) -> Vec<batchmap::BatchResponse> {
+            let mut responses: Vec<batchmap::BatchResponse> = Vec::new();
+            while let Some(datum) = input.recv().await {
+                let mut response = batchmap::BatchResponse::from_id(datum.id);
+                response.append(batchmap::Message::new(datum.value).with_keys(datum.keys.clone()));
+                responses.push(response);
+            }
+            responses
+        }
+    }
+
+    #[tonic::async_trait]
+    impl mapstream::MapStreamer for Cat {
+        async fn map_stream(
+            &self,
+            input: mapstream::MapStreamRequest,
+            tx: Sender<mapstream::Message>,
+        ) {
+            let payload_str = String::from_utf8(input.value).unwrap_or_default();
+            let splits: Vec<&str> = payload_str.split(',').collect();
+
+            for split in splits {
+                let message = mapstream::Message::new(split.as_bytes().to_vec())
+                    .with_keys(input.keys.clone())
+                    .with_tags(vec![]);
+                if tx.send(message).await.is_err() {
+                    break;
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_map_operation() {
+        let tracker_handle = TrackerHandle::new(None);
+        // create the source which produces x number of messages
+        let cln_token = CancellationToken::new();
+
+        // Create source
+        let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("source.sock");
+        let server_info_file = tmp_dir.path().join("source-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let source_handle = tokio::spawn(async move {
+            // a simple source which generates total of 100 messages
+            source::Server::new(SimpleSource::new(100))
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(src_shutdown_rx)
+                .await
+                .unwrap()
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
+
+        let (src_read, src_ack, lag_reader) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
+
+        let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
+            5,
+            SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
+            tracker_handle.clone(),
+            true,
+            None,
+            None,
+            None,
+        );
+
+        // create a mapper
+        let (mp_shutdown_tx, mp_shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("mapper.sock");
+        let server_info_file = tmp_dir.path().join("mapper-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let map_handle = tokio::spawn(async move {
+            map::Server::new(Cat)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(mp_shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = MapClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let mapper = MapHandle::new(
+            MapMode::Unary,
+            10,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+            client,
+            tracker_handle.clone(),
+        )
+        .await
+        .unwrap();
+
+        let sink_writer = SinkWriterBuilder::new(
+            10,
+            Duration::from_millis(100),
+            SinkClientType::Log,
+            tracker_handle.clone(),
+        )
+        .build()
+        .await
+        .unwrap();
+
+        // create the forwarder with the source, transformer, and writer
+        let forwarder = Forwarder::new(source.clone(), None, sink_writer);
+
+        let cancel_token = cln_token.clone();
+        let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
+            forwarder.start(cancel_token).await?;
+            Ok(())
+        });
+
+        // wait for one sec to check if the pending becomes zero, because all the messages
+        // should be read and acked; if it doesn't, then fail the test
+        let tokio_result = tokio::time::timeout(Duration::from_secs(1), async move {
+            loop {
+                let pending = source.pending().await.unwrap();
+                if pending == Some(0) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        assert!(
+            tokio_result.is_ok(),
+            "Timeout occurred before pending became zero"
+        );
+        cln_token.cancel();
+        forwarder_handle.await.unwrap().unwrap();
+        mp_shutdown_tx.send(()).unwrap();
+        src_shutdown_tx.send(()).unwrap();
+        source_handle.await.unwrap();
+        map_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_batch_map_operation() {
+        let tracker_handle = TrackerHandle::new(None);
+        // create the source which produces x number of messages
+        let cln_token = CancellationToken::new();
+
+        // Create source
+        let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("source.sock");
+        let server_info_file = tmp_dir.path().join("source-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let source_handle = tokio::spawn(async move {
+            // a simple source which generates total of 100 messages
+            source::Server::new(SimpleSource::new(100))
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(src_shutdown_rx)
+                .await
+                .unwrap()
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
+
+        let (src_read, src_ack, lag_reader) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
+
+        let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
+            5,
+            SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
+            tracker_handle.clone(),
+            true,
+            None,
+            None,
+            None,
+        );
+
+        // create a mapper
+        let (bmp_shutdown_tx, bmp_shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("batch_map.sock");
+        let server_info_file = tmp_dir.path().join("batch_map-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let map_handle = tokio::spawn(async move {
+            batchmap::Server::new(Cat)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(bmp_shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = MapClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let mapper = MapHandle::new(
+            MapMode::Batch,
+            10,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+            client,
+            tracker_handle.clone(),
+        )
+        .await
+        .unwrap();
+
+        let sink_writer = SinkWriterBuilder::new(
+            10,
+            Duration::from_millis(100),
+            SinkClientType::Log,
+            tracker_handle.clone(),
+        )
+        .build()
+        .await
+        .unwrap();
+
+        // create the forwarder with the source, transformer, and writer
+        let forwarder = Forwarder::new(source.clone(), None, sink_writer);
+
+        let cancel_token = cln_token.clone();
+        let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
+            forwarder.start(cancel_token).await?;
+            Ok(())
+        });
+
+        // wait for one sec to check if the pending becomes zero, because all the messages
+        // should be read and acked; if it doesn't, then fail the test
+        let tokio_result = tokio::time::timeout(Duration::from_secs(1), async move {
+            loop {
+                let pending = source.pending().await.unwrap();
+                if pending == Some(0) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        assert!(
+            tokio_result.is_ok(),
+            "Timeout occurred before pending became zero"
+        );
+        cln_token.cancel();
+        forwarder_handle.await.unwrap().unwrap();
+        bmp_shutdown_tx.send(()).unwrap();
+        src_shutdown_tx.send(()).unwrap();
+        source_handle.await.unwrap();
+        map_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_flatmap_stream_operation() {
+        let tracker_handle = TrackerHandle::new(None);
+        // create the source which produces x number of messages
+        let cln_token = CancellationToken::new();
+
+        // Create source
+        let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("source.sock");
+        let server_info_file = tmp_dir.path().join("source-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let source_handle = tokio::spawn(async move {
+            // a simple source which generates total of 100 messages
+            source::Server::new(SimpleSource::new(100))
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(src_shutdown_rx)
+                .await
+                .unwrap()
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
+
+        let (src_read, src_ack, lag_reader) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
+
+        let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
+            5,
+            SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
+            tracker_handle.clone(),
+            true,
+            None,
+            None,
+            None,
+        );
+
+        // create a mapper
+        let (fms_shutdown_tx, fms_shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("flatmap_stream.sock");
+        let server_info_file = tmp_dir.path().join("flatmap_stream-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let map_handle = tokio::spawn(async move {
+            mapstream::Server::new(Cat)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(fms_shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = MapClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let mapper = MapHandle::new(
+            MapMode::Stream,
+            10,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+            client,
+            tracker_handle.clone(),
+        )
+        .await
+        .unwrap();
+
+        let sink_writer = SinkWriterBuilder::new(
+            10,
+            Duration::from_millis(100),
+            SinkClientType::Log,
+            tracker_handle.clone(),
+        )
+        .build()
+        .await
+        .unwrap();
+
+        // create the forwarder with the source, transformer, and writer
+        let forwarder = Forwarder::new(source.clone(), None, sink_writer);
+
+        let cancel_token = cln_token.clone();
+        let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
+            forwarder.start(cancel_token).await?;
+            Ok(())
+        });
+
+        // wait for one sec to check if the pending becomes zero, because all the messages
+        // should be read and acked; if it doesn't, then fail the test
+        let tokio_result = tokio::time::timeout(Duration::from_secs(1), async move {
+            loop {
+                let pending = source.pending().await.unwrap();
+                if pending == Some(0) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        assert!(
+            tokio_result.is_ok(),
+            "Timeout occurred before pending became zero"
+        );
+        cln_token.cancel();
+        forwarder_handle.await.unwrap().unwrap();
+        fms_shutdown_tx.send(()).unwrap();
+        src_shutdown_tx.send(()).unwrap();
+        source_handle.await.unwrap();
+        map_handle.await.unwrap();
+    }
 }
