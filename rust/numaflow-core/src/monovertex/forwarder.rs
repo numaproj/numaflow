@@ -641,9 +641,8 @@ mod tests {
         let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
 
         let cancel_token = cln_token.clone();
-        let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
-            forwarder.start(cancel_token).await
-        });
+        let forwarder_handle: JoinHandle<Result<()>> =
+            tokio::spawn(async move { forwarder.start(cancel_token).await });
 
         // wait for one sec to check if the pending becomes zero, because all the messages
         // should be read and acked; if it doesn't, then fail the test
@@ -767,10 +766,8 @@ mod tests {
         let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
 
         let cancel_token = cln_token.clone();
-        let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
-            forwarder.start(cancel_token).await?;
-            Ok(())
-        });
+        let forwarder_handle: JoinHandle<Result<()>> =
+            tokio::spawn(async move { forwarder.start(cancel_token).await });
 
         // wait for one sec to check if the pending becomes zero, because all the messages
         // should be read and acked; if it doesn't, then fail the test
@@ -894,9 +891,8 @@ mod tests {
         let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
 
         let cancel_token = cln_token.clone();
-        let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
-            forwarder.start(cancel_token).await
-        });
+        let forwarder_handle: JoinHandle<Result<()>> =
+            tokio::spawn(async move { forwarder.start(cancel_token).await });
 
         // wait for one sec to check if the pending becomes zero, because all the messages
         // should be read and acked; if it doesn't, then fail the test
