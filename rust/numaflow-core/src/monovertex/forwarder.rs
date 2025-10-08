@@ -512,7 +512,11 @@ mod tests {
             let mut responses: Vec<batchmap::BatchResponse> = Vec::new();
             while let Some(datum) = input.recv().await {
                 let mut response = batchmap::BatchResponse::from_id(datum.id);
-                response.append(batchmap::Message::new(datum.value).with_keys(datum.keys.clone()));
+                response.append(batchmap::Message {
+                    keys: Option::from(datum.keys),
+                    value: datum.value,
+                    tags: None,
+                });
                 responses.push(response);
             }
             responses
@@ -634,12 +638,11 @@ mod tests {
         .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), None, sink_writer);
+        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
-            forwarder.start(cancel_token).await?;
-            Ok(())
+            forwarder.start(cancel_token).await
         });
 
         // wait for one sec to check if the pending becomes zero, because all the messages
@@ -761,7 +764,7 @@ mod tests {
         .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), None, sink_writer);
+        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
@@ -888,12 +891,11 @@ mod tests {
         .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), None, sink_writer);
+        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
-            forwarder.start(cancel_token).await?;
-            Ok(())
+            forwarder.start(cancel_token).await
         });
 
         // wait for one sec to check if the pending becomes zero, because all the messages
