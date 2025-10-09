@@ -21,13 +21,13 @@ use crate::tracker::TrackerHandle;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
 
-use crate::pipeline::isb::jetstream::reader::JetStreamReader;
+use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
 use crate::watermark::wmb::WMB;
 use async_nats::jetstream::Context;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use numaflow_throttling::RateLimiter;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 const ACK_RETRY_INTERVAL: u64 = 100; // ms
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
@@ -81,7 +81,8 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
             let semaphore = Arc::new(Semaphore::new(max_ack_pending));
 
             loop {
-                // stop reading if the token is cancelled
+                // stop reading if the token is cancelled. cancel is only honored here since it is
+                // the first block in the chain.
                 if cancel.is_cancelled() {
                     break;
                 }
@@ -129,6 +130,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
 
         Ok((ReceiverStream::new(rx), handle))
     }
+
     pub(crate) async fn pending(&mut self) -> Result<Option<usize>> {
         self.js_reader.pending().await
     }
@@ -331,6 +333,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
 
         // Fetch message batch
         let batch = if effective_batch_size == 0 {
+            // if throttled
             Vec::new()
         } else {
             match self
@@ -465,7 +468,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
             offset: message.offset.clone(),
             ack_rx,
             tick: self.cfg.wip_ack_interval,
-            permit,
+            _permit: permit,
             cancel,
             message_processing_start: processing_start,
         };
@@ -484,15 +487,22 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         semaphore: Arc<Semaphore>,
         max_ack_pending: usize,
     ) -> Result<()> {
+        info!(
+            "ISBReader is shutting down (pending={}), waiting for inflight messages to be acked/nacked",
+            max_ack_pending - semaphore.available_permits()
+        );
         // Wait for inflight messages to finish
         let _ = semaphore.acquire_many_owned(max_ack_pending as u32).await;
 
         // Shutdown rate limiter if configured
         if let Some(rl) = &self.rate_limiter {
+            info!("ISBReader is shutting down, shutting down rate limiter");
             rl.shutdown()
                 .await
                 .map_err(|e| Error::ISB(format!("Failed to shutdown rate limiter: {e}")))?;
         }
+
+        info!("ISBReader cleanup on shutdown completed.");
 
         Ok(())
     }
@@ -505,7 +515,7 @@ struct WipParams {
     offset: Offset,
     ack_rx: oneshot::Receiver<ReadAck>,
     tick: Duration,
-    permit: tokio::sync::OwnedSemaphorePermit,
+    _permit: tokio::sync::OwnedSemaphorePermit, // drop guard
     cancel: CancellationToken,
     message_processing_start: Instant,
 }

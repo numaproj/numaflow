@@ -1,3 +1,5 @@
+//!  Compression and Decompression before writing or after reading from ISB.
+
 use std::io::Read;
 
 use crate::Result;
@@ -5,7 +7,7 @@ use crate::config::pipeline::isb::CompressionType;
 use crate::error::Error;
 
 /// Compress data based on the compression type.
-pub fn compress(compression_type: Option<CompressionType>, data: &[u8]) -> Result<Vec<u8>> {
+pub(super) fn compress(compression_type: Option<CompressionType>, data: &[u8]) -> Result<Vec<u8>> {
     match compression_type {
         Some(CompressionType::Gzip) => {
             use flate2::Compression;
@@ -51,7 +53,10 @@ pub fn compress(compression_type: Option<CompressionType>, data: &[u8]) -> Resul
 }
 
 /// Decompress data based on the compression type.
-pub fn decompress(compression_type: Option<CompressionType>, data: &[u8]) -> Result<Vec<u8>> {
+pub(super) fn decompress(
+    compression_type: Option<CompressionType>,
+    data: &[u8],
+) -> Result<Vec<u8>> {
     match compression_type {
         Some(CompressionType::Gzip) => {
             use flate2::read::GzDecoder;

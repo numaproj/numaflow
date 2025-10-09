@@ -10,7 +10,7 @@ use crate::metrics::{
 };
 use crate::pipeline::PipelineContext;
 
-use crate::pipeline::isb::jetstream::reader::JetStreamReader;
+use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
 use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
 use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
 use crate::shared::create_components;
@@ -276,11 +276,11 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
     Ok((forwarder_tasks, mapper_handle.unwrap(), pending_reader_task))
 }
 
-/// Start a map forwarder for a single stream, returns the task handle and the JS reader
+/// Start a map forwarder for a single stream, returns the task handle and the ISB reader
 /// (returned so that we can create a pending reader for metrics).
 async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig>(
     reader_components: ISBReaderComponents,
-    mapper: crate::mapper::map::MapHandle,
+    mapper: MapHandle,
     buffer_writer: ISBWriter,
     rate_limiter: Option<C::RateLimiter>,
 ) -> Result<(tokio::task::JoinHandle<Result<()>>, ISBReader<C>)> {

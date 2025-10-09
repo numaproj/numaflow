@@ -8,7 +8,7 @@ use crate::metrics::{
     ComponentHealthChecks, LagReader, MetricsState, PipelineComponents, WatermarkFetcherState,
 };
 use crate::pipeline::PipelineContext;
-use crate::pipeline::isb::jetstream::reader::JetStreamReader;
+use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
 use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
 use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
 use crate::reduce::pbq::{PBQ, PBQBuilder, WAL};

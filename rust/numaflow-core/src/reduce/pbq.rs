@@ -227,7 +227,7 @@ mod tests {
     use super::*;
     use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
     use crate::message::{IntOffset, MessageID, Offset};
-    use crate::pipeline::isb::jetstream::reader::JetStreamReader;
+    use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
     use crate::pipeline::isb::reader::ISBReader;
     use crate::reduce::wal::segment::WalType;
     use crate::reduce::wal::segment::compactor::WindowKind;

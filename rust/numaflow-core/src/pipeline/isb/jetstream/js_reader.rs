@@ -99,7 +99,7 @@ pub(crate) struct JetStreamReader {
     compression_type: Option<CompressionType>,
     /// jetstream needs complete message to ack/nack, so we need to keep track of them using the offset
     /// so that we can ack/nack them later using the offset.
-    handles: Arc<Mutex<HashMap<String, JetstreamMessage>>>,
+    offset2jsmsg: Arc<Mutex<HashMap<Offset, JetstreamMessage>>>,
 }
 
 impl JetStreamReader {
@@ -117,7 +117,7 @@ impl JetStreamReader {
             stream,
             consumer,
             compression_type: isb_config.map(|c| c.compression.compress_type),
-            handles: Arc::new(Mutex::new(HashMap::new())),
+            offset2jsmsg: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -159,7 +159,6 @@ impl JetStreamReader {
                 info.stream_sequence as i64,
                 self.stream.partition,
             ));
-            let offset_key = offset.to_string();
 
             // Convert to core Message (including decompression) using existing wrapper
             let mut message = JSWrappedMessage {
@@ -175,8 +174,8 @@ impl JetStreamReader {
 
             // Track the actual message for doing ack/nack/wip by offset
             {
-                let mut map = self.handles.lock().expect("handles mutex poisoned");
-                map.insert(offset_key, js_msg);
+                let mut map = self.offset2jsmsg.lock().expect("handles mutex poisoned");
+                map.insert(offset, js_msg);
             }
 
             out.push(message);
@@ -187,47 +186,47 @@ impl JetStreamReader {
 
     /// Mark messages as in progress by sending work in progress acks.
     pub(crate) async fn mark_wip(&self, offsets: &[Offset]) -> Result<()> {
-        let handles = self.get_message_handles(offsets, false);
-        for h in handles {
-            let _ = h.ack_with(AckKind::Progress).await;
+        let msgs = self.get_js_messages(offsets, false);
+        for m in msgs {
+            let _ = m.ack_with(AckKind::Progress).await;
         }
         Ok(())
     }
 
     /// Acknowledge the offsets
     pub(crate) async fn ack(&self, offsets: &[Offset]) -> Result<()> {
-        let handles = self.get_message_handles(offsets, true);
-        for h in handles {
-            let _ = h.double_ack().await;
+        let msgs = self.get_js_messages(offsets, true);
+        for m in msgs {
+            let _ = m.double_ack().await;
         }
         Ok(())
     }
 
     /// Negatively acknowledge the offsets
     pub(crate) async fn nack(&self, offsets: &[Offset]) -> Result<()> {
-        let handles = self.get_message_handles(offsets, true);
-        for h in handles {
-            let _ = h.ack_with(AckKind::Nak(None)).await;
+        let msgs = self.get_js_messages(offsets, true);
+        for m in msgs {
+            let _ = m.ack_with(AckKind::Nak(None)).await;
         }
         Ok(())
     }
 
     /// Helper method to collect handles for given offsets, optionally removing them from the map
-    fn get_message_handles(&self, offsets: &[Offset], remove: bool) -> Vec<JetstreamMessage> {
+    fn get_js_messages(&self, offsets: &[Offset], remove: bool) -> Vec<JetstreamMessage> {
         if remove {
-            let mut map = self.handles.lock().expect("handles mutex poisoned");
+            let mut map = self.offset2jsmsg.lock().expect("handles mutex poisoned");
             let mut v = Vec::with_capacity(offsets.len());
             for o in offsets {
-                if let Some(h) = map.remove(&o.to_string()) {
+                if let Some(h) = map.remove(&o) {
                     v.push(h);
                 }
             }
             v
         } else {
-            let map = self.handles.lock().expect("handles mutex poisoned");
+            let map = self.offset2jsmsg.lock().expect("handles mutex poisoned");
             offsets
                 .iter()
-                .filter_map(|o| map.get(&o.to_string()).cloned())
+                .filter_map(|o| map.get(&o).cloned())
                 .collect()
         }
     }

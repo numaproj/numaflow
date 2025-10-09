@@ -17,7 +17,7 @@ use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_metric_labels,
     pipeline_metrics,
 };
-use crate::pipeline::isb::jetstream::writer::{JetStreamWriter, WriteError};
+use crate::pipeline::isb::jetstream::js_writer::{JetStreamWriter, WriteError};
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;
 use crate::watermark::WatermarkHandle;

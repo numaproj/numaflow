@@ -24,7 +24,7 @@ use crate::pipeline::isb::compression;
 /// Error types specific to JetStreamWriter operations
 #[derive(Debug, Clone)]
 pub(crate) enum WriteError {
-    /// Buffer is full, cannot write
+    /// Buffer is full, cannot write (retryable)
     BufferFull,
     /// Publish operation failed (retryable)
     PublishFailed(String),
@@ -32,11 +32,11 @@ pub(crate) enum WriteError {
 
 /// Buffer information for a JetStream stream.
 #[derive(Debug)]
-pub(crate) struct BufferInfo {
-    pub soft_usage: f64,
-    pub solid_usage: f64,
-    pub num_pending: u64,
-    pub num_ack_pending: usize,
+struct BufferInfo {
+    soft_usage: f64,
+    solid_usage: f64,
+    num_pending: u64,
+    num_ack_pending: usize,
 }
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
@@ -160,7 +160,7 @@ impl JetStreamWriter {
     /// - Otherwise: solidUsage = State.Msgs / maxLength
     /// - State.Msgs: The total number of messages in the stream.
     /// - maxLength: The maximum length of the buffer.
-    pub(crate) async fn fetch_buffer_info(
+    async fn fetch_buffer_info(
         js_ctx: Context,
         stream_name: &str,
         max_length: usize,

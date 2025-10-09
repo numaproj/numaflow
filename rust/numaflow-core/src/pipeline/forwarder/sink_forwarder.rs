@@ -7,7 +7,7 @@ use crate::metrics::{
     WatermarkFetcherState,
 };
 use crate::pipeline::PipelineContext;
-use crate::pipeline::isb::jetstream::reader::JetStreamReader;
+use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
 use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
