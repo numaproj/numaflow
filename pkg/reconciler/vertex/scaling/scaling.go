@@ -421,7 +421,7 @@ func (s *Scaler) desiredReplicas(_ context.Context, vertex *dfv1.Vertex, partiti
 				desired = int32(vertex.Status.Replicas) + int32(vertex.Spec.Scale.GetReplicasPerScaleUp())
 			} else {
 				singleReplicaContribution := float64(bufferLengthLimit-pending) / float64(vertex.Status.ReadyReplicas)
-				desired = int32(math.Ceil(float64(targetAvailableBufferLength) / singleReplicaContribution))
+				desired = int32(math.Round(float64(targetAvailableBufferLength) / singleReplicaContribution))
 			}
 		}
 		// we only scale down to zero when the total pending and total rate are both zero.
