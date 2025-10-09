@@ -411,7 +411,7 @@ func (s *Scaler) desiredReplicas(_ context.Context, vertex *dfv1.Vertex, partiti
 		if vertex.IsASource() || pending <= bufferLength-targetAvailableBufferLength {
 			// For sources, we calculate the time of finishing processing the pending messages,
 			// and then we know how many replicas are needed to get them done in target seconds.
-			// Similarly, we do the same logic for udf and sinks when then pending is not greater than the target scaling expection.
+			// Similarly, we do the same logic for udf and sinks when the pending is not greater than the target scaling expectation.
 			desired = int32(math.Round(((float64(pending) / rate) / float64(vertex.Spec.Scale.GetTargetProcessingSeconds())) * float64(vertex.Status.ReadyReplicas)))
 		} else {
 			// For UDF and sinks, we calculate the available buffer length, and consider it is the contribution of current replicas,
