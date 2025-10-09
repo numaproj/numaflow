@@ -120,7 +120,7 @@ impl ISBWriter {
             let mut messages_stream = messages_stream;
 
             while let Some(message) = messages_stream.next().await {
-                self.process_message(message, cln_token.clone())
+                self.write_to_isb(message, cln_token.clone())
                     .await
                     .inspect_err(|e| {
                         error!(?e, "Failed to process message");
@@ -136,8 +136,11 @@ impl ISBWriter {
         Ok(handle)
     }
 
-    /// Process a single message through the complete write pipeline.
-    async fn process_message(&self, message: Message, cln_token: CancellationToken) -> Result<()> {
+    /// Writes a single message to the ISB. It will keep retrying until it succeeds or is cancelled.
+    /// Writes are ordered only if PAF concurrency is 1 because during retries we cannot guarantee order.
+    /// This calls `write_to_stream` internally once it has figured out the target streams. This Write
+    /// is like a `flap-map` operation. It could end in 0, 1, or more writes based on conditions.
+    async fn write_to_isb(&self, message: Message, cln_token: CancellationToken) -> Result<()> {
         // Handle dropped messages
         if message.dropped() {
             self.handle_dropped_message(message).await;
@@ -284,7 +287,8 @@ impl ISBWriter {
         }
     }
 
-    /// Handles a dropped message by removing from tracker and publishing metrics.
+    /// Handles a dropped message (`message.to_drop()` from UDF) by removing from tracker and
+    /// publishing metrics.
     async fn handle_dropped_message(&self, message: Message) {
         self.tracker_handle
             .delete(message.offset)
