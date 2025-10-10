@@ -2725,7 +2725,9 @@
 
 
 <h1 id="autoscaling">Autoscaling<a class="headerlink" href="#autoscaling" title="Permanent link">&para;</a></h1>
-<p>Numaflow <a href="../../../core-concepts/pipeline/">Pipeline</a> and <a href="../../../core-concepts/monovertex/">MonoVertex</a> are both able to run with <code>Horizontal Pod Autoscaling</code> and <code>Vertical Pod Autoscaling</code>.</p>
+<p>Numaflow <a href="../../../core-concepts/pipeline/">Pipeline</a> and
+<a href="../../../core-concepts/monovertex/">MonoVertex</a> are both able to run with
+<code>Horizontal Pod Autoscaling</code> and <code>Vertical Pod Autoscaling</code>.</p>
 <h2 id="horizontal-pod-autoscaling">Horizontal Pod Autoscaling<a class="headerlink" href="#horizontal-pod-autoscaling" title="Permanent link">&para;</a></h2>
 <p><code>Horizontal Pod Autoscaling</code> approaches supported in Numaflow include:</p>
 <ul>
@@ -2734,9 +2736,14 @@
 <li>Third Party Autoscaling (such as <a href="https://keda.sh/">KEDA</a>)</li>
 </ul>
 <h3 id="numaflow-autoscaling">Numaflow Autoscaling<a class="headerlink" href="#numaflow-autoscaling" title="Permanent link">&para;</a></h3>
-<p>Numaflow provides <code>0 - N</code> autoscaling capability out of the box, it's available for all the <a href="../../../core-concepts/monovertex/">MonoVertices</a> and <a href="../../../core-concepts/pipeline/">Pipeline</a> <a href="../../../core-concepts/vertex/">vertices</a> including <code>UDF</code>, <code>Sink</code> and most of
-the <a href="../../sources/overview/"><code>Source</code></a> types (please check each source for more details).</p>
-<p>Numaflow autoscaling is enabled by default, there are some parameters can be fine-tuned to achieve better results.</p>
+<p>Numaflow provides <code>0 - N</code> autoscaling capability out of the box, it's available
+for all the <a href="../../../core-concepts/monovertex/">MonoVertices</a> and
+<a href="../../../core-concepts/pipeline/">Pipeline</a>
+<a href="../../../core-concepts/vertex/">vertices</a> including <code>UDF</code>, <code>Sink</code> and most of
+the <a href="../../sources/overview/"><code>Source</code></a> types (please check each source for more
+details).</p>
+<p>Numaflow autoscaling is enabled by default, there are some parameters can be
+fine-tuned to achieve better results.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># A Pipeline example.</span>
 <span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
@@ -2778,34 +2785,55 @@ the <a href="../../sources/overview/"><code>Source</code></a> types (please chec
 </code></pre></div>
 <ul>
 <li><code>disabled</code> - Whether to disable Numaflow autoscaling, defaults to <code>false</code>.</li>
-<li><code>min</code> - Minimum replicas, valid value could be an integer &gt;= 0. Defaults to <code>0</code>, which means it could be scaled down to 0.</li>
-<li><code>max</code> - Maximum replicas, positive integer which should not be less than <code>min</code>, defaults to <code>50</code>. if <code>max</code> and <code>min</code>
-  are the same, that will be the fixed replica number.</li>
-<li><code>lookbackSeconds</code> - How many seconds to lookback for average processing rate (tps) and pending messages calculation,
-  defaults to <code>120</code>. Rate and pending messages metrics are critical for autoscaling, you might need to tune this parameter
-  a bit to see better results. For example, your data source only have 1 minute data input in every 5 minutes, and you
-  don't want the vertices to be scaled down to <code>0</code>. In this case, you need to increase <code>lookbackSeconds</code> to overlap
-  5 minutes, so that the calculated average rate and pending messages won't be <code>0</code> during the silent period, in order to prevent from
-  scaling down to 0.
-  The max value allowed to be configured is <code>600</code>.
-  On top of this, we have dynamic lookback adjustment which tunes this parameter based on the realtime processing data.</li>
-<li><code>scaleUpCooldownSeconds</code> - After a scaling operation, how many seconds to wait for the same Vertex or MonoVertex, if the follow-up
-  operation is a scaling up, defaults to <code>90</code>. Please make sure that the time is greater than the pod to be <code>Running</code> and
-  start processing, because the autoscaling algorithm will divide the TPS by the number of pods even if the pod is not <code>Running</code>.</li>
-<li><code>scaleDownCooldownSeconds</code> - After a scaling operation, how many seconds to wait for the same Vertex or MonoVertex, if the follow-up
-  operation is a scaling down, defaults to <code>90</code>.</li>
-<li><code>zeroReplicaSleepSeconds</code> - After scaling a Source Vertex (or MonoVertex) replicas down to <code>0</code>, how many seconds to wait before scaling up to 1 replica to peek, defaults to <code>120</code>.
-  Numaflow autoscaler periodically scales up a source vertex (or MonoVertex) pod to "peek" the incoming data, this is the period of time to wait before peeking.</li>
-<li><code>targetProcessingSeconds</code> - It is used to tune the aggressiveness of autoscaling for source vertices (or MonoVertex), it measures how
-  fast you want the vertex to process all the pending messages, defaults to <code>20</code>. It is only effective for the MonoVertices or <code>Source</code> vertices in a Pipeline that
-  support autoscaling, typically increasing the value leads to lower processing rate, thus less replicas.</li>
-<li><code>targetBufferAvailability</code> - [<a href="../../../core-concepts/pipeline/">Pipeline</a> Only] Targeted buffer availability in percentage, defaults to <code>50</code>. It is only effective for <code>UDF</code>
-  and <code>Sink</code> vertices of a Pipeline, it determines how aggressive you want to do for autoscaling, increasing the value will bring more replicas. The value could be <code>&gt; 100</code> if you would like to achieve very aggressive autoscaling.</li>
-<li><code>replicasPerScaleUp</code> - Maximum number of replica change happens in one scale up operation, defaults to <code>2</code>. For
-  example, if current replica number is 3, the calculated desired replica number is 8; instead of scaling up the vertex to 8, it only does 5.</li>
-<li><code>replicasPerScaleDown</code> - Maximum number of replica change happens in one scale down operation, defaults to <code>2</code>. For
-  example, if current replica number is 9, the calculated desired replica number is 4; instead of scaling down the vertex to 4, it only does 7.</li>
-<li><code>replicasPerScale</code> - (Deprecated: Use <code>replicasPerScaleUp</code> and <code>replicasPerScaleDown</code> instead, will be removed in v1.5) Maximum number of replica change happens in one scale up or down operation, defaults to <code>2</code>.</li>
+<li><code>min</code> - Minimum replicas, valid value could be an integer &gt;= 0. Defaults to
+  <code>0</code>, which means it could be scaled down to 0.</li>
+<li><code>max</code> - Maximum replicas, positive integer which should not be less than
+  <code>min</code>, defaults to <code>50</code>. if <code>max</code> and <code>min</code> are the same, that will be the
+  fixed replica number.</li>
+<li><code>lookbackSeconds</code> - How many seconds to lookback for average processing rate
+  (tps) and pending messages calculation, defaults to <code>120</code>. Rate and pending
+  messages metrics are critical for autoscaling, you might need to tune this
+  parameter a bit to see better results. For example, your data source only have
+  1 minute data input in every 5 minutes, and you don't want the vertices to be
+  scaled down to <code>0</code>. In this case, you need to increase <code>lookbackSeconds</code> to
+  overlap 5 minutes, so that the calculated average rate and pending messages
+  won't be <code>0</code> during the silent period, in order to prevent from scaling down
+  to 0. The max value allowed to be configured is <code>600</code>. On top of this, we have
+  dynamic lookback adjustment which tunes this parameter based on the realtime
+  processing data.</li>
+<li><code>scaleUpCooldownSeconds</code> - After a scaling operation, how many seconds to wait
+  for the same Vertex or MonoVertex, if the follow-up operation is a scaling up,
+  defaults to <code>90</code>. Please make sure that the time is greater than the pod to be
+  <code>Running</code> and start processing, because the autoscaling algorithm will divide
+  the TPS by the number of pods even if the pod is not <code>Running</code>.</li>
+<li><code>scaleDownCooldownSeconds</code> - After a scaling operation, how many seconds to
+  wait for the same Vertex or MonoVertex, if the follow-up operation is a
+  scaling down, defaults to <code>90</code>.</li>
+<li><code>zeroReplicaSleepSeconds</code> - After scaling a Source Vertex (or MonoVertex)
+  replicas down to <code>0</code>, how many seconds to wait before scaling up to 1 replica
+  to peek, defaults to <code>120</code>. Numaflow autoscaler periodically scales up a
+  source vertex (or MonoVertex) pod to "peek" the incoming data, this is the
+  period of time to wait before peeking.</li>
+<li><code>targetProcessingSeconds</code> - It is used to tune the aggressiveness of
+  autoscaling for each Vertex (or MonoVertex), it measures how fast you want the
+  vertex to process all the pending messages, defaults to <code>20</code>. Typically
+  increasing the value leads to lower processing rate, thus less replicas.</li>
+<li><code>targetBufferAvailability</code> - [<a href="../../../core-concepts/pipeline/">Pipeline</a>
+  Only] Targeted buffer availability in percentage, defaults to <code>50</code>. It is only
+  effective for <code>UDF</code> and <code>Sink</code> vertices of a Pipeline, works together with
+  <code>targetProcessingSeconds</code>. It determines how aggressive you want to do for
+  autoscaling, increasing the value will bring more replicas.</li>
+<li><code>replicasPerScaleUp</code> - Maximum number of replica change happens in one scale
+  up operation, defaults to <code>2</code>. For example, if current replica number is 3,
+  the calculated desired replica number is 8; instead of scaling up the vertex
+  to 8, it only does 5.</li>
+<li><code>replicasPerScaleDown</code> - Maximum number of replica change happens in one scale
+  down operation, defaults to <code>2</code>. For example, if current replica number is 9,
+  the calculated desired replica number is 4; instead of scaling down the vertex
+  to 4, it only does 7.</li>
+<li><code>replicasPerScale</code> - (Deprecated: Use <code>replicasPerScaleUp</code> and
+  <code>replicasPerScaleDown</code> instead, will be removed in v1.5) Maximum number of
+  replica change happens in one scale up or down operation, defaults to <code>2</code>.</li>
 </ul>
 <p>To disable Numaflow autoscaling, set <code>disabled: true</code> as following.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># A Pipeline example.</span>
@@ -2829,15 +2857,20 @@ the <a href="../../sources/overview/"><code>Source</code></a> types (please chec
 <span class="w">    </span><span class="nt">disabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </code></pre></div>
 <p><strong>Notes</strong></p>
-<p>Numaflow autoscaling does not apply to reduce vertices of a Pipeline, and the source vertices which do not have a way to calculate their pending messages.</p>
+<p>Numaflow autoscaling does not apply to reduce vertices of a Pipeline, and the
+source vertices which do not have a way to calculate their pending messages.</p>
 <ul>
 <li>Generator</li>
 <li>HTTP</li>
 <li>Nats</li>
 </ul>
-<p>For User-defined Sources, if the function <code>Pending()</code> returns a negative value, autoscaling will not be applied.</p>
+<p>For User-defined Sources, if the function <code>Pending()</code> returns a negative value,
+autoscaling will not be applied.</p>
 <h3 id="kubernetes-hpa">Kubernetes HPA<a class="headerlink" href="#kubernetes-hpa" title="Permanent link">&para;</a></h3>
-<p><a href="https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/">Kubernetes HPA</a> is supported in Numaflow for any type of Vertex. To use HPA, remember to point the <code>scaleTargetRef</code> to the vertex as below, and disable Numaflow autoscaling in your Pipeline spec.</p>
+<p><a href="https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/">Kubernetes HPA</a>
+is supported in Numaflow for any type of Vertex. To use HPA, remember to point
+the <code>scaleTargetRef</code> to the vertex as below, and disable Numaflow autoscaling in
+your Pipeline spec.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># A Pipeline example.</span>
 <span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">autoscaling/v2</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HorizontalPodAutoscaler</span>
@@ -2874,11 +2907,17 @@ the <a href="../../sources/overview/"><code>Source</code></a> types (please chec
 <span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MonoVertex</span>
 <span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-mvtx</span>
 </code></pre></div>
-<p>With the configuration above, Kubernetes HPA controller will keep the target utilization of the pods of the Vertex at 50%.</p>
-<p>Kubernetes HPA autoscaling is useful for those Source vertices not able to count pending messages, such as <a href="../../sources/http/">HTTP</a>.</p>
+<p>With the configuration above, Kubernetes HPA controller will keep the target
+utilization of the pods of the Vertex at 50%.</p>
+<p>Kubernetes HPA autoscaling is useful for those Source vertices not able to count
+pending messages, such as <a href="../../sources/http/">HTTP</a>.</p>
 <h3 id="third-party-autoscaling">Third Party Autoscaling<a class="headerlink" href="#third-party-autoscaling" title="Permanent link">&para;</a></h3>
-<p>Third party autoscaling tools like <a href="https://keda.sh/">KEDA</a> are also supported in Numaflow, which can be used to autoscale any type of vertex with the scalers it supports.</p>
-<p>To use KEDA for vertex autoscaling, same as Kubernetes HPA, point the <code>scaleTargetRef</code> to your vertex, and disable Numaflow autoscaling in your Pipeline spec.</p>
+<p>Third party autoscaling tools like <a href="https://keda.sh/">KEDA</a> are also supported
+in Numaflow, which can be used to autoscale any type of vertex with the scalers
+it supports.</p>
+<p>To use KEDA for vertex autoscaling, same as Kubernetes HPA, point the
+<code>scaleTargetRef</code> to your vertex, and disable Numaflow autoscaling in your
+Pipeline spec.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># A Pipeline example.</span>
 <span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keda.sh/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ScaledObject</span>
@@ -2904,7 +2943,8 @@ the <a href="../../sources/overview/"><code>Source</code></a> types (please chec
 <span class="w">  </span><span class="l l-Scalar l-Scalar-Plain">... ...</span>
 </code></pre></div>
 <h2 id="vertical-pod-autoscaling">Vertical Pod Autoscaling<a class="headerlink" href="#vertical-pod-autoscaling" title="Permanent link">&para;</a></h2>
-<p><code>Vertical Pod Autoscaling</code> can be achieved by setting the <code>targetRef</code> to <code>Vertex</code> objects as following.</p>
+<p><code>Vertical Pod Autoscaling</code> can be achieved by setting the <code>targetRef</code> to
+<code>Vertex</code> objects as following.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># A Pipeline example.</span>
 <span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">targetRef</span><span class="p">:</span>
