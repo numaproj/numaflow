@@ -408,6 +408,7 @@ func (s *Scaler) desiredReplicas(_ context.Context, vertex *dfv1.Vertex, partiti
 			// we cannot go with current replicas because ideally we should scale down when pending is 0 or rate is 0.
 			continue
 		}
+		// For Soruce and non-source vertices which do not have packed buffers, use the same scaling mechanism
 		if vertex.IsASource() || pending <= bufferLength-targetAvailableBufferLength {
 			// For sources, we calculate the time of finishing processing the pending messages,
 			// and then we know how many replicas are needed to get them done in target seconds.

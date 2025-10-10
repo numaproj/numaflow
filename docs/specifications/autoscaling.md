@@ -85,9 +85,12 @@ calculate pending messages.
 
 ## UDF and Sink Vertices
 
-Pending messages of a UDF or Sink vertex does not represent the real number
-because of the restrained writing caused by back pressure, so we use a different
-model to achieve autoscaling for them.
+Pending messages of a UDF or Sink vertex do not always represent the real number
+because of the restrained writing caused by back pressure, so we use different
+strategies. When the number of pending messages does not hit the
+`targetAvailableBufferLength`, same model as source vertex autoscaling is used,
+otherwise we use a different model described below to achieve autoscaling for
+them.
 
 For each of the vertices, we calculate the available buffer length, and consider
 it is contributed by all the replicas, so that we can get each replica's
