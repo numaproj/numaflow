@@ -145,7 +145,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         loop {
             tokio::select! {
                 _ = interval.tick() => {
-                    let _ = params.jsr.mark_wip(std::slice::from_ref(&params.offset)).await;
+                    let _ = params.jsr.mark_wip(&params.offset).await;
                 },
                 res = &mut params.ack_rx => {
                     match res.unwrap_or(ReadAck::Nak) {
@@ -175,7 +175,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         let _ = Retry::new(
             interval,
             async || {
-                jsr.ack(std::slice::from_ref(&offset))
+                jsr.ack(&offset)
                     .await
                     .map_err(|e| Error::ISB(format!("Failed to send Ack to JetStream: {e}")))
             },
@@ -201,7 +201,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         let _ = Retry::new(
             interval,
             async || {
-                jsr.nack(std::slice::from_ref(&offset))
+                jsr.nack(&offset)
                     .await
                     .map_err(|e| Error::ISB(format!("Failed to send Nak to JetStream: {e}")))
             },
@@ -417,9 +417,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         for mut message in batch.drain(..) {
             // Skip WMB control messages
             if let MessageType::WMB = message.typ {
-                self.js_reader
-                    .ack(std::slice::from_ref(&message.offset))
-                    .await?;
+                self.js_reader.ack(&message.offset).await?;
                 continue;
             }
 

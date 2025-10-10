@@ -184,50 +184,37 @@ impl JetStreamReader {
         Ok(out)
     }
 
-    /// Mark messages as in progress by sending work in progress acks.
-    pub(crate) async fn mark_wip(&self, offsets: &[Offset]) -> Result<()> {
-        let msgs = self.get_js_messages(offsets, false);
-        for m in msgs {
-            let _ = m.ack_with(AckKind::Progress).await;
+    /// Mark message as in progress by sending work in progress ack.
+    pub(crate) async fn mark_wip(&self, offset: &Offset) -> Result<()> {
+        if let Some(msg) = self.get_js_message(offset, false) {
+            let _ = msg.ack_with(AckKind::Progress).await;
         }
         Ok(())
     }
 
-    /// Acknowledge the offsets
-    pub(crate) async fn ack(&self, offsets: &[Offset]) -> Result<()> {
-        let msgs = self.get_js_messages(offsets, true);
-        for m in msgs {
-            let _ = m.double_ack().await;
+    /// Acknowledge the offset
+    pub(crate) async fn ack(&self, offset: &Offset) -> Result<()> {
+        if let Some(msg) = self.get_js_message(offset, true) {
+            let _ = msg.double_ack().await;
         }
         Ok(())
     }
 
-    /// Negatively acknowledge the offsets
-    pub(crate) async fn nack(&self, offsets: &[Offset]) -> Result<()> {
-        let msgs = self.get_js_messages(offsets, true);
-        for m in msgs {
-            let _ = m.ack_with(AckKind::Nak(None)).await;
+    /// Negatively acknowledge the offset
+    pub(crate) async fn nack(&self, offset: &Offset) -> Result<()> {
+        if let Some(msg) = self.get_js_message(offset, true) {
+            let _ = msg.ack_with(AckKind::Nak(None)).await;
         }
         Ok(())
     }
 
-    /// Helper method to collect handles for given offsets, optionally removing them from the map
-    fn get_js_messages(&self, offsets: &[Offset], remove: bool) -> Vec<JetstreamMessage> {
+    /// Helper method to get the JetStream message for a given offset, optionally removing it from the map
+    fn get_js_message(&self, offset: &Offset, remove: bool) -> Option<JetstreamMessage> {
+        let mut map = self.offset2jsmsg.lock().expect("handles mutex poisoned");
         if remove {
-            let mut map = self.offset2jsmsg.lock().expect("handles mutex poisoned");
-            let mut v = Vec::with_capacity(offsets.len());
-            for o in offsets {
-                if let Some(h) = map.remove(&o) {
-                    v.push(h);
-                }
-            }
-            v
+            map.remove(offset)
         } else {
-            let map = self.offset2jsmsg.lock().expect("handles mutex poisoned");
-            offsets
-                .iter()
-                .filter_map(|o| map.get(&o).cloned())
-                .collect()
+            map.get(offset).cloned()
         }
     }
 
@@ -356,11 +343,8 @@ mod tests {
 
         // Test mark_wip, ack, and nack operations
         let offset = message.offset.clone();
-        js_reader
-            .mark_wip(std::slice::from_ref(&offset))
-            .await
-            .unwrap();
-        js_reader.nack(std::slice::from_ref(&offset)).await.unwrap();
+        js_reader.mark_wip(&offset).await.unwrap();
+        js_reader.nack(&offset).await.unwrap();
         // pending should be one
         let pending = js_reader.pending().await.unwrap();
         assert_eq!(pending, Some(1));
@@ -373,10 +357,7 @@ mod tests {
         assert_eq!(messages.len(), 1);
 
         // ack the message and check pending again
-        js_reader
-            .ack(std::slice::from_ref(&messages[0].offset))
-            .await
-            .unwrap();
+        js_reader.ack(&messages[0].offset).await.unwrap();
         // pending should be zero
         let pending = js_reader.pending().await.unwrap();
         assert_eq!(pending, Some(0));
