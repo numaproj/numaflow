@@ -502,7 +502,6 @@ mod tests {
                     socket_path: sock_file.to_str().unwrap().to_string(),
                     server_info_path: server_info_file.to_str().unwrap().to_string(),
                 }),
-                map_mode: MapMode::Unary,
             }),
             vertex_type: VertexType::MapUDF,
             metrics_config: MetricsConfig {

@@ -171,8 +171,6 @@ impl MonovertexConfig {
             Ok(udf) => Some(MapVtxConfig {
                 concurrency: batch_size as usize,
                 map_type: udf.try_into()?,
-                // Default value. The actual map mode is set [here](shared/create_components.rs:273)
-                map_mode: MapMode::Unary,
             }),
             Err(_) => None,
         };
