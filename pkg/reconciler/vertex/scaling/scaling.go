@@ -224,7 +224,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		s.daemonClientsCache.Add(pl.GetDaemonServiceURL(), daemonClient)
 	}
 
-	partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err := getBufferInfos(ctx, daemonClient, pl, vertex)
+	bufferLength, bufferLengthLimit, targetAvailableBufferLength, totalBufferLengthLimit, totalCurrentPending, err := getBufferInfos(ctx, daemonClient, pl, vertex)
 	if err != nil {
 		err := fmt.Errorf("error while fetching buffer info, %w", err)
 		return err
@@ -300,7 +300,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	// So we only need to add the total pending to the cache.
 	_ = s.vertexMetricsCache.Add(key+"/pending", totalPending)
 	if !vertex.IsASource() {
-		_ = s.vertexMetricsCache.Add(key+"/length", totalBufferLength)
+		_ = s.vertexMetricsCache.Add(key+"/length", totalBufferLengthLimit)
 	}
 
 	var desired int32
@@ -310,7 +310,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	if totalPending == 0 && totalRate == 0 {
 		desired = 0
 	} else {
-		desired = s.desiredReplicas(ctx, vertex, partitionRates, partitionPending, partitionBufferLengths, partitionAvailableBufferLengths)
+		desired = s.desiredReplicas(ctx, vertex, partitionRates, partitionPending, bufferLength, bufferLengthLimit, targetAvailableBufferLength)
 	}
 
 	// Check if rate limiting is configured and we're hitting the limit
@@ -393,7 +393,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	return nil
 }
 
-func (s *Scaler) desiredReplicas(_ context.Context, vertex *dfv1.Vertex, partitionProcessingRate []float64, partitionPending []int64, partitionBufferLengths []int64, partitionAvailableBufferLengths []int64) int32 {
+func (s *Scaler) desiredReplicas(_ context.Context, vertex *dfv1.Vertex, partitionProcessingRate []float64, partitionPending []int64, bufferLength, bufferLengthLimit, targetAvailableBufferLength int64) int32 {
 	maxDesired := int32(1)
 	// We calculate the max desired replicas based on the pending messages and processing rate for each partition.
 	for i := 0; i < len(partitionPending); i++ {
@@ -408,19 +408,21 @@ func (s *Scaler) desiredReplicas(_ context.Context, vertex *dfv1.Vertex, partiti
 			// we cannot go with current replicas because ideally we should scale down when pending is 0 or rate is 0.
 			continue
 		}
-		if vertex.IsASource() {
+		// For Soruce and non-source vertices which do not have packed buffers, use the same scaling mechanism
+		if vertex.IsASource() || pending <= bufferLength-targetAvailableBufferLength {
 			// For sources, we calculate the time of finishing processing the pending messages,
 			// and then we know how many replicas are needed to get them done in target seconds.
+			// Similarly, we do the same logic for udf and sinks when the pending is not greater than the target buffer availability expectation.
 			desired = int32(math.Round(((float64(pending) / rate) / float64(vertex.Spec.Scale.GetTargetProcessingSeconds())) * float64(vertex.Status.ReadyReplicas)))
 		} else {
 			// For UDF and sinks, we calculate the available buffer length, and consider it is the contribution of current replicas,
 			// then we figure out how many replicas are needed to keep the available buffer length at target level.
-			if pending >= partitionBufferLengths[i] {
+			if pending >= bufferLengthLimit {
 				// Simply return current replica number + max allowed if the pending messages are more than available buffer length
 				desired = int32(vertex.Status.Replicas) + int32(vertex.Spec.Scale.GetReplicasPerScaleUp())
 			} else {
-				singleReplicaContribution := float64(partitionBufferLengths[i]-pending) / float64(vertex.Status.ReadyReplicas)
-				desired = int32(math.Round(float64(partitionAvailableBufferLengths[i]) / singleReplicaContribution))
+				singleReplicaContribution := float64(bufferLengthLimit-pending) / float64(vertex.Status.ReadyReplicas)
+				desired = int32(math.Round(float64(targetAvailableBufferLength) / singleReplicaContribution))
 			}
 		}
 		// we only scale down to zero when the total pending and total rate are both zero.
@@ -549,32 +551,34 @@ func getBufferInfos(
 	pl *dfv1.Pipeline,
 	vertex *dfv1.Vertex,
 ) (
-	partitionBufferLengths []int64,
-	partitionAvailableBufferLengths []int64,
-	totalBufferLength int64,
+	bufferLength int64,
+	bufferLengthLimit int64,
+	targetAvailableBufferLength int64,
+	totalBufferLengthLimit int64,
 	totalCurrentPending int64,
 	err error,
 ) {
-	partitionBufferLengths = make([]int64, 0)
-	partitionAvailableBufferLengths = make([]int64, 0)
-	totalBufferLength = int64(0)
+	bufferLength = int64(0)
+	bufferLengthLimit = int64(0)
+	targetAvailableBufferLength = int64(0)
+	totalBufferLengthLimit = int64(0)
 	totalCurrentPending = int64(0)
 	for _, bufferName := range vertex.OwnedBuffers() {
 		if bInfo, err := d.GetPipelineBuffer(ctx, pl.Name, bufferName); err != nil {
 			err = fmt.Errorf("failed to get the buffer information of vertex %q, %w", vertex.Name, err)
-			return partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err
+			return bufferLength, bufferLengthLimit, targetAvailableBufferLength, totalBufferLengthLimit, totalCurrentPending, err
 		} else {
 			if bInfo.BufferLength == nil || bInfo.BufferUsageLimit == nil || bInfo.PendingCount == nil {
 				err = fmt.Errorf("invalid read buffer information of vertex %q, length, pendingCount or usage limit is missing", vertex.Name)
-				return partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, err
+				return bufferLength, bufferLengthLimit, targetAvailableBufferLength, totalBufferLengthLimit, totalCurrentPending, err
 			}
-
-			partitionBufferLengths = append(partitionBufferLengths, int64(float64(bInfo.GetBufferLength().GetValue())*bInfo.GetBufferUsageLimit().GetValue()))
-			partitionAvailableBufferLengths = append(partitionAvailableBufferLengths, int64(float64(bInfo.GetBufferLength().GetValue())*float64(vertex.Spec.Scale.GetTargetBufferAvailability())/100))
-			totalBufferLength += int64(float64(bInfo.BufferLength.GetValue()) * bInfo.BufferUsageLimit.GetValue())
+			bufferLength = bInfo.GetBufferLength().GetValue()
+			bufferLengthLimit = int64(float64(bInfo.GetBufferLength().GetValue()) * bInfo.GetBufferUsageLimit().GetValue())
+			targetAvailableBufferLength = int64(float64(bInfo.GetBufferLength().GetValue()) * float64(vertex.Spec.Scale.GetTargetBufferAvailability()) / 100)
+			totalBufferLengthLimit += int64(float64(bInfo.BufferLength.GetValue()) * bInfo.BufferUsageLimit.GetValue())
 			totalCurrentPending += bInfo.PendingCount.GetValue()
 		}
 	}
 
-	return partitionBufferLengths, partitionAvailableBufferLengths, totalBufferLength, totalCurrentPending, nil
+	return bufferLength, bufferLengthLimit, targetAvailableBufferLength, totalBufferLengthLimit, totalCurrentPending, nil
 }
