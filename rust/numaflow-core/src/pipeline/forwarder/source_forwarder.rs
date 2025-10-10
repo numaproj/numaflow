@@ -95,10 +95,21 @@ pub(crate) async fn start_source_forwarder(
         tracker_handle: tracker_handle.clone(),
     };
 
-    let writer_components = ISBWriterComponents::new(
-        source_watermark_handle.clone().map(WatermarkHandle::Source),
-        &context,
+    let writers = create_components::create_js_writers(
+        &config.to_vertex_config,
+        js_context.clone(),
+        config.isb_config.as_ref(),
+        cln_token.clone(),
     );
+
+    let writer_components = ISBWriterComponents {
+        config: config.to_vertex_config.clone(),
+        writers,
+        paf_concurrency: config.writer_concurrency,
+        tracker_handle: tracker_handle.clone(),
+        watermark_handle: source_watermark_handle.clone().map(WatermarkHandle::Source),
+        vertex_type: config.vertex_type,
+    };
 
     let buffer_writer = ISBWriter::new(writer_components);
     let transformer = create_components::create_transformer(
@@ -439,24 +450,36 @@ mod tests {
             .await
             .unwrap();
 
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        let mut writers = std::collections::HashMap::new();
+        writers.insert(
+            stream.name,
+            crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
+                stream.clone(),
+                context.clone(),
+                writer_config.clone(),
+                None,
+                cln_token.clone(),
+            ),
+        );
+
         let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 partitions: 1,
-                writer_config: BufferWriterConfig {
-                    streams: vec![stream.clone()],
-                    ..Default::default()
-                },
+                writer_config,
                 conditions: None,
                 name: "test-vertex",
                 to_vertex_type: VertexType::MapUDF,
             }],
-            js_ctx: context.clone(),
+            writers,
             paf_concurrency: 100,
             tracker_handle: tracker_handle.clone(),
-            cancel_token: cln_token.clone(),
             watermark_handle: None,
             vertex_type: VertexType::Source,
-            isb_config: None,
         };
         let writer = ISBWriter::new(writer_components);
 

@@ -9,7 +9,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
 use crate::Result;
-use crate::config::pipeline::isb::{BufferFullStrategy, ISBConfig, Stream};
+use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
 use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, Offset};
@@ -35,32 +35,11 @@ struct WriteResult {
 #[derive(Clone)]
 pub(crate) struct ISBWriterComponents {
     pub config: Vec<ToVertexConfig>,
-    pub js_ctx: async_nats::jetstream::Context,
+    pub writers: HashMap<&'static str, JetStreamWriter>,
     pub paf_concurrency: usize,
     pub tracker_handle: TrackerHandle,
-    pub cancel_token: CancellationToken,
     pub watermark_handle: Option<WatermarkHandle>,
     pub vertex_type: VertexType,
-    pub isb_config: Option<ISBConfig>,
-}
-
-impl ISBWriterComponents {
-    /// Create ISBWriterComponents from minimal components and pipeline context
-    pub fn new(
-        watermark_handle: Option<WatermarkHandle>,
-        context: &crate::pipeline::PipelineContext<'_>,
-    ) -> Self {
-        Self {
-            config: context.config.to_vertex_config.clone(),
-            js_ctx: context.js_context.clone(),
-            paf_concurrency: context.config.writer_concurrency,
-            tracker_handle: context.tracker_handle.clone(),
-            cancel_token: context.cln_token.clone(),
-            watermark_handle,
-            vertex_type: context.config.vertex_type,
-            isb_config: context.config.isb_config.clone(),
-        }
-    }
 }
 
 /// ISBWriter orchestrates writing to multiple JetStream streams.
@@ -79,29 +58,13 @@ pub(crate) struct ISBWriter {
 }
 
 impl ISBWriter {
-    /// Creates a new ISBWriter with multiple JetStreamWriters (one per stream).
+    /// Creates a new ISBWriter from pre-created JetStreamWriters.
+    /// The JetStreamWriters are created upstream and passed in, making this more testable
+    /// and decoupled from JetStream implementation details.
     pub(crate) fn new(components: ISBWriterComponents) -> Self {
-        // Create one JetStreamWriter per stream
-        let mut writers = HashMap::new();
-        for vertex_config in &components.config {
-            for stream in &vertex_config.writer_config.streams {
-                let writer = JetStreamWriter::new(
-                    stream.clone(),
-                    components.js_ctx.clone(),
-                    vertex_config.writer_config.clone(),
-                    components
-                        .isb_config
-                        .as_ref()
-                        .map(|c| c.compression.compress_type),
-                    components.cancel_token.clone(),
-                );
-                writers.insert(stream.name, writer);
-            }
-        }
-
         Self {
             config: Arc::new(components.config),
-            writers: Arc::new(writers),
+            writers: Arc::new(components.writers),
             tracker_handle: components.tracker_handle,
             watermark_handle: components.watermark_handle,
             sem: Arc::new(Semaphore::new(components.paf_concurrency)),
@@ -604,24 +567,37 @@ mod tests {
             .await
             .unwrap();
 
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        // Create JetStreamWriter
+        let mut writers = HashMap::new();
+        writers.insert(
+            stream.name,
+            JetStreamWriter::new(
+                stream.clone(),
+                context.clone(),
+                writer_config.clone(),
+                None,
+                cln_token.clone(),
+            ),
+        );
+
         let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
-                writer_config: BufferWriterConfig {
-                    streams: vec![stream.clone()],
-                    ..Default::default()
-                },
+                writer_config,
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
             }],
-            js_ctx: context.clone(),
+            writers,
             paf_concurrency: 100,
             tracker_handle: tracker_handle.clone(),
-            cancel_token: cln_token.clone(),
             watermark_handle: None,
             vertex_type: VertexType::Source,
-            isb_config: None,
         };
         let writer = ISBWriter::new(writer_components);
 
@@ -703,24 +679,37 @@ mod tests {
             .await
             .unwrap();
 
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        // Create JetStreamWriter
+        let mut writers = HashMap::new();
+        writers.insert(
+            stream.name,
+            JetStreamWriter::new(
+                stream.clone(),
+                context.clone(),
+                writer_config.clone(),
+                None,
+                cln_token.clone(),
+            ),
+        );
+
         let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
-                writer_config: BufferWriterConfig {
-                    streams: vec![stream.clone()],
-                    ..Default::default()
-                },
+                writer_config,
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
             }],
-            js_ctx: context.clone(),
+            writers,
             paf_concurrency: 100,
             tracker_handle: tracker_handle.clone(),
-            cancel_token: cln_token.clone(),
             watermark_handle: None,
             vertex_type: VertexType::Source,
-            isb_config: None,
         };
         let writer = ISBWriter::new(writer_components);
 
@@ -792,15 +781,64 @@ mod tests {
         let (_, _) = create_streams_and_consumers(&context, &vertex2_streams).await;
         let (_, _) = create_streams_and_consumers(&context, &vertex3_streams).await;
 
+        let vertex1_writer_config = BufferWriterConfig {
+            streams: vertex1_streams.clone(),
+            ..Default::default()
+        };
+        let vertex2_writer_config = BufferWriterConfig {
+            streams: vertex2_streams.clone(),
+            ..Default::default()
+        };
+        let vertex3_writer_config = BufferWriterConfig {
+            streams: vertex3_streams.clone(),
+            ..Default::default()
+        };
+
+        // Create JetStreamWriters for all streams
+        let mut writers = HashMap::new();
+        for stream in &vertex1_streams {
+            writers.insert(
+                stream.name,
+                JetStreamWriter::new(
+                    stream.clone(),
+                    context.clone(),
+                    vertex1_writer_config.clone(),
+                    None,
+                    cln_token.clone(),
+                ),
+            );
+        }
+        for stream in &vertex2_streams {
+            writers.insert(
+                stream.name,
+                JetStreamWriter::new(
+                    stream.clone(),
+                    context.clone(),
+                    vertex2_writer_config.clone(),
+                    None,
+                    cln_token.clone(),
+                ),
+            );
+        }
+        for stream in &vertex3_streams {
+            writers.insert(
+                stream.name,
+                JetStreamWriter::new(
+                    stream.clone(),
+                    context.clone(),
+                    vertex3_writer_config.clone(),
+                    None,
+                    cln_token.clone(),
+                ),
+            );
+        }
+
         let writer_components = ISBWriterComponents {
             config: vec![
                 ToVertexConfig {
                     name: "vertex1",
                     partitions: 2,
-                    writer_config: BufferWriterConfig {
-                        streams: vertex1_streams.clone(),
-                        ..Default::default()
-                    },
+                    writer_config: vertex1_writer_config,
                     conditions: Some(Box::new(ForwardConditions {
                         tags: Box::new(TagConditions {
                             operator: Some("or".to_string()),
@@ -812,10 +850,7 @@ mod tests {
                 ToVertexConfig {
                     name: "vertex2",
                     partitions: 1,
-                    writer_config: BufferWriterConfig {
-                        streams: vertex2_streams.clone(),
-                        ..Default::default()
-                    },
+                    writer_config: vertex2_writer_config,
                     conditions: Some(Box::new(ForwardConditions {
                         tags: Box::new(TagConditions {
                             operator: Some("or".to_string()),
@@ -827,21 +862,16 @@ mod tests {
                 ToVertexConfig {
                     name: "vertex3",
                     partitions: 1,
-                    writer_config: BufferWriterConfig {
-                        streams: vertex3_streams.clone(),
-                        ..Default::default()
-                    },
+                    writer_config: vertex3_writer_config,
                     conditions: None, // No conditions, always forward
                     to_vertex_type: VertexType::Sink,
                 },
             ],
-            js_ctx: context.clone(),
+            writers,
             paf_concurrency: 100,
             tracker_handle: tracker_handle.clone(),
-            cancel_token: cln_token.clone(),
             watermark_handle: None,
             vertex_type: VertexType::Source,
-            isb_config: None,
         };
         let writer = ISBWriter::new(writer_components);
 

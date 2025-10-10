@@ -136,11 +136,24 @@ pub async fn start_map_forwarder(
         cln_token: cln_token.clone(),
         js_context: &js_context,
         config: &config,
-        tracker_handle,
+        tracker_handle: tracker_handle.clone(),
     };
 
-    let writer_components =
-        ISBWriterComponents::new(watermark_handle.clone().map(WatermarkHandle::ISB), &context);
+    let writers = create_components::create_js_writers(
+        &config.to_vertex_config,
+        js_context.clone(),
+        config.isb_config.as_ref(),
+        cln_token.clone(),
+    );
+
+    let writer_components = ISBWriterComponents {
+        config: config.to_vertex_config.clone(),
+        writers,
+        paf_concurrency: config.writer_concurrency,
+        tracker_handle: tracker_handle.clone(),
+        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
+        vertex_type: config.vertex_type,
+    };
 
     let buffer_writer = ISBWriter::new(writer_components);
     let (forwarder_tasks, mapper_handle, _pending_reader_task) = if let Some(rate_limit_config) =
