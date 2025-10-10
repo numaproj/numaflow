@@ -135,7 +135,6 @@ pub(crate) mod map {
     pub(crate) struct MapVtxConfig {
         pub(crate) concurrency: usize,
         pub(crate) map_type: MapType,
-        pub(crate) map_mode: MapMode,
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -459,7 +458,6 @@ impl PipelineConfig {
                     VertexConfig::Map(MapVtxConfig {
                         concurrency: batch_size as usize,
                         map_type: udf.try_into()?,
-                        map_mode: MapMode::Unary,
                     }),
                     VertexType::MapUDF,
                 )
@@ -1103,7 +1101,6 @@ mod tests {
         let map_vtx_config = MapVtxConfig {
             concurrency: 10,
             map_type,
-            map_mode: MapMode::Unary,
         };
 
         assert_eq!(map_vtx_config.concurrency, 10);
@@ -1152,7 +1149,6 @@ mod tests {
                     socket_path: DEFAULT_MAP_SOCKET.to_string(),
                     server_info_path: DEFAULT_MAP_SERVER_INFO_FILE.to_string(),
                 }),
-                map_mode: MapMode::Unary,
             }),
             metrics_config: MetricsConfig::default(),
             watermark_config: Some(WatermarkConfig::Edge(EdgeWatermarkConfig {

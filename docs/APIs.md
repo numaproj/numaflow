@@ -6049,6 +6049,21 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
+<code>udf</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
+UDF </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>AbstractPodTemplate</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
 AbstractPodTemplate </a> </em>
@@ -6538,6 +6553,21 @@ Description
 
 <td>
 
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>udf</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
+UDF </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -13142,7 +13172,8 @@ UDF
 <p>
 
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>)
 </p>
 
 <p>

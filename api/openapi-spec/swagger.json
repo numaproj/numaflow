@@ -21259,6 +21259,9 @@
             "$ref": "#/definitions/io.k8s.api.core.v1.Toleration"
           }
         },
+        "udf": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDF"
+        },
         "updateStrategy": {
           "description": "The strategy to use to replace existing pods with new ones.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UpdateStrategy"

@@ -21263,6 +21263,9 @@
           },
           "type": "array"
         },
+        "udf": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDF"
+        },
         "updateStrategy": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UpdateStrategy",
           "description": "The strategy to use to replace existing pods with new ones."
