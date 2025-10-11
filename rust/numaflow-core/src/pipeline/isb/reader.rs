@@ -32,6 +32,9 @@ use tracing::{error, info, warn};
 const ACK_RETRY_INTERVAL: u64 = 100; // ms
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 
+/// Type alias for metric labels
+type MetricLabels = Arc<Vec<(String, String)>>;
+
 /// ISBReader component which reads messages from ISB, assigns watermark to the messages and starts
 /// tracking them using the tracker and also listens for ack/nack from the tracker and performs the
 /// ack/nack to the ISB.
@@ -46,6 +49,8 @@ pub(crate) struct ISBReader<C: NumaflowTypeConfig> {
     watermark: Option<ISBWatermarkHandle>,
     js_reader: JetStreamReader,
     rate_limiter: Option<C::RateLimiter>,
+    /// Cached metric labels to avoid repeated allocations
+    metric_labels: MetricLabels,
 }
 
 impl<C: NumaflowTypeConfig> ISBReader<C> {
@@ -54,6 +59,14 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         js_reader: JetStreamReader,
         rate_limiter: Option<C::RateLimiter>,
     ) -> Result<Self> {
+        // Build metric labels once during initialization
+        let mut labels = pipeline_metric_labels(&components.vertex_type).clone();
+        labels.push((
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            components.stream.name.to_string(),
+        ));
+        let metric_labels = Arc::new(labels);
+
         Ok(Self {
             vertex_type: components.vertex_type,
             stream: components.stream,
@@ -64,6 +77,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
             watermark: components.watermark_handle,
             js_reader,
             rate_limiter,
+            metric_labels,
         })
     }
 
@@ -74,7 +88,6 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let max_ack_pending = self.cfg.max_ack_pending;
         let batch_size = std::cmp::min(self.batch_size, max_ack_pending);
-        let labels = self.build_metric_labels();
         let (tx, rx) = mpsc::channel(batch_size);
 
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
@@ -107,20 +120,13 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                 self.handle_idle_watermarks(batch.is_empty(), &tx).await?;
 
                 // Process each message in the batch
-                self.process_message_batch(
-                    &mut batch,
-                    &tx,
-                    &labels,
-                    &mut permits,
-                    cancel.clone(),
-                    start,
-                )
-                .await?;
+                self.process_message_batch(&mut batch, &tx, &mut permits, cancel.clone(), start)
+                    .await?;
 
                 pipeline_metrics()
                     .forwarder
                     .read_processing_time
-                    .get_or_create(&labels)
+                    .get_or_create(&self.metric_labels)
                     .observe(start.elapsed().as_micros() as f64);
             }
 
@@ -252,11 +258,10 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
 
     fn publish_ack_metrics(
         stream_name: &'static str,
-        labels: &[(String, String)],
+        labels: &MetricLabels,
         ack_start: Instant,
         message_processing_start: Instant,
     ) {
-        let labels_vec = labels.to_vec();
         pipeline_metrics()
             .jetstream_isb
             .ack_time_total
@@ -265,52 +270,42 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         pipeline_metrics()
             .forwarder
             .ack_processing_time
-            .get_or_create(&labels_vec)
+            .get_or_create(labels)
             .observe(ack_start.elapsed().as_micros() as f64);
         pipeline_metrics()
             .forwarder
             .ack_total
-            .get_or_create(&labels_vec)
+            .get_or_create(labels)
             .inc();
         pipeline_metrics()
             .forwarder
             .e2e_time
-            .get_or_create(&labels_vec)
+            .get_or_create(labels)
             .observe(message_processing_start.elapsed().as_micros() as f64);
     }
 
-    fn publish_read_metrics(labels: &[(String, String)], message: &Message) {
+    fn publish_read_metrics(labels: &MetricLabels, message: &Message) {
         let message_bytes = message.value.len();
-        let labels_vec = labels.to_vec();
         pipeline_metrics()
             .forwarder
             .read_total
-            .get_or_create(&labels_vec)
+            .get_or_create(labels)
             .inc();
         pipeline_metrics()
             .forwarder
             .data_read_total
-            .get_or_create(&labels_vec)
+            .get_or_create(labels)
             .inc();
         pipeline_metrics()
             .forwarder
             .read_bytes_total
-            .get_or_create(&labels_vec)
+            .get_or_create(labels)
             .inc_by(message_bytes as u64);
         pipeline_metrics()
             .forwarder
             .data_read_bytes_total
-            .get_or_create(&labels_vec)
+            .get_or_create(labels)
             .inc_by(message_bytes as u64);
-    }
-
-    fn build_metric_labels(&self) -> Vec<(String, String)> {
-        let mut labels = pipeline_metric_labels(&self.vertex_type).clone();
-        labels.push((
-            PIPELINE_PARTITION_NAME_LABEL.to_string(),
-            self.stream.name.to_string(),
-        ));
-        labels
     }
 
     /// Applies rate limiting and fetches the message batch.
@@ -409,7 +404,6 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         &mut self,
         batch: &mut Vec<Message>,
         tx: &mpsc::Sender<Message>,
-        labels: &[(String, String)],
         permits: &mut tokio::sync::OwnedSemaphorePermit,
         cancel: CancellationToken,
         processing_start: Instant,
@@ -428,7 +422,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
             }
 
             // Publish read metrics
-            Self::publish_read_metrics(labels, &message);
+            Self::publish_read_metrics(&self.metric_labels, &message);
 
             // Start message tracking and WIP loop
             self.start_message_tracking(
@@ -461,7 +455,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
 
         let params = WipParams {
             stream_name: self.stream.name,
-            labels: self.build_metric_labels(),
+            labels: Arc::clone(&self.metric_labels),
             jsr: self.js_reader.clone(),
             offset: message.offset.clone(),
             ack_rx,
@@ -508,7 +502,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
 
 struct WipParams {
     stream_name: &'static str,
-    labels: Vec<(String, String)>,
+    labels: Arc<Vec<(String, String)>>,
     jsr: JetStreamReader,
     offset: Offset,
     ack_rx: oneshot::Receiver<ReadAck>,

@@ -24,6 +24,11 @@ use crate::watermark::WatermarkHandle;
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 
+/// Type alias for metric labels
+type MetricLabels = Arc<Vec<(String, String)>>;
+/// Type alias for stream metric labels map
+type StreamMetricLabelsMap = Arc<HashMap<&'static str, MetricLabels>>;
+
 /// Result of a successful write operation to a stream.
 struct WriteResult {
     stream: Stream,
@@ -55,6 +60,9 @@ pub(crate) struct ISBWriter {
     sem: Arc<Semaphore>,
     paf_concurrency: usize,
     vertex_type: VertexType,
+    /// Cached metric labels per stream to avoid repeated allocations
+    /// HashMap: stream_name -> labels
+    stream_metric_labels: StreamMetricLabelsMap,
 }
 
 impl ISBWriter {
@@ -62,6 +70,17 @@ impl ISBWriter {
     /// The JetStreamWriters are created upstream and passed in, making this more testable
     /// and decoupled from JetStream implementation details.
     pub(crate) fn new(components: ISBWriterComponents) -> Self {
+        // Build metric labels for each stream once during initialization
+        let mut stream_metric_labels = HashMap::new();
+        for stream_name in components.writers.keys() {
+            let mut labels = pipeline_metric_labels(components.vertex_type.as_str()).clone();
+            labels.push((
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                (*stream_name).to_string(),
+            ));
+            stream_metric_labels.insert(*stream_name, Arc::new(labels));
+        }
+
         Self {
             config: Arc::new(components.config),
             writers: Arc::new(components.writers),
@@ -70,6 +89,7 @@ impl ISBWriter {
             sem: Arc::new(Semaphore::new(components.paf_concurrency)),
             paf_concurrency: components.paf_concurrency,
             vertex_type: components.vertex_type,
+            stream_metric_labels: Arc::new(stream_metric_labels),
         }
     }
 
@@ -302,30 +322,30 @@ impl ISBWriter {
 
     /// Publishes write metrics for a successful write.
     fn publish_write_metrics(
+        &self,
         partition_name: &str,
-        vertex_type: &str,
         message: &Message,
         write_processing_start: Instant,
     ) {
-        let mut labels = pipeline_metric_labels(vertex_type).clone();
-        labels.push((
-            PIPELINE_PARTITION_NAME_LABEL.to_string(),
-            partition_name.to_string(),
-        ));
+        let labels = self
+            .stream_metric_labels
+            .get(partition_name)
+            .expect("labels should exist for stream");
+
         pipeline_metrics()
             .forwarder
             .write_total
-            .get_or_create(&labels)
+            .get_or_create(labels)
             .inc();
         pipeline_metrics()
             .forwarder
             .write_bytes_total
-            .get_or_create(&labels)
+            .get_or_create(labels)
             .inc_by(message.value.len() as u64);
         pipeline_metrics()
             .forwarder
             .write_processing_time
-            .get_or_create(&labels)
+            .get_or_create(labels)
             .observe(write_processing_start.elapsed().as_micros() as f64);
 
         // jetstream write time histogram metric
@@ -420,9 +440,8 @@ impl ISBWriter {
                 .await
             {
                 // Publish write metrics for successful write
-                Self::publish_write_metrics(
+                self.publish_write_metrics(
                     write_result.stream.name,
-                    self.vertex_type.as_str(),
                     message,
                     write_result.write_start,
                 );
@@ -602,7 +621,7 @@ mod tests {
         let writer = ISBWriter::new(writer_components);
 
         let (tx, rx) = mpsc::channel(10);
-        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let messages_stream = ReceiverStream::new(rx);
 
         let write_handle = writer
             .streaming_write(messages_stream, cln_token.clone())
@@ -714,7 +733,7 @@ mod tests {
         let writer = ISBWriter::new(writer_components);
 
         let (tx, rx) = mpsc::channel(10);
-        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let messages_stream = ReceiverStream::new(rx);
 
         let write_handle = writer
             .streaming_write(messages_stream, cln_token.clone())
@@ -876,7 +895,7 @@ mod tests {
         let writer = ISBWriter::new(writer_components);
 
         let (tx, rx) = mpsc::channel(10);
-        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let messages_stream = ReceiverStream::new(rx);
 
         let write_handle = writer
             .streaming_write(messages_stream, cln_token.clone())
@@ -935,7 +954,7 @@ mod tests {
     }
 
     async fn create_streams_and_consumers(
-        context: &async_nats::jetstream::Context,
+        context: &jetstream::Context,
         stream_names: &[Stream],
     ) -> (Vec<stream::Stream>, Vec<Consumer<Config>>) {
         let mut streams = Vec::new();

@@ -21,6 +21,9 @@ use crate::metrics::{
 };
 use crate::pipeline::isb::compression;
 
+/// Type alias for metric labels
+type MetricLabels = Arc<Vec<(String, String)>>;
+
 /// Error types specific to JetStreamWriter operations
 #[derive(Debug, Clone)]
 pub(crate) enum WriteError {
@@ -55,6 +58,8 @@ pub(crate) struct JetStreamWriter {
     compression_type: Option<CompressionType>,
     is_full: Arc<AtomicBool>,
     writer_config: BufferWriterConfig,
+    /// Cached metric labels to avoid repeated allocations
+    buffer_labels: MetricLabels,
 }
 
 impl JetStreamWriter {
@@ -69,12 +74,16 @@ impl JetStreamWriter {
     ) -> Self {
         let is_full = Arc::new(AtomicBool::new(false));
 
+        // Build metric labels once during initialization
+        let buffer_labels = Arc::new(jetstream_isb_metrics_labels(stream.name));
+
         let this = Self {
             stream: stream.clone(),
             js_ctx: js_ctx.clone(),
             compression_type,
             is_full: Arc::clone(&is_full),
             writer_config: writer_config.clone(),
+            buffer_labels,
         };
 
         // Spawn background task to monitor this stream's fullness
@@ -108,7 +117,6 @@ impl JetStreamWriter {
             tokio::select! {
                 _ = interval.tick() => {
                     let stream_name = self.stream.name;
-                    let buffer_labels = jetstream_isb_metrics_labels(stream_name);
                     match Self::fetch_buffer_info(
                         self.js_ctx.clone(),
                         stream_name,
@@ -123,13 +131,13 @@ impl JetStreamWriter {
                                 self.is_full.store(false, Ordering::Relaxed);
                             }
                             pipeline_metrics().jetstream_isb.buffer_soft_usage
-                                .get_or_create(&buffer_labels).set(buffer_info.soft_usage);
+                                .get_or_create(&self.buffer_labels).set(buffer_info.soft_usage);
                             pipeline_metrics().jetstream_isb.buffer_solid_usage
-                                .get_or_create(&buffer_labels).set(buffer_info.solid_usage);
+                                .get_or_create(&self.buffer_labels).set(buffer_info.solid_usage);
                             pipeline_metrics().jetstream_isb.buffer_pending
-                                .get_or_create(&buffer_labels).set(buffer_info.num_pending as i64);
+                                .get_or_create(&self.buffer_labels).set(buffer_info.num_pending as i64);
                             pipeline_metrics().jetstream_isb.buffer_ack_pending
-                                .get_or_create(&buffer_labels).set(buffer_info.num_ack_pending as i64);
+                                .get_or_create(&self.buffer_labels).set(buffer_info.num_ack_pending as i64);
                         }
                         Err(e) => {
                             error!(?e, "Failed to fetch buffer info for stream {}, updating isFull to true", stream_name);
@@ -213,7 +221,7 @@ impl JetStreamWriter {
             pipeline_metrics()
                 .jetstream_isb
                 .isfull_total
-                .get_or_create(&jetstream_isb_metrics_labels(self.stream.name))
+                .get_or_create(&self.buffer_labels)
                 .inc();
             return Err(WriteError::BufferFull);
         }
@@ -303,7 +311,7 @@ impl JetStreamWriter {
                         pipeline_metrics()
                             .jetstream_isb
                             .write_time_total
-                            .get_or_create(&jetstream_isb_metrics_labels(self.stream.name))
+                            .get_or_create(&self.buffer_labels)
                             .observe(start_time.elapsed().as_micros() as f64);
                         return Ok(ack);
                     }
@@ -316,7 +324,7 @@ impl JetStreamWriter {
                     pipeline_metrics()
                         .jetstream_isb
                         .write_error_total
-                        .get_or_create(&jetstream_isb_metrics_labels(self.stream.name))
+                        .get_or_create(&self.buffer_labels)
                         .inc();
                     error!(?e, "publishing failed, retrying");
                     sleep(Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS)).await;
