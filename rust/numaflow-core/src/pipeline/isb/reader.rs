@@ -141,26 +141,29 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
 
     /// Periodically mark WIP until ack/nack received, then perform final ack/nack and publish metrics.
     async fn wip_loop(mut params: WipParams) {
-        // let mut interval = time::interval(params.tick);
-        tokio::select! {
-            // _ = interval.tick() => {
-            //     let _ = params.jsr.mark_wip(&params.offset).await;
-            // },
-            res = &mut params.ack_rx => {
-                match res.unwrap_or(ReadAck::Nak) {
-                    ReadAck::Ack => {
-                        let ack_start = Instant::now();
-                        Self::ack_with_retry(params.jsr.clone(), params.offset.clone(), params.cancel.clone()).await;
-                        Self::publish_ack_metrics(
-                            params.stream_name,
-                            &params.labels,
-                            ack_start,
-                            params.message_processing_start,
-                        );
-                    },
-                    ReadAck::Nak => {
-                        Self::nak_with_retry(params.jsr.clone(), params.offset.clone(), params.cancel.clone()).await;
-                    },
+        let mut interval = time::interval(params.tick);
+        loop {
+            tokio::select! {
+                _ = interval.tick() => {
+                    let _ = params.jsr.mark_wip(&params.offset).await;
+                },
+                res = &mut params.ack_rx => {
+                    match res.unwrap_or(ReadAck::Nak) {
+                        ReadAck::Ack => {
+                            let ack_start = Instant::now();
+                            Self::ack_with_retry(params.jsr.clone(), params.offset.clone(), params.cancel.clone()).await;
+                            Self::publish_ack_metrics(
+                                params.stream_name,
+                                &params.labels,
+                                ack_start,
+                                params.message_processing_start,
+                            );
+                        },
+                        ReadAck::Nak => {
+                            Self::nak_with_retry(params.jsr.clone(), params.offset.clone(), params.cancel.clone()).await;
+                        },
+                    }
+                    break;
                 }
             }
         }
@@ -462,7 +465,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
             jsr: self.js_reader.clone(),
             offset: message.offset.clone(),
             ack_rx,
-            tick: self.cfg.wip_ack_interval,
+            tick: self.js_reader.get_wip_ack_interval(),
             _permit: permit,
             cancel,
             message_processing_start: processing_start,

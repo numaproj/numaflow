@@ -102,6 +102,8 @@ pub(crate) struct JetStreamReader {
     /// jetstream needs complete message to ack/nack, so we need to keep track of them using the offset
     /// so that we can ack/nack them later using the offset.
     offset2jsmsg: Arc<RwLock<HashMap<Offset, JetstreamMessage>>>,
+    /// interval at which we should send wip ack to avoid redelivery.
+    wip_ack_interval: Duration,
 }
 
 impl JetStreamReader {
@@ -110,17 +112,24 @@ impl JetStreamReader {
         js_ctx: Context,
         isb_config: Option<ISBConfig>,
     ) -> Result<Self> {
-        let consumer: PullConsumer = js_ctx
+        let mut consumer: PullConsumer = js_ctx
             .get_consumer_from_stream(&stream.name, &stream.name)
             .await
             .map_err(|e| Error::ISB(format!("Failed to get consumer for stream {e}")))?;
 
+        let consumer_info = consumer
+            .info()
+            .await
+            .map_err(|e| Error::ISB(format!("Failed to get consumer info {e}")))?;
+
+        let ack_wait_seconds = consumer_info.config.ack_wait.as_secs();
         Ok(Self {
             stream,
             read_consumer: Arc::new(consumer.clone()),
             js_context: js_ctx,
             compression_type: isb_config.map(|c| c.compression.compress_type),
             offset2jsmsg: Arc::new(RwLock::new(HashMap::new())),
+            wip_ack_interval: Duration::from_secs(ack_wait_seconds * 2 / 3),
         })
     }
 
@@ -237,6 +246,10 @@ impl JetStreamReader {
                 })?;
 
         Ok(Some(info.num_pending as usize + info.num_ack_pending))
+    }
+
+    pub(crate) fn get_wip_ack_interval(&self) -> Duration {
+        self.wip_ack_interval
     }
 }
 
