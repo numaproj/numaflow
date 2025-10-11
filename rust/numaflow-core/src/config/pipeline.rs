@@ -27,7 +27,6 @@ use crate::config::components::source::SourceType;
 use crate::config::components::transformer::{TransformerConfig, TransformerType};
 use crate::config::get_vertex_replica;
 use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig, Stream};
-use crate::config::pipeline::map::MapMode;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::error::Error;

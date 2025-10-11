@@ -22,7 +22,6 @@ use crate::error::Error;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use numaflow_models::models::MonoVertex;
-use numaflow_shared::server_info::MapMode;
 use serde_json::from_slice;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;

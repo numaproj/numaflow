@@ -16,7 +16,6 @@ use numaflow_nats::jetstream::{ConsumerDeliverPolicy, JetstreamSourceConfig};
 use numaflow_nats::nats::NatsSourceConfig;
 use numaflow_pulsar::{PulsarAuth, source::PulsarSourceConfig};
 use numaflow_sqs::source::SqsSourceConfig;
-use serde::{Deserialize, Serialize};
 use tracing::warn;
 
 const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
@@ -365,19 +364,6 @@ impl Default for GeneratorConfig {
             jitter: Duration::from_secs(0),
         }
     }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct AuthToken {
-    /// Name of the configmap
-    name: String,
-    /// Key within the configmap
-    key: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct Auth {
-    token: AuthToken,
 }
 
 impl TryFrom<Box<numaflow_models::models::HttpSource>> for SourceType {
