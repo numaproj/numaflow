@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use crate::Result;
@@ -25,7 +25,7 @@ use tracing::warn;
 struct JSWrappedMessage {
     partition_idx: u16,
     message: async_nats::jetstream::Message,
-    vertex_name: String,
+    vertex_name: &'static str,
     compression_type: Option<CompressionType>,
 }
 
@@ -101,7 +101,7 @@ pub(crate) struct JetStreamReader {
     compression_type: Option<CompressionType>,
     /// jetstream needs complete message to ack/nack, so we need to keep track of them using the offset
     /// so that we can ack/nack them later using the offset.
-    offset2jsmsg: Arc<Mutex<HashMap<Offset, JetstreamMessage>>>,
+    offset2jsmsg: Arc<RwLock<HashMap<Offset, JetstreamMessage>>>,
 }
 
 impl JetStreamReader {
@@ -120,7 +120,7 @@ impl JetStreamReader {
             read_consumer: Arc::new(consumer.clone()),
             js_context: js_ctx,
             compression_type: isb_config.map(|c| c.compression.compress_type),
-            offset2jsmsg: Arc::new(Mutex::new(HashMap::new())),
+            offset2jsmsg: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 
@@ -167,7 +167,7 @@ impl JetStreamReader {
             let mut message = JSWrappedMessage {
                 partition_idx: self.stream.partition,
                 message: js_msg.clone(),
-                vertex_name: get_vertex_name().to_string(),
+                vertex_name: get_vertex_name(),
                 compression_type: self.compression_type,
             }
             .into_message()
@@ -177,7 +177,7 @@ impl JetStreamReader {
 
             // Track the actual message for doing ack/nack/wip by offset
             {
-                let mut map = self.offset2jsmsg.lock().expect("handles mutex poisoned");
+                let mut map = self.offset2jsmsg.write().expect("handles mutex poisoned");
                 map.insert(offset, js_msg);
             }
 
@@ -213,10 +213,11 @@ impl JetStreamReader {
 
     /// Helper method to get the JetStream message for a given offset, optionally removing it from the map
     fn get_js_message(&self, offset: &Offset, remove: bool) -> Option<JetstreamMessage> {
-        let mut map = self.offset2jsmsg.lock().expect("handles mutex poisoned");
         if remove {
+            let mut map = self.offset2jsmsg.write().expect("handles mutex poisoned");
             map.remove(offset)
         } else {
+            let map = self.offset2jsmsg.read().expect("handles mutex poisoned");
             map.get(offset).cloned()
         }
     }
