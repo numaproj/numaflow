@@ -85,7 +85,7 @@ mod stream_generator {
                     "Specified KeyCount is higher than RPU. KeyCount has changed."
                 );
             }
-            if key_count > 0 && rpu % key_count as usize != 0 {
+            if key_count > 0 && !rpu.is_multiple_of(key_count as usize) {
                 let new_rpu = rpu - (rpu % key_count as usize);
                 warn!(
                     rpu,

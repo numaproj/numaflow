@@ -11,10 +11,11 @@ use crate::metadata::Metadata;
 use crate::pipeline::isb::compression;
 use crate::shared::grpc::utc_from_timestamp;
 use async_nats::jetstream::{
-    AckKind, Context, Message as JetstreamMessage, consumer::PullConsumer,
+    AckKind, Context, Message as JetstreamMessage, consumer, consumer::PullConsumer,
 };
 use bytes::Bytes;
 use prost::Message as ProtoMessage;
+use serde_json::json;
 use tokio_stream::StreamExt;
 use tracing::warn;
 
@@ -94,7 +95,8 @@ pub(crate) struct JetStreamReader {
     /// jetstream stream from which we are reading
     stream: Stream,
     /// jetstream consumer used to read messages
-    consumer: PullConsumer,
+    read_consumer: Arc<PullConsumer>,
+    js_context: Context,
     /// compression_type is used to decompress the message body
     compression_type: Option<CompressionType>,
     /// jetstream needs complete message to ack/nack, so we need to keep track of them using the offset
@@ -115,7 +117,8 @@ impl JetStreamReader {
 
         Ok(Self {
             stream,
-            consumer,
+            read_consumer: Arc::new(consumer.clone()),
+            js_context: js_ctx,
             compression_type: isb_config.map(|c| c.compression.compress_type),
             offset2jsmsg: Arc::new(Mutex::new(HashMap::new())),
         })
@@ -129,7 +132,7 @@ impl JetStreamReader {
     pub(crate) async fn fetch(&mut self, max: usize, timeout: Duration) -> Result<Vec<Message>> {
         let mut out = Vec::with_capacity(max);
         let messages = match self
-            .consumer
+            .read_consumer
             .batch()
             .max_messages(max)
             .expires(timeout)
@@ -220,12 +223,18 @@ impl JetStreamReader {
 
     /// Returns the number of pending messages in the stream.
     pub(crate) async fn pending(&mut self) -> Result<Option<usize>> {
-        let info = self.consumer.info().await.map_err(|e| {
-            Error::ISB(format!(
-                "Failed to get consumer info for stream {}: {}",
-                self.stream.name, e
-            ))
-        })?;
+        let subject = format!("CONSUMER.INFO.{}.{}", self.stream.name, self.stream.name);
+        let info: consumer::Info =
+            self.js_context
+                .request(subject, &json!({}))
+                .await
+                .map_err(|e| {
+                    Error::ISB(format!(
+                        "Failed to get consumer info for stream {}: {}",
+                        self.stream.name, e
+                    ))
+                })?;
+
         Ok(Some(info.num_pending as usize + info.num_ack_pending))
     }
 }

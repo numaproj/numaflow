@@ -112,7 +112,7 @@ impl ISBWriter {
 
         // Route and write to appropriate streams
         let write_results = self
-            .route_and_write_message(message.clone(), cln_token.clone())
+            .route_and_write_message(&message, cln_token.clone())
             .await;
 
         // Resolve PAFs and finalize
@@ -124,24 +124,24 @@ impl ISBWriter {
     /// Returns a list of WriteResults (one per successful write).
     async fn route_and_write_message(
         &self,
-        message: Message,
+        message: &Message,
         cln_token: CancellationToken,
     ) -> Vec<WriteResult> {
         let mut results = vec![];
 
         for vertex in &*self.config {
-            // Check whether we need to write to this downstream vertex
+            // Check whether we need to write this message to downstream vertex
             if !forward::should_forward(message.tags.clone(), vertex.conditions.clone()) {
                 continue;
             }
 
             // Determine target stream based on partitioning
-            let stream = Self::determine_target_stream(&message, vertex);
+            let stream = Self::determine_target_stream(message, vertex);
 
             // Write to the stream with retry logic
             if let Some(write_result) = self
                 .write_to_stream(
-                    &message,
+                    message,
                     &stream,
                     vertex.writer_config.buffer_full_strategy.clone(),
                     cln_token.clone(),
@@ -159,7 +159,7 @@ impl ISBWriter {
                 "message will be dropped because conditional forwarding rules are not met or buffer is full"
             );
             self.tracker_handle
-                .delete(message.offset)
+                .delete(message.offset.clone())
                 .await
                 .expect("Failed to delete offset from tracker");
             self.publish_stream_drop_metric("n/a", "forwarding-rules-not-met", 0);
