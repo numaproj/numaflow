@@ -1064,8 +1064,6 @@ mod tests {
         })
         .await;
 
-        println!("I'm upto here");
-
         assert!(
             tokio_result.is_ok(),
             "Timeout occurred before pending became zero"
