@@ -771,6 +771,7 @@ mod tests {
     use async_nats::jetstream::consumer::PullConsumer;
     use async_nats::jetstream::{self, consumer, stream};
     use chrono::{TimeZone, Utc};
+    use numaflow::shared::ServerExtras;
     use numaflow::{accumulator, session_reduce};
     use numaflow_pb::clients::sessionreduce::session_reduce_client::SessionReduceClient;
     use prost::Message as ProstMessage;
@@ -1641,7 +1642,7 @@ mod tests {
         let server_info = server_info_file.clone();
         let server_socket = sock_file.clone();
         let server_handle = tokio::spawn(async move {
-            numaflow::accumulator::Server::new(AccumulatorCounterCreator {})
+            accumulator::Server::new(AccumulatorCounterCreator {})
                 .with_socket_file(server_socket)
                 .with_server_info_file(server_info)
                 .start_with_shutdown(shutdown_rx)

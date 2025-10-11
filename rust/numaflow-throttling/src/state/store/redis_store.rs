@@ -23,6 +23,7 @@ pub struct RedisStore {
     register_script: Script,
     deregister_script: Script,
     sync_pool_size_script: Script,
+    stale_age: usize,
 }
 
 /// Different ways to connect to Redis based on different Redis deployments.
@@ -253,7 +254,11 @@ impl SentinelBuilder {
 }
 
 impl RedisStore {
-    pub async fn new(key_prefix: &'static str, mode: RedisMode) -> Result<Self, RedisError> {
+    pub async fn new(
+        key_prefix: &'static str,
+        stale_age: usize,
+        mode: RedisMode,
+    ) -> Result<Self, RedisError> {
         let client = Self::make_client(mode).await?;
 
         // Create script objects
@@ -267,6 +272,7 @@ impl RedisStore {
             register_script,
             deregister_script,
             sync_pool_size_script,
+            stale_age,
         };
 
         // Load scripts into Redis
@@ -533,22 +539,50 @@ impl Store for RedisStore {
         &self,
         processor_id: &str,
         _cancel: CancellationToken,
-    ) -> crate::Result<usize> {
-        let pool_size: usize = self
-            .exec_lua_script(&self.register_script, &[self.key_prefix], &[processor_id])
+    ) -> crate::Result<(usize, f32)> {
+        // Currently registration script returns a tuple (pool_size, prev_max_filled)
+        let result: Vec<String> = self
+            .exec_lua_script(
+                &self.register_script,
+                &[self.key_prefix],
+                &[processor_id, &self.stale_age.to_string()],
+            )
             .await
             .map_err(|e| Error::Redis(e.to_string()))?;
 
-        Ok(pool_size)
+        if result.len() != 2 {
+            return Err(Error::Redis(
+                "Invalid response from register script".to_string(),
+            ));
+        }
+
+        let pool_size: usize = result
+            .first()
+            .expect("should have pool size")
+            .parse()
+            .map_err(|_| Error::Redis("Invalid pool size in response".to_string()))?;
+
+        let prev_max_filled: f32 = result
+            .get(1)
+            .expect("should have prev_max_filled")
+            .parse()
+            .map_err(|_| Error::Redis("Invalid prev_max_filled in response".to_string()))?;
+
+        Ok((pool_size, prev_max_filled))
     }
 
     async fn deregister(
         &self,
         processor_id: &str,
+        prev_max_filled: f32,
         _cancel: CancellationToken,
     ) -> crate::Result<()> {
         let _: String = self
-            .exec_lua_script(&self.deregister_script, &[self.key_prefix], &[processor_id])
+            .exec_lua_script(
+                &self.deregister_script,
+                &[self.key_prefix],
+                &[processor_id, &prev_max_filled.to_string()],
+            )
             .await
             .map_err(|e| Error::Redis(e.to_string()))?;
 
@@ -568,12 +602,13 @@ impl Store for RedisStore {
             .to_string();
 
         let pool_size_str = pool_size.to_string();
+        let stale_age_str = self.stale_age.to_string();
 
         let result: Vec<String> = self
             .exec_lua_script(
                 &self.sync_pool_size_script,
                 &[self.key_prefix],
-                &[processor_id, &timestamp, &pool_size_str],
+                &[processor_id, &timestamp, &pool_size_str, &stale_age_str],
             )
             .await
             .map_err(|e| Error::Redis(e.to_string()))?;
@@ -603,6 +638,60 @@ impl Store for RedisStore {
 mod tests {
     use super::*;
     use numaflow_models::models::{RedisSentinelConfig, Tls};
+    use std::time::Duration;
+
+    /// Test utilities for integration tests
+    mod test_utils {
+        use crate::state::store::redis_store::{RedisMode, RedisStore};
+
+        /// Creates a Redis store for testing with a unique key prefix
+        /// Returns None if Redis is not available
+        pub async fn create_test_redis_store(
+            test_name: &str,
+            stale_age: usize,
+        ) -> Option<RedisStore> {
+            let redis_url = "redis://127.0.0.1:6379";
+
+            // Check if Redis is available
+            if let Err(_) = redis::Client::open(redis_url) {
+                println!(
+                    "Skipping Redis test - Redis server not available at {}",
+                    redis_url
+                );
+                return None;
+            }
+
+            let test_key_prefix =
+                Box::leak(format!("test_{}_{}", test_name, std::process::id()).into_boxed_str());
+            let redis_mode = RedisMode::single_url(redis_url.to_string())
+                .build()
+                .unwrap();
+
+            match RedisStore::new(test_key_prefix, stale_age, redis_mode).await {
+                Ok(store) => Some(store),
+                Err(e) => {
+                    println!("Skipping Redis test - Failed to connect to Redis: {}", e);
+                    None
+                }
+            }
+        }
+
+        /// Cleans up Redis keys after a test
+        pub fn cleanup_redis_keys(test_name: &str) {
+            let redis_url = "redis://127.0.0.1:6379";
+            if let Ok(client) = redis::Client::open(redis_url)
+                && let Ok(mut conn) = client.get_connection()
+            {
+                let test_key_prefix = format!("test_{}_{}", test_name, std::process::id());
+                let _: Result<(), _> = redis::cmd("DEL")
+                    .arg(format!("{}:heartbeats", test_key_prefix))
+                    .arg(format!("{}:poolsize", test_key_prefix))
+                    .arg(format!("{}:prev_max_filled", test_key_prefix))
+                    .arg(format!("{}:prev_max_filled_ttl", test_key_prefix))
+                    .query(&mut conn);
+            }
+        }
+    }
 
     /// Comprehensive test for Redis mode creation from RateLimiterRedisStore configurations
     #[test]
@@ -1000,5 +1089,66 @@ mod tests {
             deregister_script.get_hash(),
             sync_pool_size_script.get_hash()
         );
+    }
+
+    #[tokio::test]
+    async fn test_previously_stored_max_filled_at_deregister_redis() {
+        let test_name = "test_previously_stored_max_filled_at_deregister_redis";
+        let store = match test_utils::create_test_redis_store(test_name, 180).await {
+            Some(store) => store,
+            None => return, // Skip test if Redis is not available
+        };
+
+        let cancel = CancellationToken::new();
+
+        store.register("processor_a", cancel.clone()).await.unwrap();
+        let _ = store
+            .sync_pool_size("processor_a", 1, cancel.clone())
+            .await
+            .unwrap();
+
+        // Deregister processor_a and store max_filled as 10
+        store
+            .deregister("processor_a", 10.0, cancel.clone())
+            .await
+            .unwrap();
+
+        // Register processor_a again and check if max_filled is 10
+        let (_, prev_max_filled) = store.register("processor_a", cancel.clone()).await.unwrap();
+
+        assert_eq!(prev_max_filled, 10.0);
+
+        test_utils::cleanup_redis_keys(test_name);
+    }
+
+    #[tokio::test]
+    async fn test_expired_stored_max_filled_at_deregister_redis() {
+        let test_name = "test_expired_stored_max_filled_at_deregister_redis";
+        let store = match test_utils::create_test_redis_store(test_name, 1).await {
+            Some(store) => store,
+            None => return, // Skip test if Redis is not available
+        };
+        let cancel = CancellationToken::new();
+
+        store.register("processor_a", cancel.clone()).await.unwrap();
+        let _ = store
+            .sync_pool_size("processor_a", 1, cancel.clone())
+            .await
+            .unwrap();
+
+        // Deregister processor_a and store max_filled as 10
+        store
+            .deregister("processor_a", 10.0, cancel.clone())
+            .await
+            .unwrap();
+
+        // Wait for the stored max_filled to expire
+        tokio::time::sleep(Duration::from_millis(2000)).await;
+
+        // Register processor_a again and check if max_filled is 0
+        let (_, prev_max_filled) = store.register("processor_a", cancel.clone()).await.unwrap();
+
+        assert_eq!(prev_max_filled, 0.0);
+        test_utils::cleanup_redis_keys(test_name);
     }
 }

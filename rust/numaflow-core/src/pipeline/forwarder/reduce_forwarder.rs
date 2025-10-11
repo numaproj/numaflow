@@ -549,6 +549,7 @@ mod tests {
     use chrono::{TimeZone, Utc};
     use futures::StreamExt;
     use numaflow::reduce;
+    use numaflow::shared::ServerExtras;
     use std::sync::Arc;
     use std::time::Duration;
     use tempfile::TempDir;

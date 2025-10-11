@@ -91,6 +91,7 @@ pub mod tests {
     use aws_sdk_sqs::types::BatchResultErrorEntry;
     use aws_smithy_mocks::{MockResponseInterceptor, Rule, RuleMode, mock};
     use chrono::Utc;
+    use numaflow::shared::ServerExtras;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;
@@ -185,7 +186,7 @@ pub mod tests {
         // let source = get_sqs_source().await;
         let sink_writer = get_sqs_sink(tracker_handle.clone()).await;
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), sink_writer);
+        let forwarder = Forwarder::new(source.clone(), None, sink_writer);
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<crate::error::Result<()>> = tokio::spawn(async move {

@@ -21259,6 +21259,9 @@
             "$ref": "#/definitions/io.k8s.api.core.v1.Toleration"
           }
         },
+        "udf": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDF"
+        },
         "updateStrategy": {
           "description": "The strategy to use to replace existing pods with new ones.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UpdateStrategy"
@@ -21759,9 +21762,17 @@
           "description": "RampUpDuration is the duration to reach the maximum TPS from the minimum TPS. The min unit of ramp up is 1 in 1 second.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         },
+        "resumedRampUp": {
+          "description": "ResumedRampUp is used to enable the resume mode for rate limiting.\n\nThis, if true, will allow the processor to resume the ramp-up process from the last known state of the rate limiter, i.e., if the processor was allowed X tokens before shutting down, it will be allowed X tokens again after the processor restarts.\n\nThe resumed ramp-up process will be allowed until TTL time after the processor first deregisters with the rate limiter.",
+          "type": "boolean"
+        },
         "store": {
           "description": "Store is used to define the Distributed Store for the rate limiting. We also support in-memory store if no store is configured. This means that every replica will have its own rate limit and the actual TPS will be the sum of all the replicas.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimiterStore"
+        },
+        "ttl": {
+          "description": "TTL is used to define the duration after which a pod is considered stale and removed from the pool of pods if it doesn't sync with the rate limiter.\n\nFurthermore, if the ResumedRampUp is true, then TTL also defines the amount of time within which, if a pod re-registers / registers with the same name, with the rate limiter, it will be assigned the same rate limit as the previous pod with that name.",
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         }
       }
     },

@@ -1,11 +1,6 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use base64::Engine;
-use base64::prelude::BASE64_STANDARD;
-use numaflow_models::models::MonoVertex;
-use serde_json::from_slice;
-
 use super::pipeline::ServingCallbackConfig;
 use super::{
     DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED,
@@ -22,7 +17,13 @@ use crate::config::components::transformer::{
 };
 use crate::config::get_vertex_replica;
 use crate::config::monovertex::sink::SinkType;
+use crate::config::pipeline::map::MapVtxConfig;
 use crate::error::Error;
+use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
+use numaflow_models::models::MonoVertex;
+use numaflow_shared::server_info::MapMode;
+use serde_json::from_slice;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
@@ -38,6 +39,7 @@ pub(crate) struct MonovertexConfig {
     pub(crate) graceful_shutdown_time: Duration,
     pub(crate) replica: u16,
     pub(crate) source_config: SourceConfig,
+    pub(crate) map_config: Option<MapVtxConfig>,
     pub(crate) sink_config: SinkConfig,
     pub(crate) transformer_config: Option<TransformerConfig>,
     pub(crate) fb_sink_config: Option<SinkConfig>,
@@ -62,6 +64,7 @@ impl Default for MonovertexConfig {
                 sink_type: SinkType::Log(sink::LogConfig::default()),
                 retry_config: None,
             },
+            map_config: None,
             transformer_config: None,
             fb_sink_config: None,
             metrics_config: MetricsConfig::default(),
@@ -156,6 +159,22 @@ impl MonovertexConfig {
             retry_config: sink.retry_strategy.clone().map(|retry| retry.into()),
         };
 
+        // Based on whether UDF config is present or not, obtain a Result<Box<Udf>>
+        // Not checking whether this is Map or Reduce UDF, only considering Map UDF for now
+        let udf = mono_vertex_obj
+            .spec
+            .udf
+            .clone()
+            .ok_or_else(|| Error::Config("Map UDF not found".to_string()));
+
+        let map_config = match udf {
+            Ok(udf) => Some(MapVtxConfig {
+                concurrency: batch_size as usize,
+                map_type: udf.try_into()?,
+            }),
+            Err(_) => None,
+        };
+
         let fb_sink_config = if sink.fallback.is_some() {
             Some(SinkConfig {
                 sink_type: SinkType::fallback_sinktype(&sink)?,
@@ -207,6 +226,7 @@ impl MonovertexConfig {
             graceful_shutdown_time: Duration::from_secs(graceful_shutdown_time_secs),
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
             source_config,
+            map_config,
             sink_config,
             transformer_config,
             fb_sink_config,

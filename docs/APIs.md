@@ -6049,6 +6049,21 @@ Refer to the Kubernetes API documentation for the fields of the
 
 <td>
 
+<code>udf</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
+UDF </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>AbstractPodTemplate</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
 AbstractPodTemplate </a> </em>
@@ -6538,6 +6553,21 @@ Description
 
 <td>
 
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>udf</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.UDF">
+UDF </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -9205,6 +9235,70 @@ RateLimiterModes </a> </em>
 <p>
 
 RateLimiterModes is used to define the modes for rate limiting.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>resumedRampUp</code></br> <em> bool </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+ResumedRampUp is used to enable the resume mode for rate limiting.
+</p>
+
+<p>
+
+This, if true, will allow the processor to resume the ramp-up process
+from the last known state of the rate limiter, i.e., if the processor
+was allowed X tokens before shutting down, it will be allowed X tokens
+again after the processor restarts.
+</p>
+
+<p>
+
+The resumed ramp-up process will be allowed until TTL time after the
+processor first deregisters with the rate limiter.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>ttl</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+TTL is used to define the duration after which a pod is considered stale
+and removed from the pool of pods if it doesn’t sync with the rate
+limiter.
+</p>
+
+<p>
+
+Furthermore, if the ResumedRampUp is true, then TTL also defines the
+amount of time within which, if a pod re-registers / registers with the
+same name, with the rate limiter, it will be assigned the same rate
+limit as the previous pod with that name.
 </p>
 
 </td>
@@ -13078,7 +13172,8 @@ UDF
 <p>
 
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>)
 </p>
 
 <p>

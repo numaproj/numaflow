@@ -52,6 +52,15 @@ func ValidateMonoVertex(mvtx *dfv1.MonoVertex) error {
 			return fmt.Errorf("invalid init container name: %q is reserved for containers created by numaflow", ic.Name)
 		}
 	}
+
+	if mvtx.Spec.UDF != nil {
+		if mvtx.Spec.UDF.GroupBy != nil {
+			return fmt.Errorf("invalid udf: groupBy/reduce is not supported in monovertex")
+		} else if err := validateUDF(*mvtx.Spec.UDF); err != nil {
+			return fmt.Errorf("invalid udf: %w", err)
+		}
+	}
+
 	for _, sc := range mvtx.Spec.Sidecars {
 		if isReservedContainerName(sc.Name) {
 			return fmt.Errorf("invalid sidecar container name: %q is reserved for containers created by numaflow", sc.Name)

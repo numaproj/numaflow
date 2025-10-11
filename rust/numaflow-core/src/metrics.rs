@@ -1393,6 +1393,7 @@ mod tests {
     use crate::source::SourceType;
     use crate::source::user_defined::new_source;
     use crate::tracker::TrackerHandle;
+    use numaflow::shared::ServerExtras;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
     use numaflow_pb::clients::sink::sink_client::SinkClient;

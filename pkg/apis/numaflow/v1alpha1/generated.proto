@@ -1035,47 +1035,50 @@ message MonoVertexSpec {
   optional Sink sink = 3;
 
   // +optional
-  optional AbstractPodTemplate abstractPodTemplate = 4;
+  optional UDF udf = 4;
+
+  // +optional
+  optional AbstractPodTemplate abstractPodTemplate = 5;
 
   // Container template for the main numa container.
   // +optional
-  optional ContainerTemplate containerTemplate = 5;
+  optional ContainerTemplate containerTemplate = 6;
 
   // +optional
   // +patchStrategy=merge
   // +patchMergeKey=name
-  repeated .k8s.io.api.core.v1.Volume volumes = 6;
+  repeated .k8s.io.api.core.v1.Volume volumes = 7;
 
   // Limits define the limitations such as read batch size for the mono vertex.
   // +optional
-  optional MonoVertexLimits limits = 7;
+  optional MonoVertexLimits limits = 8;
 
   // Settings for autoscaling
   // +optional
-  optional Scale scale = 8;
+  optional Scale scale = 9;
 
   // List of customized init containers belonging to the pod.
   // More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
   // +optional
-  repeated .k8s.io.api.core.v1.Container initContainers = 9;
+  repeated .k8s.io.api.core.v1.Container initContainers = 10;
 
   // List of customized sidecar containers belonging to the pod.
   // +optional
-  repeated .k8s.io.api.core.v1.Container sidecars = 10;
+  repeated .k8s.io.api.core.v1.Container sidecars = 11;
 
   // Template for the daemon service deployment.
   // +optional
-  optional DaemonTemplate daemonTemplate = 11;
+  optional DaemonTemplate daemonTemplate = 12;
 
   // The strategy to use to replace existing pods with new ones.
   // +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
   // +optional
-  optional UpdateStrategy updateStrategy = 12;
+  optional UpdateStrategy updateStrategy = 13;
 
   // Lifecycle defines the Lifecycle properties of a MonoVertex
   // +kubebuilder:default={"desiredPhase": Running}
   // +optional
-  optional MonoVertexLifecycle lifecycle = 13;
+  optional MonoVertexLifecycle lifecycle = 14;
 }
 
 message MonoVertexStatus {
@@ -1448,6 +1451,27 @@ message RateLimit {
   // RateLimiterModes is used to define the modes for rate limiting.
   // +optional
   optional RateLimiterModes modes = 5;
+
+  // ResumedRampUp is used to enable the resume mode for rate limiting.
+  //
+  // This, if true, will allow the processor to
+  // resume the ramp-up process from the last known state of the rate limiter, i.e., if the processor was allowed X tokens
+  // before shutting down, it will be allowed X tokens again after the processor restarts.
+  //
+  // The resumed ramp-up process will be allowed until TTL time after the processor first deregisters with the rate limiter.
+  // +optional
+  // +kubebuilder:default=false
+  optional bool resumedRampUp = 6;
+
+  // TTL is used to define the duration after which a pod is considered stale and removed from the pool of pods if it
+  // doesn't sync with the rate limiter.
+  //
+  // Furthermore, if the ResumedRampUp is true, then TTL also defines the amount of time within which, if a pod
+  // re-registers / registers with the same name, with the rate limiter, it will be assigned the same rate limit as
+  // the previous pod with that name.
+  // +optional
+  // +kubebuilder:default="180s"
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration ttl = 7;
 }
 
 // RateLimiterGoBackN is for the GoBackN mode.

@@ -1587,6 +1587,11 @@ func (in *MonoVertexSpec) DeepCopyInto(out *MonoVertexSpec) {
 		*out = new(Sink)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.UDF != nil {
+		in, out := &in.UDF, &out.UDF
+		*out = new(UDF)
+		(*in).DeepCopyInto(*out)
+	}
 	in.AbstractPodTemplate.DeepCopyInto(&out.AbstractPodTemplate)
 	if in.ContainerTemplate != nil {
 		in, out := &in.ContainerTemplate, &out.ContainerTemplate
@@ -2186,6 +2191,16 @@ func (in *RateLimit) DeepCopyInto(out *RateLimit) {
 		in, out := &in.RateLimiterModes, &out.RateLimiterModes
 		*out = new(RateLimiterModes)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.ResumedRampUp != nil {
+		in, out := &in.ResumedRampUp, &out.ResumedRampUp
+		*out = new(bool)
+		**out = **in
+	}
+	if in.TTL != nil {
+		in, out := &in.TTL, &out.TTL
+		*out = new(metav1.Duration)
+		**out = **in
 	}
 	return
 }

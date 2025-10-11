@@ -33,7 +33,8 @@ var (
 			Replicas: ptr.To[int32](3),
 			AbstractVertex: dfv1.AbstractVertex{
 				Scale: dfv1.Scale{
-					TargetProcessingSeconds: ptr.To[uint32](1),
+					TargetProcessingSeconds:  ptr.To[uint32](5),
+					TargetBufferAvailability: ptr.To[uint32](90),
 				},
 			},
 		},
@@ -64,15 +65,15 @@ func Test_desiredReplicasSinglePartition(t *testing.T) {
 		src.Spec.Source = &dfv1.Source{
 			Kafka: &dfv1.KafkaSource{},
 		}
-		assert.Equal(t, int32(1), s.desiredReplicas(context.TODO(), src, []float64{0}, []int64{0}, []int64{10000}, []int64{5000}))
-		assert.Equal(t, int32(8), s.desiredReplicas(context.TODO(), src, []float64{2500}, []int64{10010}, []int64{30000}, []int64{20000}))
-		assert.Equal(t, int32(8), s.desiredReplicas(context.TODO(), src, []float64{2500}, []int64{9950}, []int64{30000}, []int64{20000}))
-		assert.Equal(t, int32(7), s.desiredReplicas(context.TODO(), src, []float64{2500}, []int64{8751}, []int64{30000}, []int64{20000}))
-		assert.Equal(t, int32(7), s.desiredReplicas(context.TODO(), src, []float64{2500}, []int64{8749}, []int64{30000}, []int64{20000}))
-		assert.Equal(t, int32(1), s.desiredReplicas(context.TODO(), src, []float64{0}, []int64{9950}, []int64{30000}, []int64{20000}))
-		assert.Equal(t, int32(1), s.desiredReplicas(context.TODO(), src, []float64{2500}, []int64{2}, []int64{30000}, []int64{20000}))
-		assert.Equal(t, int32(1), s.desiredReplicas(context.TODO(), src, []float64{2500}, []int64{0}, []int64{30000}, []int64{20000}))
-
+		src.Spec.Scale.TargetProcessingSeconds = ptr.To[uint32](5)
+		assert.Equal(t, int32(1), s.desiredReplicas(context.TODO(), src, []float64{0, 0}, []int64{0, 0}, int64(30000), int64(24000), int64(27000)))
+		assert.Equal(t, int32(16), s.desiredReplicas(context.TODO(), src, []float64{250, 500, 750}, []int64{10010, 800, 1200}, int64(30000), int64(24000), int64(27000)))
+		assert.Equal(t, int32(9), s.desiredReplicas(context.TODO(), src, []float64{450, 500, 750}, []int64{10010, 800, 1200}, int64(30000), int64(24000), int64(27000)))
+		assert.Equal(t, int32(16), s.desiredReplicas(context.TODO(), src, []float64{450, 20, 750}, []int64{10010, 800, 1200}, int64(30000), int64(24000), int64(27000)))
+		assert.Equal(t, int32(17), s.desiredReplicas(context.TODO(), src, []float64{450, 20, 750}, []int64{18932, 800, 1200}, int64(30000), int64(24000), int64(27000)))
+		assert.Equal(t, int32(13), s.desiredReplicas(context.TODO(), src, []float64{800, 200, 750}, []int64{18932, 800, 24988}, int64(30000), int64(24000), int64(27000)))
+		assert.Equal(t, int32(13), s.desiredReplicas(context.TODO(), src, []float64{800, 210, 750}, []int64{18932, 800, 24988}, int64(30000), int64(24000), int64(27000)))
+		assert.Equal(t, int32(15), s.desiredReplicas(context.TODO(), src, []float64{800, 21, 750}, []int64{18932, 800, 24988}, int64(30000), int64(24000), int64(27000)))
 	})
 
 	t.Run("test udf", func(t *testing.T) {
@@ -80,37 +81,106 @@ func Test_desiredReplicasSinglePartition(t *testing.T) {
 		s := NewScaler(cl)
 		udf := fakeVertex.DeepCopy()
 		udf.Spec.UDF = &dfv1.UDF{}
-		assert.Equal(t, int32(1), s.desiredReplicas(context.TODO(), udf, []float64{0}, []int64{0}, []int64{10000}, []int64{5000}))
-		assert.Equal(t, int32(1), s.desiredReplicas(context.TODO(), udf, []float64{250}, []int64{10000}, []int64{20000}, []int64{5000}))
-		assert.Equal(t, int32(1), s.desiredReplicas(context.TODO(), udf, []float64{250}, []int64{10000}, []int64{20000}, []int64{6000}))
-		assert.Equal(t, int32(2), s.desiredReplicas(context.TODO(), udf, []float64{250}, []int64{10000}, []int64{20000}, []int64{7500}))
-		assert.Equal(t, int32(2), s.desiredReplicas(context.TODO(), udf, []float64{250}, []int64{10000}, []int64{20000}, []int64{7900}))
-		assert.Equal(t, int32(2), s.desiredReplicas(context.TODO(), udf, []float64{250}, []int64{10000}, []int64{20000}, []int64{10000}))
-		assert.Equal(t, int32(3), s.desiredReplicas(context.TODO(), udf, []float64{250}, []int64{10000}, []int64{20000}, []int64{12500}))
-		assert.Equal(t, int32(3), s.desiredReplicas(context.TODO(), udf, []float64{250}, []int64{10000}, []int64{20000}, []int64{12550}))
+		udf.Spec.Scale.TargetProcessingSeconds = ptr.To[uint32](5)
+		udf.Spec.Scale.TargetBufferAvailability = ptr.To[uint32](90)
+
+		tests := []struct {
+			name                    string
+			partitionProcessingRate []float64
+			partitionPending        []int64
+			readyReplicas           uint32
+			want                    int32
+		}{
+			{
+				name:                    "no data",
+				partitionProcessingRate: []float64{0, 0},
+				partitionPending:        []int64{0, 0},
+				readyReplicas:           2,
+				want:                    1,
+			},
+			{
+				name:                    "using targetProcessingSeconds",
+				partitionProcessingRate: []float64{250, 500, 750},
+				partitionPending:        []int64{2789, 800, 1200},
+				readyReplicas:           2,
+				want:                    4,
+			},
+			{
+				name:                    "at the edge of switching from targetProcessingSeconds to targetBufferAvailability, still targetProcessingSeconds",
+				partitionProcessingRate: []float64{250, 500, 750},
+				partitionPending:        []int64{2999, 800, 1200},
+				readyReplicas:           2,
+				want:                    5,
+			},
+			{
+				name:                    "at the edge of using targetBufferAvailability, just switched from using targetProcessingSeconds",
+				partitionProcessingRate: []float64{250, 500, 750},
+				partitionPending:        []int64{3001, 800, 1200},
+				readyReplicas:           5,
+				want:                    6,
+			},
+			{
+				name:                    "combined using targetBufferAvailability and targetProcessingSeconds for differetn partitions",
+				partitionProcessingRate: []float64{250, 500, 750},
+				partitionPending:        []int64{8001, 800, 1200},
+				readyReplicas:           6,
+				want:                    10,
+			},
+			{
+				name:                    "using targetBufferAvailability",
+				partitionProcessingRate: []float64{250, 500, 750},
+				partitionPending:        []int64{8001, 3882, 4002},
+				readyReplicas:           9,
+				want:                    15,
+			},
+			{
+				name:                    "using targetBufferAvailability, less pending",
+				partitionProcessingRate: []float64{250, 500, 750},
+				partitionPending:        []int64{6000, 3882, 4002},
+				readyReplicas:           9,
+				want:                    14,
+			},
+			{
+				name:                    "using targetBufferAvailability, higher rate, no change",
+				partitionProcessingRate: []float64{650, 570, 790},
+				partitionPending:        []int64{6000, 3882, 4002},
+				readyReplicas:           9,
+				want:                    14,
+			},
+			{
+				name:                    "using targetBufferAvailability, more replicas, less pending",
+				partitionProcessingRate: []float64{650, 570, 790},
+				partitionPending:        []int64{3100, 3001, 3223},
+				readyReplicas:           11,
+				want:                    14,
+			},
+			{
+				name:                    "using targetProcessingSeconds, more replicas, less pending",
+				partitionProcessingRate: []float64{650, 570, 790},
+				partitionPending:        []int64{2998, 2998, 2998},
+				readyReplicas:           13,
+				want:                    14,
+			},
+			{
+				name:                    "using targetProcessingSeconds, less and less pending",
+				partitionProcessingRate: []float64{650, 570, 790},
+				partitionPending:        []int64{2501, 1283, 2044},
+				readyReplicas:           14,
+				want:                    11,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				udf := fakeVertex.DeepCopy()
+				udf.Spec.UDF = &dfv1.UDF{}
+				udf.Spec.Scale.TargetProcessingSeconds = ptr.To[uint32](5)
+				udf.Spec.Scale.TargetBufferAvailability = ptr.To[uint32](90)
+				udf.Status.ReadyReplicas = tt.readyReplicas
+				got := s.desiredReplicas(context.TODO(), udf, tt.partitionProcessingRate, tt.partitionPending, int64(30000), int64(24000), int64(27000))
+				assert.Equal(t, tt.want, got)
+			})
+		}
 	})
 
-}
-
-func Test_desiredReplicasMultiplePartitions(t *testing.T) {
-	cl := fake.NewClientBuilder().Build()
-	s := NewScaler(cl)
-	udf := &dfv1.Vertex{
-		Spec: dfv1.VertexSpec{
-			Replicas: ptr.To[int32](2),
-			AbstractVertex: dfv1.AbstractVertex{
-				UDF: &dfv1.UDF{},
-			},
-		},
-		Status: dfv1.VertexStatus{
-			Replicas:      uint32(2),
-			ReadyReplicas: uint32(2),
-		},
-	}
-
-	assert.Equal(t, int32(1), s.desiredReplicas(context.TODO(), udf, []float64{0, 0, 1}, []int64{0, 0, 1}, []int64{24000, 24000, 24000}, []int64{15000, 15000, 15000}))
-	assert.Equal(t, int32(2), s.desiredReplicas(context.TODO(), udf, []float64{5000, 3000, 5000}, []int64{0, 10000, 1}, []int64{24000, 24000, 24000}, []int64{15000, 15000, 15000}))
-	assert.Equal(t, int32(30), s.desiredReplicas(context.TODO(), udf, []float64{5000, 3000, 5000}, []int64{0, 23000, 1}, []int64{24000, 24000, 24000}, []int64{15000, 15000, 15000}))
-	assert.Equal(t, int32(4), s.desiredReplicas(context.TODO(), udf, []float64{5000, 3000, 5000}, []int64{0, 30000, 1}, []int64{24000, 24000, 24000}, []int64{15000, 15000, 15000}))
-	assert.Equal(t, int32(4), s.desiredReplicas(context.TODO(), udf, []float64{1000, 3000, 1000}, []int64{0, 27000, 3000}, []int64{24000, 24000, 24000}, []int64{15000, 15000, 15000}))
 }
