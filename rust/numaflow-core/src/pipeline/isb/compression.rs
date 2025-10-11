@@ -7,9 +7,9 @@ use crate::config::pipeline::isb::CompressionType;
 use crate::error::Error;
 
 /// Compress data based on the compression type.
-pub(super) fn compress(compression_type: Option<CompressionType>, data: &[u8]) -> Result<Vec<u8>> {
+pub(super) fn compress(compression_type: CompressionType, data: &[u8]) -> Result<Vec<u8>> {
     match compression_type {
-        Some(CompressionType::Gzip) => {
+        CompressionType::Gzip => {
             use flate2::Compression;
             use flate2::write::GzEncoder;
             use std::io::Write;
@@ -22,7 +22,7 @@ pub(super) fn compress(compression_type: Option<CompressionType>, data: &[u8]) -
                 .finish()
                 .map_err(|e| Error::ISB(format!("Failed to finish gzip compression: {e}")))
         }
-        Some(CompressionType::Zstd) => {
+        CompressionType::Zstd => {
             use std::io::Write;
             use zstd::Encoder;
 
@@ -35,7 +35,7 @@ pub(super) fn compress(compression_type: Option<CompressionType>, data: &[u8]) -
                 .finish()
                 .map_err(|e| Error::ISB(format!("Failed to finish zstd compression: {e}")))
         }
-        Some(CompressionType::LZ4) => {
+        CompressionType::LZ4 => {
             use lz4::EncoderBuilder;
             use std::io::Write;
 
@@ -48,17 +48,14 @@ pub(super) fn compress(compression_type: Option<CompressionType>, data: &[u8]) -
             let (compressed_data, _) = encoder.finish();
             Ok(compressed_data)
         }
-        None | Some(CompressionType::None) => Ok(data.to_vec()),
+        CompressionType::None => Ok(data.to_vec()),
     }
 }
 
 /// Decompress data based on the compression type.
-pub(super) fn decompress(
-    compression_type: Option<CompressionType>,
-    data: &[u8],
-) -> Result<Vec<u8>> {
+pub(super) fn decompress(compression_type: CompressionType, data: &[u8]) -> Result<Vec<u8>> {
     match compression_type {
-        Some(CompressionType::Gzip) => {
+        CompressionType::Gzip => {
             use flate2::read::GzDecoder;
 
             let mut decoder: GzDecoder<&[u8]> = GzDecoder::new(data);
@@ -68,7 +65,7 @@ pub(super) fn decompress(
                 .map_err(|e| Error::ISB(format!("Failed to decompress message: {e}")))?;
             Ok(decompressed)
         }
-        Some(CompressionType::Zstd) => {
+        CompressionType::Zstd => {
             let mut decoder: zstd::Decoder<'static, std::io::BufReader<&[u8]>> =
                 zstd::Decoder::new(data)
                     .map_err(|e| Error::ISB(format!("Failed to create zstd decoder: {e:?}")))?;
@@ -78,7 +75,7 @@ pub(super) fn decompress(
                 .map_err(|e| Error::ISB(format!("Failed to decompress message: {e}")))?;
             Ok(decompressed)
         }
-        Some(CompressionType::LZ4) => {
+        CompressionType::LZ4 => {
             let mut decoder: lz4::Decoder<&[u8]> = lz4::Decoder::new(data)
                 .map_err(|e| Error::ISB(format!("Failed to create lz4 decoder: {e:?}")))?;
             let mut decompressed = vec![];
@@ -87,7 +84,7 @@ pub(super) fn decompress(
                 .map_err(|e| Error::ISB(format!("Failed to decompress message: {e}")))?;
             Ok(decompressed)
         }
-        None | Some(CompressionType::None) => Ok(data.to_vec()),
+        CompressionType::None => Ok(data.to_vec()),
     }
 }
 
@@ -97,36 +94,14 @@ mod tests {
     use crate::config::pipeline::isb::CompressionType;
 
     #[test]
-    fn test_compress_decompress_none_compression() {
-        let test_data = b"Hello, World!".to_vec();
-
-        let compressed = compress(None, &test_data).unwrap();
-        assert_eq!(compressed, test_data);
-
-        let decompressed = decompress(None, &compressed).unwrap();
-        assert_eq!(decompressed, test_data);
-    }
-
-    #[test]
-    fn test_compress_decompress_none_compression_type() {
-        let test_data = b"Hello, World!".to_vec();
-
-        let compressed = compress(Some(CompressionType::None), &test_data).unwrap();
-        assert_eq!(compressed, test_data);
-
-        let decompressed = decompress(Some(CompressionType::None), &compressed).unwrap();
-        assert_eq!(decompressed, test_data);
-    }
-
-    #[test]
     fn test_compress_decompress_gzip() {
         let test_data = b"Hello, World! This is a test message for gzip compression.";
 
-        let compressed = compress(Some(CompressionType::Gzip), test_data).unwrap();
+        let compressed = compress(CompressionType::Gzip, test_data).unwrap();
         assert_ne!(compressed, test_data.to_vec());
-        assert!(compressed.len() > 0);
+        assert!(!compressed.is_empty());
 
-        let decompressed = decompress(Some(CompressionType::Gzip), &compressed).unwrap();
+        let decompressed = decompress(CompressionType::Gzip, &compressed).unwrap();
         assert_eq!(decompressed, test_data.to_vec());
     }
 
@@ -134,11 +109,11 @@ mod tests {
     fn test_compress_decompress_zstd() {
         let test_data = b"Hello, World! This is a test message for zstd compression.";
 
-        let compressed = compress(Some(CompressionType::Zstd), test_data).unwrap();
+        let compressed = compress(CompressionType::Zstd, test_data).unwrap();
         assert_ne!(compressed, test_data.to_vec());
-        assert!(compressed.len() > 0);
+        assert!(!compressed.is_empty());
 
-        let decompressed = decompress(Some(CompressionType::Zstd), &compressed).unwrap();
+        let decompressed = decompress(CompressionType::Zstd, &compressed).unwrap();
         assert_eq!(decompressed, test_data.to_vec());
     }
 
@@ -146,31 +121,20 @@ mod tests {
     fn test_compress_decompress_lz4() {
         let test_data = b"Hello, World! This is a test message for lz4 compression.";
 
-        let compressed = compress(Some(CompressionType::LZ4), test_data).unwrap();
+        let compressed = compress(CompressionType::LZ4, test_data).unwrap();
         assert_ne!(compressed, test_data.to_vec());
-        assert!(compressed.len() > 0);
+        assert!(!compressed.is_empty());
 
-        let decompressed = decompress(Some(CompressionType::LZ4), &compressed).unwrap();
+        let decompressed = decompress(CompressionType::LZ4, &compressed).unwrap();
         assert_eq!(decompressed, test_data.to_vec());
-    }
-
-    #[test]
-    fn test_compress_decompress_empty_payload_no_compression() {
-        let test_data = vec![];
-
-        let compressed = compress(None, &test_data).unwrap();
-        assert_eq!(compressed, test_data);
-
-        let decompressed = decompress(None, &compressed).unwrap();
-        assert_eq!(decompressed, test_data);
     }
 
     #[test]
     fn test_compress_decompress_empty_payload_gzip() {
         let test_data = vec![];
 
-        let compressed = compress(Some(CompressionType::Gzip), &test_data).unwrap();
-        let decompressed = decompress(Some(CompressionType::Gzip), &compressed).unwrap();
+        let compressed = compress(CompressionType::Gzip, &test_data).unwrap();
+        let decompressed = decompress(CompressionType::Gzip, &compressed).unwrap();
         assert_eq!(decompressed, test_data);
     }
 
@@ -178,8 +142,8 @@ mod tests {
     fn test_compress_decompress_empty_payload_zstd() {
         let test_data = vec![];
 
-        let compressed = compress(Some(CompressionType::Zstd), &test_data).unwrap();
-        let decompressed = decompress(Some(CompressionType::Zstd), &compressed).unwrap();
+        let compressed = compress(CompressionType::Zstd, &test_data).unwrap();
+        let decompressed = decompress(CompressionType::Zstd, &compressed).unwrap();
         assert_eq!(decompressed, test_data);
     }
 
@@ -187,8 +151,8 @@ mod tests {
     fn test_compress_decompress_empty_payload_lz4() {
         let test_data = vec![];
 
-        let compressed = compress(Some(CompressionType::LZ4), &test_data).unwrap();
-        let decompressed = decompress(Some(CompressionType::LZ4), &compressed).unwrap();
+        let compressed = compress(CompressionType::LZ4, &test_data).unwrap();
+        let decompressed = decompress(CompressionType::LZ4, &compressed).unwrap();
         assert_eq!(decompressed, test_data);
     }
 
@@ -196,7 +160,7 @@ mod tests {
     fn test_decompress_invalid_lz4_data() {
         let invalid_data = b"This is not lz4 compressed data".to_vec();
 
-        let result = decompress(Some(CompressionType::LZ4), &invalid_data);
+        let result = decompress(CompressionType::LZ4, &invalid_data);
         assert!(result.is_err());
 
         if let Err(Error::ISB(msg)) = result {
@@ -214,13 +178,13 @@ mod tests {
         let test_data = b"Hello, World! This is a test message for gzip compression.";
 
         // First compress the data properly
-        let compressed = compress(Some(CompressionType::Gzip), test_data).unwrap();
+        let compressed = compress(CompressionType::Gzip, test_data).unwrap();
 
         // Then truncate the compressed data to simulate corruption
         let mut truncated_data = compressed;
         truncated_data.truncate(truncated_data.len() / 2);
 
-        let result = decompress(Some(CompressionType::Gzip), &truncated_data);
+        let result = decompress(CompressionType::Gzip, &truncated_data);
 
         assert!(result.is_err());
         if let Err(Error::ISB(msg)) = result {
@@ -235,8 +199,8 @@ mod tests {
         // Create binary test data with various byte values
         let test_data: Vec<u8> = (0..=255).collect();
 
-        let compressed = compress(Some(CompressionType::Zstd), &test_data).unwrap();
-        let decompressed = decompress(Some(CompressionType::Zstd), &compressed).unwrap();
+        let compressed = compress(CompressionType::Zstd, &test_data).unwrap();
+        let decompressed = decompress(CompressionType::Zstd, &compressed).unwrap();
 
         assert_eq!(decompressed, test_data);
     }
@@ -246,11 +210,10 @@ mod tests {
         let test_data = b"This is a comprehensive test for all compression types with various characters: !@#$%^&*()_+-=[]{}|;':\",./<>?`~".to_vec();
 
         let compression_types = vec![
-            None,
-            Some(CompressionType::None),
-            Some(CompressionType::Gzip),
-            Some(CompressionType::Zstd),
-            Some(CompressionType::LZ4),
+            CompressionType::None,
+            CompressionType::Gzip,
+            CompressionType::Zstd,
+            CompressionType::LZ4,
         ];
 
         for compression_type in compression_types {

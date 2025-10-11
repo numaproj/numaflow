@@ -67,10 +67,12 @@ impl JSWrappedMessage {
             typ: header.kind.into(),
             keys: Arc::from(header.keys.into_boxed_slice()),
             tags: None,
-            value: Bytes::from(compression::decompress(
-                self.compression_type,
-                &body.payload,
-            )?),
+            value: match self.compression_type {
+                None => body.payload.into(),
+                Some(compression_type) => {
+                    Bytes::from(compression::decompress(compression_type, &body.payload)?)
+                }
+            },
             offset: offset.clone(),
             event_time: message_info
                 .event_time
@@ -96,7 +98,8 @@ pub(crate) struct JetStreamReader {
     stream: Stream,
     /// jetstream consumer used to read messages
     read_consumer: Arc<PullConsumer>,
-    js_context: Context,
+    /// js context to fetch pending messages from the stream
+    js_context: Arc<Context>,
     /// compression_type is used to decompress the message body
     compression_type: Option<CompressionType>,
     /// jetstream needs complete message to ack/nack, so we need to keep track of them using the offset
@@ -126,7 +129,7 @@ impl JetStreamReader {
         Ok(Self {
             stream,
             read_consumer: Arc::new(consumer.clone()),
-            js_context: js_ctx,
+            js_context: Arc::new(js_ctx),
             compression_type: isb_config.map(|c| c.compression.compress_type),
             offset2jsmsg: Arc::new(RwLock::new(HashMap::new())),
             wip_ack_interval: Duration::from_secs(ack_wait_seconds * 2 / 3),

@@ -231,10 +231,12 @@ impl JetStreamWriter {
 
         // Compress the message value if compression is enabled
         let mut message = message;
-        message.value = bytes::Bytes::from(
-            compression::compress(self.compression_type, &message.value)
-                .map_err(|e| WriteError::PublishFailed(format!("Compression failed: {}", e)))?,
-        );
+        if let Some(compression_type) = self.compression_type {
+            message.value = bytes::Bytes::from(
+                compression::compress(compression_type, &message.value)
+                    .map_err(|e| WriteError::PublishFailed(format!("Compression failed: {}", e)))?,
+            );
+        }
 
         let payload: BytesMut = message
             .try_into()
@@ -287,10 +289,13 @@ impl JetStreamWriter {
 
         // Compress the message value if compression is enabled
         let mut message = message;
-        message.value = bytes::Bytes::from(compression::compress(
-            self.compression_type,
-            &message.value,
-        )?);
+        message.value = match self.compression_type {
+            Some(compression_type) => bytes::Bytes::from(
+                compression::compress(compression_type, &message.value)
+                    .map_err(|e| Error::ISB(format!("Compression failed: {}", e)))?,
+            ),
+            None => message.value,
+        };
 
         let payload: BytesMut = message
             .try_into()
