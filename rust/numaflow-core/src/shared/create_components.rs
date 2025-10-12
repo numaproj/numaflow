@@ -792,12 +792,12 @@ pub async fn create_edge_watermark_handle(
 }
 
 /// Creates JetStreamWriters for all streams in the to_vertex_config
-pub(crate) fn create_js_writers(
+pub(crate) async fn create_js_writers(
     to_vertex_config: &[ToVertexConfig],
     js_context: Context,
     isb_config: Option<&crate::config::pipeline::isb::ISBConfig>,
     cln_token: CancellationToken,
-) -> HashMap<&'static str, JetStreamWriter> {
+) -> crate::Result<HashMap<&'static str, JetStreamWriter>> {
     let mut writers = HashMap::new();
     for vertex_config in to_vertex_config {
         for stream in &vertex_config.writer_config.streams {
@@ -807,11 +807,12 @@ pub(crate) fn create_js_writers(
                 vertex_config.writer_config.clone(),
                 isb_config.map(|c| c.compression.compress_type),
                 cln_token.clone(),
-            );
+            )
+            .await?;
             writers.insert(stream.name, writer);
         }
     }
-    writers
+    Ok(writers)
 }
 
 #[cfg(test)]

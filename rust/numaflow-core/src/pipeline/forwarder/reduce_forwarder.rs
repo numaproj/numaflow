@@ -170,7 +170,8 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         js_context.clone(),
         config.isb_config.as_ref(),
         cln_token.clone(),
-    );
+    )
+    .await?;
 
     let writer_components = ISBWriterComponents {
         config: config.to_vertex_config.clone(),
@@ -308,7 +309,8 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         js_context.clone(),
         config.isb_config.as_ref(),
         cln_token.clone(),
-    );
+    )
+    .await?;
 
     let writer_components = ISBWriterComponents {
         config: config.to_vertex_config.clone(),
@@ -811,7 +813,7 @@ mod tests {
 
         let messages = vec![msg1, msg2, msg3, msg4];
         for msg in messages {
-            let message_bytes: BytesMut = msg.try_into().unwrap();
+            let message_bytes: BytesMut = msg.try_into()?;
             js_context
                 .publish(input_stream.name, message_bytes.freeze())
                 .await
@@ -1131,7 +1133,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let message_bytes: BytesMut = msg.try_into().unwrap();
+            let message_bytes: BytesMut = msg.try_into()?;
 
             js_context
                 .publish(input_stream.name, message_bytes.freeze())

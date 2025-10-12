@@ -977,7 +977,8 @@ mod tests {
                 writer_config.clone(),
                 None,
                 cln_token.clone(),
-            ),
+            )
+            .await?,
         );
 
         let writer_components = ISBWriterComponents {
@@ -1213,7 +1214,8 @@ mod tests {
                 writer_config.clone(),
                 None,
                 cln_token.clone(),
-            ),
+            )
+            .await?,
         );
 
         let writer_components = ISBWriterComponents {
@@ -1506,7 +1508,8 @@ mod tests {
                 writer_config.clone(),
                 None,
                 cln_token.clone(),
-            ),
+            )
+            .await?,
         );
 
         let writer_components = ISBWriterComponents {
@@ -1719,7 +1722,8 @@ mod tests {
                 writer_config.clone(),
                 None,
                 cln_token.clone(),
-            ),
+            )
+            .await?,
         );
 
         let writer_components = ISBWriterComponents {
@@ -1964,7 +1968,8 @@ mod tests {
                 writer_config.clone(),
                 None,
                 cln_token.clone(),
-            ),
+            )
+            .await?,
         );
 
         let writer_components = ISBWriterComponents {

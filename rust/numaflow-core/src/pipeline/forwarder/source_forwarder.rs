@@ -100,7 +100,8 @@ pub(crate) async fn start_source_forwarder(
         js_context.clone(),
         config.isb_config.as_ref(),
         cln_token.clone(),
-    );
+    )
+    .await?;
 
     let writer_components = ISBWriterComponents {
         config: config.to_vertex_config.clone(),
@@ -465,7 +466,9 @@ mod tests {
                 writer_config.clone(),
                 None,
                 cln_token.clone(),
-            ),
+            )
+            .await
+            .unwrap(),
         );
 
         let writer_components = ISBWriterComponents {

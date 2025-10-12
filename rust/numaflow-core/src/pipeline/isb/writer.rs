@@ -601,7 +601,9 @@ mod tests {
                 writer_config.clone(),
                 None,
                 cln_token.clone(),
-            ),
+            )
+            .await
+            .unwrap(),
         );
 
         let writer_components = ISBWriterComponents {
@@ -713,7 +715,9 @@ mod tests {
                 writer_config.clone(),
                 None,
                 cln_token.clone(),
-            ),
+            )
+            .await
+            .unwrap(),
         );
 
         let writer_components = ISBWriterComponents {
@@ -824,7 +828,9 @@ mod tests {
                     vertex1_writer_config.clone(),
                     None,
                     cln_token.clone(),
-                ),
+                )
+                .await
+                .unwrap(),
             );
         }
         for stream in &vertex2_streams {
@@ -836,7 +842,9 @@ mod tests {
                     vertex2_writer_config.clone(),
                     None,
                     cln_token.clone(),
-                ),
+                )
+                .await
+                .unwrap(),
             );
         }
         for stream in &vertex3_streams {
@@ -848,7 +856,9 @@ mod tests {
                     vertex3_writer_config.clone(),
                     None,
                     cln_token.clone(),
-                ),
+                )
+                .await
+                .unwrap(),
             );
         }
 

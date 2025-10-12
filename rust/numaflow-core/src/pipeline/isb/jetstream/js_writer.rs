@@ -65,36 +65,61 @@ pub(crate) struct JetStreamWriter {
 impl JetStreamWriter {
     /// Creates a new JetStreamWriter for a single stream and spawns a background task
     /// to monitor buffer fullness.
-    pub(crate) fn new(
+    pub(crate) async fn new(
         stream: Stream,
         js_ctx: Context,
         writer_config: BufferWriterConfig,
         compression_type: Option<CompressionType>,
         cln_token: CancellationToken,
-    ) -> Self {
+    ) -> Result<Self> {
         let is_full = Arc::new(AtomicBool::new(false));
 
         // Build metric labels once during initialization
         let buffer_labels = Arc::new(jetstream_isb_metrics_labels(stream.name));
 
-        let this = Self {
-            stream: stream.clone(),
-            js_ctx: js_ctx.clone(),
+        let js_writer = Self {
+            stream,
+            js_ctx,
             compression_type,
             is_full: Arc::clone(&is_full),
-            writer_config: writer_config.clone(),
+            writer_config,
             buffer_labels,
         };
 
         // Spawn background task to monitor this stream's fullness
         tokio::spawn({
-            let this = this.clone();
+            let stream = js_writer
+                .js_ctx
+                .get_stream(js_writer.stream.name)
+                .await
+                .map_err(|_| Error::ISB("Failed to get stream".to_string()))?;
+
+            let consumer: PullConsumer = js_writer
+                .js_ctx
+                .get_consumer_from_stream(js_writer.stream.name, js_writer.stream.name)
+                .await
+                .map_err(|e| Error::ISB(format!("Failed to get the consumer {e}")))?;
+
+            let is_full = Arc::clone(&js_writer.is_full);
+            let writer_config = js_writer.writer_config.clone();
+            let buffer_labels = Arc::clone(&js_writer.buffer_labels);
+            let stream_name = js_writer.stream.name;
+
             async move {
-                this.check_stream_status(cln_token).await;
+                Self::check_stream_status(
+                    stream,
+                    consumer,
+                    is_full,
+                    writer_config,
+                    buffer_labels,
+                    stream_name,
+                    cln_token,
+                )
+                .await;
             }
         });
 
-        this
+        Ok(js_writer)
     }
 
     /// Returns the stream name.
@@ -106,107 +131,6 @@ impl JetStreamWriter {
     /// Returns whether this stream is full.
     pub(crate) fn is_full(&self) -> bool {
         self.is_full.load(Ordering::Relaxed)
-    }
-
-    /// Checks the buffer usage metrics (soft and solid usage) and pending metrics for this stream.
-    /// If the usage is greater than the bufferUsageLimit, it sets the is_full flag to true.
-    async fn check_stream_status(&self, cln_token: CancellationToken) {
-        let mut interval =
-            tokio::time::interval(Duration::from_secs(DEFAULT_REFRESH_INTERVAL_SECS));
-        loop {
-            tokio::select! {
-                _ = interval.tick() => {
-                    let stream_name = self.stream.name;
-                    match Self::fetch_buffer_info(
-                        self.js_ctx.clone(),
-                        stream_name,
-                        self.writer_config.max_length
-                    ).await {
-                        Ok(buffer_info) => {
-                            if buffer_info.solid_usage >= self.writer_config.usage_limit
-                                && buffer_info.soft_usage >= self.writer_config.usage_limit
-                            {
-                                self.is_full.store(true, Ordering::Relaxed);
-                            } else {
-                                self.is_full.store(false, Ordering::Relaxed);
-                            }
-                            pipeline_metrics().jetstream_isb.buffer_soft_usage
-                                .get_or_create(&self.buffer_labels).set(buffer_info.soft_usage);
-                            pipeline_metrics().jetstream_isb.buffer_solid_usage
-                                .get_or_create(&self.buffer_labels).set(buffer_info.solid_usage);
-                            pipeline_metrics().jetstream_isb.buffer_pending
-                                .get_or_create(&self.buffer_labels).set(buffer_info.num_pending as i64);
-                            pipeline_metrics().jetstream_isb.buffer_ack_pending
-                                .get_or_create(&self.buffer_labels).set(buffer_info.num_ack_pending as i64);
-                        }
-                        Err(e) => {
-                            error!(?e, "Failed to fetch buffer info for stream {}, updating isFull to true", stream_name);
-                            pipeline_metrics().jetstream_isb.isfull_error_total
-                                .get_or_create(&jetstream_isb_error_metrics_labels(stream_name, e.to_string())).inc();
-                            self.is_full.store(true, Ordering::Relaxed);
-                        }
-                    }
-                }
-                _ = cln_token.cancelled() => {
-                    return;
-                }
-            }
-        }
-    }
-
-    /// Fetches the buffer usage metrics (soft and solid usage) and pending metrics for the given stream.
-    ///
-    /// Soft Usage:
-    /// Formula: (NumPending + NumAckPending) / maxLength
-    /// - NumPending: The number of pending messages.
-    /// - NumAckPending: The number of messages that are in processing state(yet to be acked).
-    /// - maxLength: The maximum length of the buffer.
-    ///
-    /// Solid Usage:
-    /// Formula:
-    /// - If the stream's retention policy is LimitsPolicy: solidUsage = softUsage
-    /// - Otherwise: solidUsage = State.Msgs / maxLength
-    /// - State.Msgs: The total number of messages in the stream.
-    /// - maxLength: The maximum length of the buffer.
-    async fn fetch_buffer_info(
-        js_ctx: Context,
-        stream_name: &str,
-        max_length: usize,
-    ) -> Result<BufferInfo> {
-        let mut stream = js_ctx
-            .get_stream(stream_name)
-            .await
-            .map_err(|_| Error::ISB("Failed to get stream".to_string()))?;
-
-        let stream_info = stream
-            .info()
-            .await
-            .map_err(|e| Error::ISB(format!("Failed to get the stream info {e}")))?;
-
-        let mut consumer: PullConsumer = js_ctx
-            .get_consumer_from_stream(stream_name, stream_name)
-            .await
-            .map_err(|e| Error::ISB(format!("Failed to get the consumer {e}")))?;
-
-        let consumer_info = consumer
-            .info()
-            .await
-            .map_err(|e| Error::ISB(format!("Failed to get the consumer info {e}")))?;
-
-        let soft_usage = (consumer_info.num_pending as f64 + consumer_info.num_ack_pending as f64)
-            / max_length as f64;
-        let solid_usage = if stream_info.config.retention == Limits {
-            soft_usage
-        } else {
-            stream_info.state.messages as f64 / max_length as f64
-        };
-
-        Ok(BufferInfo {
-            soft_usage,
-            solid_usage,
-            num_pending: consumer_info.num_pending,
-            num_ack_pending: consumer_info.num_ack_pending,
-        })
     }
 
     /// Writes the message to the JetStream ISB and returns a PublishAckFuture.
@@ -341,6 +265,104 @@ impl JetStreamWriter {
             }
         }
     }
+
+    /// Checks the buffer usage metrics (soft and solid usage) and pending metrics for a stream.
+    /// If the usage is greater than the bufferUsageLimit, it sets the is_full flag to true.
+    async fn check_stream_status(
+        mut stream: async_nats::jetstream::stream::Stream,
+        mut consumer: PullConsumer,
+        is_full: Arc<AtomicBool>,
+        writer_config: BufferWriterConfig,
+        buffer_labels: MetricLabels,
+        stream_name: &'static str,
+        cln_token: CancellationToken,
+    ) {
+        let mut interval =
+            tokio::time::interval(Duration::from_secs(DEFAULT_REFRESH_INTERVAL_SECS));
+        loop {
+            tokio::select! {
+                _ = interval.tick() => {
+                    match Self::fetch_buffer_info(
+                        &mut stream,
+                        &mut consumer,
+                        writer_config.max_length
+                    ).await {
+                        Ok(buffer_info) => {
+                            if buffer_info.solid_usage >= writer_config.usage_limit
+                                && buffer_info.soft_usage >= writer_config.usage_limit
+                            {
+                                is_full.store(true, Ordering::Relaxed);
+                            } else {
+                                is_full.store(false, Ordering::Relaxed);
+                            }
+                            pipeline_metrics().jetstream_isb.buffer_soft_usage
+                                .get_or_create(&buffer_labels).set(buffer_info.soft_usage);
+                            pipeline_metrics().jetstream_isb.buffer_solid_usage
+                                .get_or_create(&buffer_labels).set(buffer_info.solid_usage);
+                            pipeline_metrics().jetstream_isb.buffer_pending
+                                .get_or_create(&buffer_labels).set(buffer_info.num_pending as i64);
+                            pipeline_metrics().jetstream_isb.buffer_ack_pending
+                                .get_or_create(&buffer_labels).set(buffer_info.num_ack_pending as i64);
+                        }
+                        Err(e) => {
+                            error!(?e, "Failed to fetch buffer info for stream {}, updating isFull to true", stream_name);
+                            pipeline_metrics().jetstream_isb.isfull_error_total
+                                .get_or_create(&jetstream_isb_error_metrics_labels(stream_name, e.to_string())).inc();
+                            is_full.store(true, Ordering::Relaxed);
+                        }
+                    }
+                }
+                _ = cln_token.cancelled() => {
+                    return;
+                }
+            }
+        }
+    }
+
+    /// Fetches the buffer usage metrics (soft and solid usage) and pending metrics for the given stream.
+    ///
+    /// Soft Usage:
+    /// Formula: (NumPending + NumAckPending) / maxLength
+    /// - NumPending: The number of pending messages.
+    /// - NumAckPending: The number of messages that are in processing state(yet to be acked).
+    /// - maxLength: The maximum length of the buffer.
+    ///
+    /// Solid Usage:
+    /// Formula:
+    /// - If the stream's retention policy is LimitsPolicy: solidUsage = softUsage
+    /// - Otherwise: solidUsage = State.Msgs / maxLength
+    /// - State.Msgs: The total number of messages in the stream.
+    /// - maxLength: The maximum length of the buffer.
+    async fn fetch_buffer_info(
+        stream: &mut async_nats::jetstream::stream::Stream,
+        consumer: &mut PullConsumer,
+        max_length: usize,
+    ) -> Result<BufferInfo> {
+        let stream_info = stream
+            .info()
+            .await
+            .map_err(|e| Error::ISB(format!("Failed to get the stream info {e}")))?;
+
+        let consumer_info = consumer
+            .info()
+            .await
+            .map_err(|e| Error::ISB(format!("Failed to get the consumer info {e}")))?;
+
+        let soft_usage = (consumer_info.num_pending as f64 + consumer_info.num_ack_pending as f64)
+            / max_length as f64;
+        let solid_usage = if stream_info.config.retention == Limits {
+            soft_usage
+        } else {
+            stream_info.state.messages as f64 / max_length as f64
+        };
+
+        Ok(BufferInfo {
+            soft_usage,
+            solid_usage,
+            num_pending: consumer_info.num_pending,
+            num_ack_pending: consumer_info.num_ack_pending,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -363,7 +385,7 @@ mod tests {
         let stream = Stream::new("test-buffer-info", "temp", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
-        let _stream = context
+        let mut js_stream = context
             .get_or_create_stream(stream::Config {
                 name: stream.name.to_string(),
                 subjects: vec![stream.name.to_string()],
@@ -385,7 +407,13 @@ mod tests {
             .await
             .unwrap();
 
-        let buffer_info = JetStreamWriter::fetch_buffer_info(context.clone(), stream.name, 100)
+        let mut consumer: PullConsumer = context
+            .get_consumer_from_stream(stream.name, stream.name)
+            .await
+            .map_err(|e| Error::ISB(format!("Failed to get the consumer {e}")))
+            .expect("failed to create consumer");
+
+        let buffer_info = JetStreamWriter::fetch_buffer_info(&mut js_stream, &mut consumer, 100)
             .await
             .unwrap();
 
@@ -449,7 +477,9 @@ mod tests {
             writer_config,
             None,
             cln_token.clone(),
-        );
+        )
+        .await
+        .unwrap();
 
         // Fill the buffer to trigger is_full
         for i in 0..4 {

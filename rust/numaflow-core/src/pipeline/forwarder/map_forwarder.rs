@@ -144,7 +144,8 @@ pub async fn start_map_forwarder(
         js_context.clone(),
         config.isb_config.as_ref(),
         cln_token.clone(),
-    );
+    )
+    .await?;
 
     let writer_components = ISBWriterComponents {
         config: config.to_vertex_config.clone(),
