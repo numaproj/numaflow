@@ -13,10 +13,8 @@ pub struct Payload {
     #[prost(string, tag = "5")]
     pub id: ::prost::alloc::string::String,
     #[prost(map = "string, string", tag = "6")]
-    pub headers: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub headers:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
     /// Metadata is the metadata of the message
     #[prost(message, optional, tag = "7")]
     pub metadata: ::core::option::Option<crate::common::metadata::Metadata>,
@@ -33,7 +31,7 @@ pub struct AccumulatorRequest {
 pub mod accumulator_request {
     /// WindowOperation represents a window operation.
     /// For Unaligned windows, OPEN, APPEND and CLOSE events are sent.
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
     pub struct WindowOperation {
         #[prost(enumeration = "window_operation::Event", tag = "1")]
         pub event: i32,
@@ -43,15 +41,7 @@ pub mod accumulator_request {
     /// Nested message and enum types in `WindowOperation`.
     pub mod window_operation {
         #[derive(
-            Clone,
-            Copy,
-            Debug,
-            PartialEq,
-            Eq,
-            Hash,
-            PartialOrd,
-            Ord,
-            ::prost::Enumeration
+            Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
         )]
         #[repr(i32)]
         pub enum Event {
@@ -84,7 +74,7 @@ pub mod accumulator_request {
     }
 }
 /// Window represents a window.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct KeyedWindow {
     #[prost(message, optional, tag = "1")]
     pub start: ::core::option::Option<::prost_types::Timestamp>,
@@ -110,7 +100,7 @@ pub struct AccumulatorResponse {
     pub eof: bool,
 }
 /// ReadyResponse is the health check result.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ReadyResponse {
     #[prost(bool, tag = "1")]
     pub ready: bool,
@@ -122,10 +112,10 @@ pub mod accumulator_client {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value,
+        clippy::let_unit_value
     )]
-    use tonic::codegen::*;
     use tonic::codegen::http::Uri;
+    use tonic::codegen::*;
     /// AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should
     /// always have monotonically increasing WM but it can be manipulated through event-time by reordering the messages.
     /// NOTE: Quite powerful, should not be abused; it can cause stalling of pipelines and leaks
@@ -167,14 +157,13 @@ pub mod accumulator_client {
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
             T: tonic::codegen::Service<
-                http::Request<tonic::body::Body>,
-                Response = http::Response<
-                    <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
+                    http::Request<tonic::body::Body>,
+                    Response = http::Response<
+                        <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
+                    >,
                 >,
-            >,
-            <T as tonic::codegen::Service<
-                http::Request<tonic::body::Body>,
-            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
+            <T as tonic::codegen::Service<http::Request<tonic::body::Body>>>::Error:
+                Into<StdError> + std::marker::Send + std::marker::Sync,
         {
             AccumulatorClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -212,28 +201,22 @@ pub mod accumulator_client {
         /// AccumulateFn applies a accumulate function to a request stream.
         pub async fn accumulate_fn(
             &mut self,
-            request: impl tonic::IntoStreamingRequest<
-                Message = super::AccumulatorRequest,
-            >,
+            request: impl tonic::IntoStreamingRequest<Message = super::AccumulatorRequest>,
         ) -> std::result::Result<
             tonic::Response<tonic::codec::Streaming<super::AccumulatorResponse>>,
             tonic::Status,
         > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/accumulator.v1.Accumulator/AccumulateFn",
-            );
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path =
+                http::uri::PathAndQuery::from_static("/accumulator.v1.Accumulator/AccumulateFn");
             let mut req = request.into_streaming_request();
-            req.extensions_mut()
-                .insert(GrpcMethod::new("accumulator.v1.Accumulator", "AccumulateFn"));
+            req.extensions_mut().insert(GrpcMethod::new(
+                "accumulator.v1.Accumulator",
+                "AccumulateFn",
+            ));
             self.inner.streaming(req, path, codec).await
         }
         /// IsReady is the heartbeat endpoint for gRPC.
@@ -241,18 +224,11 @@ pub mod accumulator_client {
             &mut self,
             request: impl tonic::IntoRequest<()>,
         ) -> std::result::Result<tonic::Response<super::ReadyResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/accumulator.v1.Accumulator/IsReady",
-            );
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/accumulator.v1.Accumulator/IsReady");
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("accumulator.v1.Accumulator", "IsReady"));

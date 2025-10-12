@@ -17,7 +17,7 @@ fn build_common() {
 }
 
 fn build_client() {
-    tonic_build::configure()
+    tonic_prost_build::configure()
         .build_client(true)
         .build_server(false)
         .out_dir("src/clients")
