@@ -33,8 +33,10 @@ pub struct Header {
     pub keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     /// Headers is the headers of the message which can be used to store and propagate source headers
     #[prost(map = "string, string", tag = "5")]
-    pub headers:
-        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    pub headers: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        ::prost::alloc::string::String,
+    >,
     /// Metadata is the metadata of the message
     #[prost(message, optional, tag = "6")]
     pub metadata: ::core::option::Option<crate::common::metadata::Metadata>,

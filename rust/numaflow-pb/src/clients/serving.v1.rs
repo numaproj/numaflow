@@ -58,10 +58,10 @@ pub mod serving_store_client {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value
+        clippy::let_unit_value,
     )]
-    use tonic::codegen::http::Uri;
     use tonic::codegen::*;
+    use tonic::codegen::http::Uri;
     /// ServingStore defines a set of methods to interface with a user-defined Store.
     #[derive(Debug, Clone)]
     pub struct ServingStoreClient<T> {
@@ -101,13 +101,14 @@ pub mod serving_store_client {
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
             T: tonic::codegen::Service<
-                    http::Request<tonic::body::Body>,
-                    Response = http::Response<
-                        <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
-                    >,
+                http::Request<tonic::body::Body>,
+                Response = http::Response<
+                    <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
                 >,
-            <T as tonic::codegen::Service<http::Request<tonic::body::Body>>>::Error:
-                Into<StdError> + std::marker::Send + std::marker::Sync,
+            >,
+            <T as tonic::codegen::Service<
+                http::Request<tonic::body::Body>,
+            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
         {
             ServingStoreClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -147,11 +148,18 @@ pub mod serving_store_client {
             &mut self,
             request: impl tonic::IntoRequest<super::PutRequest>,
         ) -> std::result::Result<tonic::Response<super::PutResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
-            })?;
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic_prost::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/serving.v1.ServingStore/Put");
+            let path = http::uri::PathAndQuery::from_static(
+                "/serving.v1.ServingStore/Put",
+            );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("serving.v1.ServingStore", "Put"));
@@ -162,11 +170,18 @@ pub mod serving_store_client {
             &mut self,
             request: impl tonic::IntoRequest<super::GetRequest>,
         ) -> std::result::Result<tonic::Response<super::GetResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
-            })?;
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic_prost::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/serving.v1.ServingStore/Get");
+            let path = http::uri::PathAndQuery::from_static(
+                "/serving.v1.ServingStore/Get",
+            );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("serving.v1.ServingStore", "Get"));
@@ -177,11 +192,18 @@ pub mod serving_store_client {
             &mut self,
             request: impl tonic::IntoRequest<()>,
         ) -> std::result::Result<tonic::Response<super::ReadyResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
-            })?;
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic_prost::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/serving.v1.ServingStore/IsReady");
+            let path = http::uri::PathAndQuery::from_static(
+                "/serving.v1.ServingStore/IsReady",
+            );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("serving.v1.ServingStore", "IsReady"));

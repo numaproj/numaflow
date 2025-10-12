@@ -87,10 +87,10 @@ pub mod source_transform_client {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value
+        clippy::let_unit_value,
     )]
-    use tonic::codegen::http::Uri;
     use tonic::codegen::*;
+    use tonic::codegen::http::Uri;
     #[derive(Debug, Clone)]
     pub struct SourceTransformClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -129,13 +129,14 @@ pub mod source_transform_client {
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
             T: tonic::codegen::Service<
-                    http::Request<tonic::body::Body>,
-                    Response = http::Response<
-                        <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
-                    >,
+                http::Request<tonic::body::Body>,
+                Response = http::Response<
+                    <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
                 >,
-            <T as tonic::codegen::Service<http::Request<tonic::body::Body>>>::Error:
-                Into<StdError> + std::marker::Send + std::marker::Sync,
+            >,
+            <T as tonic::codegen::Service<
+                http::Request<tonic::body::Body>,
+            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
         {
             SourceTransformClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -175,23 +176,33 @@ pub mod source_transform_client {
         /// SourceTransformFn can be used only at source vertex by source data transformer.
         pub async fn source_transform_fn(
             &mut self,
-            request: impl tonic::IntoStreamingRequest<Message = super::SourceTransformRequest>,
+            request: impl tonic::IntoStreamingRequest<
+                Message = super::SourceTransformRequest,
+            >,
         ) -> std::result::Result<
             tonic::Response<tonic::codec::Streaming<super::SourceTransformResponse>>,
             tonic::Status,
         > {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
-            })?;
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sourcetransformer.v1.SourceTransform/SourceTransformFn",
             );
             let mut req = request.into_streaming_request();
-            req.extensions_mut().insert(GrpcMethod::new(
-                "sourcetransformer.v1.SourceTransform",
-                "SourceTransformFn",
-            ));
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "sourcetransformer.v1.SourceTransform",
+                        "SourceTransformFn",
+                    ),
+                );
             self.inner.streaming(req, path, codec).await
         }
         /// IsReady is the heartbeat endpoint for gRPC.
@@ -199,18 +210,23 @@ pub mod source_transform_client {
             &mut self,
             request: impl tonic::IntoRequest<()>,
         ) -> std::result::Result<tonic::Response<super::ReadyResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
-            })?;
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sourcetransformer.v1.SourceTransform/IsReady",
             );
             let mut req = request.into_request();
-            req.extensions_mut().insert(GrpcMethod::new(
-                "sourcetransformer.v1.SourceTransform",
-                "IsReady",
-            ));
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("sourcetransformer.v1.SourceTransform", "IsReady"),
+                );
             self.inner.unary(req, path, codec).await
         }
     }
