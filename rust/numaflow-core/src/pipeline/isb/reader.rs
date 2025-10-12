@@ -157,7 +157,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                     match res.unwrap_or(ReadAck::Nak) {
                         ReadAck::Ack => {
                             let ack_start = Instant::now();
-                            Self::ack_with_retry(params.jsr.clone(), params.offset.clone(), params.cancel.clone()).await;
+                            Self::ack_with_retry(&params.jsr, &params.offset, &params.cancel).await;
                             Self::publish_ack_metrics(
                                 params.stream_name,
                                 &params.labels,
@@ -166,7 +166,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                             );
                         },
                         ReadAck::Nak => {
-                            Self::nak_with_retry(params.jsr.clone(), params.offset.clone(), params.cancel.clone()).await;
+                            Self::nak_with_retry(&params.jsr, &params.offset, &params.cancel).await;
                         },
                     }
                     break;
@@ -176,12 +176,12 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
     }
 
     /// invokes the ack with infinite retries until the cancellation token is cancelled.
-    async fn ack_with_retry(jsr: JetStreamReader, offset: Offset, cancel: CancellationToken) {
+    async fn ack_with_retry(jsr: &JetStreamReader, offset: &Offset, cancel: &CancellationToken) {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
         let _ = Retry::new(
             interval,
             async || {
-                jsr.ack(&offset)
+                jsr.ack(offset)
                     .await
                     .map_err(|e| Error::ISB(format!("Failed to send Ack to JetStream: {e}")))
             },
@@ -202,12 +202,12 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
     }
 
     /// invokes the nack with infinite retries until the cancellation token is cancelled.
-    async fn nak_with_retry(jsr: JetStreamReader, offset: Offset, cancel: CancellationToken) {
+    async fn nak_with_retry(jsr: &JetStreamReader, offset: &Offset, cancel: &CancellationToken) {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
         let _ = Retry::new(
             interval,
             async || {
-                jsr.nack(&offset)
+                jsr.nack(offset)
                     .await
                     .map_err(|e| Error::ISB(format!("Failed to send Nak to JetStream: {e}")))
             },
@@ -237,6 +237,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         if vertex_type != ReduceUDF.as_str() {
             return Ok(());
         }
+
         let idle_watermark = chrono::DateTime::from_timestamp_millis(idle_wmb.watermark)
             .expect("Failed to create watermark from WMB");
         let msg = Message {
@@ -311,19 +312,14 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
     /// Applies rate limiting and fetches the message batch.
     async fn apply_rate_limiting_and_fetch(&mut self, batch_size: usize) -> Vec<Message> {
         // Apply rate limiting if configured to determine effective batch size
-        let (effective_batch_size, token_epoch) = match &self.rate_limiter {
+        let effective_batch_size = match &self.rate_limiter {
             Some(rl) => {
-                let cur_epoch = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("Time went backwards beyond unix epoch")
-                    .as_secs();
                 let acquired = rl
                     .acquire_n(Some(batch_size), Some(Duration::from_secs(1)))
                     .await;
-                let eff = std::cmp::min(acquired, batch_size);
-                (eff, cur_epoch)
+                std::cmp::min(acquired, batch_size)
             }
-            None => (batch_size, 0),
+            None => batch_size,
         };
 
         // Fetch message batch
@@ -354,7 +350,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
 
         // Deposit unused tokens back if any
         if let Some(rl) = &self.rate_limiter {
-            rl.deposit_unused(batch_size.saturating_sub(batch.len()), token_epoch)
+            rl.deposit_unused(batch_size.saturating_sub(batch.len()))
                 .await;
         }
 
