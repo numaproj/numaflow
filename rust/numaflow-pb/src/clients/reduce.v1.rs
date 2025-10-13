@@ -83,7 +83,7 @@ pub mod reduce_request {
 }
 /// Window represents a window.
 /// Since the client doesn't track keys, window doesn't have a keys field.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Window {
     #[prost(message, optional, tag = "1")]
     pub start: ::core::option::Option<::prost_types::Timestamp>,
@@ -121,7 +121,7 @@ pub mod reduce_response {
     }
 }
 /// ReadyResponse is the health check result.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ReadyResponse {
     #[prost(bool, tag = "1")]
     pub ready: bool,
@@ -233,7 +233,7 @@ pub mod reduce_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/reduce.v1.Reduce/ReduceFn",
             );
@@ -254,7 +254,7 @@ pub mod reduce_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static("/reduce.v1.Reduce/IsReady");
             let mut req = request.into_request();
             req.extensions_mut().insert(GrpcMethod::new("reduce.v1.Reduce", "IsReady"));
