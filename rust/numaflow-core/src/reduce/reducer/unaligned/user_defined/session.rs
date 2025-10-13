@@ -26,7 +26,7 @@ impl From<Message> for session_reduce_request::Payload {
             event_time: Some(prost_timestamp_from_utc(msg.event_time)),
             watermark: msg.watermark.map(prost_timestamp_from_utc),
             headers: Arc::unwrap_or_clone(msg.headers),
-            metadata: msg.metadata.map(|m| m.into()),
+            metadata: msg.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
         }
     }
 }

@@ -39,7 +39,7 @@ pub(crate) struct Message {
     /// headers of the message
     pub(crate) headers: Arc<HashMap<String, String>>,
     /// Additional metadata that could be passed per message between the vertices.
-    pub(crate) metadata: Option<Metadata>,
+    pub(crate) metadata: Option<Arc<Metadata>>,
     /// is_late is used to indicate if the message is a late data. Late data is data that arrives
     /// after the watermark has passed. This is set only at source.
     pub(crate) is_late: bool,
@@ -313,9 +313,10 @@ impl TryFrom<Message> for BytesMut {
                 id: Some(message.id.into()),
                 keys: message.keys.to_vec(),
                 headers: Arc::unwrap_or_clone(message.headers),
-                metadata: message.metadata.map(|mut m| {
+                metadata: message.metadata.map(|m| {
                     // When writing to JetStream, we set previous_vertex to current vertex name
                     // so that the next vertex knows who sent the message
+                    let mut m = Arc::unwrap_or_clone(m);
                     m.previous_vertex = crate::config::get_vertex_name().to_string();
                     m.into()
                 }),
@@ -400,7 +401,7 @@ mod tests {
                 id: Some(message.id.into()),
                 keys: message.keys.to_vec(),
                 headers: Arc::unwrap_or_clone(message.headers),
-                metadata: message.metadata.map(|m| m.into()),
+                metadata: message.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
             }),
             body: Some(Body {
                 payload: message.value.clone().into(),

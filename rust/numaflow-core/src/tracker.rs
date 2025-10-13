@@ -672,10 +672,10 @@ mod tests {
         message.headers = Arc::new(headers);
 
         const FROM_VERTEX_NAME: &str = "source-vertex";
-        message.metadata = Some(Metadata {
+        message.metadata = Some(Arc::new(Metadata {
             previous_vertex: FROM_VERTEX_NAME.into(),
             ..Default::default()
-        });
+        }));
 
         let callback_info: ServingCallbackInfo = TryFrom::try_from(&message).unwrap();
         assert_eq!(callback_info.id, "1234");
@@ -894,10 +894,10 @@ mod tests {
                 index: 1,
             },
             headers: Arc::new(headers),
-            metadata: Some(Metadata {
+            metadata: Some(Arc::new(Metadata {
                 previous_vertex: "source-vertex".into(),
                 ..Default::default()
-            }),
+            })),
             is_late: false,
         };
 

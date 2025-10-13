@@ -35,7 +35,7 @@ impl From<Message> for SinkRequest {
                 watermark: message.watermark.map(prost_timestamp_from_utc),
                 id: message.id.to_string(),
                 headers: Arc::unwrap_or_clone(message.headers),
-                metadata: message.metadata.map(|m| m.into()),
+                metadata: message.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
             }),
             status: None,
             handshake: None,

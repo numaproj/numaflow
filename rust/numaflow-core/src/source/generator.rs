@@ -196,7 +196,7 @@ mod stream_generator {
                 },
                 headers: Default::default(),
                 // Set default metadata so that metadata is always present.
-                metadata: Some(crate::metadata::Metadata::default()),
+                metadata: Some(Arc::new(crate::metadata::Metadata::default())),
                 is_late: false,
             }
         }

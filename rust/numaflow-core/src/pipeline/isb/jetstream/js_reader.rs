@@ -85,7 +85,7 @@ impl JSWrappedMessage {
             },
             headers: Arc::new(header.headers),
             watermark: None,
-            metadata: header.metadata.map(Metadata::from),
+            metadata: header.metadata.map(|m| Arc::new(Metadata::from(m))),
             is_late: message_info.is_late,
         })
     }

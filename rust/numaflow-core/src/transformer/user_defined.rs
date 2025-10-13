@@ -24,7 +24,7 @@ struct ParentMessageInfo {
     offset: Offset,
     is_late: bool,
     headers: Arc<HashMap<String, String>>,
-    metadata: Option<Metadata>,
+    metadata: Option<Arc<Metadata>>,
 }
 
 // we are passing the reference for msg info because we can have more than 1 response for a single request and
@@ -59,7 +59,7 @@ impl From<UserDefinedTransformerMessage<'_>> for Message {
             // it cannot be none, since the sdks will always send the default value.
             metadata: match value.0.metadata {
                 None => value.1.metadata.clone(),
-                Some(m) => Some(m.into()),
+                Some(m) => Some(Arc::new(m.into())),
             },
             is_late: value.1.is_late,
         }
@@ -91,7 +91,7 @@ impl From<Message> for SourceTransformRequest {
                 event_time: Some(prost_timestamp_from_utc(message.event_time)),
                 watermark: message.watermark.map(prost_timestamp_from_utc),
                 headers: Arc::unwrap_or_clone(message.headers),
-                metadata: message.metadata.map(|m| m.into()),
+                metadata: message.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
             }),
             handshake: None,
         }

@@ -29,7 +29,7 @@ impl TryFrom<SqsMessage> for Message {
             },
             headers: Arc::new(message.headers),
             // Set default metadata so that metadata is always present.
-            metadata: Some(crate::metadata::Metadata::default()),
+            metadata: Some(Arc::new(crate::metadata::Metadata::default())),
             is_late: false,
         })
     }
