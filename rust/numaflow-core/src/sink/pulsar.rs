@@ -104,7 +104,7 @@ mod tests {
                 offset: id.to_string().into(),
                 index: 0,
             },
-            headers,
+            headers: Arc::new(headers),
             metadata: None,
             is_late: false,
         }
@@ -375,7 +375,7 @@ mod tests {
                 offset: "large-msg".to_string().into(),
                 index: 0,
             },
-            headers: HashMap::new(),
+            headers: Arc::new(HashMap::new()),
             metadata: None,
             is_late: false,
         };

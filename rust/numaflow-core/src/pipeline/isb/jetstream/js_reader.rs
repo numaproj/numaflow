@@ -83,7 +83,7 @@ impl JSWrappedMessage {
                 offset: offset.to_string().into(),
                 index: 0,
             },
-            headers: header.headers,
+            headers: Arc::new(header.headers),
             watermark: None,
             metadata: header.metadata.map(Metadata::from),
             is_late: message_info.is_late,

@@ -111,7 +111,7 @@ mod tests {
                     offset: i.to_string().into(),
                     index: i as i32,
                 },
-                headers,
+                headers: Arc::new(headers),
                 metadata: None,
                 is_late: false,
             });

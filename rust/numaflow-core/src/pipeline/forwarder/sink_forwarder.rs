@@ -371,7 +371,7 @@ mod tests {
                     offset: "123".to_string().into(),
                     index: 0,
                 },
-                headers: HashMap::new(),
+                headers: Arc::new(HashMap::new()),
                 metadata: None,
                 is_late: false,
             };

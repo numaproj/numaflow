@@ -23,7 +23,7 @@ type ResponseSenderMap =
 struct ParentMessageInfo {
     offset: Offset,
     is_late: bool,
-    headers: HashMap<String, String>,
+    headers: Arc<HashMap<String, String>>,
     metadata: Option<Metadata>,
 }
 
@@ -53,7 +53,7 @@ impl From<UserDefinedTransformerMessage<'_>> for Message {
                 .event_time
                 .map(utc_from_timestamp)
                 .expect("event time should be present"),
-            headers: value.1.headers.clone(),
+            headers: Arc::clone(&value.1.headers),
             watermark: None,
             // TODO: remove this once backwards compatibility is not needed for metadata, because
             // it cannot be none, since the sdks will always send the default value.
@@ -90,7 +90,7 @@ impl From<Message> for SourceTransformRequest {
                 value: message.value.to_vec(),
                 event_time: Some(prost_timestamp_from_utc(message.event_time)),
                 watermark: message.watermark.map(prost_timestamp_from_utc),
-                headers: message.headers,
+                headers: Arc::unwrap_or_clone(message.headers),
                 metadata: message.metadata.map(|m| m.into()),
             }),
             handshake: None,
@@ -194,7 +194,7 @@ impl UserDefinedTransformer {
 
         let msg_info = ParentMessageInfo {
             offset: message.offset.clone(),
-            headers: message.headers.clone(),
+            headers: Arc::clone(&message.headers),
             is_late: message.is_late,
             metadata: message.metadata.clone(),
         };

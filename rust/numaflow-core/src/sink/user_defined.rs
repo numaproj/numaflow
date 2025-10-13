@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bytes::Bytes;
 use numaflow_monitor::runtime;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
@@ -32,7 +34,7 @@ impl From<Message> for SinkRequest {
                 event_time: Some(prost_timestamp_from_utc(message.event_time)),
                 watermark: message.watermark.map(prost_timestamp_from_utc),
                 id: message.id.to_string(),
-                headers: message.headers,
+                headers: Arc::unwrap_or_clone(message.headers),
                 metadata: message.metadata.map(|m| m.into()),
             }),
             status: None,

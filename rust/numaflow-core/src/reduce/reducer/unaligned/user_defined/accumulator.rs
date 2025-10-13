@@ -24,7 +24,7 @@ impl From<Message> for accumulator::Payload {
             event_time: Some(prost_timestamp_from_utc(msg.event_time)),
             watermark: msg.watermark.map(prost_timestamp_from_utc),
             id: msg.id.to_string(),
-            headers: msg.headers,
+            headers: Arc::unwrap_or_clone(msg.headers),
             metadata: msg.metadata.map(|m| m.into()),
         }
     }
@@ -103,7 +103,7 @@ impl From<AccumulatorResponse> for Message {
                 offset: result.id.into(),
                 index: 0,
             },
-            headers: result.headers,
+            headers: Arc::new(result.headers),
             metadata: None,
             is_late: false,
         }
