@@ -32,7 +32,7 @@ pub trait RateLimiter {
 
     /// Deposit tokens into the rate limiter.
     /// This will be used to deposit tokens into the rate limiter.
-    async fn deposit_unused(&self, n: usize, cur_epoch: u64);
+    async fn deposit_unused(&self, n: usize);
 
     /// Shutdown the rate limiter and clean up resources.
     /// This will deregister the processor from the distributed store and stop any background tasks.
@@ -369,6 +369,22 @@ impl RateLimit<WithoutState> {
             }
         }
     }
+
+    /// Tries to deposit unused tokens (non-blocking), if the tokens don't belong to the current
+    /// epoch's budget, then it is a no-op.
+    async fn attempt_deposit_unused(&self, n: usize, cur_epoch: u64) {
+        if cur_epoch
+            != self
+                .last_queried_epoch
+                .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return;
+        }
+
+        // Track the unused tokens
+        self.token
+            .fetch_add(n, std::sync::atomic::Ordering::Release);
+    }
 }
 
 impl RateLimiter for RateLimit<WithoutState> {
@@ -410,16 +426,13 @@ impl RateLimiter for RateLimit<WithoutState> {
             .unwrap_or(0)
     }
 
-    async fn deposit_unused(&self, n: usize, token_grabbed_epoch: u64) {
-        if self
-            .last_queried_epoch
-            .load(std::sync::atomic::Ordering::Acquire)
-            == token_grabbed_epoch
-        {
-            // Track the unused tokens
-            self.token
-                .fetch_add(n, std::sync::atomic::Ordering::Release);
-        }
+    async fn deposit_unused(&self, n: usize) {
+        let cur_epoch = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
+
+        self.attempt_deposit_unused(n, cur_epoch).await;
     }
 
     async fn shutdown(&self) -> crate::Result<()> {
@@ -459,6 +472,30 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithState<S>> {
                 0
             }
         }
+    }
+
+    /// Tries to deposit unused tokens (non-blocking), if the tokens don't belong to the current
+    /// epoch, then it is a no-op.
+    async fn attempt_deposit_unused(&self, n: usize, cur_epoch: u64) {
+        if cur_epoch
+            != self
+                .last_queried_epoch
+                .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return;
+        }
+
+        let known_pool_size = self
+            .state
+            .0
+            .known_pool_size
+            .load(std::sync::atomic::Ordering::Acquire);
+
+        // Track the unused tokens. We multiply by pool size because while grabbing tokens,
+        // we divide by pool size thinking every other processor will be grabbing the same amount
+        // of tokens.
+        self.token
+            .fetch_add(n * known_pool_size, std::sync::atomic::Ordering::Release);
     }
 }
 
@@ -503,24 +540,13 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithSta
 
     /// Deposit unused tokens back into the rate limiter only if the tokens were acquired in the
     /// same epoch used to acquire the tokens.
-    async fn deposit_unused(&self, n: usize, cur_epoch: u64) {
-        if self
-            .last_queried_epoch
-            .load(std::sync::atomic::Ordering::Acquire)
-            == cur_epoch
-        {
-            let known_pool_size = self
-                .state
-                .0
-                .known_pool_size
-                .load(std::sync::atomic::Ordering::Acquire);
+    async fn deposit_unused(&self, n: usize) {
+        let cur_epoch = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
 
-            // Track the unused tokens. We multiply by pool size because while grabbing tokens,
-            // we divide by pool size thinking every other processor will be grabbing the same amount
-            // of tokens.
-            self.token
-                .fetch_add(n * known_pool_size, std::sync::atomic::Ordering::Release);
-        }
+        self.attempt_deposit_unused(n, cur_epoch).await;
     }
 
     async fn shutdown(&self) -> Result<()> {
@@ -735,7 +761,7 @@ impl RateLimiter for NoOpRateLimiter {
         n.unwrap_or(usize::MAX)
     }
 
-    async fn deposit_unused(&self, _: usize, _: u64) {}
+    async fn deposit_unused(&self, _: usize) {}
 
     async fn shutdown(&self) -> crate::Result<()> {
         // No-op for NoOpRateLimiter as there are no resources to clean up
@@ -936,7 +962,7 @@ mod tests {
                         tokens
                     );
                     rate_limiter
-                        .deposit_unused(deposited_tokens[i], cur_epoch)
+                        .attempt_deposit_unused(deposited_tokens[i], cur_epoch)
                         .await;
                 }
 
@@ -1005,7 +1031,7 @@ mod tests {
             let redis_url = "redis://127.0.0.1:6379";
 
             // Check if Redis is available
-            if let Err(_) = redis::Client::open(redis_url) {
+            if redis::Client::open(redis_url).is_err() {
                 println!(
                     "Skipping Redis test - Redis server not available at {}",
                     redis_url

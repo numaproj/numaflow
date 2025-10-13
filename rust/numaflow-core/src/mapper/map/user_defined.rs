@@ -28,12 +28,12 @@ struct ParentMessageInfo {
     offset: Offset,
     event_time: DateTime<Utc>,
     is_late: bool,
-    headers: HashMap<String, String>,
+    headers: Arc<HashMap<String, String>>,
     start_time: Instant,
     /// this remains 0 for all except map-streaming because in map-streaming there could be more than
     /// one response for a single request.
     current_index: i32,
-    metadata: Option<Metadata>,
+    metadata: Option<Arc<Metadata>>,
 }
 
 impl From<Message> for MapRequest {
@@ -44,8 +44,8 @@ impl From<Message> for MapRequest {
                 value: message.value.to_vec(),
                 event_time: Some(prost_timestamp_from_utc(message.event_time)),
                 watermark: message.watermark.map(prost_timestamp_from_utc),
-                headers: message.headers,
-                metadata: message.metadata.map(|m| m.into()),
+                headers: Arc::unwrap_or_clone(message.headers),
+                metadata: message.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
             }),
             id: message.offset.to_string(),
             handshake: None,
@@ -132,7 +132,7 @@ impl UserDefinedUnaryMap {
         let msg_info = ParentMessageInfo {
             offset: message.offset.clone(),
             event_time: message.event_time,
-            headers: message.headers.clone(),
+            headers: Arc::clone(&message.headers),
             is_late: message.is_late,
             start_time: Instant::now(),
             current_index: 0,
@@ -245,7 +245,7 @@ impl UserDefinedBatchMap {
             let msg_info = ParentMessageInfo {
                 offset: message.offset.clone(),
                 event_time: message.event_time,
-                headers: message.headers.clone(),
+                headers: Arc::clone(&message.headers),
                 is_late: message.is_late,
                 start_time: Instant::now(),
                 current_index: 0,
@@ -464,7 +464,7 @@ impl UserDefinedStreamMap {
         let msg_info = ParentMessageInfo {
             offset: message.offset.clone(),
             event_time: message.event_time,
-            headers: message.headers.clone(),
+            headers: Arc::clone(&message.headers),
             start_time: Instant::now(),
             is_late: message.is_late,
             current_index: 0,
@@ -507,14 +507,14 @@ impl From<UserDefinedMessage<'_>> for Message {
             value: value.0.value.into(),
             offset: value.1.offset.clone(),
             event_time: value.1.event_time,
-            headers: value.1.headers.clone(),
+            headers: Arc::clone(&value.1.headers),
             watermark: None,
             is_late: value.1.is_late,
             metadata: match value.0.metadata {
                 // TODO: remove this once backwards compatibility is not needed for metadata, because
                 // it cannot be none, since the sdks will always send the default value.
                 None => value.1.metadata.clone(),
-                Some(m) => Some(m.into()),
+                Some(m) => Some(Arc::new(m.into())),
             },
         }
     }

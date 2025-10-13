@@ -33,9 +33,9 @@ impl From<JetstreamMessage> for Message {
                 offset: offset.to_string().into(),
                 index: 0,
             },
-            headers: message.headers,
+            headers: Arc::new(message.headers),
             // Set default metadata so that metadata is always present.
-            metadata: Some(Metadata::default()),
+            metadata: Some(Arc::new(Metadata::default())),
             is_late: false,
         }
     }

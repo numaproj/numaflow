@@ -657,7 +657,7 @@ mod tests {
                 offset: Bytes::from_static(b"0"),
                 index: 1,
             },
-            headers: HashMap::new(),
+            headers: Arc::new(HashMap::new()),
             metadata: None,
             is_late: false,
         };
@@ -669,13 +669,13 @@ mod tests {
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
-        message.headers = headers;
+        message.headers = Arc::new(headers);
 
         const FROM_VERTEX_NAME: &str = "source-vertex";
-        message.metadata = Some(Metadata {
+        message.metadata = Some(Arc::new(Metadata {
             previous_vertex: FROM_VERTEX_NAME.into(),
             ..Default::default()
-        });
+        }));
 
         let callback_info: ServingCallbackInfo = TryFrom::try_from(&message).unwrap();
         assert_eq!(callback_info.id, "1234");
@@ -701,7 +701,7 @@ mod tests {
                 offset: Bytes::from_static(b"offset1"),
                 index: 1,
             },
-            headers: HashMap::new(),
+            headers: Arc::new(HashMap::new()),
             metadata: None,
             is_late: false,
         };
@@ -743,7 +743,7 @@ mod tests {
                 offset: Bytes::from_static(b"offset1"),
                 index: 1,
             },
-            headers: HashMap::new(),
+            headers: Arc::new(HashMap::new()),
             metadata: None,
             is_late: false,
         };
@@ -790,7 +790,7 @@ mod tests {
                 offset: Bytes::from_static(b"0"),
                 index: 1,
             },
-            headers: HashMap::new(),
+            headers: Arc::new(HashMap::new()),
             metadata: None,
             is_late: false,
         };
@@ -826,7 +826,7 @@ mod tests {
                 offset: Bytes::from_static(b"0"),
                 index: 1,
             },
-            headers: HashMap::new(),
+            headers: Arc::new(HashMap::new()),
             metadata: None,
             is_late: false,
         };
@@ -893,11 +893,11 @@ mod tests {
                 offset: Bytes::from_static(b"offset1"),
                 index: 1,
             },
-            headers,
-            metadata: Some(Metadata {
+            headers: Arc::new(headers),
+            metadata: Some(Arc::new(Metadata {
                 previous_vertex: "source-vertex".into(),
                 ..Default::default()
-            }),
+            })),
             is_late: false,
         };
 
