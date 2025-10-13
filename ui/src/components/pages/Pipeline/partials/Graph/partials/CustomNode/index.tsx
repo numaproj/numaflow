@@ -15,6 +15,7 @@ import sink from "../../../../../../../images/sink.png";
 import monoVertex from "../../../../../../../images/monoVertex.svg";
 import transformer from "../../../../../../../images/transformer.svg";
 import udf from "../../../../../../../images/map.png";
+import fallback from "../../../../../../../images/fallback.png";
 import input0 from "../../../../../../../images/input0.svg";
 import input1 from "../../../../../../../images/input1.svg";
 import input2 from "../../../../../../../images/input2.svg";
@@ -392,7 +393,7 @@ const CustomNode: FC<NodeProps> = ({
                   <Box className={"mono-vertex-img-wrapper"}>
                     <img
                       className={"mono-vertex-img"}
-                      src={sink}
+                      src={fallback}
                       alt={"fallback-sink-container"}
                     />
                   </Box>
