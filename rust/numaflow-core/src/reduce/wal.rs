@@ -44,8 +44,8 @@ impl TryFrom<WalMessage> for Bytes {
                     kind: message.typ.into(),
                     id: Some(message.id.into()),
                     keys: message.keys.to_vec(),
-                    headers: message.headers,
-                    metadata: message.metadata.map(|m| m.into()),
+                    headers: Arc::unwrap_or_clone(message.headers),
+                    metadata: message.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
                 }),
                 body: Some(numaflow_pb::objects::isb::Body {
                     payload: message.value.to_vec(),

@@ -27,9 +27,9 @@ impl TryFrom<SqsMessage> for Message {
                 offset: offset.to_string().into(),
                 index: 0,
             },
-            headers: message.headers,
+            headers: Arc::new(message.headers),
             // Set default metadata so that metadata is always present.
-            metadata: Some(crate::metadata::Metadata::default()),
+            metadata: Some(Arc::new(crate::metadata::Metadata::default())),
             is_late: false,
         })
     }
@@ -162,7 +162,7 @@ pub mod tests {
             Offset::String(StringOffset::new("offset".to_string(), 0)),
         );
         assert_eq!(message.event_time, ts);
-        assert_eq!(message.headers, headers);
+        assert_eq!(*message.headers, headers);
     }
 
     #[tokio::test]

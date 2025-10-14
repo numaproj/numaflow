@@ -489,6 +489,7 @@ impl SinkWriter {
                         .into_iter()
                         .filter(|msg| !msg.dropped())
                         .collect::<Vec<_>>();
+
                     match self.write(batch.clone(), cln_token.clone()).await {
                         Ok(_) => {
                             for offset in offsets {
@@ -529,7 +530,7 @@ impl SinkWriter {
             return Ok(());
         }
 
-        let write_start_time = tokio::time::Instant::now();
+        let write_start_time = time::Instant::now();
         let total_msgs = messages.len();
         let mut retry_attempts = 0;
         let total_msgs_bytes: usize = messages.iter().map(|msg| msg.value.len()).sum();
@@ -1158,7 +1159,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
+                headers: Arc::new(HashMap::new()),
                 metadata: None,
                 is_late: false,
             })
@@ -1196,7 +1197,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
+                headers: Arc::new(HashMap::new()),
                 metadata: None,
                 is_late: false,
             })
@@ -1275,7 +1276,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
+                headers: Arc::new(HashMap::new()),
                 metadata: None,
                 is_late: false,
             })
@@ -1364,7 +1365,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
+                headers: Arc::new(HashMap::new()),
                 metadata: None,
                 is_late: false,
             })
@@ -1478,7 +1479,7 @@ mod tests {
                         offset: "123".to_string().into(),
                         index: i as i32,
                     },
-                    headers,
+                    headers: Arc::new(headers),
                     metadata: None,
                     is_late: false,
                 }
@@ -1527,7 +1528,7 @@ mod tests {
                 offset: "123".to_string().into(),
                 index: 0,
             },
-            headers: HashMap::new(),
+            headers: Arc::new(HashMap::new()),
             metadata: None,
             is_late: false,
         };

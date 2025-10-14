@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::config::components::reduce::UnalignedWindowType;
@@ -8,10 +9,11 @@ use crate::config::get_vertex_replica;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{
-    DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET, PipelineConfig,
+    DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET, PipelineConfig, ToVertexConfig,
 };
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
+use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
 use crate::reduce::reducer::WindowManager;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
@@ -787,6 +789,30 @@ pub async fn create_edge_watermark_handle(
         }
         _ => Ok(None),
     }
+}
+
+/// Creates JetStreamWriters for all streams in the to_vertex_config
+pub(crate) async fn create_js_writers(
+    to_vertex_config: &[ToVertexConfig],
+    js_context: Context,
+    isb_config: Option<&crate::config::pipeline::isb::ISBConfig>,
+    cln_token: CancellationToken,
+) -> crate::Result<HashMap<&'static str, JetStreamWriter>> {
+    let mut writers = HashMap::new();
+    for vertex_config in to_vertex_config {
+        for stream in &vertex_config.writer_config.streams {
+            let writer = JetStreamWriter::new(
+                stream.clone(),
+                js_context.clone(),
+                vertex_config.writer_config.clone(),
+                isb_config.map(|c| c.compression.compress_type),
+                cln_token.clone(),
+            )
+            .await?;
+            writers.insert(stream.name, writer);
+        }
+    }
+    Ok(writers)
 }
 
 #[cfg(test)]

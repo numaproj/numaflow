@@ -21,8 +21,8 @@ impl From<Message> for reduce_request::Payload {
             value: msg.value.to_vec(),
             event_time: Some(prost_timestamp_from_utc(msg.event_time)),
             watermark: msg.watermark.map(prost_timestamp_from_utc),
-            headers: msg.headers.clone(),
-            metadata: msg.metadata.map(|m| m.into()),
+            headers: Arc::unwrap_or_clone(msg.headers),
+            metadata: msg.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
         }
     }
 }
@@ -34,8 +34,8 @@ impl From<&Message> for reduce_request::Payload {
             value: msg.value.to_vec(),
             event_time: Some(prost_timestamp_from_utc(msg.event_time)),
             watermark: msg.watermark.map(prost_timestamp_from_utc),
-            headers: msg.headers.clone(),
-            metadata: msg.metadata.clone().map(|m| m.into()),
+            headers: (*msg.headers).clone(),
+            metadata: msg.metadata.clone().map(|m| (*m).clone().into()),
         }
     }
 }

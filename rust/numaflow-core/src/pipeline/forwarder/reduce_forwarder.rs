@@ -8,8 +8,9 @@ use crate::metrics::{
     ComponentHealthChecks, LagReader, MetricsState, PipelineComponents, WatermarkFetcherState,
 };
 use crate::pipeline::PipelineContext;
-use crate::pipeline::isb::jetstream::reader::{ISBReaderComponents, JetStreamReader};
-use crate::pipeline::isb::jetstream::writer::{ISBWriterComponents, JetstreamWriter};
+use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
+use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
+use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
 use crate::reduce::pbq::{PBQ, PBQBuilder, WAL};
 use crate::reduce::reducer::aligned::reducer::AlignedReducer;
 use crate::reduce::reducer::aligned::windower::AlignedWindowManager;
@@ -164,10 +165,24 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         &context,
     );
 
-    let writer_components =
-        ISBWriterComponents::new(watermark_handle.clone().map(WatermarkHandle::ISB), &context);
+    let writers = create_components::create_js_writers(
+        &config.to_vertex_config,
+        js_context.clone(),
+        config.isb_config.as_ref(),
+        cln_token.clone(),
+    )
+    .await?;
 
-    let buffer_writer = JetstreamWriter::new(writer_components);
+    let writer_components = ISBWriterComponents {
+        config: config.to_vertex_config.clone(),
+        writers,
+        paf_concurrency: config.writer_concurrency,
+        tracker_handle: tracker_handle.clone(),
+        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
+        vertex_type: config.vertex_type,
+    };
+
+    let buffer_writer = ISBWriter::new(writer_components);
 
     // Create WAL if configured
     let (wal, gc_wal) = create_wal_components(
@@ -289,10 +304,24 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         &context,
     );
 
-    let writer_components =
-        ISBWriterComponents::new(watermark_handle.clone().map(WatermarkHandle::ISB), &context);
+    let writers = create_components::create_js_writers(
+        &config.to_vertex_config,
+        js_context.clone(),
+        config.isb_config.as_ref(),
+        cln_token.clone(),
+    )
+    .await?;
 
-    let buffer_writer = JetstreamWriter::new(writer_components);
+    let writer_components = ISBWriterComponents {
+        config: config.to_vertex_config.clone(),
+        writers,
+        paf_concurrency: config.writer_concurrency,
+        tracker_handle: tracker_handle.clone(),
+        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
+        vertex_type: config.vertex_type,
+    };
+
+    let buffer_writer = ISBWriter::new(writer_components);
 
     // Create WAL if configured (use Unaligned WindowKind for unaligned reducers)
     let (wal, gc_wal) = create_wal_components(
@@ -357,18 +386,25 @@ async fn run_reduce_forwarder<C: NumaflowTypeConfig>(
     reducer: Reducer,
     wal: Option<WAL>,
     rate_limiter: Option<C::RateLimiter>,
-) -> crate::error::Result<()> {
-    let buffer_reader = JetStreamReader::<C>::new(reader_components, rate_limiter).await?;
+) -> Result<()> {
+    let js_reader = JetStreamReader::new(
+        reader_components.stream.clone(),
+        reader_components.js_ctx.clone(),
+        reader_components.isb_config.clone(),
+    )
+    .await?;
+
+    let isb_reader = ISBReader::<C>::new(reader_components, js_reader, rate_limiter).await?;
 
     // Create lag reader with the single buffer reader (reduce only reads from one stream)
     let pending_reader = shared::metrics::create_pending_reader(
         &context.config.metrics_config,
-        LagReader::ISB(vec![buffer_reader.clone()]),
+        LagReader::ISB(vec![isb_reader.clone()]),
     )
     .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
-    let pbq_builder = PBQBuilder::<C>::new(buffer_reader, context.tracker_handle.clone());
+    let pbq_builder = PBQBuilder::<C>::new(isb_reader, context.tracker_handle.clone());
     let pbq = match wal {
         Some(wal) => pbq_builder.wal(wal).build(),
         None => pbq_builder.build(),
@@ -777,7 +813,7 @@ mod tests {
 
         let messages = vec![msg1, msg2, msg3, msg4];
         for msg in messages {
-            let message_bytes: BytesMut = msg.try_into().unwrap();
+            let message_bytes: BytesMut = msg.try_into()?;
             js_context
                 .publish(input_stream.name, message_bytes.freeze())
                 .await
@@ -1097,7 +1133,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let message_bytes: BytesMut = msg.try_into().unwrap();
+            let message_bytes: BytesMut = msg.try_into()?;
 
             js_context
                 .publish(input_stream.name, message_bytes.freeze())

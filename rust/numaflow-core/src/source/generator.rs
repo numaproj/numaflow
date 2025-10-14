@@ -85,7 +85,7 @@ mod stream_generator {
                     "Specified KeyCount is higher than RPU. KeyCount has changed."
                 );
             }
-            if key_count > 0 && rpu % key_count as usize != 0 {
+            if key_count > 0 && !rpu.is_multiple_of(key_count as usize) {
                 let new_rpu = rpu - (rpu % key_count as usize);
                 warn!(
                     rpu,
@@ -196,7 +196,7 @@ mod stream_generator {
                 },
                 headers: Default::default(),
                 // Set default metadata so that metadata is always present.
-                metadata: Some(crate::metadata::Metadata::default()),
+                metadata: Some(Arc::new(crate::metadata::Metadata::default())),
                 is_late: false,
             }
         }

@@ -7,7 +7,8 @@ use crate::metrics::{
     WatermarkFetcherState,
 };
 use crate::pipeline::PipelineContext;
-use crate::pipeline::isb::jetstream::reader::{ISBReaderComponents, JetStreamReader};
+use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
+use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::sink::SinkWriter;
@@ -31,12 +32,12 @@ use tracing::{error, info};
 /// Sink forwarder is a component which starts a streaming reader and a sink writer
 /// and manages the lifecycle of these components.
 pub(crate) struct SinkForwarder<C: crate::typ::NumaflowTypeConfig> {
-    jetstream_reader: JetStreamReader<C>,
+    jetstream_reader: ISBReader<C>,
     sink_writer: SinkWriter,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> SinkForwarder<C> {
-    pub(crate) async fn new(jetstream_reader: JetStreamReader<C>, sink_writer: SinkWriter) -> Self {
+    pub(crate) async fn new(jetstream_reader: ISBReader<C>, sink_writer: SinkWriter) -> Self {
         Self {
             jetstream_reader,
             sink_writer,
@@ -221,7 +222,7 @@ async fn run_all_sink_forwarders<C: NumaflowTypeConfig>(
     PendingReaderTasks,
 )> {
     let mut forwarder_tasks = vec![];
-    let mut isb_lag_readers: Vec<JetStreamReader<C>> = vec![];
+    let mut isb_lag_readers: Vec<ISBReader<C>> = vec![];
     let mut first_sink_writer = None;
 
     for stream in reader_config.streams.clone() {
@@ -282,14 +283,22 @@ async fn run_sink_forwarder_for_stream<C: NumaflowTypeConfig>(
     reader_components: ISBReaderComponents,
     sink_writer: SinkWriter,
     rate_limiter: Option<C::RateLimiter>,
-) -> Result<(tokio::task::JoinHandle<Result<()>>, JetStreamReader<C>)> {
+) -> Result<(tokio::task::JoinHandle<Result<()>>, ISBReader<C>)> {
     let cln_token = reader_components.cln_token.clone();
-    let buffer_reader = JetStreamReader::<C>::new(reader_components, rate_limiter).await?;
 
-    let forwarder = SinkForwarder::<C>::new(buffer_reader.clone(), sink_writer).await;
+    let js_reader = JetStreamReader::new(
+        reader_components.stream.clone(),
+        reader_components.js_ctx.clone(),
+        reader_components.isb_config.clone(),
+    )
+    .await?;
+
+    let isb_reader = ISBReader::<C>::new(reader_components, js_reader, rate_limiter).await?;
+
+    let forwarder = SinkForwarder::<C>::new(isb_reader.clone(), sink_writer).await;
 
     let task = tokio::spawn(async move { forwarder.start(cln_token).await });
-    Ok((task, buffer_reader))
+    Ok((task, isb_reader))
 }
 
 #[cfg(test)]
@@ -362,7 +371,7 @@ mod tests {
                     offset: "123".to_string().into(),
                     index: 0,
                 },
-                headers: HashMap::new(),
+                headers: Arc::new(HashMap::new()),
                 metadata: None,
                 is_late: false,
             };
