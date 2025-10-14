@@ -107,7 +107,6 @@ pub(crate) struct TrackerHandle {
     serving_callback_handler: Option<CallbackHandler>,
     processed_msg_count: Arc<AtomicUsize>,
     cln_token: CancellationToken,
-    enable_callbacks: bool,
 }
 
 impl Drop for TrackerHandle {
@@ -132,8 +131,7 @@ impl Drop for TrackerHandle {
 
 impl TrackerHandle {
     /// Creates a new TrackerHandle instance.
-    pub(crate) fn new(callback_handler: Option<CallbackHandler>) -> Self {
-        let enable_callbacks = callback_handler.is_some();
+    pub(crate) fn new(serving_callback_handler: Option<CallbackHandler>) -> Self {
         let processed_msg_count = Arc::new(AtomicUsize::new(0));
         let cln_token = CancellationToken::new();
 
@@ -154,10 +152,9 @@ impl TrackerHandle {
 
         Self {
             state,
-            serving_callback_handler: callback_handler,
+            serving_callback_handler,
             processed_msg_count,
             cln_token,
-            enable_callbacks,
         }
     }
 
@@ -224,7 +221,7 @@ impl TrackerHandle {
     ) -> Result<()> {
         let offset = message.offset.clone();
         let mut callback_info = None;
-        if self.enable_callbacks {
+        if self.serving_callback_handler.is_some() {
             callback_info = Some(message.try_into()?);
         }
 
