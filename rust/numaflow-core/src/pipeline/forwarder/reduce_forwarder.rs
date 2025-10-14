@@ -98,7 +98,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     aligned_config: AlignedReducerConfig,
 ) -> crate::error::Result<()> {
     // for reduce we do not pass serving callback handler to tracker.
-    let tracker_handle = TrackerHandle::new(None);
+    let tracker_handle = TrackerHandle::new(None, cln_token.clone());
 
     // Create aligned window manager based on window type
     let window_manager = match &aligned_config.window_config.window_type {
@@ -250,7 +250,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     unaligned_config: UnalignedReducerConfig,
 ) -> crate::error::Result<()> {
     // for reduce we do not pass serving callback handler to tracker.
-    let tracker_handle = TrackerHandle::new(None);
+    let tracker_handle = TrackerHandle::new(None, cln_token.clone());
 
     // Create unaligned window manager based on window type
     let window_manager = match &unaligned_config.window_config.window_type {

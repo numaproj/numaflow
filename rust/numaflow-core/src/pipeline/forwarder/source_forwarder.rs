@@ -86,7 +86,7 @@ pub(crate) async fn start_source_forwarder(
         None
     };
 
-    let tracker_handle = TrackerHandle::new(serving_callback_handler);
+    let tracker_handle = TrackerHandle::new(serving_callback_handler, cln_token.clone());
 
     let context = PipelineContext {
         cln_token: cln_token.clone(),
@@ -342,10 +342,9 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_source_forwarder() {
-        let tracker_handle = TrackerHandle::new(None);
-
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
+        let tracker_handle = TrackerHandle::new(None, cln_token.clone());
 
         // create a transformer
         let (st_shutdown_tx, st_shutdown_rx) = oneshot::channel();

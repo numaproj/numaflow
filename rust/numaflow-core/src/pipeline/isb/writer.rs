@@ -560,7 +560,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
 
         let stream = Stream::new("test-streaming", "temp", 0);
         // Delete stream if it exists
@@ -673,8 +673,8 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None);
         let cln_token = CancellationToken::new();
+        let tracker_handle = TrackerHandle::new(None, cln_token.clone());
 
         let stream = Stream::new("test-streaming-cancel", "temp", 0);
         // Delete stream if it exists
@@ -789,8 +789,8 @@ mod tests {
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None);
         let cln_token = CancellationToken::new();
+        let tracker_handle = TrackerHandle::new(None, cln_token.clone());
 
         // Create multiple streams for different vertices
         let vertex1_streams = vec![

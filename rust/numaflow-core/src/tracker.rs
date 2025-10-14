@@ -118,14 +118,15 @@ pub(crate) struct TrackerHandle {
     idle_offset_map: Arc<RwLock<HashMap<u16, Option<i64>>>>,
     serving_callback_handler: Option<CallbackHandler>,
     processed_msg_count: Arc<AtomicUsize>,
-    cln_token: CancellationToken,
 }
 
 impl TrackerHandle {
     /// Creates a new TrackerHandle instance.
-    pub(crate) fn new(serving_callback_handler: Option<CallbackHandler>) -> Self {
+    pub(crate) fn new(
+        serving_callback_handler: Option<CallbackHandler>,
+        cln_token: CancellationToken,
+    ) -> Self {
         let processed_msg_count = Arc::new(AtomicUsize::new(0));
-        let cln_token = CancellationToken::new();
 
         let state = Arc::new(RwLock::new(TrackerState {
             entries: HashMap::new(),
@@ -137,7 +138,6 @@ impl TrackerHandle {
         // stop the task when the tracker is dropped.
         tokio::spawn({
             let processed_msg_count = Arc::clone(&processed_msg_count);
-            let cln_token = cln_token.clone();
             async move {
                 Self::log_processed_msg_count(processed_msg_count, cln_token).await;
             }
@@ -148,7 +148,6 @@ impl TrackerHandle {
             idle_offset_map,
             serving_callback_handler,
             processed_msg_count,
-            cln_token,
         }
     }
 
@@ -482,7 +481,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_insert_update_delete() {
-        let handle = TrackerHandle::new(None);
+        let handle = TrackerHandle::new(None, CancellationToken::new());
         let (ack_send, ack_recv) = oneshot::channel();
 
         let message = Message {
@@ -525,7 +524,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_with_multiple_deletes() {
-        let handle = TrackerHandle::new(None);
+        let handle = TrackerHandle::new(None, CancellationToken::new());
         let (ack_send, ack_recv) = oneshot::channel();
         let message = Message {
             typ: Default::default(),
@@ -571,7 +570,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_discard() {
-        let handle = TrackerHandle::new(None);
+        let handle = TrackerHandle::new(None, CancellationToken::new());
         let (ack_send, ack_recv) = oneshot::channel();
 
         let message = Message {
@@ -607,7 +606,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_discard_after_update_with_higher_count() {
-        let handle = TrackerHandle::new(None);
+        let handle = TrackerHandle::new(None, CancellationToken::new());
         let (ack_send, ack_recv) = oneshot::channel();
 
         let message = Message {
@@ -669,7 +668,7 @@ mod tests {
         let callback_handler =
             CallbackHandler::new("test", js_context.clone(), store_name, 10).await;
 
-        let handle = TrackerHandle::new(Some(callback_handler));
+        let handle = TrackerHandle::new(Some(callback_handler), CancellationToken::new());
         let (ack_send, ack_recv) = oneshot::channel();
 
         let mut headers = HashMap::new();
@@ -729,7 +728,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_idle_status_tracking() {
-        let handle = TrackerHandle::new(None);
+        let handle = TrackerHandle::new(None, CancellationToken::new());
         assert_eq!(handle.get_idle_offset().await.unwrap(), HashMap::new());
 
         handle.set_idle_offset(0, Some(100)).await.unwrap();
@@ -753,7 +752,7 @@ mod tests {
         // This test verifies that dropping TrackerState with unacknowledged messages
         // logs an error. We can't easily assert on log output, but we can verify
         // the drop doesn't panic and the logic works correctly.
-        let handle = TrackerHandle::new(None);
+        let handle = TrackerHandle::new(None, CancellationToken::new());
         let (ack_send1, _ack_recv1) = oneshot::channel();
         let (ack_send2, _ack_recv2) = oneshot::channel();
 

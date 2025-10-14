@@ -1523,7 +1523,7 @@ mod tests {
         .await
         .expect("Failed to create source reader");
 
-        let tracker = TrackerHandle::new(None);
+        let tracker = TrackerHandle::new(None, CancellationToken::new());
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),

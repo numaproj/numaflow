@@ -633,7 +633,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
             ..Default::default()
         };
-        let tracker = TrackerHandle::new(None);
+        let tracker = TrackerHandle::new(None, CancellationToken::new());
 
         let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
             .await
@@ -718,7 +718,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
 
         let js_stream = Stream::new("test-ack", "test", 0);
         // Delete stream if it exists
@@ -886,7 +886,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
             ..Default::default()
         };
-        let tracker = TrackerHandle::new(None);
+        let tracker = TrackerHandle::new(None, CancellationToken::new());
 
         let js_reader =
             JetStreamReader::new(stream.clone(), context.clone(), Some(isb_config.clone()))

@@ -178,7 +178,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_sqs_sink_e2e() {
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
         let cln_token = CancellationToken::new();
 
         let (source, src_handle, src_shutdown_tx) =

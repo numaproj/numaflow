@@ -657,7 +657,7 @@ mod tests {
             from_vertex_config: vec![from_bucket_config.clone()],
             to_vertex_config: vec![to_bucket_config.clone()],
         };
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
 
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,
@@ -829,7 +829,7 @@ mod tests {
             from_vertex_config: vec![from_bucket_config.clone()],
             to_vertex_config: vec![from_bucket_config.clone()],
         };
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
 
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,
@@ -991,7 +991,7 @@ mod tests {
             from_vertex_config: vec![from_bucket_config.clone()],
             to_vertex_config: vec![to_bucket_config.clone()],
         };
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
 
         let _handle = ISBWatermarkHandle::new(
             vertex_name,
@@ -1104,7 +1104,7 @@ mod tests {
             from_vertex_config: vec![from_bucket_config.clone()],
             to_vertex_config: vec![from_bucket_config.clone()],
         };
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
 
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,

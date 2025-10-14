@@ -206,7 +206,7 @@ pub mod tests {
 
         // create SQS source with test client
         use crate::tracker::TrackerHandle;
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
         let cln_token = CancellationToken::new();
 
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(

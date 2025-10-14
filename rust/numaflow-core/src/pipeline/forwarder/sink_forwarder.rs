@@ -105,7 +105,7 @@ pub async fn start_sink_forwarder(
 
     let from_partitions: Vec<u16> = (0..reader_config.streams.len() as u16).collect();
 
-    let tracker_handle = TrackerHandle::new(serving_callback_handler.clone());
+    let tracker_handle = TrackerHandle::new(serving_callback_handler.clone(), cln_token.clone());
     let watermark_handle = create_components::create_edge_watermark_handle(
         &config,
         &js_context,

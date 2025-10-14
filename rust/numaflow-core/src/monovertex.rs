@@ -59,7 +59,7 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
     cln_token: CancellationToken,
     rate_limiter: Option<C::RateLimiter>,
 ) -> error::Result<()> {
-    let tracker_handle = TrackerHandle::new(None);
+    let tracker_handle = TrackerHandle::new(None, cln_token.clone());
 
     let transformer = create_components::create_transformer(
         config.batch_size,

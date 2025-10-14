@@ -277,7 +277,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
             ..Default::default()
         };
-        let tracker = TrackerHandle::new(None);
+        let tracker = TrackerHandle::new(None, CancellationToken::new());
         use crate::pipeline::isb::reader::ISBReaderComponents;
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
@@ -410,7 +410,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
             ..Default::default()
         };
-        let tracker = TrackerHandle::new(None);
+        let tracker = TrackerHandle::new(None, CancellationToken::new());
         use crate::pipeline::isb::reader::ISBReaderComponents;
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
@@ -657,7 +657,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
             ..Default::default()
         };
-        let tracker = TrackerHandle::new(None);
+        let tracker = TrackerHandle::new(None, CancellationToken::new());
         use crate::pipeline::isb::reader::ISBReaderComponents;
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),

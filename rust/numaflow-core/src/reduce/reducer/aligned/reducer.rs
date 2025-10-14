@@ -755,7 +755,7 @@ mod tests {
 
         // Create ISBWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
         let writer_config = BufferWriterConfig {
             streams: vec![stream.clone()],
             ..Default::default()
@@ -1016,7 +1016,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
         let writer_config = BufferWriterConfig {
             streams: vec![stream.clone()],
             ..Default::default()
@@ -1279,7 +1279,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
         let writer_config = BufferWriterConfig {
             streams: vec![stream.clone()],
             ..Default::default()
