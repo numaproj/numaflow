@@ -510,11 +510,18 @@ impl From<UserDefinedMessage<'_>> for Message {
             headers: value.1.headers.clone(),
             watermark: None,
             is_late: value.1.is_late,
-            metadata: match value.0.metadata {
-                // TODO: remove this once backwards compatibility is not needed for metadata, because
-                // it cannot be none, since the sdks will always send the default value.
-                None => value.1.metadata.clone(),
-                Some(m) => Some(m.into()),
+            metadata: {
+                let mut metadata = Metadata::default();
+                // Get SystemMetadata from parent message info
+                if let Some(parent_metadata) = &value.1.metadata {
+                    metadata.sys_metadata = parent_metadata.sys_metadata.clone();
+                }
+                // Get UserMetadata from the response if present
+                if let Some(response_metadata) = &value.0.metadata {
+                    let response_meta: Metadata = response_metadata.clone().into();
+                    metadata.user_metadata = response_meta.user_metadata;
+                }
+                Some(metadata)
             },
         }
     }
