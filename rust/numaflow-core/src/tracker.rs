@@ -109,26 +109,6 @@ pub(crate) struct TrackerHandle {
     cln_token: CancellationToken,
 }
 
-impl Drop for TrackerHandle {
-    fn drop(&mut self) {
-        // Try to lock the state to check if it's empty
-        if let Ok(state) = self.state.try_lock() {
-            let total_entries: usize = state
-                .entries
-                .values()
-                .map(|partition| partition.len())
-                .sum();
-            if total_entries > 0 {
-                error!(
-                    "Tracker dropped with non-empty entries: {:?}",
-                    state.entries
-                );
-            }
-        }
-        self.cln_token.cancel();
-    }
-}
-
 impl TrackerHandle {
     /// Creates a new TrackerHandle instance.
     pub(crate) fn new(serving_callback_handler: Option<CallbackHandler>) -> Self {
