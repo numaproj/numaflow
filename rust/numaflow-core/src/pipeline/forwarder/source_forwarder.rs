@@ -75,7 +75,7 @@ pub(crate) async fn start_source_forwarder(
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
         Some(
             CallbackHandler::new(
-                config.vertex_name.to_string(),
+                config.vertex_name,
                 js_context.clone(),
                 cb_cfg.callback_store,
                 cb_cfg.callback_concurrency,

@@ -119,7 +119,7 @@ enum ActorSender {
 /// etc., since we do concurrent processing of messages, the moment we encounter an error from any
 /// of the tasks, we will go to shut-down mode. We cancel the token to let upstream know that we are
 /// shutting down. We drain the input stream, nack the messages, and exit when the stream is
-/// closed. We will drop the downstream stream so that the downstream components can shutdown.
+/// closed. We will drop the downstream stream so that the downstream components can shut down.
 /// Structured concurrency is honoured here, we wait for all the concurrent tokio tasks to exit.
 /// before shutting down the component.
 #[derive(Clone)]
