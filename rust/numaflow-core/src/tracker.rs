@@ -17,7 +17,7 @@ use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{RwLock, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
@@ -45,9 +45,18 @@ struct TrackerEntry {
 struct TrackerState {
     /// entries organized by partition, each partition has its own BTreeMap of offsets
     entries: HashMap<u16, BTreeMap<Offset, TrackerEntry>>,
-    /// tracks whether the source is currently idle (not reading any data)
-    /// if it's set to none, it means the source is not idle.
-    idle_offset_map: HashMap<u16, Option<i64>>,
+}
+
+impl Drop for TrackerState {
+    fn drop(&mut self) {
+        let total_entries: usize = self.entries.values().map(|partition| partition.len()).sum();
+        if total_entries > 0 {
+            error!(
+                total_entries,
+                "TrackerState dropped with {} unacknowledged messages still tracked", total_entries
+            );
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -103,7 +112,10 @@ impl TryFrom<&Message> for ServingCallbackInfo {
 /// It allows inserting, updating, deleting, and discarding tracked messages.
 #[derive(Clone)]
 pub(crate) struct TrackerHandle {
-    state: Arc<Mutex<TrackerState>>,
+    state: Arc<RwLock<TrackerState>>,
+    /// tracks whether the source is currently idle (not reading any data)
+    /// if it's set to none, it means the source is not idle.
+    idle_offset_map: Arc<RwLock<HashMap<u16, Option<i64>>>>,
     serving_callback_handler: Option<CallbackHandler>,
     processed_msg_count: Arc<AtomicUsize>,
     cln_token: CancellationToken,
@@ -115,10 +127,11 @@ impl TrackerHandle {
         let processed_msg_count = Arc::new(AtomicUsize::new(0));
         let cln_token = CancellationToken::new();
 
-        let state = Arc::new(Mutex::new(TrackerState {
+        let state = Arc::new(RwLock::new(TrackerState {
             entries: HashMap::new(),
-            idle_offset_map: HashMap::new(),
         }));
+
+        let idle_offset_map = Arc::new(RwLock::new(HashMap::new()));
 
         // spawn a task to log the number of processed messages every second, cln_token is used to
         // stop the task when the tracker is dropped.
@@ -132,6 +145,7 @@ impl TrackerHandle {
 
         Self {
             state,
+            idle_offset_map,
             serving_callback_handler,
             processed_msg_count,
             cln_token,
@@ -206,7 +220,7 @@ impl TrackerHandle {
         }
 
         let partition = offset.partition_idx();
-        let mut state = self.state.lock().await;
+        let mut state = self.state.write().await;
         let partition_entries = state.entries.entry(partition).or_default();
         partition_entries.insert(
             offset.clone(),
@@ -234,7 +248,7 @@ impl TrackerHandle {
             .collect();
 
         let partition = offset.partition_idx();
-        let mut state = self.state.lock().await;
+        let mut state = self.state.write().await;
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
             return Ok(());
         };
@@ -252,7 +266,7 @@ impl TrackerHandle {
     /// resets the count and eof status for an offset in the tracker.
     pub(crate) async fn refresh(&self, offset: Offset) -> Result<()> {
         let partition = offset.partition_idx();
-        let mut state = self.state.lock().await;
+        let mut state = self.state.write().await;
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
             return Ok(());
         };
@@ -278,7 +292,7 @@ impl TrackerHandle {
         let response = message_tags.map(|tags| tags.to_vec());
 
         let partition = offset.partition_idx();
-        let mut state = self.state.lock().await;
+        let mut state = self.state.write().await;
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
             return Ok(());
         };
@@ -296,7 +310,7 @@ impl TrackerHandle {
     /// Updates the EOF status for an offset in the Tracker
     pub(crate) async fn eof(&self, offset: Offset) -> Result<()> {
         let partition = offset.partition_idx();
-        let mut state = self.state.lock().await;
+        let mut state = self.state.write().await;
 
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
             return Ok(());
@@ -320,7 +334,7 @@ impl TrackerHandle {
     /// Deletes a message from the Tracker with the given offset.
     pub(crate) async fn delete(&self, offset: Offset) -> Result<()> {
         let partition = offset.partition_idx();
-        let mut state = self.state.lock().await;
+        let mut state = self.state.write().await;
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
             return Ok(());
         };
@@ -348,7 +362,7 @@ impl TrackerHandle {
     /// Discards a message from the Tracker with the given offset.
     pub(crate) async fn discard(&self, offset: Offset) -> Result<()> {
         let partition = offset.partition_idx();
-        let mut state = self.state.lock().await;
+        let mut state = self.state.write().await;
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
             return Ok(());
         };
@@ -365,13 +379,13 @@ impl TrackerHandle {
     /// Checks if the Tracker is empty. Used for testing to make sure all messages are acknowledged.
     #[cfg(test)]
     pub(crate) async fn is_empty(&self) -> Result<bool> {
-        let state = self.state.lock().await;
+        let state = self.state.read().await;
         Ok(state.entries.values().all(|partition| partition.is_empty()))
     }
 
     /// Returns the lowest watermark among all the tracked offsets.
     pub(crate) async fn lowest_watermark(&self) -> Result<DateTime<Utc>> {
-        let state = self.state.lock().await;
+        let state = self.state.read().await;
         // Get the lowest watermark across all partitions
         let watermark = state
             .entries
@@ -394,16 +408,16 @@ impl TrackerHandle {
         partition_idx: u16,
         idle_offset: Option<i64>,
     ) -> Result<()> {
-        let mut state = self.state.lock().await;
-        state.idle_offset_map.insert(partition_idx, idle_offset);
+        let mut idle_map = self.idle_offset_map.write().await;
+        idle_map.insert(partition_idx, idle_offset);
         Ok(())
     }
 
     /// Gets the idle wmb status of the tracker. It returns a map of partition index to the idle offset.
     /// This idle offset is compared against the newly fetch Head WMB as part of the optimistic locking.
     pub(crate) async fn get_idle_offset(&self) -> Result<HashMap<u16, Option<i64>>> {
-        let state = self.state.lock().await;
-        Ok(state.idle_offset_map.clone())
+        let idle_map = self.idle_offset_map.read().await;
+        Ok(idle_map.clone())
     }
 }
 
@@ -732,5 +746,63 @@ mod tests {
         assert_eq!(idle_offsets.get(&0), Some(&None));
         assert_eq!(idle_offsets.get(&1), Some(&Some(200)));
         assert_eq!(idle_offsets.get(&2), Some(&None));
+    }
+
+    #[tokio::test]
+    async fn test_tracker_state_drop_with_unacknowledged_messages() {
+        // This test verifies that dropping TrackerState with unacknowledged messages
+        // logs an error. We can't easily assert on log output, but we can verify
+        // the drop doesn't panic and the logic works correctly.
+        let handle = TrackerHandle::new(None);
+        let (ack_send1, _ack_recv1) = oneshot::channel();
+        let (ack_send2, _ack_recv2) = oneshot::channel();
+
+        let message1 = Message {
+            typ: Default::default(),
+            keys: Arc::from([]),
+            tags: None,
+            value: Bytes::from_static(b"test1"),
+            offset: Offset::String(StringOffset::new("offset1".to_string(), 0)),
+            event_time: Default::default(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "in".into(),
+                offset: Bytes::from_static(b"offset1"),
+                index: 1,
+            },
+            headers: Arc::new(HashMap::new()),
+            metadata: None,
+            is_late: false,
+        };
+
+        let message2 = Message {
+            typ: Default::default(),
+            keys: Arc::from([]),
+            tags: None,
+            value: Bytes::from_static(b"test2"),
+            offset: Offset::String(StringOffset::new("offset2".to_string(), 1)),
+            event_time: Default::default(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "in".into(),
+                offset: Bytes::from_static(b"offset2"),
+                index: 2,
+            },
+            headers: Arc::new(HashMap::new()),
+            metadata: None,
+            is_late: false,
+        };
+
+        // Insert messages but don't acknowledge them
+        handle.insert(&message1, ack_send1).await.unwrap();
+        handle.insert(&message2, ack_send2).await.unwrap();
+
+        // Verify tracker is not empty
+        assert!(!handle.is_empty().await.unwrap());
+
+        // When handle is dropped, TrackerState's drop should log an error
+        // about 2 unacknowledged messages
+        drop(handle);
+        // The error log will appear in test output if running with --nocapture
     }
 }
