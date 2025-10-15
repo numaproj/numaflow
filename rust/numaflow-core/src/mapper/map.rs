@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use numaflow_pb::clients::map::map_client::MapClient;
@@ -267,6 +268,7 @@ impl MapHandle {
                             // if there are errors then we need to drain the stream and nack
                             if self.shutting_down_on_err {
                                 warn!(offset = ?read_msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
+                                read_msg.ack_handle.unwrap().is_failed.store(true, Ordering::Relaxed);
                                 self.tracker.discard(read_msg.offset).await.expect("failed to discard message");
                             } else {
                                 let permit = Arc::clone(&semaphore).acquire_owned()

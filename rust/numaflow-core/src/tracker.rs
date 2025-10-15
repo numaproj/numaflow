@@ -30,11 +30,6 @@ use crate::message::{Message, Offset, ReadAck};
 struct TrackerEntry {
     /// one shot to send the ack back
     ack_send: Option<oneshot::Sender<ReadAck>>,
-    /// number of messages in flight. the count to reach 0 for the ack to happen.
-    /// count++ happens during update and count-- during delete
-    count: usize,
-    /// end of stream for this offset (not expecting any more streaming data).
-    eof: bool,
     /// Callback info for serving
     serving_callback_info: Option<ServingCallbackInfo>,
     /// Watermark for the message
@@ -238,7 +233,6 @@ impl TrackerHandle {
         message: &Message,
         ack_send: oneshot::Sender<ReadAck>,
     ) -> Result<()> {
-        info!(?message, "Tracker insert invoked");
         let offset = message.offset.clone();
         let mut callback_info = None;
         if self.serving_callback_handler.is_some() {
@@ -252,8 +246,6 @@ impl TrackerHandle {
             offset.clone(),
             TrackerEntry {
                 ack_send: Some(ack_send),
-                count: 0,
-                eof: true,
                 serving_callback_info: callback_info,
                 watermark: message.watermark,
             },
@@ -263,7 +255,6 @@ impl TrackerHandle {
 
     /// Inserts a new message into the Tracker with the given offset and acknowledgment sender.
     pub(crate) async fn insert_message(&self, message: &Message) -> Result<()> {
-        info!(?message, "Tracker insert invoked");
         let offset = message.offset.clone();
         let mut callback_info = None;
         if self.serving_callback_handler.is_some() {
@@ -277,8 +268,6 @@ impl TrackerHandle {
             offset.clone(),
             TrackerEntry {
                 ack_send: None,
-                count: 0,
-                eof: true,
                 serving_callback_info: callback_info,
                 watermark: message.watermark,
             },
@@ -293,31 +282,28 @@ impl TrackerHandle {
         offset: Offset,
         response_tags: Vec<Option<Arc<[String]>>>,
     ) -> Result<()> {
-        info!(?offset, ?response_tags, "Tracker update invoked");
-        let responses: Vec<Option<Vec<String>>> = response_tags
-            .into_iter()
-            .map(|tags| tags.map(|tags| tags.iter().map(|tag| tag.to_string()).collect()))
-            .collect();
-
-        let partition = offset.partition_idx();
-        let mut state = self.state.write().await;
-        let Some(partition_entries) = state.entries.get_mut(&partition) else {
-            return Ok(());
-        };
-        let Some(entry) = partition_entries.get_mut(&offset) else {
-            return Ok(());
-        };
-
-        entry.count += responses.len();
-        if let Some(cb) = entry.serving_callback_info.as_mut() {
-            cb.responses = responses;
-        }
+        // let responses: Vec<Option<Vec<String>>> = response_tags
+        //     .into_iter()
+        //     .map(|tags| tags.map(|tags| tags.iter().map(|tag| tag.to_string()).collect()))
+        //     .collect();
+        //
+        // let partition = offset.partition_idx();
+        // let mut state = self.state.write().await;
+        // let Some(partition_entries) = state.entries.get_mut(&partition) else {
+        //     return Ok(());
+        // };
+        // let Some(entry) = partition_entries.get_mut(&offset) else {
+        //     return Ok(());
+        // };
+        //
+        // if let Some(cb) = entry.serving_callback_info.as_mut() {
+        //     cb.responses = responses;
+        // }
         Ok(())
     }
 
     /// resets the count and eof status for an offset in the tracker.
     pub(crate) async fn refresh(&self, offset: Offset) -> Result<()> {
-        info!(?offset, "Tracker refresh invoked");
         let partition = offset.partition_idx();
         let mut state = self.state.write().await;
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
@@ -326,9 +312,6 @@ impl TrackerHandle {
         let Some(mut entry) = partition_entries.remove(&offset) else {
             return Ok(());
         };
-
-        entry.count = 0;
-        entry.eof = false;
 
         if let Some(serving_info) = &mut entry.serving_callback_info {
             serving_info.responses = vec![];
@@ -342,30 +325,10 @@ impl TrackerHandle {
         offset: Offset,
         message_tags: Option<Arc<[String]>>,
     ) -> Result<()> {
-        info!(?offset, ?message_tags, "Tracker append invoked");
-        let response = message_tags.map(|tags| tags.to_vec());
-
-        let partition = offset.partition_idx();
-        let mut state = self.state.write().await;
-        let Some(partition_entries) = state.entries.get_mut(&partition) else {
-            return Ok(());
-        };
-        let Some(entry) = partition_entries.get_mut(&offset) else {
-            return Ok(());
-        };
-
-        entry.count += 1;
-        if let Some(cb) = entry.serving_callback_info.as_mut() {
-            cb.responses.push(response);
-        }
-        Ok(())
-    }
-
-    /// Updates the EOF status for an offset in the Tracker
-    pub(crate) async fn eof(&self, offset: Offset) -> Result<()> {
+        // let response = message_tags.map(|tags| tags.to_vec());
+        //
         // let partition = offset.partition_idx();
         // let mut state = self.state.write().await;
-        //
         // let Some(partition_entries) = state.entries.get_mut(&partition) else {
         //     return Ok(());
         // };
@@ -373,15 +336,14 @@ impl TrackerHandle {
         //     return Ok(());
         // };
         //
-        // entry.eof = true;
-        // // if the count is zero, we can send an ack immediately
-        // // this is case where map-stream will send eof true after
-        // // receiving all the messages.
-        // if entry.count == 0 {
-        //     // let entry = partition_entries.remove(&offset).unwrap();
-        //     drop(state); // Release the lock before calling completed_successfully
-        //     // self.completed_successfully(entry).await;
+        // if let Some(cb) = entry.serving_callback_info.as_mut() {
+        //     cb.responses.push(response);
         // }
+        Ok(())
+    }
+
+    /// Updates the EOF status for an offset in the Tracker
+    pub(crate) async fn eof(&self, offset: Offset) -> Result<()> {
         Ok(())
     }
 
@@ -407,45 +369,11 @@ impl TrackerHandle {
 
     /// Deletes a message from the Tracker with the given offset.
     pub(crate) async fn delete(&self, offset: Offset) -> Result<()> {
-        // let partition = offset.partition_idx();
-        // let mut state = self.state.write().await;
-        // let Some(partition_entries) = state.entries.get_mut(&partition) else {
-        //     return Ok(());
-        // };
-        // let Some(mut entry) = partition_entries.remove(&offset) else {
-        //     return Ok(());
-        // };
-        //
-        // if entry.count > 0 {
-        //     entry.count -= 1;
-        // }
-        //
-        // // if count is 0 and is eof we are sure that we can ack the offset.
-        // // In map-streaming this won't happen because eof is not tied to the message, rather it is
-        // // tied to channel-close.
-        // if entry.count == 0 && entry.eof {
-        //     drop(state); // Release the lock before calling completed_successfully
-        //     self.completed_successfully(entry).await;
-        // } else {
-        //     // add it back because we removed it
-        //     partition_entries.insert(offset, entry);
-        // }
         Ok(())
     }
 
     /// Discards a message from the Tracker with the given offset.
     pub(crate) async fn discard(&self, offset: Offset) -> Result<()> {
-        let partition = offset.partition_idx();
-        let mut state = self.state.write().await;
-        let Some(partition_entries) = state.entries.get_mut(&partition) else {
-            return Ok(());
-        };
-        let Some(entry) = partition_entries.remove(&offset) else {
-            return Ok(());
-        };
-        if let Some(ack_send) = entry.ack_send {
-            ack_send.send(ReadAck::Nak).expect("Failed to send nak");
-        }
         Ok(())
     }
 
