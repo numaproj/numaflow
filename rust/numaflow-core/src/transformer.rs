@@ -329,7 +329,6 @@ mod tests {
     use numaflow::shared::ServerExtras;
     use numaflow::sourcetransform;
     use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-    use std::collections::HashMap;
     use std::time::Duration;
     use tempfile::TempDir;
     use tokio::sync::oneshot;
@@ -398,9 +397,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
-            headers: Arc::new(HashMap::new()),
-            metadata: None,
-            is_late: false,
+            ..Default::default()
         };
 
         let transformed_messages = Transformer::transform(
@@ -477,9 +474,7 @@ mod tests {
                     offset: i.to_string().into(),
                     index: i,
                 },
-                headers: Arc::new(HashMap::new()),
-                metadata: None,
-                is_late: false,
+                ..Default::default()
             };
             messages.push(message);
         }
@@ -564,9 +559,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
-            headers: Arc::new(HashMap::new()),
-            metadata: None,
-            is_late: false,
+            ..Default::default()
         };
 
         let result = transformer

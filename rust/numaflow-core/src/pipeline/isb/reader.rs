@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use tokio::sync::{Semaphore, mpsc, oneshot};
@@ -12,7 +13,7 @@ use crate::config::get_vertex_name;
 use crate::config::pipeline::VertexType::ReduceUDF;
 use crate::config::pipeline::isb::{BufferReaderConfig, ISBConfig, Stream};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageType, Offset, ReadAck};
+use crate::message::{AckHandle, IntOffset, Message, MessageType, Offset, ReadAck};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
     jetstream_isb_metrics_labels, pipeline_metric_labels, pipeline_metrics,
@@ -108,7 +109,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
 
                 let start = Instant::now();
                 // Apply rate limiting and fetch message batch
-                let mut batch = self.apply_rate_limiting_and_fetch(batch_size).await;
+                let batch = self.apply_rate_limiting_and_fetch(batch_size).await;
 
                 pipeline_metrics()
                     .jetstream_isb
@@ -120,7 +121,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                 self.handle_idle_watermarks(batch.is_empty(), &tx).await?;
 
                 // Process each message in the batch
-                self.process_message_batch(&mut batch, &tx, &mut permits, cancel.clone(), start)
+                self.process_message_batch(batch, &tx, &mut permits, cancel.clone(), start)
                     .await?;
 
                 pipeline_metrics()
@@ -169,6 +170,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                             Self::nak_with_retry(&params.jsr, &params.offset, &params.cancel).await;
                         },
                     }
+                    params.tracker.remove(&params.offset).await.expect("Failed to remove offset from tracker");
                     break;
                 }
             }
@@ -398,7 +400,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
     /// sends them to the downstream channel.
     async fn process_message_batch(
         &mut self,
-        batch: &mut Vec<Message>,
+        mut batch: Vec<Message>,
         tx: &mpsc::Sender<Message>,
         permits: &mut tokio::sync::OwnedSemaphorePermit,
         cancel: CancellationToken,
@@ -420,12 +422,16 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
             // Publish read metrics
             Self::publish_read_metrics(&self.metric_labels, &message);
 
+            let (ack_tx, ack_rx) = oneshot::channel();
+            message.ack_handle = Some(Arc::new(AckHandle::new(ack_tx)));
+
             // Start message tracking and WIP loop
             self.start_message_tracking(
                 &message,
                 permits.split(1).expect("Failed to split permit"),
                 cancel.clone(),
                 processing_start,
+                ack_rx,
             )
             .await?;
 
@@ -445,9 +451,9 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         permit: tokio::sync::OwnedSemaphorePermit,
         cancel: CancellationToken,
         processing_start: Instant,
+        ack_rx: oneshot::Receiver<ReadAck>,
     ) -> Result<()> {
-        let (ack_tx, ack_rx) = oneshot::channel();
-        self.tracker.insert(message, ack_tx).await?;
+        self.tracker.insert_message(message).await?;
 
         let params = WipParams {
             stream_name: self.stream.name,
@@ -459,6 +465,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
             _permit: permit,
             cancel,
             message_processing_start: processing_start,
+            tracker: self.tracker.clone(),
         };
 
         tokio::spawn(async move {
@@ -506,6 +513,7 @@ struct WipParams {
     _permit: tokio::sync::OwnedSemaphorePermit, // drop guard
     cancel: CancellationToken,
     message_processing_start: Instant,
+    tracker: TrackerHandle,
 }
 
 /// Components needed to create a JetStreamReader.

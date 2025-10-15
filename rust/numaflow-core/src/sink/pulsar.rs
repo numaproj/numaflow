@@ -105,8 +105,7 @@ mod tests {
                 index: 0,
             },
             headers: Arc::new(headers),
-            metadata: None,
-            is_late: false,
+            ..Default::default()
         }
     }
 
@@ -376,8 +375,7 @@ mod tests {
                 index: 0,
             },
             headers: Arc::new(HashMap::new()),
-            metadata: None,
-            is_late: false,
+            ..Default::default()
         };
 
         let responses = sink

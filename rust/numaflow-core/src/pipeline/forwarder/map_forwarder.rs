@@ -216,7 +216,7 @@ pub async fn start_map_forwarder(
         .map_err(|e| Error::Forwarder(e.to_string()))?;
 
     for result in results {
-        error!(?result, "Forwarder task failed");
+        info!(?result, "Forwarder task completed");
         result?;
     }
 
@@ -408,7 +408,6 @@ mod tests {
 
             use async_nats::jetstream::{consumer, stream};
             use chrono::{TimeZone, Utc};
-            use std::collections::HashMap;
             use std::sync::Arc; // Publish some messages into the stream
 
             use crate::message::{Message, MessageID, Offset, StringOffset};
@@ -425,9 +424,7 @@ mod tests {
                     offset: "123".to_string().into(),
                     index: 0,
                 },
-                headers: Arc::new(HashMap::new()),
-                metadata: None,
-                is_late: false,
+                ..Default::default()
             };
             let message: bytes::BytesMut = message.try_into().unwrap();
 

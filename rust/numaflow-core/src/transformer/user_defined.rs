@@ -12,7 +12,7 @@ use tonic::{Request, Streaming};
 
 use crate::config::get_vertex_name;
 use crate::error::{Error, Result};
-use crate::message::{Message, MessageID, Offset};
+use crate::message::{AckHandle, Message, MessageID, Offset};
 use crate::metadata::Metadata;
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 
@@ -25,6 +25,7 @@ struct ParentMessageInfo {
     is_late: bool,
     headers: Arc<HashMap<String, String>>,
     metadata: Option<Arc<Metadata>>,
+    ack_handle: Option<Arc<AckHandle>>,
 }
 
 // we are passing the reference for msg info because we can have more than 1 response for a single request and
@@ -62,6 +63,7 @@ impl From<UserDefinedTransformerMessage<'_>> for Message {
                 Some(m) => Some(Arc::new(m.into())),
             },
             is_late: value.1.is_late,
+            ack_handle: value.1.ack_handle.clone(),
         }
     }
 }
@@ -197,6 +199,7 @@ impl UserDefinedTransformer {
             headers: Arc::clone(&message.headers),
             is_late: message.is_late,
             metadata: message.metadata.clone(),
+            ack_handle: message.ack_handle.clone(),
         };
 
         self.senders

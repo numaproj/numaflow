@@ -31,6 +31,7 @@ impl TryFrom<SqsMessage> for Message {
             // Set default metadata so that metadata is always present.
             metadata: Some(Arc::new(crate::metadata::Metadata::default())),
             is_late: false,
+            ack_handle: None,
         })
     }
 }

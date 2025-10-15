@@ -7,7 +7,7 @@
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
-use crate::message::ReadAck;
+use crate::message::{AckHandle, ReadAck};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_metric_labels, pipeline_metrics,
@@ -28,6 +28,7 @@ use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SqsSource;
 use numaflow_throttling::RateLimiter;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::sync::{mpsc, oneshot};
@@ -434,7 +435,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 }
 
                 let read_start_time = Instant::now();
-                let messages = match Self::read(self.sender.clone()).await {
+                let mut messages = match Self::read(self.sender.clone()).await {
                     Some(Ok(messages)) => messages,
                     None => {
                         info!("Source returned None (end of stream). Stopping the source.");
@@ -473,12 +474,14 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
                 let mut offsets = vec![];
                 let mut ack_batch = Vec::with_capacity(msgs_len);
-                for message in messages.iter() {
+                for message in messages.iter_mut() {
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
                     let offset = message.offset.clone();
 
+                    message.ack_handle = Some(Arc::new(AckHandle::new(resp_ack_tx)));
+
                     // insert the offset and the ack one shot in the tracker.
-                    self.tracker_handle.insert(message, resp_ack_tx).await?;
+                    self.tracker_handle.insert_message(&message).await?;
 
                     // store the ack one shot in the batch to invoke ack later.
                     ack_batch.push((offset.clone(), resp_ack_rx));
@@ -493,6 +496,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     self.sender.clone(),
                     ack_batch,
                     _permit,
+                    self.tracker_handle.clone(),
                     cln_token.clone(),
                 ));
 
@@ -571,6 +575,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         source_handle: mpsc::Sender<ActorMessage>,
         ack_rx_batch: Vec<(Offset, oneshot::Receiver<ReadAck>)>,
         _permit: OwnedSemaphorePermit, // permit to release after acking the offsets.
+        tracker_handle: TrackerHandle,
         cancel_token: CancellationToken,
     ) -> Result<()> {
         let n = ack_rx_batch.len();
@@ -580,16 +585,20 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         for (offset, oneshot_rx) in ack_rx_batch {
             match oneshot_rx.await {
                 Ok(ReadAck::Ack) => {
-                    offsets_to_ack.push(offset);
+                    offsets_to_ack.push(offset.clone());
                 }
                 Ok(ReadAck::Nak) => {
                     warn!(?offset, "Nak received for offset");
-                    offsets_to_nack.push(offset);
+                    offsets_to_nack.push(offset.clone());
                 }
                 Err(e) => {
                     error!(?offset, err=?e, "Error receiving ack for offset");
                 }
             }
+            tracker_handle
+                .remove(&offset)
+                .await
+                .expect("Failed to delete offset from tracker");
         }
 
         let start = Instant::now();

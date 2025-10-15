@@ -200,7 +200,7 @@ pub async fn start_sink_forwarder(
         .map_err(|e| Error::Forwarder(e.to_string()))?;
 
     for result in results {
-        error!(?result, "Forwarder task failed");
+        info!(?result, "Forwarder task completed");
         result?;
     }
 
@@ -303,7 +303,6 @@ async fn run_sink_forwarder_for_stream<C: NumaflowTypeConfig>(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -371,9 +370,7 @@ mod tests {
                     offset: "123".to_string().into(),
                     index: 0,
                 },
-                headers: Arc::new(HashMap::new()),
-                metadata: None,
-                is_late: false,
+                ..Default::default()
             };
             let message: bytes::BytesMut = message.try_into().unwrap();
 

@@ -1,9 +1,9 @@
+use crate::Error;
 use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
-
-use crate::Error;
+use std::sync::atomic::AtomicBool;
 
 use crate::metadata::Metadata;
 use crate::shared::grpc::prost_timestamp_from_utc;
@@ -11,6 +11,7 @@ use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
+use tokio::sync::oneshot;
 
 const DROP: &str = "U+005C__DROP__";
 
@@ -43,6 +44,34 @@ pub(crate) struct Message {
     /// is_late is used to indicate if the message is a late data. Late data is data that arrives
     /// after the watermark has passed. This is set only at source.
     pub(crate) is_late: bool,
+    pub(crate) ack_handle: Option<Arc<AckHandle>>,
+}
+
+#[derive(Debug)]
+pub(crate) struct AckHandle {
+    pub(crate) ack_handle: Option<oneshot::Sender<ReadAck>>,
+    pub(crate) is_failed: AtomicBool,
+}
+
+impl AckHandle {
+    pub(crate) fn new(ack_handle: oneshot::Sender<ReadAck>) -> Self {
+        Self {
+            ack_handle: Some(ack_handle),
+            is_failed: AtomicBool::new(false),
+        }
+    }
+}
+
+impl Drop for AckHandle {
+    fn drop(&mut self) {
+        if let Some(ack_handle) = self.ack_handle.take() {
+            if self.is_failed.load(std::sync::atomic::Ordering::Relaxed) {
+                ack_handle.send(ReadAck::Nak).expect("Failed to send nak");
+            } else {
+                ack_handle.send(ReadAck::Ack).expect("Failed to send ack");
+            }
+        }
+    }
 }
 
 /// Type of the [Message].
@@ -98,6 +127,7 @@ impl Default for Message {
             metadata: None,
             typ: Default::default(),
             is_late: false,
+            ack_handle: None,
         }
     }
 }
@@ -383,9 +413,7 @@ mod tests {
                 offset: "123".to_string().into(),
                 index: 0,
             },
-            headers: Arc::new(HashMap::new()),
-            metadata: None,
-            is_late: false,
+            ..Default::default()
         };
 
         let result: Result<BytesMut> = message.clone().try_into();

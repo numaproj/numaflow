@@ -29,7 +29,7 @@ use crate::message::{Message, Offset, ReadAck};
 #[derive(Debug)]
 struct TrackerEntry {
     /// one shot to send the ack back
-    ack_send: oneshot::Sender<ReadAck>,
+    ack_send: Option<oneshot::Sender<ReadAck>>,
     /// number of messages in flight. the count to reach 0 for the ack to happen.
     /// count++ happens during update and count-- during delete
     count: usize,
@@ -49,7 +49,7 @@ struct TrackerState {
 
 impl Drop for TrackerState {
     fn drop(&mut self) {
-        let total_entries: usize = self.entries.values().map(|partition| partition.len()).sum();
+        let total_entries: usize = self.entries.values().map(|value| value.len()).sum();
         if total_entries > 0 {
             error!(
                 total_entries,
@@ -169,19 +169,45 @@ impl TrackerHandle {
         }
     }
 
+    /*
+    * add ack handle one shot sender to the message.
+       AckHandle {
+           oneshot_tx,
+           is_failed: Arc<AtomicBool>,
+       }
+
+       Message {
+           ack_handle: Arc<AckHandle>,
+       }
+
+       impl Drop on AckHandle {
+           if is_failed {
+               tx.send(nack)
+           } else {
+               tx.send(nack)
+           }
+       }
+
+       Tracker will not track the ack handles anymore, it only tracks the inflight offsets and other state
+       we don't need delete method on the tracker, it doesn't need count and eof
+    */
+
     /// This function is called once the message has been successfully processed. This is where
     /// the bookkeeping for a successful message happens, things like,
     /// - ack back
     /// - call serving callbacks
     /// - watermark progression
     async fn completed_successfully(&self, entry: TrackerEntry) {
+        info!(?entry, "Tracker completed successfully invoked");
         let TrackerEntry {
             ack_send,
             serving_callback_info: callback_info,
             ..
         } = entry;
 
-        ack_send.send(ReadAck::Ack).expect("Failed to send ack");
+        if let Some(ack_send) = ack_send {
+            ack_send.send(ReadAck::Ack).expect("Failed to send ack");
+        }
         self.processed_msg_count.fetch_add(1, Ordering::Relaxed);
 
         let Some(ref callback_handler) = self.serving_callback_handler else {
@@ -212,6 +238,7 @@ impl TrackerHandle {
         message: &Message,
         ack_send: oneshot::Sender<ReadAck>,
     ) -> Result<()> {
+        info!(?message, "Tracker insert invoked");
         let offset = message.offset.clone();
         let mut callback_info = None;
         if self.serving_callback_handler.is_some() {
@@ -224,7 +251,32 @@ impl TrackerHandle {
         partition_entries.insert(
             offset.clone(),
             TrackerEntry {
-                ack_send,
+                ack_send: Some(ack_send),
+                count: 0,
+                eof: true,
+                serving_callback_info: callback_info,
+                watermark: message.watermark,
+            },
+        );
+        Ok(())
+    }
+
+    /// Inserts a new message into the Tracker with the given offset and acknowledgment sender.
+    pub(crate) async fn insert_message(&self, message: &Message) -> Result<()> {
+        info!(?message, "Tracker insert invoked");
+        let offset = message.offset.clone();
+        let mut callback_info = None;
+        if self.serving_callback_handler.is_some() {
+            callback_info = Some(message.try_into()?);
+        }
+
+        let partition = offset.partition_idx();
+        let mut state = self.state.write().await;
+        let partition_entries = state.entries.entry(partition).or_default();
+        partition_entries.insert(
+            offset.clone(),
+            TrackerEntry {
+                ack_send: None,
                 count: 0,
                 eof: true,
                 serving_callback_info: callback_info,
@@ -241,6 +293,7 @@ impl TrackerHandle {
         offset: Offset,
         response_tags: Vec<Option<Arc<[String]>>>,
     ) -> Result<()> {
+        info!(?offset, ?response_tags, "Tracker update invoked");
         let responses: Vec<Option<Vec<String>>> = response_tags
             .into_iter()
             .map(|tags| tags.map(|tags| tags.iter().map(|tag| tag.to_string()).collect()))
@@ -264,6 +317,7 @@ impl TrackerHandle {
 
     /// resets the count and eof status for an offset in the tracker.
     pub(crate) async fn refresh(&self, offset: Offset) -> Result<()> {
+        info!(?offset, "Tracker refresh invoked");
         let partition = offset.partition_idx();
         let mut state = self.state.write().await;
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
@@ -288,6 +342,7 @@ impl TrackerHandle {
         offset: Offset,
         message_tags: Option<Arc<[String]>>,
     ) -> Result<()> {
+        info!(?offset, ?message_tags, "Tracker append invoked");
         let response = message_tags.map(|tags| tags.to_vec());
 
         let partition = offset.partition_idx();
@@ -308,53 +363,73 @@ impl TrackerHandle {
 
     /// Updates the EOF status for an offset in the Tracker
     pub(crate) async fn eof(&self, offset: Offset) -> Result<()> {
+        // let partition = offset.partition_idx();
+        // let mut state = self.state.write().await;
+        //
+        // let Some(partition_entries) = state.entries.get_mut(&partition) else {
+        //     return Ok(());
+        // };
+        // let Some(entry) = partition_entries.get_mut(&offset) else {
+        //     return Ok(());
+        // };
+        //
+        // entry.eof = true;
+        // // if the count is zero, we can send an ack immediately
+        // // this is case where map-stream will send eof true after
+        // // receiving all the messages.
+        // if entry.count == 0 {
+        //     // let entry = partition_entries.remove(&offset).unwrap();
+        //     drop(state); // Release the lock before calling completed_successfully
+        //     // self.completed_successfully(entry).await;
+        // }
+        Ok(())
+    }
+
+    /// Deletes a message from the Tracker with the given offset.
+    pub(crate) async fn remove(&self, offset: &Offset) -> Result<()> {
         let partition = offset.partition_idx();
         let mut state = self.state.write().await;
-
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
             return Ok(());
         };
-        let Some(entry) = partition_entries.get_mut(&offset) else {
+        let Some(entry) = partition_entries.remove(offset) else {
             return Ok(());
         };
 
-        entry.eof = true;
-        // if the count is zero, we can send an ack immediately
-        // this is case where map-stream will send eof true after
-        // receiving all the messages.
-        if entry.count == 0 {
-            let entry = partition_entries.remove(&offset).unwrap();
-            drop(state); // Release the lock before calling completed_successfully
-            self.completed_successfully(entry).await;
-        }
+        // if count is 0 and is eof we are sure that we can ack the offset.
+        // In map-streaming this won't happen because eof is not tied to the message, rather it is
+        // tied to channel-close.
+        drop(state); // Release the lock before calling completed_successfully
+        self.completed_successfully(entry).await;
+
         Ok(())
     }
 
     /// Deletes a message from the Tracker with the given offset.
     pub(crate) async fn delete(&self, offset: Offset) -> Result<()> {
-        let partition = offset.partition_idx();
-        let mut state = self.state.write().await;
-        let Some(partition_entries) = state.entries.get_mut(&partition) else {
-            return Ok(());
-        };
-        let Some(mut entry) = partition_entries.remove(&offset) else {
-            return Ok(());
-        };
-
-        if entry.count > 0 {
-            entry.count -= 1;
-        }
-
-        // if count is 0 and is eof we are sure that we can ack the offset.
-        // In map-streaming this won't happen because eof is not tied to the message, rather it is
-        // tied to channel-close.
-        if entry.count == 0 && entry.eof {
-            drop(state); // Release the lock before calling completed_successfully
-            self.completed_successfully(entry).await;
-        } else {
-            // add it back because we removed it
-            partition_entries.insert(offset, entry);
-        }
+        // let partition = offset.partition_idx();
+        // let mut state = self.state.write().await;
+        // let Some(partition_entries) = state.entries.get_mut(&partition) else {
+        //     return Ok(());
+        // };
+        // let Some(mut entry) = partition_entries.remove(&offset) else {
+        //     return Ok(());
+        // };
+        //
+        // if entry.count > 0 {
+        //     entry.count -= 1;
+        // }
+        //
+        // // if count is 0 and is eof we are sure that we can ack the offset.
+        // // In map-streaming this won't happen because eof is not tied to the message, rather it is
+        // // tied to channel-close.
+        // if entry.count == 0 && entry.eof {
+        //     drop(state); // Release the lock before calling completed_successfully
+        //     self.completed_successfully(entry).await;
+        // } else {
+        //     // add it back because we removed it
+        //     partition_entries.insert(offset, entry);
+        // }
         Ok(())
     }
 
@@ -368,10 +443,9 @@ impl TrackerHandle {
         let Some(entry) = partition_entries.remove(&offset) else {
             return Ok(());
         };
-        entry
-            .ack_send
-            .send(ReadAck::Nak)
-            .expect("Failed to send nak");
+        if let Some(ack_send) = entry.ack_send {
+            ack_send.send(ReadAck::Nak).expect("Failed to send nak");
+        }
         Ok(())
     }
 
@@ -453,9 +527,7 @@ mod tests {
                 offset: Bytes::from_static(b"0"),
                 index: 1,
             },
-            headers: Arc::new(HashMap::new()),
-            metadata: None,
-            is_late: false,
+            ..Default::default()
         };
 
         let callback_info: super::Result<ServingCallbackInfo> = TryFrom::try_from(&message);
@@ -497,9 +569,7 @@ mod tests {
                 offset: Bytes::from_static(b"offset1"),
                 index: 1,
             },
-            headers: Arc::new(HashMap::new()),
-            metadata: None,
-            is_late: false,
+            ..Default::default()
         };
 
         // Insert a new message
@@ -539,9 +609,7 @@ mod tests {
                 offset: Bytes::from_static(b"offset1"),
                 index: 1,
             },
-            headers: Arc::new(HashMap::new()),
-            metadata: None,
-            is_late: false,
+            ..Default::default()
         };
 
         // Insert a new message
@@ -586,9 +654,7 @@ mod tests {
                 offset: Bytes::from_static(b"0"),
                 index: 1,
             },
-            headers: Arc::new(HashMap::new()),
-            metadata: None,
-            is_late: false,
+            ..Default::default()
         };
 
         // Insert a new message
@@ -622,9 +688,7 @@ mod tests {
                 offset: Bytes::from_static(b"0"),
                 index: 1,
             },
-            headers: Arc::new(HashMap::new()),
-            metadata: None,
-            is_late: false,
+            ..Default::default()
         };
 
         // Insert a new message
@@ -695,6 +759,7 @@ mod tests {
                 ..Default::default()
             })),
             is_late: false,
+            ..Default::default()
         };
 
         // Insert a new message
@@ -769,9 +834,7 @@ mod tests {
                 offset: Bytes::from_static(b"offset1"),
                 index: 1,
             },
-            headers: Arc::new(HashMap::new()),
-            metadata: None,
-            is_late: false,
+            ..Default::default()
         };
 
         let message2 = Message {
@@ -787,9 +850,7 @@ mod tests {
                 offset: Bytes::from_static(b"offset2"),
                 index: 2,
             },
-            headers: Arc::new(HashMap::new()),
-            metadata: None,
-            is_late: false,
+            ..Default::default()
         };
 
         // Insert messages but don't acknowledge them

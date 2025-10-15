@@ -155,6 +155,7 @@ impl From<UserDefinedSessionResponse> for Message {
             headers: Arc::new(HashMap::new()), // reset headers since it is a new message
             metadata: None,
             is_late: false,
+            ack_handle: None,
         }
     }
 }

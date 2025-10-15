@@ -1159,9 +1159,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: Arc::new(HashMap::new()),
-                metadata: None,
-                is_late: false,
+                ..Default::default()
             })
             .collect();
 
@@ -1197,9 +1195,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: Arc::new(HashMap::new()),
-                metadata: None,
-                is_late: false,
+                ..Default::default()
             })
             .collect();
 
@@ -1276,9 +1272,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: Arc::new(HashMap::new()),
-                metadata: None,
-                is_late: false,
+                ..Default::default()
             })
             .collect();
 
@@ -1365,9 +1359,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: Arc::new(HashMap::new()),
-                metadata: None,
-                is_late: false,
+                ..Default::default()
             })
             .collect();
 
@@ -1479,9 +1471,7 @@ mod tests {
                         offset: "123".to_string().into(),
                         index: i as i32,
                     },
-                    headers: Arc::new(headers),
-                    metadata: None,
-                    is_late: false,
+                    ..Default::default()
                 }
             })
             .collect();
@@ -1528,9 +1518,7 @@ mod tests {
                 offset: "123".to_string().into(),
                 index: 0,
             },
-            headers: Arc::new(HashMap::new()),
-            metadata: None,
-            is_late: false,
+            ..Default::default()
         };
 
         let request: SinkRequest = message.into();
