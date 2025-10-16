@@ -56,27 +56,105 @@ Side Inputs Update.
 
 Here is an example of how to write a User-defined Side Input in Golang,
 
-```go
-// handle is the side input handler function.
-func handle(_ context.Context) sideinputsdk.Message {
-    t := time.Now()
-    // val is the side input message value. This would be the value that the side input vertex receives.
-    val := "an example: " + string(t.String())
-    // randomly drop side input message. Note that the side input message is not retried.
-    // NoBroadcastMessage() is used to drop the message and not to
-    // broadcast it to other side input vertices.
-    counter = (counter + 1) % 10
-    if counter%2 == 0 {
-        return sideinputsdk.NoBroadcastMessage()
-    }
-    // BroadcastMessage() is used to broadcast the message with the given value to other side input vertices.
-    // val must be converted to []byte.
-    return sideinputsdk.BroadcastMessage([]byte(val))
-}
-```
+=== "Go"
 
-Similarly, this can be written in [Python](https://github.com/numaproj/numaflow-python/blob/main/examples/sideinput/simple_sideinput/example.py)
-and [Java](https://github.com/numaproj/numaflow-java/blob/main/examples/src/main/java/io/numaproj/numaflow/examples/sideinput/simple/SimpleSideInput.java) as well.
+    ```go
+    // handle is the side input handler function.
+    func handle(_ context.Context) sideinputsdk.Message {
+        t := time.Now()
+        // val is the side input message value. This would be the value that the side input vertex receives.
+        val := "an example: " + string(t.String())
+        // randomly drop side input message. Note that the side input message is not retried.
+        // NoBroadcastMessage() is used to drop the message and not to
+        // broadcast it to other side input vertices.
+        counter = (counter + 1) % 10
+        if counter%2 == 0 {
+            return sideinputsdk.NoBroadcastMessage()
+        }
+        // BroadcastMessage() is used to broadcast the message with the given value to other side input vertices.
+        // val must be converted to []byte.
+        return sideinputsdk.BroadcastMessage([]byte(val))
+    }
+    ```
+
+
+=== "Python"
+
+    ```python
+    import datetime
+    from pynumaflow.sideinput import Response, SideInputServer, SideInput
+
+
+    class ExampleSideInput(SideInput):
+        def __init__(self):
+            self.counter = 0
+
+        def retrieve_handler(self) -> Response:
+            """
+            Called every time the side input is triggered.
+            """
+            time_now = datetime.datetime.now()
+            val = f"an example: {str(time_now)}"
+            self.counter += 1
+
+            # broadcast every other time
+            if self.counter % 2 == 0:
+                return Response.no_broadcast_message()
+            return Response.broadcast_message(val.encode("utf-8"))
+
+
+    if __name__ == "__main__":
+        grpc_server = SideInputServer(ExampleSideInput())
+        grpc_server.start()
+    ```
+
+=== "Java"
+
+    ```java
+    package io.numaproj.numaflow.examples.sideinput.simple;
+
+    import com.fasterxml.jackson.core.JsonProcessingException;
+    import com.fasterxml.jackson.databind.ObjectMapper;
+    import io.numaproj.numaflow.examples.sideinput.Config;
+    import io.numaproj.numaflow.sideinput.Message;
+    import io.numaproj.numaflow.sideinput.Server;
+    import io.numaproj.numaflow.sideinput.SideInputRetriever;
+    import lombok.extern.slf4j.Slf4j;
+
+    @Slf4j
+    public class SimpleSideInput extends SideInputRetriever {
+        private final Config config;
+        private final ObjectMapper jsonMapper = new ObjectMapper();
+
+        public SimpleSideInput(Config config) {
+            this.config = config;
+        }
+
+        public static void main(String[] args) throws Exception {
+            Server server = new Server(new SimpleSideInput(new Config("sampling", 0.5F)));
+            server.start();
+            server.awaitTermination();
+        }
+
+        @Override
+        public Message retrieveSideInput() {
+            byte[] val;
+            if (0.9 > config.getSampling()) {
+                config.setSampling(config.getSampling() + 0.01F);
+            } else {
+                config.setSampling(0.5F);
+            }
+            try {
+                val = jsonMapper.writeValueAsBytes(config);
+                log.info("Broadcasting side input message: {}", new String(val));
+                return Message.createBroadcastMessage(val);
+            } catch (JsonProcessingException e) {
+                log.error("Failed to serialize config: {}", e.getMessage());
+                return Message.createNoBroadcastMessage();
+            }
+        }
+    }
+    ```
 
 After performing the retrieval/update, the side input value is then broadcasted to all vertices that use the side input.
 
