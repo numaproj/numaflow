@@ -17,19 +17,17 @@ use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use tokio::sync::{RwLock, oneshot};
+use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::Result;
 use crate::error::Error;
-use crate::message::{Message, Offset, ReadAck};
+use crate::message::{Message, Offset};
 
 /// TrackerEntry represents the state of a tracked message.
 #[derive(Debug)]
 struct TrackerEntry {
-    /// one shot to send the ack back
-    ack_send: Option<oneshot::Sender<ReadAck>>,
     /// Callback info for serving
     serving_callback_info: Option<ServingCallbackInfo>,
     /// Watermark for the message
@@ -164,29 +162,6 @@ impl TrackerHandle {
         }
     }
 
-    /*
-    * add ack handle one shot sender to the message.
-       AckHandle {
-           oneshot_tx,
-           is_failed: Arc<AtomicBool>,
-       }
-
-       Message {
-           ack_handle: Arc<AckHandle>,
-       }
-
-       impl Drop on AckHandle {
-           if is_failed {
-               tx.send(nack)
-           } else {
-               tx.send(nack)
-           }
-       }
-
-       Tracker will not track the ack handles anymore, it only tracks the inflight offsets and other state
-       we don't need delete method on the tracker, it doesn't need count and eof
-    */
-
     /// This function is called once the message has been successfully processed. This is where
     /// the bookkeeping for a successful message happens, things like,
     /// - ack back
@@ -195,14 +170,10 @@ impl TrackerHandle {
     async fn completed_successfully(&self, entry: TrackerEntry) {
         info!(?entry, "Tracker completed successfully invoked");
         let TrackerEntry {
-            ack_send,
             serving_callback_info: callback_info,
             ..
         } = entry;
 
-        if let Some(ack_send) = ack_send {
-            ack_send.send(ReadAck::Ack).expect("Failed to send ack");
-        }
         self.processed_msg_count.fetch_add(1, Ordering::Relaxed);
 
         let Some(ref callback_handler) = self.serving_callback_handler else {
@@ -228,11 +199,7 @@ impl TrackerHandle {
     }
 
     /// Inserts a new message into the Tracker with the given offset and acknowledgment sender.
-    pub(crate) async fn insert(
-        &self,
-        message: &Message,
-        ack_send: oneshot::Sender<ReadAck>,
-    ) -> Result<()> {
+    pub(crate) async fn insert(&self, message: &Message) -> Result<()> {
         let offset = message.offset.clone();
         let mut callback_info = None;
         if self.serving_callback_handler.is_some() {
@@ -245,29 +212,6 @@ impl TrackerHandle {
         partition_entries.insert(
             offset.clone(),
             TrackerEntry {
-                ack_send: Some(ack_send),
-                serving_callback_info: callback_info,
-                watermark: message.watermark,
-            },
-        );
-        Ok(())
-    }
-
-    /// Inserts a new message into the Tracker with the given offset and acknowledgment sender.
-    pub(crate) async fn insert_message(&self, message: &Message) -> Result<()> {
-        let offset = message.offset.clone();
-        let mut callback_info = None;
-        if self.serving_callback_handler.is_some() {
-            callback_info = Some(message.try_into()?);
-        }
-
-        let partition = offset.partition_idx();
-        let mut state = self.state.write().await;
-        let partition_entries = state.entries.entry(partition).or_default();
-        partition_entries.insert(
-            offset.clone(),
-            TrackerEntry {
-                ack_send: None,
                 serving_callback_info: callback_info,
                 watermark: message.watermark,
             },
@@ -279,31 +223,39 @@ impl TrackerHandle {
     /// and entry for this message's offset.
     pub(crate) async fn update(
         &self,
-        offset: Offset,
+        offset: &Offset,
         response_tags: Vec<Option<Arc<[String]>>>,
     ) -> Result<()> {
-        // let responses: Vec<Option<Vec<String>>> = response_tags
-        //     .into_iter()
-        //     .map(|tags| tags.map(|tags| tags.iter().map(|tag| tag.to_string()).collect()))
-        //     .collect();
-        //
-        // let partition = offset.partition_idx();
-        // let mut state = self.state.write().await;
-        // let Some(partition_entries) = state.entries.get_mut(&partition) else {
-        //     return Ok(());
-        // };
-        // let Some(entry) = partition_entries.get_mut(&offset) else {
-        //     return Ok(());
-        // };
-        //
-        // if let Some(cb) = entry.serving_callback_info.as_mut() {
-        //     cb.responses = responses;
-        // }
+        if self.serving_callback_handler.is_none() {
+            return Ok(());
+        }
+
+        let responses: Vec<Option<Vec<String>>> = response_tags
+            .into_iter()
+            .map(|tags| tags.map(|tags| tags.iter().map(|tag| tag.to_string()).collect()))
+            .collect();
+
+        let partition = offset.partition_idx();
+        let mut state = self.state.write().await;
+        let Some(partition_entries) = state.entries.get_mut(&partition) else {
+            return Ok(());
+        };
+        let Some(entry) = partition_entries.get_mut(offset) else {
+            return Ok(());
+        };
+
+        if let Some(cb) = entry.serving_callback_info.as_mut() {
+            cb.responses = responses;
+        }
         Ok(())
     }
 
     /// resets the count and eof status for an offset in the tracker.
     pub(crate) async fn refresh(&self, offset: Offset) -> Result<()> {
+        if self.serving_callback_handler.is_none() {
+            return Ok(());
+        }
+
         let partition = offset.partition_idx();
         let mut state = self.state.write().await;
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
@@ -325,30 +277,28 @@ impl TrackerHandle {
         offset: Offset,
         message_tags: Option<Arc<[String]>>,
     ) -> Result<()> {
-        // let response = message_tags.map(|tags| tags.to_vec());
-        //
-        // let partition = offset.partition_idx();
-        // let mut state = self.state.write().await;
-        // let Some(partition_entries) = state.entries.get_mut(&partition) else {
-        //     return Ok(());
-        // };
-        // let Some(entry) = partition_entries.get_mut(&offset) else {
-        //     return Ok(());
-        // };
-        //
-        // if let Some(cb) = entry.serving_callback_info.as_mut() {
-        //     cb.responses.push(response);
-        // }
-        Ok(())
-    }
+        if self.serving_callback_handler.is_none() {
+            return Ok(());
+        }
 
-    /// Updates the EOF status for an offset in the Tracker
-    pub(crate) async fn eof(&self, offset: Offset) -> Result<()> {
+        let response = message_tags.map(|tags| tags.to_vec());
+        let partition = offset.partition_idx();
+        let mut state = self.state.write().await;
+        let Some(partition_entries) = state.entries.get_mut(&partition) else {
+            return Ok(());
+        };
+        let Some(entry) = partition_entries.get_mut(&offset) else {
+            return Ok(());
+        };
+
+        if let Some(cb) = entry.serving_callback_info.as_mut() {
+            cb.responses.push(response);
+        }
         Ok(())
     }
 
     /// Deletes a message from the Tracker with the given offset.
-    pub(crate) async fn remove(&self, offset: &Offset) -> Result<()> {
+    pub(crate) async fn delete(&self, offset: &Offset) -> Result<()> {
         let partition = offset.partition_idx();
         let mut state = self.state.write().await;
         let Some(partition_entries) = state.entries.get_mut(&partition) else {
@@ -364,16 +314,6 @@ impl TrackerHandle {
         drop(state); // Release the lock before calling completed_successfully
         self.completed_successfully(entry).await;
 
-        Ok(())
-    }
-
-    /// Deletes a message from the Tracker with the given offset.
-    pub(crate) async fn delete(&self, offset: Offset) -> Result<()> {
-        Ok(())
-    }
-
-    /// Discards a message from the Tracker with the given offset.
-    pub(crate) async fn discard(&self, offset: Offset) -> Result<()> {
         Ok(())
     }
 
@@ -430,7 +370,6 @@ mod tests {
     use futures::StreamExt;
     use std::collections::HashMap;
     use std::sync::Arc;
-    use tokio::sync::oneshot;
     use tokio::time::{Duration, timeout};
 
     use super::*;
@@ -482,8 +421,6 @@ mod tests {
     #[tokio::test]
     async fn test_insert_update_delete() {
         let handle = TrackerHandle::new(None, CancellationToken::new());
-        let (ack_send, ack_recv) = oneshot::channel();
-
         let message = Message {
             typ: Default::default(),
             keys: Arc::from([]),
@@ -501,142 +438,16 @@ mod tests {
         };
 
         // Insert a new message
-        handle.insert(&message, ack_send).await.unwrap();
+        handle.insert(&message).await.unwrap();
 
         // Update the message
         handle
-            .update(message.offset.clone(), vec![message.tags.clone()])
+            .update(&message.offset, vec![message.tags.clone()])
             .await
             .unwrap();
-        handle.eof(message.offset.clone()).await.unwrap();
 
-        // Delete the message
-        handle.delete(message.offset).await.unwrap();
+        handle.delete(&message.offset).await.unwrap();
 
-        // Verify that the message was deleted and ack was received
-        let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
-        assert!(result.is_ok(), "Ack should be received");
-        assert_eq!(result.unwrap(), ReadAck::Ack);
-        assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
-    }
-
-    #[tokio::test]
-    async fn test_update_with_multiple_deletes() {
-        let handle = TrackerHandle::new(None, CancellationToken::new());
-        let (ack_send, ack_recv) = oneshot::channel();
-        let message = Message {
-            typ: Default::default(),
-            keys: Arc::from([]),
-            tags: None,
-            value: Bytes::from_static(b"test"),
-            offset: Offset::String(StringOffset::new("offset1".to_string(), 0)),
-            event_time: Default::default(),
-            watermark: None,
-            id: MessageID {
-                vertex_name: "in".into(),
-                offset: Bytes::from_static(b"offset1"),
-                index: 1,
-            },
-            ..Default::default()
-        };
-
-        // Insert a new message
-        handle.insert(&message, ack_send).await.unwrap();
-
-        let messages: Vec<Message> = std::iter::repeat_n(message.clone(), 3).collect();
-        // Update the message with a count of 3
-        for message in messages {
-            handle
-                .update(message.offset.clone(), vec![message.tags.clone()])
-                .await
-                .unwrap();
-        }
-
-        // Delete the message three times
-        handle.delete(message.offset.clone()).await.unwrap();
-        handle.delete(message.offset.clone()).await.unwrap();
-        handle.delete(message.offset.clone()).await.unwrap();
-
-        // Verify that the message was deleted and ack was received after the third delete
-        let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
-        assert!(result.is_ok(), "Ack should be received after three deletes");
-        assert_eq!(result.unwrap(), ReadAck::Ack);
-        assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
-    }
-
-    #[tokio::test]
-    async fn test_discard() {
-        let handle = TrackerHandle::new(None, CancellationToken::new());
-        let (ack_send, ack_recv) = oneshot::channel();
-
-        let message = Message {
-            typ: Default::default(),
-            keys: Arc::from([]),
-            tags: None,
-            value: Bytes::from_static(b"test"),
-            offset: Offset::Int(IntOffset::new(0, 0)),
-            event_time: Default::default(),
-            watermark: None,
-            id: MessageID {
-                vertex_name: "in".into(),
-                offset: Bytes::from_static(b"0"),
-                index: 1,
-            },
-            ..Default::default()
-        };
-
-        // Insert a new message
-        handle.insert(&message, ack_send).await.unwrap();
-
-        // Discard the message
-        handle.discard(message.offset.clone()).await.unwrap();
-
-        // Verify that the message was discarded and nak was received
-        let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
-        assert!(result.is_ok(), "Nak should be received");
-        assert_eq!(result.unwrap(), ReadAck::Nak);
-        assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
-    }
-
-    #[tokio::test]
-    async fn test_discard_after_update_with_higher_count() {
-        let handle = TrackerHandle::new(None, CancellationToken::new());
-        let (ack_send, ack_recv) = oneshot::channel();
-
-        let message = Message {
-            typ: Default::default(),
-            keys: Arc::from([]),
-            tags: None,
-            value: Bytes::from_static(b"test"),
-            offset: Offset::Int(IntOffset::new(0, 0)),
-            event_time: Default::default(),
-            watermark: None,
-            id: MessageID {
-                vertex_name: "in".into(),
-                offset: Bytes::from_static(b"0"),
-                index: 1,
-            },
-            ..Default::default()
-        };
-
-        // Insert a new message
-        handle.insert(&message, ack_send).await.unwrap();
-
-        let messages: Vec<Message> = std::iter::repeat_n(message.clone(), 3).collect();
-        for message in messages {
-            handle
-                .update(message.offset.clone(), vec![message.tags.clone()])
-                .await
-                .unwrap();
-        }
-
-        // Discard the message
-        handle.discard(message.offset).await.unwrap();
-
-        // Verify that the message was discarded and nak was received
-        let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
-        assert!(result.is_ok(), "Nak should be received");
-        assert_eq!(result.unwrap(), ReadAck::Nak);
         assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
     }
 
@@ -661,7 +472,6 @@ mod tests {
             CallbackHandler::new("test", js_context.clone(), store_name, 10).await;
 
         let handle = TrackerHandle::new(Some(callback_handler), CancellationToken::new());
-        let (ack_send, ack_recv) = oneshot::channel();
 
         let mut headers = HashMap::new();
         headers.insert(DEFAULT_ID_HEADER.to_string(), "1234".to_string());
@@ -691,13 +501,9 @@ mod tests {
         };
 
         // Insert a new message
-        handle.insert(&message, ack_send).await.unwrap();
-        handle.eof(offset).await.unwrap();
+        handle.insert(&message).await.unwrap();
+        handle.delete(&offset).await.unwrap();
 
-        // Verify that the message was discarded and Ack was received
-        let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
-        assert!(result.is_ok(), "Ack should be received");
-        assert_eq!(result.unwrap(), ReadAck::Ack);
         assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
 
         // Verify that the callback was written to the KV store
@@ -746,8 +552,6 @@ mod tests {
         // logs an error. We can't easily assert on log output, but we can verify
         // the drop doesn't panic and the logic works correctly.
         let handle = TrackerHandle::new(None, CancellationToken::new());
-        let (ack_send1, _ack_recv1) = oneshot::channel();
-        let (ack_send2, _ack_recv2) = oneshot::channel();
 
         let message1 = Message {
             typ: Default::default(),
@@ -782,8 +586,8 @@ mod tests {
         };
 
         // Insert messages but don't acknowledge them
-        handle.insert(&message1, ack_send1).await.unwrap();
-        handle.insert(&message2, ack_send2).await.unwrap();
+        handle.insert(&message1).await.unwrap();
+        handle.insert(&message2).await.unwrap();
 
         // Verify tracker is not empty
         assert!(!handle.is_empty().await.unwrap());

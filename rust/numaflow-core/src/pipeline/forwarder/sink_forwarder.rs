@@ -236,7 +236,6 @@ async fn run_all_sink_forwarders<C: NumaflowTypeConfig>(
             context.config.read_timeout,
             sink.sink_config.clone(),
             sink.fb_sink_config.clone(),
-            context.tracker_handle.clone(),
             serving_store.clone(),
             &context.cln_token,
         )

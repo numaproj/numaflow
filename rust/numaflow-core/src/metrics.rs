@@ -1540,7 +1540,6 @@ mod tests {
             SinkClientType::UserDefined(SinkClient::new(
                 create_rpc_channel(sink_sock_file).await.unwrap(),
             )),
-            tracker.clone(),
         )
         .fb_sink_client(SinkClientType::UserDefined(SinkClient::new(
             create_rpc_channel(fb_sink_sock_file).await.unwrap(),

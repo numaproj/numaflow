@@ -184,7 +184,7 @@ pub mod tests {
         let (source, src_handle, src_shutdown_tx) =
             get_simple_source(tracker_handle.clone(), cln_token.clone()).await;
         // let source = get_sqs_source().await;
-        let sink_writer = get_sqs_sink(tracker_handle.clone()).await;
+        let sink_writer = get_sqs_sink().await;
         // create the forwarder with the source, transformer, and writer
         let forwarder = Forwarder::new(source.clone(), None, sink_writer);
 
@@ -268,7 +268,7 @@ pub mod tests {
         )
     }
 
-    async fn get_sqs_sink(tracker_handle: TrackerHandle) -> SinkWriter {
+    async fn get_sqs_sink() -> SinkWriter {
         let queue_url_output = get_queue_url_output();
         let sqs_operation_mocks = MockResponseInterceptor::new()
             .rule_mode(RuleMode::MatchAny)
@@ -291,15 +291,10 @@ pub mod tests {
 
         // create sink writer
         use crate::sink::{SinkClientType, SinkWriterBuilder};
-        SinkWriterBuilder::new(
-            5,
-            Duration::from_millis(100),
-            SinkClientType::Sqs(sqs_sink),
-            tracker_handle.clone(),
-        )
-        .build()
-        .await
-        .unwrap()
+        SinkWriterBuilder::new(5, Duration::from_millis(100), SinkClientType::Sqs(sqs_sink))
+            .build()
+            .await
+            .unwrap()
     }
 
     fn get_send_message_output(count: i32) -> Rule {

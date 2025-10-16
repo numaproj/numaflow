@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use tokio::sync::{Semaphore, mpsc, oneshot};
@@ -170,7 +169,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                             Self::nak_with_retry(&params.jsr, &params.offset, &params.cancel).await;
                         },
                     }
-                    params.tracker.remove(&params.offset).await.expect("Failed to remove offset from tracker");
+                    params.tracker.delete(&params.offset).await.expect("Failed to remove offset from tracker");
                     break;
                 }
             }
@@ -453,8 +452,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         processing_start: Instant,
         ack_rx: oneshot::Receiver<ReadAck>,
     ) -> Result<()> {
-        self.tracker.insert_message(message).await?;
-
+        self.tracker.insert(message).await?;
         let params = WipParams {
             stream_name: self.stream.name,
             labels: Arc::clone(&self.metric_labels),
@@ -710,11 +708,9 @@ mod tests {
             10,
             "Expected 10 messages from the jetstream reader"
         );
+        drop(buffer);
 
         reader_cancel_token.cancel();
-        for offset in offsets {
-            tracker.delete(offset).await.unwrap();
-        }
         js_reader_task.await.unwrap().unwrap();
         context.delete_stream(stream.name).await.unwrap();
     }
@@ -817,11 +813,6 @@ mod tests {
             let Some(_val) = js_reader_rx.next().await else {
                 break;
             };
-        }
-
-        // after reading messages remove from the tracker so that the messages are acked
-        for offset in offsets {
-            tracker_handle.delete(offset).await.unwrap();
         }
 
         // wait until the tracker becomes empty, don't wait more than 1 second
@@ -975,8 +966,8 @@ mod tests {
         assert_eq!(received_message.keys.as_ref(), &["empty_key".to_string()]);
         assert_eq!(received_message.offset.to_string(), offset.to_string());
 
-        // Clean up
-        tracker.delete(offset).await.unwrap();
+        drop(received_message);
+
         reader_cancel_token.cancel();
         js_reader_task.await.unwrap().unwrap();
         context.delete_stream(stream.name).await.unwrap();

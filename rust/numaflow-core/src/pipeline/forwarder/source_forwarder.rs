@@ -107,7 +107,6 @@ pub(crate) async fn start_source_forwarder(
         config: config.to_vertex_config.clone(),
         writers,
         paf_concurrency: config.writer_concurrency,
-        tracker_handle: tracker_handle.clone(),
         watermark_handle: source_watermark_handle.clone().map(WatermarkHandle::Source),
         vertex_type: config.vertex_type,
     };
@@ -480,7 +479,6 @@ mod tests {
             }],
             writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
             watermark_handle: None,
             vertex_type: VertexType::Source,
         };

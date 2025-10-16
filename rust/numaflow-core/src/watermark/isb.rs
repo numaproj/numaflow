@@ -554,7 +554,6 @@ mod tests {
     use crate::message::{IntOffset, Message};
     use crate::tracker::TrackerHandle;
     use crate::watermark::wmb::WMB;
-    use tokio::sync::oneshot;
 
     // Helper function to create test messages
     fn create_test_message(
@@ -688,11 +687,8 @@ mod tests {
         let message1 = create_test_message(1, 0, Some(100));
         let message2 = create_test_message(2, 0, Some(200));
 
-        let (ack_send1, _ack_recv1) = oneshot::channel();
-        let (ack_send2, _ack_recv2) = oneshot::channel();
-
-        tracker_handle.insert(&message1, ack_send1).await.unwrap();
-        tracker_handle.insert(&message2, ack_send2).await.unwrap();
+        tracker_handle.insert(&message1).await.unwrap();
+        tracker_handle.insert(&message2).await.unwrap();
 
         handle
             .publish_watermark(
@@ -736,7 +732,7 @@ mod tests {
         }
 
         tracker_handle
-            .delete(Offset::Int(IntOffset {
+            .delete(&Offset::Int(IntOffset {
                 offset: 1,
                 partition_idx: 0,
             }))
@@ -868,8 +864,7 @@ mod tests {
 
                 // Insert message into tracker
                 let message = create_test_message(i, 0, Some(i * 100));
-                let (ack_send, ack_recv) = oneshot::channel();
-                tracker_handle.insert(&message, ack_send).await.unwrap();
+                tracker_handle.insert(&message).await.unwrap();
 
                 handle
                     .publish_watermark(
@@ -897,8 +892,7 @@ mod tests {
                     break;
                 }
                 sleep(Duration::from_millis(10)).await;
-                tracker_handle.delete(offset.clone()).await.unwrap();
-                ack_recv.await.unwrap();
+                tracker_handle.delete(&offset).await.unwrap();
             }
         })
         .await;
@@ -1021,8 +1015,7 @@ mod tests {
         // Insert multiple offsets into tracker
         for i in 1..=3 {
             let message = create_test_message(i, 0, Some(i * 100));
-            let (ack_send, _ack_recv) = oneshot::channel();
-            tracker_handle.insert(&message, ack_send).await.unwrap();
+            tracker_handle.insert(&message).await.unwrap();
         }
 
         // Wait for the idle timeout to trigger
@@ -1141,8 +1134,7 @@ mod tests {
 
             // Insert message into tracker
             let message = create_test_message(i, 0, Some(i * 100));
-            let (ack_send, ack_recv) = oneshot::channel();
-            tracker_handle.insert(&message, ack_send).await.unwrap();
+            tracker_handle.insert(&message).await.unwrap();
 
             handle
                 .publish_watermark(
@@ -1165,8 +1157,7 @@ mod tests {
                 break;
             }
             sleep(Duration::from_millis(10)).await;
-            tracker_handle.delete(offset.clone()).await.unwrap();
-            ack_recv.await.unwrap();
+            tracker_handle.delete(&offset).await.unwrap();
         }
 
         assert_ne!(fetched_watermark, -1);

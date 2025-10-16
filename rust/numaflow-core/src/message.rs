@@ -366,8 +366,6 @@ impl TryFrom<Message> for BytesMut {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use chrono::TimeZone;
     use numaflow_pb::objects::isb::{
         Body, Header, Message as ProtoMessage, MessageId, MessageInfo,

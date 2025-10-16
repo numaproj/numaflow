@@ -17,7 +17,7 @@ use crate::error::Error;
 use crate::mapper::map::user_defined::{
     UserDefinedBatchMap, UserDefinedStreamMap, UserDefinedUnaryMap,
 };
-use crate::message::{Message, Offset};
+use crate::message::{AckHandle, Message, Offset};
 use crate::tracker::TrackerHandle;
 pub(super) mod user_defined;
 
@@ -268,8 +268,7 @@ impl MapHandle {
                             // if there are errors then we need to drain the stream and nack
                             if self.shutting_down_on_err {
                                 warn!(offset = ?read_msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
-                                read_msg.ack_handle.unwrap().is_failed.store(true, Ordering::Relaxed);
-                                self.tracker.discard(read_msg.offset).await.expect("failed to discard message");
+                                read_msg.ack_handle.as_ref().expect("ack handle should be present").is_failed.store(true, Ordering::Relaxed);
                             } else {
                                 let permit = Arc::clone(&semaphore).acquire_owned()
                                     .await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}" )))?;
@@ -299,16 +298,18 @@ impl MapHandle {
                         if self.shutting_down_on_err {
                             for msg in batch {
                                 warn!(offset = ?msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
-                                self.tracker
-                                    .discard(msg.offset)
-                                    .await
-                                    .expect("failed to discard message");
+                                msg.ack_handle
+                                    .as_ref()
+                                    .expect("ack handle should be present")
+                                    .is_failed
+                                    .store(true, Ordering::Relaxed);
                             }
                             continue;
                         }
 
-                        let offsets: Vec<Offset> =
-                            batch.iter().map(|msg| msg.offset.clone()).collect();
+                        let ack_handles: Vec<Option<Arc<AckHandle>>> =
+                            batch.iter().map(|msg| msg.ack_handle.clone()).collect();
+
                         if !batch.is_empty()
                             && let Err(e) = Self::batch(
                                 map_handle.clone(),
@@ -321,11 +322,12 @@ impl MapHandle {
                             error!(?e, "error received while performing batch map operation");
                             // if there is an error, discard all the messages in the tracker and
                             // return the error.
-                            for offset in offsets {
-                                self.tracker
-                                    .discard(offset)
-                                    .await
-                                    .expect("failed to discard message");
+                            for ack_handle in ack_handles {
+                                ack_handle
+                                    .as_ref()
+                                    .expect("ack handle should be present")
+                                    .is_failed
+                                    .store(true, Ordering::Relaxed);
                             }
                             cln_token.cancel();
                             self.shutting_down_on_err = true;
@@ -358,7 +360,7 @@ impl MapHandle {
 
                             if self.shutting_down_on_err {
                                 warn!(offset = ?read_msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
-                                self.tracker.discard(read_msg.offset).await.expect("failed to discard message");
+                                read_msg.ack_handle.as_ref().expect("ack handle should be present").is_failed.store(true, Ordering::Relaxed);
                             } else {
                                 let permit = Arc::clone(&semaphore).acquire_owned().await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}")))?;
                                 let error_tx = error_tx.clone();
@@ -429,10 +431,12 @@ impl MapHandle {
 
             if let Err(e) = map_handle.send(msg).await {
                 error!(?e, "failed to send message to map actor");
-                tracker_handle
-                    .discard(offset)
-                    .await
-                    .expect("failed to discard message");
+                read_msg
+                    .ack_handle
+                    .as_ref()
+                    .expect("ack handle should be present")
+                    .is_failed
+                    .store(true, Ordering::Relaxed);
                 let _ = error_tx
                     .send(Error::Mapper(format!("failed to send message: {e}")))
                     .await;
@@ -446,15 +450,11 @@ impl MapHandle {
                             // update the tracker with the number of messages sent and send the mapped messages
                             tracker_handle
                                 .update(
-                                    offset.clone(),
+                                    &offset,
                                     mapped_messages.iter().map(|m| m.tags.clone()).collect(),
                                 )
                                 .await
                                 .expect("failed to update tracker");
-                            tracker_handle
-                                .eof(offset)
-                                .await
-                                .expect("failed to update eof");
 
                             // send messages downstream
                             for mapped_message in mapped_messages {
@@ -466,18 +466,22 @@ impl MapHandle {
                         }
                         Ok(Err(_map_err)) => {
                             error!(err=?_map_err, ?offset, "failed to map message");
-                            tracker_handle
-                                .discard(offset)
-                                .await
-                                .expect("failed to discard message");
+                            read_msg
+                                .ack_handle
+                                .as_ref()
+                                .expect("ack handle should be present")
+                                .is_failed
+                                .store(true, Ordering::Relaxed);
                             let _ = error_tx.send(_map_err).await;
                         }
                         Err(err) => {
                             error!(?err, ?offset, "failed to receive message");
-                            tracker_handle
-                                .discard(offset)
-                                .await
-                                .expect("failed to discard message");
+                            read_msg
+                                .ack_handle
+                                .as_ref()
+                                .expect("ack handle should be present")
+                                .is_failed
+                                .store(true, Ordering::Relaxed);
                             let _ = error_tx
                                 .send(Error::Mapper(format!("failed to receive message: {err}")))
                                 .await;
@@ -486,10 +490,12 @@ impl MapHandle {
                 },
                 _ = cln_token.cancelled() => {
                     error!(?offset, "Cancellation token received, discarding message");
-                    tracker_handle
-                        .discard(offset)
-                        .await
-                        .expect("failed to discard message");
+                    read_msg
+                        .ack_handle
+                        .as_ref()
+                        .expect("ack handle should be present")
+                        .is_failed
+                        .store(true, Ordering::Relaxed);
                 }
             }
         });
@@ -529,11 +535,10 @@ impl MapHandle {
                     if let Some(offset) = offset {
                         tracker_handle
                             .update(
-                                offset.clone(),
+                                &offset,
                                 mapped_messages.iter().map(|m| m.tags.clone()).collect(),
                             )
                             .await?;
-                        tracker_handle.eof(offset).await?;
                     }
                     for mapped_message in mapped_messages {
                         output_tx
@@ -584,10 +589,12 @@ impl MapHandle {
 
             if let Err(e) = map_handle.send(msg).await {
                 error!(?e, "failed to send message to map actor");
-                tracker_handle
-                    .discard(read_msg.offset)
-                    .await
-                    .expect("failed to discard message");
+                read_msg
+                    .ack_handle
+                    .as_ref()
+                    .expect("ack handle should be present")
+                    .is_failed
+                    .store(true, Ordering::Relaxed);
                 let _ = error_tx
                     .send(Error::Mapper(format!("failed to send message: {e}")))
                     .await;
@@ -613,10 +620,12 @@ impl MapHandle {
                                 output_tx.send(mapped_message).await.expect("failed to send response");
                             }
                             Some(Err(e)) => {
-                                tracker_handle
-                                    .discard(read_msg.offset)
-                                    .await
-                                    .expect("failed to discard message");
+                                read_msg
+                                    .ack_handle
+                                    .as_ref()
+                                    .expect("ack handle should be present")
+                                    .is_failed
+                                    .store(true, Ordering::Relaxed);
                                 let _ = error_tx.send(e).await;
                                 return;
                             }
@@ -625,10 +634,12 @@ impl MapHandle {
                     },
                     _ = cln_token.cancelled() => {
                         error!(?read_msg.offset, "Cancellation token received, will not wait for the response");
-                        tracker_handle
-                            .discard(read_msg.offset)
-                            .await
-                            .expect("failed to discard message");
+                        read_msg
+                            .ack_handle
+                            .as_ref()
+                            .expect("ack handle should be present")
+                            .is_failed
+                            .store(true, Ordering::Relaxed);
                         let _ = error_tx
                             .send(Error::Mapper("Operation cancelled".to_string()))
                             .await;
@@ -638,10 +649,6 @@ impl MapHandle {
             }
 
             info!(?read_msg.offset, "Stream map operation completed");
-            tracker_handle
-                .eof(read_msg.offset)
-                .await
-                .expect("failed to update eof");
         });
     }
 

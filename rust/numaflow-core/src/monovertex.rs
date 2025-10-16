@@ -102,7 +102,6 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
         config.read_timeout,
         config.sink_config.clone(),
         config.fb_sink_config.clone(),
-        tracker_handle,
         None,
         &cln_token,
     )

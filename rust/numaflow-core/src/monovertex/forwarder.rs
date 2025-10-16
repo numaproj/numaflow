@@ -303,15 +303,11 @@ mod tests {
             None,
         );
 
-        let sink_writer = SinkWriterBuilder::new(
-            10,
-            Duration::from_millis(100),
-            SinkClientType::Log,
-            tracker_handle.clone(),
-        )
-        .build()
-        .await
-        .unwrap();
+        let sink_writer =
+            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
+                .build()
+                .await
+                .unwrap();
 
         // create the forwarder with the source, transformer, and writer
         let forwarder = Forwarder::new(source.clone(), None, sink_writer);
@@ -447,15 +443,11 @@ mod tests {
             None,
         );
 
-        let sink_writer = SinkWriterBuilder::new(
-            10,
-            Duration::from_millis(100),
-            SinkClientType::Log,
-            tracker_handle.clone(),
-        )
-        .build()
-        .await
-        .unwrap();
+        let sink_writer =
+            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
+                .build()
+                .await
+                .unwrap();
 
         // create the forwarder with the source, transformer, and writer
         let forwarder = Forwarder::new(source.clone(), None, sink_writer);
@@ -627,15 +619,11 @@ mod tests {
         .await
         .unwrap();
 
-        let sink_writer = SinkWriterBuilder::new(
-            10,
-            Duration::from_millis(100),
-            SinkClientType::Log,
-            tracker_handle.clone(),
-        )
-        .build()
-        .await
-        .unwrap();
+        let sink_writer =
+            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
+                .build()
+                .await
+                .unwrap();
 
         // create the forwarder with the source, transformer, and writer
         let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
@@ -752,15 +740,11 @@ mod tests {
         .await
         .unwrap();
 
-        let sink_writer = SinkWriterBuilder::new(
-            10,
-            Duration::from_millis(100),
-            SinkClientType::Log,
-            tracker_handle.clone(),
-        )
-        .build()
-        .await
-        .unwrap();
+        let sink_writer =
+            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
+                .build()
+                .await
+                .unwrap();
 
         // create the forwarder with the source, transformer, and writer
         let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
@@ -877,15 +861,11 @@ mod tests {
         .await
         .unwrap();
 
-        let sink_writer = SinkWriterBuilder::new(
-            10,
-            Duration::from_millis(100),
-            SinkClientType::Log,
-            tracker_handle.clone(),
-        )
-        .build()
-        .await
-        .unwrap();
+        let sink_writer =
+            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
+                .build()
+                .await
+                .unwrap();
 
         // create the forwarder with the source, transformer, and writer
         let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);

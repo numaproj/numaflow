@@ -767,7 +767,6 @@ mod tests {
     use crate::reduce::reducer::unaligned::user_defined::session::UserDefinedSessionReduce;
     use crate::reduce::reducer::unaligned::windower::session::SessionWindowManager;
     use crate::shared::grpc::create_rpc_channel;
-    use crate::tracker::TrackerHandle;
     use async_nats::jetstream::consumer::PullConsumer;
     use async_nats::jetstream::{self, consumer, stream};
     use chrono::{TimeZone, Utc};
@@ -962,7 +961,6 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
         let writer_config = BufferWriterConfig {
             streams: vec![stream.clone()],
             ..Default::default()
@@ -991,7 +989,6 @@ mod tests {
             }],
             writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
         };
@@ -1199,13 +1196,12 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
         let writer_config = BufferWriterConfig {
             streams: vec![stream.clone()],
             ..Default::default()
         };
 
-        let mut writers = std::collections::HashMap::new();
+        let mut writers = HashMap::new();
         writers.insert(
             stream.name,
             crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
@@ -1228,7 +1224,6 @@ mod tests {
             }],
             writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
         };
@@ -1493,13 +1488,12 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
         let writer_config = BufferWriterConfig {
             streams: vec![stream.clone()],
             ..Default::default()
         };
 
-        let mut writers = std::collections::HashMap::new();
+        let mut writers = HashMap::new();
         writers.insert(
             stream.name,
             crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
@@ -1522,7 +1516,6 @@ mod tests {
             }],
             writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
         };
@@ -1707,13 +1700,12 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
         let writer_config = BufferWriterConfig {
             streams: vec![stream.clone()],
             ..Default::default()
         };
 
-        let mut writers = std::collections::HashMap::new();
+        let mut writers = HashMap::new();
         writers.insert(
             stream.name,
             crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
@@ -1736,7 +1728,6 @@ mod tests {
             }],
             writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
         };
@@ -1953,13 +1944,12 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
         let writer_config = BufferWriterConfig {
             streams: vec![stream.clone()],
             ..Default::default()
         };
 
-        let mut writers = std::collections::HashMap::new();
+        let mut writers = HashMap::new();
         writers.insert(
             stream.name,
             crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
@@ -1982,7 +1972,6 @@ mod tests {
             }],
             writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
         };

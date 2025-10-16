@@ -62,29 +62,15 @@ pub(crate) async fn create_sink_writer(
     read_timeout: Duration,
     primary_sink: SinkConfig,
     fallback_sink: Option<SinkConfig>,
-    tracker_handle: TrackerHandle,
     serving_store: Option<ServingStore>,
     cln_token: &CancellationToken,
 ) -> error::Result<SinkWriter> {
     let mut sink_writer_builder = match primary_sink.sink_type.clone() {
-        SinkType::Log(_) => SinkWriterBuilder::new(
-            batch_size,
-            read_timeout,
-            SinkClientType::Log,
-            tracker_handle,
-        ),
-        SinkType::Blackhole(_) => SinkWriterBuilder::new(
-            batch_size,
-            read_timeout,
-            SinkClientType::Blackhole,
-            tracker_handle,
-        ),
-        SinkType::Serve => SinkWriterBuilder::new(
-            batch_size,
-            read_timeout,
-            SinkClientType::Serve,
-            tracker_handle,
-        ),
+        SinkType::Log(_) => SinkWriterBuilder::new(batch_size, read_timeout, SinkClientType::Log),
+        SinkType::Blackhole(_) => {
+            SinkWriterBuilder::new(batch_size, read_timeout, SinkClientType::Blackhole)
+        }
+        SinkType::Serve => SinkWriterBuilder::new(batch_size, read_timeout, SinkClientType::Serve),
         SinkType::UserDefined(ud_config) => {
             let sink_server_info =
                 sdk_server_info(ud_config.server_info_path.clone().into(), cln_token.clone())
@@ -113,7 +99,6 @@ pub(crate) async fn create_sink_writer(
                 batch_size,
                 read_timeout,
                 SinkClientType::UserDefined(sink_grpc_client.clone()),
-                tracker_handle,
             )
             .retry_config(primary_sink.retry_config.unwrap_or_default())
         }
@@ -123,18 +108,12 @@ pub(crate) async fn create_sink_writer(
                 batch_size,
                 read_timeout,
                 SinkClientType::Sqs(sqs_sink.clone()),
-                tracker_handle,
             )
         }
         SinkType::Kafka(sink_config) => {
             let sink_config = *sink_config;
             let kafka_sink = numaflow_kafka::sink::new_sink(sink_config)?;
-            SinkWriterBuilder::new(
-                batch_size,
-                read_timeout,
-                SinkClientType::Kafka(kafka_sink),
-                tracker_handle,
-            )
+            SinkWriterBuilder::new(batch_size, read_timeout, SinkClientType::Kafka(kafka_sink))
         }
         SinkType::Pulsar(pulsar_sink_config) => {
             let pulsar_sink = numaflow_pulsar::sink::new_sink(*pulsar_sink_config).await?;
@@ -142,7 +121,6 @@ pub(crate) async fn create_sink_writer(
                 batch_size,
                 read_timeout,
                 SinkClientType::Pulsar(Box::new(pulsar_sink)),
-                tracker_handle,
             )
         }
     };

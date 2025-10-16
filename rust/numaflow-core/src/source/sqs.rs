@@ -222,15 +222,11 @@ pub mod tests {
 
         // create sink writer
         use crate::sink::{SinkClientType, SinkWriterBuilder};
-        let sink_writer = SinkWriterBuilder::new(
-            10,
-            Duration::from_millis(100),
-            SinkClientType::Log,
-            tracker_handle.clone(),
-        )
-        .build()
-        .await
-        .unwrap();
+        let sink_writer =
+            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
+                .build()
+                .await
+                .unwrap();
 
         // create the forwarder with the source and sink writer
         let forwarder =

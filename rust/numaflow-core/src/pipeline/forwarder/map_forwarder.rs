@@ -151,7 +151,6 @@ pub async fn start_map_forwarder(
         config: config.to_vertex_config.clone(),
         writers,
         paf_concurrency: config.writer_concurrency,
-        tracker_handle: tracker_handle.clone(),
         watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
         vertex_type: config.vertex_type,
     };

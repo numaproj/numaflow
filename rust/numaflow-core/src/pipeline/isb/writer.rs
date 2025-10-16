@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant, sleep};
@@ -19,7 +20,6 @@ use crate::metrics::{
 };
 use crate::pipeline::isb::jetstream::js_writer::{JetStreamWriter, WriteError};
 use crate::shared::forward;
-use crate::tracker::TrackerHandle;
 use crate::watermark::WatermarkHandle;
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
@@ -42,7 +42,6 @@ pub(crate) struct ISBWriterComponents {
     pub config: Vec<ToVertexConfig>,
     pub writers: HashMap<&'static str, JetStreamWriter>,
     pub paf_concurrency: usize,
-    pub tracker_handle: TrackerHandle,
     pub watermark_handle: Option<WatermarkHandle>,
     pub vertex_type: VertexType,
 }
@@ -55,7 +54,6 @@ pub(crate) struct ISBWriter {
     config: Arc<Vec<ToVertexConfig>>,
     /// HashMap: stream_name -> JetStreamWriter
     writers: Arc<HashMap<&'static str, JetStreamWriter>>,
-    tracker_handle: TrackerHandle,
     watermark_handle: Option<WatermarkHandle>,
     sem: Arc<Semaphore>,
     paf_concurrency: usize,
@@ -84,7 +82,6 @@ impl ISBWriter {
         Self {
             config: Arc::new(components.config),
             writers: Arc::new(components.writers),
-            tracker_handle: components.tracker_handle,
             watermark_handle: components.watermark_handle,
             sem: Arc::new(Semaphore::new(components.paf_concurrency)),
             paf_concurrency: components.paf_concurrency,
@@ -126,7 +123,7 @@ impl ISBWriter {
     async fn write_to_isb(&self, message: Message, cln_token: CancellationToken) -> Result<()> {
         // Handle dropped messages
         if message.dropped() {
-            self.handle_dropped_message(message).await;
+            self.publish_stream_drop_metric("n/a", "to_drop", message.value.len());
             return Ok(());
         }
 
@@ -178,10 +175,6 @@ impl ISBWriter {
                 tags = ?message.tags,
                 "message will be dropped because conditional forwarding rules are not met or buffer is full"
             );
-            self.tracker_handle
-                .delete(message.offset.clone())
-                .await
-                .expect("Failed to delete offset from tracker");
             self.publish_stream_drop_metric("n/a", "forwarding-rules-not-met", 0);
         }
 
@@ -246,7 +239,11 @@ impl ISBWriter {
                     // Handle buffer full based on strategy
                     match buffer_full_strategy {
                         BufferFullStrategy::DiscardLatest => {
-                            self.drop_message_due_to_buffer_full(message, stream).await;
+                            self.publish_stream_drop_metric(
+                                stream.name,
+                                "buffer-full",
+                                message.value.len(),
+                            );
                             return None; // Don't retry
                         }
                         BufferFullStrategy::RetryUntilSuccess => {
@@ -268,25 +265,6 @@ impl ISBWriter {
             // Sleep to avoid busy looping
             sleep(Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS)).await;
         }
-    }
-
-    /// Handles a dropped message (`message.to_drop()` from UDF) by removing from tracker and
-    /// publishing metrics.
-    async fn handle_dropped_message(&self, message: Message) {
-        self.tracker_handle
-            .delete(message.offset)
-            .await
-            .expect("Failed to delete offset from tracker");
-        self.publish_stream_drop_metric("n/a", "to_drop", message.value.len());
-    }
-
-    /// Drops a message due to buffer full and publishes metrics.
-    async fn drop_message_due_to_buffer_full(&self, message: &Message, stream: &Stream) {
-        self.tracker_handle
-            .delete(message.offset.clone())
-            .await
-            .expect("Failed to delete offset from tracker");
-        self.publish_stream_drop_metric(stream.name, "buffer-full", message.value.len());
     }
 
     /// Waits for all PAF resolvers to complete.
@@ -383,22 +361,18 @@ impl ISBWriter {
 
             // If any of the writes failed, NAK the message
             if resolved_offsets.len() != n {
-                this.tracker_handle
-                    .discard(message.offset.clone())
-                    .await
-                    .expect("Failed to discard offset from the tracker");
+                message
+                    .ack_handle
+                    .as_ref()
+                    .expect("ack handle should be present")
+                    .is_failed
+                    .store(true, Ordering::Relaxed);
                 return;
             }
 
             // Publish watermarks for successful writes
             this.publish_watermarks_for_offsets(resolved_offsets, &message)
                 .await;
-
-            // Finalize by removing from tracker (sends ACK to reader)
-            this.tracker_handle
-                .delete(message.offset.clone())
-                .await
-                .expect("Failed to delete offset from tracker");
         });
 
         Ok(())
@@ -544,7 +518,7 @@ impl ISBWriter {
 mod tests {
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
-    use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
+    use crate::message::{AckHandle, IntOffset, Message, MessageID, Offset, ReadAck};
     use async_nats::jetstream;
     use async_nats::jetstream::consumer::{self, Config, Consumer};
     use async_nats::jetstream::stream;
@@ -560,7 +534,6 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
 
         let stream = Stream::new("test-streaming", "temp", 0);
         // Delete stream if it exists
@@ -616,7 +589,6 @@ mod tests {
             }],
             writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
             watermark_handle: None,
             vertex_type: VertexType::Source,
         };
@@ -647,10 +619,10 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                 ..Default::default()
             };
             ack_rxs.push(ack_rx);
-            tracker_handle.insert(&message, ack_tx).await.unwrap();
             tx.send(message).await.unwrap();
         }
         drop(tx);
@@ -660,9 +632,6 @@ mod tests {
         }
 
         write_handle.await.unwrap().unwrap();
-
-        // make sure all messages are acked
-        assert!(tracker_handle.is_empty().await.unwrap());
         context.delete_stream(stream.name).await.unwrap();
     }
 
@@ -674,7 +643,6 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, cln_token.clone());
 
         let stream = Stream::new("test-streaming-cancel", "temp", 0);
         // Delete stream if it exists
@@ -730,7 +698,6 @@ mod tests {
             }],
             writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
             watermark_handle: None,
             vertex_type: VertexType::Source,
         };
@@ -761,10 +728,10 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                 ..Default::default()
             };
             ack_rxs.push(ack_rx);
-            tracker_handle.insert(&message, ack_tx).await.unwrap();
             tx.send(message).await.unwrap();
         }
 
@@ -777,9 +744,6 @@ mod tests {
         }
 
         write_handle.await.unwrap().unwrap();
-
-        // make sure all messages are acked
-        assert!(tracker_handle.is_empty().await.unwrap());
         context.delete_stream(stream.name).await.unwrap();
     }
 
@@ -790,7 +754,6 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, cln_token.clone());
 
         // Create multiple streams for different vertices
         let vertex1_streams = vec![
@@ -898,7 +861,6 @@ mod tests {
             ],
             writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
             watermark_handle: None,
             vertex_type: VertexType::Source,
         };
@@ -937,23 +899,20 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                 ..Default::default()
             };
             ack_rxs.push(ack_rx);
-            tracker_handle.insert(&message, ack_tx).await.unwrap();
             tx.send(message).await.unwrap();
         }
         drop(tx);
 
+        // make sure all messages are acked
         for ack_rx in ack_rxs {
             assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
         }
 
         write_handle.await.unwrap().unwrap();
-
-        // make sure all messages are acked
-        assert!(tracker_handle.is_empty().await.unwrap());
-
         for stream_name in vertex1_streams
             .iter()
             .chain(&vertex2_streams)

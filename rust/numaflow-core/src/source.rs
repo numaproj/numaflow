@@ -28,7 +28,7 @@ use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SqsSource;
 use numaflow_throttling::RateLimiter;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::sync::{mpsc, oneshot};
@@ -472,20 +472,18 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         .await;
                 }
 
-                let mut offsets = vec![];
+                let mut ack_handles = vec![];
                 let mut ack_batch = Vec::with_capacity(msgs_len);
                 for message in messages.iter_mut() {
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
-                    let offset = message.offset.clone();
-
                     message.ack_handle = Some(Arc::new(AckHandle::new(resp_ack_tx)));
 
                     // insert the offset and the ack one shot in the tracker.
-                    self.tracker_handle.insert_message(&message).await?;
+                    self.tracker_handle.insert(&message).await?;
 
                     // store the ack one shot in the batch to invoke ack later.
-                    ack_batch.push((offset.clone(), resp_ack_rx));
-                    offsets.push(offset);
+                    ack_batch.push((message.offset.clone(), resp_ack_rx));
+                    ack_handles.push(message.ack_handle.clone());
                 }
 
                 // start a background task to invoke ack on the source for the offsets that are acked.
@@ -514,11 +512,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                                 ?e,
                                 "Error while transforming messages, sending nack to the batch"
                             );
-                            for offset in offsets {
-                                self.tracker_handle
-                                    .discard(offset)
-                                    .await
-                                    .expect("tracker operations should never fail");
+                            for ack_handle in ack_handles {
+                                ack_handle
+                                    .as_ref()
+                                    .expect("ack handle should be present")
+                                    .is_failed
+                                    .store(true, Ordering::Relaxed);
                             }
                             result = Err(e);
                             break;
@@ -596,7 +595,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 }
             }
             tracker_handle
-                .remove(&offset)
+                .delete(&offset)
                 .await
                 .expect("Failed to delete offset from tracker");
         }
@@ -884,10 +883,6 @@ mod tests {
             }
         }
 
-        async fn pending(&self) -> Option<usize> {
-            Some(self.yet_to_ack.read().unwrap().len() + self.nacked.read().unwrap().len())
-        }
-
         async fn nack(&self, offsets: Vec<Offset>) {
             for offset in offsets {
                 self.yet_to_ack
@@ -900,6 +895,10 @@ mod tests {
                     .insert(String::from_utf8(offset.offset).unwrap());
                 self.sent_count.fetch_sub(1, Ordering::SeqCst);
             }
+        }
+
+        async fn pending(&self) -> Option<usize> {
+            Some(self.yet_to_ack.read().unwrap().len() + self.nacked.read().unwrap().len())
         }
 
         async fn partitions(&self) -> Option<Vec<i32>> {
@@ -960,16 +959,17 @@ mod tests {
 
         let (mut stream, handle) = source.clone().streaming_read(cln_token.clone()).unwrap();
         let mut offsets = vec![];
+        let mut messages = Vec::with_capacity(50);
         // we should read all the 100 messages
-        for _ in 0..100 {
+        for i in 0..100 {
             let message = stream.next().await.unwrap();
             assert_eq!(message.value, "hello".as_bytes());
             offsets.push(message.offset.clone());
-        }
 
-        // ack 50 messages by invoking delete on tracker
-        for offset in offsets.iter().take(50) {
-            tracker.delete(offset.clone()).await.unwrap();
+            // only store the last 50 messages, rest will be dropped and acknowledged.
+            if i >= 50 {
+                messages.push(message);
+            }
         }
 
         // wait for upto 1s with 10ms sleep between each check to make sure the pending becomes 50
@@ -991,20 +991,19 @@ mod tests {
             .unwrap();
         assert_eq!(partitions, vec![1, 2]);
 
-        // tracker discard will invoke nack
-        for offset in offsets.iter().skip(50) {
-            tracker.discard(offset.clone()).await.unwrap();
+        for message in messages.into_iter() {
+            // set failed to true so that the message is nacked
+            message
+                .ack_handle
+                .unwrap()
+                .is_failed
+                .store(true, Ordering::Relaxed);
         }
 
         // read should return 50 nacked messages
         for _ in 0..50 {
             let message = stream.next().await.unwrap();
             assert_eq!(message.value, "hello".as_bytes());
-        }
-
-        // ack them all now
-        for offset in offsets.iter().skip(50) {
-            tracker.delete(offset.clone()).await.unwrap();
         }
 
         // pending should be 0 now

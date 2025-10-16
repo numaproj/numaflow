@@ -25,16 +25,14 @@ pub(crate) struct WAL {
 /// PBQBuilder is a builder for PBQ.
 pub(crate) struct PBQBuilder<C: crate::typ::NumaflowTypeConfig> {
     isb_reader: ISBReader<C>,
-    tracker_handle: TrackerHandle,
     wal: Option<WAL>,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> PBQBuilder<C> {
     /// Creates a new PBQBuilder.
-    pub(crate) fn new(isb_reader: ISBReader<C>, tracker_handle: TrackerHandle) -> Self {
+    pub(crate) fn new(isb_reader: ISBReader<C>) -> Self {
         Self {
             isb_reader,
-            tracker_handle,
             wal: None,
         }
     }
@@ -48,7 +46,6 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQBuilder<C> {
         PBQ {
             isb_reader: self.isb_reader,
             wal: self.wal,
-            tracker_handle: self.tracker_handle,
         }
     }
 }
@@ -58,7 +55,6 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQBuilder<C> {
 pub(crate) struct PBQ<C: crate::typ::NumaflowTypeConfig> {
     isb_reader: ISBReader<C>,
     wal: Option<WAL>,
-    tracker_handle: TrackerHandle,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
@@ -71,24 +67,11 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
 
         let handle = if let Some(wal) = self.wal {
             tokio::spawn(async move {
-                Self::read_isb_with_wal(
-                    self.isb_reader,
-                    wal,
-                    self.tracker_handle,
-                    tx,
-                    cancellation_token,
-                )
-                .await
+                Self::read_isb_with_wal(self.isb_reader, wal, tx, cancellation_token).await
             })
         } else {
             tokio::spawn(async move {
-                Self::read_isb_without_wal(
-                    self.isb_reader,
-                    self.tracker_handle,
-                    tx,
-                    cancellation_token,
-                )
-                .await
+                Self::read_isb_without_wal(self.isb_reader, tx, cancellation_token).await
             })
         };
 
@@ -100,7 +83,6 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
     async fn read_isb_with_wal(
         isb_reader: ISBReader<C>,
         wal: WAL,
-        tracker_handle: TrackerHandle,
         tx: Sender<Message>,
         cancellation_token: CancellationToken,
     ) -> Result<()> {
@@ -153,13 +135,8 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
 
         // acknowledge the successfully written wal messages by listening on the offset stream.
         tokio::spawn(async move {
-            while let Some(offset) = offset_stream.next().await {
-                // no watermark publishing here, since we are just acknowledging the write to WAL
-                tracker_handle
-                    .delete(offset)
-                    .await
-                    .expect("Failed to delete offset");
-            }
+            // TODO: we need to pass the ack handle instead of offset to the pbq writer
+            while let Some(_offset) = offset_stream.next().await {}
         });
 
         while let Some(msg) = isb_stream.next().await {
@@ -195,7 +172,6 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
     /// Reads messages from ISB and immediately acks it by invoking the tracker delete.
     async fn read_isb_without_wal(
         isb_reader: ISBReader<C>,
-        tracker_handle: TrackerHandle,
         tx: Sender<Message>,
         cancellation_token: CancellationToken,
     ) -> Result<()> {
@@ -203,16 +179,8 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
 
         // Process messages from ISB stream
         while let Some(msg) = isb_stream.next().await {
-            let offset = msg.offset.clone();
-
             // Forward the message to the output channel
             tx.send(msg).await.expect("Receiver dropped");
-
-            // Immediately delete from tracker to do acknowledgment
-            tracker_handle
-                .delete(offset)
-                .await
-                .expect("Failed to delete offset from tracker");
         }
 
         // Wait for the ISB reader task to complete
@@ -238,6 +206,7 @@ mod tests {
     use chrono::Utc;
     use std::sync::Arc;
     use std::time::Duration;
+    use tokio::time::sleep;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -306,8 +275,7 @@ mod tests {
 
         let reader_cancel_token = CancellationToken::new();
 
-        let pbq = PBQBuilder::new(js_reader, tracker.clone()).build();
-
+        let pbq = PBQBuilder::new(js_reader).build();
         let (mut pbq_stream, handle) = pbq
             .streaming_read(reader_cancel_token.clone())
             .await
@@ -353,16 +321,17 @@ mod tests {
             "Expected 10 messages from the jetstream reader"
         );
 
-        // Verify that tracker is empty (all messages have been automatically deleted)
-        // This validates that our fix properly calls tracker.delete() for non-WAL case
-        assert!(
-            tracker.is_empty().await.unwrap(),
-            "Tracker should be empty after messages are processed (tracker.delete() should have been called automatically)"
-        );
+        drop(buffer);
 
-        for offset in offsets {
-            tracker.discard(offset).await.unwrap();
-        }
+        // keep trying for tracker to be empty every 5ms upto 100ms use tokio timeout
+        tokio::time::timeout(Duration::from_millis(100), async {
+            while !tracker.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("Tracker is not empty after 100ms");
+
         reader_cancel_token.cancel();
         context.delete_stream(stream.name).await.unwrap();
         handle.await.unwrap().unwrap();
@@ -439,7 +408,7 @@ mod tests {
 
         // Create WAL components
         let append_only_wal = AppendOnlyWal::new(
-            crate::reduce::wal::segment::WalType::Data,
+            WalType::Data,
             wal_path.clone(),
             10,  // 10MB max file size
             100, // 100ms flush interval
@@ -461,7 +430,7 @@ mod tests {
         let reader_cancel_token = CancellationToken::new();
 
         // Build PBQ with WAL
-        let pbq = PBQBuilder::new(js_reader, tracker.clone()).wal(wal).build();
+        let pbq = PBQBuilder::new(js_reader).wal(wal).build();
 
         let (mut pbq_stream, handle) = pbq
             .streaming_read(reader_cancel_token.clone())
@@ -505,6 +474,7 @@ mod tests {
         }
 
         assert_eq!(buffer.len(), 10, "Expected 10 messages from the PBQ");
+        drop(buffer);
 
         reader_cancel_token.cancel();
         handle.await.unwrap().unwrap();
@@ -562,9 +532,6 @@ mod tests {
             );
         }
 
-        for offset in offsets {
-            tracker.discard(offset).await.unwrap();
-        }
         context.delete_stream(stream.name).await.unwrap();
     }
 
@@ -702,7 +669,7 @@ mod tests {
         let reader_cancel_token = CancellationToken::new();
 
         // Build PBQ with WAL
-        let pbq = PBQBuilder::new(js_reader, tracker.clone()).wal(wal).build();
+        let pbq = PBQBuilder::new(js_reader).wal(wal).build();
 
         // Start reading from PBQ - this should first replay from WAL, then read from ISB
         let (mut pbq_stream, handle) = pbq
@@ -795,6 +762,7 @@ mod tests {
             );
         }
 
+        drop(isb_messages);
         // Verify that the ISB messages were also written to WAL
         reader_cancel_token.cancel();
         handle.await.unwrap().unwrap();
@@ -828,10 +796,6 @@ mod tests {
             "Expected 10 total messages in WAL (5 original + 5 from ISB)"
         );
 
-        // Clean up
-        for offset in isb_offsets {
-            tracker.discard(offset).await.unwrap();
-        }
         context.delete_stream(stream.name).await.unwrap();
     }
 }

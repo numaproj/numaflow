@@ -177,7 +177,6 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         config: config.to_vertex_config.clone(),
         writers,
         paf_concurrency: config.writer_concurrency,
-        tracker_handle: tracker_handle.clone(),
         watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
         vertex_type: config.vertex_type,
     };
@@ -316,7 +315,6 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         config: config.to_vertex_config.clone(),
         writers,
         paf_concurrency: config.writer_concurrency,
-        tracker_handle: tracker_handle.clone(),
         watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
         vertex_type: config.vertex_type,
     };
@@ -404,7 +402,7 @@ async fn run_reduce_forwarder<C: NumaflowTypeConfig>(
     .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
-    let pbq_builder = PBQBuilder::<C>::new(isb_reader, context.tracker_handle.clone());
+    let pbq_builder = PBQBuilder::<C>::new(isb_reader);
     let pbq = match wal {
         Some(wal) => pbq_builder.wal(wal).build(),
         None => pbq_builder.build(),
