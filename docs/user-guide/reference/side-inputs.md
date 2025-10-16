@@ -76,7 +76,7 @@ Here is an example of how to write a User-defined Side Input in Golang,
         return sideinputsdk.BroadcastMessage([]byte(val))
     }
     ```
-
+    [View full example on GitHub](https://github.com/numaproj/numaflow-go/blob/main/examples/sideinput/simple_sideinput/main.go)
 
 === "Python"
 
@@ -107,6 +107,7 @@ Here is an example of how to write a User-defined Side Input in Golang,
         grpc_server = SideInputServer(ExampleSideInput())
         grpc_server.start()
     ```
+    [View full example on GitHub](https://github.com/numaproj/numaflow-python/blob/main/examples/sideinput/simple_sideinput/example.py)
 
 === "Java"
 
@@ -155,6 +156,7 @@ Here is an example of how to write a User-defined Side Input in Golang,
         }
     }
     ```
+    [View full example on GitHub](https://github.com/numaproj/numaflow-java/blob/main/examples/src/main/java/io/numaproj/numaflow/examples/sideinput/simple/SimpleSideInput.java)
 
 After performing the retrieval/update, the side input value is then broadcasted to all vertices that use the side input.
 
