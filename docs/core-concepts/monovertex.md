@@ -49,7 +49,7 @@ few examples where you cannot use MonoVertex.
 
 ## Anatomy of MonoVertex
 
-MonoVertex supports the same Sources, Sinks, and Transformers which are used in the Pipeline spec.
+MonoVertex supports the same Sources, Map UDF, Sinks, and Transformers which are used in the Pipeline spec.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -63,25 +63,8 @@ spec:
     transformer: # transformer is an optional container to do any transformation to the incoming data before passing to the sink
     # same as the Pipeline Transformer
     # ...
-  sink:
-  # same as the Pipeline Sink
+  udf: # optional Map: same as the Pipeline Map
   # ...
-```
-
-MonoVertex also supports adding map UDF similar to pipeline spec.
-
-```yaml
-apiVersion: numaflow.numaproj.io/v1alpha1
-kind: MonoVertex
-metadata:
-  name: mono-vertex-with-map
-spec:
-  source:
-    # same as the Pipeline Source
-    # ...
-  udf:
-    # same as the Pipeline Map
-    # ...
   sink:
   # same as the Pipeline Sink
   # ...
