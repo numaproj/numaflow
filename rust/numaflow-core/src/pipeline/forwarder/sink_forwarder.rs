@@ -15,7 +15,7 @@ use crate::sink::SinkWriter;
 use crate::sink::serve::ServingStore;
 use crate::sink::serve::nats::NatsServingStore;
 use crate::sink::serve::user_defined::UserDefinedStore;
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::typ::{
     NumaflowTypeConfig, WithInMemoryRateLimiter, WithRedisRateLimiter, WithoutRateLimiter,
     build_in_memory_rate_limiter_config, build_redis_rate_limiter_config,
@@ -105,7 +105,7 @@ pub async fn start_sink_forwarder(
 
     let from_partitions: Vec<u16> = (0..reader_config.streams.len() as u16).collect();
 
-    let tracker_handle = TrackerHandle::new(serving_callback_handler.clone(), cln_token.clone());
+    let tracker_handle = Tracker::new(serving_callback_handler.clone(), cln_token.clone());
     let watermark_handle = create_components::create_edge_watermark_handle(
         &config,
         &js_context,

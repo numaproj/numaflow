@@ -11,7 +11,7 @@ use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::source::Source;
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::transformer::Transformer;
 use crate::typ::{
     NumaflowTypeConfig, WithInMemoryRateLimiter, WithRedisRateLimiter, WithoutRateLimiter,
@@ -86,7 +86,7 @@ pub(crate) async fn start_source_forwarder(
         None
     };
 
-    let tracker_handle = TrackerHandle::new(serving_callback_handler, cln_token.clone());
+    let tracker_handle = Tracker::new(serving_callback_handler, cln_token.clone());
 
     let context = PipelineContext {
         cln_token: cln_token.clone(),
@@ -237,7 +237,7 @@ mod tests {
     use crate::shared::grpc::create_rpc_channel;
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
-    use crate::tracker::TrackerHandle;
+    use crate::tracker::Tracker;
     use crate::transformer::Transformer;
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
@@ -343,7 +343,7 @@ mod tests {
     async fn test_source_forwarder() {
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, cln_token.clone());
+        let tracker_handle = Tracker::new(None, cln_token.clone());
 
         // create a transformer
         let (st_shutdown_tx, st_shutdown_rx) = oneshot::channel();

@@ -13,7 +13,7 @@ use crate::metrics::{
     pipeline_metric_labels, pipeline_metrics,
 };
 use crate::source::http::CoreHttpSource;
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::{
     message::{Message, Offset},
     reader::LagReader,
@@ -212,7 +212,7 @@ where
 pub(crate) struct Source<C: crate::typ::NumaflowTypeConfig> {
     read_batch_size: usize,
     sender: mpsc::Sender<ActorMessage>,
-    tracker_handle: TrackerHandle,
+    tracker_handle: Tracker,
     read_ahead: bool,
     /// Transformer handler for transforming messages from Source.
     transformer: Option<Transformer>,
@@ -226,7 +226,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     pub(crate) fn new(
         batch_size: usize,
         src_type: SourceType,
-        tracker_handle: TrackerHandle,
+        tracker_handle: Tracker,
         read_ahead: bool,
         transformer: Option<Transformer>,
         watermark_handle: Option<SourceWatermarkHandle>,
@@ -574,7 +574,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         source_handle: mpsc::Sender<ActorMessage>,
         ack_rx_batch: Vec<(Offset, oneshot::Receiver<ReadAck>)>,
         _permit: OwnedSemaphorePermit, // permit to release after acking the offsets.
-        tracker_handle: TrackerHandle,
+        tracker_handle: Tracker,
         cancel_token: CancellationToken,
     ) -> Result<()> {
         let n = ack_rx_batch.len();
@@ -793,7 +793,7 @@ mod tests {
     use crate::shared::grpc::create_rpc_channel;
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
-    use crate::tracker::TrackerHandle;
+    use crate::tracker::Tracker;
     use chrono::Utc;
     use numaflow::shared::ServerExtras;
     use numaflow::source;
@@ -944,7 +944,7 @@ mod tests {
         .map_err(|e| panic!("failed to create source reader: {:?}", e))
         .unwrap();
 
-        let tracker = TrackerHandle::new(None, CancellationToken::new());
+        let tracker = Tracker::new(None, CancellationToken::new());
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),

@@ -18,7 +18,7 @@ use crate::mapper::map::user_defined::{
     UserDefinedBatchMap, UserDefinedStreamMap, UserDefinedUnaryMap,
 };
 use crate::message::{AckHandle, Message, Offset};
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 pub(super) mod user_defined;
 
 /// UnaryActorMessage is a message that is sent to the UnaryMapperActor.
@@ -129,7 +129,7 @@ pub(crate) struct MapHandle {
     read_timeout: Duration,
     graceful_shutdown_time: Duration,
     concurrency: usize,
-    tracker: TrackerHandle,
+    tracker: Tracker,
     actor_sender: ActorSender,
     /// this the final state of the component (any error will set this as Err)
     final_result: crate::Result<()>,
@@ -152,7 +152,7 @@ impl MapHandle {
         graceful_timeout: Duration,
         concurrency: usize,
         client: MapClient<Channel>,
-        tracker_handle: TrackerHandle,
+        tracker_handle: Tracker,
     ) -> error::Result<Self> {
         // Based on the map mode, spawn the appropriate map actor
         // and store the sender handle in the actor_sender.
@@ -412,7 +412,7 @@ impl MapHandle {
         permit: OwnedSemaphorePermit,
         read_msg: Message,
         output_tx: mpsc::Sender<Message>,
-        tracker_handle: TrackerHandle,
+        tracker_handle: Tracker,
         error_tx: mpsc::Sender<Error>,
         cln_token: CancellationToken,
     ) {
@@ -449,7 +449,7 @@ impl MapHandle {
                         Ok(Ok(mapped_messages)) => {
                             // update the tracker with the number of messages sent and send the mapped messages
                             tracker_handle
-                                .update(
+                                .serving_update(
                                     &offset,
                                     mapped_messages.iter().map(|m| m.tags.clone()).collect(),
                                 )
@@ -510,7 +510,7 @@ impl MapHandle {
         map_handle: mpsc::Sender<BatchActorMessage>,
         batch: Vec<Message>,
         output_tx: mpsc::Sender<Message>,
-        tracker_handle: TrackerHandle,
+        tracker_handle: Tracker,
     ) -> error::Result<()> {
         let (senders, receivers): (Vec<_>, Vec<_>) =
             batch.iter().map(|_| oneshot::channel()).unzip();
@@ -536,7 +536,7 @@ impl MapHandle {
 
                     if let Some(offset) = offset {
                         tracker_handle
-                            .update(
+                            .serving_update(
                                 &offset,
                                 mapped_messages.iter().map(|m| m.tags.clone()).collect(),
                             )
@@ -575,7 +575,7 @@ impl MapHandle {
         permit: OwnedSemaphorePermit,
         read_msg: Message,
         output_tx: mpsc::Sender<Message>,
-        tracker_handle: TrackerHandle,
+        tracker_handle: Tracker,
         error_tx: mpsc::Sender<Error>,
         cln_token: CancellationToken,
     ) {
@@ -606,7 +606,7 @@ impl MapHandle {
             // we need update the tracker with no responses, because unlike unary and batch, we cannot update the
             // responses here we will have to append the responses.
             tracker_handle
-                .refresh(read_msg.offset.clone())
+                .serving_refresh(read_msg.offset.clone())
                 .await
                 .expect("failed to reset tracker");
             loop {
@@ -616,7 +616,7 @@ impl MapHandle {
                             Some(Ok(mapped_message)) => {
                                 info!(?mapped_message, "Received mapped message");
                                 tracker_handle
-                                    .append(mapped_message.offset.clone(), mapped_message.tags.clone())
+                                    .serving_append(mapped_message.offset.clone(), mapped_message.tags.clone())
                                     .await
                                     .expect("failed to update tracker");
                                 output_tx.send(mapped_message).await.expect("failed to send response");
@@ -720,7 +720,7 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = Tracker::new(None, CancellationToken::new());
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
@@ -813,7 +813,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = Tracker::new(None, CancellationToken::new());
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
             MapMode::Unary,
@@ -905,7 +905,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = Tracker::new(None, CancellationToken::new());
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
             MapMode::Unary,
@@ -1015,7 +1015,7 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = Tracker::new(None, CancellationToken::new());
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
@@ -1131,7 +1131,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new(None, cln_token.clone());
+        let tracker_handle = Tracker::new(None, cln_token.clone());
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
             MapMode::Batch,
@@ -1255,7 +1255,7 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = Tracker::new(None, CancellationToken::new());
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
@@ -1355,7 +1355,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = Tracker::new(None, CancellationToken::new());
         let mapper = MapHandle::new(
             MapMode::Stream,
             500,

@@ -4,7 +4,6 @@ use crate::pipeline::isb::reader::ISBReader;
 use crate::reduce::wal::WalMessage;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::reduce::wal::segment::compactor::Compactor;
-use crate::tracker::TrackerHandle;
 use std::time::Duration;
 use tokio::sync::mpsc::{self, Sender};
 use tokio::task::JoinHandle;
@@ -200,6 +199,7 @@ mod tests {
     use crate::reduce::wal::segment::WalType;
     use crate::reduce::wal::segment::compactor::WindowKind;
     use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
+    use crate::tracker::Tracker;
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
     use bytes::BytesMut;
@@ -246,7 +246,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
             ..Default::default()
         };
-        let tracker = TrackerHandle::new(None, CancellationToken::new());
+        let tracker = Tracker::new(None, CancellationToken::new());
         use crate::pipeline::isb::reader::ISBReaderComponents;
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
@@ -379,7 +379,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
             ..Default::default()
         };
-        let tracker = TrackerHandle::new(None, CancellationToken::new());
+        let tracker = Tracker::new(None, CancellationToken::new());
         use crate::pipeline::isb::reader::ISBReaderComponents;
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
@@ -624,7 +624,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
             ..Default::default()
         };
-        let tracker = TrackerHandle::new(None, CancellationToken::new());
+        let tracker = Tracker::new(None, CancellationToken::new());
         use crate::pipeline::isb::reader::ISBReaderComponents;
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),

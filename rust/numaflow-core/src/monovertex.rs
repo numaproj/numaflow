@@ -9,7 +9,7 @@ use crate::metrics::{LagReader, PendingReaderTasks};
 use crate::shared::create_components;
 use crate::sink::SinkWriter;
 use crate::source::Source;
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::typ::{
     build_in_memory_rate_limiter_config, build_redis_rate_limiter_config,
     should_use_redis_rate_limiter,
@@ -59,7 +59,7 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
     cln_token: CancellationToken,
     rate_limiter: Option<C::RateLimiter>,
 ) -> error::Result<()> {
-    let tracker_handle = TrackerHandle::new(None, cln_token.clone());
+    let tracker_handle = Tracker::new(None, cln_token.clone());
 
     let transformer = create_components::create_transformer(
         config.batch_size,

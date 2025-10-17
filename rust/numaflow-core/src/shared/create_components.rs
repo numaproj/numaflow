@@ -32,7 +32,7 @@ use crate::source::nats::new_nats_source;
 use crate::source::pulsar::new_pulsar_source;
 use crate::source::sqs::new_sqs_source;
 use crate::source::user_defined::new_source;
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::transformer::Transformer;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
@@ -206,7 +206,7 @@ pub(crate) async fn create_transformer(
     batch_size: usize,
     graceful_timeout: Duration,
     transformer_config: Option<TransformerConfig>,
-    tracker_handle: TrackerHandle,
+    tracker_handle: Tracker,
     cln_token: CancellationToken,
 ) -> error::Result<Option<Transformer>> {
     if let Some(transformer_config) = transformer_config
@@ -255,7 +255,7 @@ pub(crate) async fn create_mapper(
     read_timeout: Duration,
     graceful_timeout: Duration,
     map_config: MapVtxConfig,
-    tracker_handle: TrackerHandle,
+    tracker_handle: Tracker,
     cln_token: CancellationToken,
 ) -> error::Result<MapHandle> {
     match map_config.map_type {
@@ -350,7 +350,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
     batch_size: usize,
     read_timeout: Duration,
     source_config: &SourceConfig,
-    tracker_handle: TrackerHandle,
+    tracker_handle: Tracker,
     transformer: Option<Transformer>,
     watermark_handle: Option<SourceWatermarkHandle>,
     cln_token: CancellationToken,
@@ -744,7 +744,7 @@ pub async fn create_edge_watermark_handle(
     js_context: &Context,
     cln_token: &CancellationToken,
     window_manager: Option<WindowManager>,
-    tracker_handle: TrackerHandle,
+    tracker_handle: Tracker,
     from_partitions: Vec<u16>,
 ) -> error::Result<Option<ISBWatermarkHandle>> {
     match &config.watermark_config {

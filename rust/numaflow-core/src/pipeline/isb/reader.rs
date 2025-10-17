@@ -1,3 +1,7 @@
+//! ISBReader is responsible for reading messages from ISB, assigning watermark to the messages and
+//! starts tracking them using the tracker and also listens for ack/nack from the tracker and performs
+//! the ack/nack to the ISB.
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -17,7 +21,7 @@ use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
     jetstream_isb_metrics_labels, pipeline_metric_labels, pipeline_metrics,
 };
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
 
@@ -45,7 +49,7 @@ pub(crate) struct ISBReader<C: NumaflowTypeConfig> {
     cfg: BufferReaderConfig,
     batch_size: usize,
     read_timeout: Duration,
-    tracker: TrackerHandle,
+    tracker: Tracker,
     watermark: Option<ISBWatermarkHandle>,
     js_reader: JetStreamReader,
     rate_limiter: Option<C::RateLimiter>,
@@ -511,7 +515,7 @@ struct WipParams {
     _permit: tokio::sync::OwnedSemaphorePermit, // drop guard
     cancel: CancellationToken,
     message_processing_start: Instant,
-    tracker: TrackerHandle,
+    tracker: Tracker,
 }
 
 /// Components needed to create a JetStreamReader.
@@ -521,7 +525,7 @@ pub(crate) struct ISBReaderComponents {
     pub stream: Stream,
     pub js_ctx: Context,
     pub config: BufferReaderConfig,
-    pub tracker_handle: TrackerHandle,
+    pub tracker_handle: Tracker,
     pub batch_size: usize,
     pub read_timeout: Duration,
     pub watermark_handle: Option<ISBWatermarkHandle>,
@@ -560,7 +564,7 @@ mod tests {
     use crate::config::pipeline::isb::{BufferReaderConfig, CompressionType};
     use crate::message::{Message, MessageID};
     use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
-    use crate::tracker::TrackerHandle;
+    use crate::tracker::Tracker;
     use async_nats::jetstream;
     use async_nats::jetstream::consumer::PullConsumer;
     use async_nats::jetstream::{consumer, stream};
@@ -639,7 +643,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
             ..Default::default()
         };
-        let tracker = TrackerHandle::new(None, CancellationToken::new());
+        let tracker = Tracker::new(None, CancellationToken::new());
 
         let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
             .await
@@ -722,7 +726,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = Tracker::new(None, CancellationToken::new());
 
         let js_stream = Stream::new("test-ack", "test", 0);
         // Delete stream if it exists
@@ -885,7 +889,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
             ..Default::default()
         };
-        let tracker = TrackerHandle::new(None, CancellationToken::new());
+        let tracker = Tracker::new(None, CancellationToken::new());
 
         let js_reader =
             JetStreamReader::new(stream.clone(), context.clone(), Some(isb_config.clone()))

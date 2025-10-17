@@ -118,7 +118,7 @@ mod tests {
     use crate::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
-    use crate::tracker::TrackerHandle;
+    use crate::tracker::Tracker;
     use crate::transformer::Transformer;
     use chrono::Utc;
     use numaflow::shared::ServerExtras;
@@ -223,7 +223,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_forwarder() {
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = Tracker::new(None, CancellationToken::new());
 
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
@@ -292,7 +292,7 @@ mod tests {
         .await
         .map_err(|e| panic!("failed to create source reader: {:?}", e))
         .unwrap();
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = Tracker::new(None, CancellationToken::new());
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
@@ -366,7 +366,7 @@ mod tests {
     async fn test_transformer_flatmap_operation() {
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, cln_token.clone());
+        let tracker_handle = Tracker::new(None, cln_token.clone());
 
         // create a transformer
         let (st_shutdown_tx, st_shutdown_rx) = oneshot::channel();
@@ -540,7 +540,7 @@ mod tests {
     async fn test_map_operation() {
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, cln_token.clone());
+        let tracker_handle = Tracker::new(None, cln_token.clone());
 
         // Create source
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
@@ -661,7 +661,7 @@ mod tests {
     async fn test_batch_map_operation() {
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, cln_token.clone());
+        let tracker_handle = Tracker::new(None, cln_token.clone());
 
         // Create source
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
@@ -782,7 +782,7 @@ mod tests {
     async fn test_flatmap_stream_operation() {
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, cln_token.clone());
+        let tracker_handle = Tracker::new(None, cln_token.clone());
 
         // Create source
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
