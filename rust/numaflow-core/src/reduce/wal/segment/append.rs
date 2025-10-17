@@ -1,4 +1,4 @@
-use crate::message::Offset;
+use crate::message::Message;
 use crate::reduce::wal::error::WalResult;
 use crate::reduce::wal::segment::WalType;
 use bytes::Bytes;
@@ -24,8 +24,10 @@ const ROTATE_IF_STALE_DURATION: chrono::Duration = chrono::Duration::seconds(30)
 pub(crate) enum SegmentWriteMessage {
     /// Writes the given payload to the WAL.
     WriteData {
-        /// Unique offset of the payload. Useful to detect write failures.
-        offset: Option<Offset>,
+        /// Message to be returned after successful write. This is used to keep the message
+        /// alive (and its Arc<AckHandle>) until WAL persistence completes. For writes that
+        /// don't have an associated message (e.g., GC events), this should be None.
+        message: Option<Message>,
         /// Data to be written on do the WAL.
         data: Bytes,
     },
@@ -58,8 +60,8 @@ struct SegmentWriteActor {
     max_file_size: u64,
     /// Maximum age of a segment file before rotation
     max_segment_age: chrono::Duration,
-    /// The result of [SegmentWriteMessage] operation.
-    result_tx: Sender<Offset>,
+    /// The result of [SegmentWriteMessage] operation - returns the message after successful write.
+    result_tx: Sender<Message>,
 }
 
 impl Drop for SegmentWriteActor {
@@ -80,7 +82,7 @@ impl SegmentWriteActor {
         max_file_size: u64,
         flush_interval: Duration,
         max_segment_age: chrono::Duration,
-        result_tx: Sender<Offset>,
+        result_tx: Sender<Message>,
     ) -> Self {
         Self {
             wal_type,
@@ -137,11 +139,11 @@ impl SegmentWriteActor {
     /// we should exit upon errors.
     async fn handle_message(&mut self, msg: SegmentWriteMessage) -> WalResult<()> {
         match msg {
-            SegmentWriteMessage::WriteData { offset: id, data } => {
+            SegmentWriteMessage::WriteData { message, data } => {
                 self.write_data(data).await?;
-                // we need to respond only if ID is provided
-                if let Some(id) = id {
-                    self.result_tx.send(id).await.unwrap();
+                // we need to respond only if message is provided
+                if let Some(message) = message {
+                    self.result_tx.send(message).await.unwrap();
                 }
             }
             SegmentWriteMessage::Rotate { on_size } => {
@@ -323,15 +325,16 @@ impl AppendOnlyWal {
     }
 
     /// Start the WAL for streaming write.
+    /// Returns a stream of messages that were successfully written to WAL.
     /// CANCEL SAFETY: This is not cancel safe. This is because our writes are buffered.
     pub(crate) async fn streaming_write(
         self,
         stream: ReceiverStream<SegmentWriteMessage>,
-    ) -> WalResult<(ReceiverStream<Offset>, JoinHandle<WalResult<()>>)> {
+    ) -> WalResult<(ReceiverStream<Message>, JoinHandle<WalResult<()>>)> {
         let (file_name, file_buf) =
             SegmentWriteActor::open_segment(&self.wal_type, &self.base_path, 0).await?;
 
-        let (result_tx, result_rx) = mpsc::channel::<Offset>(self.channel_buffer_size);
+        let (result_tx, result_rx) = mpsc::channel::<Message>(self.channel_buffer_size);
 
         let max_file_size_bytes = self.max_file_size_mb * 1024 * 1024;
         let flush_duration = Duration::from_millis(self.flush_interval_ms);
@@ -366,12 +369,14 @@ impl AppendOnlyWal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{Offset, StringOffset};
+    use crate::message::{Message, MessageID, Offset, StringOffset};
     use crate::reduce::wal::segment::WalType;
     use bytes::{Bytes, BytesMut};
+    use chrono::Utc;
     use futures::stream::StreamExt;
     use std::fs;
     use std::mem::size_of;
+    use std::sync::Arc;
     use tempfile::tempdir;
 
     #[tokio::test]
@@ -400,15 +405,19 @@ mod tests {
             .await
             .expect("Failed to start WAL service");
 
-        let mut expected_ids = Vec::new();
+        let mut expected_offsets = Vec::new();
         let mut received_results = Vec::new();
 
         let id1 = Offset::String(StringOffset::new("msg-001".to_string(), 0));
         let data1 = Bytes::from("some initial data");
-        expected_ids.push(id1.clone());
+        let msg1 = Message {
+            offset: id1.clone(),
+            ..Default::default()
+        };
+        expected_offsets.push(id1.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                offset: Some(id1),
+                message: Some(msg1),
                 data: data1.clone(),
             })
             .await
@@ -416,10 +425,14 @@ mod tests {
 
         let id2 = Offset::String(StringOffset::new("msg-002".to_string(), 0));
         let data2 = Bytes::from(" more data here");
-        expected_ids.push(id2.clone());
+        let msg2 = Message {
+            offset: id2.clone(),
+            ..Default::default()
+        };
+        expected_offsets.push(id2.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                offset: Some(id2),
+                message: Some(msg2),
                 data: data2.clone(),
             })
             .await
@@ -428,10 +441,14 @@ mod tests {
         let large_data_size = (0.6 * 1024.0 * 1024.0) as usize;
         let large_data1 = Bytes::from(vec![b'A'; large_data_size]);
         let id3 = Offset::String(StringOffset::new("msg-large-1".to_string(), 0));
-        expected_ids.push(id3.clone());
+        let msg3 = Message {
+            offset: id3.clone(),
+            ..Default::default()
+        };
+        expected_offsets.push(id3.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                offset: Some(id3),
+                message: Some(msg3),
                 data: large_data1.clone(),
             })
             .await
@@ -439,10 +456,14 @@ mod tests {
 
         let large_data2 = Bytes::from(vec![b'B'; large_data_size]);
         let id4 = Offset::String(StringOffset::new("msg-large-2".to_string(), 0));
-        expected_ids.push(id4.clone());
+        let msg4 = Message {
+            offset: id4.clone(),
+            ..Default::default()
+        };
+        expected_offsets.push(id4.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                offset: Some(id4),
+                message: Some(msg4),
                 data: large_data2.clone(),
             })
             .await
@@ -450,10 +471,14 @@ mod tests {
 
         let id5 = Offset::String(StringOffset::new("msg-005-rotated".to_string(), 0));
         let data5 = Bytes::from("data after rotation");
-        expected_ids.push(id5.clone());
+        let msg5 = Message {
+            offset: id5.clone(),
+            ..Default::default()
+        };
+        expected_offsets.push(id5.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                offset: Some(id5),
+                message: Some(msg5),
                 data: data5.clone(),
             })
             .await
@@ -461,10 +486,14 @@ mod tests {
 
         let id6 = Offset::String(StringOffset::new("msg-006-rotated".to_string(), 0));
         let data6 = Bytes::from(" more data after rotation");
-        expected_ids.push(id6.clone());
+        let msg6 = Message {
+            offset: id6.clone(),
+            ..Default::default()
+        };
+        expected_offsets.push(id6.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                offset: Some(id6),
+                message: Some(msg6),
                 data: data6.clone(),
             })
             .await
@@ -478,27 +507,27 @@ mod tests {
 
         assert_eq!(
             received_results.len(),
-            expected_ids.len(),
+            expected_offsets.len(),
             "Should receive a result for every message sent"
         );
 
-        let mut received_ids = Vec::new();
+        let mut received_offsets = Vec::new();
         for result in received_results {
-            received_ids.push(result);
+            received_offsets.push(result.offset);
         }
 
-        // We can't sort Offset values directly, so we'll just check that we received the same number of IDs
+        // We can't sort Offset values directly, so we'll just check that we received the same number of offsets
         assert_eq!(
-            received_ids.len(),
-            expected_ids.len(),
-            "Mismatch between expected and received successful IDs count"
+            received_offsets.len(),
+            expected_offsets.len(),
+            "Mismatch between expected and received successful offsets count"
         );
 
-        // Check that each expected ID is in the received IDs
-        for expected_id in expected_ids {
+        // Check that each expected offset is in the received offsets
+        for expected_offset in expected_offsets {
             assert!(
-                received_ids.contains(&expected_id),
-                "Missing expected ID in received IDs"
+                received_offsets.contains(&expected_offset),
+                "Missing expected offset in received offsets"
             );
         }
 
@@ -569,14 +598,18 @@ mod tests {
             .await
             .expect("Failed to start WAL service");
 
-        let id1 = Some(Offset::String(StringOffset::new(
+        let id1 = Offset::String(StringOffset::new(
             "flush-test-1".to_string(),
             0,
-        )));
+        ));
+        let msg1 = Message {
+            offset: id1.clone(),
+            ..Default::default()
+        };
         let data1 = Bytes::from("Data to be flushed");
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                offset: id1.clone(),
+                message: Some(msg1),
                 data: data1.clone(),
             })
             .await
@@ -605,9 +638,9 @@ mod tests {
 
         let result = result_rx.next().await.expect("Should receive a result");
         assert_eq!(
-            result,
-            id1.unwrap(),
-            "Should have received the correct ID back"
+            result.offset,
+            id1,
+            "Should have received the correct offset back"
         );
 
         // FIXME: why does this hang?
@@ -644,11 +677,15 @@ mod tests {
             .expect("Failed to start WAL service");
 
         // Send some data to the WAL
-        let id1 = Some(Offset::String(StringOffset::new("msg-001".to_string(), 0)));
+        let id1 = Offset::String(StringOffset::new("msg-001".to_string(), 0));
+        let msg1 = Message {
+            offset: id1.clone(),
+            ..Default::default()
+        };
         let data1 = Bytes::from("data before rotation");
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                offset: id1.clone(),
+                message: Some(msg1),
                 data: data1.clone(),
             })
             .await
@@ -661,11 +698,15 @@ mod tests {
             .unwrap();
 
         // Send more data after rotation
-        let id2 = Some(Offset::String(StringOffset::new("msg-002".to_string(), 0)));
+        let id2 = Offset::String(StringOffset::new("msg-002".to_string(), 0));
+        let msg2 = Message {
+            offset: id2.clone(),
+            ..Default::default()
+        };
         let data2 = Bytes::from("data after rotation");
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                offset: id2.clone(),
+                message: Some(msg2),
                 data: data2.clone(),
             })
             .await
@@ -750,11 +791,15 @@ mod tests {
             .expect("Failed to start WAL service");
 
         // Send some data to the WAL
-        let id1 = Some(Offset::String(StringOffset::new("msg-001".to_string(), 0)));
+        let id1 = Offset::String(StringOffset::new("msg-001".to_string(), 0));
+        let msg1 = Message {
+            offset: id1.clone(),
+            ..Default::default()
+        };
         let data1 = Bytes::from("data before time-based rotation");
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                offset: id1.clone(),
+                message: Some(msg1),
                 data: data1.clone(),
             })
             .await
@@ -764,11 +809,15 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(max_segment_age_secs + 1)).await;
 
         // Send more data after the time threshold
-        let id2 = Some(Offset::String(StringOffset::new("msg-002".to_string(), 0)));
+        let id2 = Offset::String(StringOffset::new("msg-002".to_string(), 0));
+        let msg2 = Message {
+            offset: id2.clone(),
+            ..Default::default()
+        };
         let data2 = Bytes::from("data after time-based rotation");
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                offset: id2.clone(),
+                message: Some(msg2),
                 data: data2.clone(),
             })
             .await

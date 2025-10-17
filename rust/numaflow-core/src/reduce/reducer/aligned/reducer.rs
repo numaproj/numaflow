@@ -153,7 +153,7 @@ impl ReduceTask {
             debug!(?gc_event, "Sending GC event to WAL");
             gc_wal_tx
                 .send(SegmentWriteMessage::WriteData {
-                    offset: None,
+                    message: None,
                     data: prost::Message::encode_to_vec(&gc_event).into(),
                 })
                 .await

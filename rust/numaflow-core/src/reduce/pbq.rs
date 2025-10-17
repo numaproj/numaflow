@@ -127,21 +127,24 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
         let (mut isb_stream, isb_handle) = isb_reader
             .streaming_read(cancellation_token.clone())
             .await?;
-        let (mut offset_stream, wal_handle) = wal
+        let (mut message_stream, wal_handle) = wal
             .append_only_wal
             .streaming_write(ReceiverStream::new(wal_rx))
             .await?;
 
-        // acknowledge the successfully written wal messages by listening on the offset stream.
+        // Acknowledge the successfully written WAL messages by listening on the message stream.
+        // When we receive a message back from the WAL, it means it has been persisted, so we can
+        // safely drop it (which will trigger the ack via Arc<AckHandle>).
         tokio::spawn(async move {
-            // TODO: we need to pass the ack handle instead of offset to the pbq writer
-            while let Some(_offset) = offset_stream.next().await {}
+            while let Some(_msg) = message_stream.next().await {
+                // Message is dropped here, triggering ack via Arc<AckHandle>
+            }
         });
 
         while let Some(msg) = isb_stream.next().await {
             wal_tx
                 .send(SegmentWriteMessage::WriteData {
-                    offset: Some(msg.offset.clone()),
+                    message: Some(msg.clone()),
                     data: WalMessage {
                         message: msg.clone(),
                     }
@@ -608,7 +611,7 @@ mod tests {
             let bytes: bytes::Bytes = wal_message.try_into().unwrap();
 
             tx.send(SegmentWriteMessage::WriteData {
-                offset: Some(message.offset.clone()),
+                message: Some(message),
                 data: bytes,
             })
             .await

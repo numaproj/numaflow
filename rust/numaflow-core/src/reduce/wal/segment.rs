@@ -114,7 +114,7 @@ impl From<GcEventEntry> for GcEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{Message, MessageID, Offset, StringOffset};
+    use crate::message::{IntOffset, Message, MessageID, Offset};
     use crate::reduce::wal::WalMessage;
     use crate::reduce::wal::segment::WalType;
     use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
@@ -161,7 +161,7 @@ mod tests {
             .unwrap();
 
         tx.send(SegmentWriteMessage::WriteData {
-            offset: Some(Offset::String(StringOffset::new("gc".to_string(), 0))),
+            message: None,
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event)),
         })
         .await
@@ -197,16 +197,17 @@ mod tests {
             message.event_time = start_time + (time_increment * i);
             message.keys = Arc::from(vec!["test-key".to_string()]);
             message.value = bytes::Bytes::from(vec![1, 2, 3]);
+            message.offset = Offset::Int(IntOffset::new(i as i64, 0));
             message.id = MessageID {
                 vertex_name: "test-vertex".to_string().into(),
                 offset: i.to_string().into(),
                 index: 0,
             };
-            let message: WalMessage = message.into();
+            let wal_message: WalMessage = message.clone().into();
 
-            let proto_message: Bytes = message.try_into().unwrap();
+            let proto_message: Bytes = wal_message.try_into().unwrap();
             tx.send(SegmentWriteMessage::WriteData {
-                offset: Some(Offset::String(StringOffset::new(format!("msg-{}", i), 0))),
+                message: Some(message),
                 data: proto_message,
             })
             .await
@@ -305,14 +306,14 @@ mod tests {
 
         // Send both GC events
         tx.send(SegmentWriteMessage::WriteData {
-            offset: Some(Offset::String(StringOffset::new("gc1".to_string(), 0))),
+            message: None,
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event1)),
         })
         .await
         .unwrap();
 
         tx.send(SegmentWriteMessage::WriteData {
-            offset: Some(Offset::String(StringOffset::new("gc2".to_string(), 0))),
+            message: None,
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event2)),
         })
         .await
@@ -353,16 +354,17 @@ mod tests {
             message.keys = Arc::from(vec![key.to_string()]);
 
             message.value = bytes::Bytes::from(vec![1, 2, 3]);
+            message.offset = Offset::Int(IntOffset::new(i as i64, 0));
             message.id = MessageID {
                 vertex_name: "test-vertex".to_string().into(),
                 offset: i.to_string().into(),
                 index: 0,
             };
-            let message: WalMessage = message.into();
+            let wal_message: WalMessage = message.clone().into();
 
-            let proto_message: Bytes = message.try_into().unwrap();
+            let proto_message: Bytes = wal_message.try_into().unwrap();
             tx.send(SegmentWriteMessage::WriteData {
-                offset: Some(Offset::String(StringOffset::new(format!("msg-{}", i), 0))),
+                message: Some(message),
                 data: proto_message,
             })
             .await

@@ -1332,7 +1332,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "global-state-tests")]
+    // #[cfg(feature = "global-state-tests")]
     #[tokio::test]
     async fn test_map_stream_panic() -> Result<()> {
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();

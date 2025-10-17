@@ -247,9 +247,10 @@ impl Compactor {
                         .should_retain_message(&msg.message.expect("Message should be present"))?
                     {
                         // Send the message to the compaction WAL
+                        // No message handle needed for compaction writes
                         wal_tx
                             .send(SegmentWriteMessage::WriteData {
-                                offset: None,
+                                message: None,
                                 data: data.clone(),
                             })
                             .await
@@ -476,7 +477,7 @@ impl ShouldRetain for UnalignedCompaction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{Message, MessageID, Offset, StringOffset};
+    use crate::message::{IntOffset, Message, MessageID, Offset};
     use crate::reduce::wal::WalMessage;
     use crate::shared::grpc::prost_timestamp_from_utc;
     use bytes::Bytes;
@@ -557,7 +558,7 @@ mod tests {
             prost::Message::encode(&event, &mut buf)
                 .map_err(|e| format!("Failed to encode GC event: {e}"))?;
             tx.send(SegmentWriteMessage::WriteData {
-                offset: None,
+                message: None,
                 data: Bytes::from(buf),
             })
             .await
@@ -663,7 +664,7 @@ mod tests {
             prost::Message::encode(&event, &mut buf)
                 .map_err(|e| format!("Failed to encode GC event: {e}"))?;
             tx.send(SegmentWriteMessage::WriteData {
-                offset: None,
+                message: None,
                 data: Bytes::from(buf),
             })
             .await
@@ -740,15 +741,23 @@ mod tests {
             .await
             .unwrap();
 
+        let msg1 = Message {
+            offset: Offset::Int(IntOffset::new(1, 0)),
+            ..Default::default()
+        };
         tx.send(SegmentWriteMessage::WriteData {
-            offset: Some(Offset::String(StringOffset::new("gc1".to_string(), 0))),
+            message: Some(msg1),
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event_1)),
         })
         .await
         .unwrap();
 
+        let msg2 = Message {
+            offset: Offset::Int(IntOffset::new(2, 0)),
+            ..Default::default()
+        };
         tx.send(SegmentWriteMessage::WriteData {
-            offset: Some(Offset::String(StringOffset::new("gc2".to_string(), 0))),
+            message: Some(msg2),
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event_2)),
         })
         .await
@@ -792,17 +801,18 @@ mod tests {
             message.event_time = start_time + (time_increment * i);
             message.keys = Arc::from(vec!["test-key".to_string()]);
             message.value = bytes::Bytes::from(vec![1, 2, 3]);
+            message.offset = Offset::Int(IntOffset::new(i as i64, 0));
             message.id = MessageID {
                 vertex_name: "test-vertex".to_string().into(),
                 offset: i.to_string().into(),
                 index: 0,
             };
 
-            let message: WalMessage = message.into();
+            let wal_message: WalMessage = message.clone().into();
 
-            let proto_message: Bytes = message.try_into().unwrap();
+            let proto_message: Bytes = wal_message.try_into().unwrap();
             tx.send(SegmentWriteMessage::WriteData {
-                offset: Some(Offset::String(StringOffset::new(format!("msg-{}", i), 0))),
+                message: Some(message),
                 data: proto_message,
             })
             .await
@@ -929,7 +939,7 @@ mod tests {
         prost::Message::encode(&gc_event, &mut buf)
             .map_err(|e| format!("Failed to encode GC event: {e}"))?;
         tx.send(SegmentWriteMessage::WriteData {
-            offset: None,
+            message: None,
             data: Bytes::from(buf),
         })
         .await
@@ -963,13 +973,14 @@ mod tests {
         before_message.event_time = before_time;
         before_message.keys = Arc::from(vec!["test-key".to_string()]);
         before_message.value = bytes::Bytes::from(vec![1, 2, 3]);
+        before_message.offset = Offset::Int(IntOffset::new(1, 0));
         before_message.id = MessageID {
             vertex_name: "test-vertex".to_string().into(),
             offset: "1".to_string().into(),
             index: 0,
         };
 
-        let before_message: WalMessage = before_message.into();
+        let before_wal_message: WalMessage = before_message.clone().into();
 
         // Message with event time after the GC end time (should be retained)
         let after_time = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
@@ -977,26 +988,27 @@ mod tests {
         after_message.event_time = after_time;
         after_message.keys = Arc::from(vec!["test-key".to_string()]);
         after_message.value = bytes::Bytes::from(vec![4, 5, 6]);
+        after_message.offset = Offset::Int(IntOffset::new(2, 0));
         after_message.id = MessageID {
             vertex_name: "test-vertex".to_string().into(),
             offset: "2".to_string().into(),
             index: 0,
         };
 
-        let after_message: WalMessage = after_message.into();
+        let after_wal_message: WalMessage = after_message.clone().into();
 
         // Write the messages to the WAL
-        let before_proto: Bytes = before_message.try_into().unwrap();
+        let before_proto: Bytes = before_wal_message.try_into().unwrap();
         tx.send(SegmentWriteMessage::WriteData {
-            offset: Some(Offset::String(StringOffset::new("msg-1".to_string(), 0))),
+            message: Some(before_message),
             data: before_proto,
         })
         .await
         .map_err(|e| format!("Failed to send data: {e}"))?;
 
-        let after_proto: Bytes = after_message.try_into().unwrap();
+        let after_proto: Bytes = after_wal_message.try_into().unwrap();
         tx.send(SegmentWriteMessage::WriteData {
-            offset: Some(Offset::String(StringOffset::new("msg-2".to_string(), 0))),
+            message: Some(after_message),
             data: after_proto,
         })
         .await
@@ -1151,7 +1163,7 @@ mod tests {
             prost::Message::encode(&event, &mut buf)
                 .map_err(|e| format!("Failed to encode GC event: {e}"))?;
             tx.send(SegmentWriteMessage::WriteData {
-                offset: None,
+                message: None,
                 data: Bytes::from(buf),
             })
             .await
@@ -1189,12 +1201,13 @@ mod tests {
         message_1.event_time = before_time_1;
         message_1.keys = Arc::from(vec!["key1".to_string(), "key2".to_string()]);
         message_1.value = bytes::Bytes::from(vec![1, 2, 3]);
+        message_1.offset = Offset::Int(IntOffset::new(1, 0));
         message_1.id = MessageID {
             vertex_name: "test-vertex".to_string().into(),
             offset: "1".to_string().into(),
             index: 0,
         };
-        let message_1: WalMessage = message_1.into();
+        let wal_message_1: WalMessage = message_1.clone().into();
 
         // Message 2: key1:key2 with event time after gc_end_1 (should be retained)
         let after_time_1 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
@@ -1202,12 +1215,13 @@ mod tests {
         message_2.event_time = after_time_1;
         message_2.keys = Arc::from(vec!["key1".to_string(), "key2".to_string()]);
         message_2.value = bytes::Bytes::from(vec![4, 5, 6]);
+        message_2.offset = Offset::Int(IntOffset::new(2, 0));
         message_2.id = MessageID {
             vertex_name: "test-vertex".to_string().into(),
             offset: "2".to_string().into(),
             index: 0,
         };
-        let message_2: WalMessage = message_2.into();
+        let wal_message_2: WalMessage = message_2.clone().into();
 
         // Message 3: key3:key4 with event time before gc_end_2 (should be filtered out)
         let before_time_2 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
@@ -1215,12 +1229,13 @@ mod tests {
         message_3.event_time = before_time_2;
         message_3.keys = Arc::from(vec!["key3".to_string(), "key4".to_string()]);
         message_3.value = bytes::Bytes::from(vec![7, 8, 9]);
+        message_3.offset = Offset::Int(IntOffset::new(3, 0));
         message_3.id = MessageID {
             vertex_name: "test-vertex".to_string().into(),
             offset: "3".to_string().into(),
             index: 0,
         };
-        let message_3: WalMessage = message_3.into();
+        let wal_message_3: WalMessage = message_3.clone().into();
 
         // Message 4: key3:key4 with event time after gc_end_2 (should be retained)
         let after_time_2 = Utc.with_ymd_and_hms(2025, 4, 1, 2, 30, 0).unwrap();
@@ -1228,24 +1243,26 @@ mod tests {
         message_4.event_time = after_time_2;
         message_4.keys = Arc::from(vec!["key3".to_string(), "key4".to_string()]);
         message_4.value = bytes::Bytes::from(vec![10, 11, 12]);
+        message_4.offset = Offset::Int(IntOffset::new(4, 0));
         message_4.id = MessageID {
             vertex_name: "test-vertex".to_string().into(),
             offset: "4".to_string().into(),
             index: 0,
         };
-        let message_4: WalMessage = message_4.into();
+        let wal_message_4: WalMessage = message_4.clone().into();
 
         // Write the messages to the WAL
-        for (i, message) in [message_1, message_2, message_3, message_4]
-            .iter()
-            .enumerate()
+        for (message, wal_message) in [
+            (message_1, wal_message_1),
+            (message_2, wal_message_2),
+            (message_3, wal_message_3),
+            (message_4, wal_message_4),
+        ]
+        .iter()
         {
-            let proto: Bytes = message.clone().try_into().unwrap();
+            let proto: Bytes = wal_message.clone().try_into().unwrap();
             tx.send(SegmentWriteMessage::WriteData {
-                offset: Some(Offset::String(StringOffset::new(
-                    format!("msg-{}", i + 1),
-                    0,
-                ))),
+                message: Some(message.clone()),
                 data: proto,
             })
             .await
