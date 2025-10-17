@@ -1,3 +1,12 @@
+//! Message is the message read from the source or ISB and is passed around till it is forwarded to
+//! the next vertex or the sink. The moment the message is read, it is inserted into the [crate::tracker]
+//! and an ack task is spawned (for ISB we have an additional work-in-progress loop). This spawned task
+//! is responsible for sending the ack/nak to the source once the [Message] has completed its life-cycle
+//! (successfully processed (can include dropped) - ack, or failed - nack).
+//! The spawned task exposes an [AckHandle] which implements [Drop] trait. As the message is processed,
+//! and cloned (e.g., flat-map), the reference counted Handle will keep track and eventually will be
+//! dropped once the all the copies of [Message] are dropped. This trigger the final ack/nak.
+
 use crate::Error;
 use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;
@@ -44,9 +53,13 @@ pub(crate) struct Message {
     /// is_late is used to indicate if the message is a late data. Late data is data that arrives
     /// after the watermark has passed. This is set only at source.
     pub(crate) is_late: bool,
+    /// ack_handle is used to send the ack/nak to the source. It is optional because it is not used
+    /// when the message is originated from the WAL (reduce vertex).
     pub(crate) ack_handle: Option<Arc<AckHandle>>,
 }
 
+/// AckHandle is used to send the ack/nak to the source but it is reference counted and makes sure
+/// when it is dropped, we send the ack/nak to the source.
 #[derive(Debug)]
 pub(crate) struct AckHandle {
     pub(crate) ack_handle: Option<oneshot::Sender<ReadAck>>,
@@ -54,6 +67,7 @@ pub(crate) struct AckHandle {
 }
 
 impl AckHandle {
+    /// create a new AckHandle for a message.
     pub(crate) fn new(ack_handle: oneshot::Sender<ReadAck>) -> Self {
         Self {
             ack_handle: Some(ack_handle),
