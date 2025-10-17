@@ -464,15 +464,16 @@ impl MapHandle {
                                     .expect("failed to send response");
                             }
                         }
-                        Ok(Err(_map_err)) => {
-                            error!(err=?_map_err, ?offset, "failed to map message");
+                        Ok(Err(map_err)) => {
+                            error!(err=?map_err, ?offset, "failed to map message");
                             read_msg
                                 .ack_handle
                                 .as_ref()
                                 .expect("ack handle should be present")
                                 .is_failed
                                 .store(true, Ordering::Relaxed);
-                            let _ = error_tx.send(_map_err).await;
+                            info!("writing error to error channel");
+                            let _ = error_tx.send(map_err).await;
                         }
                         Err(err) => {
                             error!(?err, ?offset, "failed to receive message");
@@ -498,6 +499,7 @@ impl MapHandle {
                         .store(true, Ordering::Relaxed);
                 }
             }
+            info!(?offset, "Unary map operation completed");
         });
     }
 
@@ -679,6 +681,7 @@ mod tests {
     use tokio::sync::{mpsc::Sender, oneshot};
 
     use super::*;
+    use crate::message::ReadAck;
     use crate::{
         Result,
         message::{MessageID, Offset, StringOffset},
@@ -917,13 +920,14 @@ mod tests {
 
         let (input_tx, input_rx) = mpsc::channel(10);
         let input_stream = ReceiverStream::new(input_rx);
-
+        let cln_token = CancellationToken::new();
         let (_output_stream, map_handle) = mapper
-            .streaming_map(input_stream, CancellationToken::new())
+            .streaming_map(input_stream, cln_token.clone())
             .await?;
-
+        let mut ack_rxs = vec![];
         // send 10 requests to the mapper
         for i in 0..10 {
+            let (ack_tx, ack_rx) = oneshot::channel();
             let message = Message {
                 typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
@@ -937,12 +941,14 @@ mod tests {
                     offset: i.to_string().into(),
                     index: i,
                 },
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                 ..Default::default()
             };
             input_tx.send(message).await.unwrap();
-            tokio::time::sleep(Duration::from_millis(10)).await;
+            ack_rxs.push(ack_rx);
         }
 
+        cln_token.cancelled().await;
         drop(input_tx);
         // Await the join handle and expect an error due to the panic
         let result = map_handle.await.unwrap();
@@ -954,7 +960,12 @@ mod tests {
                 .contains("PanicCat panicked!")
         );
 
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        for ack_rx in ack_rxs {
+            let ack = ack_rx.await.unwrap();
+            assert_eq!(ack, ReadAck::Nak);
+        }
+
+        tokio::time::sleep(Duration::from_millis(500)).await;
         assert!(
             handle.is_finished(),
             "Expected gRPC server to have shut down"
@@ -1100,6 +1111,7 @@ mod tests {
     #[cfg(feature = "global-state-tests")]
     #[tokio::test]
     async fn test_batch_map_with_panic() -> Result<()> {
+        let cln_token = CancellationToken::new();
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("batch_map_panic.sock");
@@ -1119,7 +1131,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = TrackerHandle::new(None, cln_token.clone());
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
             MapMode::Batch,
@@ -1132,6 +1144,8 @@ mod tests {
         )
         .await?;
 
+        let (ack_tx1, ack_rx1) = oneshot::channel();
+        let (ack_tx2, ack_rx2) = oneshot::channel();
         let messages = vec![
             Message {
                 typ: Default::default(),
@@ -1146,6 +1160,7 @@ mod tests {
                     offset: "0".to_string().into(),
                     index: 0,
                 },
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx1))),
                 ..Default::default()
             },
             Message {
@@ -1161,6 +1176,7 @@ mod tests {
                     offset: "1".to_string().into(),
                     index: 1,
                 },
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx2))),
                 ..Default::default()
             },
         ];
@@ -1171,11 +1187,17 @@ mod tests {
         for message in messages {
             input_tx.send(message).await.unwrap();
         }
-        drop(input_tx);
 
         let (_output_stream, map_handle) = mapper
-            .streaming_map(input_stream, CancellationToken::new())
+            .streaming_map(input_stream, cln_token.clone())
             .await?;
+
+        drop(input_tx);
+
+        let ack1 = ack_rx1.await.unwrap();
+        let ack2 = ack_rx2.await.unwrap();
+        assert_eq!(ack1, ReadAck::Nak);
+        assert_eq!(ack2, ReadAck::Nak);
 
         // Await the join handle and expect an error due to the panic
         let result = map_handle.await.unwrap();
@@ -1352,8 +1374,10 @@ mod tests {
             .streaming_map(input_stream, CancellationToken::new())
             .await?;
 
+        let mut ack_rxs = vec![];
         // send 10 requests to the mapper
         for i in 0..10 {
+            let (ack_tx, ack_rx) = oneshot::channel();
             let message = Message {
                 typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
@@ -1367,8 +1391,10 @@ mod tests {
                     offset: i.to_string().into(),
                     index: i,
                 },
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                 ..Default::default()
             };
+            ack_rxs.push(ack_rx);
             input_tx.send(message).await.unwrap();
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
@@ -1383,6 +1409,10 @@ mod tests {
                 .to_string()
                 .contains("PanicFlatmapStream panicked!")
         );
+        for ack_rx in ack_rxs {
+            let ack = ack_rx.await.unwrap();
+            assert_eq!(ack, ReadAck::Nak);
+        }
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(

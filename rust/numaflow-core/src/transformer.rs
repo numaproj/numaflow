@@ -333,7 +333,7 @@ mod tests {
     use tokio::sync::oneshot;
 
     use super::*;
-    use crate::message::StringOffset;
+    use crate::message::{AckHandle, ReadAck, StringOffset};
     use crate::message::{Message, MessageID, Offset};
     use crate::shared::grpc::create_rpc_channel;
 
@@ -545,6 +545,7 @@ mod tests {
         )
         .await?;
 
+        let (ack_tx, ack_rx) = oneshot::channel();
         let message = Message {
             typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
@@ -558,6 +559,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
+            ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
             ..Default::default()
         };
 
@@ -566,6 +568,7 @@ mod tests {
             .await;
         assert!(result.is_err(), "Expected an error due to panic");
         assert!(result.unwrap_err().to_string().contains("panic"));
+        assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak);
 
         // we need to drop the transformer, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
