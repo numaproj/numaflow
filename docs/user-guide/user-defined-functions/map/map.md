@@ -47,16 +47,6 @@ Below are examples showing how to implement map streaming for flat-map operation
 
 === "Go"
     ```go
-    package main
-
-    import (
-      "context"
-      "log"
-      "strings"
-
-      "github.com/numaproj/numaflow-go/pkg/mapstreamer"
-    )
-
     // FlatMap is a MapStreamer that split the input message into multiple messages and stream them.
     type FlatMap struct {
     }
@@ -73,23 +63,11 @@ Below are examples showing how to implement map streaming for flat-map operation
         messageCh <- mapstreamer.NewMessage([]byte(s))
       }
     }
-
-    func main() {
-      err := mapstreamer.NewServer(&FlatMap{}).Start(context.Background())
-      if err != nil {
-        log.Panic("Failed to start map stream function server: ", err)
-      }
-    }
     ```
     [View full examples on GitHub](https://github.com/numaproj/numaflow-go/tree/main/examples/mapstreamer/flatmap_stream/)
 
 === "Python"
     ```python
-    import os
-    from collections.abc import AsyncIterable
-    from pynumaflow.mapstreamer import Message, Datum, MapStreamAsyncServer, MapStreamer
-
-
     class FlatMapStream(MapStreamer):
         async def handler(self, keys: list[str], datum: Datum) -> AsyncIterable[Message]:
             """
@@ -123,30 +101,11 @@ Below are examples showing how to implement map streaming for flat-map operation
             return
         for s in strs:
             yield Message(str.encode(s))
-
-
-    if __name__ == "__main__":
-        invoke = os.getenv("INVOKE", "func_handler")
-        if invoke == "class":
-            handler = FlatMapStream()
-        else:
-            handler = map_stream_handler
-        grpc_server = MapStreamAsyncServer(handler)
-        grpc_server.start()
     ```
     [View full examples on GitHub](https://github.com/numaproj/numaflow-python/tree/main/examples/mapstream/flatmap_stream/)
 
 === "Java"
     ```java
-    package io.numaproj.numaflow.examples.mapstream.flatmapstream;
-
-    import io.numaproj.numaflow.mapstreamer.Datum;
-    import io.numaproj.numaflow.mapstreamer.MapStreamer;
-    import io.numaproj.numaflow.mapstreamer.Message;
-    import io.numaproj.numaflow.mapstreamer.OutputObserver;
-    import io.numaproj.numaflow.mapstreamer.Server;
-
-
     /**
     * This is a simple User Defined Function example which processes the input message
     * and produces more than one output messages(flatMap) in a streaming mode
@@ -155,17 +114,6 @@ Below are examples showing how to implement map streaming for flat-map operation
     */
 
     public class FlatMapStreamFunction extends MapStreamer {
-
-        public static void main(String[] args) throws Exception {
-            Server server = new Server(new FlatMapStreamFunction());
-
-            // Start the server
-            server.start();
-
-            // wait for the server to shutdown
-            server.awaitTermination();
-        }
-
         public void processMessage(String[] keys, Datum data, OutputObserver outputObserver) {
             String msg = new String(data.getValue());
             String[] strs = msg.split(",");
@@ -201,16 +149,6 @@ Below are examples showing how to implement batch map operations:
 
 === "Go"
     ```go
-    package main
-
-    import (
-      "context"
-      "log"
-      "strings"
-
-      "github.com/numaproj/numaflow-go/pkg/batchmapper"
-    )
-
     func batchMapFn(_ context.Context, datums <-chan batchmapper.Datum) batchmapper.BatchResponses {
       batchResponses := batchmapper.BatchResponsesBuilder()
       for d := range datums {
@@ -227,30 +165,11 @@ Below are examples showing how to implement batch map operations:
       }
       return batchResponses
     }
-
-    func main() {
-      err := batchmapper.NewServer(batchmapper.BatchMapperFunc(batchMapFn)).Start(context.Background())
-      if err != nil {
-        log.Panic("Failed to start batch map function server: ", err)
-      }
-    }
     ```
     [View full examples on GitHub](https://github.com/numaproj/numaflow-go/tree/main/examples/batchmapper/)
 
 === "Python"
     ```python
-    from collections.abc import AsyncIterable
-
-    from pynumaflow.batchmapper import (
-        Message,
-        Datum,
-        BatchMapper,
-        BatchMapAsyncServer,
-        BatchResponses,
-        BatchResponse,
-    )
-
-
     class Flatmap(BatchMapper):
         """
         This is a class that inherits from the BatchMapper class.
@@ -276,32 +195,11 @@ Below are examples showing how to implement batch map operations:
                 batch_responses.append(batch_response)
 
             return batch_responses
-
-
-    if __name__ == "__main__":
-        """
-        This example shows how to use the Batch Map Flatmap.
-        We use a class as handler, but a function can be used as well.
-        """
-        grpc_server = BatchMapAsyncServer(Flatmap())
-        grpc_server.start()
     ```
     [View full examples on GitHub](https://github.com/numaproj/numaflow-python/tree/main/examples/batchmap/)
 
 === "Java"
     ```java
-    package io.numaproj.numaflow.examples.batchmap.flatmap;
-
-    import io.numaproj.numaflow.batchmapper.BatchMapper;
-    import io.numaproj.numaflow.batchmapper.BatchResponse;
-    import io.numaproj.numaflow.batchmapper.BatchResponses;
-    import io.numaproj.numaflow.batchmapper.Datum;
-    import io.numaproj.numaflow.batchmapper.DatumIterator;
-    import io.numaproj.numaflow.batchmapper.Message;
-    import io.numaproj.numaflow.batchmapper.Server;
-    import lombok.extern.slf4j.Slf4j;
-
-    @Slf4j
     public class BatchFlatMap extends BatchMapper {
         @Override
         public BatchResponses processMessage(DatumIterator datumStream) {
@@ -331,16 +229,6 @@ Below are examples showing how to implement batch map operations:
                 }
             }
             return batchResponses;
-        }
-
-        public static void main(String[] args) throws Exception {
-            Server server = new Server(new BatchFlatMap());
-
-            // Start the server
-            server.start();
-
-            // wait for the server to shutdown
-            server.awaitTermination();
         }
     }
     ```

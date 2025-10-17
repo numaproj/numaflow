@@ -81,10 +81,6 @@ Here is an example of how to write a User-defined Side Input in Golang,
 === "Python"
 
     ```python
-    import datetime
-    from pynumaflow.sideinput import Response, SideInputServer, SideInput
-
-
     class ExampleSideInput(SideInput):
         def __init__(self):
             self.counter = 0
@@ -101,40 +97,18 @@ Here is an example of how to write a User-defined Side Input in Golang,
             if self.counter % 2 == 0:
                 return Response.no_broadcast_message()
             return Response.broadcast_message(val.encode("utf-8"))
-
-
-    if __name__ == "__main__":
-        grpc_server = SideInputServer(ExampleSideInput())
-        grpc_server.start()
     ```
     [View full example on GitHub](https://github.com/numaproj/numaflow-python/blob/main/examples/sideinput/simple_sideinput/example.py)
 
 === "Java"
 
     ```java
-    package io.numaproj.numaflow.examples.sideinput.simple;
-
-    import com.fasterxml.jackson.core.JsonProcessingException;
-    import com.fasterxml.jackson.databind.ObjectMapper;
-    import io.numaproj.numaflow.examples.sideinput.Config;
-    import io.numaproj.numaflow.sideinput.Message;
-    import io.numaproj.numaflow.sideinput.Server;
-    import io.numaproj.numaflow.sideinput.SideInputRetriever;
-    import lombok.extern.slf4j.Slf4j;
-
-    @Slf4j
     public class SimpleSideInput extends SideInputRetriever {
         private final Config config;
         private final ObjectMapper jsonMapper = new ObjectMapper();
 
         public SimpleSideInput(Config config) {
             this.config = config;
-        }
-
-        public static void main(String[] args) throws Exception {
-            Server server = new Server(new SimpleSideInput(new Config("sampling", 0.5F)));
-            server.start();
-            server.awaitTermination();
         }
 
         @Override

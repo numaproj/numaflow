@@ -10,17 +10,6 @@ You can build your own user-defined sources in multiple languages. Below are com
 
 === "Go"
     ```go
-    package main
-
-    import (
-        "context"
-        "log"
-
-        "simple_source/impl"
-
-        "github.com/numaproj/numaflow-go/pkg/sourcer"
-    )
-
     func main() {
         simpleSource := impl.NewSimpleSource()
         err := sourcer.NewServer(simpleSource).Start(context.Background())
@@ -33,32 +22,6 @@ You can build your own user-defined sources in multiple languages. Below are com
 
 === "Python"
     ```python
-    import uuid
-    from datetime import datetime
-    import logging
-
-    from pynumaflow.shared.asynciter import NonBlockingIterator
-    from pynumaflow.sourcer import (
-        ReadRequest,
-        Message,
-        AckRequest,
-        PendingResponse,
-        Offset,
-        PartitionsResponse,
-        get_default_partitions,
-        Sourcer,
-        SourceAsyncServer,
-        NackRequest,
-    )
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)-8s %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    logger = logging.getLogger(__name__)
-
-
     class AsyncSource(Sourcer):
         """
         AsyncSource is a class for User Defined Source implementation.
@@ -130,39 +93,11 @@ You can build your own user-defined sources in multiple languages. Below are com
             The simple source always returns default partitions.
             """
             return PartitionsResponse(partitions=get_default_partitions())
-
-
-    if __name__ == "__main__":
-        ud_source = AsyncSource()
-        grpc_server = SourceAsyncServer(ud_source)
-        logger.info("Starting grpc server")
-        grpc_server.start()
     ```
     [View full implementation on GitHub](https://github.com/numaproj/numaflow-python/tree/main/examples/source/simple_source)
 
 === "Java"
     ```java
-    package io.numaproj.numaflow.examples.source.simple;
-
-    import io.numaproj.numaflow.sourcer.AckRequest;
-    import io.numaproj.numaflow.sourcer.Message;
-    import io.numaproj.numaflow.sourcer.NackRequest;
-    import io.numaproj.numaflow.sourcer.Offset;
-    import io.numaproj.numaflow.sourcer.OutputObserver;
-    import io.numaproj.numaflow.sourcer.ReadRequest;
-    import io.numaproj.numaflow.sourcer.Server;
-    import io.numaproj.numaflow.sourcer.Sourcer;
-    import lombok.extern.slf4j.Slf4j;
-
-    import java.nio.ByteBuffer;
-    import java.time.Instant;
-    import java.util.HashMap;
-    import java.util.List;
-    import java.util.Map;
-    import java.util.UUID;
-    import java.util.concurrent.ConcurrentHashMap;
-    import java.util.concurrent.atomic.AtomicInteger;
-
     /**
      * SimpleSource is a simple implementation of Sourcer.
      * It generates messages with increasing offsets.
@@ -175,16 +110,6 @@ You can build your own user-defined sources in multiple languages. Below are com
         private final Map<Integer, Boolean> yetToBeAcked = new ConcurrentHashMap<>();
         Map<Integer, Boolean> nacked = new ConcurrentHashMap<>();
         private final AtomicInteger readIndex = new AtomicInteger(0);
-
-        public static void main(String[] args) throws Exception {
-            Server server = new Server(new SimpleSource());
-
-            // Start the server
-            server.start();
-
-            // wait for the server to shut down
-            server.awaitTermination();
-        }
 
         @Override
         public void read(ReadRequest request, OutputObserver observer) {

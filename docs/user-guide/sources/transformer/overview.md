@@ -68,17 +68,6 @@ Below are complete examples in various programming languages, where we apply con
 
 === "Go"
     ```go
-    package main
-
-    import (
-        "context"
-        "log"
-
-        "event_time_filter/impl"
-
-        "github.com/numaproj/numaflow-go/pkg/sourcetransformer"
-    )
-
     func transform(_ context.Context, keys []string, d sourcetransformer.Datum) sourcetransformer.Messages {
         return impl.FilterEventTime(keys, d)
     }
@@ -94,10 +83,6 @@ Below are complete examples in various programming languages, where we apply con
 
 === "Python"
     ```python
-    import datetime
-    import logging
-    from pynumaflow.sourcetransformer import Messages, Message, Datum, SourceTransformServer
-
     """
     This is a simple User Defined Function example which receives a message, applies the following
     data transformation, and returns the message.
@@ -134,26 +119,11 @@ Below are complete examples in various programming languages, where we apply con
             )
             messages.append(Message(value=val, event_time=january_first_2023, tags=["after_year_2022"]))
         return messages
-
-
-    if __name__ == "__main__":
-        grpc_server = SourceTransformServer(my_handler)
-        grpc_server.start()
     ```
     [View full implementation on GitHub](https://github.com/numaproj/numaflow-python/tree/main/examples/sourcetransform/event_time_filter)
 
 === "Java"
     ```java
-    package io.numaproj.numaflow.examples.sourcetransformer.eventtimefilter;
-
-    import io.numaproj.numaflow.sourcetransformer.Datum;
-    import io.numaproj.numaflow.sourcetransformer.Message;
-    import io.numaproj.numaflow.sourcetransformer.MessageList;
-    import io.numaproj.numaflow.sourcetransformer.Server;
-    import io.numaproj.numaflow.sourcetransformer.SourceTransformer;
-
-    import java.time.Instant;
-
     /**
      * This is a simple User Defined Function example which receives a message, applies the following
      * data transformation, and returns the message.
@@ -166,16 +136,6 @@ Below are complete examples in various programming languages, where we apply con
     public class EventTimeFilterFunction extends SourceTransformer {
         private static final Instant januaryFirst2022 = Instant.ofEpochMilli(1640995200000L);
         private static final Instant januaryFirst2023 = Instant.ofEpochMilli(1672531200000L);
-
-        public static void main(String[] args) throws Exception {
-            Server server = new Server(new EventTimeFilterFunction());
-
-            // Start the server
-            server.start();
-
-            // wait for the server to shut down
-            server.awaitTermination();
-        }
 
         public MessageList processMessage(String[] keys, Datum data) {
             Instant eventTime = data.getEventTime();
