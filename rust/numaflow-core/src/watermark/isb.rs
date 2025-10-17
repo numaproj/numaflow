@@ -32,7 +32,7 @@ use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Offset};
 use crate::reduce::reducer::WindowManager;
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::isb::wm_fetcher::ISBWatermarkFetcher;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
@@ -75,7 +75,7 @@ struct ISBWatermarkActor {
     /// Window manager is used to compute the minimum watermark for the reduce vertex.
     window_manager: Option<WindowManager>,
     latest_fetched_wm: Watermark,
-    tracker_handle: TrackerHandle,
+    tracker_handle: Tracker,
     from_partitions: Vec<u16>,
 }
 
@@ -85,7 +85,7 @@ impl ISBWatermarkActor {
         publisher: ISBWatermarkPublisher,
         idle_manager: ISBIdleDetector,
         window_manager: Option<WindowManager>,
-        tracker_handle: TrackerHandle,
+        tracker_handle: Tracker,
         from_partitions: Vec<u16>,
     ) -> Self {
         Self {
@@ -340,7 +340,7 @@ impl ISBWatermarkHandle {
         to_vertex_configs: &[ToVertexConfig],
         cln_token: CancellationToken,
         window_manager: Option<WindowManager>,
-        tracker_handle: TrackerHandle,
+        tracker_handle: Tracker,
         from_partitions: Vec<u16>,
     ) -> Result<Self> {
         let (sender, receiver) = mpsc::channel(100);
@@ -552,7 +552,7 @@ mod tests {
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::config::pipeline::watermark::BucketConfig;
     use crate::message::{IntOffset, Message};
-    use crate::tracker::TrackerHandle;
+    use crate::tracker::Tracker;
     use crate::watermark::wmb::WMB;
 
     // Helper function to create test messages
@@ -656,7 +656,7 @@ mod tests {
             from_vertex_config: vec![from_bucket_config.clone()],
             to_vertex_config: vec![to_bucket_config.clone()],
         };
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = Tracker::new(None, CancellationToken::new());
 
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,
@@ -825,7 +825,7 @@ mod tests {
             from_vertex_config: vec![from_bucket_config.clone()],
             to_vertex_config: vec![from_bucket_config.clone()],
         };
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = Tracker::new(None, CancellationToken::new());
 
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,
@@ -985,7 +985,7 @@ mod tests {
             from_vertex_config: vec![from_bucket_config.clone()],
             to_vertex_config: vec![to_bucket_config.clone()],
         };
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = Tracker::new(None, CancellationToken::new());
 
         let _handle = ISBWatermarkHandle::new(
             vertex_name,
@@ -1097,7 +1097,7 @@ mod tests {
             from_vertex_config: vec![from_bucket_config.clone()],
             to_vertex_config: vec![from_bucket_config.clone()],
         };
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = Tracker::new(None, CancellationToken::new());
 
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,

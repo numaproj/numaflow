@@ -85,7 +85,7 @@ pub mod tests {
     use crate::sink::SinkWriter;
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
-    use crate::tracker::TrackerHandle;
+    use crate::tracker::Tracker;
     use aws_sdk_sqs::Config;
     use aws_sdk_sqs::config::BehaviorVersion;
     use aws_sdk_sqs::types::BatchResultErrorEntry;
@@ -178,7 +178,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_sqs_sink_e2e() {
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = Tracker::new(None, CancellationToken::new());
         let cln_token = CancellationToken::new();
 
         let (source, src_handle, src_shutdown_tx) =
@@ -218,7 +218,7 @@ pub mod tests {
     }
 
     async fn get_simple_source(
-        tracker_handle: TrackerHandle,
+        tracker_handle: Tracker,
         cln_token: CancellationToken,
     ) -> (
         Source<crate::typ::WithoutRateLimiter>,

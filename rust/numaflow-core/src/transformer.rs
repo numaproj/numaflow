@@ -18,7 +18,7 @@ use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_metric_labels, pipeline_metrics,
 };
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::transformer::user_defined::UserDefinedTransformer;
 
 /// User-Defined Transformer is a custom transformer that can be built by the user.
@@ -71,7 +71,7 @@ pub(crate) struct Transformer {
     sender: mpsc::Sender<TransformerActorMessage>,
     concurrency: usize,
     graceful_shutdown_time: Duration,
-    tracker_handle: TrackerHandle,
+    tracker_handle: Tracker,
     health_checker: Option<SourceTransformClient<Channel>>,
 }
 
@@ -81,7 +81,7 @@ impl Transformer {
         concurrency: usize,
         graceful_timeout: Duration,
         client: SourceTransformClient<Channel>,
-        tracker_handle: TrackerHandle,
+        tracker_handle: Tracker,
     ) -> Result<Self> {
         let (sender, receiver) = mpsc::channel(batch_size);
         let transformer_actor = TransformerActor::new(
@@ -217,7 +217,7 @@ impl Transformer {
 
                     // update the tracker with the number of responses for each message
                     tracker_handle
-                        .update(
+                        .serving_update(
                             &read_msg.offset,
                             transformed_messages
                                 .iter()
@@ -371,7 +371,7 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = Tracker::new(None, CancellationToken::new());
 
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
         let transformer = Transformer::new(
@@ -447,7 +447,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = Tracker::new(None, CancellationToken::new());
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
         let transformer = Transformer::new(
             500,
@@ -534,7 +534,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new(None, CancellationToken::new());
+        let tracker_handle = Tracker::new(None, CancellationToken::new());
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
         let transformer = Transformer::new(
             500,

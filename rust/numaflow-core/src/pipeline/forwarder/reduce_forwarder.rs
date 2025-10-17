@@ -26,7 +26,7 @@ use crate::reduce::wal::create_wal_components;
 use crate::reduce::wal::segment::compactor::WindowKind;
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::typ::{NumaflowTypeConfig, WithoutRateLimiter};
 use crate::watermark::WatermarkHandle;
 use crate::{Result, shared};
@@ -98,7 +98,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     aligned_config: AlignedReducerConfig,
 ) -> crate::error::Result<()> {
     // for reduce we do not pass serving callback handler to tracker.
-    let tracker_handle = TrackerHandle::new(None, cln_token.clone());
+    let tracker_handle = Tracker::new(None, cln_token.clone());
 
     // Create aligned window manager based on window type
     let window_manager = match &aligned_config.window_config.window_type {
@@ -249,7 +249,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     unaligned_config: UnalignedReducerConfig,
 ) -> crate::error::Result<()> {
     // for reduce we do not pass serving callback handler to tracker.
-    let tracker_handle = TrackerHandle::new(None, cln_token.clone());
+    let tracker_handle = Tracker::new(None, cln_token.clone());
 
     // Create unaligned window manager based on window type
     let window_manager = match &unaligned_config.window_config.window_type {

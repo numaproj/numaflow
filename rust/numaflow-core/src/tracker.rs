@@ -1,13 +1,10 @@
 //! Tracker is added because when we do data forwarding in [MonoVertex](crate::monovertex::forwarder) or
 //! in [Pipeline](crate::pipeline::forwarder), immaterial whether we are in source, UDF, or Sink, we
 //! have to track whether the message has completely moved to the next vertex (N+1)th before we can
-//! mark that message as done in the Nth vertex. We use Tracker to let Read know that it can mark the
-//! message as Ack or NAck based on the state of the message. E.g., Ack if successfully written to ISB,
-//! NAck otherwise if ISB is failing to accept, and we are in shutdown path.
-//! There will be a tracker per input stream reader.
+//! mark that message as done in the Nth vertex. When the [crate::message::AckHandle] is dropped,
+//! [crate::pipeline::isb::reader] call [Tracker::delete] to mark that message as done.
 //!
 //! Items tracked by the tracker and uses [Offset] as the key.
-//!   - Ack or NAck after processing of a message
 //!   - The oldest Watermark is tracked
 //!   - Callbacks for Serving is triggered in the tracker.
 
@@ -104,7 +101,7 @@ impl TryFrom<&Message> for ServingCallbackInfo {
 /// TrackerHandle provides an interface to interact with the Tracker.
 /// It allows inserting, updating, deleting, and discarding tracked messages.
 #[derive(Clone)]
-pub(crate) struct TrackerHandle {
+pub(crate) struct Tracker {
     state: Arc<RwLock<TrackerState>>,
     /// tracks whether the source is currently idle (not reading any data)
     /// if it's set to none, it means the source is not idle.
@@ -113,7 +110,7 @@ pub(crate) struct TrackerHandle {
     processed_msg_count: Arc<AtomicUsize>,
 }
 
-impl TrackerHandle {
+impl Tracker {
     /// Creates a new TrackerHandle instance.
     pub(crate) fn new(
         serving_callback_handler: Option<CallbackHandler>,
@@ -164,7 +161,6 @@ impl TrackerHandle {
 
     /// This function is called once the message has been successfully processed. This is where
     /// the bookkeeping for a successful message happens, things like,
-    /// - ack back
     /// - call serving callbacks
     /// - watermark progression
     async fn completed_successfully(&self, entry: TrackerEntry) {
@@ -198,7 +194,7 @@ impl TrackerHandle {
         }
     }
 
-    /// Inserts a new message into the Tracker with the given offset and acknowledgment sender.
+    /// Inserts a new message into the Tracker with the given offset.
     pub(crate) async fn insert(&self, message: &Message) -> Result<()> {
         let offset = message.offset.clone();
         let mut callback_info = None;
@@ -221,7 +217,7 @@ impl TrackerHandle {
 
     /// Informs the tracker that a new message has been generated. The tracker should contain
     /// and entry for this message's offset.
-    pub(crate) async fn update(
+    pub(crate) async fn serving_update(
         &self,
         offset: &Offset,
         response_tags: Vec<Option<Arc<[String]>>>,
@@ -251,7 +247,7 @@ impl TrackerHandle {
     }
 
     /// resets the count and eof status for an offset in the tracker.
-    pub(crate) async fn refresh(&self, offset: Offset) -> Result<()> {
+    pub(crate) async fn serving_refresh(&self, offset: Offset) -> Result<()> {
         if self.serving_callback_handler.is_none() {
             return Ok(());
         }
@@ -272,7 +268,7 @@ impl TrackerHandle {
         Ok(())
     }
 
-    pub(crate) async fn append(
+    pub(crate) async fn serving_append(
         &self,
         offset: Offset,
         message_tags: Option<Arc<[String]>>,
@@ -420,7 +416,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_insert_update_delete() {
-        let handle = TrackerHandle::new(None, CancellationToken::new());
+        let handle = Tracker::new(None, CancellationToken::new());
         let message = Message {
             typ: Default::default(),
             keys: Arc::from([]),
@@ -442,7 +438,7 @@ mod tests {
 
         // Update the message
         handle
-            .update(&message.offset, vec![message.tags.clone()])
+            .serving_update(&message.offset, vec![message.tags.clone()])
             .await
             .unwrap();
 
@@ -471,7 +467,7 @@ mod tests {
         let callback_handler =
             CallbackHandler::new("test", js_context.clone(), store_name, 10).await;
 
-        let handle = TrackerHandle::new(Some(callback_handler), CancellationToken::new());
+        let handle = Tracker::new(Some(callback_handler), CancellationToken::new());
 
         let mut headers = HashMap::new();
         headers.insert(DEFAULT_ID_HEADER.to_string(), "1234".to_string());
@@ -527,7 +523,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_idle_status_tracking() {
-        let handle = TrackerHandle::new(None, CancellationToken::new());
+        let handle = Tracker::new(None, CancellationToken::new());
         assert_eq!(handle.get_idle_offset().await.unwrap(), HashMap::new());
 
         handle.set_idle_offset(0, Some(100)).await.unwrap();
@@ -551,7 +547,7 @@ mod tests {
         // This test verifies that dropping TrackerState with unacknowledged messages
         // logs an error. We can't easily assert on log output, but we can verify
         // the drop doesn't panic and the logic works correctly.
-        let handle = TrackerHandle::new(None, CancellationToken::new());
+        let handle = Tracker::new(None, CancellationToken::new());
 
         let message1 = Message {
             typ: Default::default(),
