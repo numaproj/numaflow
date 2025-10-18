@@ -50,6 +50,20 @@ impl SourceIdleDetector {
             >= self.config.threshold.as_millis() as i64
     }
 
+    fn get_source_idling_from_init_wm(&mut self) -> i64 {
+        if let Some(init_source_delay) = self.config.init_source_delay &&
+            Utc::now().timestamp_millis() - self.updated_ts.timestamp_millis()
+            >= init_source_delay.as_millis() as i64 {
+
+            let now = Utc::now();
+            let idle_wm = now.timestamp_millis() + self.config.init_source_delay.expect("Invalid init source delay").as_millis() as i64;
+            self.last_idle_wm_published_time = now;
+            idle_wm
+        } else {
+            -1
+        }
+    }
+
     /// Verifies if the step interval has passed.
     fn has_step_interval_passed(&self) -> bool {
         self.last_idle_wm_published_time.timestamp_millis() == -1
@@ -70,7 +84,7 @@ impl SourceIdleDetector {
         // check if the computed watermark is -1
         // last computed watermark can be -1, when the pod is restarted or when the processor entity is not created yet.
         if computed_wm == -1 {
-            return -1;
+            return self.get_source_idling_from_init_wm()
         }
 
         let mut idle_wm = computed_wm + increment_by;
@@ -93,7 +107,7 @@ impl SourceIdleDetector {
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
-
+    use tokio::time;
     use super::*;
     use crate::config::pipeline::watermark::IdleConfig;
 
@@ -103,6 +117,7 @@ mod tests {
             threshold: Duration::from_millis(100),
             step_interval: Duration::from_millis(50),
             increment_by: Duration::from_millis(10),
+            init_source_delay: None,
         };
         let mut manager = SourceIdleDetector::new(config);
 
@@ -120,6 +135,7 @@ mod tests {
             threshold: Duration::from_millis(100),
             step_interval: Duration::from_millis(50),
             increment_by: Duration::from_millis(10),
+            init_source_delay: None,
         };
         let mut manager = SourceIdleDetector::new(config);
 
@@ -138,12 +154,42 @@ mod tests {
             threshold: Duration::from_millis(100),
             step_interval: Duration::from_millis(50),
             increment_by: Duration::from_millis(10),
+            init_source_delay: None,
         };
         let mut manager = SourceIdleDetector::new(config);
 
         // Update and fetch idle watermark with computed_wm = -1
         let idle_wm = manager.update_and_fetch_idle_wm(-1);
         assert_eq!(idle_wm, -1);
+
+        // Update and fetch idle watermark with a valid computed_wm
+        let idle_wm = manager.update_and_fetch_idle_wm(1000);
+        assert_eq!(idle_wm, 1010);
+    }
+
+    #[test]
+    fn test_update_and_fetch_idle_wm_with_init_source_delay() {
+        let config = IdleConfig {
+            threshold: Duration::from_millis(100),
+            step_interval: Duration::from_millis(50),
+            increment_by: Duration::from_millis(10),
+            init_source_delay: Some(Duration::from_millis(100)),
+        };
+        let mut manager = SourceIdleDetector::new(config.clone());
+
+        // Update and fetch idle watermark with computed_wm = -1
+        // Since init_source_delay hasn't passed, idle_wm should be -1
+        let idle_wm = manager.update_and_fetch_idle_wm(-1);
+        assert_eq!(idle_wm, -1);
+
+        std::thread::sleep(Duration::from_millis(100));
+
+        // Since init_source_delay has passed, idle_wm should be
+        // last_idle_wm_published_time + init_source_delay
+        let idle_wm = manager.update_and_fetch_idle_wm(-1);
+        let expected_wm = manager.last_idle_wm_published_time.timestamp_millis() +
+            config.init_source_delay.unwrap().as_millis() as i64;
+        assert_eq!(idle_wm, expected_wm);
 
         // Update and fetch idle watermark with a valid computed_wm
         let idle_wm = manager.update_and_fetch_idle_wm(1000);

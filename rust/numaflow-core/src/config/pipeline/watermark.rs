@@ -34,6 +34,7 @@ impl WatermarkConfig {
                 increment_by: idle.increment_by.map(Duration::from).unwrap_or_default(),
                 step_interval: idle.step_interval.map(Duration::from).unwrap_or_default(),
                 threshold: idle.threshold.map(Duration::from).unwrap_or_default(),
+                init_source_delay: idle.init_source_delay.map(Duration::from),
             });
 
         // Helper function to create bucket config for to_vertex
@@ -151,6 +152,7 @@ pub(crate) struct IdleConfig {
     pub(crate) increment_by: Duration,
     pub(crate) step_interval: Duration,
     pub(crate) threshold: Duration,
+    pub(crate) init_source_delay: Option<Duration>,
 }
 
 impl Default for IdleConfig {
@@ -159,6 +161,7 @@ impl Default for IdleConfig {
             increment_by: Duration::from_millis(0),
             step_interval: Duration::from_millis(0),
             threshold: Duration::from_millis(0),
+            init_source_delay: None,
         }
     }
 }

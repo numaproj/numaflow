@@ -1047,6 +1047,11 @@ func (in *IdleSource) DeepCopyInto(out *IdleSource) {
 		*out = new(metav1.Duration)
 		**out = **in
 	}
+	if in.InitSourceDelay != nil {
+		in, out := &in.InitSourceDelay, &out.InitSourceDelay
+		*out = new(metav1.Duration)
+		**out = **in
+	}
 	return
 }
 
