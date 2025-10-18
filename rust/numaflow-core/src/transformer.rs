@@ -504,7 +504,6 @@ mod tests {
     #[cfg(feature = "global-state-tests")]
     #[tokio::test]
     async fn test_transform_stream_with_panic() -> Result<()> {
-        tracing_subscriber::fmt::init();
         let tmp_dir = TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("sourcetransform.sock");
         let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
