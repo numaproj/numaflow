@@ -292,14 +292,14 @@ func (r *jetStreamInstaller) createSecrets(ctx context.Context) error {
 		return nil
 	}
 
-	if oldClientObjExisting {
+	if oldServerObjExisting {
 		if err := r.client.Delete(ctx, oldSObj); err != nil {
 			return fmt.Errorf("failed to delete malformed nats server auth secret, err: %w", err)
 		}
 		r.logger.Infow("Deleted malformed nats server auth secret successfully")
 	}
 
-	if oldServerObjExisting {
+	if oldClientObjExisting {
 		if err := r.client.Delete(ctx, oldCObj); err != nil {
 			return fmt.Errorf("failed to delete malformed nats client auth secret, err: %w", err)
 		}
