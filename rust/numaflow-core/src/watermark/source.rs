@@ -1008,6 +1008,7 @@ mod tests {
             threshold: Duration::from_millis(10),
             step_interval: Duration::from_millis(5),
             increment_by: Duration::from_millis(1),
+            init_source_delay: None,
         };
 
         let mut handle = SourceWatermarkHandle::new(
@@ -1200,6 +1201,7 @@ mod tests {
             threshold: Duration::from_millis(2000), // set higher value so that the source won't be idling
             step_interval: Duration::from_millis(3),
             increment_by: Duration::from_millis(1),
+            init_source_delay: None,
         };
 
         let mut handle = SourceWatermarkHandle::new(
