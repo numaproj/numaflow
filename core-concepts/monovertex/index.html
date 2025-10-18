@@ -2728,7 +2728,7 @@
 <p>MonoVertex is a simplified version of the <a href="../pipeline/">Pipeline</a>. The major design idea behind MonoVertex is to simplify data-processing
 in those cases where independently autoscaling vertices are not required. This means there will only be a single vertex 
 called the MonoVertex, which is capable of running the <a href="../../user-guide/sources/overview/">Source</a>, the <a href="../../user-guide/sinks/overview/">Sink</a>
-(with <a href="../../user-guide/sinks/fallback/">Fallback Sink</a> if need be), and optionally the <a href="../../user-guide/sources/transformer/overview/">Transformer</a> 
+(with <a href="../../user-guide/sinks/fallback/">Fallback Sink</a> if need be), and optionally the <a href="../../user-guide/sources/transformer/overview/">Transformer</a> or <a href="../../user-guide/user-defined-functions/map/map/">Map UDF</a>
 together. There is no concept of Edges in MonoVertex since there is only one <a href="../vertex/">Vertex</a>. The MonoVertex runs the same containers run by the 
 <a href="../pipeline/">Pipeline</a>, this means the users can switch between MonoVertex and <a href="../pipeline/">Pipeline</a> by just 
 changing the spec. MonoVertex’s <a href="../../specifications/autoscaling/">autoscaling</a> is similar to the Source vertex of a <a href="../pipeline/">Pipeline</a>, 
@@ -2758,9 +2758,6 @@ about 50K unless larger ISBs were used.</p>
 you might be able to get away with MonoVertex. For all other use cases, use the full Pipeline Semantics. Below are a 
 few examples where you cannot use MonoVertex.</p>
 <ul>
-<li><a href="../../user-guide/user-defined-functions/user-defined-functions/">Map</a> is not supported, only
-   <a href="../../user-guide/sources/transformer/overview/">Transformer</a> can be used. If you need Map support, please let us know 
-   by creating an issue,</li>
 <li>If you are using the <a href="../../user-guide/user-defined-functions/reduce/reduce/">Reduce</a> feature, then the full <a href="../pipeline/">Pipeline</a>
   semantics is required. This is because of the need for shuffling of data.</li>
 <li>There are cases where you want to autoscale intermediate process nodes, especially in the case of ML workloads.</li>
@@ -2768,7 +2765,7 @@ few examples where you cannot use MonoVertex.</p>
 <li>If you want to use the <a href="../../user-guide/reference/join-vertex/">Join</a> feature, then MonoVertex will not work.</li>
 </ul>
 <h2 id="anatomy-of-monovertex">Anatomy of MonoVertex<a class="headerlink" href="#anatomy-of-monovertex" title="Permanent link">&para;</a></h2>
-<p>MonoVertex supports the same Sources, Sinks, and Transformers which are used in the Pipeline spec.</p>
+<p>MonoVertex supports the same Sources, Map UDF, Sinks, and Transformers which are used in the Pipeline spec.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MonoVertex</span>
 <span class="nt">metadata</span><span class="p">:</span>
@@ -2780,6 +2777,8 @@ few examples where you cannot use MonoVertex.</p>
 <span class="w">    </span><span class="nt">transformer</span><span class="p">:</span><span class="w"> </span><span class="c1"># transformer is an optional container to do any transformation to the incoming data before passing to the sink</span>
 <span class="w">    </span><span class="c1"># same as the Pipeline Transformer</span>
 <span class="w">    </span><span class="c1"># ...</span>
+<span class="w">  </span><span class="nt">udf</span><span class="p">:</span><span class="w"> </span><span class="c1"># optional Map: same as the Pipeline Map</span>
+<span class="w">  </span><span class="c1"># ...</span>
 <span class="w">  </span><span class="nt">sink</span><span class="p">:</span>
 <span class="w">  </span><span class="c1"># same as the Pipeline Sink</span>
 <span class="w">  </span><span class="c1"># ...</span>
