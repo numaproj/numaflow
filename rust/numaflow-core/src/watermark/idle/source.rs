@@ -51,12 +51,17 @@ impl SourceIdleDetector {
     }
 
     fn get_source_idling_from_init_wm(&mut self) -> i64 {
-        if let Some(init_source_delay) = self.config.init_source_delay &&
-            Utc::now().timestamp_millis() - self.updated_ts.timestamp_millis()
-            >= init_source_delay.as_millis() as i64 {
-
+        if let Some(init_source_delay) = self.config.init_source_delay
+            && Utc::now().timestamp_millis() - self.updated_ts.timestamp_millis()
+                >= init_source_delay.as_millis() as i64
+        {
             let now = Utc::now();
-            let idle_wm = now.timestamp_millis() + self.config.init_source_delay.expect("Invalid init source delay").as_millis() as i64;
+            let idle_wm = now.timestamp_millis()
+                + self
+                    .config
+                    .init_source_delay
+                    .expect("Invalid init source delay")
+                    .as_millis() as i64;
             self.last_idle_wm_published_time = now;
             idle_wm
         } else {
@@ -84,7 +89,7 @@ impl SourceIdleDetector {
         // check if the computed watermark is -1
         // last computed watermark can be -1, when the pod is restarted or when the processor entity is not created yet.
         if computed_wm == -1 {
-            return self.get_source_idling_from_init_wm()
+            return self.get_source_idling_from_init_wm();
         }
 
         let mut idle_wm = computed_wm + increment_by;
@@ -106,10 +111,10 @@ impl SourceIdleDetector {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-    use tokio::time;
     use super::*;
     use crate::config::pipeline::watermark::IdleConfig;
+    use std::time::Duration;
+    use tokio::time;
 
     #[test]
     fn test_is_source_idling() {
@@ -187,8 +192,8 @@ mod tests {
         // Since init_source_delay has passed, idle_wm should be
         // last_idle_wm_published_time + init_source_delay
         let idle_wm = manager.update_and_fetch_idle_wm(-1);
-        let expected_wm = manager.last_idle_wm_published_time.timestamp_millis() +
-            config.init_source_delay.unwrap().as_millis() as i64;
+        let expected_wm = manager.last_idle_wm_published_time.timestamp_millis()
+            + config.init_source_delay.unwrap().as_millis() as i64;
         assert_eq!(idle_wm, expected_wm);
 
         // Update and fetch idle watermark with a valid computed_wm
