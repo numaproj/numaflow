@@ -127,30 +127,19 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
         let (mut isb_stream, isb_handle) = isb_reader
             .streaming_read(cancellation_token.clone())
             .await?;
-        let (mut message_stream, wal_handle) = wal
+
+        let wal_handle = wal
             .append_only_wal
             .streaming_write(ReceiverStream::new(wal_rx))
             .await?;
 
-        // Acknowledge the successfully written WAL messages by listening on the message stream.
-        // When we receive a message back from the WAL, it means it has been persisted, so we can
-        // safely drop it (which will trigger the ack via Arc<AckHandle>).
-        tokio::spawn(async move {
-            while let Some(_msg) = message_stream.next().await {
-                // Message is dropped here, triggering ack via Arc<AckHandle>
-            }
-        });
-
         while let Some(msg) = isb_stream.next().await {
+            // Send the message to WAL - it will be converted to bytes internally.
+            // The message will be kept alive until the write completes, then dropped
+            // (triggering ack via Arc<AckHandle>).
             wal_tx
-                .send(SegmentWriteMessage::WriteData {
-                    message: Some(msg.clone()),
-                    data: WalMessage {
-                        message: msg.clone(),
-                    }
-                    .clone()
-                    .try_into()
-                    .expect("Failed to parse message to bytes"),
+                .send(SegmentWriteMessage::WriteMessage {
+                    message: msg.clone(),
                 })
                 .await
                 .expect("Receiver dropped");
@@ -415,13 +404,13 @@ mod tests {
             wal_path.clone(),
             10,  // 10MB max file size
             100, // 100ms flush interval
-            100, // channel buffer
+            // channel buffer
             300, // max_segment_age_secs
         )
         .await
         .unwrap();
 
-        let compactor = Compactor::new(wal_path.clone(), WindowKind::Aligned, 10, 100, 100, 300)
+        let compactor = Compactor::new(wal_path.clone(), WindowKind::Aligned, 10, 100, 300)
             .await
             .unwrap();
 
@@ -482,13 +471,12 @@ mod tests {
         reader_cancel_token.cancel();
         handle.await.unwrap().unwrap();
 
-        let append_only_wal =
-            AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 100, 300)
-                .await
-                .unwrap();
+        let append_only_wal = AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 300)
+            .await
+            .unwrap();
 
         let (tx, rx) = mpsc::channel::<SegmentWriteMessage>(10);
-        let (_result_rx, writer_handle) = append_only_wal
+        let writer_handle = append_only_wal
             .streaming_write(ReceiverStream::new(rx))
             .await
             .unwrap();
@@ -576,13 +564,12 @@ mod tests {
             .unwrap();
 
         // First, write some messages directly to WAL
-        let append_only_wal =
-            AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 100, 300)
-                .await
-                .unwrap();
+        let append_only_wal = AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 300)
+            .await
+            .unwrap();
 
         let (tx, rx) = mpsc::channel::<SegmentWriteMessage>(100);
-        let (_result_rx, writer_handle) = append_only_wal
+        let writer_handle = append_only_wal
             .streaming_write(ReceiverStream::new(rx))
             .await
             .unwrap();
@@ -605,17 +592,9 @@ mod tests {
                 ..Default::default()
             };
 
-            let wal_message = WalMessage {
-                message: message.clone(),
-            };
-            let bytes: bytes::Bytes = wal_message.try_into().unwrap();
-
-            tx.send(SegmentWriteMessage::WriteData {
-                message: Some(message),
-                data: bytes,
-            })
-            .await
-            .unwrap();
+            tx.send(SegmentWriteMessage::WriteMessage { message })
+                .await
+                .unwrap();
         }
 
         drop(tx);
@@ -655,12 +634,11 @@ mod tests {
                 .unwrap();
 
         // Create new WAL components for PBQ
-        let append_only_wal =
-            AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 100, 300)
-                .await
-                .unwrap();
+        let append_only_wal = AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 300)
+            .await
+            .unwrap();
 
-        let compactor = Compactor::new(wal_path.clone(), WindowKind::Aligned, 10, 100, 100, 300)
+        let compactor = Compactor::new(wal_path.clone(), WindowKind::Aligned, 10, 100, 300)
             .await
             .unwrap();
 

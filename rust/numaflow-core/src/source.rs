@@ -479,7 +479,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     message.ack_handle = Some(Arc::new(AckHandle::new(resp_ack_tx)));
 
                     // insert the offset and the ack one shot in the tracker.
-                    self.tracker_handle.insert(&message).await?;
+                    self.tracker_handle.insert(message).await?;
 
                     // store the ack one shot in the batch to invoke ack later.
                     ack_batch.push((message.offset.clone(), resp_ack_rx));
