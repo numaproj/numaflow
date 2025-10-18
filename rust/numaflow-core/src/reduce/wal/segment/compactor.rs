@@ -703,8 +703,7 @@ mod tests {
             test_path.clone(),
             1,    // 1MB
             1000, // 1s flush interval
-            // channel buffer
-            300, // max_segment_age_secs
+            300,  // max_segment_age_secs
         )
         .await
         .unwrap();
@@ -754,8 +753,7 @@ mod tests {
             test_path.clone(),
             1,    // 1MB
             1000, // 1s flush interval
-            // channel buffer
-            300, // max_segment_age_secs
+            300,  // max_segment_age_secs
         )
         .await
         .unwrap();
@@ -803,8 +801,7 @@ mod tests {
             WindowKind::Aligned,
             1,    // 1MB
             1000, // 1s flush interval
-            // channel buffer
-            300, // max_segment_age_secs
+            300,  // max_segment_age_secs
         )
         .await
         .unwrap();

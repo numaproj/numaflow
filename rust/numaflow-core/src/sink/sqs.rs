@@ -178,11 +178,11 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_sqs_sink_e2e() {
-        let tracker_handle = Tracker::new(None, CancellationToken::new());
+        let tracker = Tracker::new(None, CancellationToken::new());
         let cln_token = CancellationToken::new();
 
         let (source, src_handle, src_shutdown_tx) =
-            get_simple_source(tracker_handle.clone(), cln_token.clone()).await;
+            get_simple_source(tracker.clone(), cln_token.clone()).await;
         // let source = get_sqs_source().await;
         let sink_writer = get_sqs_sink().await;
         // create the forwarder with the source, transformer, and writer
@@ -218,7 +218,7 @@ pub mod tests {
     }
 
     async fn get_simple_source(
-        tracker_handle: Tracker,
+        tracker: Tracker,
         cln_token: CancellationToken,
     ) -> (
         Source<crate::typ::WithoutRateLimiter>,
@@ -257,7 +257,7 @@ pub mod tests {
             Source::new(
                 5,
                 SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
-                tracker_handle.clone(),
+                tracker.clone(),
                 true,
                 None,
                 None,

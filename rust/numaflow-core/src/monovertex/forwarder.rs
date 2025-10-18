@@ -223,7 +223,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_forwarder() {
-        let tracker_handle = Tracker::new(None, CancellationToken::new());
+        let tracker = Tracker::new(None, CancellationToken::new());
 
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
@@ -249,15 +249,10 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
-        let transformer = Transformer::new(
-            10,
-            10,
-            Duration::from_secs(10),
-            client,
-            tracker_handle.clone(),
-        )
-        .await
-        .unwrap();
+        let transformer =
+            Transformer::new(10, 10, Duration::from_secs(10), client, tracker.clone())
+                .await
+                .unwrap();
 
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
@@ -292,11 +287,11 @@ mod tests {
         .await
         .map_err(|e| panic!("failed to create source reader: {:?}", e))
         .unwrap();
-        let tracker_handle = Tracker::new(None, CancellationToken::new());
+        let tracker = Tracker::new(None, CancellationToken::new());
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
-            tracker_handle.clone(),
+            tracker.clone(),
             true,
             Some(transformer),
             None,
@@ -366,7 +361,7 @@ mod tests {
     async fn test_transformer_flatmap_operation() {
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
-        let tracker_handle = Tracker::new(None, cln_token.clone());
+        let tracker = Tracker::new(None, cln_token.clone());
 
         // create a transformer
         let (st_shutdown_tx, st_shutdown_rx) = oneshot::channel();
@@ -389,15 +384,10 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
-        let transformer = Transformer::new(
-            10,
-            10,
-            Duration::from_secs(10),
-            client,
-            tracker_handle.clone(),
-        )
-        .await
-        .unwrap();
+        let transformer =
+            Transformer::new(10, 10, Duration::from_secs(10), client, tracker.clone())
+                .await
+                .unwrap();
 
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
@@ -436,7 +426,7 @@ mod tests {
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
-            tracker_handle.clone(),
+            tracker.clone(),
             true,
             Some(transformer),
             None,
@@ -540,7 +530,7 @@ mod tests {
     async fn test_map_operation() {
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
-        let tracker_handle = Tracker::new(None, cln_token.clone());
+        let tracker = Tracker::new(None, cln_token.clone());
 
         // Create source
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
@@ -579,7 +569,7 @@ mod tests {
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
-            tracker_handle.clone(),
+            tracker.clone(),
             true,
             None,
             None,
@@ -614,7 +604,7 @@ mod tests {
             Duration::from_secs(10),
             10,
             client,
-            tracker_handle.clone(),
+            tracker.clone(),
         )
         .await
         .unwrap();
@@ -661,7 +651,7 @@ mod tests {
     async fn test_batch_map_operation() {
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
-        let tracker_handle = Tracker::new(None, cln_token.clone());
+        let tracker = Tracker::new(None, cln_token.clone());
 
         // Create source
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
@@ -700,7 +690,7 @@ mod tests {
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
-            tracker_handle.clone(),
+            tracker.clone(),
             true,
             None,
             None,
@@ -735,7 +725,7 @@ mod tests {
             Duration::from_secs(10),
             10,
             client,
-            tracker_handle.clone(),
+            tracker.clone(),
         )
         .await
         .unwrap();
@@ -782,7 +772,7 @@ mod tests {
     async fn test_flatmap_stream_operation() {
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
-        let tracker_handle = Tracker::new(None, cln_token.clone());
+        let tracker = Tracker::new(None, cln_token.clone());
 
         // Create source
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
@@ -821,7 +811,7 @@ mod tests {
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
-            tracker_handle.clone(),
+            tracker.clone(),
             true,
             None,
             None,
@@ -856,7 +846,7 @@ mod tests {
             Duration::from_secs(10),
             10,
             client,
-            tracker_handle.clone(),
+            tracker.clone(),
         )
         .await
         .unwrap();

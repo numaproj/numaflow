@@ -133,7 +133,7 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
             .streaming_write(ReceiverStream::new(wal_rx))
             .await?;
 
-        while let Some(msg) = isb_stream.next().await {
+        while let Some(mut msg) = isb_stream.next().await {
             // Send the message to WAL - it will be converted to bytes internally.
             // The message will be kept alive until the write completes, then dropped
             // (triggering ack via Arc<AckHandle>).
@@ -144,6 +144,8 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
                 .await
                 .expect("Receiver dropped");
 
+            // drop the ack handle of the outgoing message, because we are persisting the data.
+            msg.ack_handle = None;
             tx.send(msg).await.expect("Receiver dropped");
         }
 
@@ -245,7 +247,7 @@ mod tests {
             stream: stream.clone(),
             js_ctx: context.clone(),
             config: buf_reader_config,
-            tracker_handle: tracker.clone(),
+            tracker: tracker.clone(),
             batch_size: 500,
             read_timeout: Duration::from_millis(100),
             watermark_handle: None,
@@ -378,7 +380,7 @@ mod tests {
             stream: stream.clone(),
             js_ctx: context.clone(),
             config: buf_reader_config,
-            tracker_handle: tracker.clone(),
+            tracker: tracker.clone(),
             batch_size: 500,
             read_timeout: Duration::from_millis(100),
             watermark_handle: None,
@@ -404,7 +406,6 @@ mod tests {
             wal_path.clone(),
             10,  // 10MB max file size
             100, // 100ms flush interval
-            // channel buffer
             300, // max_segment_age_secs
         )
         .await
@@ -613,7 +614,7 @@ mod tests {
             stream: stream.clone(),
             js_ctx: context.clone(),
             config: buf_reader_config,
-            tracker_handle: tracker.clone(),
+            tracker: tracker.clone(),
             batch_size: 500,
             read_timeout: Duration::from_millis(100),
             watermark_handle: None,

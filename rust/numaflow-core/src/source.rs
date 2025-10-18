@@ -212,7 +212,7 @@ where
 pub(crate) struct Source<C: crate::typ::NumaflowTypeConfig> {
     read_batch_size: usize,
     sender: mpsc::Sender<ActorMessage>,
-    tracker_handle: Tracker,
+    tracker: Tracker,
     read_ahead: bool,
     /// Transformer handler for transforming messages from Source.
     transformer: Option<Transformer>,
@@ -226,7 +226,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     pub(crate) fn new(
         batch_size: usize,
         src_type: SourceType,
-        tracker_handle: Tracker,
+        tracker: Tracker,
         read_ahead: bool,
         transformer: Option<Transformer>,
         watermark_handle: Option<SourceWatermarkHandle>,
@@ -305,7 +305,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         Self {
             read_batch_size: batch_size,
             sender,
-            tracker_handle,
+            tracker,
             read_ahead,
             transformer,
             watermark_handle,
@@ -479,7 +479,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     message.ack_handle = Some(Arc::new(AckHandle::new(resp_ack_tx)));
 
                     // insert the offset and the ack one shot in the tracker.
-                    self.tracker_handle.insert(message).await?;
+                    self.tracker.insert(message).await?;
 
                     // store the ack one shot in the batch to invoke ack later.
                     ack_batch.push((message.offset.clone(), resp_ack_rx));
@@ -494,7 +494,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     self.sender.clone(),
                     ack_batch,
                     _permit,
-                    self.tracker_handle.clone(),
+                    self.tracker.clone(),
                     cln_token.clone(),
                 ));
 
@@ -574,7 +574,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         source_handle: mpsc::Sender<ActorMessage>,
         ack_rx_batch: Vec<(Offset, oneshot::Receiver<ReadAck>)>,
         _permit: OwnedSemaphorePermit, // permit to release after acking the offsets.
-        tracker_handle: Tracker,
+        tracker: Tracker,
         cancel_token: CancellationToken,
     ) -> Result<()> {
         let n = ack_rx_batch.len();
@@ -594,7 +594,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     error!(?offset, err=?e, "Error receiving ack for offset");
                 }
             }
-            tracker_handle
+            tracker
                 .delete(&offset)
                 .await
                 .expect("Failed to delete offset from tracker");

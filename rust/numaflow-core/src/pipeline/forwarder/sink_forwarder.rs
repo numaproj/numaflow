@@ -105,13 +105,13 @@ pub async fn start_sink_forwarder(
 
     let from_partitions: Vec<u16> = (0..reader_config.streams.len() as u16).collect();
 
-    let tracker_handle = Tracker::new(serving_callback_handler.clone(), cln_token.clone());
+    let tracker = Tracker::new(serving_callback_handler.clone(), cln_token.clone());
     let watermark_handle = create_components::create_edge_watermark_handle(
         &config,
         &js_context,
         &cln_token,
         None,
-        tracker_handle.clone(),
+        tracker.clone(),
         from_partitions.clone(),
     )
     .await?;
@@ -135,7 +135,7 @@ pub async fn start_sink_forwarder(
         cln_token: cln_token.clone(),
         js_context: &js_context,
         config: &config,
-        tracker_handle,
+        tracker,
     };
 
     // 2. Clean dispatch logic

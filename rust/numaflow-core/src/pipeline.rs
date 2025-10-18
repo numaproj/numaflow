@@ -16,7 +16,7 @@ pub(crate) struct PipelineContext<'a> {
     pub(crate) cln_token: CancellationToken,
     pub(crate) js_context: &'a Context,
     pub(crate) config: &'a PipelineConfig,
-    pub(crate) tracker_handle: Tracker,
+    pub(crate) tracker: Tracker,
 }
 
 /// Creates a jetstream context based on the provided configuration

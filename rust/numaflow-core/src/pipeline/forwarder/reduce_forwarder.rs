@@ -96,9 +96,9 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
     aligned_config: AlignedReducerConfig,
-) -> crate::error::Result<()> {
+) -> Result<()> {
     // for reduce we do not pass serving callback handler to tracker.
-    let tracker_handle = Tracker::new(None, cln_token.clone());
+    let tracker = Tracker::new(None, cln_token.clone());
 
     // Create aligned window manager based on window type
     let window_manager = match &aligned_config.window_config.window_type {
@@ -131,7 +131,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         &js_context,
         &cln_token,
         Some(WindowManager::Aligned(window_manager.clone())),
-        tracker_handle.clone(),
+        tracker.clone(),
         vec![*get_vertex_replica()], // in reduce, we consume from a single partition
     )
     .await?;
@@ -155,7 +155,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         cln_token: cln_token.clone(),
         js_context: &js_context,
         config: &config,
-        tracker_handle: tracker_handle.clone(),
+        tracker: tracker.clone(),
     };
 
     let reader_components = ISBReaderComponents::new(
@@ -230,7 +230,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         cln_token: cln_token.clone(),
         js_context: &js_context,
         config: &config,
-        tracker_handle,
+        tracker,
     };
 
     // rate limit is not applicable for reduce
@@ -247,9 +247,9 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
     unaligned_config: UnalignedReducerConfig,
-) -> crate::error::Result<()> {
+) -> Result<()> {
     // for reduce we do not pass serving callback handler to tracker.
-    let tracker_handle = Tracker::new(None, cln_token.clone());
+    let tracker = Tracker::new(None, cln_token.clone());
 
     // Create unaligned window manager based on window type
     let window_manager = match &unaligned_config.window_config.window_type {
@@ -269,7 +269,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         &js_context,
         &cln_token,
         Some(WindowManager::Unaligned(window_manager.clone())),
-        tracker_handle.clone(),
+        tracker.clone(),
         vec![*get_vertex_replica()], // in reduce, we consume from a single partition
     )
     .await?;
@@ -293,7 +293,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         cln_token: cln_token.clone(),
         js_context: &js_context,
         config: &config,
-        tracker_handle: tracker_handle.clone(),
+        tracker: tracker.clone(),
     };
 
     let reader_components = ISBReaderComponents::new(
@@ -366,7 +366,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         cln_token: cln_token.clone(),
         js_context: &js_context,
         config: &config,
-        tracker_handle,
+        tracker,
     };
 
     // rate limit is not applicable for reduce

@@ -1156,7 +1156,7 @@ mod tests {
     #[tokio::test]
     async fn test_streaming_write() {
         let cln_token = CancellationToken::new();
-        let tracker_handle = Tracker::new(None, cln_token.clone());
+        let tracker = Tracker::new(None, cln_token.clone());
         let sink_writer =
             SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
                 .build()
@@ -1204,12 +1204,12 @@ mod tests {
             assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
         }
         // check if the tracker is empty
-        assert!(tracker_handle.is_empty().await.unwrap());
+        assert!(tracker.is_empty().await.unwrap());
     }
 
     #[tokio::test]
     async fn test_streaming_write_error() {
-        let tracker_handle = Tracker::new(None, CancellationToken::new());
+        let tracker = Tracker::new(None, CancellationToken::new());
         // start the server
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
@@ -1290,13 +1290,13 @@ mod tests {
         }
 
         // check if the tracker is empty
-        assert!(tracker_handle.is_empty().await.unwrap());
+        assert!(tracker.is_empty().await.unwrap());
     }
 
     #[tokio::test]
     async fn test_fallback_write() {
         let cln_token = CancellationToken::new();
-        let tracker_handle = Tracker::new(None, cln_token.clone());
+        let tracker = Tracker::new(None, cln_token.clone());
 
         // start the server
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
@@ -1372,7 +1372,7 @@ mod tests {
         }
 
         // check if the tracker is empty
-        assert!(tracker_handle.is_empty().await.unwrap());
+        assert!(tracker.is_empty().await.unwrap());
     }
 
     #[cfg(feature = "nats-tests")]
@@ -1396,7 +1396,7 @@ mod tests {
             .await
             .unwrap();
 
-        let tracker_handle = Tracker::new(None, CancellationToken::new());
+        let tracker = Tracker::new(None, CancellationToken::new());
         let serving_store = ServingStore::Nats(Box::new(
             NatsServingStore::new(
                 context.clone(),
@@ -1487,7 +1487,7 @@ mod tests {
         }
 
         // check if the tracker is empty
-        assert!(tracker_handle.is_empty().await.unwrap());
+        assert!(tracker.is_empty().await.unwrap());
 
         let keys: Vec<_> = kv_store.keys().await.unwrap().collect().await;
         assert_eq!(keys.len(), 10);

@@ -207,13 +207,13 @@ pub mod tests {
 
         // create SQS source with test client
         use crate::tracker::Tracker;
-        let tracker_handle = Tracker::new(None, CancellationToken::new());
+        let tracker = Tracker::new(None, CancellationToken::new());
         let cln_token = CancellationToken::new();
 
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             1,
             SourceType::Sqs(sqs_source),
-            tracker_handle.clone(),
+            tracker.clone(),
             true,
             None,
             None,

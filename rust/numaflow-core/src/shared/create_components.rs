@@ -206,7 +206,7 @@ pub(crate) async fn create_transformer(
     batch_size: usize,
     graceful_timeout: Duration,
     transformer_config: Option<TransformerConfig>,
-    tracker_handle: Tracker,
+    tracker: Tracker,
     cln_token: CancellationToken,
 ) -> error::Result<Option<Transformer>> {
     if let Some(transformer_config) = transformer_config
@@ -242,7 +242,7 @@ pub(crate) async fn create_transformer(
                 transformer_config.concurrency,
                 graceful_timeout,
                 transformer_grpc_client.clone(),
-                tracker_handle,
+                tracker,
             )
             .await?,
         ));
@@ -255,7 +255,7 @@ pub(crate) async fn create_mapper(
     read_timeout: Duration,
     graceful_timeout: Duration,
     map_config: MapVtxConfig,
-    tracker_handle: Tracker,
+    tracker: Tracker,
     cln_token: CancellationToken,
 ) -> error::Result<MapHandle> {
     match map_config.map_type {
@@ -302,7 +302,7 @@ pub(crate) async fn create_mapper(
                         graceful_timeout,
                         map_config.concurrency,
                         map_grpc_client.clone(),
-                        tracker_handle,
+                        tracker,
                     )
                     .await?)
                 }
@@ -335,7 +335,7 @@ pub(crate) async fn create_mapper(
                         graceful_timeout,
                         map_config.concurrency,
                         map_grpc_client.clone(),
-                        tracker_handle,
+                        tracker,
                     )
                     .await?)
                 }
@@ -350,7 +350,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
     batch_size: usize,
     read_timeout: Duration,
     source_config: &SourceConfig,
-    tracker_handle: Tracker,
+    tracker: Tracker,
     transformer: Option<Transformer>,
     watermark_handle: Option<SourceWatermarkHandle>,
     cln_token: CancellationToken,
@@ -363,7 +363,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Generator(generator, generator_ack, generator_lag),
-                tracker_handle,
+                tracker,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
@@ -382,7 +382,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             Ok(crate::source::Source::new(
                 batch_size,
                 source::SourceType::Pulsar(pulsar),
-                tracker_handle,
+                tracker,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
@@ -401,7 +401,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Sqs(sqs),
-                tracker_handle,
+                tracker,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
@@ -419,7 +419,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Jetstream(jetstream),
-                tracker_handle,
+                tracker,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
@@ -437,7 +437,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Nats(nats),
-                tracker_handle,
+                tracker,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
@@ -451,7 +451,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Kafka(kafka),
-                tracker_handle,
+                tracker,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
@@ -465,7 +465,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Http(CoreHttpSource::new(batch_size, http_source)),
-                tracker_handle,
+                tracker,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
@@ -489,7 +489,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             Ok(Source::new(
                 batch_size,
                 source::SourceType::UserDefinedSource(Box::new(ud_read), Box::new(ud_ack), ud_lag),
-                tracker_handle,
+                tracker,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
@@ -744,7 +744,7 @@ pub async fn create_edge_watermark_handle(
     js_context: &Context,
     cln_token: &CancellationToken,
     window_manager: Option<WindowManager>,
-    tracker_handle: Tracker,
+    tracker: Tracker,
     from_partitions: Vec<u16>,
 ) -> error::Result<Option<ISBWatermarkHandle>> {
     match &config.watermark_config {
@@ -759,7 +759,7 @@ pub async fn create_edge_watermark_handle(
                 &config.to_vertex_config,
                 cln_token.clone(),
                 window_manager,
-                tracker_handle,
+                tracker,
                 from_partitions,
             )
             .await?;

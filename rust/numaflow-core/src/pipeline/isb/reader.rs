@@ -77,7 +77,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
             cfg: components.config,
             batch_size: components.batch_size,
             read_timeout: components.read_timeout,
-            tracker: components.tracker_handle,
+            tracker: components.tracker,
             watermark: components.watermark_handle,
             js_reader,
             rate_limiter,
@@ -525,7 +525,7 @@ pub(crate) struct ISBReaderComponents {
     pub stream: Stream,
     pub js_ctx: Context,
     pub config: BufferReaderConfig,
-    pub tracker_handle: Tracker,
+    pub tracker: Tracker,
     pub batch_size: usize,
     pub read_timeout: Duration,
     pub watermark_handle: Option<ISBWatermarkHandle>,
@@ -545,7 +545,7 @@ impl ISBReaderComponents {
             stream,
             js_ctx: context.js_context.clone(),
             config: reader_config,
-            tracker_handle: context.tracker_handle.clone(),
+            tracker: context.tracker.clone(),
             batch_size: context.config.batch_size,
             read_timeout: context.config.read_timeout,
             watermark_handle,
@@ -654,7 +654,7 @@ mod tests {
             stream: stream.clone(),
             js_ctx: context.clone(),
             config: buf_reader_config,
-            tracker_handle: tracker.clone(),
+            tracker: tracker.clone(),
             batch_size: 500,
             read_timeout: Duration::from_millis(100),
             watermark_handle: None,
@@ -726,7 +726,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = Tracker::new(None, CancellationToken::new());
+        let tracker = Tracker::new(None, CancellationToken::new());
 
         let js_stream = Stream::new("test-ack", "test", 0);
         // Delete stream if it exists
@@ -768,7 +768,7 @@ mod tests {
             stream: js_stream.clone(),
             js_ctx: context.clone(),
             config: buf_reader_config,
-            tracker_handle: tracker_handle.clone(),
+            tracker: tracker.clone(),
             batch_size: 1,
             read_timeout: Duration::from_millis(100),
             watermark_handle: None,
@@ -821,7 +821,7 @@ mod tests {
 
         // wait until the tracker becomes empty, don't wait more than 1 second
         tokio::time::timeout(Duration::from_secs(1), async {
-            while !tracker_handle.is_empty().await.unwrap() {
+            while !tracker.is_empty().await.unwrap() {
                 sleep(Duration::from_millis(10)).await;
             }
         })
@@ -901,7 +901,7 @@ mod tests {
             stream: stream.clone(),
             js_ctx: context.clone(),
             config: buf_reader_config,
-            tracker_handle: tracker.clone(),
+            tracker: tracker.clone(),
             batch_size: 500,
             read_timeout: Duration::from_millis(100),
             watermark_handle: None,
