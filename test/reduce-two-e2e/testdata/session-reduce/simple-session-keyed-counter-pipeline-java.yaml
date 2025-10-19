@@ -5,6 +5,9 @@ metadata:
 spec:
   watermark:
     maxDelay: 30s
+  limits:
+    readTimeout: 10ms
+    readBatchSize: 5
   vertices:
     - name: in
       scale:

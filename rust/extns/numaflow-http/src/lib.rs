@@ -108,7 +108,7 @@ impl Default for HttpSourceConfig {
             vertex_name: "in",
             buffer_size: 500,
             addr: "0.0.0.0:8443".parse().expect("Invalid address"),
-            timeout: Duration::from_millis(5),
+            timeout: Duration::from_secs(1),
             token: None,
             graceful_shutdown_time: Duration::from_secs(20),
         }
@@ -168,7 +168,7 @@ impl HttpSourceConfigBuilder {
             addr: self
                 .addr
                 .unwrap_or_else(|| "0.0.0.0:8443".parse().expect("Invalid address")),
-            timeout: self.timeout.unwrap_or(Duration::from_millis(5)),
+            timeout: self.timeout.unwrap_or(Duration::from_secs(1)),
             token: self.token,
             // FIXME: As of today we have a hard timeout of 30 secs from K8s, we have not exposed a way to increase it.
             graceful_shutdown_time: self
