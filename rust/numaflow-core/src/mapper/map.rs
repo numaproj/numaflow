@@ -1394,9 +1394,9 @@ mod tests {
                 ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                 ..Default::default()
             };
-            ack_rxs.push(ack_rx);
             input_tx.send(message).await.unwrap();
             tokio::time::sleep(Duration::from_millis(10)).await;
+            ack_rxs.push(ack_rx);
         }
 
         drop(input_tx);

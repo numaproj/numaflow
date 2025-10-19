@@ -5,6 +5,7 @@ use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
 use tokio::io::BufWriter;
 use tokio::task::JoinHandle;
 use tokio::{
@@ -14,7 +15,7 @@ use tokio::{
 };
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 /// Duration after which the WAL Segment is considered stale.
 const ROTATE_IF_STALE_DURATION: chrono::Duration = chrono::Duration::seconds(30);
@@ -145,8 +146,21 @@ impl SegmentWriteActor {
                 .try_into()
                 .expect("Failed to convert message to bytes");
 
-                self.write_data(data).await?;
-                // Message is dropped here after successful write, triggering ack/nack
+                // Message is dropped here after successful write, triggering ack/nack.
+                return match self.write_data(data).await {
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        // message failed to write to WAL, mark it as failed so that it gets nacked.
+                        error!(?e, "Failed to write message to WAL");
+                        message
+                            .ack_handle
+                            .as_ref()
+                            .expect("ack handle should be present")
+                            .is_failed
+                            .store(true, Ordering::Relaxed);
+                        Err(e)
+                    }
+                };
             }
             SegmentWriteMessage::WriteRawData { data } => {
                 // Just write the raw data
