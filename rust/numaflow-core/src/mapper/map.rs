@@ -1335,6 +1335,7 @@ mod tests {
     #[cfg(feature = "global-state-tests")]
     #[tokio::test]
     async fn test_map_stream_panic() -> Result<()> {
+        tracing_subscriber::fmt::init();
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("map_stream_panic.sock");
@@ -1350,12 +1351,13 @@ mod tests {
                 .await
                 .expect("server failed");
         });
+        let cln_token = CancellationToken::new();
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
-        let tracker = Tracker::new(None, CancellationToken::new());
+        let tracker = Tracker::new(None, cln_token.clone());
         let mapper = MapHandle::new(
             MapMode::Stream,
             500,
@@ -1371,7 +1373,7 @@ mod tests {
         let input_stream = ReceiverStream::new(input_rx);
 
         let (_output_stream, map_handle) = mapper
-            .streaming_map(input_stream, CancellationToken::new())
+            .streaming_map(input_stream, cln_token.clone())
             .await?;
 
         let mut ack_rxs = vec![];
@@ -1394,9 +1396,9 @@ mod tests {
                 ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                 ..Default::default()
             };
+            ack_rxs.push(ack_rx);
             input_tx.send(message).await.unwrap();
             tokio::time::sleep(Duration::from_millis(10)).await;
-            ack_rxs.push(ack_rx);
         }
 
         drop(input_tx);

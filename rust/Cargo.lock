@@ -2565,6 +2565,7 @@ dependencies = [
  "tonic 0.14.2",
  "tower",
  "tracing",
+ "tracing-subscriber",
  "trait-variant",
  "zstd",
 ]
