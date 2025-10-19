@@ -7,8 +7,6 @@ spec:
     maxDelay: 30s
   vertices:
     - name: in
-      limits:
-        readBatchSize: 1
       source:
         http: {}
     - name: atoi
