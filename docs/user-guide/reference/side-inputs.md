@@ -44,7 +44,7 @@ spec:
 
 To use the `Side Inputs` feature, a User-defined function implementing an interface defined in the Numaflow SDK
 ([Go](https://github.com/numaproj/numaflow-go/blob/main/pkg/sideinput/),
-[Python](https://github.com/numaproj/numaflow-python/blob/main/pynumaflow/sideinput/),
+[Python](https://github.com/numaproj/numaflow-python/blob/main/packages/pynumaflow/pynumaflow/sideinput/),
 [Java](https://github.com/numaproj/numaflow-java/tree/main/src/main/java/io/numaproj/numaflow/sideinput))
 is needed to retrieve the data.
 
@@ -75,7 +75,7 @@ func handle(_ context.Context) sideinputsdk.Message {
 }
 ```
 
-Similarly, this can be written in [Python](https://github.com/numaproj/numaflow-python/blob/main/examples/sideinput/simple_sideinput/example.py)
+Similarly, this can be written in [Python](https://github.com/numaproj/numaflow-python/blob/main/packages/pynumaflow/examples/sideinput/simple_sideinput/example.py)
 and [Java](https://github.com/numaproj/numaflow-java/blob/main/examples/src/main/java/io/numaproj/numaflow/examples/sideinput/simple/SimpleSideInput.java) as well.
 
 After performing the retrieval/update, the side input value is then broadcasted to all vertices that use the side input.
@@ -109,5 +109,5 @@ sideInputFileName -> "/var/numaflow/side-inputs/sideInputName"
 
 Here are some examples of watching the side input filesystem for changes in
 [Golang](https://github.com/numaproj/numaflow-go/blob/main/examples/sideinput/simple_sideinput/udf/main.go),
-[Python](https://github.com/numaproj/numaflow-python/blob/main/examples/sideinput/simple_sideinput/udf/example.py) and
+[Python](https://github.com/numaproj/numaflow-python/blob/main/packages/pynumaflow/examples/sideinput/simple_sideinput/udf/example.py) and
 [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sideinput/udf).
