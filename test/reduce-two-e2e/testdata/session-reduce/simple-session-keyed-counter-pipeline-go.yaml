@@ -34,7 +34,7 @@ spec:
           keyed: true
           storage:
             persistentVolumeClaim:
-              volumeSize: 2Gi
+              volumeSize: 1Gi
               accessMode: ReadWriteOncePod
     - name: sink
       scale:

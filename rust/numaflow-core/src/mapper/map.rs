@@ -249,6 +249,7 @@ impl MapHandle {
                     // messages in the tracker and stop processing the input
                     // stream.
                     tokio::select! {
+                        biased;
                         Some(error) = error_rx.recv() => {
                             // when we get an error we cancel the token to signal the upstream to stop
                             // sending new messages, and we empty the input stream and return the error.
@@ -342,6 +343,7 @@ impl MapHandle {
                     // messages in the tracker and stop processing the input
                     // stream.
                     tokio::select! {
+                        biased;
                        Some(error) = error_rx.recv() => {
                             // when we get an error we cancel the token to signal the upstream to stop
                             // sending new messages, and we empty the input stream and return the error.
@@ -393,7 +395,7 @@ impl MapHandle {
                 shutdown_handle.abort();
             }
 
-            self.final_result.clone()
+            self.final_result
         });
 
         Ok((ReceiverStream::new(output_rx), handle))
@@ -499,7 +501,6 @@ impl MapHandle {
                         .store(true, Ordering::Relaxed);
                 }
             }
-            info!(?offset, "Unary map operation completed");
         });
     }
 
@@ -614,7 +615,6 @@ impl MapHandle {
                     result = receiver.recv() => {
                         match result {
                             Some(Ok(mapped_message)) => {
-                                info!(?mapped_message, "Received mapped message");
                                 tracker
                                     .serving_append(mapped_message.offset.clone(), mapped_message.tags.clone())
                                     .await
@@ -622,6 +622,7 @@ impl MapHandle {
                                 output_tx.send(mapped_message).await.expect("failed to send response");
                             }
                             Some(Err(e)) => {
+                                error!(?e, "failed to map message");
                                 read_msg
                                     .ack_handle
                                     .as_ref()
@@ -649,8 +650,6 @@ impl MapHandle {
                     }
                 }
             }
-
-            info!(?read_msg.offset, "Stream map operation completed");
         });
     }
 
@@ -674,12 +673,6 @@ impl MapHandle {
 mod tests {
     use std::time::Duration;
 
-    use numaflow::shared::ServerExtras;
-    use numaflow::{batchmap, map, mapstream};
-    use numaflow_pb::clients::map::map_client::MapClient;
-    use tempfile::TempDir;
-    use tokio::sync::{mpsc::Sender, oneshot};
-
     use super::*;
     use crate::message::ReadAck;
     use crate::{
@@ -687,6 +680,11 @@ mod tests {
         message::{MessageID, Offset, StringOffset},
         shared::grpc::create_rpc_channel,
     };
+    use numaflow::shared::ServerExtras;
+    use numaflow::{batchmap, map, mapstream};
+    use numaflow_pb::clients::map::map_client::MapClient;
+    use tempfile::TempDir;
+    use tokio::sync::{mpsc::Sender, oneshot};
 
     struct SimpleMapper;
 
@@ -1398,9 +1396,9 @@ mod tests {
             };
             ack_rxs.push(ack_rx);
             input_tx.send(message).await.unwrap();
-            tokio::time::sleep(Duration::from_millis(10)).await;
         }
 
+        cln_token.cancelled().await;
         drop(input_tx);
         // Await the join handle and expect an error due to the panic
         let result = map_handle.await.unwrap();
