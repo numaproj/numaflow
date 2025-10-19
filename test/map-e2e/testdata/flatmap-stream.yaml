@@ -5,12 +5,12 @@ metadata:
 spec:
   vertices:
     - name: in
+      limits:
+        readBatchSize: 1
       source:
         http: {}
     - name: go-split
       partitions: 3
-      limits:
-        readBatchSize: 1
       scale:
         min: 1
       udf:
@@ -38,8 +38,6 @@ spec:
             imagePullPolicy: IfNotPresent
     - name: python-split
       partitions: 3
-      limits:
-        readBatchSize: 1
       scale:
         min: 1
       udf:
@@ -64,8 +62,6 @@ spec:
             imagePullPolicy: IfNotPresent
     - name: java-split
       partitions: 3
-      limits:
-        readBatchSize: 1
       scale:
         min: 1
       udf:

@@ -13,6 +13,8 @@ spec:
       stepInterval: 2s # If source is idling then publish the watermark only when step interval has passed.
   vertices:
     - name: in
+      limits:
+        readBatchSize: 1
       scale:
         min: 1
       source:

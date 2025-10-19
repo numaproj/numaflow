@@ -13,6 +13,8 @@ spec:
         schedule: "*/5 * * * * *"
   vertices:
     - name: in
+      limits:
+        readBatchSize: 1
       source:
         http: {}
     - name: si-e2e

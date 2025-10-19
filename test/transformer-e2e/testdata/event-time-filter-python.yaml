@@ -5,6 +5,8 @@ metadata:
 spec:
   vertices:
     - name: in
+      limits:
+        readBatchSize: 1
       scale:
         min: 1
       source:
