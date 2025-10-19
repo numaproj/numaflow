@@ -164,7 +164,6 @@ impl Tracker {
     /// - call serving callbacks
     /// - watermark progression
     async fn completed_successfully(&self, entry: TrackerEntry) {
-        info!(?entry, "Tracker completed successfully invoked");
         let TrackerEntry {
             serving_callback_info: callback_info,
             ..

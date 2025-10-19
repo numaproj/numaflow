@@ -500,8 +500,7 @@ mod tests {
             WindowKind::Aligned,
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            // channel_buffer_size
-            300, // max_segment_age_secs
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -537,8 +536,7 @@ mod tests {
             path.clone(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            // channel_buffer_size
-            300, // max_segment_age_secs
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -593,8 +591,7 @@ mod tests {
             WindowKind::Unaligned,
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            // channel_buffer_size
-            300, // max_segment_age_secs
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -641,8 +638,7 @@ mod tests {
             path.clone(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            // channel_buffer_size
-            300, // max_segment_age_secs
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -872,8 +868,7 @@ mod tests {
             path.clone(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            // channel_buffer_size
-            300, // max_segment_age_secs
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -911,8 +906,7 @@ mod tests {
             path.clone(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            // channel_buffer_size
-            300, // max_segment_age_secs
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -971,8 +965,7 @@ mod tests {
             WindowKind::Aligned,
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            // channel_buffer_size
-            300, // max_segment_age_secs
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -1063,8 +1056,7 @@ mod tests {
             path.clone(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            // channel_buffer_size
-            300, // max_segment_age_secs
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -1114,8 +1106,7 @@ mod tests {
             path.clone(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            // channel_buffer_size
-            300, // max_segment_age_secs
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -1208,8 +1199,7 @@ mod tests {
             WindowKind::Unaligned,
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            // channel_buffer_size
-            300, // max_segment_age_secs
+            300,  // max_segment_age_secs
         )
         .await?;
 
