@@ -46,6 +46,8 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
+	defer w.StreamVertexPodLogs("compute-sum", "numa").TerminateAllPodLogs()
+
 	done := make(chan struct{})
 	go func() {
 		// publish messages to source vertex, with event time starting from 60000
