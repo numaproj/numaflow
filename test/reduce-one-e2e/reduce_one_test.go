@@ -46,7 +46,7 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	defer w.StreamVertexPodLogs("compute-sum", "numa").TerminateAllPodLogs()
+	defer w.StreamVertexPodLogs("compute-sum", "numa").StreamVertexPodLogs("atoi", "numa").TerminateAllPodLogs()
 
 	done := make(chan struct{})
 	go func() {
