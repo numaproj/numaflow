@@ -106,9 +106,8 @@ impl ISBWatermarkFetcher {
         }
         // now we computed and updated for this partition, we just need to compare across partitions.
         let fetched_wm = self.get_watermark();
-        if self
-            .last_log_time
-            .duration_since(SystemTime::now())
+        if SystemTime::now()
+            .duration_since(self.last_log_time)
             .unwrap()
             >= Duration::from_secs(1)
         {
