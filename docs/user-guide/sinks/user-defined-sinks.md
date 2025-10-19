@@ -143,7 +143,7 @@ For more detailed examples and implementation patterns, check out the official S
 
 - **[Golang SDK Examples](https://github.com/numaproj/numaflow-go/tree/main/examples/sinker)**
 - **[Java SDK Examples](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple/)**
-- **[Python SDK Examples](https://github.com/numaproj/numaflow-python/tree/main/examples/sink/)**
+- **[Python SDK Examples](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/sink/)**
 
 These repositories contain complete working examples of user-defined sinks with various response types and error handling patterns.
 

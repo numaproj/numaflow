@@ -64,4 +64,4 @@ based on the use case.
 * a **fallback** response doesn't respect the sink retry strategy. It gets immediately directed to the fallback sink without getting retried.
 
 SDK methods to generate either a fallback or a failed response in a primary user-defined sink can be found here:
-[Golang](https://github.com/numaproj/numaflow-go/blob/main/pkg/sinker/types.go), [Java](https://github.com/numaproj/numaflow-java/blob/main/src/main/java/io/numaproj/numaflow/sinker/Response.java), [Python](https://github.com/numaproj/numaflow-python/blob/main/pynumaflow/sinker/_dtypes.py)
+[Golang](https://github.com/numaproj/numaflow-go/blob/main/pkg/sinker/types.go), [Java](https://github.com/numaproj/numaflow-java/blob/main/src/main/java/io/numaproj/numaflow/sinker/Response.java), [Python](https://github.com/numaproj/numaflow-python/blob/main/packages/pynumaflow/pynumaflow/sinker/_dtypes.py)
