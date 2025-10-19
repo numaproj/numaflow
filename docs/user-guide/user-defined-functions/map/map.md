@@ -8,7 +8,7 @@ You can build your own UDF in multiple languages.
 
 Check the links below to see the UDF examples for different languages.
 
-- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/map/)
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/map/)
 - [Golang](https://github.com/numaproj/numaflow-go/tree/main/examples/mapper/)
 - [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/map/)
 
@@ -43,7 +43,7 @@ spec:
 
 Check the links below to see the UDF examples in streaming mode for different languages.
 
-- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/mapstream/flatmap_stream/)
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/mapstream/flatmap_stream/)
 - [Golang](https://github.com/numaproj/numaflow-go/tree/main/examples/mapstreamer/flatmap_stream/)
 - [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/mapstream/flatmapstream/)
 
@@ -66,7 +66,7 @@ every input data item, there should be a corresponding response in the BatchResp
 
 Check the links below to see the UDF examples in batch mode for different languages.
 
-- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/batchmap/)
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/batchmap/)
 - [Golang](https://github.com/numaproj/numaflow-go/tree/main/examples/batchmapper/)
 - [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/batchmap/)
 - [Rust](https://github.com/numaproj/numaflow-rs/tree/main/examples/batchmap-cat/)
