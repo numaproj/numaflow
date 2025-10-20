@@ -26,8 +26,8 @@ pub(crate) async fn wait_until_source_ready(
     cln_token: &CancellationToken,
     client: &mut SourceClient<Channel>,
 ) -> error::Result<()> {
-    info!("Waiting for source client to be ready...");
     loop {
+        info!("Waiting for source client to be ready...");
         if cln_token.is_cancelled() {
             return Err(Error::Forwarder(
                 "Cancellation token is cancelled".to_string(),
@@ -35,9 +35,11 @@ pub(crate) async fn wait_until_source_ready(
         }
         match client.is_ready(Request::new(())).await {
             Ok(_) => break,
-            Err(_) => sleep(Duration::from_secs(1)).await,
+            Err(e) => {
+                warn!(error = ?e, "Failed to check source client readiness");
+                sleep(Duration::from_secs(1)).await
+            }
         }
-        info!("Waiting for source client to be ready...");
     }
     Ok(())
 }
@@ -48,6 +50,7 @@ pub(crate) async fn wait_until_sink_ready(
     client: &mut SinkClient<Channel>,
 ) -> error::Result<()> {
     loop {
+        info!("Waiting for sink client to be ready...");
         if cln_token.is_cancelled() {
             return Err(Error::Forwarder(
                 "Cancellation token is cancelled".to_string(),
@@ -55,9 +58,11 @@ pub(crate) async fn wait_until_sink_ready(
         }
         match client.is_ready(Request::new(())).await {
             Ok(_) => break,
-            Err(_) => sleep(Duration::from_secs(1)).await,
+            Err(e) => {
+                warn!(error = ?e, "Failed to check sink client readiness");
+                sleep(Duration::from_secs(1)).await
+            }
         }
-        info!("Waiting for sink client to be ready...");
     }
     Ok(())
 }
@@ -68,6 +73,7 @@ pub(crate) async fn wait_until_transformer_ready(
     client: &mut SourceTransformClient<Channel>,
 ) -> error::Result<()> {
     loop {
+        info!("Waiting for transformer client to be ready...");
         if cln_token.is_cancelled() {
             return Err(Error::Forwarder(
                 "Cancellation token is cancelled".to_string(),
@@ -75,9 +81,11 @@ pub(crate) async fn wait_until_transformer_ready(
         }
         match client.is_ready(Request::new(())).await {
             Ok(_) => break,
-            Err(_) => sleep(Duration::from_secs(1)).await,
+            Err(e) => {
+                warn!(error = ?e, "Failed to check transformer client readiness");
+                sleep(Duration::from_secs(1)).await
+            }
         }
-        info!("Waiting for transformer client to be ready...");
     }
     Ok(())
 }
@@ -88,6 +96,7 @@ pub(crate) async fn wait_until_mapper_ready(
     client: &mut MapClient<Channel>,
 ) -> error::Result<()> {
     loop {
+        info!("Waiting for mapper client to be ready...");
         if cln_token.is_cancelled() {
             return Err(Error::Forwarder(
                 "Cancellation token is cancelled".to_string(),
@@ -95,9 +104,11 @@ pub(crate) async fn wait_until_mapper_ready(
         }
         match client.is_ready(Request::new(())).await {
             Ok(_) => break,
-            Err(_) => sleep(Duration::from_secs(1)).await,
+            Err(e) => {
+                warn!(error = ?e, "Failed to check mapper client readiness");
+                sleep(Duration::from_secs(1)).await
+            }
         }
-        info!("Waiting for mapper client to be ready...");
     }
     Ok(())
 }
