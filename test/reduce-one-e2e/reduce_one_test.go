@@ -128,6 +128,11 @@ func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
+	defer w.StreamVertexPodLogs("non-keyed-fixed-sum", "numa").
+		StreamVertexPodLogs("keyed-fixed-sum", "numa").
+		StreamVertexPodLogs("atoi", "numa").
+		TerminateAllPodLogs()
+
 	done := make(chan struct{})
 	go func() {
 		// publish messages to source vertex, with event time starting from 60000
@@ -221,6 +226,11 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamVertexPodLogs("non-keyed-fixed-sum", "numa").
+		StreamVertexPodLogs("keyed-fixed-sum", "numa").
+		StreamVertexPodLogs("atoi", "numa").
+		StreamVertexPodLogs("non-keyed-sliding-sum", "numa").
+		TerminateAllPodLogs()
 
 	done := make(chan struct{})
 	go func() {
