@@ -82,8 +82,8 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 	// since the key can be even or odd and the window duration is 10s
 	// the sum should be 20(for even) and 40(for odd)
 	w.Expect().
-		RedisSinkContains("http-idle-source-sink", "20", SinkCheckWithTimeout(300*time.Second)).
-		RedisSinkContains("http-idle-source-sink", "40", SinkCheckWithTimeout(300*time.Second))
+		RedisSinkContains("http-idle-source-sink", "200", SinkCheckWithTimeout(300*time.Second)).
+		RedisSinkContains("http-idle-source-sink", "400", SinkCheckWithTimeout(300*time.Second))
 	done <- struct{}{}
 }
 

@@ -63,6 +63,8 @@ spec:
   edges:
     - from: in
       to: atoi
+    - from: in-two
+      to: atoi
     - from: atoi
       to: compute-sum
     - from: compute-sum
