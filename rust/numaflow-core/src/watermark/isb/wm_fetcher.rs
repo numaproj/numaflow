@@ -100,7 +100,6 @@ impl ISBWatermarkFetcher {
                     .expect("should have partition index") = epoch;
             }
         }
-
         // now we computed and updated for this partition, we just need to compare across partitions.
         self.get_watermark()
     }

@@ -7,11 +7,15 @@ spec:
     readBatchSize: 50
   vertices:
     - name: in-0
+      limits:
+        readBatchSize: 1
       scale:
         min: 1
       source:
         http: {}
     - name: in-1
+      limits:
+        readBatchSize: 1
       scale:
         min: 1
       source:

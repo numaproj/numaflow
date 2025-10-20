@@ -126,19 +126,6 @@ impl Default for Settings {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Serving {
-    #[serde(rename = "msgIDHeaderKey")]
-    pub msg_id_header_key: Option<String>,
-    #[serde(rename = "store")]
-    pub callback_storage: CallbackStorageConfig,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct CallbackStorageConfig {
-    pub url: String,
-}
-
 /// This implementation is to load settings from env variables
 impl TryFrom<HashMap<String, String>> for Settings {
     type Error = Error;

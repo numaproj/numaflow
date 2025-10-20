@@ -1,3 +1,7 @@
+//! ISBReader is responsible for reading messages from ISB, assigning watermark to the messages and
+//! starts tracking them using the tracker and also listens for ack/nack from the tracker and performs
+//! the ack/nack to the ISB.
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -12,12 +16,12 @@ use crate::config::get_vertex_name;
 use crate::config::pipeline::VertexType::ReduceUDF;
 use crate::config::pipeline::isb::{BufferReaderConfig, ISBConfig, Stream};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageType, Offset, ReadAck};
+use crate::message::{AckHandle, IntOffset, Message, MessageType, Offset, ReadAck};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
     jetstream_isb_metrics_labels, pipeline_metric_labels, pipeline_metrics,
 };
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
 
@@ -45,7 +49,7 @@ pub(crate) struct ISBReader<C: NumaflowTypeConfig> {
     cfg: BufferReaderConfig,
     batch_size: usize,
     read_timeout: Duration,
-    tracker: TrackerHandle,
+    tracker: Tracker,
     watermark: Option<ISBWatermarkHandle>,
     js_reader: JetStreamReader,
     rate_limiter: Option<C::RateLimiter>,
@@ -73,7 +77,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
             cfg: components.config,
             batch_size: components.batch_size,
             read_timeout: components.read_timeout,
-            tracker: components.tracker_handle,
+            tracker: components.tracker,
             watermark: components.watermark_handle,
             js_reader,
             rate_limiter,
@@ -108,7 +112,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
 
                 let start = Instant::now();
                 // Apply rate limiting and fetch message batch
-                let mut batch = self.apply_rate_limiting_and_fetch(batch_size).await;
+                let batch = self.apply_rate_limiting_and_fetch(batch_size).await;
 
                 pipeline_metrics()
                     .jetstream_isb
@@ -120,7 +124,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                 self.handle_idle_watermarks(batch.is_empty(), &tx).await?;
 
                 // Process each message in the batch
-                self.process_message_batch(&mut batch, &tx, &mut permits, cancel.clone(), start)
+                self.process_message_batch(batch, &tx, &mut permits, cancel.clone(), start)
                     .await?;
 
                 pipeline_metrics()
@@ -169,6 +173,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                             Self::nak_with_retry(&params.jsr, &params.offset, &params.cancel).await;
                         },
                     }
+                    params.tracker.delete(&params.offset).await.expect("Failed to remove offset from tracker");
                     break;
                 }
             }
@@ -398,7 +403,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
     /// sends them to the downstream channel.
     async fn process_message_batch(
         &mut self,
-        batch: &mut Vec<Message>,
+        mut batch: Vec<Message>,
         tx: &mpsc::Sender<Message>,
         permits: &mut tokio::sync::OwnedSemaphorePermit,
         cancel: CancellationToken,
@@ -420,12 +425,16 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
             // Publish read metrics
             Self::publish_read_metrics(&self.metric_labels, &message);
 
+            let (ack_tx, ack_rx) = oneshot::channel();
+            message.ack_handle = Some(Arc::new(AckHandle::new(ack_tx)));
+
             // Start message tracking and WIP loop
             self.start_message_tracking(
                 &message,
                 permits.split(1).expect("Failed to split permit"),
                 cancel.clone(),
                 processing_start,
+                ack_rx,
             )
             .await?;
 
@@ -445,10 +454,9 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         permit: tokio::sync::OwnedSemaphorePermit,
         cancel: CancellationToken,
         processing_start: Instant,
+        ack_rx: oneshot::Receiver<ReadAck>,
     ) -> Result<()> {
-        let (ack_tx, ack_rx) = oneshot::channel();
-        self.tracker.insert(message, ack_tx).await?;
-
+        self.tracker.insert(message).await?;
         let params = WipParams {
             stream_name: self.stream.name,
             labels: Arc::clone(&self.metric_labels),
@@ -459,6 +467,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
             _permit: permit,
             cancel,
             message_processing_start: processing_start,
+            tracker: self.tracker.clone(),
         };
 
         tokio::spawn(async move {
@@ -506,6 +515,7 @@ struct WipParams {
     _permit: tokio::sync::OwnedSemaphorePermit, // drop guard
     cancel: CancellationToken,
     message_processing_start: Instant,
+    tracker: Tracker,
 }
 
 /// Components needed to create a JetStreamReader.
@@ -515,7 +525,7 @@ pub(crate) struct ISBReaderComponents {
     pub stream: Stream,
     pub js_ctx: Context,
     pub config: BufferReaderConfig,
-    pub tracker_handle: TrackerHandle,
+    pub tracker: Tracker,
     pub batch_size: usize,
     pub read_timeout: Duration,
     pub watermark_handle: Option<ISBWatermarkHandle>,
@@ -535,7 +545,7 @@ impl ISBReaderComponents {
             stream,
             js_ctx: context.js_context.clone(),
             config: reader_config,
-            tracker_handle: context.tracker_handle.clone(),
+            tracker: context.tracker.clone(),
             batch_size: context.config.batch_size,
             read_timeout: context.config.read_timeout,
             watermark_handle,
@@ -554,7 +564,7 @@ mod tests {
     use crate::config::pipeline::isb::{BufferReaderConfig, CompressionType};
     use crate::message::{Message, MessageID};
     use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
-    use crate::tracker::TrackerHandle;
+    use crate::tracker::Tracker;
     use async_nats::jetstream;
     use async_nats::jetstream::consumer::PullConsumer;
     use async_nats::jetstream::{consumer, stream};
@@ -633,7 +643,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
             ..Default::default()
         };
-        let tracker = TrackerHandle::new(None);
+        let tracker = Tracker::new(None, CancellationToken::new());
 
         let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
             .await
@@ -644,7 +654,7 @@ mod tests {
             stream: stream.clone(),
             js_ctx: context.clone(),
             config: buf_reader_config,
-            tracker_handle: tracker.clone(),
+            tracker: tracker.clone(),
             batch_size: 500,
             read_timeout: Duration::from_millis(100),
             watermark_handle: None,
@@ -702,11 +712,9 @@ mod tests {
             10,
             "Expected 10 messages from the jetstream reader"
         );
+        drop(buffer);
 
         reader_cancel_token.cancel();
-        for offset in offsets {
-            tracker.delete(offset).await.unwrap();
-        }
         js_reader_task.await.unwrap().unwrap();
         context.delete_stream(stream.name).await.unwrap();
     }
@@ -718,7 +726,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker = Tracker::new(None, CancellationToken::new());
 
         let js_stream = Stream::new("test-ack", "test", 0);
         // Delete stream if it exists
@@ -760,7 +768,7 @@ mod tests {
             stream: js_stream.clone(),
             js_ctx: context.clone(),
             config: buf_reader_config,
-            tracker_handle: tracker_handle.clone(),
+            tracker: tracker.clone(),
             batch_size: 1,
             read_timeout: Duration::from_millis(100),
             watermark_handle: None,
@@ -811,14 +819,9 @@ mod tests {
             };
         }
 
-        // after reading messages remove from the tracker so that the messages are acked
-        for offset in offsets {
-            tracker_handle.delete(offset).await.unwrap();
-        }
-
         // wait until the tracker becomes empty, don't wait more than 1 second
         tokio::time::timeout(Duration::from_secs(1), async {
-            while !tracker_handle.is_empty().await.unwrap() {
+            while !tracker.is_empty().await.unwrap() {
                 sleep(Duration::from_millis(10)).await;
             }
         })
@@ -886,7 +889,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
             ..Default::default()
         };
-        let tracker = TrackerHandle::new(None);
+        let tracker = Tracker::new(None, CancellationToken::new());
 
         let js_reader =
             JetStreamReader::new(stream.clone(), context.clone(), Some(isb_config.clone()))
@@ -898,7 +901,7 @@ mod tests {
             stream: stream.clone(),
             js_ctx: context.clone(),
             config: buf_reader_config,
-            tracker_handle: tracker.clone(),
+            tracker: tracker.clone(),
             batch_size: 500,
             read_timeout: Duration::from_millis(100),
             watermark_handle: None,
@@ -967,8 +970,8 @@ mod tests {
         assert_eq!(received_message.keys.as_ref(), &["empty_key".to_string()]);
         assert_eq!(received_message.offset.to_string(), offset.to_string());
 
-        // Clean up
-        tracker.delete(offset).await.unwrap();
+        drop(received_message);
+
         reader_cancel_token.cancel();
         js_reader_task.await.unwrap().unwrap();
         context.delete_stream(stream.name).await.unwrap();

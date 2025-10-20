@@ -3,6 +3,9 @@ kind: Pipeline
 metadata:
   name: reduce-sideinput-pipeline
 spec:
+  limits:
+    readBatchSize: 10
+    readTimeout: 50ms
   sideInputs:
     - name: myticker
       container:
@@ -13,6 +16,8 @@ spec:
         schedule: "*/5 * * * * *"
   vertices:
     - name: in
+      limits:
+        readBatchSize: 1
       source:
         http: {}
     - name: atoi

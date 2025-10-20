@@ -5,6 +5,7 @@ metadata:
 spec:
   limits:
     readBatchSize: 50
+    readTimeout: 50ms
   watermark:
     maxDelay: 20s
     idleSource:
@@ -14,6 +15,8 @@ spec:
       initSourceDelay: 5s # Progress the watermark for a source that hasn't produced any data ever, after initSourceDelay.
   vertices:
     - name: in
+      limits:
+        readBatchSize: 1
       scale:
         min: 1
       source:

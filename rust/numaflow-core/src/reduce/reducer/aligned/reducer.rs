@@ -152,8 +152,7 @@ impl ReduceTask {
 
             debug!(?gc_event, "Sending GC event to WAL");
             gc_wal_tx
-                .send(SegmentWriteMessage::WriteData {
-                    offset: None,
+                .send(SegmentWriteMessage::WriteGcEvent {
                     data: prost::Message::encode_to_vec(&gc_event).into(),
                 })
                 .await
@@ -642,7 +641,6 @@ mod tests {
     use crate::reduce::reducer::aligned::windower::fixed::FixedWindowManager;
     use crate::reduce::reducer::aligned::windower::sliding::SlidingWindowManager;
     use crate::shared::grpc::create_rpc_channel;
-    use crate::tracker::TrackerHandle;
     use async_nats::jetstream::consumer::PullConsumer;
     use async_nats::jetstream::{self, consumer, stream};
     use chrono::{TimeZone, Utc};
@@ -755,7 +753,6 @@ mod tests {
 
         // Create ISBWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None);
         let writer_config = BufferWriterConfig {
             streams: vec![stream.clone()],
             ..Default::default()
@@ -785,7 +782,6 @@ mod tests {
             }],
             writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
         };
@@ -1016,7 +1012,6 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None);
         let writer_config = BufferWriterConfig {
             streams: vec![stream.clone()],
             ..Default::default()
@@ -1045,7 +1040,6 @@ mod tests {
             }],
             writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
         };
@@ -1279,7 +1273,6 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None);
         let writer_config = BufferWriterConfig {
             streams: vec![stream.clone()],
             ..Default::default()
@@ -1309,7 +1302,6 @@ mod tests {
             }],
             writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
         };

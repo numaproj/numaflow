@@ -101,6 +101,8 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
+	defer w.StreamVertexPodLogs("compute-count", "numa").StreamVertexPodLogs("even-odd", "numa").TerminateAllPodLogs()
+
 	count := 0
 	done := make(chan struct{})
 	go func() {

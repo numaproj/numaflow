@@ -4,7 +4,8 @@ use std::time::Duration;
 
 use async_nats::jetstream::Context;
 use async_nats::jetstream::consumer::PullConsumer;
-use async_nats::jetstream::context::{Publish, PublishAckFuture, PublishErrorKind};
+use async_nats::jetstream::context::{PublishAckFuture, PublishErrorKind};
+use async_nats::jetstream::message::PublishMessage;
 use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
 use bytes::BytesMut;
@@ -171,7 +172,9 @@ impl JetStreamWriter {
             .js_ctx
             .send_publish(
                 self.stream.name,
-                Publish::build().payload(payload.freeze()).message_id(&id),
+                PublishMessage::build()
+                    .payload(payload.freeze())
+                    .message_id(&id),
             )
             .await
         {

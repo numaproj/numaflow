@@ -32,7 +32,7 @@ use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Offset};
 use crate::reduce::reducer::WindowManager;
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::isb::wm_fetcher::ISBWatermarkFetcher;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
@@ -75,7 +75,7 @@ struct ISBWatermarkActor {
     /// Window manager is used to compute the minimum watermark for the reduce vertex.
     window_manager: Option<WindowManager>,
     latest_fetched_wm: Watermark,
-    tracker_handle: TrackerHandle,
+    tracker: Tracker,
     from_partitions: Vec<u16>,
 }
 
@@ -85,7 +85,7 @@ impl ISBWatermarkActor {
         publisher: ISBWatermarkPublisher,
         idle_manager: ISBIdleDetector,
         window_manager: Option<WindowManager>,
-        tracker_handle: TrackerHandle,
+        tracker: Tracker,
         from_partitions: Vec<u16>,
     ) -> Self {
         Self {
@@ -95,7 +95,7 @@ impl ISBWatermarkActor {
             window_manager,
             latest_fetched_wm: Watermark::from_timestamp_millis(-1)
                 .expect("failed to parse timestamp"),
-            tracker_handle,
+            tracker,
             from_partitions,
         }
     }
@@ -274,11 +274,7 @@ impl ISBWatermarkActor {
     /// be setting the Head WMB offset. Here we will make sure that for every partition, the Head WMB
     /// saved in the idle status matches the Head WMB offset in the partition's timeline.
     async fn get_idle_watermark(&mut self) -> Watermark {
-        let idle_offsets = self
-            .tracker_handle
-            .get_idle_offset()
-            .await
-            .unwrap_or_default();
+        let idle_offsets = self.tracker.get_idle_offset().await.unwrap_or_default();
 
         // iterate over all the partitions and check if they are idling by fetching the head idle wmb
         // and comparing it with the tracker's idle state.
@@ -312,7 +308,7 @@ impl ISBWatermarkActor {
 
     /// Gets the lowest watermark among all the inflight requests using the tracker
     async fn get_lowest_watermark(&self) -> Option<Watermark> {
-        if let Ok(lowest_watermark) = self.tracker_handle.lowest_watermark().await {
+        if let Ok(lowest_watermark) = self.tracker.lowest_watermark().await {
             Some(Watermark::from_timestamp_millis(lowest_watermark.timestamp_millis()).unwrap())
         } else {
             None
@@ -340,7 +336,7 @@ impl ISBWatermarkHandle {
         to_vertex_configs: &[ToVertexConfig],
         cln_token: CancellationToken,
         window_manager: Option<WindowManager>,
-        tracker_handle: TrackerHandle,
+        tracker: Tracker,
         from_partitions: Vec<u16>,
     ) -> Result<Self> {
         let (sender, receiver) = mpsc::channel(100);
@@ -376,7 +372,7 @@ impl ISBWatermarkHandle {
             publisher,
             idle_manager.clone(),
             window_manager,
-            tracker_handle.clone(),
+            tracker.clone(),
             from_partitions,
         );
         tokio::spawn(async move { actor.run(receiver).await });
@@ -552,9 +548,8 @@ mod tests {
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::config::pipeline::watermark::BucketConfig;
     use crate::message::{IntOffset, Message};
-    use crate::tracker::TrackerHandle;
+    use crate::tracker::Tracker;
     use crate::watermark::wmb::WMB;
-    use tokio::sync::oneshot;
 
     // Helper function to create test messages
     fn create_test_message(
@@ -657,7 +652,7 @@ mod tests {
             from_vertex_config: vec![from_bucket_config.clone()],
             to_vertex_config: vec![to_bucket_config.clone()],
         };
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker = Tracker::new(None, CancellationToken::new());
 
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,
@@ -678,7 +673,7 @@ mod tests {
             }],
             CancellationToken::new(),
             None,
-            tracker_handle.clone(),
+            tracker.clone(),
             vec![0],
         )
         .await
@@ -688,11 +683,8 @@ mod tests {
         let message1 = create_test_message(1, 0, Some(100));
         let message2 = create_test_message(2, 0, Some(200));
 
-        let (ack_send1, _ack_recv1) = oneshot::channel();
-        let (ack_send2, _ack_recv2) = oneshot::channel();
-
-        tracker_handle.insert(&message1, ack_send1).await.unwrap();
-        tracker_handle.insert(&message2, ack_send2).await.unwrap();
+        tracker.insert(&message1).await.unwrap();
+        tracker.insert(&message2).await.unwrap();
 
         handle
             .publish_watermark(
@@ -735,8 +727,8 @@ mod tests {
             panic!("WMB not found");
         }
 
-        tracker_handle
-            .delete(Offset::Int(IntOffset {
+        tracker
+            .delete(&Offset::Int(IntOffset {
                 offset: 1,
                 partition_idx: 0,
             }))
@@ -829,7 +821,7 @@ mod tests {
             from_vertex_config: vec![from_bucket_config.clone()],
             to_vertex_config: vec![from_bucket_config.clone()],
         };
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker = Tracker::new(None, CancellationToken::new());
 
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,
@@ -850,7 +842,7 @@ mod tests {
             }],
             CancellationToken::new(),
             None,
-            tracker_handle.clone(),
+            tracker.clone(),
             vec![0],
         )
         .await
@@ -868,8 +860,7 @@ mod tests {
 
                 // Insert message into tracker
                 let message = create_test_message(i, 0, Some(i * 100));
-                let (ack_send, ack_recv) = oneshot::channel();
-                tracker_handle.insert(&message, ack_send).await.unwrap();
+                tracker.insert(&message).await.unwrap();
 
                 handle
                     .publish_watermark(
@@ -897,8 +888,7 @@ mod tests {
                     break;
                 }
                 sleep(Duration::from_millis(10)).await;
-                tracker_handle.delete(offset.clone()).await.unwrap();
-                ack_recv.await.unwrap();
+                tracker.delete(&offset).await.unwrap();
             }
         })
         .await;
@@ -991,7 +981,7 @@ mod tests {
             from_vertex_config: vec![from_bucket_config.clone()],
             to_vertex_config: vec![to_bucket_config.clone()],
         };
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker = Tracker::new(None, CancellationToken::new());
 
         let _handle = ISBWatermarkHandle::new(
             vertex_name,
@@ -1012,7 +1002,7 @@ mod tests {
             }],
             CancellationToken::new(),
             None,
-            tracker_handle.clone(),
+            tracker.clone(),
             vec![0],
         )
         .await
@@ -1021,8 +1011,7 @@ mod tests {
         // Insert multiple offsets into tracker
         for i in 1..=3 {
             let message = create_test_message(i, 0, Some(i * 100));
-            let (ack_send, _ack_recv) = oneshot::channel();
-            tracker_handle.insert(&message, ack_send).await.unwrap();
+            tracker.insert(&message).await.unwrap();
         }
 
         // Wait for the idle timeout to trigger
@@ -1104,7 +1093,7 @@ mod tests {
             from_vertex_config: vec![from_bucket_config.clone()],
             to_vertex_config: vec![from_bucket_config.clone()],
         };
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker = Tracker::new(None, CancellationToken::new());
 
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,
@@ -1125,7 +1114,7 @@ mod tests {
             }],
             CancellationToken::new(),
             None,
-            tracker_handle.clone(),
+            tracker.clone(),
             vec![0],
         )
         .await
@@ -1141,8 +1130,7 @@ mod tests {
 
             // Insert message into tracker
             let message = create_test_message(i, 0, Some(i * 100));
-            let (ack_send, ack_recv) = oneshot::channel();
-            tracker_handle.insert(&message, ack_send).await.unwrap();
+            tracker.insert(&message).await.unwrap();
 
             handle
                 .publish_watermark(
@@ -1165,8 +1153,7 @@ mod tests {
                 break;
             }
             sleep(Duration::from_millis(10)).await;
-            tracker_handle.delete(offset.clone()).await.unwrap();
-            ack_recv.await.unwrap();
+            tracker.delete(&offset).await.unwrap();
         }
 
         assert_ne!(fetched_watermark, -1);

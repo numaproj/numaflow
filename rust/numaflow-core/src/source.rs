@@ -7,13 +7,13 @@
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
-use crate::message::ReadAck;
+use crate::message::{AckHandle, ReadAck};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_metric_labels, pipeline_metrics,
 };
 use crate::source::http::CoreHttpSource;
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::{
     message::{Message, Offset},
     reader::LagReader,
@@ -28,6 +28,7 @@ use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SqsSource;
 use numaflow_throttling::RateLimiter;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::sync::{mpsc, oneshot};
@@ -211,7 +212,7 @@ where
 pub(crate) struct Source<C: crate::typ::NumaflowTypeConfig> {
     read_batch_size: usize,
     sender: mpsc::Sender<ActorMessage>,
-    tracker_handle: TrackerHandle,
+    tracker: Tracker,
     read_ahead: bool,
     /// Transformer handler for transforming messages from Source.
     transformer: Option<Transformer>,
@@ -225,7 +226,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     pub(crate) fn new(
         batch_size: usize,
         src_type: SourceType,
-        tracker_handle: TrackerHandle,
+        tracker: Tracker,
         read_ahead: bool,
         transformer: Option<Transformer>,
         watermark_handle: Option<SourceWatermarkHandle>,
@@ -304,7 +305,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         Self {
             read_batch_size: batch_size,
             sender,
-            tracker_handle,
+            tracker,
             read_ahead,
             transformer,
             watermark_handle,
@@ -434,7 +435,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 }
 
                 let read_start_time = Instant::now();
-                let messages = match Self::read(self.sender.clone()).await {
+                let mut messages = match Self::read(self.sender.clone()).await {
                     Some(Ok(messages)) => messages,
                     None => {
                         info!("Source returned None (end of stream). Stopping the source.");
@@ -471,18 +472,18 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         .await;
                 }
 
-                let mut offsets = vec![];
+                let mut ack_handles = vec![];
                 let mut ack_batch = Vec::with_capacity(msgs_len);
-                for message in messages.iter() {
+                for message in messages.iter_mut() {
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
-                    let offset = message.offset.clone();
+                    message.ack_handle = Some(Arc::new(AckHandle::new(resp_ack_tx)));
 
                     // insert the offset and the ack one shot in the tracker.
-                    self.tracker_handle.insert(message, resp_ack_tx).await?;
+                    self.tracker.insert(message).await?;
 
                     // store the ack one shot in the batch to invoke ack later.
-                    ack_batch.push((offset.clone(), resp_ack_rx));
-                    offsets.push(offset);
+                    ack_batch.push((message.offset.clone(), resp_ack_rx));
+                    ack_handles.push(message.ack_handle.clone());
                 }
 
                 // start a background task to invoke ack on the source for the offsets that are acked.
@@ -493,6 +494,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     self.sender.clone(),
                     ack_batch,
                     _permit,
+                    self.tracker.clone(),
                     cln_token.clone(),
                 ));
 
@@ -510,11 +512,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                                 ?e,
                                 "Error while transforming messages, sending nack to the batch"
                             );
-                            for offset in offsets {
-                                self.tracker_handle
-                                    .discard(offset)
-                                    .await
-                                    .expect("tracker operations should never fail");
+                            for ack_handle in ack_handles {
+                                ack_handle
+                                    .as_ref()
+                                    .expect("ack handle should be present")
+                                    .is_failed
+                                    .store(true, Ordering::Relaxed);
                             }
                             result = Err(e);
                             break;
@@ -571,6 +574,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         source_handle: mpsc::Sender<ActorMessage>,
         ack_rx_batch: Vec<(Offset, oneshot::Receiver<ReadAck>)>,
         _permit: OwnedSemaphorePermit, // permit to release after acking the offsets.
+        tracker: Tracker,
         cancel_token: CancellationToken,
     ) -> Result<()> {
         let n = ack_rx_batch.len();
@@ -580,16 +584,20 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         for (offset, oneshot_rx) in ack_rx_batch {
             match oneshot_rx.await {
                 Ok(ReadAck::Ack) => {
-                    offsets_to_ack.push(offset);
+                    offsets_to_ack.push(offset.clone());
                 }
                 Ok(ReadAck::Nak) => {
                     warn!(?offset, "Nak received for offset");
-                    offsets_to_nack.push(offset);
+                    offsets_to_nack.push(offset.clone());
                 }
                 Err(e) => {
                     error!(?offset, err=?e, "Error receiving ack for offset");
                 }
             }
+            tracker
+                .delete(&offset)
+                .await
+                .expect("Failed to delete offset from tracker");
         }
 
         let start = Instant::now();
@@ -785,7 +793,7 @@ mod tests {
     use crate::shared::grpc::create_rpc_channel;
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
-    use crate::tracker::TrackerHandle;
+    use crate::tracker::Tracker;
     use chrono::Utc;
     use numaflow::shared::ServerExtras;
     use numaflow::source;
@@ -875,10 +883,6 @@ mod tests {
             }
         }
 
-        async fn pending(&self) -> Option<usize> {
-            Some(self.yet_to_ack.read().unwrap().len() + self.nacked.read().unwrap().len())
-        }
-
         async fn nack(&self, offsets: Vec<Offset>) {
             for offset in offsets {
                 self.yet_to_ack
@@ -891,6 +895,10 @@ mod tests {
                     .insert(String::from_utf8(offset.offset).unwrap());
                 self.sent_count.fetch_sub(1, Ordering::SeqCst);
             }
+        }
+
+        async fn pending(&self) -> Option<usize> {
+            Some(self.yet_to_ack.read().unwrap().len() + self.nacked.read().unwrap().len())
         }
 
         async fn partitions(&self) -> Option<Vec<i32>> {
@@ -936,7 +944,7 @@ mod tests {
         .map_err(|e| panic!("failed to create source reader: {:?}", e))
         .unwrap();
 
-        let tracker = TrackerHandle::new(None);
+        let tracker = Tracker::new(None, CancellationToken::new());
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
@@ -951,16 +959,17 @@ mod tests {
 
         let (mut stream, handle) = source.clone().streaming_read(cln_token.clone()).unwrap();
         let mut offsets = vec![];
+        let mut messages = Vec::with_capacity(50);
         // we should read all the 100 messages
-        for _ in 0..100 {
+        for i in 0..100 {
             let message = stream.next().await.unwrap();
             assert_eq!(message.value, "hello".as_bytes());
             offsets.push(message.offset.clone());
-        }
 
-        // ack 50 messages by invoking delete on tracker
-        for offset in offsets.iter().take(50) {
-            tracker.delete(offset.clone()).await.unwrap();
+            // only store the last 50 messages, rest will be dropped and acknowledged.
+            if i >= 50 {
+                messages.push(message);
+            }
         }
 
         // wait for upto 1s with 10ms sleep between each check to make sure the pending becomes 50
@@ -982,20 +991,19 @@ mod tests {
             .unwrap();
         assert_eq!(partitions, vec![1, 2]);
 
-        // tracker discard will invoke nack
-        for offset in offsets.iter().skip(50) {
-            tracker.discard(offset.clone()).await.unwrap();
+        for message in messages.into_iter() {
+            // set failed to true so that the message is nacked
+            message
+                .ack_handle
+                .unwrap()
+                .is_failed
+                .store(true, Ordering::Relaxed);
         }
 
         // read should return 50 nacked messages
         for _ in 0..50 {
             let message = stream.next().await.unwrap();
             assert_eq!(message.value, "hello".as_bytes());
-        }
-
-        // ack them all now
-        for offset in offsets.iter().skip(50) {
-            tracker.delete(offset.clone()).await.unwrap();
         }
 
         // pending should be 0 now

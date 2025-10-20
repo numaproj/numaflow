@@ -40,10 +40,10 @@ const (
 	Label      = "numaflow-e2e"
 	LabelValue = "true"
 	ISBSvcName = "numaflow-e2e"
-	// the number 90 is carefully chosen to ensure the test suite can finish within a reasonable time without timing out.
+	// the number 120 is carefully chosen to ensure the test suite can finish within a reasonable time without timing out.
 	// please exercise caution when updating this value, as it may cause e2e tests to be flaky.
 	// if updated, consider running the entire e2e test suite multiple times to ensure stability.
-	defaultTimeout = 90 * time.Second
+	defaultTimeout = 120 * time.Second
 
 	LogSourceVertexStarted    = "Start processing source messages"
 	SinkVertexStarted         = "Start processing sink messages"

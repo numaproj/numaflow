@@ -87,6 +87,7 @@ impl JSWrappedMessage {
             watermark: None,
             metadata: header.metadata.map(|m| Arc::new(Metadata::from(m))),
             is_late: message_info.is_late,
+            ack_handle: None,
         })
     }
 }
@@ -132,7 +133,7 @@ impl JetStreamReader {
             js_context: Arc::new(js_ctx),
             compression_type: isb_config.map(|c| c.compression.compress_type),
             offset2jsmsg: Arc::new(RwLock::new(HashMap::new())),
-            wip_ack_interval: Duration::from_secs(ack_wait_seconds * 1 / 3), // give 2 chances
+            wip_ack_interval: Duration::from_secs(ack_wait_seconds / 3), // give 2 chances
         })
     }
 

@@ -112,8 +112,7 @@ mod tests {
                     index: i as i32,
                 },
                 headers: Arc::new(headers),
-                metadata: None,
-                is_late: false,
+                ..Default::default()
             });
         }
         let responses = sink.sink(messages).await.expect("Failed to send messages");

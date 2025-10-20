@@ -5,10 +5,11 @@ metadata:
 spec:
   vertices:
     - name: in
+      limits:
+        readBatchSize: 1
       source:
         http: {}
     - name: even-or-odd
-
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/examples/mapper/even_odd

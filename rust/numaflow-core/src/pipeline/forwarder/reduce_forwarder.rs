@@ -26,7 +26,7 @@ use crate::reduce::wal::create_wal_components;
 use crate::reduce::wal::segment::compactor::WindowKind;
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::typ::{NumaflowTypeConfig, WithoutRateLimiter};
 use crate::watermark::WatermarkHandle;
 use crate::{Result, shared};
@@ -96,9 +96,9 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
     aligned_config: AlignedReducerConfig,
-) -> crate::error::Result<()> {
+) -> Result<()> {
     // for reduce we do not pass serving callback handler to tracker.
-    let tracker_handle = TrackerHandle::new(None);
+    let tracker = Tracker::new(None, cln_token.clone());
 
     // Create aligned window manager based on window type
     let window_manager = match &aligned_config.window_config.window_type {
@@ -131,7 +131,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         &js_context,
         &cln_token,
         Some(WindowManager::Aligned(window_manager.clone())),
-        tracker_handle.clone(),
+        tracker.clone(),
         vec![*get_vertex_replica()], // in reduce, we consume from a single partition
     )
     .await?;
@@ -155,7 +155,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         cln_token: cln_token.clone(),
         js_context: &js_context,
         config: &config,
-        tracker_handle: tracker_handle.clone(),
+        tracker: tracker.clone(),
     };
 
     let reader_components = ISBReaderComponents::new(
@@ -177,7 +177,6 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         config: config.to_vertex_config.clone(),
         writers,
         paf_concurrency: config.writer_concurrency,
-        tracker_handle: tracker_handle.clone(),
         watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
         vertex_type: config.vertex_type,
     };
@@ -231,7 +230,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         cln_token: cln_token.clone(),
         js_context: &js_context,
         config: &config,
-        tracker_handle,
+        tracker,
     };
 
     // rate limit is not applicable for reduce
@@ -248,9 +247,9 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
     unaligned_config: UnalignedReducerConfig,
-) -> crate::error::Result<()> {
+) -> Result<()> {
     // for reduce we do not pass serving callback handler to tracker.
-    let tracker_handle = TrackerHandle::new(None);
+    let tracker = Tracker::new(None, cln_token.clone());
 
     // Create unaligned window manager based on window type
     let window_manager = match &unaligned_config.window_config.window_type {
@@ -270,7 +269,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         &js_context,
         &cln_token,
         Some(WindowManager::Unaligned(window_manager.clone())),
-        tracker_handle.clone(),
+        tracker.clone(),
         vec![*get_vertex_replica()], // in reduce, we consume from a single partition
     )
     .await?;
@@ -294,7 +293,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         cln_token: cln_token.clone(),
         js_context: &js_context,
         config: &config,
-        tracker_handle: tracker_handle.clone(),
+        tracker: tracker.clone(),
     };
 
     let reader_components = ISBReaderComponents::new(
@@ -316,7 +315,6 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         config: config.to_vertex_config.clone(),
         writers,
         paf_concurrency: config.writer_concurrency,
-        tracker_handle: tracker_handle.clone(),
         watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
         vertex_type: config.vertex_type,
     };
@@ -368,7 +366,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         cln_token: cln_token.clone(),
         js_context: &js_context,
         config: &config,
-        tracker_handle,
+        tracker,
     };
 
     // rate limit is not applicable for reduce
@@ -404,7 +402,7 @@ async fn run_reduce_forwarder<C: NumaflowTypeConfig>(
     .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
-    let pbq_builder = PBQBuilder::<C>::new(isb_reader, context.tracker_handle.clone());
+    let pbq_builder = PBQBuilder::<C>::new(isb_reader);
     let pbq = match wal {
         Some(wal) => pbq_builder.wal(wal).build(),
         None => pbq_builder.build(),

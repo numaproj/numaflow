@@ -231,7 +231,7 @@ impl ISBWatermarkPublisher {
             offset,
             watermark,
             last_published_time: Instant::now(),
-            delay: None,
+            delay: last_state.delay,
         };
     }
 }

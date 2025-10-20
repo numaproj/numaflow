@@ -13,7 +13,7 @@ use tracing::error;
 use crate::config::get_vertex_name;
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
-use crate::message::{Message, MessageID, Offset};
+use crate::message::{AckHandle, Message, MessageID, Offset};
 use crate::metadata::Metadata;
 use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 use crate::shared::grpc::prost_timestamp_from_utc;
@@ -34,6 +34,7 @@ struct ParentMessageInfo {
     /// one response for a single request.
     current_index: i32,
     metadata: Option<Arc<Metadata>>,
+    ack_handle: Option<Arc<AckHandle>>,
 }
 
 impl From<Message> for MapRequest {
@@ -137,6 +138,7 @@ impl UserDefinedUnaryMap {
             start_time: Instant::now(),
             current_index: 0,
             metadata: message.metadata.clone(),
+            ack_handle: message.ack_handle.clone(),
         };
 
         pipeline_metrics()
@@ -250,6 +252,7 @@ impl UserDefinedBatchMap {
                 start_time: Instant::now(),
                 current_index: 0,
                 metadata: message.metadata.clone(),
+                ack_handle: message.ack_handle.clone(),
             };
 
             pipeline_metrics()
@@ -469,6 +472,7 @@ impl UserDefinedStreamMap {
             is_late: message.is_late,
             current_index: 0,
             metadata: message.metadata.clone(),
+            ack_handle: message.ack_handle.clone(),
         };
 
         pipeline_metrics()
@@ -523,6 +527,7 @@ impl From<UserDefinedMessage<'_>> for Message {
                 }
                 Some(Arc::new(metadata))
             },
+            ack_handle: value.1.ack_handle.clone(),
         }
     }
 }

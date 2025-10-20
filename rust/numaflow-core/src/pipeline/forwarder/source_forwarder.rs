@@ -11,7 +11,7 @@ use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::source::Source;
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::transformer::Transformer;
 use crate::typ::{
     NumaflowTypeConfig, WithInMemoryRateLimiter, WithRedisRateLimiter, WithoutRateLimiter,
@@ -75,7 +75,7 @@ pub(crate) async fn start_source_forwarder(
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
         Some(
             CallbackHandler::new(
-                config.vertex_name.to_string(),
+                config.vertex_name,
                 js_context.clone(),
                 cb_cfg.callback_store,
                 cb_cfg.callback_concurrency,
@@ -86,13 +86,13 @@ pub(crate) async fn start_source_forwarder(
         None
     };
 
-    let tracker_handle = TrackerHandle::new(serving_callback_handler);
+    let tracker = Tracker::new(serving_callback_handler, cln_token.clone());
 
     let context = PipelineContext {
         cln_token: cln_token.clone(),
         js_context: &js_context,
         config: &config,
-        tracker_handle: tracker_handle.clone(),
+        tracker: tracker.clone(),
     };
 
     let writers = create_components::create_js_writers(
@@ -107,7 +107,6 @@ pub(crate) async fn start_source_forwarder(
         config: config.to_vertex_config.clone(),
         writers,
         paf_concurrency: config.writer_concurrency,
-        tracker_handle: tracker_handle.clone(),
         watermark_handle: source_watermark_handle.clone().map(WatermarkHandle::Source),
         vertex_type: config.vertex_type,
     };
@@ -117,7 +116,7 @@ pub(crate) async fn start_source_forwarder(
         config.batch_size,
         config.graceful_shutdown_time,
         source_config.transformer_config.clone(),
-        tracker_handle.clone(),
+        tracker.clone(),
         cln_token.clone(),
     )
     .await?;
@@ -179,7 +178,7 @@ async fn run_source_forwarder<C: NumaflowTypeConfig>(
         context.config.batch_size,
         context.config.read_timeout,
         &source_config.source_config,
-        context.tracker_handle.clone(),
+        context.tracker.clone(),
         transformer,
         source_watermark_handle.clone(),
         context.cln_token.clone(),
@@ -238,7 +237,7 @@ mod tests {
     use crate::shared::grpc::create_rpc_channel;
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
-    use crate::tracker::TrackerHandle;
+    use crate::tracker::Tracker;
     use crate::transformer::Transformer;
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
@@ -342,10 +341,9 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_source_forwarder() {
-        let tracker_handle = TrackerHandle::new(None);
-
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
 
         // create a transformer
         let (st_shutdown_tx, st_shutdown_rx) = oneshot::channel();
@@ -367,15 +365,10 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
-        let transformer = Transformer::new(
-            10,
-            10,
-            Duration::from_secs(10),
-            client,
-            tracker_handle.clone(),
-        )
-        .await
-        .unwrap();
+        let transformer =
+            Transformer::new(10, 10, Duration::from_secs(10), client, tracker.clone())
+                .await
+                .unwrap();
 
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
@@ -414,7 +407,7 @@ mod tests {
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
-            tracker_handle.clone(),
+            tracker.clone(),
             true,
             Some(transformer),
             None,
@@ -481,7 +474,6 @@ mod tests {
             }],
             writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
             watermark_handle: None,
             vertex_type: VertexType::Source,
         };

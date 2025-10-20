@@ -132,7 +132,6 @@ pub(crate) async fn create_wal_components(
             wal_path.clone(),
             storage_config.max_file_size_mb,
             storage_config.flush_interval_ms,
-            storage_config.channel_buffer_size,
             storage_config.max_segment_age_secs,
         )
         .await?;
@@ -142,7 +141,6 @@ pub(crate) async fn create_wal_components(
             window_kind,
             storage_config.max_file_size_mb,
             storage_config.flush_interval_ms,
-            storage_config.channel_buffer_size,
             storage_config.max_segment_age_secs,
         )
         .await?;
@@ -152,7 +150,6 @@ pub(crate) async fn create_wal_components(
             wal_path,
             storage_config.max_file_size_mb,
             storage_config.flush_interval_ms,
-            storage_config.channel_buffer_size,
             storage_config.max_segment_age_secs,
         )
         .await?;

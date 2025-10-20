@@ -1392,7 +1392,7 @@ mod tests {
     use crate::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::SourceType;
     use crate::source::user_defined::new_source;
-    use crate::tracker::TrackerHandle;
+    use crate::tracker::Tracker;
     use numaflow::shared::ServerExtras;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
@@ -1523,7 +1523,7 @@ mod tests {
         .await
         .expect("Failed to create source reader");
 
-        let tracker = TrackerHandle::new(None);
+        let tracker = Tracker::new(None, CancellationToken::new());
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
@@ -1540,7 +1540,6 @@ mod tests {
             SinkClientType::UserDefined(SinkClient::new(
                 create_rpc_channel(sink_sock_file).await.unwrap(),
             )),
-            tracker.clone(),
         )
         .fb_sink_client(SinkClientType::UserDefined(SinkClient::new(
             create_rpc_channel(fb_sink_sock_file).await.unwrap(),
