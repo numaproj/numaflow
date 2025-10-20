@@ -115,7 +115,6 @@ mod tests {
     use super::*;
     use crate::config::pipeline::watermark::IdleConfig;
     use std::time::Duration;
-    use tokio::time;
 
     #[test]
     fn test_is_source_idling() {

@@ -891,9 +891,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_source_transformer_map_operation() {
-        let tracker_handle = TrackerHandle::new(None);
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
+        let tracker_handle = Tracker::new(None, cln_token.clone());
 
         // create a transformer
         let (st_shutdown_tx, st_shutdown_rx) = oneshot::channel();
@@ -913,6 +913,7 @@ mod tests {
         });
 
         // wait for the server to start
+        // TODO: flaky
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
@@ -1003,15 +1004,11 @@ mod tests {
         .await
         .unwrap();
 
-        let sink_writer = SinkWriterBuilder::new(
-            10,
-            Duration::from_millis(100),
-            SinkClientType::Log,
-            tracker_handle.clone(),
-        )
-        .build()
-        .await
-        .unwrap();
+        let sink_writer =
+            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
+                .build()
+                .await
+                .unwrap();
 
         // create the forwarder with the source, transformer, and writer
         let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
@@ -1038,6 +1035,7 @@ mod tests {
             tokio_result.is_ok(),
             "Timeout occurred before pending became zero"
         );
+
         cln_token.cancel();
         forwarder_handle.await.unwrap().unwrap();
         mp_shutdown_tx.send(()).unwrap();
@@ -1045,5 +1043,6 @@ mod tests {
         src_shutdown_tx.send(()).unwrap();
         source_handle.await.unwrap();
         map_handle.await.unwrap();
+        transformer_handle.await.unwrap();
     }
 }
