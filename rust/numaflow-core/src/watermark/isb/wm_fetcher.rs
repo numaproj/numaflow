@@ -11,7 +11,6 @@ use crate::error::Result;
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::wmb::{WMB, Watermark};
 use std::collections::HashMap;
-use std::time::{Duration, SystemTime};
 
 /// ISBWatermarkFetcher is the watermark fetcher for the incoming edges.
 pub(crate) struct ISBWatermarkFetcher {
@@ -21,8 +20,6 @@ pub(crate) struct ISBWatermarkFetcher {
     /// A map of vertex to its last processed watermark for each partition. Index[0] will be 0th
     /// partition, and so forth.
     last_processed_wm: HashMap<&'static str, HashMap<u16, i64>>,
-    /// Last time we logged fetch_watermark info (for throttling)
-    last_log_time: SystemTime,
 }
 
 impl ISBWatermarkFetcher {
@@ -45,7 +42,6 @@ impl ISBWatermarkFetcher {
         Ok(ISBWatermarkFetcher {
             processor_managers,
             last_processed_wm,
-            last_log_time: SystemTime::now(),
         })
     }
 
@@ -105,22 +101,7 @@ impl ISBWatermarkFetcher {
             }
         }
         // now we computed and updated for this partition, we just need to compare across partitions.
-        let fetched_wm = self.get_watermark();
-        if SystemTime::now()
-            .duration_since(self.last_log_time)
-            .unwrap()
-            >= Duration::from_secs(1)
-        {
-            tracing::info!(
-                offset = offset,
-                partition_idx = partition_idx,
-                watermark = fetched_wm.timestamp_millis(),
-                managers = ?self.processor_managers,
-                "fetch_watermark called"
-            );
-            self.last_log_time = SystemTime::now();
-        }
-        fetched_wm
+        self.get_watermark()
     }
 
     /// Fetches the head watermark using the watermark fetcher. This returns the minimum

@@ -1333,7 +1333,6 @@ mod tests {
     #[cfg(feature = "global-state-tests")]
     #[tokio::test]
     async fn test_map_stream_panic() -> Result<()> {
-        tracing_subscriber::fmt::init();
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("map_stream_panic.sock");

@@ -133,10 +133,9 @@ impl Tracker {
         // spawn a task to log the number of processed messages every second, cln_token is used to
         // stop the task when the tracker is dropped.
         tokio::spawn({
-            let tracker = tracker.clone();
             let processed_msg_count = Arc::clone(&processed_msg_count);
             async move {
-                Self::log_processed_msg_count(processed_msg_count, tracker, cln_token).await;
+                Self::log_processed_msg_count(processed_msg_count, cln_token).await;
             }
         });
 
@@ -146,7 +145,6 @@ impl Tracker {
     /// Logs the number of processed messages every second.
     async fn log_processed_msg_count(
         processed_msg_count: Arc<AtomicUsize>,
-        tracker: Tracker,
         cln_token: CancellationToken,
     ) {
         let mut ticker = tokio::time::interval(tokio::time::Duration::from_secs(1));
@@ -157,8 +155,7 @@ impl Tracker {
                 }
                 _ = ticker.tick() => {
                     let processed = processed_msg_count.swap(0, Ordering::Relaxed);
-                    let lowest_watermark = tracker.lowest_watermark().await.unwrap_or_default().timestamp_millis();
-                    info!(?processed, ?lowest_watermark, "Processed messages per second");
+                    info!(?processed, "Processed messages per second");
                 }
             }
         }

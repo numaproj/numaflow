@@ -701,7 +701,6 @@ impl UnalignedReducer {
             .close_windows(watermark.sub(self.allowed_lateness));
 
         for window_msg in window_messages {
-            info!(?window_msg, "Sending close window message");
             actor_tx
                 .send(window_msg)
                 .await
