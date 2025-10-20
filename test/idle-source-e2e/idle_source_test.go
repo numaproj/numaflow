@@ -61,7 +61,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 	done := make(chan struct{})
 	go func() {
 		// publish messages to source vertex, with event time starting from 0
-		startTime := time.Now().UnixMilli()
+		startTime := int(time.Now().UnixMilli())
 		for i := 0; true; i++ {
 			select {
 			case <-ctx.Done():
