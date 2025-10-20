@@ -192,6 +192,12 @@ func validateIdleSource(pl dfv1.Pipeline) error {
 			return fmt.Errorf("invalid idle source watermark config, incrementBy should be greater than 0")
 		} else if pl.Spec.Watermark.IdleSource.Threshold.Duration < pl.Spec.Watermark.IdleSource.IncrementBy.Duration {
 			return fmt.Errorf("invalid idle source watermark config, threshold should be greater than or equal to incrementBy")
+		} else if pl.Spec.Watermark.IdleSource.InitSourceDelay != nil {
+			if pl.Spec.Watermark.IdleSource.InitSourceDelay.Duration <= 0 {
+				return fmt.Errorf("invalid idle source watermark config, initSourceDelay should be greater than 0")
+			} else if pl.Spec.Watermark.IdleSource.InitSourceDelay.Duration < pl.Spec.Watermark.IdleSource.Threshold.Duration {
+				return fmt.Errorf("invalid idle source watermark config, initSourceDelay should be greater than or equal to threshold")
+			}
 		}
 	}
 	return nil

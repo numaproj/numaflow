@@ -20,6 +20,8 @@ limitations under the License.
 pub struct IdleSource {
     #[serde(rename = "incrementBy", skip_serializing_if = "Option::is_none")]
     pub increment_by: Option<kube::core::Duration>,
+    #[serde(rename = "initSourceDelay", skip_serializing_if = "Option::is_none")]
+    pub init_source_delay: Option<kube::core::Duration>,
     #[serde(rename = "stepInterval", skip_serializing_if = "Option::is_none")]
     pub step_interval: Option<kube::core::Duration>,
     #[serde(rename = "threshold", skip_serializing_if = "Option::is_none")]
@@ -30,6 +32,7 @@ impl IdleSource {
     pub fn new() -> IdleSource {
         IdleSource {
             increment_by: None,
+            init_source_delay: None,
             step_interval: None,
             threshold: None,
         }
