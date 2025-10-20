@@ -348,7 +348,7 @@ impl ReduceTask {
                 let gc_event: GcEvent = window.into();
                 let gc_event_bytes = gc_event.encode_to_vec();
                 if let Err(e) = gc_wal_tx
-                    .send(SegmentWriteMessage::WriteRawData {
+                    .send(SegmentWriteMessage::WriteGcEvent {
                         data: gc_event_bytes.into(),
                     })
                     .await

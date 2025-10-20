@@ -247,7 +247,7 @@ impl Compactor {
                         // Send the message to the compaction WAL
                         // No message handle needed for compaction writes
                         wal_tx
-                            .send(SegmentWriteMessage::WriteRawData { data: data.clone() })
+                            .send(SegmentWriteMessage::WriteGcEvent { data: data.clone() })
                             .await
                             .map_err(|e| {
                                 format!("Failed to send message to compaction WAL: {e}")
@@ -549,7 +549,7 @@ mod tests {
             let mut buf = Vec::new();
             prost::Message::encode(&event, &mut buf)
                 .map_err(|e| format!("Failed to encode GC event: {e}"))?;
-            tx.send(SegmentWriteMessage::WriteRawData {
+            tx.send(SegmentWriteMessage::WriteGcEvent {
                 data: Bytes::from(buf),
             })
             .await
@@ -651,7 +651,7 @@ mod tests {
             let mut buf = Vec::new();
             prost::Message::encode(&event, &mut buf)
                 .map_err(|e| format!("Failed to encode GC event: {e}"))?;
-            tx.send(SegmentWriteMessage::WriteRawData {
+            tx.send(SegmentWriteMessage::WriteGcEvent {
                 data: Bytes::from(buf),
             })
             .await
@@ -728,13 +728,13 @@ mod tests {
             .unwrap();
 
         // Write GC events as raw data
-        tx.send(SegmentWriteMessage::WriteRawData {
+        tx.send(SegmentWriteMessage::WriteGcEvent {
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event_1)),
         })
         .await
         .unwrap();
 
-        tx.send(SegmentWriteMessage::WriteRawData {
+        tx.send(SegmentWriteMessage::WriteGcEvent {
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event_2)),
         })
         .await
@@ -888,7 +888,7 @@ mod tests {
         let mut buf = Vec::new();
         prost::Message::encode(&gc_event, &mut buf)
             .map_err(|e| format!("Failed to encode GC event: {e}"))?;
-        tx.send(SegmentWriteMessage::WriteRawData {
+        tx.send(SegmentWriteMessage::WriteGcEvent {
             data: Bytes::from(buf),
         })
         .await
@@ -1087,7 +1087,7 @@ mod tests {
             let mut buf = Vec::new();
             prost::Message::encode(&event, &mut buf)
                 .map_err(|e| format!("Failed to encode GC event: {e}"))?;
-            tx.send(SegmentWriteMessage::WriteRawData {
+            tx.send(SegmentWriteMessage::WriteGcEvent {
                 data: Bytes::from(buf),
             })
             .await

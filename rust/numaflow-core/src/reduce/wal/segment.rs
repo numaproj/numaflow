@@ -157,7 +157,7 @@ mod tests {
             .await
             .unwrap();
 
-        tx.send(SegmentWriteMessage::WriteRawData {
+        tx.send(SegmentWriteMessage::WriteGcEvent {
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event)),
         })
         .await
@@ -295,13 +295,13 @@ mod tests {
             .unwrap();
 
         // Send both GC events
-        tx.send(SegmentWriteMessage::WriteRawData {
+        tx.send(SegmentWriteMessage::WriteGcEvent {
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event1)),
         })
         .await
         .unwrap();
 
-        tx.send(SegmentWriteMessage::WriteRawData {
+        tx.send(SegmentWriteMessage::WriteGcEvent {
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event2)),
         })
         .await

@@ -29,8 +29,8 @@ pub(crate) enum SegmentWriteMessage {
         /// Message to be written. Will be dropped after successful write.
         message: Message,
     },
-    /// Writes raw data to the WAL (e.g., GC events).
-    WriteRawData {
+    /// Writes GC Events to the WAL
+    WriteGcEvent {
         /// Raw data to be written to the WAL.
         data: Bytes,
     },
@@ -162,7 +162,7 @@ impl SegmentWriteActor {
                     }
                 };
             }
-            SegmentWriteMessage::WriteRawData { data } => {
+            SegmentWriteMessage::WriteGcEvent { data } => {
                 // Just write the raw data
                 self.write_data(data).await?;
             }
