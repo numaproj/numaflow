@@ -18,7 +18,7 @@ use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_metric_labels, pipeline_metrics,
 };
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::transformer::user_defined::UserDefinedTransformer;
 
 /// User-Defined Transformer is a custom transformer that can be built by the user.
@@ -71,7 +71,7 @@ pub(crate) struct Transformer {
     sender: mpsc::Sender<TransformerActorMessage>,
     concurrency: usize,
     graceful_shutdown_time: Duration,
-    tracker_handle: TrackerHandle,
+    tracker: Tracker,
     health_checker: Option<SourceTransformClient<Channel>>,
 }
 
@@ -81,7 +81,7 @@ impl Transformer {
         concurrency: usize,
         graceful_timeout: Duration,
         client: SourceTransformClient<Channel>,
-        tracker_handle: TrackerHandle,
+        tracker: Tracker,
     ) -> Result<Self> {
         let (sender, receiver) = mpsc::channel(batch_size);
         let transformer_actor = TransformerActor::new(
@@ -97,7 +97,7 @@ impl Transformer {
             concurrency,
             graceful_shutdown_time: graceful_timeout,
             sender,
-            tracker_handle,
+            tracker,
             health_checker: Some(client),
         })
     }
@@ -157,7 +157,7 @@ impl Transformer {
     ) -> Result<Vec<Message>> {
         let batch_start_time = tokio::time::Instant::now();
         let transform_handle = self.sender.clone();
-        let tracker_handle = self.tracker_handle.clone();
+        let tracker = self.tracker.clone();
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
         let mut labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
         labels.push((
@@ -199,7 +199,7 @@ impl Transformer {
             .map(|read_msg| {
                 let permit_fut = Arc::clone(&semaphore).acquire_owned();
                 let transform_handle = transform_handle.clone();
-                let tracker_handle = tracker_handle.clone();
+                let tracker = tracker.clone();
                 let hard_shutdown_token = hard_shutdown_token.clone();
 
                 tokio::spawn(async move {
@@ -216,16 +216,15 @@ impl Transformer {
                     .await?;
 
                     // update the tracker with the number of responses for each message
-                    tracker_handle
-                        .update(
-                            read_msg.offset.clone(),
+                    tracker
+                        .serving_update(
+                            &read_msg.offset,
                             transformed_messages
                                 .iter()
                                 .map(|m| m.tags.clone())
                                 .collect(),
                         )
                         .await?;
-                    tracker_handle.eof(read_msg.offset.clone()).await?;
 
                     Ok::<Vec<Message>, Error>(transformed_messages)
                 })
@@ -372,17 +371,11 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker = Tracker::new(None, CancellationToken::new());
 
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
-        let transformer = Transformer::new(
-            500,
-            10,
-            Duration::from_secs(10),
-            client,
-            tracker_handle.clone(),
-        )
-        .await?;
+        let transformer =
+            Transformer::new(500, 10, Duration::from_secs(10), client, tracker.clone()).await?;
 
         let message = Message {
             typ: Default::default(),
@@ -397,9 +390,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
-            headers: Default::default(),
-            metadata: None,
-            is_late: false,
+            ..Default::default()
         };
 
         let transformed_messages = Transformer::transform(
@@ -450,16 +441,10 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker = Tracker::new(None, CancellationToken::new());
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
-        let transformer = Transformer::new(
-            500,
-            10,
-            Duration::from_secs(10),
-            client,
-            tracker_handle.clone(),
-        )
-        .await?;
+        let transformer =
+            Transformer::new(500, 10, Duration::from_secs(10), client, tracker.clone()).await?;
 
         let mut messages = vec![];
         for i in 0..5 {
@@ -476,9 +461,7 @@ mod tests {
                     offset: i.to_string().into(),
                     index: i,
                 },
-                headers: Default::default(),
-                metadata: None,
-                is_late: false,
+                ..Default::default()
             };
             messages.push(message);
         }
@@ -539,16 +522,10 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker = Tracker::new(None, CancellationToken::new());
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
-        let transformer = Transformer::new(
-            500,
-            10,
-            Duration::from_secs(10),
-            client,
-            tracker_handle.clone(),
-        )
-        .await?;
+        let transformer =
+            Transformer::new(500, 10, Duration::from_secs(10), client, tracker.clone()).await?;
 
         let message = Message {
             typ: Default::default(),
@@ -563,9 +540,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
-            headers: Default::default(),
-            metadata: None,
-            is_late: false,
+            ..Default::default()
         };
 
         let result = transformer

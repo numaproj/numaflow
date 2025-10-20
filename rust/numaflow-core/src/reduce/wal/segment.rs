@@ -114,13 +114,11 @@ impl From<GcEventEntry> for GcEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{Message, MessageID, Offset, StringOffset};
-    use crate::reduce::wal::WalMessage;
+    use crate::message::{IntOffset, Message, MessageID, Offset};
     use crate::reduce::wal::segment::WalType;
     use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
     use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
     use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
-    use bytes::Bytes;
     use chrono::{TimeZone, Utc};
     use std::sync::Arc;
     use std::time::Duration;
@@ -138,7 +136,6 @@ mod tests {
             test_path.clone(),
             1,    // 1MB
             1000, // 1s flush interval
-            500,  // channel buffer
             300,  // 5 minutes
         )
         .await
@@ -155,13 +152,12 @@ mod tests {
         };
 
         let (tx, rx) = tokio::sync::mpsc::channel(10);
-        let (_offset_stream, handle) = gc_wal
+        let handle = gc_wal
             .streaming_write(ReceiverStream::new(rx))
             .await
             .unwrap();
 
-        tx.send(SegmentWriteMessage::WriteData {
-            offset: Some(Offset::String(StringOffset::new("gc".to_string(), 0))),
+        tx.send(SegmentWriteMessage::WriteGcEvent {
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event)),
         })
         .await
@@ -176,7 +172,6 @@ mod tests {
             test_path.clone(),
             1,    // 20MB
             1000, // 1s flush interval
-            500,  // channel buffer
             300,  // 5 minutes
         )
         .await
@@ -184,7 +179,7 @@ mod tests {
 
         // Write 100 segment entries
         let (tx, rx) = tokio::sync::mpsc::channel(100);
-        let (_offset_stream, handle) = segment_wal
+        let handle = segment_wal
             .streaming_write(ReceiverStream::new(rx))
             .await
             .unwrap();
@@ -197,27 +192,24 @@ mod tests {
             message.event_time = start_time + (time_increment * i);
             message.keys = Arc::from(vec!["test-key".to_string()]);
             message.value = bytes::Bytes::from(vec![1, 2, 3]);
+            message.offset = Offset::Int(IntOffset::new(i as i64, 0));
             message.id = MessageID {
                 vertex_name: "test-vertex".to_string().into(),
                 offset: i.to_string().into(),
                 index: 0,
             };
-            let message: WalMessage = message.into();
 
-            let proto_message: Bytes = message.try_into().unwrap();
-            tx.send(SegmentWriteMessage::WriteData {
-                offset: Some(Offset::String(StringOffset::new(format!("msg-{}", i), 0))),
-                data: proto_message,
-            })
-            .await
-            .unwrap();
+            // Send message - conversion to bytes happens internally
+            tx.send(SegmentWriteMessage::WriteMessage { message })
+                .await
+                .unwrap();
         }
 
         drop(tx);
         handle.await.unwrap().unwrap();
 
         // Create and run compactor
-        let compactor = Compactor::new(test_path.clone(), WindowKind::Aligned, 1, 1000, 500, 300)
+        let compactor = Compactor::new(test_path.clone(), WindowKind::Aligned, 1, 1000, 300)
             .await
             .unwrap();
 
@@ -274,7 +266,6 @@ mod tests {
             test_path.clone(),
             1,    // 1MB
             1000, // 1s flush interval
-            500,  // channel buffer
             300,  // 5 minutes
         )
         .await
@@ -298,21 +289,19 @@ mod tests {
         };
 
         let (tx, rx) = tokio::sync::mpsc::channel(10);
-        let (_offset_stream, handle) = gc_wal
+        let handle = gc_wal
             .streaming_write(ReceiverStream::new(rx))
             .await
             .unwrap();
 
         // Send both GC events
-        tx.send(SegmentWriteMessage::WriteData {
-            offset: Some(Offset::String(StringOffset::new("gc1".to_string(), 0))),
+        tx.send(SegmentWriteMessage::WriteGcEvent {
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event1)),
         })
         .await
         .unwrap();
 
-        tx.send(SegmentWriteMessage::WriteData {
-            offset: Some(Offset::String(StringOffset::new("gc2".to_string(), 0))),
+        tx.send(SegmentWriteMessage::WriteGcEvent {
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event2)),
         })
         .await
@@ -327,7 +316,6 @@ mod tests {
             test_path.clone(),
             1,    // 20MB
             1000, // 1s flush interval
-            500,  // channel buffer
             300,  // 5 minutes
         )
         .await
@@ -335,7 +323,7 @@ mod tests {
 
         // Write segment entries with different keys
         let (tx, rx) = tokio::sync::mpsc::channel(100);
-        let (_offset_stream, handle) = segment_wal
+        let handle = segment_wal
             .streaming_write(ReceiverStream::new(rx))
             .await
             .unwrap();
@@ -353,20 +341,17 @@ mod tests {
             message.keys = Arc::from(vec![key.to_string()]);
 
             message.value = bytes::Bytes::from(vec![1, 2, 3]);
+            message.offset = Offset::Int(IntOffset::new(i as i64, 0));
             message.id = MessageID {
                 vertex_name: "test-vertex".to_string().into(),
                 offset: i.to_string().into(),
                 index: 0,
             };
-            let message: WalMessage = message.into();
 
-            let proto_message: Bytes = message.try_into().unwrap();
-            tx.send(SegmentWriteMessage::WriteData {
-                offset: Some(Offset::String(StringOffset::new(format!("msg-{}", i), 0))),
-                data: proto_message,
-            })
-            .await
-            .unwrap();
+            // Send message - conversion to bytes happens internally
+            tx.send(SegmentWriteMessage::WriteMessage { message })
+                .await
+                .unwrap();
         }
 
         drop(tx);
@@ -378,7 +363,6 @@ mod tests {
             WindowKind::Unaligned,
             1,    // 20MB
             1000, // 1s flush interval
-            500,  // channel buffer
             300,  // max_segment_age_secs
         )
         .await

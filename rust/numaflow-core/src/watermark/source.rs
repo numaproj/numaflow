@@ -1008,6 +1008,7 @@ mod tests {
             threshold: Duration::from_millis(10),
             step_interval: Duration::from_millis(5),
             increment_by: Duration::from_millis(1),
+            init_source_delay: None,
         };
 
         let mut handle = SourceWatermarkHandle::new(
@@ -1200,6 +1201,7 @@ mod tests {
             threshold: Duration::from_millis(2000), // set higher value so that the source won't be idling
             step_interval: Duration::from_millis(3),
             increment_by: Duration::from_millis(1),
+            init_source_delay: None,
         };
 
         let mut handle = SourceWatermarkHandle::new(
@@ -1276,7 +1278,7 @@ mod tests {
             .await
             .expect("Failed to get ot bucket");
 
-        let timeout_duration = Duration::from_secs(1);
+        let timeout_duration = Duration::from_secs(2);
         let result = tokio::time::timeout(timeout_duration, async {
             loop {
                 if let Some(wmb) = ot_bucket.get("v1-0").await.expect("Failed to get wmb") {
@@ -1286,7 +1288,7 @@ mod tests {
                         return true; // Found idle watermark
                     }
                 }
-                tokio::time::sleep(Duration::from_millis(10)).await;
+                tokio::time::sleep(Duration::from_millis(50)).await;
             }
         })
         .await;

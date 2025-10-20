@@ -44,8 +44,8 @@ impl TryFrom<WalMessage> for Bytes {
                     kind: message.typ.into(),
                     id: Some(message.id.into()),
                     keys: message.keys.to_vec(),
-                    headers: message.headers,
-                    metadata: message.metadata.map(|m| m.into()),
+                    headers: Arc::unwrap_or_clone(message.headers),
+                    metadata: message.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
                 }),
                 body: Some(numaflow_pb::objects::isb::Body {
                     payload: message.value.to_vec(),
@@ -132,7 +132,6 @@ pub(crate) async fn create_wal_components(
             wal_path.clone(),
             storage_config.max_file_size_mb,
             storage_config.flush_interval_ms,
-            storage_config.channel_buffer_size,
             storage_config.max_segment_age_secs,
         )
         .await?;
@@ -142,7 +141,6 @@ pub(crate) async fn create_wal_components(
             window_kind,
             storage_config.max_file_size_mb,
             storage_config.flush_interval_ms,
-            storage_config.channel_buffer_size,
             storage_config.max_segment_age_secs,
         )
         .await?;
@@ -152,7 +150,6 @@ pub(crate) async fn create_wal_components(
             wal_path,
             storage_config.max_file_size_mb,
             storage_config.flush_interval_ms,
-            storage_config.channel_buffer_size,
             storage_config.max_segment_age_secs,
         )
         .await?;

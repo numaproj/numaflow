@@ -37,8 +37,9 @@ impl From<NatsMessage> for Message {
             },
             headers: Default::default(),
             // Set default metadata so that metadata is always present.
-            metadata: Some(Metadata::default()),
+            metadata: Some(Arc::new(Metadata::default())),
             is_late: false,
+            ack_handle: None,
         }
     }
 }

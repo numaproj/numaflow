@@ -6,11 +6,14 @@ spec:
   watermark:
     maxDelay: 30s
   limits:
-    readBatchSize: 50
+    readTimeout: 50ms
+    readBatchSize: 10
   vertices:
     - name: in
       limits:
         readBatchSize: 1
+      scale:
+        min: 1
       source:
         http: {}
     - name: atoi

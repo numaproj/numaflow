@@ -1,4 +1,5 @@
 use numaflow_kafka::sink::{KafkaSink, KafkaSinkMessage, KafkaSinkResponse};
+use std::collections::HashMap;
 
 use crate::error::{Error, Result};
 use crate::message::Message;
@@ -7,13 +8,18 @@ use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
 impl TryFrom<Message> for KafkaSinkMessage {
     type Error = Error;
 
-    fn try_from(mut msg: Message) -> Result<Self> {
+    fn try_from(msg: Message) -> Result<Self> {
+        let mut headers: HashMap<String, String> = msg
+            .headers
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
         let id = msg.id.to_string();
         // Add all message keys to the Kafka headers
-        msg.headers
-            .insert("__key_len".to_string(), msg.keys.len().to_string());
+        headers.insert("__key_len".to_string(), msg.keys.len().to_string());
         for (i, key) in msg.keys.iter().enumerate() {
-            msg.headers.insert(format!("__key_{i}"), key.to_string());
+            headers.insert(format!("__key_{i}"), key.to_string());
         }
 
         let partition_key = if msg.keys.is_empty() {
@@ -25,7 +31,7 @@ impl TryFrom<Message> for KafkaSinkMessage {
         Ok(Self {
             id,
             partition_key,
-            headers: msg.headers,
+            headers,
             payload: msg.value,
         })
     }
@@ -105,9 +111,8 @@ mod tests {
                     offset: i.to_string().into(),
                     index: i as i32,
                 },
-                headers,
-                metadata: None,
-                is_late: false,
+                headers: Arc::new(headers),
+                ..Default::default()
             });
         }
         let responses = sink.sink(messages).await.expect("Failed to send messages");

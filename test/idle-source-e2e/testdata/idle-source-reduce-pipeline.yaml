@@ -5,14 +5,23 @@ metadata:
 spec:
   limits:
     readBatchSize: 50
+    readTimeout: 50ms
   watermark:
     maxDelay: 20s
     idleSource:
       threshold: 5s # The pipeline will be considered idle if the source has not emitted any data for given threshold value.
       incrementBy: 2s # If source is found to be idle then increment the watermark by given incrementBy value.
       stepInterval: 2s # If source is idling then publish the watermark only when step interval has passed.
+      initSourceDelay: 5s # Progress the watermark for a source that hasn't produced any data ever, after initSourceDelay.
   vertices:
     - name: in
+      limits:
+        readBatchSize: 1
+      scale:
+        min: 1
+      source:
+        http: {}
+    - name: in-two
       scale:
         min: 1
       source:
@@ -56,6 +65,8 @@ spec:
                 value: "http-idle-source-sink"
   edges:
     - from: in
+      to: atoi
+    - from: in-two
       to: atoi
     - from: atoi
       to: compute-sum

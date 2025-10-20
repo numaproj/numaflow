@@ -85,7 +85,7 @@ pub mod tests {
     use crate::sink::SinkWriter;
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
-    use crate::tracker::TrackerHandle;
+    use crate::tracker::Tracker;
     use aws_sdk_sqs::Config;
     use aws_sdk_sqs::config::BehaviorVersion;
     use aws_sdk_sqs::types::BatchResultErrorEntry;
@@ -178,13 +178,13 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_sqs_sink_e2e() {
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker = Tracker::new(None, CancellationToken::new());
         let cln_token = CancellationToken::new();
 
         let (source, src_handle, src_shutdown_tx) =
-            get_simple_source(tracker_handle.clone(), cln_token.clone()).await;
+            get_simple_source(tracker.clone(), cln_token.clone()).await;
         // let source = get_sqs_source().await;
-        let sink_writer = get_sqs_sink(tracker_handle.clone()).await;
+        let sink_writer = get_sqs_sink().await;
         // create the forwarder with the source, transformer, and writer
         let forwarder = Forwarder::new(source.clone(), None, sink_writer);
 
@@ -218,7 +218,7 @@ pub mod tests {
     }
 
     async fn get_simple_source(
-        tracker_handle: TrackerHandle,
+        tracker: Tracker,
         cln_token: CancellationToken,
     ) -> (
         Source<crate::typ::WithoutRateLimiter>,
@@ -257,7 +257,7 @@ pub mod tests {
             Source::new(
                 5,
                 SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
-                tracker_handle.clone(),
+                tracker.clone(),
                 true,
                 None,
                 None,
@@ -268,7 +268,7 @@ pub mod tests {
         )
     }
 
-    async fn get_sqs_sink(tracker_handle: TrackerHandle) -> SinkWriter {
+    async fn get_sqs_sink() -> SinkWriter {
         let queue_url_output = get_queue_url_output();
         let sqs_operation_mocks = MockResponseInterceptor::new()
             .rule_mode(RuleMode::MatchAny)
@@ -291,15 +291,10 @@ pub mod tests {
 
         // create sink writer
         use crate::sink::{SinkClientType, SinkWriterBuilder};
-        SinkWriterBuilder::new(
-            5,
-            Duration::from_millis(100),
-            SinkClientType::Sqs(sqs_sink),
-            tracker_handle.clone(),
-        )
-        .build()
-        .await
-        .unwrap()
+        SinkWriterBuilder::new(5, Duration::from_millis(100), SinkClientType::Sqs(sqs_sink))
+            .build()
+            .await
+            .unwrap()
     }
 
     fn get_send_message_output(count: i32) -> Rule {

@@ -1,9 +1,18 @@
+//! Message is the message read from the source or ISB and is passed around till it is forwarded to
+//! the next vertex or the sink. The moment the message is read, it is inserted into the [crate::tracker]
+//! and an ack task is spawned (for ISB we have an additional work-in-progress loop). This spawned task
+//! is responsible for sending the ack/nak to the source once the [Message] has completed its life-cycle
+//! (successfully processed (can include dropped) - ack, or failed - nack).
+//! The spawned task exposes an [AckHandle] which implements [Drop] trait. As the message is processed,
+//! and cloned (e.g., flat-map), the reference counted Handle will keep track and eventually will be
+//! dropped once the all the copies of [Message] are dropped. This trigger the final ack/nak.
+
+use crate::Error;
 use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
-
-use crate::Error;
+use std::sync::atomic::AtomicBool;
 
 use crate::metadata::Metadata;
 use crate::shared::grpc::prost_timestamp_from_utc;
@@ -11,6 +20,7 @@ use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
+use tokio::sync::oneshot;
 
 const DROP: &str = "U+005C__DROP__";
 
@@ -37,12 +47,45 @@ pub(crate) struct Message {
     /// id of the message
     pub(crate) id: MessageID,
     /// headers of the message
-    pub(crate) headers: HashMap<String, String>,
+    pub(crate) headers: Arc<HashMap<String, String>>,
     /// Additional metadata that could be passed per message between the vertices.
-    pub(crate) metadata: Option<Metadata>,
+    pub(crate) metadata: Option<Arc<Metadata>>,
     /// is_late is used to indicate if the message is a late data. Late data is data that arrives
     /// after the watermark has passed. This is set only at source.
     pub(crate) is_late: bool,
+    /// ack_handle is used to send the ack/nak to the source. It is optional because it is not used
+    /// when the message is originated from the WAL (reduce vertex).
+    pub(crate) ack_handle: Option<Arc<AckHandle>>,
+}
+
+/// AckHandle is used to send the ack/nak to the source but it is reference counted and makes sure
+/// when it is dropped, we send the ack/nak to the source.
+#[derive(Debug)]
+pub(crate) struct AckHandle {
+    pub(crate) ack_handle: Option<oneshot::Sender<ReadAck>>,
+    pub(crate) is_failed: AtomicBool,
+}
+
+impl AckHandle {
+    /// create a new AckHandle for a message.
+    pub(crate) fn new(ack_handle: oneshot::Sender<ReadAck>) -> Self {
+        Self {
+            ack_handle: Some(ack_handle),
+            is_failed: AtomicBool::new(false),
+        }
+    }
+}
+
+impl Drop for AckHandle {
+    fn drop(&mut self) {
+        if let Some(ack_handle) = self.ack_handle.take() {
+            if self.is_failed.load(std::sync::atomic::Ordering::Relaxed) {
+                ack_handle.send(ReadAck::Nak).expect("Failed to send nak");
+            } else {
+                ack_handle.send(ReadAck::Ack).expect("Failed to send ack");
+            }
+        }
+    }
 }
 
 /// Type of the [Message].
@@ -94,10 +137,11 @@ impl Default for Message {
             event_time: Utc::now(),
             watermark: None,
             id: Default::default(),
-            headers: HashMap::new(),
+            headers: Arc::new(HashMap::new()),
             metadata: None,
             typ: Default::default(),
             is_late: false,
+            ack_handle: None,
         }
     }
 }
@@ -312,10 +356,11 @@ impl TryFrom<Message> for BytesMut {
                 kind: message.typ.into(),
                 id: Some(message.id.into()),
                 keys: message.keys.to_vec(),
-                headers: message.headers,
-                metadata: message.metadata.map(|mut m| {
+                headers: Arc::unwrap_or_clone(message.headers),
+                metadata: message.metadata.map(|m| {
                     // When writing to JetStream, we set previous_vertex to current vertex name
                     // so that the next vertex knows who sent the message
+                    let mut m = Arc::unwrap_or_clone(m);
                     m.previous_vertex = crate::config::get_vertex_name().to_string();
                     m.into()
                 }),
@@ -335,8 +380,6 @@ impl TryFrom<Message> for BytesMut {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use chrono::TimeZone;
     use numaflow_pb::objects::isb::{
         Body, Header, Message as ProtoMessage, MessageId, MessageInfo,
@@ -382,9 +425,7 @@ mod tests {
                 offset: "123".to_string().into(),
                 index: 0,
             },
-            headers: HashMap::new(),
-            metadata: None,
-            is_late: false,
+            ..Default::default()
         };
 
         let result: Result<BytesMut> = message.clone().try_into();
@@ -399,8 +440,8 @@ mod tests {
                 kind: numaflow_pb::objects::isb::MessageKind::Data as i32,
                 id: Some(message.id.into()),
                 keys: message.keys.to_vec(),
-                headers: message.headers,
-                metadata: message.metadata.map(|m| m.into()),
+                headers: Arc::unwrap_or_clone(message.headers),
+                metadata: message.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
             }),
             body: Some(Body {
                 payload: message.value.clone().into(),

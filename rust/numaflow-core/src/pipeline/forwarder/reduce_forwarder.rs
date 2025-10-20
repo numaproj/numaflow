@@ -8,8 +8,9 @@ use crate::metrics::{
     ComponentHealthChecks, LagReader, MetricsState, PipelineComponents, WatermarkFetcherState,
 };
 use crate::pipeline::PipelineContext;
-use crate::pipeline::isb::jetstream::reader::{ISBReaderComponents, JetStreamReader};
-use crate::pipeline::isb::jetstream::writer::{ISBWriterComponents, JetstreamWriter};
+use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
+use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
+use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
 use crate::reduce::pbq::{PBQ, PBQBuilder, WAL};
 use crate::reduce::reducer::aligned::reducer::AlignedReducer;
 use crate::reduce::reducer::aligned::windower::AlignedWindowManager;
@@ -25,7 +26,7 @@ use crate::reduce::wal::create_wal_components;
 use crate::reduce::wal::segment::compactor::WindowKind;
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::typ::{NumaflowTypeConfig, WithoutRateLimiter};
 use crate::watermark::WatermarkHandle;
 use crate::{Result, shared};
@@ -95,9 +96,9 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
     aligned_config: AlignedReducerConfig,
-) -> crate::error::Result<()> {
+) -> Result<()> {
     // for reduce we do not pass serving callback handler to tracker.
-    let tracker_handle = TrackerHandle::new(None);
+    let tracker = Tracker::new(None, cln_token.clone());
 
     // Create aligned window manager based on window type
     let window_manager = match &aligned_config.window_config.window_type {
@@ -130,7 +131,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         &js_context,
         &cln_token,
         Some(WindowManager::Aligned(window_manager.clone())),
-        tracker_handle.clone(),
+        tracker.clone(),
         vec![*get_vertex_replica()], // in reduce, we consume from a single partition
     )
     .await?;
@@ -154,7 +155,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         cln_token: cln_token.clone(),
         js_context: &js_context,
         config: &config,
-        tracker_handle: tracker_handle.clone(),
+        tracker: tracker.clone(),
     };
 
     let reader_components = ISBReaderComponents::new(
@@ -164,10 +165,23 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         &context,
     );
 
-    let writer_components =
-        ISBWriterComponents::new(watermark_handle.clone().map(WatermarkHandle::ISB), &context);
+    let writers = create_components::create_js_writers(
+        &config.to_vertex_config,
+        js_context.clone(),
+        config.isb_config.as_ref(),
+        cln_token.clone(),
+    )
+    .await?;
 
-    let buffer_writer = JetstreamWriter::new(writer_components);
+    let writer_components = ISBWriterComponents {
+        config: config.to_vertex_config.clone(),
+        writers,
+        paf_concurrency: config.writer_concurrency,
+        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
+        vertex_type: config.vertex_type,
+    };
+
+    let buffer_writer = ISBWriter::new(writer_components);
 
     // Create WAL if configured
     let (wal, gc_wal) = create_wal_components(
@@ -216,7 +230,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         cln_token: cln_token.clone(),
         js_context: &js_context,
         config: &config,
-        tracker_handle,
+        tracker,
     };
 
     // rate limit is not applicable for reduce
@@ -233,9 +247,9 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
     unaligned_config: UnalignedReducerConfig,
-) -> crate::error::Result<()> {
+) -> Result<()> {
     // for reduce we do not pass serving callback handler to tracker.
-    let tracker_handle = TrackerHandle::new(None);
+    let tracker = Tracker::new(None, cln_token.clone());
 
     // Create unaligned window manager based on window type
     let window_manager = match &unaligned_config.window_config.window_type {
@@ -255,7 +269,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         &js_context,
         &cln_token,
         Some(WindowManager::Unaligned(window_manager.clone())),
-        tracker_handle.clone(),
+        tracker.clone(),
         vec![*get_vertex_replica()], // in reduce, we consume from a single partition
     )
     .await?;
@@ -279,7 +293,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         cln_token: cln_token.clone(),
         js_context: &js_context,
         config: &config,
-        tracker_handle: tracker_handle.clone(),
+        tracker: tracker.clone(),
     };
 
     let reader_components = ISBReaderComponents::new(
@@ -289,10 +303,23 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         &context,
     );
 
-    let writer_components =
-        ISBWriterComponents::new(watermark_handle.clone().map(WatermarkHandle::ISB), &context);
+    let writers = create_components::create_js_writers(
+        &config.to_vertex_config,
+        js_context.clone(),
+        config.isb_config.as_ref(),
+        cln_token.clone(),
+    )
+    .await?;
 
-    let buffer_writer = JetstreamWriter::new(writer_components);
+    let writer_components = ISBWriterComponents {
+        config: config.to_vertex_config.clone(),
+        writers,
+        paf_concurrency: config.writer_concurrency,
+        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
+        vertex_type: config.vertex_type,
+    };
+
+    let buffer_writer = ISBWriter::new(writer_components);
 
     // Create WAL if configured (use Unaligned WindowKind for unaligned reducers)
     let (wal, gc_wal) = create_wal_components(
@@ -339,7 +366,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         cln_token: cln_token.clone(),
         js_context: &js_context,
         config: &config,
-        tracker_handle,
+        tracker,
     };
 
     // rate limit is not applicable for reduce
@@ -357,18 +384,25 @@ async fn run_reduce_forwarder<C: NumaflowTypeConfig>(
     reducer: Reducer,
     wal: Option<WAL>,
     rate_limiter: Option<C::RateLimiter>,
-) -> crate::error::Result<()> {
-    let buffer_reader = JetStreamReader::<C>::new(reader_components, rate_limiter).await?;
+) -> Result<()> {
+    let js_reader = JetStreamReader::new(
+        reader_components.stream.clone(),
+        reader_components.js_ctx.clone(),
+        reader_components.isb_config.clone(),
+    )
+    .await?;
+
+    let isb_reader = ISBReader::<C>::new(reader_components, js_reader, rate_limiter).await?;
 
     // Create lag reader with the single buffer reader (reduce only reads from one stream)
     let pending_reader = shared::metrics::create_pending_reader(
         &context.config.metrics_config,
-        LagReader::ISB(vec![buffer_reader.clone()]),
+        LagReader::ISB(vec![isb_reader.clone()]),
     )
     .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
-    let pbq_builder = PBQBuilder::<C>::new(buffer_reader, context.tracker_handle.clone());
+    let pbq_builder = PBQBuilder::<C>::new(isb_reader);
     let pbq = match wal {
         Some(wal) => pbq_builder.wal(wal).build(),
         None => pbq_builder.build(),
@@ -777,7 +811,7 @@ mod tests {
 
         let messages = vec![msg1, msg2, msg3, msg4];
         for msg in messages {
-            let message_bytes: BytesMut = msg.try_into().unwrap();
+            let message_bytes: BytesMut = msg.try_into()?;
             js_context
                 .publish(input_stream.name, message_bytes.freeze())
                 .await
@@ -1097,7 +1131,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let message_bytes: BytesMut = msg.try_into().unwrap();
+            let message_bytes: BytesMut = msg.try_into()?;
 
             js_context
                 .publish(input_stream.name, message_bytes.freeze())

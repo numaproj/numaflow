@@ -4,7 +4,8 @@ metadata:
   name: join-on-reduce
 spec:
   limits:
-    readBatchSize: 50
+    readBatchSize: 5
+    readTimeout: 10ms
   vertices:
     - name: in
       scale:

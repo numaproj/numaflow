@@ -27,10 +27,11 @@ impl TryFrom<SqsMessage> for Message {
                 offset: offset.to_string().into(),
                 index: 0,
             },
-            headers: message.headers,
+            headers: Arc::new(message.headers),
             // Set default metadata so that metadata is always present.
-            metadata: Some(crate::metadata::Metadata::default()),
+            metadata: Some(Arc::new(crate::metadata::Metadata::default())),
             is_late: false,
+            ack_handle: None,
         })
     }
 }
@@ -162,7 +163,7 @@ pub mod tests {
             Offset::String(StringOffset::new("offset".to_string(), 0)),
         );
         assert_eq!(message.event_time, ts);
-        assert_eq!(message.headers, headers);
+        assert_eq!(*message.headers, headers);
     }
 
     #[tokio::test]
@@ -205,14 +206,14 @@ pub mod tests {
         .unwrap();
 
         // create SQS source with test client
-        use crate::tracker::TrackerHandle;
-        let tracker_handle = TrackerHandle::new(None);
+        use crate::tracker::Tracker;
+        let tracker = Tracker::new(None, CancellationToken::new());
         let cln_token = CancellationToken::new();
 
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             1,
             SourceType::Sqs(sqs_source),
-            tracker_handle.clone(),
+            tracker.clone(),
             true,
             None,
             None,
@@ -221,15 +222,11 @@ pub mod tests {
 
         // create sink writer
         use crate::sink::{SinkClientType, SinkWriterBuilder};
-        let sink_writer = SinkWriterBuilder::new(
-            10,
-            Duration::from_millis(100),
-            SinkClientType::Log,
-            tracker_handle.clone(),
-        )
-        .build()
-        .await
-        .unwrap();
+        let sink_writer =
+            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
+                .build()
+                .await
+                .unwrap();
 
         // create the forwarder with the source and sink writer
         let forwarder =

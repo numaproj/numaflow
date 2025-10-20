@@ -33,7 +33,7 @@ pub struct AccumulatorRequest {
 pub mod accumulator_request {
     /// WindowOperation represents a window operation.
     /// For Unaligned windows, OPEN, APPEND and CLOSE events are sent.
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
     pub struct WindowOperation {
         #[prost(enumeration = "window_operation::Event", tag = "1")]
         pub event: i32,
@@ -84,7 +84,7 @@ pub mod accumulator_request {
     }
 }
 /// Window represents a window.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct KeyedWindow {
     #[prost(message, optional, tag = "1")]
     pub start: ::core::option::Option<::prost_types::Timestamp>,
@@ -110,7 +110,7 @@ pub struct AccumulatorResponse {
     pub eof: bool,
 }
 /// ReadyResponse is the health check result.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ReadyResponse {
     #[prost(bool, tag = "1")]
     pub ready: bool,
@@ -227,7 +227,7 @@ pub mod accumulator_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/accumulator.v1.Accumulator/AccumulateFn",
             );
@@ -249,7 +249,7 @@ pub mod accumulator_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/accumulator.v1.Accumulator/IsReady",
             );

@@ -6,7 +6,8 @@ spec:
   watermark:
     maxDelay: 30s
   limits:
-    readBatchSize: 50
+    readTimeout: 50ms
+    readBatchSize: 10
   vertices:
     - name: in
       limits:

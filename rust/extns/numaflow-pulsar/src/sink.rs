@@ -164,8 +164,6 @@ pub mod test_utils {
             .await
             .expect("Failed to create consumer");
 
-        println!("Fetching messages from topic: {topic}");
-
         let mut messages = Vec::with_capacity(count);
         let mut received = 0;
         while received < count {

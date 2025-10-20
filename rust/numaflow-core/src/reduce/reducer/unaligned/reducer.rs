@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::message::{Message, MessageType};
-use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
+use crate::pipeline::isb::writer::ISBWriter;
 use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
 use crate::reduce::reducer::unaligned::user_defined::accumulator::UserDefinedAccumulator;
 use crate::reduce::reducer::unaligned::user_defined::session::UserDefinedSessionReduce;
@@ -43,8 +43,8 @@ struct ActiveStream {
 struct ReduceTask {
     /// Client for user-defined reduce operations.
     client_type: UserDefinedUnalignedReduce,
-    /// JetStream writer for writing results of reduce operation.
-    js_writer: JetstreamWriter,
+    /// ISB writer for writing results of reduce operation.
+    isb_writer: ISBWriter,
     /// Sender for GC WAL messages. It is optional since users can specify not to use WAL.
     gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
     /// Sender for error messages.
@@ -65,7 +65,7 @@ impl ReduceTask {
     /// Creates a new ReduceTask with the given configuration for Accumulator
     fn new(
         client: UserDefinedUnalignedReduce,
-        js_writer: JetstreamWriter,
+        isb_writer: ISBWriter,
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
         error_tx: mpsc::Sender<Error>,
         window_manager: UnalignedWindowManager,
@@ -73,7 +73,7 @@ impl ReduceTask {
     ) -> Self {
         Self {
             client_type: client,
-            js_writer,
+            isb_writer,
             gc_wal_tx,
             error_tx,
             window_manager,
@@ -97,7 +97,7 @@ impl ReduceTask {
         let (mut writer_tx, writer_rx) = mpsc::channel(500);
         let writer_stream = ReceiverStream::new(writer_rx);
         let mut writer_handle = self
-            .js_writer
+            .isb_writer
             .clone()
             .streaming_write(writer_stream, cln_token.clone())
             .await?;
@@ -140,7 +140,7 @@ impl ReduceTask {
 
                     // Start a new writer
                     writer_handle = self
-                        .js_writer
+                        .isb_writer
                         .clone()
                         .streaming_write(writer_stream, cln_token.clone())
                         .await?;
@@ -218,7 +218,7 @@ impl ReduceTask {
         let (mut writer_tx, writer_rx) = mpsc::channel(100);
         let writer_stream = ReceiverStream::new(writer_rx);
         let mut writer_handle = self
-            .js_writer
+            .isb_writer
             .clone()
             .streaming_write(writer_stream, cln_token.clone())
             .await?;
@@ -258,7 +258,7 @@ impl ReduceTask {
                     writer_tx = new_writer_tx;
 
                     writer_handle = self
-                        .js_writer
+                        .isb_writer
                         .clone()
                         .streaming_write(writer_stream, cln_token.clone())
                         .await?;
@@ -348,8 +348,7 @@ impl ReduceTask {
                 let gc_event: GcEvent = window.into();
                 let gc_event_bytes = gc_event.encode_to_vec();
                 if let Err(e) = gc_wal_tx
-                    .send(SegmentWriteMessage::WriteData {
-                        offset: None,
+                    .send(SegmentWriteMessage::WriteGcEvent {
                         data: gc_event_bytes.into(),
                     })
                     .await
@@ -378,8 +377,8 @@ struct UnalignedReduceActor {
     client_type: UserDefinedUnalignedReduce,
     /// Map of [ActiveStream]s keyed by window ID.
     active_streams: HashMap<&'static str, ActiveStream>,
-    /// JetStream writer for writing results of reduce operation.
-    js_writer: JetstreamWriter,
+    /// ISB writer for writing results of reduce operation.
+    isb_writer: ISBWriter,
     /// Sender for error messages.
     error_tx: mpsc::Sender<Error>,
     /// Sender for GC WAL messages. It is optional since users can specify not to use WAL.
@@ -412,7 +411,7 @@ impl UnalignedReduceActor {
     pub(crate) async fn new(
         client_type: UserDefinedUnalignedReduce,
         receiver: mpsc::Receiver<UnalignedWindowMessage>,
-        js_writer: JetstreamWriter,
+        isb_writer: ISBWriter,
         error_tx: mpsc::Sender<Error>,
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
         window_manager: UnalignedWindowManager,
@@ -422,7 +421,7 @@ impl UnalignedReduceActor {
             client_type,
             receiver,
             active_streams: HashMap::new(),
-            js_writer,
+            isb_writer,
             error_tx,
             gc_wal_tx,
             window_manager,
@@ -466,7 +465,7 @@ impl UnalignedReduceActor {
         // Create a ReduceTask based on the client type
         let reduce_task = ReduceTask::new(
             self.client_type.clone(),
-            self.js_writer.clone(),
+            self.isb_writer.clone(),
             self.gc_wal_tx.clone(),
             self.error_tx.clone(),
             self.window_manager.clone(),
@@ -503,7 +502,7 @@ pub(crate) struct UnalignedReducer {
     /// Window manager for assigning windows to messages and closing windows.
     window_manager: UnalignedWindowManager,
     /// Writer for writing results to JetStream
-    js_writer: JetstreamWriter,
+    isb_writer: ISBWriter,
     /// Final state of the component (any error will set this as Err).
     final_result: crate::Result<()>,
     /// Set to true when shutting down due to an error.
@@ -525,7 +524,7 @@ impl UnalignedReducer {
     pub(crate) async fn new(
         client: UserDefinedUnalignedReduce,
         window_manager: UnalignedWindowManager,
-        js_writer: JetstreamWriter,
+        isb_writer: ISBWriter,
         allowed_lateness: Duration,
         gc_wal: Option<AppendOnlyWal>,
         graceful_timeout: Duration,
@@ -534,7 +533,7 @@ impl UnalignedReducer {
         Self {
             client,
             window_manager,
-            js_writer,
+            isb_writer,
             final_result: Ok(()),
             shutting_down_on_err: false,
             gc_wal,
@@ -579,7 +578,7 @@ impl UnalignedReducer {
         let actor = UnalignedReduceActor::new(
             self.client.clone(),
             actor_rx,
-            self.js_writer.clone(),
+            self.isb_writer.clone(),
             error_tx.clone(),
             gc_wal_handle,
             self.window_manager.clone(),
@@ -762,12 +761,11 @@ mod tests {
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::config::pipeline::{ToVertexConfig, VertexType};
     use crate::message::{Message, MessageID, Offset, StringOffset};
-    use crate::pipeline::isb::jetstream::writer::{ISBWriterComponents, JetstreamWriter};
+    use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
     use crate::reduce::reducer::unaligned::user_defined::accumulator::UserDefinedAccumulator;
     use crate::reduce::reducer::unaligned::user_defined::session::UserDefinedSessionReduce;
     use crate::reduce::reducer::unaligned::windower::session::SessionWindowManager;
     use crate::shared::grpc::create_rpc_channel;
-    use crate::tracker::TrackerHandle;
     use async_nats::jetstream::consumer::PullConsumer;
     use async_nats::jetstream::{self, consumer, stream};
     use chrono::{TimeZone, Utc};
@@ -962,33 +960,44 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None);
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        let mut writers = std::collections::HashMap::new();
+        writers.insert(
+            stream.name,
+            crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
+                stream.clone(),
+                js_context.clone(),
+                writer_config.clone(),
+                None,
+                cln_token.clone(),
+            )
+            .await?,
+        );
+
         let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
-                writer_config: BufferWriterConfig {
-                    streams: vec![stream.clone()],
-                    ..Default::default()
-                },
+                writer_config,
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
             }],
-            js_ctx: js_context.clone(),
+            writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
-            cancel_token: cln_token.clone(),
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
-            isb_config: None,
         };
-        let js_writer = JetstreamWriter::new(writer_components);
+        let isb_writer = ISBWriter::new(writer_components);
 
         // Create the UnalignedReducer
         let reducer = UnalignedReducer::new(
             client,
             window_manager,
-            js_writer,
+            isb_writer,
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
@@ -1186,33 +1195,44 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None);
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        let mut writers = HashMap::new();
+        writers.insert(
+            stream.name,
+            crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
+                stream.clone(),
+                js_context.clone(),
+                writer_config.clone(),
+                None,
+                cln_token.clone(),
+            )
+            .await?,
+        );
+
         let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
-                writer_config: BufferWriterConfig {
-                    streams: vec![stream.clone()],
-                    ..Default::default()
-                },
+                writer_config,
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
             }],
-            js_ctx: js_context.clone(),
+            writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
-            cancel_token: cln_token.clone(),
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
-            isb_config: None,
         };
-        let js_writer = JetstreamWriter::new(writer_components);
+        let isb_writer = ISBWriter::new(writer_components);
 
         // Create the UnalignedReducer
         let reducer = UnalignedReducer::new(
             client,
             window_manager,
-            js_writer,
+            isb_writer,
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
@@ -1467,33 +1487,44 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None);
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        let mut writers = HashMap::new();
+        writers.insert(
+            stream.name,
+            crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
+                stream.clone(),
+                js_context.clone(),
+                writer_config.clone(),
+                None,
+                cln_token.clone(),
+            )
+            .await?,
+        );
+
         let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
-                writer_config: BufferWriterConfig {
-                    streams: vec![stream.clone()],
-                    ..Default::default()
-                },
+                writer_config,
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
             }],
-            js_ctx: js_context.clone(),
+            writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
-            cancel_token: cln_token.clone(),
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
-            isb_config: None,
         };
-        let js_writer = JetstreamWriter::new(writer_components);
+        let isb_writer = ISBWriter::new(writer_components);
 
         // Create the UnalignedReducer
         let reducer = UnalignedReducer::new(
             client,
             window_manager,
-            js_writer,
+            isb_writer,
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
@@ -1668,33 +1699,44 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None);
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        let mut writers = HashMap::new();
+        writers.insert(
+            stream.name,
+            crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
+                stream.clone(),
+                js_context.clone(),
+                writer_config.clone(),
+                None,
+                cln_token.clone(),
+            )
+            .await?,
+        );
+
         let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
-                writer_config: BufferWriterConfig {
-                    streams: vec![stream.clone()],
-                    ..Default::default()
-                },
+                writer_config,
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
             }],
-            js_ctx: js_context.clone(),
+            writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
-            cancel_token: cln_token.clone(),
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
-            isb_config: None,
         };
-        let js_writer = JetstreamWriter::new(writer_components);
+        let isb_writer = ISBWriter::new(writer_components);
 
         // Create the UnalignedReducer
         let reducer = UnalignedReducer::new(
             client,
             window_manager,
-            js_writer,
+            isb_writer,
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
@@ -1901,33 +1943,44 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None);
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        let mut writers = HashMap::new();
+        writers.insert(
+            stream.name,
+            crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
+                stream.clone(),
+                js_context.clone(),
+                writer_config.clone(),
+                None,
+                cln_token.clone(),
+            )
+            .await?,
+        );
+
         let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
-                writer_config: BufferWriterConfig {
-                    streams: vec![stream.clone()],
-                    ..Default::default()
-                },
+                writer_config,
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
             }],
-            js_ctx: js_context.clone(),
+            writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
-            cancel_token: cln_token.clone(),
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
-            isb_config: None,
         };
-        let js_writer = JetstreamWriter::new(writer_components);
+        let isb_writer = ISBWriter::new(writer_components);
 
         // Create the UnalignedReducer
         let reducer = UnalignedReducer::new(
             client,
             window_manager,
-            js_writer,
+            isb_writer,
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),

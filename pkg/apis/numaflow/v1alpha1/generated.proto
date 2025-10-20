@@ -703,6 +703,11 @@ message IdleSource {
 
   // IncrementBy is the duration to be added to the current watermark to progress the watermark when source is idling.
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration incrementBy = 3;
+
+  // InitSourceDelay is the duration after which, if source doesn't produce any data, the watermark is initialized
+  // with the current wall clock time.
+  // +optional
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration initSourceDelay = 4;
 }
 
 // InterStepBuffer configuration specifically for the pipeline.

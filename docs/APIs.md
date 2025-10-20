@@ -4322,6 +4322,28 @@ progress the watermark when source is idling.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>initSourceDelay</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+InitSourceDelay is the duration after which, if source doesn’t produce
+any data, the watermark is initialized with the current wall clock time.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>

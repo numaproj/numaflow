@@ -66,7 +66,7 @@ func main() {
 
 Check the links below to see another transformer example in various programming languages, where we apply conditional forwarding based on the input event time.
 
-- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/sourcetransform/event_time_filter)
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/sourcetransform/event_time_filter)
 - [Golang](https://github.com/numaproj/numaflow-go/tree/main/examples/sourcetransformer/event_time_filter)
 - [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sourcetransformer/eventtimefilter)
 

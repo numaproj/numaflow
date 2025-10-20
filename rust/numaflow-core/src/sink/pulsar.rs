@@ -1,6 +1,7 @@
 use numaflow_pulsar::sink::{
     Message as PulsarMessage, Response as PulsarResponse, Sink as PulsarSink,
 };
+use std::collections::HashMap;
 
 use crate::error::{Error, Result};
 use crate::message::Message;
@@ -9,14 +10,19 @@ use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
 impl TryFrom<Message> for PulsarMessage {
     type Error = Error;
 
-    fn try_from(mut msg: Message) -> Result<Self> {
+    fn try_from(msg: Message) -> Result<Self> {
+        let mut headers: HashMap<String, String> = msg
+            .headers
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
         let id = msg.id.to_string();
         // Add all message keys to the Pulsar properties
         // We do the same for Kafka sink with Kafka headers.
-        msg.headers
-            .insert("__key_len".to_string(), msg.keys.len().to_string());
+        headers.insert("__key_len".to_string(), msg.keys.len().to_string());
         for (i, key) in msg.keys.iter().enumerate() {
-            msg.headers.insert(format!("__key_{i}"), key.to_string());
+            headers.insert(format!("__key_{i}"), key.to_string());
         }
 
         let event_time = msg.event_time.timestamp_millis();
@@ -28,7 +34,7 @@ impl TryFrom<Message> for PulsarMessage {
 
         Ok(Self {
             id,
-            properties: msg.headers,
+            properties: headers,
             payload: msg.value,
             event_time_epoch_ms: event_time as u64,
         })
@@ -98,9 +104,8 @@ mod tests {
                 offset: id.to_string().into(),
                 index: 0,
             },
-            headers,
-            metadata: None,
-            is_late: false,
+            headers: Arc::new(headers),
+            ..Default::default()
         }
     }
 
@@ -369,9 +374,8 @@ mod tests {
                 offset: "large-msg".to_string().into(),
                 index: 0,
             },
-            headers: HashMap::new(),
-            metadata: None,
-            is_late: false,
+            headers: Arc::new(HashMap::new()),
+            ..Default::default()
         };
 
         let responses = sink

@@ -3,7 +3,7 @@
 MonoVertex is a simplified version of the [Pipeline](./pipeline.md). The major design idea behind MonoVertex is to simplify data-processing
 in those cases where independently autoscaling vertices are not required. This means there will only be a single vertex 
 called the MonoVertex, which is capable of running the [Source](../user-guide/sources/overview.md), the [Sink](../user-guide/sinks/overview.md)
-(with [Fallback Sink](../user-guide/sinks/fallback.md) if need be), and optionally the [Transformer](../user-guide/sources/transformer/overview.md) 
+(with [Fallback Sink](../user-guide/sinks/fallback.md) if need be), and optionally the [Transformer](../user-guide/sources/transformer/overview.md) or [Map UDF](../user-guide/user-defined-functions/map/map.md)
 together. There is no concept of Edges in MonoVertex since there is only one [Vertex](vertex.md). The MonoVertex runs the same containers run by the 
 [Pipeline](./pipeline.md), this means the users can switch between MonoVertex and [Pipeline](./pipeline.md) by just 
 changing the spec. MonoVertex’s [autoscaling](../specifications/autoscaling.md) is similar to the Source vertex of a [Pipeline](./pipeline.md), 
@@ -41,9 +41,6 @@ The rule of thumb is, if you are just reading from the source and writing to a s
 you might be able to get away with MonoVertex. For all other use cases, use the full Pipeline Semantics. Below are a 
 few examples where you cannot use MonoVertex.
 
- * [Map](../user-guide/user-defined-functions/user-defined-functions.md) is not supported, only
-   [Transformer](../user-guide/sources/transformer/overview.md) can be used. If you need Map support, please let us know 
-   by creating an issue,
  * If you are using the [Reduce](../user-guide/user-defined-functions/reduce/reduce.md) feature, then the full [Pipeline](./pipeline.md)
   semantics is required. This is because of the need for shuffling of data.
  * There are cases where you want to autoscale intermediate process nodes, especially in the case of ML workloads.
@@ -52,7 +49,7 @@ few examples where you cannot use MonoVertex.
 
 ## Anatomy of MonoVertex
 
-MonoVertex supports the same Sources, Sinks, and Transformers which are used in the Pipeline spec.
+MonoVertex supports the same Sources, Map UDF, Sinks, and Transformers which are used in the Pipeline spec.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -66,6 +63,8 @@ spec:
     transformer: # transformer is an optional container to do any transformation to the incoming data before passing to the sink
     # same as the Pipeline Transformer
     # ...
+  udf: # optional Map: same as the Pipeline Map
+  # ...
   sink:
   # same as the Pipeline Sink
   # ...

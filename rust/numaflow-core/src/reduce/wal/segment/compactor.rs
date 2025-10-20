@@ -68,7 +68,6 @@ impl Compactor {
         kind: WindowKind,
         max_file_size_mb: u64,
         flush_interval_ms: u64,
-        channel_buffer_size: usize,
         max_segment_age_secs: u64,
     ) -> WalResult<Self> {
         let segment_wal = ReplayWal::new(WalType::Data, path.clone());
@@ -79,13 +78,12 @@ impl Compactor {
             path.clone(),
             max_file_size_mb,
             flush_interval_ms,
-            channel_buffer_size,
             max_segment_age_secs,
         )
         .await?;
 
         let (compaction_ao_tx, compaction_ao_rx) = mpsc::channel(500);
-        let (_, handle) = compaction_ao_wal
+        let handle = compaction_ao_wal
             .streaming_write(ReceiverStream::new(compaction_ao_rx))
             .await?;
 
@@ -247,11 +245,9 @@ impl Compactor {
                         .should_retain_message(&msg.message.expect("Message should be present"))?
                     {
                         // Send the message to the compaction WAL
+                        // No message handle needed for compaction writes
                         wal_tx
-                            .send(SegmentWriteMessage::WriteData {
-                                offset: None,
-                                data: data.clone(),
-                            })
+                            .send(SegmentWriteMessage::WriteGcEvent { data: data.clone() })
                             .await
                             .map_err(|e| {
                                 format!("Failed to send message to compaction WAL: {e}")
@@ -476,7 +472,7 @@ impl ShouldRetain for UnalignedCompaction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{Message, MessageID, Offset, StringOffset};
+    use crate::message::{IntOffset, Message, MessageID, Offset};
     use crate::reduce::wal::WalMessage;
     use crate::shared::grpc::prost_timestamp_from_utc;
     use bytes::Bytes;
@@ -490,13 +486,13 @@ mod tests {
     #[tokio::test]
     async fn test_build_aligned_compaction() -> WalResult<()> {
         // Create a temporary directory for the test
-        let temp_dir = tempdir().unwrap();
+        let temp_dir = tempdir()?;
         let path = temp_dir.path().to_path_buf();
 
         // Create WAL directories
-        fs::create_dir_all(path.join(WalType::Gc.to_string())).unwrap();
-        fs::create_dir_all(path.join(WalType::Data.to_string())).unwrap();
-        fs::create_dir_all(path.join(WalType::Compact.to_string())).unwrap();
+        fs::create_dir_all(path.join(WalType::Gc.to_string()))?;
+        fs::create_dir_all(path.join(WalType::Data.to_string()))?;
+        fs::create_dir_all(path.join(WalType::Compact.to_string()))?;
 
         // Create a compactor with default test values
         let compactor = Compactor::new(
@@ -504,7 +500,6 @@ mod tests {
             WindowKind::Aligned,
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            1000, // channel_buffer_size
             300,  // max_segment_age_secs
         )
         .await?;
@@ -541,23 +536,20 @@ mod tests {
             path.clone(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            100,  // channel_buffer_size
             300,  // max_segment_age_secs
         )
         .await?;
 
         // Set up streaming write for the GC WAL
         let (tx, rx) = mpsc::channel(100);
-        let (_result_rx, writer_handle) =
-            gc_writer.streaming_write(ReceiverStream::new(rx)).await?;
+        let writer_handle = gc_writer.streaming_write(ReceiverStream::new(rx)).await?;
 
         // Write GC events to the WAL
         for event in gc_events {
             let mut buf = Vec::new();
             prost::Message::encode(&event, &mut buf)
                 .map_err(|e| format!("Failed to encode GC event: {e}"))?;
-            tx.send(SegmentWriteMessage::WriteData {
-                offset: None,
+            tx.send(SegmentWriteMessage::WriteGcEvent {
                 data: Bytes::from(buf),
             })
             .await
@@ -585,13 +577,13 @@ mod tests {
     #[tokio::test]
     async fn test_build_unaligned_compaction() -> WalResult<()> {
         // Create a temporary directory for the test
-        let temp_dir = tempdir().unwrap();
+        let temp_dir = tempdir()?;
         let path = temp_dir.path().to_path_buf();
 
         // Create WAL directories
-        fs::create_dir_all(path.join(WalType::Gc.to_string())).unwrap();
-        fs::create_dir_all(path.join(WalType::Data.to_string())).unwrap();
-        fs::create_dir_all(path.join(WalType::Compact.to_string())).unwrap();
+        fs::create_dir_all(path.join(WalType::Gc.to_string()))?;
+        fs::create_dir_all(path.join(WalType::Data.to_string()))?;
+        fs::create_dir_all(path.join(WalType::Compact.to_string()))?;
 
         // Create a compactor with default test values
         let compactor = Compactor::new(
@@ -599,7 +591,6 @@ mod tests {
             WindowKind::Unaligned,
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            1000, // channel_buffer_size
             300,  // max_segment_age_secs
         )
         .await?;
@@ -647,23 +638,20 @@ mod tests {
             path.clone(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            100,  // channel_buffer_size
             300,  // max_segment_age_secs
         )
         .await?;
 
         // Set up streaming write for the GC WAL
         let (tx, rx) = mpsc::channel(100);
-        let (_result_rx, writer_handle) =
-            gc_writer.streaming_write(ReceiverStream::new(rx)).await?;
+        let writer_handle = gc_writer.streaming_write(ReceiverStream::new(rx)).await?;
 
         // Write GC events to the WAL
         for event in gc_events {
             let mut buf = Vec::new();
             prost::Message::encode(&event, &mut buf)
                 .map_err(|e| format!("Failed to encode GC event: {e}"))?;
-            tx.send(SegmentWriteMessage::WriteData {
-                offset: None,
+            tx.send(SegmentWriteMessage::WriteGcEvent {
                 data: Bytes::from(buf),
             })
             .await
@@ -711,7 +699,6 @@ mod tests {
             test_path.clone(),
             1,    // 1MB
             1000, // 1s flush interval
-            500,  // channel buffer
             300,  // max_segment_age_secs
         )
         .await
@@ -735,20 +722,19 @@ mod tests {
         };
 
         let (tx, rx) = mpsc::channel(10);
-        let (_offset_stream, handle) = gc_wal
+        let handle = gc_wal
             .streaming_write(ReceiverStream::new(rx))
             .await
             .unwrap();
 
-        tx.send(SegmentWriteMessage::WriteData {
-            offset: Some(Offset::String(StringOffset::new("gc1".to_string(), 0))),
+        // Write GC events as raw data
+        tx.send(SegmentWriteMessage::WriteGcEvent {
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event_1)),
         })
         .await
         .unwrap();
 
-        tx.send(SegmentWriteMessage::WriteData {
-            offset: Some(Offset::String(StringOffset::new("gc2".to_string(), 0))),
+        tx.send(SegmentWriteMessage::WriteGcEvent {
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event_2)),
         })
         .await
@@ -763,7 +749,6 @@ mod tests {
             test_path.clone(),
             1,    // 1MB
             1000, // 1s flush interval
-            500,  // channel buffer
             300,  // max_segment_age_secs
         )
         .await
@@ -771,18 +756,10 @@ mod tests {
 
         // Write 1000 segment entries across 10 files
         let (tx, rx) = mpsc::channel(100);
-        let (mut offset_stream, handle) = segment_wal
+        let handle = segment_wal
             .streaming_write(ReceiverStream::new(rx))
             .await
             .unwrap();
-
-        let write_result_cnt = tokio::spawn(async move {
-            let mut counter = 0;
-            while offset_stream.next().await.is_some() {
-                counter += 1;
-            }
-            counter
-        });
 
         let start_time = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
         let time_increment = chrono::Duration::seconds(1);
@@ -792,21 +769,17 @@ mod tests {
             message.event_time = start_time + (time_increment * i);
             message.keys = Arc::from(vec!["test-key".to_string()]);
             message.value = bytes::Bytes::from(vec![1, 2, 3]);
+            message.offset = Offset::Int(IntOffset::new(i as i64, 0));
             message.id = MessageID {
                 vertex_name: "test-vertex".to_string().into(),
                 offset: i.to_string().into(),
                 index: 0,
             };
 
-            let message: WalMessage = message.into();
-
-            let proto_message: Bytes = message.try_into().unwrap();
-            tx.send(SegmentWriteMessage::WriteData {
-                offset: Some(Offset::String(StringOffset::new(format!("msg-{}", i), 0))),
-                data: proto_message,
-            })
-            .await
-            .unwrap();
+            // Send message - conversion to bytes happens internally
+            tx.send(SegmentWriteMessage::WriteMessage { message })
+                .await
+                .unwrap();
 
             // Rotate every 100 messages to create 10 files
             if i % 100 == 0 {
@@ -818,15 +791,12 @@ mod tests {
         drop(tx);
         handle.await.unwrap().unwrap();
 
-        assert_eq!(write_result_cnt.await.unwrap(), 1000);
-
         // Create and run compactor
         let compactor = Compactor::new(
             test_path.clone(),
             WindowKind::Aligned,
             1,    // 1MB
             1000, // 1s flush interval
-            500,  // channel buffer
             300,  // max_segment_age_secs
         )
         .await
@@ -884,13 +854,13 @@ mod tests {
     #[tokio::test]
     async fn test_compact_with_replay_aligned() -> WalResult<()> {
         // Create a temporary directory for the test
-        let temp_dir = tempdir().unwrap();
+        let temp_dir = tempdir()?;
         let path = temp_dir.path().to_path_buf();
 
         // Create WAL directories
-        fs::create_dir_all(path.join(WalType::Gc.to_string())).unwrap();
-        fs::create_dir_all(path.join(WalType::Data.to_string())).unwrap();
-        fs::create_dir_all(path.join(WalType::Compact.to_string())).unwrap();
+        fs::create_dir_all(path.join(WalType::Gc.to_string()))?;
+        fs::create_dir_all(path.join(WalType::Data.to_string()))?;
+        fs::create_dir_all(path.join(WalType::Compact.to_string()))?;
 
         // Create GC WAL with test events
         let gc_wal = AppendOnlyWal::new(
@@ -898,7 +868,6 @@ mod tests {
             path.clone(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            100,  // channel_buffer_size
             300,  // max_segment_age_secs
         )
         .await?;
@@ -914,22 +883,12 @@ mod tests {
 
         // Write the GC event to the WAL
         let (tx, rx) = mpsc::channel(100);
-        let (mut gc_wal_write_rx, writer_handle) =
-            gc_wal.streaming_write(ReceiverStream::new(rx)).await?;
-
-        let write_result_cnt = tokio::spawn(async move {
-            let mut counter = 0;
-            while let Some(_) = gc_wal_write_rx.next().await {
-                counter += 1;
-            }
-            return counter;
-        });
+        let writer_handle = gc_wal.streaming_write(ReceiverStream::new(rx)).await?;
 
         let mut buf = Vec::new();
         prost::Message::encode(&gc_event, &mut buf)
             .map_err(|e| format!("Failed to encode GC event: {e}"))?;
-        tx.send(SegmentWriteMessage::WriteData {
-            offset: None,
+        tx.send(SegmentWriteMessage::WriteGcEvent {
             data: Bytes::from(buf),
         })
         .await
@@ -947,15 +906,13 @@ mod tests {
             path.clone(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            100,  // channel_buffer_size
             300,  // max_segment_age_secs
         )
         .await?;
 
         // Create messages with different event times
         let (tx, rx) = mpsc::channel(100);
-        let (_result_rx, writer_handle) =
-            segment_wal.streaming_write(ReceiverStream::new(rx)).await?;
+        let writer_handle = segment_wal.streaming_write(ReceiverStream::new(rx)).await?;
 
         // Message with event time before the GC end time (should be filtered out)
         let before_time = Utc.with_ymd_and_hms(2025, 4, 1, 0, 59, 0).unwrap();
@@ -963,13 +920,12 @@ mod tests {
         before_message.event_time = before_time;
         before_message.keys = Arc::from(vec!["test-key".to_string()]);
         before_message.value = bytes::Bytes::from(vec![1, 2, 3]);
+        before_message.offset = Offset::Int(IntOffset::new(1, 0));
         before_message.id = MessageID {
             vertex_name: "test-vertex".to_string().into(),
             offset: "1".to_string().into(),
             index: 0,
         };
-
-        let before_message: WalMessage = before_message.into();
 
         // Message with event time after the GC end time (should be retained)
         let after_time = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
@@ -977,27 +933,22 @@ mod tests {
         after_message.event_time = after_time;
         after_message.keys = Arc::from(vec!["test-key".to_string()]);
         after_message.value = bytes::Bytes::from(vec![4, 5, 6]);
+        after_message.offset = Offset::Int(IntOffset::new(2, 0));
         after_message.id = MessageID {
             vertex_name: "test-vertex".to_string().into(),
             offset: "2".to_string().into(),
             index: 0,
         };
 
-        let after_message: WalMessage = after_message.into();
-
-        // Write the messages to the WAL
-        let before_proto: Bytes = before_message.try_into().unwrap();
-        tx.send(SegmentWriteMessage::WriteData {
-            offset: Some(Offset::String(StringOffset::new("msg-1".to_string(), 0))),
-            data: before_proto,
+        // Write the messages to the WAL - conversion to bytes happens internally
+        tx.send(SegmentWriteMessage::WriteMessage {
+            message: before_message,
         })
         .await
         .map_err(|e| format!("Failed to send data: {e}"))?;
 
-        let after_proto: Bytes = after_message.try_into().unwrap();
-        tx.send(SegmentWriteMessage::WriteData {
-            offset: Some(Offset::String(StringOffset::new("msg-2".to_string(), 0))),
-            data: after_proto,
+        tx.send(SegmentWriteMessage::WriteMessage {
+            message: after_message,
         })
         .await
         .map_err(|e| format!("Failed to send data: {e}"))?;
@@ -1008,16 +959,12 @@ mod tests {
             .await
             .map_err(|e| format!("Writer failed: {e}"))??;
 
-        // we do not get data written to the tx channel because ID is None
-        assert_eq!(write_result_cnt.await.unwrap(), 0);
-
         // Create a compactor with aligned window kind
         let compactor = Compactor::new(
             path.clone(),
             WindowKind::Aligned,
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            100,  // channel_buffer_size
             300,  // max_segment_age_secs
         )
         .await?;
@@ -1095,13 +1042,13 @@ mod tests {
     #[tokio::test]
     async fn test_compact_with_replay_unaligned() -> WalResult<()> {
         // Create a temporary directory for the test
-        let temp_dir = tempdir().unwrap();
+        let temp_dir = tempdir()?;
         let path = temp_dir.path().to_path_buf();
 
         // Create WAL directories
-        fs::create_dir_all(path.join(WalType::Gc.to_string())).unwrap();
-        fs::create_dir_all(path.join(WalType::Data.to_string())).unwrap();
-        fs::create_dir_all(path.join(WalType::Compact.to_string())).unwrap();
+        fs::create_dir_all(path.join(WalType::Gc.to_string()))?;
+        fs::create_dir_all(path.join(WalType::Data.to_string()))?;
+        fs::create_dir_all(path.join(WalType::Compact.to_string()))?;
 
         // Create GC WAL with test events
         let gc_wal = AppendOnlyWal::new(
@@ -1109,23 +1056,13 @@ mod tests {
             path.clone(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            100,  // channel_buffer_size
             300,  // max_segment_age_secs
         )
         .await?;
 
         // Create GC events with different keys and end times
         let (tx, rx) = mpsc::channel(100);
-        let (mut gc_wal_write_rx, writer_handle) =
-            gc_wal.streaming_write(ReceiverStream::new(rx)).await?;
-
-        let write_result_cnt = tokio::spawn(async move {
-            let mut counter = 0;
-            while (gc_wal_write_rx.next().await).is_some() {
-                counter += 1;
-            }
-            counter
-        });
+        let writer_handle = gc_wal.streaming_write(ReceiverStream::new(rx)).await?;
 
         // GC event for key1:key2 with end time
         let gc_start_1 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
@@ -1150,8 +1087,7 @@ mod tests {
             let mut buf = Vec::new();
             prost::Message::encode(&event, &mut buf)
                 .map_err(|e| format!("Failed to encode GC event: {e}"))?;
-            tx.send(SegmentWriteMessage::WriteData {
-                offset: None,
+            tx.send(SegmentWriteMessage::WriteGcEvent {
                 data: Bytes::from(buf),
             })
             .await
@@ -1164,24 +1100,19 @@ mod tests {
             .await
             .map_err(|e| format!("Writer failed: {e}"))??;
 
-        // we do not get data written to the tx channel because ID is None
-        assert_eq!(write_result_cnt.await.unwrap(), 0);
-
         // Create segment WAL with test messages
         let segment_wal = AppendOnlyWal::new(
             WalType::Data,
             path.clone(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            100,  // channel_buffer_size
             300,  // max_segment_age_secs
         )
         .await?;
 
         // Create messages with different keys and event times
         let (tx, rx) = mpsc::channel(100);
-        let (_result_rx, writer_handle) =
-            segment_wal.streaming_write(ReceiverStream::new(rx)).await?;
+        let writer_handle = segment_wal.streaming_write(ReceiverStream::new(rx)).await?;
 
         // Message 1: key1:key2 with event time before gc_end_1 (should be filtered out)
         let before_time_1 = Utc.with_ymd_and_hms(2025, 4, 1, 0, 59, 0).unwrap();
@@ -1189,12 +1120,13 @@ mod tests {
         message_1.event_time = before_time_1;
         message_1.keys = Arc::from(vec!["key1".to_string(), "key2".to_string()]);
         message_1.value = bytes::Bytes::from(vec![1, 2, 3]);
+        message_1.offset = Offset::Int(IntOffset::new(1, 0));
         message_1.id = MessageID {
             vertex_name: "test-vertex".to_string().into(),
             offset: "1".to_string().into(),
             index: 0,
         };
-        let message_1: WalMessage = message_1.into();
+        let wal_message_1: WalMessage = message_1.clone().into();
 
         // Message 2: key1:key2 with event time after gc_end_1 (should be retained)
         let after_time_1 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
@@ -1202,12 +1134,13 @@ mod tests {
         message_2.event_time = after_time_1;
         message_2.keys = Arc::from(vec!["key1".to_string(), "key2".to_string()]);
         message_2.value = bytes::Bytes::from(vec![4, 5, 6]);
+        message_2.offset = Offset::Int(IntOffset::new(2, 0));
         message_2.id = MessageID {
             vertex_name: "test-vertex".to_string().into(),
             offset: "2".to_string().into(),
             index: 0,
         };
-        let message_2: WalMessage = message_2.into();
+        let wal_message_2: WalMessage = message_2.clone().into();
 
         // Message 3: key3:key4 with event time before gc_end_2 (should be filtered out)
         let before_time_2 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
@@ -1215,12 +1148,13 @@ mod tests {
         message_3.event_time = before_time_2;
         message_3.keys = Arc::from(vec!["key3".to_string(), "key4".to_string()]);
         message_3.value = bytes::Bytes::from(vec![7, 8, 9]);
+        message_3.offset = Offset::Int(IntOffset::new(3, 0));
         message_3.id = MessageID {
             vertex_name: "test-vertex".to_string().into(),
             offset: "3".to_string().into(),
             index: 0,
         };
-        let message_3: WalMessage = message_3.into();
+        let wal_message_3: WalMessage = message_3.clone().into();
 
         // Message 4: key3:key4 with event time after gc_end_2 (should be retained)
         let after_time_2 = Utc.with_ymd_and_hms(2025, 4, 1, 2, 30, 0).unwrap();
@@ -1228,25 +1162,26 @@ mod tests {
         message_4.event_time = after_time_2;
         message_4.keys = Arc::from(vec!["key3".to_string(), "key4".to_string()]);
         message_4.value = bytes::Bytes::from(vec![10, 11, 12]);
+        message_4.offset = Offset::Int(IntOffset::new(4, 0));
         message_4.id = MessageID {
             vertex_name: "test-vertex".to_string().into(),
             offset: "4".to_string().into(),
             index: 0,
         };
-        let message_4: WalMessage = message_4.into();
+        let wal_message_4: WalMessage = message_4.clone().into();
 
         // Write the messages to the WAL
-        for (i, message) in [message_1, message_2, message_3, message_4]
-            .iter()
-            .enumerate()
+        for (message, _wal_message) in [
+            (message_1, wal_message_1),
+            (message_2, wal_message_2),
+            (message_3, wal_message_3),
+            (message_4, wal_message_4),
+        ]
+        .iter()
         {
-            let proto: Bytes = message.clone().try_into().unwrap();
-            tx.send(SegmentWriteMessage::WriteData {
-                offset: Some(Offset::String(StringOffset::new(
-                    format!("msg-{}", i + 1),
-                    0,
-                ))),
-                data: proto,
+            // Send message - conversion to bytes happens internally
+            tx.send(SegmentWriteMessage::WriteMessage {
+                message: message.clone(),
             })
             .await
             .map_err(|e| format!("Failed to send data: {e}"))?;
@@ -1264,7 +1199,6 @@ mod tests {
             WindowKind::Unaligned,
             100,  // max_file_size_mb
             1000, // flush_interval_ms
-            100,  // channel_buffer_size
             300,  // max_segment_age_secs
         )
         .await?;

@@ -80,7 +80,7 @@ aggregated depending on the current _lateness_ of the data stream.
 
 Check the links below to see the UDF examples for different languages.
 
-- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/reduce)
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/reduce)
 - [Golang](https://github.com/numaproj/numaflow-go/tree/main/examples/reducer)
 - [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reduce)
 
@@ -111,7 +111,7 @@ Note: UDFs should use the ReduceStreamer functionality in the SDKs to use this f
 
 Check the links below to see the UDF examples in streaming mode for different languages.
 
-- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/reducestream)
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/reducestream)
 - [Golang](https://github.com/numaproj/numaflow-go/tree/main/examples/reducestreamer)
 - [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reducestreamer/sum)
 

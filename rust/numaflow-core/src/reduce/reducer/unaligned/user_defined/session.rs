@@ -25,8 +25,8 @@ impl From<Message> for session_reduce_request::Payload {
             value: msg.value.to_vec(),
             event_time: Some(prost_timestamp_from_utc(msg.event_time)),
             watermark: msg.watermark.map(prost_timestamp_from_utc),
-            headers: msg.headers.clone(),
-            metadata: msg.metadata.map(|m| m.into()),
+            headers: Arc::unwrap_or_clone(msg.headers),
+            metadata: msg.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
         }
     }
 }
@@ -152,9 +152,10 @@ impl From<UserDefinedSessionResponse> for Message {
                 offset: offset_str.into(),
                 index: user_response.index as i32,
             },
-            headers: HashMap::new(), // reset headers since it is a new message
+            headers: Arc::new(HashMap::new()), // reset headers since it is a new message
             metadata: None,
             is_late: false,
+            ack_handle: None,
         }
     }
 }

@@ -2,7 +2,7 @@ use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::message::{Message, MessageType};
 use crate::metrics::{pipeline_drop_metric_labels, pipeline_metrics};
-use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
+use crate::pipeline::isb::writer::ISBWriter;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::reduce::reducer::aligned::windower::{
     AlignedWindowManager, AlignedWindowMessage, AlignedWindowOperation, Window,
@@ -38,7 +38,7 @@ struct ActiveStream {
 /// Also writes the GC events to the WAL if configured.
 struct ReduceTask {
     client: UserDefinedAlignedReduce,
-    js_writer: JetstreamWriter,
+    isb_writer: ISBWriter,
     gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
     error_tx: mpsc::Sender<Error>,
     window: Window,
@@ -49,7 +49,7 @@ impl ReduceTask {
     /// Creates a new ReduceTask with the given configuration
     fn new(
         client: UserDefinedAlignedReduce,
-        js_writer: JetstreamWriter,
+        isb_writer: ISBWriter,
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
         error_tx: mpsc::Sender<Error>,
         window: Window,
@@ -57,7 +57,7 @@ impl ReduceTask {
     ) -> Self {
         Self {
             client,
-            js_writer,
+            isb_writer,
             gc_wal_tx,
             error_tx,
             window,
@@ -77,7 +77,7 @@ impl ReduceTask {
 
             // Spawn a task to write results to JetStream
             let writer_handle = match self
-                .js_writer
+                .isb_writer
                 .streaming_write(result_stream, cln_token.clone())
                 .await
             {
@@ -152,8 +152,7 @@ impl ReduceTask {
 
             debug!(?gc_event, "Sending GC event to WAL");
             gc_wal_tx
-                .send(SegmentWriteMessage::WriteData {
-                    offset: None,
+                .send(SegmentWriteMessage::WriteGcEvent {
                     data: prost::Message::encode_to_vec(&gc_event).into(),
                 })
                 .await
@@ -172,8 +171,8 @@ struct AlignedReduceActor {
     client: UserDefinedAlignedReduce,
     /// Map of [ActiveStream]s keyed by window ID (pnf_slot).
     active_streams: HashMap<Bytes, ActiveStream>,
-    /// JetStream writer for writing results of reduce operation.
-    js_writer: JetstreamWriter,
+    /// ISB writer for writing results of reduce operation.
+    isb_writer: ISBWriter,
     /// Sender for error messages.
     error_tx: mpsc::Sender<Error>,
     /// Sender for GC WAL messages. It is optional since users can specify not to use WAL.
@@ -209,7 +208,7 @@ impl AlignedReduceActor {
     pub(crate) async fn new(
         client: UserDefinedAlignedReduce,
         receiver: mpsc::Receiver<AlignedWindowMessage>,
-        js_writer: JetstreamWriter,
+        isb_writer: ISBWriter,
         error_tx: mpsc::Sender<Error>,
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
         window_manager: AlignedWindowManager,
@@ -219,7 +218,7 @@ impl AlignedReduceActor {
             client,
             receiver,
             active_streams: HashMap::new(),
-            js_writer,
+            isb_writer,
             error_tx,
             gc_wal_tx,
             window_manager,
@@ -260,7 +259,7 @@ impl AlignedReduceActor {
         // Create a ReduceTask
         let reduce_task = ReduceTask::new(
             self.client.clone(),
-            self.js_writer.clone(),
+            self.isb_writer.clone(),
             self.gc_wal_tx.clone(),
             self.error_tx.clone(),
             window.clone(),
@@ -358,7 +357,7 @@ pub(crate) struct AlignedReducer {
     /// Window manager for assigning windows to messages and closing windows.
     window_manager: AlignedWindowManager,
     /// Writer for writing results to JetStream
-    js_writer: JetstreamWriter,
+    isb_writer: ISBWriter,
     /// Final state of the component (any error will set this as Err).
     final_result: crate::Result<()>,
     /// Set to true when shutting down due to an error.
@@ -380,7 +379,7 @@ impl AlignedReducer {
     pub(crate) async fn new(
         client: UserDefinedAlignedReduce,
         window_manager: AlignedWindowManager,
-        js_writer: JetstreamWriter,
+        isb_writer: ISBWriter,
         gc_wal: Option<AppendOnlyWal>,
         allowed_lateness: Duration,
         graceful_timeout: Duration,
@@ -389,7 +388,7 @@ impl AlignedReducer {
         Self {
             client,
             window_manager,
-            js_writer,
+            isb_writer,
             gc_wal,
             allowed_lateness,
             current_watermark: DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"),
@@ -434,7 +433,7 @@ impl AlignedReducer {
         let actor = AlignedReduceActor::new(
             self.client.clone(),
             actor_rx,
-            self.js_writer.clone(),
+            self.isb_writer.clone(),
             error_tx.clone(),
             gc_wal_handle,
             self.window_manager.clone(),
@@ -637,12 +636,11 @@ mod tests {
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::config::pipeline::{ToVertexConfig, VertexType};
     use crate::message::{Message, MessageID, Offset, StringOffset};
-    use crate::pipeline::isb::jetstream::writer::{ISBWriterComponents, JetstreamWriter};
+    use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
     use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
     use crate::reduce::reducer::aligned::windower::fixed::FixedWindowManager;
     use crate::reduce::reducer::aligned::windower::sliding::SlidingWindowManager;
     use crate::shared::grpc::create_rpc_channel;
-    use crate::tracker::TrackerHandle;
     use async_nats::jetstream::consumer::PullConsumer;
     use async_nats::jetstream::{self, consumer, stream};
     use chrono::{TimeZone, Utc};
@@ -753,35 +751,47 @@ mod tests {
             .await
             .unwrap();
 
-        // Create JetstreamWriter
+        // Create ISBWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None);
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        let mut writers = std::collections::HashMap::new();
+        writers.insert(
+            stream.name,
+            crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
+                stream.clone(),
+                js_context.clone(),
+                writer_config.clone(),
+                None,
+                cln_token.clone(),
+            )
+            .await
+            .unwrap(),
+        );
+
         let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
-                writer_config: BufferWriterConfig {
-                    streams: vec![stream.clone()],
-                    ..Default::default()
-                },
+                writer_config,
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
             }],
-            js_ctx: js_context.clone(),
+            writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
-            cancel_token: cln_token.clone(),
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
-            isb_config: None,
         };
-        let js_writer = JetstreamWriter::new(writer_components);
+        let isb_writer = ISBWriter::new(writer_components);
 
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
             client,
             AlignedWindowManager::Fixed(windower),
-            js_writer,
+            isb_writer,
             None, // No GC WAL for testing
             Duration::from_secs(0),
             Duration::from_millis(50),
@@ -1002,33 +1012,44 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None);
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        let mut writers = std::collections::HashMap::new();
+        writers.insert(
+            stream.name,
+            crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
+                stream.clone(),
+                js_context.clone(),
+                writer_config.clone(),
+                None,
+                cln_token.clone(),
+            )
+            .await?,
+        );
+
         let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
-                writer_config: BufferWriterConfig {
-                    streams: vec![stream.clone()],
-                    ..Default::default()
-                },
+                writer_config,
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
             }],
-            js_ctx: js_context.clone(),
+            writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
-            cancel_token: cln_token.clone(),
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
-            isb_config: None,
         };
-        let js_writer = JetstreamWriter::new(writer_components);
+        let isb_writer = ISBWriter::new(writer_components);
 
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
             client,
             AlignedWindowManager::Sliding(windower),
-            js_writer,
+            isb_writer,
             None, // No GC WAL for testing
             Duration::from_secs(0),
             Duration::from_millis(50),
@@ -1252,33 +1273,45 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None);
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        let mut writers = std::collections::HashMap::new();
+        writers.insert(
+            stream.name,
+            crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
+                stream.clone(),
+                js_context.clone(),
+                writer_config.clone(),
+                None,
+                cln_token.clone(),
+            )
+            .await
+            .unwrap(),
+        );
+
         let writer_components = ISBWriterComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
-                writer_config: BufferWriterConfig {
-                    streams: vec![stream.clone()],
-                    ..Default::default()
-                },
+                writer_config,
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
             }],
-            js_ctx: js_context.clone(),
+            writers,
             paf_concurrency: 100,
-            tracker_handle: tracker_handle.clone(),
-            cancel_token: cln_token.clone(),
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
-            isb_config: None,
         };
-        let js_writer = JetstreamWriter::new(writer_components);
+        let isb_writer = ISBWriter::new(writer_components);
 
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
             client,
             AlignedWindowManager::Fixed(windower),
-            js_writer,
+            isb_writer,
             None, // No GC WAL for testing
             Duration::from_secs(0),
             Duration::from_millis(50),

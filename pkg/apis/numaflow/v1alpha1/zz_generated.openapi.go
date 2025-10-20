@@ -2153,6 +2153,12 @@ func schema_pkg_apis_numaflow_v1alpha1_IdleSource(ref common.ReferenceCallback) 
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
+					"initSourceDelay": {
+						SchemaProps: spec.SchemaProps{
+							Description: "InitSourceDelay is the duration after which, if source doesn't produce any data, the watermark is initialized with the current wall clock time.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
 				},
 			},
 		},

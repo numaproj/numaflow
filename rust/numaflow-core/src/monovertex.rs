@@ -9,7 +9,7 @@ use crate::metrics::{LagReader, PendingReaderTasks};
 use crate::shared::create_components;
 use crate::sink::SinkWriter;
 use crate::source::Source;
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::typ::{
     build_in_memory_rate_limiter_config, build_redis_rate_limiter_config,
     should_use_redis_rate_limiter,
@@ -59,13 +59,13 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
     cln_token: CancellationToken,
     rate_limiter: Option<C::RateLimiter>,
 ) -> error::Result<()> {
-    let tracker_handle = TrackerHandle::new(None);
+    let tracker = Tracker::new(None, cln_token.clone());
 
     let transformer = create_components::create_transformer(
         config.batch_size,
         config.graceful_shutdown_time,
         config.transformer_config.clone(),
-        tracker_handle.clone(),
+        tracker.clone(),
         cln_token.clone(),
     )
     .await?;
@@ -74,7 +74,7 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
         config.batch_size,
         config.read_timeout,
         &config.source_config,
-        tracker_handle.clone(),
+        tracker.clone(),
         transformer,
         None,
         cln_token.clone(),
@@ -88,7 +88,7 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
             config.read_timeout,
             config.graceful_shutdown_time,
             map_config.clone(),
-            tracker_handle.clone(),
+            tracker.clone(),
             cln_token.clone(),
         )
         .await
@@ -102,7 +102,6 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
         config.read_timeout,
         config.sink_config.clone(),
         config.fb_sink_config.clone(),
-        tracker_handle,
         None,
         &cln_token,
     )

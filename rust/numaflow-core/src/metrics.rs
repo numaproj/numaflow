@@ -4,7 +4,6 @@ use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Router, routing::get};
 use axum_server::tls_rustls::RustlsConfig;
-use chrono::Utc;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
@@ -27,7 +26,7 @@ use crate::Error;
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
 use crate::mapper::map::MapHandle;
-use crate::pipeline::isb::jetstream::reader::JetStreamReader;
+use crate::pipeline::isb::reader::{ISBReader as JetStreamReader, ISBReader};
 use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
 use crate::reduce::reducer::user_defined::UserDefinedReduce;
 use crate::sink::SinkWriter;
@@ -1218,7 +1217,7 @@ async fn sidecar_livez<C: crate::typ::NumaflowTypeConfig>(
 pub(crate) enum LagReader<C: crate::typ::NumaflowTypeConfig> {
     Source(Box<Source<C>>),
     #[allow(clippy::upper_case_acronyms)]
-    ISB(Vec<JetStreamReader<C>>), // multiple partitions
+    ISB(Vec<ISBReader<C>>), // multiple partitions
 }
 
 /// PendingReader is responsible for periodically checking the lag of the reader
@@ -1393,7 +1392,7 @@ mod tests {
     use crate::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::SourceType;
     use crate::source::user_defined::new_source;
-    use crate::tracker::TrackerHandle;
+    use crate::tracker::Tracker;
     use numaflow::shared::ServerExtras;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
@@ -1524,7 +1523,7 @@ mod tests {
         .await
         .expect("Failed to create source reader");
 
-        let tracker = TrackerHandle::new(None);
+        let tracker = Tracker::new(None, CancellationToken::new());
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
@@ -1541,7 +1540,6 @@ mod tests {
             SinkClientType::UserDefined(SinkClient::new(
                 create_rpc_channel(sink_sock_file).await.unwrap(),
             )),
-            tracker.clone(),
         )
         .fb_sink_client(SinkClientType::UserDefined(SinkClient::new(
             create_rpc_channel(fb_sink_sock_file).await.unwrap(),

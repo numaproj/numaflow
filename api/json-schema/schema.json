@@ -20562,6 +20562,10 @@
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
           "description": "IncrementBy is the duration to be added to the current watermark to progress the watermark when source is idling."
         },
+        "initSourceDelay": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "InitSourceDelay is the duration after which, if source doesn't produce any data, the watermark is initialized with the current wall clock time."
+        },
         "stepInterval": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
           "description": "StepInterval is the duration between the subsequent increment of the watermark as long the source remains Idle. The default value is 0s which means that once we detect idle source, we will be incrementing the watermark by `IncrementBy` for time we detect that we source is empty (in other words, this will be a very frequent update)."

@@ -7907,6 +7907,8 @@ spec:
                     properties:
                       incrementBy:
                         type: string
+                      initSourceDelay:
+                        type: string
                       stepInterval:
                         default: 0s
                         type: string

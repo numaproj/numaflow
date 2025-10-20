@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::config::pipeline;
 use crate::config::pipeline::PipelineConfig;
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::{Result, error};
 use async_nats::jetstream::Context;
 use async_nats::{ConnectOptions, jetstream};
@@ -16,7 +16,7 @@ pub(crate) struct PipelineContext<'a> {
     pub(crate) cln_token: CancellationToken,
     pub(crate) js_context: &'a Context,
     pub(crate) config: &'a PipelineConfig,
-    pub(crate) tracker_handle: TrackerHandle,
+    pub(crate) tracker: Tracker,
 }
 
 /// Creates a jetstream context based on the provided configuration

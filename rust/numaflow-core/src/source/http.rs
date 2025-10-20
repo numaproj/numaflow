@@ -37,10 +37,11 @@ impl From<HttpMessage> for Message {
                 offset: value.id.into(),
                 index: 0,
             },
-            headers: value.headers,
+            headers: Arc::new(value.headers),
             // Set default metadata so that metadata is always present.
-            metadata: Some(Metadata::default()),
+            metadata: Some(Arc::new(Metadata::default())),
             is_late: false,
+            ack_handle: None,
         }
     }
 }

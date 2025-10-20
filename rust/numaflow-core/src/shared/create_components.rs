@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::config::components::reduce::UnalignedWindowType;
@@ -8,10 +9,11 @@ use crate::config::get_vertex_replica;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{
-    DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET, PipelineConfig,
+    DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET, PipelineConfig, ToVertexConfig,
 };
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
+use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
 use crate::reduce::reducer::WindowManager;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
@@ -30,7 +32,7 @@ use crate::source::nats::new_nats_source;
 use crate::source::pulsar::new_pulsar_source;
 use crate::source::sqs::new_sqs_source;
 use crate::source::user_defined::new_source;
-use crate::tracker::TrackerHandle;
+use crate::tracker::Tracker;
 use crate::transformer::Transformer;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
@@ -60,29 +62,15 @@ pub(crate) async fn create_sink_writer(
     read_timeout: Duration,
     primary_sink: SinkConfig,
     fallback_sink: Option<SinkConfig>,
-    tracker_handle: TrackerHandle,
     serving_store: Option<ServingStore>,
     cln_token: &CancellationToken,
 ) -> error::Result<SinkWriter> {
     let mut sink_writer_builder = match primary_sink.sink_type.clone() {
-        SinkType::Log(_) => SinkWriterBuilder::new(
-            batch_size,
-            read_timeout,
-            SinkClientType::Log,
-            tracker_handle,
-        ),
-        SinkType::Blackhole(_) => SinkWriterBuilder::new(
-            batch_size,
-            read_timeout,
-            SinkClientType::Blackhole,
-            tracker_handle,
-        ),
-        SinkType::Serve => SinkWriterBuilder::new(
-            batch_size,
-            read_timeout,
-            SinkClientType::Serve,
-            tracker_handle,
-        ),
+        SinkType::Log(_) => SinkWriterBuilder::new(batch_size, read_timeout, SinkClientType::Log),
+        SinkType::Blackhole(_) => {
+            SinkWriterBuilder::new(batch_size, read_timeout, SinkClientType::Blackhole)
+        }
+        SinkType::Serve => SinkWriterBuilder::new(batch_size, read_timeout, SinkClientType::Serve),
         SinkType::UserDefined(ud_config) => {
             let sink_server_info =
                 sdk_server_info(ud_config.server_info_path.clone().into(), cln_token.clone())
@@ -111,7 +99,6 @@ pub(crate) async fn create_sink_writer(
                 batch_size,
                 read_timeout,
                 SinkClientType::UserDefined(sink_grpc_client.clone()),
-                tracker_handle,
             )
             .retry_config(primary_sink.retry_config.unwrap_or_default())
         }
@@ -121,18 +108,12 @@ pub(crate) async fn create_sink_writer(
                 batch_size,
                 read_timeout,
                 SinkClientType::Sqs(sqs_sink.clone()),
-                tracker_handle,
             )
         }
         SinkType::Kafka(sink_config) => {
             let sink_config = *sink_config;
             let kafka_sink = numaflow_kafka::sink::new_sink(sink_config)?;
-            SinkWriterBuilder::new(
-                batch_size,
-                read_timeout,
-                SinkClientType::Kafka(kafka_sink),
-                tracker_handle,
-            )
+            SinkWriterBuilder::new(batch_size, read_timeout, SinkClientType::Kafka(kafka_sink))
         }
         SinkType::Pulsar(pulsar_sink_config) => {
             let pulsar_sink = numaflow_pulsar::sink::new_sink(*pulsar_sink_config).await?;
@@ -140,7 +121,6 @@ pub(crate) async fn create_sink_writer(
                 batch_size,
                 read_timeout,
                 SinkClientType::Pulsar(Box::new(pulsar_sink)),
-                tracker_handle,
             )
         }
     };
@@ -226,7 +206,7 @@ pub(crate) async fn create_transformer(
     batch_size: usize,
     graceful_timeout: Duration,
     transformer_config: Option<TransformerConfig>,
-    tracker_handle: TrackerHandle,
+    tracker: Tracker,
     cln_token: CancellationToken,
 ) -> error::Result<Option<Transformer>> {
     if let Some(transformer_config) = transformer_config
@@ -262,7 +242,7 @@ pub(crate) async fn create_transformer(
                 transformer_config.concurrency,
                 graceful_timeout,
                 transformer_grpc_client.clone(),
-                tracker_handle,
+                tracker,
             )
             .await?,
         ));
@@ -275,7 +255,7 @@ pub(crate) async fn create_mapper(
     read_timeout: Duration,
     graceful_timeout: Duration,
     map_config: MapVtxConfig,
-    tracker_handle: TrackerHandle,
+    tracker: Tracker,
     cln_token: CancellationToken,
 ) -> error::Result<MapHandle> {
     match map_config.map_type {
@@ -322,7 +302,7 @@ pub(crate) async fn create_mapper(
                         graceful_timeout,
                         map_config.concurrency,
                         map_grpc_client.clone(),
-                        tracker_handle,
+                        tracker,
                     )
                     .await?)
                 }
@@ -355,7 +335,7 @@ pub(crate) async fn create_mapper(
                         graceful_timeout,
                         map_config.concurrency,
                         map_grpc_client.clone(),
-                        tracker_handle,
+                        tracker,
                     )
                     .await?)
                 }
@@ -370,7 +350,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
     batch_size: usize,
     read_timeout: Duration,
     source_config: &SourceConfig,
-    tracker_handle: TrackerHandle,
+    tracker: Tracker,
     transformer: Option<Transformer>,
     watermark_handle: Option<SourceWatermarkHandle>,
     cln_token: CancellationToken,
@@ -383,7 +363,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Generator(generator, generator_ack, generator_lag),
-                tracker_handle,
+                tracker,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
@@ -402,7 +382,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             Ok(crate::source::Source::new(
                 batch_size,
                 source::SourceType::Pulsar(pulsar),
-                tracker_handle,
+                tracker,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
@@ -421,7 +401,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Sqs(sqs),
-                tracker_handle,
+                tracker,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
@@ -439,7 +419,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Jetstream(jetstream),
-                tracker_handle,
+                tracker,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
@@ -457,7 +437,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Nats(nats),
-                tracker_handle,
+                tracker,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
@@ -471,7 +451,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Kafka(kafka),
-                tracker_handle,
+                tracker,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
@@ -485,7 +465,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Http(CoreHttpSource::new(batch_size, http_source)),
-                tracker_handle,
+                tracker,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
@@ -509,7 +489,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             Ok(Source::new(
                 batch_size,
                 source::SourceType::UserDefinedSource(Box::new(ud_read), Box::new(ud_ack), ud_lag),
-                tracker_handle,
+                tracker,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
@@ -764,7 +744,7 @@ pub async fn create_edge_watermark_handle(
     js_context: &Context,
     cln_token: &CancellationToken,
     window_manager: Option<WindowManager>,
-    tracker_handle: TrackerHandle,
+    tracker: Tracker,
     from_partitions: Vec<u16>,
 ) -> error::Result<Option<ISBWatermarkHandle>> {
     match &config.watermark_config {
@@ -779,7 +759,7 @@ pub async fn create_edge_watermark_handle(
                 &config.to_vertex_config,
                 cln_token.clone(),
                 window_manager,
-                tracker_handle,
+                tracker,
                 from_partitions,
             )
             .await?;
@@ -787,6 +767,30 @@ pub async fn create_edge_watermark_handle(
         }
         _ => Ok(None),
     }
+}
+
+/// Creates JetStreamWriters for all streams in the to_vertex_config
+pub(crate) async fn create_js_writers(
+    to_vertex_config: &[ToVertexConfig],
+    js_context: Context,
+    isb_config: Option<&crate::config::pipeline::isb::ISBConfig>,
+    cln_token: CancellationToken,
+) -> crate::Result<HashMap<&'static str, JetStreamWriter>> {
+    let mut writers = HashMap::new();
+    for vertex_config in to_vertex_config {
+        for stream in &vertex_config.writer_config.streams {
+            let writer = JetStreamWriter::new(
+                stream.clone(),
+                js_context.clone(),
+                vertex_config.writer_config.clone(),
+                isb_config.map(|c| c.compression.compress_type),
+                cln_token.clone(),
+            )
+            .await?;
+            writers.insert(stream.name, writer);
+        }
+    }
+    Ok(writers)
 }
 
 #[cfg(test)]
