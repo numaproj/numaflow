@@ -221,7 +221,7 @@ pub mod tests {
         );
 
         // create sink writer
-        use crate::sink::{SinkClientType, SinkWriterBuilder};
+        use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
         let sink_writer =
             SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
                 .build()

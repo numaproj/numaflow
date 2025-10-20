@@ -1,33 +1,20 @@
-use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
-use crate::{error, message::Message};
+use super::{ResponseFromSink, ResponseStatusFromSink, Sink};
+use crate::message::Message;
 
-pub(crate) struct LogSink;
+/// Blackhole is a sink to emulate /dev/null
+pub struct BlackholeSink;
 
-impl Sink for LogSink {
-    async fn sink(&mut self, messages: Vec<Message>) -> error::Result<Vec<ResponseFromSink>> {
-        let mut result = Vec::with_capacity(messages.len());
-        for msg in messages {
-            let mut headers = String::new();
-            msg.headers.iter().for_each(|(k, v)| {
-                headers.push_str(&format!("{k}: {v}, "));
-            });
-
-            let log_line = format!(
-                "Payload - {} Keys - {} EventTime - {} Headers - {} ID - {}",
-                &String::from_utf8_lossy(&msg.value),
-                msg.keys.join(","),
-                msg.event_time.timestamp_millis(),
-                headers,
-                msg.id,
-            );
-            tracing::info!("{}", log_line);
-            result.push(ResponseFromSink {
-                id: msg.id.to_string(),
+impl Sink for BlackholeSink {
+    async fn sink(&mut self, messages: Vec<Message>) -> crate::Result<Vec<ResponseFromSink>> {
+        let output = messages
+            .into_iter()
+            .map(|msg| ResponseFromSink {
                 status: ResponseStatusFromSink::Success,
+                id: msg.id.to_string(),
                 serve_response: None,
             })
-        }
-        Ok(result)
+            .collect();
+        Ok(output)
     }
 }
 
@@ -37,14 +24,14 @@ mod tests {
 
     use chrono::Utc;
 
-    use super::LogSink;
+    use super::BlackholeSink;
     use crate::message::IntOffset;
     use crate::message::{Message, MessageID, Offset};
-    use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
+    use crate::sinker::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
 
     #[tokio::test]
-    async fn test_log_sink() {
-        let mut sink = LogSink;
+    async fn test_black_hole() {
+        let mut sink = BlackholeSink;
         let messages = vec![
             Message {
                 typ: Default::default(),

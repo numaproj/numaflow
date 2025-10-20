@@ -1,9 +1,3 @@
-//! The [Sink] serves as the endpoint for processed data that has been outputted from the platform,
-//! which is then sent to an external system or application.
-//!
-//! [Sink]: https://numaflow.numaproj.io/user-guide/sinks/overview/
-
-use backoff::strategy::exponential::Exponential;
 use numaflow_kafka::sink::KafkaSink;
 use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::sink::Status::{Failure, Fallback, Serve, Success};
@@ -11,11 +5,8 @@ use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
 use numaflow_pulsar::sink::Sink as PulsarSink;
 use numaflow_sqs::sink::SqsSink;
-use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
-use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::{pin, time};
@@ -23,11 +14,10 @@ use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
-use tracing::{error, info, warn};
-use user_defined::UserDefinedSink;
+use tracing::{error, info};
 
 use crate::Result;
-use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
+use crate::config::components::sink::RetryConfig;
 use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
@@ -36,30 +26,42 @@ use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_metric_labels, pipeline_metrics,
 };
-use crate::sink::serve::{ServingStore, StoreEntry};
+use crate::sinker::actor::{SinkActor, SinkActorMessage, SinkActorResponse};
+use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
+
+use serve::{ServingStore, StoreEntry};
+use user_defined::UserDefinedSink;
 
 /// A [Blackhole] sink which reads but never writes to anywhere, semantic equivalent of `/dev/null`.
 ///
 /// [Blackhole]: https://numaflow.numaproj.io/user-guide/sinks/blackhole/
+#[path = "sink/blackhole.rs"]
 mod blackhole;
 
 /// [log] sink prints out the read messages on to stdout.
 ///
 /// [Log]: https://numaflow.numaproj.io/user-guide/sinks/log/
+#[path = "sink/log.rs"]
 mod log;
 
 /// Serving [ServingStore] to store the result of the serving pipeline. It also contains the builtin [serve::ServeSink]
 /// to write to the serving store.
+#[path = "sink/serve.rs"]
 pub mod serve;
 
+#[path = "sink/sqs.rs"]
 mod sqs;
 
+#[path = "sink/pulsar.rs"]
 mod pulsar;
 
+#[path = "sink/kafka.rs"]
 mod kafka;
+
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.
 ///
 /// [User-Defined Sink]: https://numaflow.numaproj.io/user-guide/sinks/user-defined-sinks/
+#[path = "sink/user_defined.rs"]
 mod user_defined;
 
 /// Set of items to be implemented be a Numaflow Sink.
@@ -70,175 +72,6 @@ mod user_defined;
 pub(crate) trait LocalSink {
     /// Write the messages to the Sink.
     async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>>;
-}
-
-/// Response from the sink actor containing categorized messages
-#[derive(Debug)]
-struct SinkActorResponse {
-    success: Vec<Message>,
-    failed: Vec<Message>,
-    fallback: Vec<Message>,
-    serving: Vec<Message>,
-    dropped: Vec<Message>,
-}
-
-/// SinkActorMessage is a message that is sent to the SinkActor.
-struct SinkActorMessage {
-    messages: Vec<Message>,
-    respond_to: oneshot::Sender<Result<SinkActorResponse>>,
-    cancel: CancellationToken,
-}
-
-/// SinkActor is an actor that handles messages sent to the Sink.
-struct SinkActor<T> {
-    actor_messages: Receiver<SinkActorMessage>,
-    sink: T,
-    retry_config: RetryConfig,
-}
-
-impl<T> SinkActor<T>
-where
-    T: Sink,
-{
-    fn new(actor_messages: Receiver<SinkActorMessage>, sink: T, retry_config: RetryConfig) -> Self {
-        Self {
-            actor_messages,
-            sink,
-            retry_config,
-        }
-    }
-
-    /// Invokes the sink and retries only failed messages until success or retry limit.
-    /// Returns categorized messages: success, failed, fallback, and serving.
-    async fn write_messages_to_sink(
-        &mut self,
-        messages: Vec<Message>,
-        cancel: &CancellationToken,
-    ) -> Result<SinkActorResponse> {
-        if messages.is_empty() {
-            return Ok(SinkActorResponse {
-                success: vec![],
-                failed: vec![],
-                fallback: vec![],
-                serving: vec![],
-                dropped: vec![],
-            });
-        }
-
-        let mut messages_to_retry = messages;
-        let mut success_msgs = Vec::new();
-        let mut fallback_msgs = Vec::new();
-        let mut serving_msgs = Vec::new();
-        let mut dropped_msgs = Vec::new();
-
-        // Create exponential backoff strategy from retry config
-        let backoff = Exponential::from_millis(
-            self.retry_config.sink_initial_retry_interval_in_ms,
-            self.retry_config.sink_max_retry_interval_in_ms,
-            self.retry_config.sink_retry_factor,
-            self.retry_config.sink_retry_jitter,
-            Some(self.retry_config.sink_max_retry_attempts),
-        );
-
-        // Manual retry loop with backoff
-        let mut backoff_iter = backoff.into_iter();
-
-        loop {
-            // send batch to sink
-            let responses = self.sink.sink(messages_to_retry.clone()).await?;
-
-            // Create a map of id to result
-            let result_map = responses
-                .into_iter()
-                .map(|resp| (resp.id, resp.status))
-                .collect::<HashMap<_, _>>();
-
-            // Classify messages based on responses
-            let mut failed_ids = Vec::new();
-
-            messages_to_retry.retain(|msg| {
-                match result_map.get(&msg.id.to_string()) {
-                    Some(ResponseStatusFromSink::Success) => {
-                        success_msgs.push(msg.clone());
-                        false // remove from retry list
-                    }
-                    Some(ResponseStatusFromSink::Failed(_)) => {
-                        failed_ids.push(msg.id.to_string());
-                        true // keep for retry
-                    }
-                    Some(ResponseStatusFromSink::Fallback) => {
-                        fallback_msgs.push(msg.clone());
-                        false // remove from retry list
-                    }
-                    Some(ResponseStatusFromSink::Serve) => {
-                        serving_msgs.push(msg.clone());
-                        false // remove from retry list
-                    }
-                    None => false, // remove if no response
-                }
-            });
-
-            if messages_to_retry.is_empty() {
-                // success path, all messages processed
-                break;
-            }
-
-            // Check if we should retry
-            if cancel.is_cancelled() {
-                warn!("Cancellation received, stopping retry loop");
-                // Remaining messages are failed
-                return Ok(SinkActorResponse {
-                    success: success_msgs,
-                    failed: messages_to_retry,
-                    fallback: fallback_msgs,
-                    serving: serving_msgs,
-                    dropped: dropped_msgs,
-                });
-            }
-
-            // Get next backoff delay
-            if let Some(delay) = backoff_iter.next() {
-                warn!(
-                    remaining = messages_to_retry.len(),
-                    delay_ms = delay.as_millis(),
-                    "Retrying failed messages"
-                );
-                tokio::time::sleep(delay).await;
-            } else {
-                match self.retry_config.sink_retry_on_fail_strategy {
-                    OnFailureStrategy::Fallback => {
-                        fallback_msgs.append(&mut messages_to_retry);
-                    }
-                    OnFailureStrategy::Drop => {
-                        dropped_msgs.append(&mut messages_to_retry);
-                    }
-                    _ => {}
-                }
-                // No more retries, remaining messages are failed
-                warn!(remaining = messages_to_retry.len(), "Retries exhausted");
-                break;
-            }
-        }
-
-        Ok(SinkActorResponse {
-            success: success_msgs,
-            failed: messages_to_retry,
-            fallback: fallback_msgs,
-            serving: serving_msgs,
-            dropped: dropped_msgs,
-        })
-    }
-
-    async fn handle_message(&mut self, msg: SinkActorMessage) {
-        let result = self.write_messages_to_sink(msg.messages, &msg.cancel).await;
-        let _ = msg.respond_to.send(result);
-    }
-
-    async fn run(mut self) {
-        while let Some(msg) = self.actor_messages.recv().await {
-            self.handle_message(msg).await;
-        }
-    }
 }
 
 pub(crate) enum SinkClientType {
@@ -348,7 +181,7 @@ impl HealthCheckClientsBuilder {
 /// messages that are in input stream and nack them using the tracker, when the upstream stops sending
 /// messages the input stream will be closed, and we will stop the component.
 #[derive(Clone)]
-pub(super) struct SinkWriter {
+pub(crate) struct SinkWriter {
     batch_size: usize,
     chunk_timeout: Duration,
     sink_handle: mpsc::Sender<SinkActorMessage>,
@@ -578,7 +411,7 @@ impl SinkWriter {
 
     /// Streaming write the messages to the Sink, it will keep writing messages until the stream is
     /// closed or the cancellation token is triggered.
-    pub(super) async fn streaming_write(
+    pub(crate) async fn streaming_write(
         mut self,
         messages_stream: ReceiverStream<Message>,
         cln_token: CancellationToken,
@@ -916,7 +749,7 @@ mod tests {
     use crate::config::pipeline::NatsStoreConfig;
     use crate::message::{AckHandle, IntOffset, Message, MessageID, Offset, ReadAck};
     use crate::shared::grpc::create_rpc_channel;
-    use crate::sink::serve::nats::NatsServingStore;
+    use crate::sinker::sink::serve::nats::NatsServingStore;
     use crate::tracker::Tracker;
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
@@ -924,7 +757,9 @@ mod tests {
     use numaflow::shared::ServerExtras;
     use numaflow::sink;
     use numaflow_pb::clients::sink::{SinkRequest, SinkResponse};
+    use std::collections::HashMap;
     use std::sync::Arc;
+    use tokio::sync::mpsc::Receiver;
     use tokio::time::{Duration, sleep};
     use tokio_util::sync::CancellationToken;
 

@@ -21,8 +21,8 @@ use crate::reduce::reducer::unaligned::user_defined::accumulator::UserDefinedAcc
 use crate::reduce::reducer::unaligned::user_defined::session::UserDefinedSessionReduce;
 use crate::shared::grpc;
 use crate::shared::grpc::{create_rpc_channel, wait_until_source_ready};
-use crate::sink::serve::ServingStore;
-use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
+use crate::sinker::sink::serve::ServingStore;
+use crate::sinker::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::Source;
 use crate::source::generator::new_generator;
 use crate::source::http::CoreHttpSource;

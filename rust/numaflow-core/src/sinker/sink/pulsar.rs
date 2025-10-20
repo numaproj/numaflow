@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crate::error::{Error, Result};
 use crate::message::Message;
-use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
+use crate::sinker::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
 
 impl TryFrom<Message> for PulsarMessage {
     type Error = Error;

@@ -7,7 +7,7 @@ use crate::error::{self};
 use crate::mapper::map::MapHandle;
 use crate::metrics::{LagReader, PendingReaderTasks};
 use crate::shared::create_components;
-use crate::sink::SinkWriter;
+use crate::sinker::sink::SinkWriter;
 use crate::source::Source;
 use crate::tracker::Tracker;
 use crate::typ::{
