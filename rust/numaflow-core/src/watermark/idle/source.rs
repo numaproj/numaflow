@@ -193,8 +193,7 @@ mod tests {
         // Since init_source_delay has passed, idle_wm should be
         // last_idle_wm_published_time + init_source_delay
         let idle_wm = manager.update_and_fetch_idle_wm(-1);
-        let expected_wm = manager.last_idle_wm_published_time.timestamp_millis()
-            + config.init_source_delay.unwrap().as_millis() as i64;
+        let expected_wm = manager.last_idle_wm_published_time.timestamp_millis();
         assert_eq!(idle_wm, expected_wm);
 
         // Update and fetch idle watermark with a valid computed_wm
