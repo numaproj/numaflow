@@ -444,23 +444,23 @@ impl SinkWriter {
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             async move {
                 info!(?self.batch_size, ?self.chunk_timeout, "Starting sink writer");
+
+                // Combine chunking and timeout into a stream
                 let chunk_stream =
                     messages_stream.chunks_timeout(self.batch_size, self.chunk_timeout);
-
                 pin!(chunk_stream);
 
-                loop {
-                    let batch = match chunk_stream.next().await {
-                        Some(batch) => batch,
-                        None => {
-                            break;
-                        }
-                    };
+                // Main processing loop
+                while let Some(batch) = chunk_stream.next().await {
+                    // empty batch means end of stream
+                    if batch.is_empty() {
+                        continue;
+                    }
 
                     // we are in shutting down mode, we will not be writing to the sink
                     // tell tracker to nack the messages.
                     if self.shutting_down {
-                        for msg in batch.iter() {
+                        for msg in &batch {
                             msg.ack_handle
                                 .as_ref()
                                 .expect("ack handle should be present")
@@ -470,43 +470,49 @@ impl SinkWriter {
                         continue;
                     }
 
-                    if batch.is_empty() {
-                        continue;
-                    }
-
+                    // collect ack handles for later failure tracking
                     let ack_handles = batch
                         .iter()
                         .map(|msg| msg.ack_handle.clone())
                         .collect::<Vec<_>>();
 
-                    // filter out the messages which needs to be dropped
-                    let batch = batch
-                        .into_iter()
-                        .filter(|msg| !msg.dropped())
-                        .collect::<Vec<_>>();
+                    // filter out messages that are marked for drop
+                    let batch: Vec<_> = batch.into_iter().filter(|msg| !msg.dropped()).collect();
 
-                    match self.write(batch, cln_token.clone()).await {
-                        Ok(_) => {}
-                        Err(e) => {
-                            // if there is a critical error, cancel the token and let upstream know
-                            // that we are shutting down and stop sending messages to the sink
-                            error!(?e, "Error writing to sink");
-                            cln_token.cancel();
-                            for ack_handle in ack_handles {
-                                ack_handle
-                                    .as_ref()
-                                    .expect("ack handle should be present")
-                                    .is_failed
-                                    .store(true, Ordering::Relaxed);
-                            }
-                            self.final_result = Err(e);
-                            self.shutting_down = true;
+                    // skip if all were dropped
+                    if batch.is_empty() {
+                        continue;
+                    }
+
+                    // perform the write operation
+                    if let Err(e) = self.write(batch, cln_token.clone()).await {
+                        // critical error, cancel upstream and mark all acks as failed
+                        error!(?e, "Error writing to sink, initiating shutdown.");
+                        cln_token.cancel();
+
+                        for ack_handle in ack_handles {
+                            ack_handle
+                                .as_ref()
+                                .expect("ack handle should be present")
+                                .is_failed
+                                .store(true, Ordering::Relaxed);
                         }
+
+                        self.final_result = Err(e);
+                        self.shutting_down = true;
+                    }
+
+                    // if cancellation triggered externally, break early
+                    if cln_token.is_cancelled() {
+                        break;
                     }
                 }
+
+                // finalize
                 self.final_result.clone()
             }
         });
+
         Ok(handle)
     }
 
@@ -524,21 +530,19 @@ impl SinkWriter {
         let total_msgs = messages.len();
         let mut retry_attempts = 0;
         let total_msgs_bytes: usize = messages.iter().map(|msg| msg.value.len()).sum();
+
         let mut error_map = HashMap::new();
         let mut fallback_msgs = Vec::new();
         let mut serving_msgs = Vec::new();
-        // start with the original set of message to be sent.
-        // we will overwrite this vec with failed messages and will keep retrying.
-        let mut messages_to_send = messages;
+        let mut messages_to_send = messages; // start with all messages
         let mut write_errors_total = 0;
 
-        // only breaks out of this loop based on the retry strategy unless all the messages have been written to sink
-        // successfully.
+        // only breaks out of this loop based on the retry strategy unless all messages are written
         let retry_config = &self.retry_config.clone();
-        // Initialize a `StdRng` instance which implements std::marker::Send
-        let mut rng = StdRng::from_entropy();
+        let mut rng = StdRng::from_entropy(); // Initialize a `StdRng` instance which implements Send
 
         loop {
+            // inner retry attempts for the same batch
             while retry_attempts <= retry_config.sink_max_retry_attempts {
                 let status = self
                     .write_to_sink_once(
@@ -548,22 +552,23 @@ impl SinkWriter {
                         &mut messages_to_send,
                     )
                     .await;
+
                 match status {
-                    Ok(true) => break,
+                    Ok(true) => break, // all messages written successfully
                     Ok(false) => {
-                        // Increment retry attempt only if we will retry again
-                        // otherwise we will break out of the loop
-                        // sleep for the calculated delay only if we are retrying
+                        // increment retry attempt only if we will retry again
                         if retry_attempts >= retry_config.sink_max_retry_attempts {
                             break;
                         }
                         retry_attempts += 1;
                         write_errors_total += error_map.len();
+
                         warn!(
                             retry_attempt = retry_attempts,
                             ?error_map,
                             "Retrying due to retryable error."
                         );
+
                         let delay = Self::calculate_exponential_delay(
                             retry_config,
                             retry_attempts,
@@ -571,44 +576,41 @@ impl SinkWriter {
                         );
                         sleep(Duration::from_millis(delay as u64)).await;
                     }
-                    Err(e) => Err(e)?,
+                    Err(e) => return Err(e),
                 }
 
                 // if we are shutting down, stop the retry
                 if cln_token.is_cancelled() {
                     return Err(Error::Sink(
                         "Cancellation token triggered during retry. \
-                        This happens when we are shutting down due to some error \
-                        and will no longer re-try writing to sink."
+                    This happens when we are shutting down due to some error \
+                    and will no longer re-try writing to sink."
                             .to_string(),
                     ));
                 }
             }
 
-            // If after the retries we still have messages to process, handle the post retry failures
+            // If after the retries we still have messages to process, handle post retry failures
             let need_retry = Self::handle_sink_post_retry(
                 &mut retry_attempts,
                 &mut error_map,
                 &mut fallback_msgs,
                 &mut messages_to_send,
                 retry_config,
-            );
+            )?;
 
-            match need_retry {
-                // if we are done with the messages, break the loop
-                Ok(false) => break,
-                // if we need to retry, reset the retry_attempts and error_map
-                Ok(true) => {
-                    retry_attempts = 0;
-                    error_map.clear();
-                }
-                Err(e) => Err(e)?,
+            // reset state for next retry round
+            if need_retry {
+                retry_attempts = 0;
+                error_map.clear();
+            } else {
+                break;
             }
         }
 
+        // If there are fallback messages, write them to the fallback sink
         let fb_msgs_total = fallback_msgs.len();
         let fb_msgs_bytes_total: usize = fallback_msgs.iter().map(|msg| msg.value.len()).sum();
-        // If there are fallback messages, write them to the fallback sink
         if !fallback_msgs.is_empty() {
             let fallback_sink_start = time::Instant::now();
             self.handle_fallback_messages(fallback_msgs, retry_config)
@@ -616,13 +618,14 @@ impl SinkWriter {
             Self::send_fb_sink_metrics(fb_msgs_total, fb_msgs_bytes_total, fallback_sink_start);
         }
 
+        // If there are serving messages, write them to the serving store
         let serving_msgs_total = serving_msgs.len();
         let serving_msgs_bytes_total: usize = serving_msgs.iter().map(|msg| msg.value.len()).sum();
-        // If there are serving messages, write them to the serving store
         if !serving_msgs.is_empty() {
             self.handle_serving_messages(serving_msgs).await?;
         }
 
+        // record metrics
         if is_mono_vertex() {
             monovertex_metrics()
                 .sink
@@ -645,6 +648,7 @@ impl SinkWriter {
                 PIPELINE_PARTITION_NAME_LABEL.to_string(),
                 get_vertex_name().to_string(),
             ));
+
             pipeline_metrics()
                 .forwarder
                 .write_total
@@ -672,6 +676,8 @@ impl SinkWriter {
 
     /// Handles the post retry failures based on the configured strategy,
     /// returns true if we need to retry, else false.
+    /// Handles the post retry failures based on the configured strategy,
+    /// returns true if we need to retry, else false.
     fn handle_sink_post_retry(
         retry_attempts: &mut u16,
         error_map: &mut HashMap<String, i32>,
@@ -683,8 +689,10 @@ impl SinkWriter {
         if messages_to_send.is_empty() {
             return Ok(false);
         }
+
         // check what is the failure strategy in the config
         let strategy = retry_config.sink_retry_on_fail_strategy.clone();
+
         match strategy {
             // if we need to retry, return true
             OnFailureStrategy::Retry => {
@@ -693,8 +701,9 @@ impl SinkWriter {
                     errors = ?error_map,
                     "Using onFailure Retry, retry attempts completed"
                 );
-                return Ok(true);
+                Ok(true)
             }
+
             // if we need to drop the messages, log and return false
             OnFailureStrategy::Drop => {
                 // log that we are dropping the messages as requested
@@ -703,6 +712,8 @@ impl SinkWriter {
                     errors = ?error_map,
                     "Dropping messages."
                 );
+
+                // update drop metrics appropriately
                 if is_mono_vertex() {
                     // update the drop metric count with the messages left for sink
                     monovertex_metrics()
@@ -721,23 +732,29 @@ impl SinkWriter {
                         ))
                         .inc_by(messages_to_send.len() as u64);
                 }
+
+                Ok(false)
             }
+
             // if we need to move the messages to the fallback, return false
             OnFailureStrategy::Fallback => {
                 // log that we are moving the messages to the fallback as requested
                 warn!(
                     retry_attempts = *retry_attempts,
                     errors = ?error_map,
-                    "Moving messages to fallback after retry attempts.",
+                    "Moving messages to fallback after retry attempts."
                 );
+
                 // move the messages to the fallback messages
                 fallback_msgs.append(messages_to_send);
+
+                Ok(false)
             }
         }
-        // if we are done with the messages, break the loop
-        Ok(false)
     }
 
+    /// Writes to sink once and will return true if successful, else false. Please note that it
+    /// mutates its incoming fields.
     /// Writes to sink once and will return true if successful, else false. Please note that it
     /// mutates its incoming fields.
     async fn write_to_sink_once(
@@ -747,50 +764,52 @@ impl SinkWriter {
         serving_msgs: &mut Vec<Message>,
         messages_to_send: &mut Vec<Message>,
     ) -> Result<bool> {
-        match self.sink(messages_to_send.clone()).await {
-            Ok(response) => {
-                // create a map of id to result, since there is no strict requirement
-                // for the udsink to return the results in the same order as the requests
-                let result_map = response
-                    .into_iter()
-                    .map(|resp| (resp.id, resp.status))
-                    .collect::<HashMap<_, _>>();
+        // call the sink once and collect the response
+        let response = self.sink(messages_to_send.clone()).await?;
 
-                error_map.clear();
-                // drain all the messages that were successfully written
-                // and keep only the failed messages to send again
-                // construct the error map for the failed messages
-                messages_to_send.retain(|msg| {
-                    if let Some(result) = result_map.get(&msg.id.to_string()) {
-                        return match result {
-                            ResponseStatusFromSink::Success => false,
-                            ResponseStatusFromSink::Failed(err_msg) => {
-                                *error_map.entry(err_msg.clone()).or_insert(0) += 1;
-                                true
-                            }
-                            ResponseStatusFromSink::Fallback => {
-                                fallback_msgs.push(msg.clone());
-                                false
-                            }
-                            ResponseStatusFromSink::Serve => {
-                                serving_msgs.push(msg.clone());
-                                false
-                            }
-                        };
-                    }
-                    false
-                });
+        // create a map of id to result, since there is no strict requirement
+        // for the udsink to return the results in the same order as the requests
+        let result_map = response
+            .into_iter()
+            .map(|resp| (resp.id, resp.status))
+            .collect::<HashMap<_, _>>();
 
-                // if all messages are successfully written, break the loop
-                if messages_to_send.is_empty() {
-                    return Ok(true);
+        // clear previous errors before processing this attempt
+        error_map.clear();
+
+        // drain all the messages that were successfully written
+        // and keep only the failed messages to send again
+        // construct the error map for the failed messages
+        messages_to_send.retain(|msg| {
+            match result_map.get(&msg.id.to_string()) {
+                // successfully written message — remove it
+                Some(ResponseStatusFromSink::Success) => false,
+
+                // failed message — record error message and retry it
+                Some(ResponseStatusFromSink::Failed(err_msg)) => {
+                    *error_map.entry(err_msg.clone()).or_insert(0) += 1;
+                    true
                 }
 
-                // we need to retry
-                Ok(false)
+                // move message to fallback sink
+                Some(ResponseStatusFromSink::Fallback) => {
+                    fallback_msgs.push(msg.clone());
+                    false
+                }
+
+                // move message to serving store
+                Some(ResponseStatusFromSink::Serve) => {
+                    serving_msgs.push(msg.clone());
+                    false
+                }
+
+                None => false,
             }
-            Err(e) => Err(e),
-        }
+        });
+
+        // if all messages are successfully written, break the loop
+        // return true if done, false if we need to retry
+        Ok(!messages_to_send.is_empty())
     }
 
     // Writes the fallback messages to the fallback sink
@@ -802,7 +821,7 @@ impl SinkWriter {
         if self.fb_sink_handle.is_none() {
             return Err(Error::FbSink(
                 "Response contains fallback messages but no fallback sink is configured. \
-                Please update the spec to configure fallback sink https://numaflow.numaproj.io/user-guide/sinks/fallback/".to_string(),
+            Please update the spec to configure fallback sink https://numaflow.numaproj.io/user-guide/sinks/fallback/".to_string(),
             ));
         }
 
@@ -821,8 +840,12 @@ impl SinkWriter {
         let max_retry_attempts = default_retry.steps.unwrap();
         let sleep_interval = default_retry.interval.unwrap();
 
+        // keep retrying until we succeed or exhaust attempts
         while retry_attempts <= max_retry_attempts {
-            match self.fb_sink(messages_to_send.clone()).await {
+            // write to fallback sink once
+            let fb_result = self.fb_sink(messages_to_send.clone()).await;
+
+            match fb_result {
                 Ok(fb_response) => {
                     // create a map of id to result, since there is no strict requirement
                     // for the udsink to return the results in the same order as the requests
@@ -834,43 +857,42 @@ impl SinkWriter {
                     let mut contains_fallback_status = false;
                     let mut contains_serving_status = false;
 
+                    // clear previous errors before processing this attempt
                     fallback_error_map.clear();
+
                     // drain all the messages that were successfully written
                     // and keep only the failed messages to send again
                     // construct the error map for the failed messages
                     messages_to_send.retain(|msg| {
-                        if let Some(result) = result_map.get(&msg.id.to_string()) {
-                            match result {
-                                ResponseStatusFromSink::Success => false,
-                                ResponseStatusFromSink::Failed(err_msg) => {
-                                    *fallback_error_map.entry(err_msg.clone()).or_insert(0) += 1;
-                                    // increment fb sink error metric for pipeline
-                                    if !is_mono_vertex() {
-                                        let mut labels =
-                                            pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
-                                        labels.push((
-                                            PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                                            get_vertex_name().to_string(),
-                                        ));
-                                        pipeline_metrics()
-                                            .sink_forwarder
-                                            .fbsink_write_error_total
-                                            .get_or_create(&labels)
-                                            .inc_by(1);
-                                    }
-                                    true
+                        match result_map.get(&msg.id.to_string()) {
+                            Some(ResponseStatusFromSink::Success) => false,
+                            Some(ResponseStatusFromSink::Failed(err_msg)) => {
+                                *fallback_error_map.entry(err_msg.clone()).or_insert(0) += 1;
+                                // increment fb sink error metric for pipeline
+                                if !is_mono_vertex() {
+                                    let mut labels =
+                                        pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
+                                    labels.push((
+                                        PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                                        get_vertex_name().to_string(),
+                                    ));
+                                    pipeline_metrics()
+                                        .sink_forwarder
+                                        .fbsink_write_error_total
+                                        .get_or_create(&labels)
+                                        .inc_by(1);
                                 }
-                                ResponseStatusFromSink::Fallback => {
-                                    contains_fallback_status = true;
-                                    false
-                                }
-                                ResponseStatusFromSink::Serve => {
-                                    contains_serving_status = true;
-                                    false
-                                }
+                                true
                             }
-                        } else {
-                            false
+                            Some(ResponseStatusFromSink::Fallback) => {
+                                contains_fallback_status = true;
+                                false
+                            }
+                            Some(ResponseStatusFromSink::Serve) => {
+                                contains_serving_status = true;
+                                false
+                            }
+                            None => false,
                         }
                     });
 
@@ -878,19 +900,21 @@ impl SinkWriter {
                     if contains_fallback_status {
                         return Err(Error::FbSink(
                             "Fallback response contains fallback status. \
-                            Specifying fallback status in fallback response is not allowed."
+                        Specifying fallback status in fallback response is not allowed."
                                 .to_string(),
                         ));
                     }
 
+                    // specifying serving status in fallback response is not allowed
                     if contains_serving_status {
                         return Err(Error::FbSink(
                             "Fallback response contains serving status. \
-                            Specifying serving status in fallback response is not allowed."
+                        Specifying serving status in fallback response is not allowed."
                                 .to_string(),
                         ));
                     }
 
+                    // if all messages were written successfully, we are done
                     if messages_to_send.is_empty() {
                         break;
                     }
@@ -910,15 +934,21 @@ impl SinkWriter {
                         break;
                     }
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    // early return on critical sink failure
+                    return Err(e);
+                }
             }
         }
+
+        // if after all retries we still have messages left, return an error
         if !messages_to_send.is_empty() {
             return Err(Error::FbSink(format!(
                 "Failed to write messages to fallback sink after {retry_attempts} retry attempts. \
-                Max Attempts configured: {max_retry_attempts} Errors: {fallback_error_map:?}"
+            Max Attempts configured: {max_retry_attempts} Errors: {fallback_error_map:?}"
             )));
         }
+
         Ok(())
     }
 
@@ -1011,6 +1041,8 @@ impl SinkWriter {
         }
     }
 
+    // Calculates exponential backoff delay with optional jitter.
+    // Returns the computed delay (in milliseconds) capped by max retry interval.
     fn calculate_exponential_delay(
         retry_config: &RetryConfig,
         retry_attempts: u16,

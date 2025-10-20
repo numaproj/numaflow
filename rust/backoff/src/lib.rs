@@ -4,6 +4,7 @@
 //! we have retry the Future with a backoff [`strategy`]. Optionally, there are cases where retry is
 //! not useful, and we could break out of retries early; for such cases we have [`Condition`].
 //!
+//! # Example with Fixed Interval
 //! ```rust
 //!
 //! use crate::backoff::strategy::fixed;
@@ -17,6 +18,33 @@
 //! async fn main() {
 //!     let interval = fixed::Interval::from_millis(1);
 //!     let fut = Retry::new(interval, some_work, |_: &()| true);
+//!     let result = fut.await;
+//!     assert!(result.is_ok());
+//!     assert_eq!(result.unwrap(), 42);
+//! }
+//! ```
+//!
+//! # Example with Exponential Backoff
+//! ```rust
+//!
+//! use crate::backoff::strategy::exponential::Exponential;
+//! use crate::backoff::retry::Retry;
+//! use std::time::Duration;
+//!
+//! async fn some_work() -> Result<u64, ()> {
+//!     Ok(42)
+//! }
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let backoff = Exponential::from_millis(
+//!         100,    // base_interval_ms
+//!         10000,  // max_interval_ms
+//!         2.0,    // factor
+//!         0.5,    // jitter
+//!         Some(5) // max_attempts
+//!     );
+//!     let fut = Retry::new(backoff, some_work, |_: &()| true);
 //!     let result = fut.await;
 //!     assert!(result.is_ok());
 //!     assert_eq!(result.unwrap(), 42);
