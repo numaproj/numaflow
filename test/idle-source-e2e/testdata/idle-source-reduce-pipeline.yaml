@@ -5,6 +5,7 @@ metadata:
 spec:
   limits:
     readBatchSize: 50
+    readTimeout: 50ms
   watermark:
     maxDelay: 20s
     idleSource:
