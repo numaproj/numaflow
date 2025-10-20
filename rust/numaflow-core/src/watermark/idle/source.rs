@@ -50,18 +50,20 @@ impl SourceIdleDetector {
             >= self.config.threshold.as_millis() as i64
     }
 
+    /// Get idle watermark when the source is idling from the start (no messages read/produced ever)
+    /// Checks if `init_source_delay` duration has passed before progressing the watermark for the
+    /// idling source.
     fn get_source_idling_from_init_wm(&mut self) -> i64 {
-        if let Some(init_source_delay) = self.config.init_source_delay
-            && Utc::now().timestamp_millis() - self.updated_ts.timestamp_millis()
-                >= init_source_delay.as_millis() as i64
+        let now = Utc::now();
+
+        let Some(init_source_delay) = self.config.init_source_delay else {
+            return -1;
+        };
+
+        if now.timestamp_millis() - self.updated_ts.timestamp_millis()
+            >= init_source_delay.as_millis() as i64
         {
-            let now = Utc::now();
-            let idle_wm = now.timestamp_millis()
-                + self
-                    .config
-                    .init_source_delay
-                    .expect("Invalid init source delay")
-                    .as_millis() as i64;
+            let idle_wm = now.timestamp_millis() + init_source_delay.as_millis() as i64;
             self.last_idle_wm_published_time = now;
             idle_wm
         } else {
