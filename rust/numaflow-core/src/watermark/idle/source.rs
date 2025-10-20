@@ -63,9 +63,8 @@ impl SourceIdleDetector {
         if now.timestamp_millis() - self.updated_ts.timestamp_millis()
             >= init_source_delay.as_millis() as i64
         {
-            let idle_wm = now.timestamp_millis() + init_source_delay.as_millis() as i64;
             self.last_idle_wm_published_time = now;
-            idle_wm
+            now.timestamp_millis()
         } else {
             -1
         }
