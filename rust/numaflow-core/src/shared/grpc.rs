@@ -144,7 +144,7 @@ pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> error::Result<Ch
 
 /// Connects to the UDS socket and returns a channel
 pub(crate) async fn connect_with_uds(uds_path: PathBuf) -> error::Result<Channel> {
-    let channel = Endpoint::try_from("http://[::]:50051")
+    let channel = Endpoint::try_from("http://[::1]:50051")
         .map_err(|e| Error::Connection(format!("Failed to create endpoint: {e:?}")))?
         .connect_with_connector(service_fn(move |_: Uri| {
             let uds_socket = uds_path.clone();
