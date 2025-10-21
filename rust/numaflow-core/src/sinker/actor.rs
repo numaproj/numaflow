@@ -76,6 +76,8 @@ where
 
         // Manual retry loop with backoff
         let mut backoff_iter = backoff.into_iter();
+        let mut retry_attempt = 0;
+        let mut error_map = HashMap::new();
 
         loop {
             // send batch to sink
@@ -95,8 +97,9 @@ where
                     Some(ResponseStatusFromSink::Success) => {
                         false // remove from retry list
                     }
-                    Some(ResponseStatusFromSink::Failed(_)) => {
+                    Some(ResponseStatusFromSink::Failed(err_msg)) => {
                         failed_ids.push(msg.id.to_string());
+                        *error_map.entry(err_msg.clone()).or_insert(0) += 1;
                         true // keep for retry
                     }
                     Some(ResponseStatusFromSink::Fallback) => {
@@ -130,18 +133,30 @@ where
 
             // Get next backoff delay
             if let Some(delay) = backoff_iter.next() {
+                retry_attempt += 1;
                 warn!(
-                    remaining = messages_to_retry.len(),
-                    delay_ms = delay.as_millis(),
-                    "Retrying failed messages"
+                    ?retry_attempt,
+                    ?error_map,
+                    "Retrying due to retryable error."
                 );
+                error_map.clear();
                 tokio::time::sleep(delay).await;
             } else {
                 match self.retry_config.sink_retry_on_fail_strategy {
                     OnFailureStrategy::Fallback => {
+                        warn!(
+                            retry_attempts = ?retry_attempt,
+                            errors = ?error_map,
+                            "Retries exhausted, forwarding to fallback."
+                        );
                         fallback_messages.append(&mut messages_to_retry);
                     }
                     OnFailureStrategy::Drop => {
+                        warn!(
+                            retry_attempts = ?retry_attempt,
+                            errors = ?error_map,
+                            "Retries exhausted, dropping messages."
+                        );
                         dropped_messages.append(&mut messages_to_retry);
                     }
                     OnFailureStrategy::Retry => {
