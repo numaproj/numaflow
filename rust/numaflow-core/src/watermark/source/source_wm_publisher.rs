@@ -29,13 +29,30 @@ impl SourceWatermarkPublisher {
         max_delay: Duration,
         source_config: BucketConfig,
         to_vertex_configs: Vec<BucketConfig>,
+        default_partitions: Vec<u16>,
     ) -> error::Result<Self> {
+        let mut publishers = HashMap::new();
+        for partition in default_partitions {
+            let processor_name = format!("{}-{}", source_config.vertex, partition);
+            info!(processor = ?processor_name, partition = ?partition,
+                "Creating new publisher for ISB"
+            );
+            let publisher = ISBWatermarkPublisher::new(
+                processor_name.clone(),
+                js_context.clone(),
+                &to_vertex_configs,
+            )
+            .await
+            .expect("Failed to create publisher");
+            publishers.insert(processor_name.clone(), publisher);
+        }
+
         Ok(SourceWatermarkPublisher {
             js_context,
             max_delay,
             source_config,
             to_vertex_configs,
-            publishers: HashMap::new(),
+            publishers,
         })
     }
 
@@ -181,6 +198,7 @@ mod tests {
             Duration::from_secs(0),
             source_config.clone(),
             vec![],
+            vec![],
         )
         .await
         .expect("Failed to create source publisher");
@@ -283,6 +301,7 @@ mod tests {
             Duration::from_secs(0),
             source_config.clone(),
             vec![edge_config.clone()],
+            vec![],
         )
         .await
         .expect("Failed to create source publisher");
@@ -372,6 +391,7 @@ mod tests {
             js_context.clone(),
             Duration::from_secs(0),
             source_config.clone(),
+            vec![],
             vec![],
         )
         .await
@@ -476,6 +496,7 @@ mod tests {
             Duration::from_secs(0),
             source_config.clone(),
             vec![edge_config.clone()],
+            vec![],
         )
         .await
         .expect("Failed to create source publisher");

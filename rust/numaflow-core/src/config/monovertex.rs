@@ -57,6 +57,7 @@ impl Default for MonovertexConfig {
             replica: 0,
             source_config: SourceConfig {
                 read_ahead: false,
+                default_partitions: vec![],
                 source_type: SourceType::Generator(GeneratorConfig::default()),
             },
             sink_config: SinkConfig {
@@ -136,6 +137,10 @@ impl MonovertexConfig {
 
         let source = SourceSpec::new(mono_vertex_name.clone(), "mvtx".into(), source);
         let source_type: SourceType = source.try_into()?;
+        let default_partitions = match source_type {
+            SourceType::Kafka(_) => vec![],
+            _ => vec![*get_vertex_replica()],
+        };
 
         let source_config = SourceConfig {
             read_ahead: env_vars
@@ -145,6 +150,7 @@ impl MonovertexConfig {
                 .parse()
                 .unwrap(),
             source_type,
+            default_partitions,
         };
 
         let sink = mono_vertex_obj
@@ -574,6 +580,7 @@ mod tests {
         let config = MonovertexConfig::load(env_vars).unwrap();
         let expected_source_config = crate::config::components::source::SourceConfig {
             read_ahead: false,
+            default_partitions: vec![],
             source_type: SourceType::Jetstream(numaflow_nats::jetstream::JetstreamSourceConfig {
                 addr: "jetstream-server.internal".to_string(),
                 stream: "mystream".to_string(),

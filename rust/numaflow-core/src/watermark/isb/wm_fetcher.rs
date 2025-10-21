@@ -11,6 +11,7 @@ use crate::error::Result;
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::wmb::{WMB, Watermark};
 use std::collections::HashMap;
+use tracing::info;
 
 /// ISBWatermarkFetcher is the watermark fetcher for the incoming edges.
 pub(crate) struct ISBWatermarkFetcher {
@@ -169,12 +170,30 @@ impl ISBWatermarkFetcher {
                 .values()
                 .filter(|processor| processor.is_active());
 
+            info!(
+                ?active_processors,
+                ?partition_idx,
+                "Fetching head idle wmb active processors",
+            );
+
             for processor in active_processors {
+                info!(
+                    name = ?processor.name,
+                    ?partition_idx,
+                    "Fetching head idle wmb each processor",
+                );
                 // Only check the timeline for the requested partition
                 if let Some(timeline) = processor.timelines.get(&partition_idx)
                     && let Some(head_wmb) = timeline.get_head_wmb()
                     && head_wmb.idle
                 {
+                    info!(
+                        name = ?processor.name,
+                        ?head_wmb,
+                        ?partition_idx,
+                        "Fetching head idle wmb each timeline - {:?}",
+                        timeline
+                    );
                     // Track the minimum WMB for this edge
                     match edge_min_wmb {
                         None => edge_min_wmb = Some(head_wmb),
@@ -212,6 +231,12 @@ impl ISBWatermarkFetcher {
             }
         }
 
+        info!(
+            ?min_wmb,
+            ?partition_idx,
+            "Fetched head idle wmb - {:?}",
+            self.processor_managers
+        );
         min_wmb
     }
 

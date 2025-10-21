@@ -7,6 +7,7 @@ use crate::metrics::{
 };
 use crate::pipeline::PipelineContext;
 
+use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
@@ -70,7 +71,6 @@ pub(crate) async fn start_source_forwarder(
     js_context: Context,
     config: PipelineConfig,
     source_config: SourceVtxConfig,
-    source_watermark_handle: Option<SourceWatermarkHandle>,
 ) -> error::Result<()> {
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
         Some(
@@ -84,6 +84,22 @@ pub(crate) async fn start_source_forwarder(
         )
     } else {
         None
+    };
+
+    // create watermark handle, if watermark is enabled
+    let source_watermark_handle = match &config.watermark_config {
+        Some(WatermarkConfig::Source(source_wm_config)) => Some(
+            SourceWatermarkHandle::new(
+                config.read_timeout,
+                js_context.clone(),
+                &config.to_vertex_config,
+                source_wm_config,
+                source_config.source_config.default_partitions.clone(),
+                cln_token.clone(),
+            )
+            .await?,
+        ),
+        _ => None,
     };
 
     let tracker = Tracker::new(serving_callback_handler, cln_token.clone());
@@ -592,6 +608,7 @@ mod tests {
             vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: false,
+                    default_partitions: vec![0],
                     source_type: crate::config::components::source::SourceType::Generator(
                         GeneratorConfig {
                             rpu: 10,
@@ -623,9 +640,6 @@ mod tests {
                 panic!("Expected source vertex config");
             };
 
-        // For this test, we don't have watermark config, so watermark handle is None
-        let source_watermark_handle = None;
-
         let cancellation_token = CancellationToken::new();
         let forwarder_task = tokio::spawn({
             let cancellation_token = cancellation_token.clone();
@@ -636,7 +650,6 @@ mod tests {
                     context,
                     pipeline_config,
                     source_vtx_config,
-                    source_watermark_handle,
                 )
                 .await
                 .unwrap();

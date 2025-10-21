@@ -385,6 +385,7 @@ impl SourceWatermarkHandle {
         js_context: async_nats::jetstream::Context,
         to_vertex_configs: &[ToVertexConfig],
         config: &SourceWatermarkConfig,
+        default_partitions: Vec<u16>,
         cln_token: CancellationToken,
     ) -> Result<Self> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
@@ -402,6 +403,7 @@ impl SourceWatermarkHandle {
             config.max_delay,
             config.source_bucket_config.clone(),
             config.to_vertex_bucket_config.clone(),
+            default_partitions,
         )
         .await
         .map_err(|e| Error::Watermark(e.to_string()))?;
@@ -661,6 +663,7 @@ mod tests {
             js_context.clone(),
             Default::default(),
             &source_config,
+            vec![],
             CancellationToken::new(),
         )
         .await
@@ -828,6 +831,7 @@ mod tests {
                 to_vertex_type: VertexType::MapUDF,
             }],
             &source_config,
+            vec![],
             CancellationToken::new(),
         )
         .await
@@ -1021,6 +1025,7 @@ mod tests {
                 to_vertex_bucket_config: vec![to_vertex_bucket_config],
                 idle_config: Some(source_idle_config),
             },
+            vec![],
             CancellationToken::new(),
         )
         .await
@@ -1214,6 +1219,7 @@ mod tests {
                 to_vertex_bucket_config: vec![to_vertex_bucket_config],
                 idle_config: Some(source_idle_config),
             },
+            vec![],
             CancellationToken::new(),
         )
         .await
@@ -1389,6 +1395,7 @@ mod tests {
             js_context.clone(),
             Default::default(),
             &source_config,
+            vec![],
             CancellationToken::new(),
         )
         .await

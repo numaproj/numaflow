@@ -27,12 +27,14 @@ pub(crate) struct SourceConfig {
     /// for high-throughput use-cases we read-ahead the next batch before the previous batch has
     /// been acked (or completed). For most cases it should be set to false.
     pub(crate) read_ahead: bool,
+    pub(crate) default_partitions: Vec<u16>,
     pub(crate) source_type: SourceType,
 }
 
 impl Default for SourceConfig {
     fn default() -> Self {
         Self {
+            default_partitions: vec![],
             read_ahead: false,
             source_type: SourceType::Generator(GeneratorConfig::default()),
         }
@@ -482,6 +484,7 @@ mod tests {
         let generator_config = GeneratorConfig::default();
         let source_config = SourceConfig {
             read_ahead: false,
+            default_partitions: vec![],
             source_type: SourceType::Generator(generator_config.clone()),
         };
         if let SourceType::Generator(config) = source_config.source_type {
@@ -496,6 +499,7 @@ mod tests {
         let user_defined_config = UserDefinedConfig::default();
         let source_config = SourceConfig {
             read_ahead: false,
+            default_partitions: vec![],
             source_type: SourceType::UserDefined(user_defined_config.clone()),
         };
         if let SourceType::UserDefined(config) = source_config.source_type {

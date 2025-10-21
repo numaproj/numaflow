@@ -362,7 +362,10 @@ impl PipelineConfig {
 
             let source = SourceSpec::new(pipeline_name.clone(), vertex_name.clone(), source);
             let source_type: SourceType = source.try_into()?;
-
+            let default_partitions = match source_type {
+                SourceType::Kafka(_) => vec![],
+                _ => vec![*get_vertex_replica()],
+            };
             (
                 VertexConfig::Source(SourceVtxConfig {
                     source_config: SourceConfig {
@@ -371,6 +374,7 @@ impl PipelineConfig {
                             .parse()
                             .unwrap(),
                         source_type,
+                        default_partitions,
                     },
                     transformer_config,
                 }),
@@ -926,6 +930,7 @@ mod tests {
         let expected_vertex_config = VertexConfig::Source(SourceVtxConfig {
             source_config: SourceConfig {
                 read_ahead: false,
+                default_partitions: vec![],
                 source_type: SourceType::Jetstream(
                     numaflow_nats::jetstream::JetstreamSourceConfig {
                         addr: "jetstream-server.internal".to_string(),
@@ -981,6 +986,7 @@ mod tests {
             vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: false,
+                    default_partitions: vec![],
                     source_type: SourceType::Generator(GeneratorConfig {
                         rpu: 100000,
                         content: Default::default(),
@@ -1038,6 +1044,7 @@ mod tests {
             vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: false,
+                    default_partitions: vec![],
                     source_type: SourceType::Pulsar(PulsarSourceConfig {
                         pulsar_server_addr: "pulsar://pulsar-service:6650".to_string(),
                         topic: "test_persistent".to_string(),
