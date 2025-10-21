@@ -1,3 +1,7 @@
+use crate::Result;
+use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
+use crate::message::Message;
+use crate::sinker::sink::{ResponseStatusFromSink, Sink};
 use backoff::strategy::exponential::Exponential;
 use std::collections::HashMap;
 use tokio::sync::mpsc::Receiver;
@@ -5,15 +9,9 @@ use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-use crate::Result;
-use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
-use crate::message::Message;
-use crate::sinker::sink::{ResponseStatusFromSink, Sink};
-
 /// Response from the sink actor containing categorized messages
 #[derive(Default)]
 pub(super) struct SinkActorResponse {
-    pub(super) success: Vec<Message>,
     pub(super) failed: Vec<Message>,
     pub(super) fallback: Vec<Message>,
     pub(super) serving: Vec<Message>,
@@ -63,10 +61,9 @@ where
 
         // State to accumulate outcomes across retries
         let mut messages_to_retry = messages.clone();
-        let mut success_msgs = Vec::new();
-        let mut fallback_msgs = Vec::new();
-        let mut serving_msgs = Vec::new();
-        let mut dropped_msgs = Vec::new();
+        let mut fallback_messages = Vec::new();
+        let mut serving_messages = Vec::new();
+        let mut dropped_messages = Vec::new();
 
         // Build backoff iterator from retry config
         let backoff = Exponential::from_millis(
@@ -96,7 +93,6 @@ where
             messages_to_retry.retain(|msg| {
                 match result_map.get(&msg.id.to_string()) {
                     Some(ResponseStatusFromSink::Success) => {
-                        success_msgs.push(msg.clone());
                         false // remove from retry list
                     }
                     Some(ResponseStatusFromSink::Failed(_)) => {
@@ -104,11 +100,11 @@ where
                         true // keep for retry
                     }
                     Some(ResponseStatusFromSink::Fallback) => {
-                        fallback_msgs.push(msg.clone());
+                        fallback_messages.push(msg.clone());
                         false // remove from retry list
                     }
                     Some(ResponseStatusFromSink::Serve) => {
-                        serving_msgs.push(msg.clone());
+                        serving_messages.push(msg.clone());
                         false // remove from retry list
                     }
                     None => false, // remove if no response
@@ -125,11 +121,10 @@ where
                 warn!("Cancellation received, stopping retry loop");
                 // Remaining messages are failed
                 return Ok(SinkActorResponse {
-                    success: success_msgs,
                     failed: messages_to_retry,
-                    fallback: fallback_msgs,
-                    serving: serving_msgs,
-                    dropped: dropped_msgs,
+                    fallback: fallback_messages,
+                    serving: serving_messages,
+                    dropped: dropped_messages,
                 });
             }
 
@@ -144,12 +139,15 @@ where
             } else {
                 match self.retry_config.sink_retry_on_fail_strategy {
                     OnFailureStrategy::Fallback => {
-                        fallback_msgs.append(&mut messages_to_retry);
+                        fallback_messages.append(&mut messages_to_retry);
                     }
                     OnFailureStrategy::Drop => {
-                        dropped_msgs.append(&mut messages_to_retry);
+                        dropped_messages.append(&mut messages_to_retry);
                     }
-                    _ => {}
+                    OnFailureStrategy::Retry => {
+                        // we don't have to worry about retry because when strategy is set to retry
+                        // the max retry attempts is set to int::MAX.
+                    }
                 }
                 // No more retries, remaining messages are failed
                 warn!(remaining = messages_to_retry.len(), "Retries exhausted");
@@ -158,11 +156,10 @@ where
         }
 
         Ok(SinkActorResponse {
-            success: success_msgs,
             failed: messages_to_retry,
-            fallback: fallback_msgs,
-            serving: serving_msgs,
-            dropped: dropped_msgs,
+            fallback: fallback_messages,
+            serving: serving_messages,
+            dropped: dropped_messages,
         })
     }
 

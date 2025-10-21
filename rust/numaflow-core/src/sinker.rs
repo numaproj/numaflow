@@ -16,6 +16,8 @@
 //! [Sink]: https://numaflow.numaproj.io/user-guide/sinks/overview/
 //! [SinkWriter]: sink::SinkWriter
 //! [SinkActor]: actor::SinkActor
+pub(crate) mod sink;
 
 mod actor;
-pub(crate) mod sink;
+
+mod builder;
