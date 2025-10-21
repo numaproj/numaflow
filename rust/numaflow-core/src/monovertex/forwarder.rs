@@ -974,7 +974,8 @@ mod tests {
             Some(transformer),
             None,
             None,
-        ).await;
+        )
+        .await;
 
         // create a mapper
         let (mp_shutdown_tx, mp_shutdown_rx) = oneshot::channel();
