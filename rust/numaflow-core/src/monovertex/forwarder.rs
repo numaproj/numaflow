@@ -904,7 +904,7 @@ mod tests {
         let server_info = server_info_file.clone();
         let server_socket = sock_file.clone();
         let transformer_handle = tokio::spawn(async move {
-            sourcetransform::Server::new(FlatMapTransformer)
+            sourcetransform::Server::new(SimpleTransformer)
                 .with_socket_file(server_socket)
                 .with_server_info_file(server_info)
                 .start_with_shutdown(st_shutdown_rx)
