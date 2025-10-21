@@ -127,6 +127,23 @@ impl SourceWatermarkPublisher {
             .publish_watermark(stream, offset, watermark, idle)
             .await;
     }
+
+    /// Initializes the active partitions by creating a publisher for each partition.
+    pub(crate) async fn initialize_active_partitions(&mut self, active_partitions: Vec<u16>) {
+        for partition in active_partitions {
+            let processor_name = format!("{}-{}", self.source_config.vertex, partition);
+            if !self.publishers.contains_key(&processor_name) {
+                let publisher = ISBWatermarkPublisher::new(
+                    processor_name.clone(),
+                    self.js_context.clone(),
+                    &self.to_vertex_configs,
+                )
+                .await
+                .expect("Failed to create publisher");
+                self.publishers.insert(processor_name.clone(), publisher);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
