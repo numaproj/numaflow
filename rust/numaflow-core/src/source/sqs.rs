@@ -218,7 +218,8 @@ pub mod tests {
             None,
             None,
             None,
-        );
+        )
+        .await;
 
         // create sink writer
         use crate::sink::{SinkClientType, SinkWriterBuilder};

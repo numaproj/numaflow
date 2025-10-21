@@ -1532,7 +1532,8 @@ mod tests {
             None,
             None,
             None,
-        );
+        )
+        .await;
 
         let sink_writer = SinkWriterBuilder::new(
             10,
