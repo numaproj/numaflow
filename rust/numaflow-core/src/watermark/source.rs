@@ -66,6 +66,10 @@ enum SourceActorMessage {
     PublishISBIdleWatermark {
         oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
     },
+    InitializeActivePartitions {
+        partitions: Vec<u16>,
+        oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
+    },
 }
 
 /// SourceWatermarkActor comprises SourcePublisher and SourceFetcher.
@@ -176,6 +180,18 @@ impl SourceWatermarkActor {
 
                 oneshot_tx
                     .send(result)
+                    .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
+            }
+            SourceActorMessage::InitializeActivePartitions {
+                partitions,
+                oneshot_tx,
+            } => {
+                self.publisher
+                    .initialize_active_partitions(partitions)
+                    .await;
+
+                oneshot_tx
+                    .send(Ok(()))
                     .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
             }
         }
@@ -582,6 +598,29 @@ impl SourceWatermarkHandle {
         if let Err(e) = self
             .sender
             .send(SourceActorMessage::PublishISBIdleWatermark { oneshot_tx })
+            .await
+        {
+            warn!(?e, "Failed to send message");
+            return;
+        }
+
+        match oneshot_rx.await {
+            Ok(_) => {}
+            Err(e) => {
+                warn!(?e, "Failed to receive response");
+            }
+        }
+    }
+
+    /// Initializes the active partitions by creating a publisher for each partition.
+    pub(crate) async fn initialize_active_partitions(&self, partitions: Vec<u16>) {
+        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
+        if let Err(e) = self
+            .sender
+            .send(SourceActorMessage::InitializeActivePartitions {
+                partitions,
+                oneshot_tx,
+            })
             .await
         {
             warn!(?e, "Failed to send message");

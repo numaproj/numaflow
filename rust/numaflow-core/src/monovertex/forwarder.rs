@@ -296,7 +296,8 @@ mod tests {
             Some(transformer),
             None,
             None,
-        );
+        )
+        .await;
 
         let sink_writer =
             SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
@@ -431,7 +432,8 @@ mod tests {
             Some(transformer),
             None,
             None,
-        );
+        )
+        .await;
 
         let sink_writer =
             SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
@@ -574,7 +576,8 @@ mod tests {
             None,
             None,
             None,
-        );
+        )
+        .await;
 
         // create a mapper
         let (mp_shutdown_tx, mp_shutdown_rx) = oneshot::channel();
@@ -695,7 +698,8 @@ mod tests {
             None,
             None,
             None,
-        );
+        )
+        .await;
 
         // create a mapper
         let (bmp_shutdown_tx, bmp_shutdown_rx) = oneshot::channel();
@@ -816,7 +820,8 @@ mod tests {
             None,
             None,
             None,
-        );
+        )
+        .await;
 
         // create a mapper
         let (fms_shutdown_tx, fms_shutdown_rx) = oneshot::channel();
