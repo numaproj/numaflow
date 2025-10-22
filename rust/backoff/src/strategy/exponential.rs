@@ -116,8 +116,7 @@ impl Exponential {
         // Apply jitter to the base delay.
         // jitter is a value between 0 and 1
         // 1.0 - jitter gives us the lower bound and 1.0 + jitter gives us the upper bound
-        let jitter_factor: f64 =
-            rand::thread_rng().gen_range(1.0 - self.jitter..=1.0 + self.jitter);
+        let jitter_factor: f64 = rand::rng().random_range(1.0 - self.jitter..=1.0 + self.jitter);
         let delay_ms = base_delay_ms * jitter_factor;
 
         // Always cap the delay to the configured maximum retry interval.
