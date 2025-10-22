@@ -271,10 +271,6 @@ mod tests {
                 .unwrap()
         });
 
-        // wait for the server to start
-        // TODO: flaky
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
         let (src_read, src_ack, lag_reader) = new_source(
@@ -381,9 +377,6 @@ mod tests {
                 .expect("server failed");
         });
 
-        // wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
         let transformer =
             Transformer::new(10, 10, Duration::from_secs(10), client, tracker.clone())
@@ -406,10 +399,6 @@ mod tests {
                 .await
                 .unwrap()
         });
-
-        // wait for the server to start
-        // TODO: flaky
-        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
@@ -552,9 +541,6 @@ mod tests {
                 .unwrap()
         });
 
-        // wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
         let (src_read, src_ack, lag_reader) = new_source(
@@ -595,9 +581,6 @@ mod tests {
                 .await
                 .expect("server failed");
         });
-
-        // wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = MapClient::new(create_rpc_channel(sock_file).await.unwrap());
         let mapper = MapHandle::new(
@@ -674,9 +657,6 @@ mod tests {
                 .unwrap()
         });
 
-        // wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
         let (src_read, src_ack, lag_reader) = new_source(
@@ -717,9 +697,6 @@ mod tests {
                 .await
                 .expect("server failed");
         });
-
-        // wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = MapClient::new(create_rpc_channel(sock_file).await.unwrap());
         let mapper = MapHandle::new(
@@ -796,9 +773,6 @@ mod tests {
                 .unwrap()
         });
 
-        // wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
         let (src_read, src_ack, lag_reader) = new_source(
@@ -839,9 +813,6 @@ mod tests {
                 .await
                 .expect("server failed");
         });
-
-        // wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = MapClient::new(create_rpc_channel(sock_file).await.unwrap());
         let mapper = MapHandle::new(
@@ -917,10 +888,6 @@ mod tests {
                 .expect("server failed");
         });
 
-        // wait for the server to start
-        // TODO: flaky
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
         let transformer = Transformer::new(
             10,
@@ -948,10 +915,6 @@ mod tests {
                 .await
                 .unwrap()
         });
-
-        // wait for the server to start
-        // TODO: flaky
-        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
@@ -994,9 +957,6 @@ mod tests {
                 .expect("server failed");
         });
 
-        // wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
         let client = MapClient::new(create_rpc_channel(sock_file).await.unwrap());
         let mapper = MapHandle::new(
             MapMode::Unary,
@@ -1028,7 +988,6 @@ mod tests {
         let tokio_result = tokio::time::timeout(Duration::from_secs(1), async move {
             loop {
                 let pending = source.pending().await.unwrap();
-                println!("pending: {}", pending.unwrap());
                 if pending == Some(0) {
                     break;
                 }
