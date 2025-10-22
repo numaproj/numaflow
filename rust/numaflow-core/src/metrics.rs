@@ -29,7 +29,7 @@ use crate::mapper::map::MapHandle;
 use crate::pipeline::isb::reader::{ISBReader as JetStreamReader, ISBReader};
 use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
 use crate::reduce::reducer::user_defined::UserDefinedReduce;
-use crate::sink::SinkWriter;
+use crate::sinker::sink::SinkWriter;
 use crate::source::Source;
 use crate::watermark::WatermarkHandle;
 
@@ -1389,7 +1389,7 @@ mod tests {
 
     use super::*;
     use crate::shared::grpc::create_rpc_channel;
-    use crate::sink::{SinkClientType, SinkWriterBuilder};
+    use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::SourceType;
     use crate::source::user_defined::new_source;
     use crate::tracker::Tracker;

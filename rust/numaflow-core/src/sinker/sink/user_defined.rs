@@ -14,7 +14,7 @@ use crate::Error;
 use crate::Result;
 use crate::message::Message;
 use crate::shared::grpc::prost_timestamp_from_utc;
-use crate::sink::{ResponseFromSink, Sink};
+use crate::sinker::sink::{ResponseFromSink, Sink};
 
 const DEFAULT_CHANNEL_SIZE: usize = 1000;
 
@@ -169,7 +169,7 @@ mod tests {
     use crate::error::Result;
     use crate::message::{IntOffset, Message, MessageID, Offset};
     use crate::shared::grpc::create_rpc_channel;
-    use crate::sink::user_defined::UserDefinedSink;
+    use crate::sinker::sink::user_defined::UserDefinedSink;
 
     struct Logger;
     #[tonic::async_trait]

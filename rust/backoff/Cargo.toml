@@ -9,3 +9,4 @@ workspace = true
 [dependencies]
 tokio = {workspace = true, features = ["time"]}
 pin-project.workspace = true
+rand.workspace = true

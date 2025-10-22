@@ -36,7 +36,7 @@ mod shared;
 /// which is then sent to an external system or application.
 ///
 /// [Sink]: https://numaflow.numaproj.io/user-guide/sinks/overview/
-mod sink;
+mod sinker;
 /// [Source] is responsible for reliable reading data from an unbounded source into Numaflow.
 ///
 /// [Source]: https://numaflow.numaproj.io/user-guide/sources/overview/

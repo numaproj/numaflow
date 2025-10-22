@@ -1,5 +1,5 @@
 use crate::config::pipeline::NatsStoreConfig;
-use crate::sink::serve::StoreEntry;
+use crate::sinker::sink::serve::StoreEntry;
 use async_nats::jetstream::Context;
 use async_nats::jetstream::kv::Store;
 use chrono::Utc;

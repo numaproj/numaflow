@@ -37,7 +37,7 @@ use tokio_util::sync::CancellationToken;
 use crate::Error;
 use crate::error;
 use crate::mapper::map::MapHandle;
-use crate::sink::SinkWriter;
+use crate::sinker::sink::SinkWriter;
 use crate::source::Source;
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
@@ -115,7 +115,7 @@ mod tests {
     use crate::mapper::map::MapHandle;
     use crate::monovertex::forwarder::Forwarder;
     use crate::shared::grpc::create_rpc_channel;
-    use crate::sink::{SinkClientType, SinkWriterBuilder};
+    use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
     use crate::tracker::Tracker;

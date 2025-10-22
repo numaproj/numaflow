@@ -11,10 +11,10 @@ use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
 use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
-use crate::sink::SinkWriter;
-use crate::sink::serve::ServingStore;
-use crate::sink::serve::nats::NatsServingStore;
-use crate::sink::serve::user_defined::UserDefinedStore;
+use crate::sinker::sink::SinkWriter;
+use crate::sinker::sink::serve::ServingStore;
+use crate::sinker::sink::serve::nats::NatsServingStore;
+use crate::sinker::sink::serve::user_defined::UserDefinedStore;
 use crate::tracker::Tracker;
 use crate::typ::{
     NumaflowTypeConfig, WithInMemoryRateLimiter, WithRedisRateLimiter, WithoutRateLimiter,
