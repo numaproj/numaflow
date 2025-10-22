@@ -54,7 +54,7 @@ Side Inputs Update.
 
 #### Example 
 
-Here is an example of how to write a User-defined Side Input in Golang,
+Here is an example of how to write a User-defined Side Input using our SDKs,
 
 === "Go"
 
