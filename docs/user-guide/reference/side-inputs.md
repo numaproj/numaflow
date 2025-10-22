@@ -52,7 +52,7 @@ You can choose the SDK of your choice to create a
 User-defined Side Input image which implements the
 Side Inputs Update.
 
-#### Example in Golang
+#### Example 
 
 Here is an example of how to write a User-defined Side Input in Golang,
 
