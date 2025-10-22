@@ -36,28 +36,20 @@ pub(crate) use crate::sinker::builder::SinkWriterBuilder;
 /// A [Blackhole] sink which reads but never writes to anywhere, semantic equivalent of `/dev/null`.
 ///
 /// [Blackhole]: https://numaflow.numaproj.io/user-guide/sinks/blackhole/
-#[path = "sink/blackhole.rs"]
-pub(crate) mod blackhole;
+pub(super) mod blackhole;
 
 /// [log] sink prints out the read messages on to stdout.
 ///
 /// [Log]: https://numaflow.numaproj.io/user-guide/sinks/log/
-#[path = "sink/log.rs"]
-pub(crate) mod log;
+pub(super) mod log;
 
 /// Serving [ServingStore] to store the result of the serving pipeline. It also contains the builtin [serve::ServeSink]
 /// to write to the serving store.
-#[path = "sink/serve.rs"]
-pub mod serve;
+pub(crate) mod serve;
 
-#[path = "sink/sqs.rs"]
-mod sqs;
-
-#[path = "sink/pulsar.rs"]
-mod pulsar;
-
-#[path = "sink/kafka.rs"]
 mod kafka;
+mod pulsar;
+mod sqs;
 
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -97,7 +89,7 @@ pub(crate) struct SinkWriter {
     chunk_timeout: Duration,
     sink_handle: mpsc::Sender<SinkActorMessage>,
     fb_sink_handle: Option<mpsc::Sender<SinkActorMessage>>,
-    shutting_down: bool,
+    shutting_down_on_err: bool,
     final_result: Result<()>,
     serving_store: Option<ServingStore>,
     health_check_clients: HealthCheckClients,
@@ -118,7 +110,7 @@ impl SinkWriter {
             chunk_timeout,
             sink_handle,
             fb_sink_handle,
-            shutting_down: false,
+            shutting_down_on_err: false,
             final_result: Ok(()),
             serving_store,
             health_check_clients,
@@ -187,9 +179,9 @@ impl SinkWriter {
                         continue;
                     }
 
-                    // we are in shutting down mode, we will not be writing to the sink
-                    // tell tracker to nack the messages.
-                    if self.shutting_down {
+                    // we are in shutting down mode, we will not be writing to the sink,
+                    // mark the messages as failed, and on Drop they will be nack'ed.
+                    if self.shutting_down_on_err {
                         for msg in &batch {
                             msg.ack_handle
                                 .as_ref()
@@ -229,7 +221,7 @@ impl SinkWriter {
                         }
 
                         self.final_result = Err(e);
-                        self.shutting_down = true;
+                        self.shutting_down_on_err = true;
                     }
 
                     // if cancellation triggered externally, break early
@@ -239,18 +231,14 @@ impl SinkWriter {
                 }
 
                 // finalize
-                self.final_result.clone()
+                self.final_result
             }
         }))
     }
 
     /// Write the messages to the Sink.
     /// Invokes the primary sink actor, handles fallback messages, serving messages, and errors.
-    pub(crate) async fn write(
-        &mut self,
-        messages: Vec<Message>,
-        cln_token: CancellationToken,
-    ) -> Result<()> {
+    async fn write(&mut self, messages: Vec<Message>, cln_token: CancellationToken) -> Result<()> {
         if messages.is_empty() {
             return Ok(());
         }
@@ -541,10 +529,6 @@ impl From<sink_response::Result> for ResponseFromSink {
             serve_response: value.serve_response,
         }
     }
-}
-
-impl Drop for SinkWriter {
-    fn drop(&mut self) {}
 }
 
 #[cfg(test)]

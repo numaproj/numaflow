@@ -110,7 +110,7 @@ where
                         serving_messages.push(msg.clone());
                         false // remove from retry list
                     }
-                    None => false, // remove if no response
+                    None => unreachable!("should have response for all messages"), // remove if no response
                 }
             });
 
