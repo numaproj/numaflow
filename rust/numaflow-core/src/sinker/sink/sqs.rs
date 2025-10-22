@@ -262,7 +262,8 @@ pub mod tests {
                 None,
                 None,
                 None,
-            ),
+            )
+            .await,
             source_handle,
             src_shutdown_tx,
         )

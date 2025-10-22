@@ -223,7 +223,7 @@ pub(crate) struct Source<C: crate::typ::NumaflowTypeConfig> {
 
 impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     /// Create a new StreamingSource. It starts the read and ack actors in the background.
-    pub(crate) fn new(
+    pub(crate) async fn new(
         batch_size: usize,
         src_type: SourceType,
         tracker: Tracker,
@@ -301,6 +301,15 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 });
             }
         };
+
+        // initialize the active partitions in the watermark actor to indicate the partitions to which
+        // the watermark should be published.
+        let active_partitions = Self::partitions(sender.clone()).await.unwrap_or_default();
+        if let Some(watermark_handle) = &watermark_handle {
+            watermark_handle
+                .initialize_active_partitions(active_partitions)
+                .await;
+        }
 
         Self {
             read_batch_size: batch_size,
@@ -953,7 +962,8 @@ mod tests {
             None,
             None,
             None,
-        );
+        )
+        .await;
 
         let sender = source.sender.clone();
 

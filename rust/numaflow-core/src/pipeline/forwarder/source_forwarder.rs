@@ -412,7 +412,8 @@ mod tests {
             Some(transformer),
             None,
             None,
-        );
+        )
+        .await;
 
         // create a js writer
         let js_url = "localhost:4222";

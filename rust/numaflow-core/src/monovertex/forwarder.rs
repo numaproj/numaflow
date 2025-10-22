@@ -271,10 +271,6 @@ mod tests {
                 .unwrap()
         });
 
-        // wait for the server to start
-        // TODO: flaky
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
         let (src_read, src_ack, lag_reader) = new_source(
@@ -296,7 +292,8 @@ mod tests {
             Some(transformer),
             None,
             None,
-        );
+        )
+        .await;
 
         let sink_writer =
             SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
@@ -380,9 +377,6 @@ mod tests {
                 .expect("server failed");
         });
 
-        // wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
         let transformer =
             Transformer::new(10, 10, Duration::from_secs(10), client, tracker.clone())
@@ -406,10 +400,6 @@ mod tests {
                 .unwrap()
         });
 
-        // wait for the server to start
-        // TODO: flaky
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
         let (src_read, src_ack, lag_reader) = new_source(
@@ -431,7 +421,8 @@ mod tests {
             Some(transformer),
             None,
             None,
-        );
+        )
+        .await;
 
         let sink_writer =
             SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
@@ -550,9 +541,6 @@ mod tests {
                 .unwrap()
         });
 
-        // wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
         let (src_read, src_ack, lag_reader) = new_source(
@@ -574,7 +562,8 @@ mod tests {
             None,
             None,
             None,
-        );
+        )
+        .await;
 
         // create a mapper
         let (mp_shutdown_tx, mp_shutdown_rx) = oneshot::channel();
@@ -592,9 +581,6 @@ mod tests {
                 .await
                 .expect("server failed");
         });
-
-        // wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = MapClient::new(create_rpc_channel(sock_file).await.unwrap());
         let mapper = MapHandle::new(
@@ -671,9 +657,6 @@ mod tests {
                 .unwrap()
         });
 
-        // wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
         let (src_read, src_ack, lag_reader) = new_source(
@@ -695,7 +678,8 @@ mod tests {
             None,
             None,
             None,
-        );
+        )
+        .await;
 
         // create a mapper
         let (bmp_shutdown_tx, bmp_shutdown_rx) = oneshot::channel();
@@ -713,9 +697,6 @@ mod tests {
                 .await
                 .expect("server failed");
         });
-
-        // wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = MapClient::new(create_rpc_channel(sock_file).await.unwrap());
         let mapper = MapHandle::new(
@@ -792,9 +773,6 @@ mod tests {
                 .unwrap()
         });
 
-        // wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
         let (src_read, src_ack, lag_reader) = new_source(
@@ -816,7 +794,8 @@ mod tests {
             None,
             None,
             None,
-        );
+        )
+        .await;
 
         // create a mapper
         let (fms_shutdown_tx, fms_shutdown_rx) = oneshot::channel();
@@ -834,9 +813,6 @@ mod tests {
                 .await
                 .expect("server failed");
         });
-
-        // wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = MapClient::new(create_rpc_channel(sock_file).await.unwrap());
         let mapper = MapHandle::new(
@@ -887,5 +863,151 @@ mod tests {
         src_shutdown_tx.send(()).unwrap();
         source_handle.await.unwrap();
         map_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_source_transformer_map_operation() {
+        // create the source which produces x number of messages
+        let cln_token = CancellationToken::new();
+        let tracker_handle = Tracker::new(None, cln_token.clone());
+
+        // create a transformer
+        let (st_shutdown_tx, st_shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sourcetransform.sock");
+        let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let transformer_handle = tokio::spawn(async move {
+            sourcetransform::Server::new(SimpleTransformer)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(st_shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let transformer = Transformer::new(
+            10,
+            10,
+            Duration::from_secs(10),
+            client,
+            tracker_handle.clone(),
+        )
+        .await
+        .unwrap();
+
+        let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("source.sock");
+        let server_info_file = tmp_dir.path().join("source-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let source_handle = tokio::spawn(async move {
+            // a simple source which generates total of 100 messages
+            source::Server::new(SimpleSource::new(10))
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(src_shutdown_rx)
+                .await
+                .unwrap()
+        });
+
+        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
+
+        let (src_read, src_ack, lag_reader) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
+
+        let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
+            5,
+            SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
+            tracker_handle.clone(),
+            true,
+            Some(transformer),
+            None,
+            None,
+        )
+        .await;
+
+        // create a mapper
+        let (mp_shutdown_tx, mp_shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("mapper.sock");
+        let server_info_file = tmp_dir.path().join("mapper-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let map_handle = tokio::spawn(async move {
+            map::Server::new(Cat)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(mp_shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        let client = MapClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let mapper = MapHandle::new(
+            MapMode::Unary,
+            10,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+            client,
+            tracker_handle.clone(),
+        )
+        .await
+        .unwrap();
+
+        let sink_writer =
+            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
+                .build()
+                .await
+                .unwrap();
+
+        // create the forwarder with the source, transformer, and writer
+        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
+
+        let cancel_token = cln_token.clone();
+        let forwarder_handle: JoinHandle<Result<()>> =
+            tokio::spawn(async move { forwarder.start(cancel_token).await });
+
+        // wait for one sec to check if the pending becomes zero, because all the messages
+        // should be read and acked; if it doesn't, then fail the test
+        let tokio_result = tokio::time::timeout(Duration::from_secs(1), async move {
+            loop {
+                let pending = source.pending().await.unwrap();
+                if pending == Some(0) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        assert!(
+            tokio_result.is_ok(),
+            "Timeout occurred before pending became zero"
+        );
+
+        cln_token.cancel();
+        forwarder_handle.await.unwrap().unwrap();
+        mp_shutdown_tx.send(()).unwrap();
+        st_shutdown_tx.send(()).unwrap();
+        src_shutdown_tx.send(()).unwrap();
+        source_handle.await.unwrap();
+        map_handle.await.unwrap();
+        transformer_handle.await.unwrap();
     }
 }

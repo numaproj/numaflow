@@ -368,7 +368,8 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
-            ))
+            )
+            .await)
         }
         SourceType::Pulsar(pulsar_config) => {
             let pulsar = new_pulsar_source(
@@ -387,7 +388,8 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
-            ))
+            )
+            .await)
         }
         SourceType::Sqs(sqs_source_config) => {
             let sqs = new_sqs_source(
@@ -406,7 +408,8 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
-            ))
+            )
+            .await)
         }
         SourceType::Jetstream(jetstream_config) => {
             let jetstream = new_jetstream_source(
@@ -424,7 +427,8 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
-            ))
+            )
+            .await)
         }
         SourceType::Nats(nats_config) => {
             let nats = new_nats_source(
@@ -442,7 +446,8 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
-            ))
+            )
+            .await)
         }
         SourceType::Kafka(kafka_config) => {
             let config = *kafka_config.clone();
@@ -456,7 +461,8 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
-            ))
+            )
+            .await)
         }
         SourceType::Http(http_source_config) => {
             let http_source =
@@ -470,7 +476,8 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
-            ))
+            )
+            .await)
         }
 
         SourceType::UserDefined(user_defined_config) => {
@@ -494,7 +501,8 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
-            ))
+            )
+            .await)
         }
     }
 }
