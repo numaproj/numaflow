@@ -335,7 +335,7 @@ func (s *FunctionalSuite) TestExponentialBackoffRetryStrategyForPipeline() {
 	firstRetryLog := fmt.Sprintf("retry_attempt=%d", 1)
 	secondRetryLog := fmt.Sprintf("retry_attempt=%d", 2)
 	thirdRetryLog := fmt.Sprintf("retry_attempt=%d", 3)
-	dropLog := "Dropping messages"
+	dropLog := "Retries exhausted, dropping messages."
 	w.Expect().VertexPodLogContains(vertexName, firstRetryLog, PodLogCheckOptionWithContainer("numa"))
 	w.Expect().VertexPodLogContains(vertexName, secondRetryLog, PodLogCheckOptionWithContainer("numa"))
 	w.Expect().VertexPodLogContains(vertexName, dropLog, PodLogCheckOptionWithContainer("numa"))

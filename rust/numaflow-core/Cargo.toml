@@ -53,9 +53,9 @@ parking_lot.workspace = true
 prometheus-client.workspace = true
 pin-project.workspace = true
 kube.workspace = true
+rand.workspace = true
 
 hyper-util = "0.1.6"
-rand = "0.8.5"
 flate2 = "1.1.2"
 zstd = "0.13.3"
 lz4 = "1.28.1"
