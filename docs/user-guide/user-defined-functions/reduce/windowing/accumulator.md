@@ -164,3 +164,83 @@ Check the links below to see the UDF examples for different languages:
 
 - [Golang](https://github.com/numaproj/numaflow-go/tree/main/examples/accumulator)
 - [Python](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/accumulator)
+
+Or see two inline examples below:
+
+=== "Go"
+    ```go
+    package main
+
+    import (
+        "context"
+        "encoding/json"
+        "sort"
+
+        "github.com/numaproj/numaflow-go/pkg/mapper/window"
+    )
+
+    // Example event structure
+    type Event struct {
+        ID        string  `json:"id"`
+        Timestamp int64   `json:"timestamp"`
+        Value     float64 `json:"value"`
+    }
+
+    // Accumulate buffers incoming datums, sorts them by timestamp, and emits them
+    // when the watermark advances.
+    func Accumulate(ctx context.Context, keys []string, datums window.DatumStream) window.DatumStream {
+        var events []Event
+        for d := range datums.Read(ctx) {
+            var e Event
+            if err := json.Unmarshal(d.Value(), &e); err != nil {
+                continue
+            }
+            events = append(events, e)
+        }
+
+        sort.Slice(events, func(i, j int) bool {
+            return events[i].Timestamp < events[j].Timestamp
+        })
+
+        out := window.NewDatumStream()
+        for _, e := range events {
+            payload, _ := json.Marshal(e)
+            out.Write(window.NewDatum(payload))
+        }
+        out.Close()
+        return out
+    }
+
+    func main() {
+        window.NewWindowMapper(Accumulate).Start(context.Background())
+    }
+    ```
+
+=== "Python"
+    ```python
+    import json
+    from pynumaflow.mapper import Datum
+    from pynumaflow.mapper.window import WindowMapper, Window
+
+    def accumulate(ctx, keys, datums: Window):
+        """
+        Accumulator example:
+        Buffers incoming datums, sorts by timestamp, and emits sorted events.
+        """
+        events = []
+
+        for d in datums.read():
+            try:
+                e = json.loads(d.value.decode("utf-8"))
+                events.append(e)
+            except Exception:
+                continue
+
+        events.sort(key=lambda e: e.get("timestamp", 0))
+
+        for e in events:
+            yield Datum(json.dumps(e).encode("utf-8"))
+
+    if __name__ == "__main__":
+        WindowMapper(handler=accumulate).start()
+    ```
