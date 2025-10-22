@@ -131,42 +131,48 @@ where
                 });
             }
 
-            // Get next backoff delay
-            if let Some(delay) = backoff_iter.next() {
-                retry_attempt += 1;
-                warn!(
-                    ?retry_attempt,
-                    ?error_map,
-                    "Retrying due to retryable error."
-                );
-                error_map.clear();
-                tokio::time::sleep(delay).await;
-            } else {
-                match self.retry_config.sink_retry_on_fail_strategy {
-                    OnFailureStrategy::Fallback => {
-                        warn!(
-                            retry_attempts = ?retry_attempt,
-                            errors = ?error_map,
-                            "Retries exhausted, forwarding to fallback."
-                        );
-                        fallback_messages.append(&mut messages_to_retry);
-                    }
-                    OnFailureStrategy::Drop => {
-                        warn!(
-                            retry_attempts = ?retry_attempt,
-                            errors = ?error_map,
-                            "Retries exhausted, dropping messages."
-                        );
-                        dropped_messages.append(&mut messages_to_retry);
-                    }
-                    OnFailureStrategy::Retry => {
-                        // we don't have to worry about retry because when strategy is set to retry
-                        // the max retry attempts is set to int::MAX.
-                    }
+            // sleep for the next backoff duration
+            match backoff_iter.next() {
+                Some(delay) => {
+                    retry_attempt += 1;
+                    warn!(
+                        ?retry_attempt,
+                        ?error_map,
+                        "Retrying due to retryable error."
+                    );
+                    error_map.clear();
+                    tokio::time::sleep(delay).await;
                 }
-                // No more retries, remaining messages are failed
-                warn!(remaining = messages_to_retry.len(), "Retries exhausted");
-                break;
+                None => {
+                    // retries exhausted, handle the remaining messages based on the strategy
+                    match self.retry_config.sink_retry_on_fail_strategy {
+                        // if strategy is fallback, move the remaining messages to fallback_messages
+                        // so that they can be sent to the fallback sink.
+                        OnFailureStrategy::Fallback => {
+                            warn!(
+                                retry_attempts = ?retry_attempt,
+                                errors = ?error_map,
+                                "Retries exhausted, forwarding to fallback."
+                            );
+                            fallback_messages.append(&mut messages_to_retry);
+                        }
+                        // if strategy is drop, drop and move the remaining messages to dropped_messages
+                        OnFailureStrategy::Drop => {
+                            warn!(
+                                retry_attempts = ?retry_attempt,
+                                errors = ?error_map,
+                                "Retries exhausted, dropping messages."
+                            );
+                            dropped_messages.append(&mut messages_to_retry);
+                        }
+                        // if the strategy is retry, we don't have to do anything because the retry
+                        // limit is set to int::MAX.
+                        OnFailureStrategy::Retry => {}
+                    }
+                    // No more retries, remaining messages are failed
+                    warn!(remaining = messages_to_retry.len(), "Retries exhausted");
+                    break;
+                }
             }
         }
 
