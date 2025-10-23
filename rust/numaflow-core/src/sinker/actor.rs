@@ -16,6 +16,7 @@ pub(super) struct SinkActorResponse {
     pub(super) fallback: Vec<Message>,
     pub(super) serving: Vec<Message>,
     pub(super) dropped: Vec<Message>,
+    pub(super) on_success: Vec<Message>,
 }
 
 /// SinkActorMessage is a message that is sent to the SinkActor.
@@ -64,6 +65,7 @@ where
         let mut fallback_messages = Vec::new();
         let mut serving_messages = Vec::new();
         let mut dropped_messages = Vec::new();
+        let mut on_success_messages = Vec::new();
 
         // Build backoff iterator from retry config
         let backoff = Exponential::from_millis(
@@ -110,6 +112,10 @@ where
                         serving_messages.push(msg.clone());
                         false // remove from retry list
                     }
+                    Some(ResponseStatusFromSink::OnSuccess) => {
+                        on_success_messages.push(msg.clone());
+                        false // remove from retry list
+                    }
                     None => unreachable!("should have response for all messages"), // remove if no response
                 }
             });
@@ -128,6 +134,7 @@ where
                     fallback: fallback_messages,
                     serving: serving_messages,
                     dropped: dropped_messages,
+                    on_success: on_success_messages,
                 });
             }
 
@@ -181,6 +188,7 @@ where
             fallback: fallback_messages,
             serving: serving_messages,
             dropped: dropped_messages,
+            on_success: on_success_messages,
         })
     }
 

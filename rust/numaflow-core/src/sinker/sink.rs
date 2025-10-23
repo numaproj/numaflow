@@ -80,7 +80,7 @@ pub(crate) enum SinkClientType {
 /// SinkWriter is a writer that writes messages to the Sink.
 ///
 /// Error handling and shutdown: There can non-retryable errors(udsink panics etc.), in that case we will
-/// cancel the token to indicate the upstream not send any more messages to the sink, we drain any inflight
+/// cancel the token to indicate the upstream will not send any more messages to the sink, we drain any inflight
 /// messages that are in input stream and nack them using the tracker, when the upstream stops sending
 /// messages the input stream will be closed, and we will stop the component.
 #[derive(Clone)]
@@ -89,6 +89,7 @@ pub(crate) struct SinkWriter {
     chunk_timeout: Duration,
     sink_handle: mpsc::Sender<SinkActorMessage>,
     fb_sink_handle: Option<mpsc::Sender<SinkActorMessage>>,
+    on_success_sink_handle: Option<mpsc::Sender<SinkActorMessage>>,
     shutting_down_on_err: bool,
     final_result: Result<()>,
     serving_store: Option<ServingStore>,
@@ -102,6 +103,7 @@ impl SinkWriter {
         chunk_timeout: Duration,
         sink_handle: mpsc::Sender<SinkActorMessage>,
         fb_sink_handle: Option<mpsc::Sender<SinkActorMessage>>,
+        on_success_sink_handle: Option<mpsc::Sender<SinkActorMessage>>,
         serving_store: Option<ServingStore>,
         health_check_clients: HealthCheckClients,
     ) -> Self {
@@ -110,6 +112,7 @@ impl SinkWriter {
             chunk_timeout,
             sink_handle,
             fb_sink_handle,
+            on_success_sink_handle,
             shutting_down_on_err: false,
             final_result: Ok(()),
             serving_store,
@@ -153,6 +156,35 @@ impl SinkWriter {
             cancel,
         };
         let _ = self.fb_sink_handle.as_ref().unwrap().send(msg).await;
+        rx.await.unwrap()
+    }
+
+    /// Sink the messages to the OnSuccess Sink.
+    async fn write_to_on_success_sink(
+        &self,
+        messages: Vec<Message>,
+        cancel: CancellationToken,
+    ) -> Result<SinkActorResponse> {
+        if self.on_success_sink_handle.is_none() {
+            // TODO update link
+            return Err(Error::OsSink(
+                "Response contains OnSuccess messages but no OnSuccess sink is configured. \
+                Please update the spec to configure fallback sink https://numaflow.numaproj.io/user-guide/sinks/onsuccess/ ".to_string(),
+            ));
+        }
+
+        let (tx, rx) = oneshot::channel();
+        let msg = SinkActorMessage {
+            messages,
+            respond_to: tx,
+            cancel,
+        };
+        let _ = self
+            .on_success_sink_handle
+            .as_ref()
+            .unwrap()
+            .send(msg)
+            .await;
         rx.await.unwrap()
     }
 
@@ -275,6 +307,12 @@ impl SinkWriter {
                 .await?;
         }
 
+        // If there are on_success messages, write them to the on_success sink
+        if !response.on_success.is_empty() {
+            self.write_to_on_success(response.on_success, cln_token.clone())
+                .await?;
+        }
+
         // If there are serving messages, write them to the serving store
         if !response.serving.is_empty() {
             self.write_to_serving_store(response.serving).await?;
@@ -289,6 +327,42 @@ impl SinkWriter {
             dropped_messages_size,
             write_start_time,
         );
+
+        Ok(())
+    }
+
+    /// Write messages to the OnSuccess Sink.
+    async fn write_to_on_success(
+        &mut self,
+        messages: Vec<Message>,
+        cln_token: CancellationToken,
+    ) -> Result<()> {
+        // Invoke on_success sink actor (with retry logic inside)
+        let on_success_response = self
+            .write_to_on_success_sink(messages, cln_token.clone())
+            .await?;
+
+        // Check if fallback returned fallback or serving status (not allowed)
+        if !on_success_response.fallback.is_empty() {
+            return Err(Error::FbSink(
+                "OnSuccess response contains fallback messages. \
+                    Specifying fallback status in OnSuccess response is not allowed."
+                    .to_string(),
+            ));
+        }
+        if !on_success_response.serving.is_empty() {
+            return Err(Error::FbSink(
+                "OnSuccess response contains serving messages. \
+                    Specifying serving status in OnSuccess response is not allowed."
+                    .to_string(),
+            ));
+        }
+
+        if !on_success_response.failed.is_empty() {
+            return Err(Error::OsSink(
+                "Failed to write messages to on_success sink after retries".to_string(),
+            ));
+        }
 
         Ok(())
     }
@@ -503,6 +577,8 @@ pub(crate) enum ResponseStatusFromSink {
     Fallback,
     /// Write to serving store.
     Serve,
+    // TODO: Add payload to on_success?
+    OnSuccess,
 }
 
 /// Sink will give a response per [Message].
@@ -522,6 +598,8 @@ impl From<sink_response::Result> for ResponseFromSink {
             Failure => ResponseStatusFromSink::Failed(value.err_msg),
             Fallback => ResponseStatusFromSink::Fallback,
             Serve => ResponseStatusFromSink::Serve,
+            // TODO: Change sink status proto
+            OnSuccess => ResponseStatusFromSink::OnSuccess,
         };
         Self {
             id: value.id,

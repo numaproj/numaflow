@@ -7,7 +7,7 @@ use tracing::error;
 
 use crate::Result;
 use crate::config::components::sink::RetryConfig;
-use crate::sinker::actor::SinkActor;
+use crate::sinker::actor::{SinkActor};
 use crate::sinker::sink::serve::ServingStore;
 use crate::sinker::sink::user_defined::UserDefinedSink;
 use crate::sinker::sink::{SinkClientType, SinkWriter};
@@ -110,6 +110,7 @@ pub(crate) struct SinkWriterBuilder {
     retry_config: RetryConfig,
     sink_client: SinkClientType,
     fb_sink_client: Option<SinkClientType>,
+    on_success_client: Option<SinkClientType>,
     serving_store: Option<ServingStore>,
 }
 
@@ -125,6 +126,7 @@ impl SinkWriterBuilder {
             retry_config: RetryConfig::default(),
             sink_client: sink_type,
             fb_sink_client: None,
+            on_success_client: None,
             serving_store: None,
         }
     }
@@ -259,6 +261,64 @@ impl SinkWriterBuilder {
             None
         };
 
+        // start onSuccess sink
+        let os_sink_handle = if let Some(os_sink_client) = self.on_success_client {
+            let (os_sender, fb_receiver) = mpsc::channel(self.batch_size);
+            let fb_retry_config = self.retry_config.clone();
+            match os_sink_client {
+                SinkClientType::Log => {
+                    let log_sink = log::LogSink;
+                    tokio::spawn(async move {
+                        let actor = SinkActor::new(fb_receiver, log_sink, fb_retry_config);
+                        actor.run().await;
+                    });
+                }
+                SinkClientType::Serve => {
+                    let serve_sink = serve::ServeSink;
+                    tokio::spawn(async move {
+                        let actor = SinkActor::new(fb_receiver, serve_sink, fb_retry_config);
+                        actor.run().await;
+                    });
+                }
+                SinkClientType::Blackhole => {
+                    let blackhole_sink = blackhole::BlackholeSink;
+                    tokio::spawn(async move {
+                        let actor = SinkActor::new(fb_receiver, blackhole_sink, fb_retry_config);
+                        actor.run().await;
+                    });
+                }
+                SinkClientType::UserDefined(sink_client) => {
+                    health_check_builder = health_check_builder.fb_sink_client(sink_client.clone());
+                    let sink = UserDefinedSink::new(sink_client).await?;
+                    tokio::spawn(async move {
+                        let actor = SinkActor::new(fb_receiver, sink, fb_retry_config);
+                        actor.run().await;
+                    });
+                }
+                SinkClientType::Sqs(sqs_sink) => {
+                    tokio::spawn(async move {
+                        let actor = SinkActor::new(fb_receiver, sqs_sink, fb_retry_config);
+                        actor.run().await;
+                    });
+                }
+                SinkClientType::Kafka(kafka_sink) => {
+                    tokio::spawn(async move {
+                        let actor = SinkActor::new(fb_receiver, kafka_sink, fb_retry_config);
+                        actor.run().await;
+                    });
+                }
+                SinkClientType::Pulsar(pulsar_sink) => {
+                    tokio::spawn(async move {
+                        let actor = SinkActor::new(fb_receiver, *pulsar_sink, fb_retry_config);
+                        actor.run().await;
+                    });
+                }
+            };
+            Some(os_sender)
+        } else {
+            None
+        };
+
         // NOTE: we do not start the serving store sink because it is over unary while the rest are
         // streaming.
         if let Some(ServingStore::UserDefined(store)) = &self.serving_store {
@@ -272,6 +332,7 @@ impl SinkWriterBuilder {
             self.chunk_timeout,
             sink_handle,
             fb_sink_handle,
+            os_sink_handle,
             self.serving_store,
             health_check_clients,
         ))
