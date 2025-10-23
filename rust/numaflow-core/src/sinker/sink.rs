@@ -174,11 +174,6 @@ impl SinkWriter {
 
                 // Main processing loop
                 while let Some(batch) = chunk_stream.next().await {
-                    // empty batch, we can skip and continue
-                    if batch.is_empty() {
-                        continue;
-                    }
-
                     // we are in shutting down mode, we will not be writing to the sink,
                     // mark the messages as failed, and on Drop they will be nack'ed.
                     if self.shutting_down_on_err {
