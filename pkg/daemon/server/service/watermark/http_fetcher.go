@@ -165,11 +165,11 @@ func (h *HTTPWatermarkFetcher) fetchFromSinglePod(partitionCount int) {
 		return
 	}
 
-	// Build URL for 0th pod of the from vertex
+	// Build URL for 0th pod of the to vertex with from query parameter
 	headlessServiceName := fmt.Sprintf("%s-%s-headless", h.pipeline.Name, h.edge.To)
 	podName := fmt.Sprintf("%s-%s-0", h.pipeline.Name, h.edge.To)
-	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/runtime/watermark",
-		podName, headlessServiceName, h.pipeline.Namespace, v1alpha1.VertexMetricsPort)
+	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/runtime/watermark?from=%s",
+		podName, headlessServiceName, h.pipeline.Namespace, v1alpha1.VertexMetricsPort, h.edge.From)
 
 	h.log.Debugf("Background fetching watermarks from single pod: %s", url)
 
@@ -204,8 +204,8 @@ func (h *HTTPWatermarkFetcher) fetchFromAllPods(partitionCount int) {
 		ctx, cancel := context.WithTimeout(h.ctx, time.Second*3)
 
 		podName := fmt.Sprintf("%s-%s-%d", h.pipeline.Name, h.edge.To, i)
-		url := fmt.Sprintf("https://%s.%s.%s.svc:%v/runtime/watermark",
-			podName, headlessServiceName, h.pipeline.Namespace, v1alpha1.VertexMetricsPort)
+		url := fmt.Sprintf("https://%s.%s.%s.svc:%v/runtime/watermark?from=%s",
+			podName, headlessServiceName, h.pipeline.Namespace, v1alpha1.VertexMetricsPort, h.edge.From)
 
 		h.log.Debugf("Background fetching watermark from pod %d: %s", i, url)
 

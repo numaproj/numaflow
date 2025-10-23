@@ -106,49 +106,97 @@ impl ISBWatermarkFetcher {
 
     /// Fetches the head watermark using the watermark fetcher. This returns the minimum
     /// of the head watermarks across all processors for the specified partition.
-    pub(crate) fn fetch_head_watermark(&mut self, partition_idx: u16) -> Watermark {
-        let mut min_wm = i64::MAX;
+    /// If `from_vertex` is provided, it fetches the watermark for that specific edge.
+    /// If `from_vertex` is None, it fetches the minimum watermark across all edges.
+    pub(crate) fn fetch_head_watermark(
+        &mut self,
+        from_vertex: Option<&str>,
+        partition_idx: u16,
+    ) -> Watermark {
+        match from_vertex {
+            Some(vertex) => {
+                // Fetch watermark for a specific edge
+                let Some(processor_manager) = self.processor_managers.get(vertex) else {
+                    // If the from-vertex is not found, return -1
+                    return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
+                };
 
-        for (edge, processor_manager) in &self.processor_managers {
-            let mut epoch = i64::MAX;
+                if let Some(epoch) =
+                    Self::compute_processor_watermark(processor_manager, partition_idx)
+                {
+                    // update the last processed watermark for this particular edge and the specific partition
+                    *self
+                        .last_processed_wm
+                        .get_mut(vertex)
+                        .unwrap_or_else(|| panic!("invalid vertex {vertex}"))
+                        .get_mut(&partition_idx)
+                        .unwrap_or_else(|| panic!("should have partition index {partition_idx}")) =
+                        epoch;
 
-            let processors = processor_manager
-                .processors
-                .read()
-                .expect("failed to acquire lock");
-
-            let active_processors = processors
-                .values()
-                .filter(|processor| processor.is_active());
-
-            for processor in active_processors {
-                // Only check the timeline for the requested partition
-                if let Some(timeline) = processor.timelines.get(&partition_idx) {
-                    let head_watermark = timeline.get_head_watermark();
-                    if head_watermark != -1 {
-                        epoch = epoch.min(head_watermark);
-                    }
+                    Watermark::from_timestamp_millis(epoch).expect("failed to parse time")
+                } else {
+                    Watermark::from_timestamp_millis(-1).expect("failed to parse time")
                 }
             }
+            None => {
+                // Fetch minimum watermark across all edges
+                let mut min_wm = i64::MAX;
 
-            if epoch < i64::MAX {
-                min_wm = min_wm.min(epoch);
-                // update the last processed watermark for this particular edge and the specific partition
-                *self
-                    .last_processed_wm
-                    .get_mut(edge)
-                    .unwrap_or_else(|| panic!("invalid vertex {edge}"))
-                    .get_mut(&partition_idx)
-                    .unwrap_or_else(|| panic!("should have partition index {partition_idx}")) =
-                    epoch;
+                for (vertex, processor_manager) in &self.processor_managers {
+                    if let Some(epoch) =
+                        Self::compute_processor_watermark(processor_manager, partition_idx)
+                    {
+                        min_wm = min_wm.min(epoch);
+                        // update the last processed watermark for this particular incoming vertex and
+                        // the specific partition
+                        *self
+                            .last_processed_wm
+                            .get_mut(vertex)
+                            .unwrap_or_else(|| panic!("invalid vertex {vertex}"))
+                            .get_mut(&partition_idx)
+                            .unwrap_or_else(|| {
+                                panic!("should have partition index {partition_idx}")
+                            }) = epoch;
+                    }
+                }
+
+                if min_wm == i64::MAX {
+                    min_wm = -1;
+                }
+
+                Watermark::from_timestamp_millis(min_wm).expect("failed to parse time")
+            }
+        }
+    }
+
+    /// Helper method to compute the minimum watermark across all active processors
+    /// for a given processor manager and partition.
+    fn compute_processor_watermark(
+        processor_manager: &ProcessorManager,
+        partition_idx: u16,
+    ) -> Option<i64> {
+        let mut epoch = i64::MAX;
+
+        let processors = processor_manager
+            .processors
+            .read()
+            .expect("failed to acquire lock");
+
+        let active_processors = processors
+            .values()
+            .filter(|processor| processor.is_active());
+
+        for processor in active_processors {
+            // Only check the timeline for the requested partition
+            if let Some(timeline) = processor.timelines.get(&partition_idx) {
+                let head_watermark = timeline.get_head_watermark();
+                if head_watermark != -1 {
+                    epoch = epoch.min(head_watermark);
+                }
             }
         }
 
-        if min_wm == i64::MAX {
-            min_wm = -1;
-        }
-
-        Watermark::from_timestamp_millis(min_wm).expect("failed to parse time")
+        if epoch < i64::MAX { Some(epoch) } else { None }
     }
 
     /// Fetches the head idle WMB for the given partition. Returns the minimum idle WMB across all
@@ -1256,7 +1304,7 @@ mod tests {
             .unwrap();
 
         // Invoke fetch_head_watermark and verify the result
-        let watermark = fetcher.fetch_head_watermark(0);
+        let watermark = fetcher.fetch_head_watermark(None, 0);
         assert_eq!(watermark.timestamp_millis(), 300);
     }
 
@@ -1375,7 +1423,7 @@ mod tests {
             .unwrap();
 
         // Invoke fetch_head_watermark and verify the result (should be minimum across all timelines)
-        let watermark = fetcher.fetch_head_watermark(0);
+        let watermark = fetcher.fetch_head_watermark(None, 0);
         assert_eq!(watermark.timestamp_millis(), 150);
     }
 
@@ -1454,7 +1502,98 @@ mod tests {
                 .unwrap();
 
         // Invoke fetch_head_watermark and verify the result (should be minimum across all edges)
-        let watermark = fetcher.fetch_head_watermark(0);
+        let watermark = fetcher.fetch_head_watermark(None, 0);
         assert_eq!(watermark.timestamp_millis(), 150);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_head_watermark_from_vertex() {
+        // Create ProcessorManagers for two edges
+        let processor_name1_edge1 = Bytes::from("processor1_edge1");
+        let processor_name1_edge2 = Bytes::from("processor1_edge2");
+
+        let mut processor1_edge1 =
+            Processor::new(processor_name1_edge1.clone(), Status::Active, &[0]);
+        let mut processor1_edge2 =
+            Processor::new(processor_name1_edge2.clone(), Status::Active, &[0]);
+
+        let timeline1_edge1 = OffsetTimeline::new(10);
+        let timeline1_edge2 = OffsetTimeline::new(10);
+
+        // Populate the OffsetTimelines with different watermarks
+        let wmb_edge1 = WMB {
+            watermark: 200,
+            offset: 10,
+            idle: false,
+            partition: 0,
+        };
+        let wmb_edge2 = WMB {
+            watermark: 150,
+            offset: 5,
+            idle: false,
+            partition: 0,
+        };
+
+        timeline1_edge1.put(wmb_edge1);
+        timeline1_edge2.put(wmb_edge2);
+
+        processor1_edge1.timelines.insert(0, timeline1_edge1);
+        processor1_edge2.timelines.insert(0, timeline1_edge2);
+
+        let mut processors_edge1 = HashMap::new();
+        processors_edge1.insert(processor_name1_edge1.clone(), processor1_edge1);
+
+        let mut processors_edge2 = HashMap::new();
+        processors_edge2.insert(processor_name1_edge2.clone(), processor1_edge2);
+
+        let processor_manager_edge1 = ProcessorManager {
+            processors: Arc::new(RwLock::new(processors_edge1)),
+            handles: vec![],
+        };
+
+        let processor_manager_edge2 = ProcessorManager {
+            processors: Arc::new(RwLock::new(processors_edge2)),
+            handles: vec![],
+        };
+
+        let mut processor_managers = HashMap::new();
+        processor_managers.insert("edge1", processor_manager_edge1);
+        processor_managers.insert("edge2", processor_manager_edge2);
+
+        let bucket_config1 = BucketConfig {
+            vertex: "edge1",
+            ot_bucket: "ot_bucket1",
+            hb_bucket: "hb_bucket1",
+            partitions: vec![0],
+            delay: None,
+        };
+        let bucket_config2 = BucketConfig {
+            vertex: "edge2",
+            ot_bucket: "ot_bucket2",
+            hb_bucket: "hb_bucket2",
+            partitions: vec![0],
+            delay: None,
+        };
+
+        let mut fetcher =
+            ISBWatermarkFetcher::new(processor_managers, &[bucket_config1, bucket_config2])
+                .await
+                .unwrap();
+
+        // Fetch watermark for edge1 specifically (should be 200)
+        let watermark_edge1 = fetcher.fetch_head_watermark(Some("edge1"), 0);
+        assert_eq!(watermark_edge1.timestamp_millis(), 200);
+
+        // Fetch watermark for edge2 specifically (should be 150)
+        let watermark_edge2 = fetcher.fetch_head_watermark(Some("edge2"), 0);
+        assert_eq!(watermark_edge2.timestamp_millis(), 150);
+
+        // Fetch watermark for non-existent edge (should be -1)
+        let watermark_nonexistent = fetcher.fetch_head_watermark(Some("edge3"), 0);
+        assert_eq!(watermark_nonexistent.timestamp_millis(), -1);
+
+        // Fetch watermark across all edges (should be minimum, which is 150)
+        let watermark_all = fetcher.fetch_head_watermark(None, 0);
+        assert_eq!(watermark_all.timestamp_millis(), 150);
     }
 }
