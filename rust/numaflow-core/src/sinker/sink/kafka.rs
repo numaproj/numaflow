@@ -43,12 +43,10 @@ impl From<KafkaSinkResponse> for ResponseFromSink {
             Ok(_) => ResponseFromSink {
                 id: resp.id,
                 status: ResponseStatusFromSink::Success,
-                serve_response: None,
             },
             Err(e) => ResponseFromSink {
                 id: resp.id,
                 status: ResponseStatusFromSink::Failed(e.to_string()),
-                serve_response: None,
             },
         }
     }

@@ -57,14 +57,12 @@ impl Sink for SqsSink {
                     result.push(ResponseFromSink {
                         id: sqs_response.id.clone(),
                         status: ResponseStatusFromSink::Success,
-                        serve_response: None,
                     });
                 }
                 Err(err) => {
                     result.push(ResponseFromSink {
                         id: sqs_response.id.clone(),
                         status: ResponseStatusFromSink::Failed(err.to_string()),
-                        serve_response: None,
                     });
                 }
             }
