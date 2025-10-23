@@ -1073,14 +1073,14 @@ pub async fn watermark_handler<C: crate::typ::NumaflowTypeConfig>(
     match &watermark_fetcher_state.watermark_handle {
         // For source watermark handle, always fetch only partition 0
         WatermarkHandle::Source(source_handle) => {
-            let mut handle_clone = source_handle.clone();
+            let handle_clone = source_handle.clone();
             let watermark = handle_clone.fetch_head_watermark(0).await;
             partitions.insert("0".to_string(), watermark.timestamp_millis());
         }
 
         // For every other vertex type, fetch watermarks for all partitions (0 to partition_count-1)
         WatermarkHandle::ISB(isb_handle) => {
-            let mut handle_clone = isb_handle.clone();
+            let handle_clone = isb_handle.clone();
 
             // For reduce vertices, only return partition 0 since they read from single partition
             // For other vertex types, fetch watermarks for all partitions
