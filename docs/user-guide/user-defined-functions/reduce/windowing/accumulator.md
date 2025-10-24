@@ -19,42 +19,42 @@ Datum stream itself. It has a powerful semantics where the input and output is a
 Global Window. It opens up the possibility of very advanced use cases like custom triggers (e.g., count based triggers
 combined with windowing strategies). 
 
-=== "Python"
-  ```python
-def Accumulator(<- stream in[Datum]) -> stream out[Datum] {
-  let state = OrderedList()
-  for i = range in {
-    # The condition will return true if Watermark progresses
-    if WatermarkProgressed(i) == true {
-        # pop all sorted elements and Write to output stream
-        Write(out, state.popN()) 
-    }
-    state.insert(i) 
-  
-  ```
 === "Go"
-  ```go 
-    func Accumulator(in <-chan Datum) <-chan Datum {
-      out := make(chan Datum)
-      go func() {
-          defer close(out)
-          var state []Datum
-          for i := range in {
-              if WatermarkProgressed(i) {
-                  sort.Slice(state, func(a, b int) bool {
-                      return state[a].Timestamp < state[b].Timestamp
-                  })
-                  for _, d := range state {
-                      out <- d
-                  }
-                  state = nil 
-              }
-              state = append(state, i)
-          }
-      }()
-      return out
-  }
-  ```
+    ```go 
+      func Accumulator(in <-chan Datum) <-chan Datum {
+        out := make(chan Datum)
+        go func() {
+            defer close(out)
+            var state []Datum
+            for i := range in {
+                if WatermarkProgressed(i) {
+                    sort.Slice(state, func(a, b int) bool {
+                        return state[a].Timestamp < state[b].Timestamp
+                    })
+                    for _, d := range state {
+                        out <- d
+                    }
+                    state = nil 
+                }
+                state = append(state, i)
+            }
+        }()
+        return out
+    }
+    ```
+=== "Python"
+    ```python
+    def Accumulator(<- stream in[Datum]) -> stream out[Datum] {
+      let state = OrderedList()
+      for i = range in {
+        # The condition will return true if Watermark progresses
+        if WatermarkProgressed(i) == true {
+            # pop all sorted elements and Write to output stream
+            Write(out, state.popN()) 
+        }
+        state.insert(i) 
+    ```
+
 
 
 ### Considerations
@@ -246,4 +246,4 @@ Check out the snippets below to see the UDF examples for different languages:
           _LOGGER.info("Timeout reached")
           await self.flush_buffer(output, flush_all=True)
     ```
-    [View the full example on Github](https://github.com/numaproj/numaflow-python/blob/83eeb23c791de5121b1b03cd1717234e2c5a5048/packages/pynumaflow/examples/accumulator/streamsorter/example.py#L19))
+    [View the full example on Github](https://github.com/numaproj/numaflow-python/blob/83eeb23c791de5121b1b03cd1717234e2c5a5048/packages/pynumaflow/examples/accumulator/streamsorter/example.py#L19)
