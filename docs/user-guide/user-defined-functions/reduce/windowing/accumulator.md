@@ -239,12 +239,7 @@ In this example:
 
 Note: Setting `readBatchSize: 1` helps maintain the ordering of events in the input streams.
 
-Check the links below to see the UDF examples for different languages:
-
-- [Golang](https://github.com/numaproj/numaflow-go/tree/main/examples/accumulator)
-- [Python](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/accumulator)
-
-Or see two inline examples below:
+Check out the snippets below to see the UDF examples for different languages:
 
 === "Go"
     ```go
@@ -294,6 +289,7 @@ Or see two inline examples below:
         window.NewWindowMapper(Accumulate).Start(context.Background())
     }
     ```
+    [View the Full Example in Github](https://github.com/numaproj/numaflow-go/tree/main/examples/accumulator)
 
 === "Python"
     ```python
@@ -323,3 +319,4 @@ Or see two inline examples below:
     if __name__ == "__main__":
         WindowMapper(handler=accumulate).start()
     ```
+    [View the full example on Github](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/accumulator)
