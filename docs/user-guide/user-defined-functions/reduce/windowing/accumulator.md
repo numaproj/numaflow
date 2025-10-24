@@ -21,93 +21,38 @@ combined with windowing strategies).
 
 === "Python"
   ```python
-  import json
-  from pynumaflow.mapper import Datum
-  from pynumaflow.mapper.window import WindowMapper, Window
-  
-  def accumulate(ctx, keys, datums: Window):
-      """
-      Accumulator:
-      - Maintains an ordered list (state)
-      - Inserts incoming datums
-      - When the watermark progresses, emits all sorted datums
-      """
-      state = []
-  
-      for d in datums.read():
-          try:
-              event = json.loads(d.value.decode("utf-8"))
-          except Exception:
-              continue
-  
-          # WatermarkProgressed(i) → watermark has advanced
-          if d.watermark.progressed():
-              # Pop all sorted elements and write to output stream
-              for e in sorted(state, key=lambda ev: ev.get("timestamp", 0)):
-                  yield Datum(json.dumps(e).encode("utf-8"))
-              state = []  # clear after emission
-  
-          # Insert current datum into state
-          state.append(event)
-  
-  if __name__ == "__main__":
-      WindowMapper(handler=accumulate).start()
+def Accumulator(<- stream in[Datum]) -> stream out[Datum] {
+  let state = OrderedList()
+  for i = range in {
+    # The condition will return true if Watermark progresses
+    if WatermarkProgressed(i) == true {
+        # pop all sorted elements and Write to output stream
+        Write(out, state.popN()) 
+    }
+    state.insert(i) 
   
   ```
 === "Go"
   ```go 
-    package main
-  
-  import (
-      "context"
-      "encoding/json"
-      "sort"
-      "time"
-  
-      "github.com/numaproj/numaflow-go/pkg/mapper/window"
-  )
-  
-  type Event struct {
-      ID        string  `json:"id"`
-      Timestamp int64   `json:"timestamp"`
-      Value     float64 `json:"value"`
-  }
-  
-  // Accumulate implements buffering, sorting, and emission based on watermark progression.
-  func Accumulate(ctx context.Context, keys []string, datums window.DatumStream) window.DatumStream {
-      var state []Event
-      watermark := time.Now().Unix()
-  
-      for d := range datums.Read(ctx) {
-          var e Event
-          if err := json.Unmarshal(d.Value(), &e); err != nil {
-              continue
-          }
-  
-          // If event’s timestamp is earlier than watermark, emit buffered events.
-          if e.Timestamp > watermark {
-              sort.Slice(state, func(i, j int) bool {
-                  return state[i].Timestamp < state[j].Timestamp
-              })
-              out := window.NewDatumStream()
-              for _, evt := range state {
-                  payload, _ := json.Marshal(evt)
-                  out.Write(window.NewDatum(payload))
+    func Accumulator(in <-chan Datum) <-chan Datum {
+      out := make(chan Datum)
+      go func() {
+          defer close(out)
+          var state []Datum
+          for i := range in {
+              if WatermarkProgressed(i) {
+                  sort.Slice(state, func(a, b int) bool {
+                      return state[a].Timestamp < state[b].Timestamp
+                  })
+                  for _, d := range state {
+                      out <- d
+                  }
+                  state = nil 
               }
-              state = nil // clear state after emission
-              out.Close()
-              watermark = e.Timestamp
+              state = append(state, i)
           }
-          // Insert current event into buffer.
-          state = append(state, e)
-      }
-  
-      out := window.NewDatumStream()
+      }()
       return out
-  }
-  
-  func main() {
-      window.NewWindowMapper(Accumulate).Start(context.Background())
   }
   ```
 
