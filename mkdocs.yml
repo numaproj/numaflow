@@ -23,6 +23,7 @@ theme:
     - navigation.tabs
     - navigation.tabs.sticky
     - navigation.top
+    - content.tabs.link
 extra:
   analytics:
     provider: google
@@ -36,6 +37,8 @@ markdown_extensions:
       alternate_style: true
   - toc:
       permalink: true
+  - pymdownx.tabbed:
+      alternate_style: true
 nav:
   - Home: README.md
   - Getting Started:
