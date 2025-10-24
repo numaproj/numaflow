@@ -188,80 +188,62 @@ Check out the snippets below to see the UDF examples for different languages:
 
 === "Go"
     ```go
-    package main
-
-    import (
-        "context"
-        "encoding/json"
-        "sort"
-
-        "github.com/numaproj/numaflow-go/pkg/mapper/window"
-    )
-
-    // Example event structure
-    type Event struct {
-        ID        string  `json:"id"`
-        Timestamp int64   `json:"timestamp"`
-        Value     float64 `json:"value"`
-    }
-
-    // Accumulate buffers incoming datums, sorts them by timestamp, and emits them
-    // when the watermark advances.
-    func Accumulate(ctx context.Context, keys []string, datums window.DatumStream) window.DatumStream {
-        var events []Event
-        for d := range datums.Read(ctx) {
-            var e Event
-            if err := json.Unmarshal(d.Value(), &e); err != nil {
-                continue
-            }
-            events = append(events, e)
-        }
-
-        sort.Slice(events, func(i, j int) bool {
-            return events[i].Timestamp < events[j].Timestamp
-        })
-
-        out := window.NewDatumStream()
-        for _, e := range events {
-            payload, _ := json.Marshal(e)
-            out.Write(window.NewDatum(payload))
-        }
-        out.Close()
-        return out
-    }
-
-    func main() {
-        window.NewWindowMapper(Accumulate).Start(context.Background())
-    }
+      func (s *streamSorter) Accumulate(ctx context.Context, input <-chan accumulator.Datum, output chan<- accumulator.Message) {
+      	for {
+      		select {
+      		case <-ctx.Done():
+      			log.Println("Exiting the Accumulator")
+      			return
+      		case datum, ok := <-input:
+      			// this case happens due to timeout
+      			if !ok {
+      				log.Println("Input channel closed")
+      				return
+      			}
+      			log.Println("Received datum with event time: ", datum.EventTime().UnixMilli())
+      			// watermark has moved, let's flush
+      			if datum.Watermark().After(s.latestWm) {
+      				s.latestWm = datum.Watermark()
+      				s.flushBuffer(output)
+      			}
+      			// store the data into the internal buffer
+      			s.insertSorted(datum)
+      		}
+      	}
+      }
     ```
-    [View the Full Example in Github](https://github.com/numaproj/numaflow-go/tree/main/examples/accumulator)
+    [View the Full Example in Github](https://github.com/numaproj/numaflow-go/blob/3abee2e44a004909e99ea1c3b5ee8d328cba37b0/examples/accumulator/streamsorter/main.go#L23)
 
 === "Python"
     ```python
-    import json
-    from pynumaflow.mapper import Datum
-    from pynumaflow.mapper.window import WindowMapper, Window
-
-    def accumulate(ctx, keys, datums: Window):
-        """
-        Accumulator example:
-        Buffers incoming datums, sorts by timestamp, and emits sorted events.
-        """
-        events = []
-
-        for d in datums.read():
-            try:
-                e = json.loads(d.value.decode("utf-8"))
-                events.append(e)
-            except Exception:
-                continue
-
-        events.sort(key=lambda e: e.get("timestamp", 0))
-
-        for e in events:
-            yield Datum(json.dumps(e).encode("utf-8"))
-
-    if __name__ == "__main__":
-        WindowMapper(handler=accumulate).start()
+    class StreamSorter(Accumulator):
+      def __init__(self):
+          _LOGGER.info("StreamSorter initialized")
+          self.latest_wm = datetime.fromtimestamp(-1)
+          self.sorted_buffer: list[Datum] = []
+  
+      async def handler(
+          self,
+          datums: AsyncIterable[Datum],
+          output: NonBlockingIterator,
+      ):
+          _LOGGER.info("StreamSorter handler started")
+          async for datum in datums:
+              _LOGGER.info(
+                  f"Received datum with event time: {datum.event_time}, "
+                  f"Current latest watermark: {self.latest_wm}, "
+                  f"Datum watermark: {datum.watermark}"
+              )
+  
+              # If watermark has moved forward
+              if datum.watermark and datum.watermark > self.latest_wm:
+                  self.latest_wm = datum.watermark
+                  _LOGGER.info(f"Watermark updated: {self.latest_wm}")
+                  await self.flush_buffer(output)
+  
+              self.insert_sorted(datum)
+  
+          _LOGGER.info("Timeout reached")
+          await self.flush_buffer(output, flush_all=True)
     ```
-    [View the full example on Github](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/accumulator)
+    [View the full example on Github](https://github.com/numaproj/numaflow-python/blob/83eeb23c791de5121b1b03cd1717234e2c5a5048/packages/pynumaflow/examples/accumulator/streamsorter/example.py#L19))
