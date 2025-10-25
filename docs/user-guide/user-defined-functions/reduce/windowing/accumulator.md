@@ -44,17 +44,78 @@ combined with windowing strategies).
     ```
 === "Python"
     ```python
-    def Accumulator(<- stream in[Datum]) -> stream out[Datum] {
-      let state = OrderedList()
-      for i = range in {
-        # The condition will return true if Watermark progresses
-        if WatermarkProgressed(i) == true {
-            # pop all sorted elements and Write to output stream
-            Write(out, state.popN()) 
-        }
-        state.insert(i) 
-    ```
+        def Accumulator(input_stream):
+        """
+        Processes an input stream of Datum objects, maintaining an ordered state.
+        Emits elements when the watermark progresses.
+        """
+        state = OrderedList()
+        output_stream = []
 
+        for i in input_stream:
+            # The condition will return True if watermark progresses
+            if WatermarkProgressed(i):
+                # Pop all sorted elements and write to output stream
+                output_stream.extend(state.pop_n())
+
+            # Insert the current element into the ordered state
+            state.insert(i)
+
+        return output_stream
+ 
+    ```
+=== "Rust"
+    ```rust
+          struct Accumulator {
+          state: OrderedList<Datum>,
+      }
+
+      impl Accumulator {
+          fn new() -> Self {
+              Self {
+                  state: OrderedList::new(),
+              }
+          }
+
+          fn process(&mut self, input_stream: &[Datum], output_stream: &mut Vec<Datum>) {
+              for i in input_stream {
+                  // Check if the watermark has progressed
+                  if WatermarkProgressed(i) {
+                      // Pop all sorted elements and write to output stream
+                      let popped = self.state.pop_all();
+                      output_stream.extend(popped);
+                  }
+                  self.state.insert(i.clone());
+              }
+          }
+      }
+ 
+    ```
+=== "Java"
+    ```java
+    import java.util.ArrayList;
+    import java.util.List;
+
+    public class Accumulator {
+        private OrderedList<Datum> state;
+
+        public Accumulator() {
+            state = new OrderedList<>();
+        }
+
+        public void process(List<Datum> inputStream, List<Datum> outputStream) {
+            for (Datum i : inputStream) {
+                // Check if the watermark has progressed
+                if (WatermarkProgressed(i)) {
+                    // Pop all sorted elements and write to output stream
+                    List<Datum> popped = state.popAll();
+                    outputStream.addAll(popped);
+                }
+                state.insert(i);
+            }
+        }
+    }
+    ```
 
 
 ### Considerations
@@ -212,7 +273,7 @@ Check out the snippets below to see the UDF examples for different languages:
       	}
       }
     ```
-    [View the Full Example in Github](https://github.com/numaproj/numaflow-go/blob/3abee2e44a004909e99ea1c3b5ee8d328cba37b0/examples/accumulator/streamsorter/main.go#L23)
+    [View the Full Example on numaflow-go Github](https://github.com/numaproj/numaflow-go/blob/3abee2e44a004909e99ea1c3b5ee8d328cba37b0/examples/accumulator/streamsorter/main.go#L23)
 
 === "Python"
     ```python
@@ -246,4 +307,82 @@ Check out the snippets below to see the UDF examples for different languages:
           _LOGGER.info("Timeout reached")
           await self.flush_buffer(output, flush_all=True)
     ```
-    [View the full example on Github](https://github.com/numaproj/numaflow-python/blob/83eeb23c791de5121b1b03cd1717234e2c5a5048/packages/pynumaflow/examples/accumulator/streamsorter/example.py#L19)
+    [View the full example on numaflow-python Github](https://github.com/numaproj/numaflow-python/blob/83eeb23c791de5121b1b03cd1717234e2c5a5048/packages/pynumaflow/examples/accumulator/streamsorter/example.py#L19)
+=== "Rust"
+    ```rust
+      /// insert_sorted will do a binary-search and inserts the AccumulatorRequest into the sorted buffer.
+      fn insert_sorted(sorted_buffer: &mut Vec<AccumulatorRequest>, request: AccumulatorRequest) {
+          let event_time = request.event_time;
+
+          // Find the insertion point using binary search
+          let index = sorted_buffer
+              .binary_search_by(|probe| probe.event_time.cmp(&event_time))
+              .unwrap_or_else(|e| e);
+
+          sorted_buffer.insert(index, request);
+      }
+
+    ```
+    [View the full example in nummaflow-rs on Github](https://github.com/numaproj/numaflow-rs/blob/3adf2b5280e3e57abeb521ac02222ff1c7ce8e5f/examples/stream-sorter/src/main.rs#L17C1-L28C1)
+=== "Java"
+    ```java
+      @Slf4j
+      @AllArgsConstructor
+      public class StreamSorterFactory extends AccumulatorFactory<StreamSorterFactory.StreamSorter> {
+
+          public static void main(String[] args) throws Exception {
+              log.info("Starting stream sorter server..");
+              Server server = new Server(new StreamSorterFactory());
+
+              // Start the server
+              server.start();
+
+              // wait for the server to shut down
+              server.awaitTermination();
+              log.info("Stream sorter server exited..");
+          }
+
+          @Override
+          public StreamSorter createAccumulator() {
+              return new StreamSorter();
+          }
+
+          public static class StreamSorter extends Accumulator {
+              private Instant latestWm = Instant.ofEpochMilli(-1);
+              private final TreeSet<Datum> sortedBuffer = new TreeSet<>(Comparator
+                      .comparing(Datum::getEventTime)
+                      .thenComparing(Datum::getID)); // Assuming Datum has a getUniqueId() method
+
+              @Override
+              public void processMessage(Datum datum, OutputStreamObserver outputStream) {
+                  log.info("Received datum with event time: {}", datum.toString());
+                  if (datum.getWatermark().isAfter(latestWm)) {
+                      latestWm = datum.getWatermark();
+                      flushBuffer(outputStream);
+                  }
+                  sortedBuffer.add(datum);
+              }
+
+              @Override
+              public void handleEndOfStream(OutputStreamObserver outputStreamObserver) {
+                  log.info("Eof received, flushing sortedBuffer: {}", latestWm.toEpochMilli());
+                  flushBuffer(outputStreamObserver);
+              }
+
+              private void flushBuffer(OutputStreamObserver outputStream) {
+                  log.info("Watermark updated, flushing sortedBuffer: {}", latestWm.toEpochMilli());
+                  while (!sortedBuffer.isEmpty() && sortedBuffer
+                          .first()
+                          .getEventTime()
+                          .isBefore(latestWm)) {
+                      Datum datum = sortedBuffer.pollFirst();
+                      assert datum != null;
+                      outputStream.send(new Message(datum));
+                      log.info("Sent datum with event time: {}", datum.getEventTime().toEpochMilli());
+                  }
+              }
+          }
+      }
+    ```
+    [View the full example in numaflow-java Github](https://github.com/numaproj/numaflow-java/blob/38734c04df9e2182c0dadf2c7a4d83997ea7c2ad/examples/src/main/java/io/numaproj/numaflow/examples/accumulator/sorter/StreamSorterFactory.java)
+   
