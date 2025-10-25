@@ -66,9 +66,128 @@ func main() {
 
 Check the links below to see another transformer example in various programming languages, where we apply conditional forwarding based on the input event time.
 
-- [Python](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/sourcetransform/event_time_filter)
-- [Golang](https://github.com/numaproj/numaflow-go/tree/main/examples/sourcetransformer/event_time_filter)
-- [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sourcetransformer/eventtimefilter)
+=== "Python"
+
+	```python
+	def my_handler(keys: list[str], datum: Datum) -> Messages:
+    val = datum.value
+    event_time = datum.event_time
+    messages = Messages()
+
+    if event_time < january_first_2022:
+        logging.info("Got event time:%s, it is before 2022, so dropping", event_time)
+        messages.append(Message.to_drop(event_time))
+    elif event_time < january_first_2023:
+        logging.info(
+            "Got event time:%s, it is within year 2022, so forwarding to within_year_2022",
+            event_time,
+        )
+        messages.append(
+            Message(value=val, event_time=january_first_2022, tags=["within_year_2022"])
+        )
+    else:
+        logging.info(
+            "Got event time:%s, it is after year 2022, so forwarding to after_year_2022", event_time
+        )
+        messages.append(Message(value=val, event_time=january_first_2023, tags=["after_year_2022"]))
+
+    return messages
+	https://github.com/numaproj/numaflow-python/blob/main/packages/pynumaflow/examples/sourcetransform/event_time_filter/example.py
+	```
+	- [Python full example on numaflow-python on Github](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/sourcetransform/event_time_filter)
+
+=== "Go"
+
+	```go
+	package main
+
+	import (
+		"context"
+		"log"
+
+		"event_time_filter/impl"
+
+		"github.com/numaproj/numaflow-go/pkg/sourcetransformer"
+	)
+
+	func transform(_ context.Context, keys []string, d sourcetransformer.Datum) sourcetransformer.Messages {
+		return impl.FilterEventTime(keys, d)
+	}
+
+	func main() {
+		err := sourcetransformer.NewServer(sourcetransformer.SourceTransformFunc(transform)).Start(context.Background())
+		if err != nil {
+			log.Panic("Failed to start source transform server: ", err)
+		}
+	}
+	https://github.com/numaproj/numaflow-go/blob/main/examples/sourcetransformer/event_time_filter/main.go
+	```
+	- [Golang full example on numaflow-go Github](https://github.com/numaproj/numaflow-go/tree/main/examples/sourcetransformer/event_time_filter)
+
+=== "Rust"
+
+	```rust
+	```
+	- [Golang full example on numaflow-rs Github](https://github.com/numaproj/numaflow-go/tree/main/examples/sourcetransformer/event_time_filter)
+
+
+=== "Java"
+
+	```java
+	/**
+	 * This is a simple User Defined Function example which receives a message, applies the following
+	 * data transformation, and returns the message.
+	 * <p>
+	 * If the message event time is before year 2022, drop the message with the original event time.
+	 * If it's within year 2022, update the tag to "within_year_2022" and update the message event time to Jan 1st 2022.
+	 * Otherwise, (exclusively after year 2022), update the tag to "after_year_2022" and update the
+	 * message event time to Jan 1st 2023.
+	 */
+	public class EventTimeFilterFunction extends SourceTransformer {
+
+		private static final Instant januaryFirst2022 = Instant.ofEpochMilli(1640995200000L);
+		private static final Instant januaryFirst2023 = Instant.ofEpochMilli(1672531200000L);
+
+		public static void main(String[] args) throws Exception {
+			Server server = new Server(new EventTimeFilterFunction());
+
+			// Start the server
+			server.start();
+
+			// wait for the server to shut down
+			server.awaitTermination();
+		}
+
+		public MessageList processMessage(String[] keys, Datum data) {
+			Instant eventTime = data.getEventTime();
+
+			if (eventTime.isBefore(januaryFirst2022)) {
+				return MessageList.newBuilder().addMessage(Message.toDrop(eventTime)).build();
+			} else if (eventTime.isBefore(januaryFirst2023)) {
+				return MessageList
+						.newBuilder()
+						.addMessage(
+								new Message(
+										data.getValue(),
+										januaryFirst2022,
+										null,
+										new String[]{"within_year_2022"}))
+						.build();
+			} else {
+				return MessageList
+						.newBuilder()
+						.addMessage(new Message(
+								data.getValue(),
+								januaryFirst2023,
+								null,
+								new String[]{"after_year_2022"}))
+						.build();
+			}
+		}
+	}
+	https://github.com/numaproj/numaflow-java/blob/main/examples/src/main/java/io/numaproj/numaflow/examples/sourcetransformer/eventtimefilter/EventTimeFilterFunction.java
+	```
+	- [Java full example of numaflow-java on Github](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sourcetransformer/eventtimefilter)
 
 After building a docker image for the written transformer, specify the image as below in the source vertex spec.
 
