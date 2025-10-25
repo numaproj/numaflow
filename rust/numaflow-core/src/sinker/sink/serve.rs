@@ -42,8 +42,7 @@ impl Sink for ServeSink {
         for msg in messages {
             result.push(ResponseFromSink {
                 id: msg.id.to_string(),
-                status: ResponseStatusFromSink::Serve,
-                serve_response: Some(msg.value.into()),
+                status: ResponseStatusFromSink::Serve(None),
             })
         }
         Ok(result)
@@ -100,9 +99,8 @@ mod tests {
         let expected_responses = messages
             .iter()
             .map(|msg| ResponseFromSink {
-                status: ResponseStatusFromSink::Serve,
+                status: ResponseStatusFromSink::Serve(None),
                 id: msg.id.to_string(),
-                serve_response: Some(msg.value.clone().into()),
             })
             .collect::<Vec<ResponseFromSink>>();
 

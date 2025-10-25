@@ -174,11 +174,6 @@ impl SinkWriter {
 
                 // Main processing loop
                 while let Some(batch) = chunk_stream.next().await {
-                    // empty batch means end of stream
-                    if batch.is_empty() {
-                        continue;
-                    }
-
                     // we are in shutting down mode, we will not be writing to the sink,
                     // mark the messages as failed, and on Drop they will be nack'ed.
                     if self.shutting_down_on_err {
@@ -222,11 +217,6 @@ impl SinkWriter {
 
                         self.final_result = Err(e);
                         self.shutting_down_on_err = true;
-                    }
-
-                    // if cancellation triggered externally, break early
-                    if cln_token.is_cancelled() {
-                        break;
                     }
                 }
 
@@ -309,14 +299,14 @@ impl SinkWriter {
         // Check if fallback returned fallback or serving status (not allowed)
         if !fb_response.fallback.is_empty() {
             return Err(Error::FbSink(
-                "Fallback response contains fallback messages. \
-                    Specifying fallback status in fallback response is not allowed."
+                "Response in fallback sink contains fallback messages. \
+                    Specifying fallback status in fallback sink is not allowed."
                     .to_string(),
             ));
         }
         if !fb_response.serving.is_empty() {
             return Err(Error::FbSink(
-                "Fallback response contains serving messages. \
+                "Response in fallback sink contains serving messages. \
                     Specifying serving status in fallback response is not allowed."
                     .to_string(),
             ));
@@ -502,7 +492,7 @@ pub(crate) enum ResponseStatusFromSink {
     /// Write to FallBack Sink.
     Fallback,
     /// Write to serving store.
-    Serve,
+    Serve(Option<Vec<u8>>),
 }
 
 /// Sink will give a response per [Message].
@@ -512,7 +502,6 @@ pub(crate) struct ResponseFromSink {
     pub(crate) id: String,
     /// Status of the "sink" operation per [Message].
     pub(crate) status: ResponseStatusFromSink,
-    pub(crate) serve_response: Option<Vec<u8>>,
 }
 
 impl From<sink_response::Result> for ResponseFromSink {
@@ -521,12 +510,11 @@ impl From<sink_response::Result> for ResponseFromSink {
             Success => ResponseStatusFromSink::Success,
             Failure => ResponseStatusFromSink::Failed(value.err_msg),
             Fallback => ResponseStatusFromSink::Fallback,
-            Serve => ResponseStatusFromSink::Serve,
+            Serve => ResponseStatusFromSink::Serve(value.serve_response),
         };
         Self {
             id: value.id,
             status,
-            serve_response: value.serve_response,
         }
     }
 }

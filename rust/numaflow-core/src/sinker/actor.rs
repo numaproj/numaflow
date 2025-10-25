@@ -84,7 +84,7 @@ where
             let responses = self.sink.sink(messages_to_retry.clone()).await?;
 
             // Create a map of id to result
-            let result_map = responses
+            let mut result_map = responses
                 .into_iter()
                 .map(|resp| (resp.id, resp.status))
                 .collect::<HashMap<_, _>>();
@@ -92,8 +92,8 @@ where
             // Classify messages based on responses
             let mut failed_ids = Vec::new();
 
-            messages_to_retry.retain(|msg| {
-                match result_map.get(&msg.id.to_string()) {
+            messages_to_retry.retain_mut(|msg| {
+                match result_map.remove(&msg.id.to_string()) {
                     Some(ResponseStatusFromSink::Success) => {
                         false // remove from retry list
                     }
@@ -106,7 +106,10 @@ where
                         fallback_messages.push(msg.clone());
                         false // remove from retry list
                     }
-                    Some(ResponseStatusFromSink::Serve) => {
+                    Some(ResponseStatusFromSink::Serve(serve_response)) => {
+                        if let Some(serve_response) = serve_response {
+                            msg.value = serve_response.into();
+                        }
                         serving_messages.push(msg.clone());
                         false // remove from retry list
                     }
