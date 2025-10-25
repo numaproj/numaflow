@@ -42,6 +42,7 @@ combined with windowing strategies).
         return out
     }
     ```
+
 === "Python"
     ```python
     def Accumulator(input_stream):
@@ -63,6 +64,7 @@ combined with windowing strategies).
 
         return output_stream
     ```
+
 === "Rust"
     ```rust
           struct Accumulator {
@@ -90,6 +92,7 @@ combined with windowing strategies).
       }
  
     ```
+    
 === "Java"
     ```java
     import java.util.ArrayList;
@@ -275,6 +278,7 @@ Check out the snippets below to see the UDF examples for different languages:
     }
     ```
     [View the Full Example on numaflow-go Github](https://github.com/numaproj/numaflow-go/blob/3abee2e44a004909e99ea1c3b5ee8d328cba37b0/examples/accumulator/streamsorter/main.go#L23)
+
 === "Python"
     ```python
     class StreamSorter(Accumulator):
