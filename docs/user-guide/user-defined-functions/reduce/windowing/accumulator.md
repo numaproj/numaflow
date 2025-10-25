@@ -20,6 +20,7 @@ Global Window. It opens up the possibility of very advanced use cases like custo
 combined with windowing strategies). 
 
 === "Go"
+
     ```go
     func Accumulator(in <-chan Datum) <-chan Datum {
         out := make(chan Datum)
@@ -42,7 +43,9 @@ combined with windowing strategies).
         return out
     }
     ```
+
 === "Python"
+
     ```python
     def Accumulator(input_stream):
         """
@@ -63,7 +66,9 @@ combined with windowing strategies).
 
         return output_stream
     ```
+
 === "Rust"
+
     ```rust
           struct Accumulator {
           state: OrderedList<Datum>,
@@ -90,7 +95,9 @@ combined with windowing strategies).
       }
  
     ```
+
 === "Java"
+
     ```java
     import java.util.ArrayList;
     import java.util.List;
@@ -246,6 +253,7 @@ Note: Setting `readBatchSize: 1` helps maintain the ordering of events in the in
 Check out the snippets below to see the UDF examples for different languages:
 
 === "Go"
+
     ```go
     func (s *streamSorter) Accumulate(ctx context.Context, input <-chan accumulator.Datum, output chan<- accumulator.Message) {
         for {
@@ -276,6 +284,7 @@ Check out the snippets below to see the UDF examples for different languages:
     [View the Full Example on numaflow-go Github](https://github.com/numaproj/numaflow-go/blob/3abee2e44a004909e99ea1c3b5ee8d328cba37b0/examples/accumulator/streamsorter/main.go#L23)
 
 === "Python"
+
     ```python
     class StreamSorter(Accumulator):
       def __init__(self):
@@ -308,7 +317,9 @@ Check out the snippets below to see the UDF examples for different languages:
           await self.flush_buffer(output, flush_all=True)
     ```
     [View the full example on numaflow-python Github](https://github.com/numaproj/numaflow-python/blob/83eeb23c791de5121b1b03cd1717234e2c5a5048/packages/pynumaflow/examples/accumulator/streamsorter/example.py#L19)
+
 === "Rust"
+
     ```rust
       /// insert_sorted will do a binary-search and inserts the AccumulatorRequest into the sorted buffer.
       fn insert_sorted(sorted_buffer: &mut Vec<AccumulatorRequest>, request: AccumulatorRequest) {
@@ -324,7 +335,9 @@ Check out the snippets below to see the UDF examples for different languages:
 
     ```
     [View the full example in nummaflow-rs on Github](https://github.com/numaproj/numaflow-rs/blob/3adf2b5280e3e57abeb521ac02222ff1c7ce8e5f/examples/stream-sorter/src/main.rs#L17C1-L28C1)
+
 === "Java"
+
     ```java
       @Slf4j
       @AllArgsConstructor
@@ -385,4 +398,5 @@ Check out the snippets below to see the UDF examples for different languages:
       }
     ```
     [View the full example in numaflow-java Github](https://github.com/numaproj/numaflow-java/blob/38734c04df9e2182c0dadf2c7a4d83997ea7c2ad/examples/src/main/java/io/numaproj/numaflow/examples/accumulator/sorter/StreamSorterFactory.java)
+    
    
