@@ -42,7 +42,6 @@ combined with windowing strategies).
         return out
     }
     ```
-
 === "Python"
     ```python
     def Accumulator(input_stream):
@@ -64,7 +63,6 @@ combined with windowing strategies).
 
         return output_stream
     ```
-
 === "Rust"
     ```rust
           struct Accumulator {
@@ -92,7 +90,6 @@ combined with windowing strategies).
       }
  
     ```
-    
 === "Java"
     ```java
     import java.util.ArrayList;
@@ -118,7 +115,6 @@ combined with windowing strategies).
         }
     }
     ```
-
 
 ### Considerations
 
