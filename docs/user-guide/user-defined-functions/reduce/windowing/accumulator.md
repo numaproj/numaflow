@@ -20,31 +20,31 @@ Global Window. It opens up the possibility of very advanced use cases like custo
 combined with windowing strategies). 
 
 === "Go"
-    ```go 
-        func Accumulator(in <-chan Datum) <-chan Datum {
-          out := make(chan Datum)
-          go func() {
-              defer close(out)
-              var state []Datum
-              for i := range in {
-                  if WatermarkProgressed(i) {
-                      sort.Slice(state, func(a, b int) bool {
-                          return state[a].Timestamp < state[b].Timestamp
-                      })
-                      for _, d := range state {
-                          out <- d
-                      }
-                      state = nil 
-                  }
-                  state = append(state, i)
-              }
-          }()
-          return out
-      }
+    ```go
+    func Accumulator(in <-chan Datum) <-chan Datum {
+        out := make(chan Datum)
+        go func() {
+            defer close(out)
+            var state []Datum
+            for i := range in {
+                if WatermarkProgressed(i) {
+                    sort.Slice(state, func(a, b int) bool {
+                        return state[a].Timestamp < state[b].Timestamp
+                    })
+                    for _, d := range state {
+                        out <- d
+                    }
+                    state = nil
+                }
+                state = append(state, i)
+            }
+        }()
+        return out
+    }
     ```
 === "Python"
     ```python
-        def Accumulator(input_stream):
+    def Accumulator(input_stream):
         """
         Processes an input stream of Datum objects, maintaining an ordered state.
         Emits elements when the watermark progresses.
@@ -62,7 +62,6 @@ combined with windowing strategies).
             state.insert(i)
 
         return output_stream
- 
     ```
 === "Rust"
     ```rust
@@ -249,32 +248,33 @@ Check out the snippets below to see the UDF examples for different languages:
 
 === "Go"
     ```go
-        func (s *streamSorter) Accumulate(ctx context.Context, input <-chan accumulator.Datum, output chan<- accumulator.Message) {
-          for {
+    func (s *streamSorter) Accumulate(ctx context.Context, input <-chan accumulator.Datum, output chan<- accumulator.Message) {
+        for {
             select {
             case <-ctx.Done():
-              log.Println("Exiting the Accumulator")
-              return
-            case datum, ok := <-input:
-              // this case happens due to timeout
-              if !ok {
-                log.Println("Input channel closed")
+                log.Println("Exiting the Accumulator")
                 return
-              }
-              log.Println("Received datum with event time: ", datum.EventTime().UnixMilli())
-              // watermark has moved, let's flush
-              if datum.Watermark().After(s.latestWm) {
-                s.latestWm = datum.Watermark()
-                s.flushBuffer(output)
-              }
-              // store the data into the internal buffer
-              s.insertSorted(datum)
+            case datum, ok := <-input:
+                // this case happens due to timeout
+                if !ok {
+                    log.Println("Input channel closed")
+                    return
+                }
+                log.Println("Received datum with event time: ", datum.EventTime().UnixMilli())
+                
+                // watermark has moved, let's flush
+                if datum.Watermark().After(s.latestWm) {
+                    s.latestWm = datum.Watermark()
+                    s.flushBuffer(output)
+                }
+                
+                // store the data into the internal buffer
+                s.insertSorted(datum)
             }
-          }
         }
+    }
     ```
     [View the Full Example on numaflow-go Github](https://github.com/numaproj/numaflow-go/blob/3abee2e44a004909e99ea1c3b5ee8d328cba37b0/examples/accumulator/streamsorter/main.go#L23)
-
 === "Python"
     ```python
     class StreamSorter(Accumulator):
