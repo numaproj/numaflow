@@ -2837,18 +2837,105 @@ have to emit back the "manipulated" <code>Datum</code>.</p>
 Datum stream itself. It has a powerful semantics where the input and output is a stream of <code>Datum</code> creating a
 Global Window. It opens up the possibility of very advanced use cases like custom triggers (e.g., count based triggers
 combined with windowing strategies). </p>
-<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">Accumulator</span><span class="p">(</span><span class="o">&lt;-</span> <span class="n">stream</span> <span class="ow">in</span><span class="p">[</span><span class="n">Datum</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">stream</span> <span class="n">out</span><span class="p">[</span><span class="n">Datum</span><span class="p">]</span> <span class="p">{</span>
-  <span class="n">let</span> <span class="n">state</span> <span class="o">=</span> <span class="n">OrderedList</span><span class="p">()</span>
-  <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="nb">range</span> <span class="ow">in</span> <span class="p">{</span>
-    <span class="c1"># The condition will return true if Watermark progresses</span>
-    <span class="k">if</span> <span class="n">WatermarkProgressed</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">==</span> <span class="n">true</span> <span class="p">{</span>
-        <span class="c1"># pop all sorted elements and Write to output stream</span>
-        <span class="n">Write</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">state</span><span class="o">.</span><span class="n">popN</span><span class="p">())</span> 
-    <span class="p">}</span>
-    <span class="n">state</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> 
-  <span class="p">}</span>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Go</label><label for="__tabbed_1_2">Python</label><label for="__tabbed_1_3">Rust</label><label for="__tabbed_1_4">Java</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="nx">Accumulator</span><span class="p">(</span><span class="nx">in</span><span class="w"> </span><span class="o">&lt;-</span><span class="kd">chan</span><span class="w"> </span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;-</span><span class="kd">chan</span><span class="w"> </span><span class="nx">Datum</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">out</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nb">make</span><span class="p">(</span><span class="kd">chan</span><span class="w"> </span><span class="nx">Datum</span><span class="p">)</span>
+<span class="w">    </span><span class="k">go</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">defer</span><span class="w"> </span><span class="nb">close</span><span class="p">(</span><span class="nx">out</span><span class="p">)</span>
+<span class="w">        </span><span class="kd">var</span><span class="w"> </span><span class="nx">state</span><span class="w"> </span><span class="p">[]</span><span class="nx">Datum</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="nx">i</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="k">range</span><span class="w"> </span><span class="nx">in</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="nx">WatermarkProgressed</span><span class="p">(</span><span class="nx">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">sort</span><span class="p">.</span><span class="nx">Slice</span><span class="p">(</span><span class="nx">state</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="nx">a</span><span class="p">,</span><span class="w"> </span><span class="nx">b</span><span class="w"> </span><span class="kt">int</span><span class="p">)</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="k">return</span><span class="w"> </span><span class="nx">state</span><span class="p">[</span><span class="nx">a</span><span class="p">].</span><span class="nx">Timestamp</span><span class="w"> </span><span class="p">&lt;</span><span class="w"> </span><span class="nx">state</span><span class="p">[</span><span class="nx">b</span><span class="p">].</span><span class="nx">Timestamp</span>
+<span class="w">                </span><span class="p">})</span>
+<span class="w">                </span><span class="k">for</span><span class="w"> </span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="k">range</span><span class="w"> </span><span class="nx">state</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="nx">out</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="nx">d</span>
+<span class="w">                </span><span class="p">}</span>
+<span class="w">                </span><span class="nx">state</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">nil</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">            </span><span class="nx">state</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nb">append</span><span class="p">(</span><span class="nx">state</span><span class="p">,</span><span class="w"> </span><span class="nx">i</span><span class="p">)</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}()</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">out</span>
 <span class="p">}</span>
 </code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">Accumulator</span><span class="p">(</span><span class="n">input_stream</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Processes an input stream of Datum objects, maintaining an ordered state.</span>
+<span class="sd">    Emits elements when the watermark progresses.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">state</span> <span class="o">=</span> <span class="n">OrderedList</span><span class="p">()</span>
+    <span class="n">output_stream</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">input_stream</span><span class="p">:</span>
+        <span class="c1"># The condition will return True if watermark progresses</span>
+        <span class="k">if</span> <span class="n">WatermarkProgressed</span><span class="p">(</span><span class="n">i</span><span class="p">):</span>
+            <span class="c1"># Pop all sorted elements and write to output stream</span>
+            <span class="n">output_stream</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">state</span><span class="o">.</span><span class="n">pop_n</span><span class="p">())</span>
+
+        <span class="c1"># Insert the current element into the ordered state</span>
+        <span class="n">state</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">output_stream</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="w">      </span><span class="k">struct</span><span class="w"> </span><span class="nc">Accumulator</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="n">state</span><span class="p">:</span><span class="w"> </span><span class="nc">OrderedList</span><span class="o">&lt;</span><span class="n">Datum</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="w">  </span><span class="k">impl</span><span class="w"> </span><span class="n">Accumulator</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">fn</span><span class="w"> </span><span class="nf">new</span><span class="p">()</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="nc">Self</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="bp">Self</span><span class="w"> </span><span class="p">{</span>
+<span class="w">              </span><span class="n">state</span><span class="p">:</span><span class="w"> </span><span class="nc">OrderedList</span><span class="p">::</span><span class="n">new</span><span class="p">(),</span>
+<span class="w">          </span><span class="p">}</span>
+<span class="w">      </span><span class="p">}</span>
+
+<span class="w">      </span><span class="k">fn</span><span class="w"> </span><span class="nf">process</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">input_stream</span><span class="p">:</span><span class="w"> </span><span class="kp">&amp;</span><span class="p">[</span><span class="n">Datum</span><span class="p">],</span><span class="w"> </span><span class="n">output_stream</span><span class="p">:</span><span class="w"> </span><span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Datum</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">input_stream</span><span class="w"> </span><span class="p">{</span>
+<span class="w">              </span><span class="c1">// Check if the watermark has progressed</span>
+<span class="w">              </span><span class="k">if</span><span class="w"> </span><span class="n">WatermarkProgressed</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                  </span><span class="c1">// Pop all sorted elements and write to output stream</span>
+<span class="w">                  </span><span class="kd">let</span><span class="w"> </span><span class="n">popped</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">state</span><span class="p">.</span><span class="n">pop_all</span><span class="p">();</span>
+<span class="w">                  </span><span class="n">output_stream</span><span class="p">.</span><span class="n">extend</span><span class="p">(</span><span class="n">popped</span><span class="p">);</span>
+<span class="w">              </span><span class="p">}</span>
+<span class="w">              </span><span class="bp">self</span><span class="p">.</span><span class="n">state</span><span class="p">.</span><span class="n">insert</span><span class="p">(</span><span class="n">i</span><span class="p">.</span><span class="n">clone</span><span class="p">());</span>
+<span class="w">          </span><span class="p">}</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">java.util.ArrayList</span><span class="p">;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">java.util.List</span><span class="p">;</span>
+
+<span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">Accumulator</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">OrderedList</span><span class="o">&lt;</span><span class="n">Datum</span><span class="o">&gt;</span><span class="w"> </span><span class="n">state</span><span class="p">;</span>
+
+<span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="nf">Accumulator</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">state</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">OrderedList</span><span class="o">&lt;&gt;</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">process</span><span class="p">(</span><span class="n">List</span><span class="o">&lt;</span><span class="n">Datum</span><span class="o">&gt;</span><span class="w"> </span><span class="n">inputStream</span><span class="p">,</span><span class="w"> </span><span class="n">List</span><span class="o">&lt;</span><span class="n">Datum</span><span class="o">&gt;</span><span class="w"> </span><span class="n">outputStream</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">Datum</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">inputStream</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="c1">// Check if the watermark has progressed</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">WatermarkProgressed</span><span class="p">(</span><span class="n">i</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="c1">// Pop all sorted elements and write to output stream</span>
+<span class="w">                </span><span class="n">List</span><span class="o">&lt;</span><span class="n">Datum</span><span class="o">&gt;</span><span class="w"> </span><span class="n">popped</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">state</span><span class="p">.</span><span class="na">popAll</span><span class="p">();</span>
+<span class="w">                </span><span class="n">outputStream</span><span class="p">.</span><span class="na">addAll</span><span class="p">(</span><span class="n">popped</span><span class="p">);</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">            </span><span class="n">state</span><span class="p">.</span><span class="na">insert</span><span class="p">(</span><span class="n">i</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+</div>
+</div>
 <h3 id="considerations">Considerations<a class="headerlink" href="#considerations" title="Permanent link">&para;</a></h3>
 <p>The Accumulator window is powerful but should be used carefully as it can cause pipeline stalling if not configured 
 properly.</p>
@@ -2957,11 +3044,149 @@ Accumulator window to join and sort two HTTP sources:</p>
 <li>The sorted output is sent to a log sink</li>
 </ol>
 <p>Note: Setting <code>readBatchSize: 1</code> helps maintain the ordering of events in the input streams.</p>
-<p>Check the links below to see the UDF examples for different languages:</p>
-<ul>
-<li><a href="https://github.com/numaproj/numaflow-go/tree/main/examples/accumulator">Golang</a></li>
-<li><a href="https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/accumulator">Python</a></li>
-</ul>
+<p>Check out the snippets below to see the UDF examples for different languages:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:4"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><input id="__tabbed_2_3" name="__tabbed_2" type="radio" /><input id="__tabbed_2_4" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Go</label><label for="__tabbed_2_2">Python</label><label for="__tabbed_2_3">Rust</label><label for="__tabbed_2_4">Java</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p><div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">streamSorter</span><span class="p">)</span><span class="w"> </span><span class="nx">Accumulate</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">input</span><span class="w"> </span><span class="o">&lt;-</span><span class="kd">chan</span><span class="w"> </span><span class="nx">accumulator</span><span class="p">.</span><span class="nx">Datum</span><span class="p">,</span><span class="w"> </span><span class="nx">output</span><span class="w"> </span><span class="kd">chan</span><span class="o">&lt;-</span><span class="w"> </span><span class="nx">accumulator</span><span class="p">.</span><span class="nx">Message</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">select</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">case</span><span class="w"> </span><span class="o">&lt;-</span><span class="nx">ctx</span><span class="p">.</span><span class="nx">Done</span><span class="p">():</span>
+<span class="w">            </span><span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;Exiting the Accumulator&quot;</span><span class="p">)</span>
+<span class="w">            </span><span class="k">return</span>
+<span class="w">        </span><span class="k">case</span><span class="w"> </span><span class="nx">datum</span><span class="p">,</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="o">&lt;-</span><span class="nx">input</span><span class="p">:</span>
+<span class="w">            </span><span class="c1">// this case happens due to timeout</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">!</span><span class="nx">ok</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;Input channel closed&quot;</span><span class="p">)</span>
+<span class="w">                </span><span class="k">return</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">            </span><span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;Received datum with event time: &quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">datum</span><span class="p">.</span><span class="nx">EventTime</span><span class="p">().</span><span class="nx">UnixMilli</span><span class="p">())</span>
+
+<span class="w">            </span><span class="c1">// watermark has moved, let&#39;s flush</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="nx">datum</span><span class="p">.</span><span class="nx">Watermark</span><span class="p">().</span><span class="nx">After</span><span class="p">(</span><span class="nx">s</span><span class="p">.</span><span class="nx">latestWm</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">s</span><span class="p">.</span><span class="nx">latestWm</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">datum</span><span class="p">.</span><span class="nx">Watermark</span><span class="p">()</span>
+<span class="w">                </span><span class="nx">s</span><span class="p">.</span><span class="nx">flushBuffer</span><span class="p">(</span><span class="nx">output</span><span class="p">)</span>
+<span class="w">            </span><span class="p">}</span>
+
+<span class="w">            </span><span class="c1">// store the data into the internal buffer</span>
+<span class="w">            </span><span class="nx">s</span><span class="p">.</span><span class="nx">insertSorted</span><span class="p">(</span><span class="nx">datum</span><span class="p">)</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<a href="https://github.com/numaproj/numaflow-go/blob/3abee2e44a004909e99ea1c3b5ee8d328cba37b0/examples/accumulator/streamsorter/main.go#L23">View the Full Example on numaflow-go Github</a></p>
+</div>
+<div class="tabbed-block">
+<p><div class="highlight"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">StreamSorter</span><span class="p">(</span><span class="n">Accumulator</span><span class="p">):</span>
+  <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;StreamSorter initialized&quot;</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">latest_wm</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">fromtimestamp</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">sorted_buffer</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Datum</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+  <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">handler</span><span class="p">(</span>
+      <span class="bp">self</span><span class="p">,</span>
+      <span class="n">datums</span><span class="p">:</span> <span class="n">AsyncIterable</span><span class="p">[</span><span class="n">Datum</span><span class="p">],</span>
+      <span class="n">output</span><span class="p">:</span> <span class="n">NonBlockingIterator</span><span class="p">,</span>
+  <span class="p">):</span>
+      <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;StreamSorter handler started&quot;</span><span class="p">)</span>
+      <span class="k">async</span> <span class="k">for</span> <span class="n">datum</span> <span class="ow">in</span> <span class="n">datums</span><span class="p">:</span>
+          <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+              <span class="sa">f</span><span class="s2">&quot;Received datum with event time: </span><span class="si">{</span><span class="n">datum</span><span class="o">.</span><span class="n">event_time</span><span class="si">}</span><span class="s2">, &quot;</span>
+              <span class="sa">f</span><span class="s2">&quot;Current latest watermark: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">latest_wm</span><span class="si">}</span><span class="s2">, &quot;</span>
+              <span class="sa">f</span><span class="s2">&quot;Datum watermark: </span><span class="si">{</span><span class="n">datum</span><span class="o">.</span><span class="n">watermark</span><span class="si">}</span><span class="s2">&quot;</span>
+          <span class="p">)</span>
+
+          <span class="c1"># If watermark has moved forward</span>
+          <span class="k">if</span> <span class="n">datum</span><span class="o">.</span><span class="n">watermark</span> <span class="ow">and</span> <span class="n">datum</span><span class="o">.</span><span class="n">watermark</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">latest_wm</span><span class="p">:</span>
+              <span class="bp">self</span><span class="o">.</span><span class="n">latest_wm</span> <span class="o">=</span> <span class="n">datum</span><span class="o">.</span><span class="n">watermark</span>
+              <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Watermark updated: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">latest_wm</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+              <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">flush_buffer</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+
+          <span class="bp">self</span><span class="o">.</span><span class="n">insert_sorted</span><span class="p">(</span><span class="n">datum</span><span class="p">)</span>
+
+      <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Timeout reached&quot;</span><span class="p">)</span>
+      <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">flush_buffer</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">flush_all</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+<a href="https://github.com/numaproj/numaflow-python/blob/83eeb23c791de5121b1b03cd1717234e2c5a5048/packages/pynumaflow/examples/accumulator/streamsorter/example.py#L19">View the full example on numaflow-python Github</a></p>
+</div>
+<div class="tabbed-block">
+<p><div class="highlight"><pre><span></span><code><span class="w">  </span><span class="sd">/// insert_sorted will do a binary-search and inserts the AccumulatorRequest into the sorted buffer.</span>
+<span class="w">  </span><span class="k">fn</span><span class="w"> </span><span class="nf">insert_sorted</span><span class="p">(</span><span class="n">sorted_buffer</span><span class="p">:</span><span class="w"> </span><span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">AccumulatorRequest</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">request</span><span class="p">:</span><span class="w"> </span><span class="nc">AccumulatorRequest</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="kd">let</span><span class="w"> </span><span class="n">event_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">request</span><span class="p">.</span><span class="n">event_time</span><span class="p">;</span>
+
+<span class="w">      </span><span class="c1">// Find the insertion point using binary search</span>
+<span class="w">      </span><span class="kd">let</span><span class="w"> </span><span class="n">index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sorted_buffer</span>
+<span class="w">          </span><span class="p">.</span><span class="n">binary_search_by</span><span class="p">(</span><span class="o">|</span><span class="n">probe</span><span class="o">|</span><span class="w"> </span><span class="n">probe</span><span class="p">.</span><span class="n">event_time</span><span class="p">.</span><span class="n">cmp</span><span class="p">(</span><span class="o">&amp;</span><span class="n">event_time</span><span class="p">))</span>
+<span class="w">          </span><span class="p">.</span><span class="n">unwrap_or_else</span><span class="p">(</span><span class="o">|</span><span class="n">e</span><span class="o">|</span><span class="w"> </span><span class="n">e</span><span class="p">);</span>
+
+<span class="w">      </span><span class="n">sorted_buffer</span><span class="p">.</span><span class="n">insert</span><span class="p">(</span><span class="n">index</span><span class="p">,</span><span class="w"> </span><span class="n">request</span><span class="p">);</span>
+<span class="w">  </span><span class="p">}</span>
+</code></pre></div>
+<a href="https://github.com/numaproj/numaflow-rs/blob/3adf2b5280e3e57abeb521ac02222ff1c7ce8e5f/examples/stream-sorter/src/main.rs#L17C1-L28C1">View the full example in nummaflow-rs on Github</a></p>
+</div>
+<div class="tabbed-block">
+<p><div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nd">@Slf4j</span>
+<span class="w">  </span><span class="nd">@AllArgsConstructor</span>
+<span class="w">  </span><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">StreamSorterFactory</span><span class="w"> </span><span class="kd">extends</span><span class="w"> </span><span class="n">AccumulatorFactory</span><span class="o">&lt;</span><span class="n">StreamSorterFactory</span><span class="p">.</span><span class="na">StreamSorter</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+
+<span class="w">      </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="n">String</span><span class="o">[]</span><span class="w"> </span><span class="n">args</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">Exception</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">&quot;Starting stream sorter server..&quot;</span><span class="p">);</span>
+<span class="w">          </span><span class="n">Server</span><span class="w"> </span><span class="n">server</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Server</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">StreamSorterFactory</span><span class="p">());</span>
+
+<span class="w">          </span><span class="c1">// Start the server</span>
+<span class="w">          </span><span class="n">server</span><span class="p">.</span><span class="na">start</span><span class="p">();</span>
+
+<span class="w">          </span><span class="c1">// wait for the server to shut down</span>
+<span class="w">          </span><span class="n">server</span><span class="p">.</span><span class="na">awaitTermination</span><span class="p">();</span>
+<span class="w">          </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">&quot;Stream sorter server exited..&quot;</span><span class="p">);</span>
+<span class="w">      </span><span class="p">}</span>
+
+<span class="w">      </span><span class="nd">@Override</span>
+<span class="w">      </span><span class="kd">public</span><span class="w"> </span><span class="n">StreamSorter</span><span class="w"> </span><span class="nf">createAccumulator</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">StreamSorter</span><span class="p">();</span>
+<span class="w">      </span><span class="p">}</span>
+
+<span class="w">      </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kd">class</span> <span class="nc">StreamSorter</span><span class="w"> </span><span class="kd">extends</span><span class="w"> </span><span class="n">Accumulator</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="kd">private</span><span class="w"> </span><span class="n">Instant</span><span class="w"> </span><span class="n">latestWm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Instant</span><span class="p">.</span><span class="na">ofEpochMilli</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">);</span>
+<span class="w">          </span><span class="kd">private</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="n">TreeSet</span><span class="o">&lt;</span><span class="n">Datum</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sortedBuffer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">TreeSet</span><span class="o">&lt;&gt;</span><span class="p">(</span><span class="n">Comparator</span>
+<span class="w">                  </span><span class="p">.</span><span class="na">comparing</span><span class="p">(</span><span class="n">Datum</span><span class="p">::</span><span class="n">getEventTime</span><span class="p">)</span>
+<span class="w">                  </span><span class="p">.</span><span class="na">thenComparing</span><span class="p">(</span><span class="n">Datum</span><span class="p">::</span><span class="n">getID</span><span class="p">));</span><span class="w"> </span><span class="c1">// Assuming Datum has a getUniqueId() method</span>
+
+<span class="w">          </span><span class="nd">@Override</span>
+<span class="w">          </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">processMessage</span><span class="p">(</span><span class="n">Datum</span><span class="w"> </span><span class="n">datum</span><span class="p">,</span><span class="w"> </span><span class="n">OutputStreamObserver</span><span class="w"> </span><span class="n">outputStream</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">              </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">&quot;Received datum with event time: {}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">datum</span><span class="p">.</span><span class="na">toString</span><span class="p">());</span>
+<span class="w">              </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">datum</span><span class="p">.</span><span class="na">getWatermark</span><span class="p">().</span><span class="na">isAfter</span><span class="p">(</span><span class="n">latestWm</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                  </span><span class="n">latestWm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">datum</span><span class="p">.</span><span class="na">getWatermark</span><span class="p">();</span>
+<span class="w">                  </span><span class="n">flushBuffer</span><span class="p">(</span><span class="n">outputStream</span><span class="p">);</span>
+<span class="w">              </span><span class="p">}</span>
+<span class="w">              </span><span class="n">sortedBuffer</span><span class="p">.</span><span class="na">add</span><span class="p">(</span><span class="n">datum</span><span class="p">);</span>
+<span class="w">          </span><span class="p">}</span>
+
+<span class="w">          </span><span class="nd">@Override</span>
+<span class="w">          </span><span class="kd">public</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">handleEndOfStream</span><span class="p">(</span><span class="n">OutputStreamObserver</span><span class="w"> </span><span class="n">outputStreamObserver</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">              </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">&quot;Eof received, flushing sortedBuffer: {}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">latestWm</span><span class="p">.</span><span class="na">toEpochMilli</span><span class="p">());</span>
+<span class="w">              </span><span class="n">flushBuffer</span><span class="p">(</span><span class="n">outputStreamObserver</span><span class="p">);</span>
+<span class="w">          </span><span class="p">}</span>
+
+<span class="w">          </span><span class="kd">private</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">flushBuffer</span><span class="p">(</span><span class="n">OutputStreamObserver</span><span class="w"> </span><span class="n">outputStream</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">              </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">&quot;Watermark updated, flushing sortedBuffer: {}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">latestWm</span><span class="p">.</span><span class="na">toEpochMilli</span><span class="p">());</span>
+<span class="w">              </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">sortedBuffer</span><span class="p">.</span><span class="na">isEmpty</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">sortedBuffer</span>
+<span class="w">                      </span><span class="p">.</span><span class="na">first</span><span class="p">()</span>
+<span class="w">                      </span><span class="p">.</span><span class="na">getEventTime</span><span class="p">()</span>
+<span class="w">                      </span><span class="p">.</span><span class="na">isBefore</span><span class="p">(</span><span class="n">latestWm</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                  </span><span class="n">Datum</span><span class="w"> </span><span class="n">datum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sortedBuffer</span><span class="p">.</span><span class="na">pollFirst</span><span class="p">();</span>
+<span class="w">                  </span><span class="k">assert</span><span class="w"> </span><span class="n">datum</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span>
+<span class="w">                  </span><span class="n">outputStream</span><span class="p">.</span><span class="na">send</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">Message</span><span class="p">(</span><span class="n">datum</span><span class="p">));</span>
+<span class="w">                  </span><span class="n">log</span><span class="p">.</span><span class="na">info</span><span class="p">(</span><span class="s">&quot;Sent datum with event time: {}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">datum</span><span class="p">.</span><span class="na">getEventTime</span><span class="p">().</span><span class="na">toEpochMilli</span><span class="p">());</span>
+<span class="w">              </span><span class="p">}</span>
+<span class="w">          </span><span class="p">}</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+</code></pre></div>
+<a href="https://github.com/numaproj/numaflow-java/blob/38734c04df9e2182c0dadf2c7a4d83997ea7c2ad/examples/src/main/java/io/numaproj/numaflow/examples/accumulator/sorter/StreamSorterFactory.java">View the full example in numaflow-java Github</a></p>
+</div>
+</div>
+</div>
 
               
             </article>
