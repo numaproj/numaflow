@@ -1,12 +1,14 @@
 use crate::error;
 use crate::message::Message;
-use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
+use crate::sinker::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
 use bytes::Bytes;
 
 /// User defined serving store to store the serving responses.
+#[path = "serve/user_defined.rs"]
 pub(crate) mod user_defined;
 
 /// Nats serving store to store the serving responses.
+#[path = "serve/nats.rs"]
 pub(crate) mod nats;
 
 /// Enum to represent different types of serving stores.
@@ -40,8 +42,7 @@ impl Sink for ServeSink {
         for msg in messages {
             result.push(ResponseFromSink {
                 id: msg.id.to_string(),
-                status: ResponseStatusFromSink::Serve,
-                serve_response: Some(msg.value.into()),
+                status: ResponseStatusFromSink::Serve(None),
             })
         }
         Ok(result)
@@ -56,8 +57,8 @@ mod tests {
 
     use crate::message::IntOffset;
     use crate::message::{Message, MessageID, Offset};
-    use crate::sink::serve::ServeSink;
-    use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
+    use crate::sinker::sink::serve::ServeSink;
+    use crate::sinker::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
 
     #[tokio::test]
     async fn test_serve_sink() {
@@ -98,9 +99,8 @@ mod tests {
         let expected_responses = messages
             .iter()
             .map(|msg| ResponseFromSink {
-                status: ResponseStatusFromSink::Serve,
+                status: ResponseStatusFromSink::Serve(None),
                 id: msg.id.to_string(),
-                serve_response: Some(msg.value.clone().into()),
             })
             .collect::<Vec<ResponseFromSink>>();
 

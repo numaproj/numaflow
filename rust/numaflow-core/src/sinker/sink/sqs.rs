@@ -3,7 +3,7 @@ use numaflow_sqs::sink::{SqsSink, SqsSinkMessage};
 use crate::error;
 use crate::error::Error;
 use crate::message::Message;
-use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
+use crate::sinker::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
 
 impl TryFrom<Message> for SqsSinkMessage {
     type Error = error::Error;
@@ -57,14 +57,12 @@ impl Sink for SqsSink {
                     result.push(ResponseFromSink {
                         id: sqs_response.id.clone(),
                         status: ResponseStatusFromSink::Success,
-                        serve_response: None,
                     });
                 }
                 Err(err) => {
                     result.push(ResponseFromSink {
                         id: sqs_response.id.clone(),
                         status: ResponseStatusFromSink::Failed(err.to_string()),
-                        serve_response: None,
                     });
                 }
             }
@@ -82,7 +80,7 @@ pub mod tests {
 
     use crate::monovertex::forwarder::Forwarder;
     use crate::shared::grpc::create_rpc_channel;
-    use crate::sink::SinkWriter;
+    use crate::sinker::sink::SinkWriter;
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
     use crate::tracker::Tracker;
@@ -291,7 +289,7 @@ pub mod tests {
         .unwrap();
 
         // create sink writer
-        use crate::sink::{SinkClientType, SinkWriterBuilder};
+        use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
         SinkWriterBuilder::new(5, Duration::from_millis(100), SinkClientType::Sqs(sqs_sink))
             .build()
             .await

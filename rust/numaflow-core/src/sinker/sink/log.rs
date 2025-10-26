@@ -1,4 +1,4 @@
-use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
+use crate::sinker::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
 use crate::{error, message::Message};
 
 pub(crate) struct LogSink;
@@ -24,7 +24,6 @@ impl Sink for LogSink {
             result.push(ResponseFromSink {
                 id: msg.id.to_string(),
                 status: ResponseStatusFromSink::Success,
-                serve_response: None,
             })
         }
         Ok(result)
@@ -40,7 +39,7 @@ mod tests {
     use super::LogSink;
     use crate::message::IntOffset;
     use crate::message::{Message, MessageID, Offset};
-    use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
+    use crate::sinker::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
 
     #[tokio::test]
     async fn test_log_sink() {
@@ -83,7 +82,6 @@ mod tests {
             .map(|msg| ResponseFromSink {
                 status: ResponseStatusFromSink::Success,
                 id: msg.id.to_string(),
-                serve_response: None,
             })
             .collect::<Vec<ResponseFromSink>>();
 

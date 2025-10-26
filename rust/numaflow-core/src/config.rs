@@ -252,7 +252,7 @@ mod tests {
                     .clone()
                     .unwrap()
                     .sink_max_retry_attempts,
-                5
+                65535
             );
             assert_eq!(
                 mvtx_cfg
@@ -462,7 +462,7 @@ mod tests {
                     .clone()
                     .unwrap()
                     .sink_max_retry_attempts,
-                5
+                65535
             );
             assert_eq!(
                 mvtx_config

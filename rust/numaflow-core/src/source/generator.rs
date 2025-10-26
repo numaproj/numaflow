@@ -129,7 +129,7 @@ mod stream_generator {
             let padding: Vec<u8> = if self.msg_size_bytes > 8 {
                 let size = self.msg_size_bytes - 8;
                 let mut bytes = vec![0; size as usize];
-                rand::thread_rng().fill(&mut bytes[..]);
+                rand::rng().fill(&mut bytes[..]);
                 bytes
             } else {
                 Default::default()
@@ -171,7 +171,7 @@ mod stream_generator {
             // rng.gen_range(0..1) will always produce 0
             let jitter = self.jitter.as_secs().max(1);
             let event_time =
-                chrono::Utc::now() - Duration::from_secs(rand::thread_rng().gen_range(0..jitter));
+                chrono::Utc::now() - Duration::from_secs(rand::rng().random_range(0..jitter));
             let mut data = self.content.to_vec();
             if data.is_empty() {
                 let value = match self.value {

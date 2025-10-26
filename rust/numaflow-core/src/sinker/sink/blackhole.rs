@@ -11,7 +11,6 @@ impl Sink for BlackholeSink {
             .map(|msg| ResponseFromSink {
                 status: ResponseStatusFromSink::Success,
                 id: msg.id.to_string(),
-                serve_response: None,
             })
             .collect();
         Ok(output)
@@ -27,7 +26,7 @@ mod tests {
     use super::BlackholeSink;
     use crate::message::IntOffset;
     use crate::message::{Message, MessageID, Offset};
-    use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
+    use crate::sinker::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
 
     #[tokio::test]
     async fn test_black_hole() {
@@ -70,7 +69,6 @@ mod tests {
             .map(|msg| ResponseFromSink {
                 status: ResponseStatusFromSink::Success,
                 id: msg.id.to_string(),
-                serve_response: None,
             })
             .collect::<Vec<ResponseFromSink>>();
 

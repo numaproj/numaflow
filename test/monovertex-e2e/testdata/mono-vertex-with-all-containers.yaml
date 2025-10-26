@@ -14,6 +14,10 @@ spec:
       container:
           image: quay.io/numaio/numaflow-go/mapt-assign-event-time:stable
           imagePullPolicy: IfNotPresent
+  udf:
+    container:
+      image: quay.io/numaio/numaflow-go/map-cat:stable
+      imagePullPolicy: IfNotPresent
   sink:
     udsink:
       container:

@@ -74,7 +74,7 @@ func (s *MonoVertexSuite) TestExponentialBackoffRetryStrategy() {
 	firstRetryLog := fmt.Sprintf("retry_attempt=%d", 1)
 	secondRetryLog := fmt.Sprintf("retry_attempt=%d", 2)
 	thirdLog := fmt.Sprintf("retry_attempt=%d", 3)
-	dropLog := "Dropping messages"
+	dropLog := "Retries exhausted, dropping messages."
 	w.Expect().MonoVertexPodLogContains(firstRetryLog, PodLogCheckOptionWithContainer("numa"))
 	w.Expect().MonoVertexPodLogContains(secondRetryLog, PodLogCheckOptionWithContainer("numa"))
 	w.Expect().MonoVertexPodLogContains(dropLog, PodLogCheckOptionWithContainer("numa"))
