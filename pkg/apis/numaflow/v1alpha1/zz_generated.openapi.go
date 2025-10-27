@@ -5701,6 +5701,12 @@ func schema_pkg_apis_numaflow_v1alpha1_Sink(ref common.ReferenceCallback) common
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink"),
 						},
 					},
+					"onSuccess": {
+						SchemaProps: spec.SchemaProps{
+							Description: "OnSuccess sink allows triggering a secondary sink operation only after the primary sink completes successfully The writes to OnSuccess sink will only be initiated if the ud-sink response field sets it.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink"),
+						},
+					},
 					"retryStrategy": {
 						SchemaProps: spec.SchemaProps{
 							Description: "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.",

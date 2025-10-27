@@ -19,6 +19,7 @@ pub(crate) struct HealthCheckClients {
     pub(crate) sink_client: Option<SinkClient<Channel>>,
     pub(crate) fb_sink_client: Option<SinkClient<Channel>>,
     pub(crate) store_client: Option<ServingStoreClient<Channel>>,
+    pub(crate) on_success_sink_client: Option<SinkClient<Channel>>,
 }
 
 impl HealthCheckClients {
@@ -59,7 +60,23 @@ impl HealthCheckClients {
             true
         };
 
-        sink && fb_sink && serve_store
+        let on_success_sink = if let Some(on_success_sink_client) = &mut self.on_success_sink_client
+        {
+            match on_success_sink_client
+                .is_ready(tonic::Request::new(()))
+                .await
+            {
+                Ok(ready) => ready.into_inner().ready,
+                Err(e) => {
+                    error!(?e, "OnSuccess Sink client is not ready");
+                    false
+                }
+            }
+        } else {
+            true
+        };
+
+        sink && fb_sink && serve_store && on_success_sink
     }
 }
 
@@ -68,6 +85,7 @@ pub(crate) struct HealthCheckClientsBuilder {
     sink_client: Option<SinkClient<Channel>>,
     fb_sink_client: Option<SinkClient<Channel>>,
     store_client: Option<ServingStoreClient<Channel>>,
+    on_success_sink_client: Option<SinkClient<Channel>>,
 }
 
 impl HealthCheckClientsBuilder {
@@ -76,6 +94,7 @@ impl HealthCheckClientsBuilder {
             sink_client: None,
             fb_sink_client: None,
             store_client: None,
+            on_success_sink_client: None,
         }
     }
 
@@ -94,11 +113,20 @@ impl HealthCheckClientsBuilder {
         self
     }
 
+    pub(crate) fn on_success_sink_client(
+        mut self,
+        on_success_sink_client: SinkClient<Channel>,
+    ) -> Self {
+        self.on_success_sink_client = Some(on_success_sink_client);
+        self
+    }
+
     pub(crate) fn build(self) -> HealthCheckClients {
         HealthCheckClients {
             sink_client: self.sink_client,
             fb_sink_client: self.fb_sink_client,
             store_client: self.store_client,
+            on_success_sink_client: self.on_success_sink_client,
         }
     }
 }
@@ -110,7 +138,7 @@ pub(crate) struct SinkWriterBuilder {
     retry_config: RetryConfig,
     sink_client: SinkClientType,
     fb_sink_client: Option<SinkClientType>,
-    on_success_client: Option<SinkClientType>,
+    on_success_sink_client: Option<SinkClientType>,
     serving_store: Option<ServingStore>,
 }
 
@@ -126,7 +154,7 @@ impl SinkWriterBuilder {
             retry_config: RetryConfig::default(),
             sink_client: sink_type,
             fb_sink_client: None,
-            on_success_client: None,
+            on_success_sink_client: None,
             serving_store: None,
         }
     }
@@ -143,6 +171,11 @@ impl SinkWriterBuilder {
 
     pub(crate) fn serving_store(mut self, serving_store: ServingStore) -> Self {
         self.serving_store = Some(serving_store);
+        self
+    }
+
+    pub(crate) fn on_success_sink_client(mut self, on_success_sink_client: SinkClientType) -> Self {
+        self.on_success_sink_client = Some(on_success_sink_client);
         self
     }
 
@@ -262,7 +295,7 @@ impl SinkWriterBuilder {
         };
 
         // start onSuccess sink
-        let os_sink_handle = if let Some(os_sink_client) = self.on_success_client {
+        let os_sink_handle = if let Some(os_sink_client) = self.on_success_sink_client {
             let (os_sender, fb_receiver) = mpsc::channel(self.batch_size);
             let fb_retry_config = self.retry_config.clone();
             match os_sink_client {
@@ -288,7 +321,8 @@ impl SinkWriterBuilder {
                     });
                 }
                 SinkClientType::UserDefined(sink_client) => {
-                    health_check_builder = health_check_builder.fb_sink_client(sink_client.clone());
+                    health_check_builder =
+                        health_check_builder.on_success_sink_client(sink_client.clone());
                     let sink = UserDefinedSink::new(sink_client).await?;
                     tokio::spawn(async move {
                         let actor = SinkActor::new(fb_receiver, sink, fb_retry_config);

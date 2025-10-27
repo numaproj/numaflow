@@ -3,6 +3,9 @@ const DEFAULT_SINK_SOCKET: &str = "/var/run/numaflow/sink.sock";
 const DEFAULT_SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/sinker-server-info";
 const DEFAULT_FB_SINK_SOCKET: &str = "/var/run/numaflow/fb-sink.sock";
 const DEFAULT_FB_SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/fb-sinker-server-info";
+const DEFAULT_ON_SUCCESS_SINK_SOCKET: &str = "/var/run/numaflow/on-success-sink.sock";
+const DEFAULT_ON_SUCCESS_SINK_SERVER_INFO_FILE: &str =
+    "/var/run/numaflow/on-success-sinker-server-info";
 const DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY: OnFailureStrategy = OnFailureStrategy::Retry;
 const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = u16::MAX;
 const DEFAULT_SINK_INITIAL_RETRY_INTERVAL_IN_MS: u32 = 1;
@@ -15,12 +18,12 @@ use std::fmt::Display;
 
 use numaflow_kafka::sink::KafkaSinkConfig;
 use numaflow_models::models::{KafkaSink, PulsarSink, RetryStrategy, Sink, SqsSink};
-use numaflow_pulsar::PulsarAuth;
 use numaflow_pulsar::sink::Config as PulsarSinkConfig;
+use numaflow_pulsar::PulsarAuth;
 use numaflow_sqs::sink::SqsSinkConfig;
 
-use crate::Result;
 use crate::error::Error;
+use crate::Result;
 
 use super::parse_kafka_auth_config;
 
@@ -102,6 +105,48 @@ impl SinkType {
                 .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
         } else {
             Err(Error::Config("Fallback sink not found".to_string()))
+        }
+    }
+
+    pub(crate) fn on_success_sinktype(sink: &Sink) -> Result<Self> {
+        if let Some(on_success) = sink.on_success.as_ref() {
+            on_success
+                .udsink
+                .as_ref()
+                .map(|_| {
+                    Ok(SinkType::UserDefined(
+                        UserDefinedConfig::on_success_default(),
+                    ))
+                })
+                .or_else(|| {
+                    on_success
+                        .log
+                        .as_ref()
+                        .map(|_| Ok(SinkType::Log(LogConfig::default())))
+                })
+                .or_else(|| {
+                    on_success
+                        .blackhole
+                        .as_ref()
+                        .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
+                })
+                .or_else(|| on_success.serve.as_ref().map(|_| Ok(SinkType::Serve)))
+                .or_else(|| on_success.sqs.as_ref().map(|sqs| sqs.clone().try_into()))
+                .or_else(|| {
+                    on_success
+                        .kafka
+                        .as_ref()
+                        .map(|kafka| kafka.clone().try_into())
+                })
+                .or_else(|| {
+                    on_success
+                        .pulsar
+                        .as_ref()
+                        .map(|pulsar| pulsar.clone().try_into())
+                })
+                .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
+        } else {
+            Err(Error::Config("OnSuccess sink not found".to_string()))
         }
     }
 }
@@ -331,6 +376,14 @@ impl UserDefinedConfig {
             server_info_path: DEFAULT_FB_SINK_SERVER_INFO_FILE.to_string(),
         }
     }
+
+    pub(crate) fn on_success_default() -> Self {
+        Self {
+            grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+            socket_path: DEFAULT_ON_SUCCESS_SINK_SOCKET.to_string(),
+            server_info_path: DEFAULT_ON_SUCCESS_SINK_SERVER_INFO_FILE.to_string(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -514,6 +567,7 @@ mod tests {
                 kafka: None,
                 pulsar: None,
             })),
+            on_success: None,
             retry_strategy: None,
             kafka: None,
             pulsar: None,
@@ -538,6 +592,7 @@ mod tests {
             serve: None,
             sqs: None,
             fallback: None,
+            on_success: None,
             retry_strategy: None,
             kafka: None,
             pulsar: None,
@@ -565,6 +620,7 @@ mod tests {
                 kafka: None,
                 pulsar: None,
             })),
+            on_success: None,
             retry_strategy: None,
             kafka: None,
             pulsar: None,
@@ -716,6 +772,7 @@ mod tests {
                     topic: "fallback-topic".to_string(),
                 })),
             })),
+            on_success: None,
             retry_strategy: None,
             kafka: None,
             pulsar: None,
@@ -765,6 +822,7 @@ mod tests {
                     topic: "fallback-topic".to_string(),
                 })),
             })),
+            on_success: None,
             retry_strategy: None,
             kafka: None,
             pulsar: None,
@@ -817,6 +875,7 @@ mod tests {
                     topic: "fallback-topic".to_string(),
                 })),
             })),
+            on_success: None,
             retry_strategy: None,
             kafka: None,
             pulsar: None,
@@ -863,6 +922,7 @@ mod tests {
                     topic: "fallback-topic".to_string(),
                 })),
             })),
+            on_success: None,
             retry_strategy: None,
             kafka: None,
             pulsar: None,

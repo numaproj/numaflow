@@ -79,7 +79,7 @@ pub(crate) enum SinkClientType {
 
 /// SinkWriter is a writer that writes messages to the Sink.
 ///
-/// Error handling and shutdown: There can non-retryable errors(udsink panics etc.), in that case we will
+/// Error handling and shutdown: There can be non-retryable errors(udsink panics etc.), in that case we will
 /// cancel the token to indicate the upstream will not send any more messages to the sink, we drain any inflight
 /// messages that are in input stream and nack them using the tracker, when the upstream stops sending
 /// messages the input stream will be closed, and we will stop the component.
@@ -169,7 +169,7 @@ impl SinkWriter {
             // TODO update link
             return Err(Error::OsSink(
                 "Response contains OnSuccess messages but no OnSuccess sink is configured. \
-                Please update the spec to configure fallback sink https://numaflow.numaproj.io/user-guide/sinks/onsuccess/ ".to_string(),
+                Please update the spec to configure on-success sink https://numaflow.numaproj.io/user-guide/sinks/onsuccess/ ".to_string(),
             ));
         }
 

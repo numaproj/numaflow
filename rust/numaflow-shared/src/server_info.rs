@@ -40,6 +40,7 @@ impl From<&str> for MapMode {
     }
 }
 
+// TODO: Add OnSuccess Sink
 /// ContainerType represents the type of processor containers used in Numaflow.
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum ContainerType {

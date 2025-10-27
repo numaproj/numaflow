@@ -42,6 +42,7 @@ pub(crate) struct MonovertexConfig {
     pub(crate) sink_config: SinkConfig,
     pub(crate) transformer_config: Option<TransformerConfig>,
     pub(crate) fb_sink_config: Option<SinkConfig>,
+    pub(crate) on_success_sink_config: Option<SinkConfig>,
     pub(crate) metrics_config: MetricsConfig,
     pub(crate) callback_config: Option<ServingCallbackConfig>,
     pub(crate) rate_limit: Option<RateLimitConfig>,
@@ -66,6 +67,7 @@ impl Default for MonovertexConfig {
             map_config: None,
             transformer_config: None,
             fb_sink_config: None,
+            on_success_sink_config: None,
             metrics_config: MetricsConfig::default(),
             callback_config: None,
             rate_limit: None,
@@ -183,6 +185,15 @@ impl MonovertexConfig {
             None
         };
 
+        let on_success_sink_config = if sink.on_success.is_some() {
+            Some(SinkConfig {
+                sink_type: SinkType::on_success_sinktype(&sink)?,
+                retry_config: None,
+            })
+        } else {
+            None
+        };
+
         let look_back_window = mono_vertex_obj
             .spec
             .scale
@@ -229,6 +240,7 @@ impl MonovertexConfig {
             sink_config,
             transformer_config,
             fb_sink_config,
+            on_success_sink_config,
             callback_config,
             rate_limit,
         })

@@ -9,21 +9,20 @@ use crate::config::get_vertex_replica;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{
-    DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET, PipelineConfig, ToVertexConfig,
+    PipelineConfig, ToVertexConfig, DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET,
 };
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
 use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
-use crate::reduce::reducer::WindowManager;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
-use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
 use crate::reduce::reducer::unaligned::user_defined::accumulator::UserDefinedAccumulator;
 use crate::reduce::reducer::unaligned::user_defined::session::UserDefinedSessionReduce;
+use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
+use crate::reduce::reducer::WindowManager;
 use crate::shared::grpc;
 use crate::shared::grpc::{create_rpc_channel, wait_until_source_ready};
 use crate::sinker::sink::serve::ServingStore;
 use crate::sinker::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
-use crate::source::Source;
 use crate::source::generator::new_generator;
 use crate::source::http::CoreHttpSource;
 use crate::source::jetstream::new_jetstream_source;
@@ -32,6 +31,7 @@ use crate::source::nats::new_nats_source;
 use crate::source::pulsar::new_pulsar_source;
 use crate::source::sqs::new_sqs_source;
 use crate::source::user_defined::new_source;
+use crate::source::Source;
 use crate::tracker::Tracker;
 use crate::transformer::Transformer;
 use crate::typ::NumaflowTypeConfig;
@@ -49,7 +49,7 @@ use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use numaflow_shared::server_info::{
-    ContainerType, Protocol, ServerInfo, sdk_server_info, supports_nack,
+    sdk_server_info, supports_nack, ContainerType, Protocol, ServerInfo,
 };
 use numaflow_sqs::sink::SqsSinkBuilder;
 use std::path::PathBuf;
@@ -62,6 +62,7 @@ pub(crate) async fn create_sink_writer(
     read_timeout: Duration,
     primary_sink: SinkConfig,
     fallback_sink: Option<SinkConfig>,
+    on_success_sink: Option<SinkConfig>,
     serving_store: Option<ServingStore>,
     cln_token: &CancellationToken,
 ) -> error::Result<SinkWriter> {
@@ -125,20 +126,11 @@ pub(crate) async fn create_sink_writer(
         }
     };
 
-    if let Some(fb_sink) = fallback_sink {
-        return match fb_sink.sink_type.clone() {
-            SinkType::Log(_) => Ok(sink_writer_builder
-                .fb_sink_client(SinkClientType::Log)
-                .build()
-                .await?),
-            SinkType::Serve => Ok(sink_writer_builder
-                .fb_sink_client(SinkClientType::Serve)
-                .build()
-                .await?),
-            SinkType::Blackhole(_) => Ok(sink_writer_builder
-                .fb_sink_client(SinkClientType::Blackhole)
-                .build()
-                .await?),
+    sink_writer_builder = if let Some(fb_sink) = fallback_sink {
+        match fb_sink.sink_type.clone() {
+            SinkType::Log(_) => sink_writer_builder.fb_sink_client(SinkClientType::Log),
+            SinkType::Serve => sink_writer_builder.fb_sink_client(SinkClientType::Serve),
+            SinkType::Blackhole(_) => sink_writer_builder.fb_sink_client(SinkClientType::Blackhole),
             SinkType::UserDefined(ud_config) => {
                 let fb_server_info =
                     sdk_server_info(ud_config.server_info_path.clone().into(), cln_token.clone())
@@ -164,35 +156,66 @@ pub(crate) async fn create_sink_writer(
                 .max_decoding_message_size(ud_config.grpc_max_message_size);
                 grpc::wait_until_sink_ready(cln_token, &mut sink_grpc_client).await?;
 
-                Ok(sink_writer_builder
+                sink_writer_builder
                     .fb_sink_client(SinkClientType::UserDefined(sink_grpc_client.clone()))
-                    .build()
-                    .await?)
             }
             SinkType::Sqs(sqs_sink_config) => {
                 let sqs_sink = SqsSinkBuilder::new(sqs_sink_config).build().await?;
-                Ok(sink_writer_builder
-                    .fb_sink_client(SinkClientType::Sqs(sqs_sink.clone()))
-                    .build()
-                    .await?)
+                sink_writer_builder.fb_sink_client(SinkClientType::Sqs(sqs_sink.clone()))
             }
             SinkType::Kafka(sink_config) => {
                 let sink_config = *sink_config.clone();
                 let kafka_sink = numaflow_kafka::sink::new_sink(sink_config)?;
-                Ok(sink_writer_builder
-                    .fb_sink_client(SinkClientType::Kafka(kafka_sink))
-                    .build()
-                    .await?)
+                sink_writer_builder.fb_sink_client(SinkClientType::Kafka(kafka_sink))
             }
             SinkType::Pulsar(pulsar_sink_config) => {
                 let pulsar_sink = numaflow_pulsar::sink::new_sink(*pulsar_sink_config).await?;
-                Ok(sink_writer_builder
-                    .fb_sink_client(SinkClientType::Pulsar(Box::new(pulsar_sink)))
-                    .build()
-                    .await?)
+                sink_writer_builder.fb_sink_client(SinkClientType::Pulsar(Box::new(pulsar_sink)))
             }
-        };
-    }
+        }
+    } else {
+        sink_writer_builder
+    };
+
+    sink_writer_builder = if let Some(os_sink) = on_success_sink {
+        match os_sink.sink_type.clone() {
+            SinkType::Log(_) => sink_writer_builder.on_success_sink_client(SinkClientType::Log),
+            SinkType::Serve => sink_writer_builder.on_success_sink_client(SinkClientType::Serve),
+            SinkType::Blackhole(_) => {
+                sink_writer_builder.on_success_sink_client(SinkClientType::Blackhole)
+            }
+            SinkType::UserDefined(ud_config) => {
+                // TODO: add metrics for on success sink
+                // TODO: Add onSuccessSinker to server_info.rs -> ContainerType
+
+                let mut sink_grpc_client = SinkClient::new(
+                    grpc::create_rpc_channel(ud_config.socket_path.clone().into()).await?,
+                )
+                .max_encoding_message_size(ud_config.grpc_max_message_size)
+                .max_decoding_message_size(ud_config.grpc_max_message_size);
+                grpc::wait_until_sink_ready(cln_token, &mut sink_grpc_client).await?;
+
+                sink_writer_builder
+                    .on_success_sink_client(SinkClientType::UserDefined(sink_grpc_client.clone()))
+            }
+            SinkType::Sqs(sqs_sink_config) => {
+                let sqs_sink = SqsSinkBuilder::new(sqs_sink_config).build().await?;
+                sink_writer_builder.on_success_sink_client(SinkClientType::Sqs(sqs_sink.clone()))
+            }
+            SinkType::Kafka(sink_config) => {
+                let sink_config = *sink_config.clone();
+                let kafka_sink = numaflow_kafka::sink::new_sink(sink_config)?;
+                sink_writer_builder.on_success_sink_client(SinkClientType::Kafka(kafka_sink))
+            }
+            SinkType::Pulsar(pulsar_sink_config) => {
+                let pulsar_sink = numaflow_pulsar::sink::new_sink(*pulsar_sink_config).await?;
+                sink_writer_builder
+                    .on_success_sink_client(SinkClientType::Pulsar(Box::new(pulsar_sink)))
+            }
+        }
+    } else {
+        sink_writer_builder
+    };
 
     if let Some(serving_store) = serving_store {
         sink_writer_builder = sink_writer_builder.serving_store(serving_store);

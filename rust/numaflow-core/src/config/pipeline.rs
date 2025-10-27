@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
 
-use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use numaflow_models::models::{ForwardConditions, Vertex};
 use serde::Deserialize;
 use serde_json::from_slice;
@@ -13,9 +13,6 @@ use super::{
     DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED,
     ENV_NUMAFLOW_SERVING_RESPONSE_STORE,
 };
-use crate::Result;
-use crate::config::ENV_NUMAFLOW_SERVING_CALLBACK_STORE;
-use crate::config::ENV_NUMAFLOW_SERVING_SPEC;
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::ratelimit::RateLimitConfig;
 use crate::config::components::reduce::{ReducerConfig, StorageConfig};
@@ -29,7 +26,10 @@ use crate::config::get_vertex_replica;
 use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig, Stream};
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
+use crate::config::ENV_NUMAFLOW_SERVING_CALLBACK_STORE;
+use crate::config::ENV_NUMAFLOW_SERVING_SPEC;
 use crate::error::Error;
+use crate::Result;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
@@ -130,6 +130,7 @@ pub(crate) mod map {
     /// re-export MapMode from shared.
     pub use numaflow_shared::server_info::MapMode;
 
+
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct MapVtxConfig {
         pub(crate) concurrency: usize,
@@ -168,6 +169,7 @@ pub(crate) mod map {
 pub(crate) struct SinkVtxConfig {
     pub(crate) sink_config: SinkConfig,
     pub(crate) fb_sink_config: Option<SinkConfig>,
+    pub(crate) on_success_sink_config: Option<SinkConfig>,
     pub(crate) serving_store_config: Option<ServingStoreType>,
 }
 
@@ -386,6 +388,15 @@ impl PipelineConfig {
                 None
             };
 
+            let on_success_sink_config = if sink.on_success.as_ref().is_some() {
+                Some(SinkConfig {
+                    sink_type: SinkType::on_success_sinktype(&sink)?,
+                    retry_config: None,
+                })
+            } else {
+                None
+            };
+
             let serving_store_config = if let Some(serving_spec) =
                 env_vars.get(ENV_NUMAFLOW_SERVING_SPEC)
             {
@@ -428,6 +439,7 @@ impl PipelineConfig {
                         retry_config: sink.retry_strategy.clone().map(|retry| retry.into()),
                     },
                     fb_sink_config,
+                    on_success_sink_config,
                     serving_store_config,
                 }),
                 VertexType::Sink,
@@ -740,6 +752,7 @@ mod tests {
                 retry_config: None,
             },
             fb_sink_config: None,
+            on_success_sink_config: None,
             serving_store_config: None,
         });
         assert_eq!(sink_type.to_string(), "Sink");
@@ -810,6 +823,7 @@ mod tests {
                     retry_config: Some(RetryConfig::default()),
                 },
                 fb_sink_config: None,
+                on_success_sink_config: None,
                 serving_store_config: Some(ServingStoreType::Nats(NatsStoreConfig {
                     rs_store_name: "test-kv-store".into(),
                 })),

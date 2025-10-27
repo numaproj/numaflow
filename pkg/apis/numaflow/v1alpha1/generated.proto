@@ -1919,9 +1919,14 @@ message Sink {
   // +optional
   optional AbstractSink fallback = 2;
 
+  // OnSuccess sink allows triggering a secondary sink operation only after the primary sink completes successfully
+  // The writes to OnSuccess sink will only be initiated if the ud-sink response field sets it.
+  // +optional
+  optional AbstractSink onSuccess = 3;
+
   // RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.
   // +optional
-  optional RetryStrategy retryStrategy = 3;
+  optional RetryStrategy retryStrategy = 4;
 }
 
 // SlidingWindow describes a sliding window

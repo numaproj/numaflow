@@ -6,23 +6,23 @@ use crate::metrics::{
     ComponentHealthChecks, LagReader, MetricsState, PendingReaderTasks, PipelineComponents,
     WatermarkFetcherState,
 };
-use crate::pipeline::PipelineContext;
 use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
 use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
+use crate::pipeline::PipelineContext;
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
-use crate::sinker::sink::SinkWriter;
-use crate::sinker::sink::serve::ServingStore;
 use crate::sinker::sink::serve::nats::NatsServingStore;
 use crate::sinker::sink::serve::user_defined::UserDefinedStore;
+use crate::sinker::sink::serve::ServingStore;
+use crate::sinker::sink::SinkWriter;
 use crate::tracker::Tracker;
 use crate::typ::{
-    NumaflowTypeConfig, WithInMemoryRateLimiter, WithRedisRateLimiter, WithoutRateLimiter,
-    build_in_memory_rate_limiter_config, build_redis_rate_limiter_config,
-    should_use_redis_rate_limiter,
+    build_in_memory_rate_limiter_config, build_redis_rate_limiter_config, should_use_redis_rate_limiter, NumaflowTypeConfig,
+    WithInMemoryRateLimiter, WithRedisRateLimiter,
+    WithoutRateLimiter,
 };
 use crate::watermark::WatermarkHandle;
-use crate::{Result, shared};
+use crate::{shared, Result};
 use async_nats::jetstream::Context;
 use futures::future::try_join_all;
 use serving::callback::CallbackHandler;
@@ -236,6 +236,7 @@ async fn run_all_sink_forwarders<C: NumaflowTypeConfig>(
             context.config.read_timeout,
             sink.sink_config.clone(),
             sink.fb_sink_config.clone(),
+            sink.on_success_sink_config.clone(),
             serving_store.clone(),
             &context.cln_token,
         )
@@ -302,22 +303,6 @@ async fn run_sink_forwarder_for_stream<C: NumaflowTypeConfig>(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-    use std::time::Duration;
-
-    use super::*;
-    use crate::config::components::metrics::MetricsConfig;
-    use crate::config::components::sink::{BlackholeConfig, SinkConfig, SinkType};
-    use crate::config::pipeline::isb::Stream;
-    use crate::config::pipeline::{PipelineConfig, VertexType};
-    use crate::pipeline::pipeline::FromVertexConfig;
-    use crate::pipeline::pipeline::SinkVtxConfig;
-    use crate::pipeline::pipeline::VertexConfig;
-    use crate::pipeline::pipeline::isb;
-    use crate::pipeline::pipeline::isb::BufferReaderConfig;
-    use async_nats::jetstream;
-    use async_nats::jetstream::{consumer, stream};
-
     // e2e test for sink forwarder, reads from multi-partitioned buffer and
     // writes to sink.
     #[cfg(feature = "nats-tests")]
@@ -425,6 +410,7 @@ mod tests {
                     retry_config: None,
                 },
                 fb_sink_config: None,
+                on_success_sink_config: None,
                 serving_store_config: None,
             }),
             metrics_config: MetricsConfig {
