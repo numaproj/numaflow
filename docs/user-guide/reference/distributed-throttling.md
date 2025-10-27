@@ -1,8 +1,11 @@
-# Distributed Throttling (DT) in Numaflow
+# Distributed Throttling
 
-DT in Numaflow is a feature that allows Numaflow to limit number of message concurrently processed by a pipeline at any
-UDF. Users can configure DT at pipeline level and it will be applied to all the UDFs in the pipeline or at each vertex
+Distributed throttling in Numaflow is a feature that allows Numaflow to limit number of message concurrently processed by a pipeline at any
+UDF. Users can configure distributed throttling at pipeline level and it will be applied to all the UDFs in the pipeline or at each vertex
 level. In the following doc, throttling and rate limiting might be used interchangeably. 
+
+## Design Details
+
 Design details are available [here](https://github.com/numaproj/numaflow/blob/main/rust/numaflow-throttling/DESIGN.md).
 
 ## Use Cases
@@ -20,7 +23,7 @@ Design details are available [here](https://github.com/numaproj/numaflow/blob/ma
 
 ## Configuration
 
-To configure DT; users need to, at minimum, specify the `max` messages that the pipeline/UDF is limited to. Furthermore, 
+To configure distributed throttling; users need to, at minimum, specify the `max` messages that the pipeline/UDF is limited to. Furthermore, 
 users can also specify the `min` messages that the pipeline/UDF will be throttled to at start-up and gradually ramped-up to `max` 
 messages over a `duration` amount of time. Configuration for additional features in rate limiter will be discussed in their respective sections. 
 
@@ -151,6 +154,7 @@ ramped-up from the min to max tokens to immediately ramp up to max tokens when a
 restarting from min tokens again. 
 
 Scenario:
+
 * Pipeline has a large ramp-up duration and a wide gap between the min and max tokens.
 * The pipeline is in steady state with current throughput at max tokens.
 * A re-deployment is triggered/pods are rotated.
