@@ -36,7 +36,7 @@ pub struct KafkaSinkConfig {
 }
 
 /// The Kafka sink client.
-pub struct KafkaSink {u
+pub struct KafkaSink {
     topic: String,
     producer: FutureProducer,
     set_partition_key: bool,
