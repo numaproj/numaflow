@@ -47,12 +47,10 @@ impl From<PulsarResponse> for ResponseFromSink {
             Ok(_) => ResponseFromSink {
                 id: resp.id,
                 status: ResponseStatusFromSink::Success,
-                serve_response: None,
             },
             Err(e) => ResponseFromSink {
                 id: resp.id,
                 status: ResponseStatusFromSink::Failed(e.to_string()),
-                serve_response: None,
             },
         }
     }
@@ -196,7 +194,6 @@ mod tests {
 
         assert_eq!(response.id, "test-id");
         assert!(matches!(response.status, ResponseStatusFromSink::Success));
-        assert!(response.serve_response.is_none());
     }
 
     #[test]
@@ -217,7 +214,6 @@ mod tests {
             }
             _ => panic!("Expected Failed status"),
         }
-        assert!(response.serve_response.is_none());
     }
 
     #[cfg(feature = "pulsar-tests")]
