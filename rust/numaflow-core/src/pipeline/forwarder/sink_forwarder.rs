@@ -303,6 +303,22 @@ async fn run_sink_forwarder_for_stream<C: NumaflowTypeConfig>(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use super::*;
+    use crate::config::components::metrics::MetricsConfig;
+    use crate::config::components::sink::{BlackholeConfig, SinkConfig, SinkType};
+    use crate::config::pipeline::isb::Stream;
+    use crate::config::pipeline::{PipelineConfig, VertexType};
+    use crate::pipeline::pipeline::FromVertexConfig;
+    use crate::pipeline::pipeline::SinkVtxConfig;
+    use crate::pipeline::pipeline::VertexConfig;
+    use crate::pipeline::pipeline::isb;
+    use crate::pipeline::pipeline::isb::BufferReaderConfig;
+    use async_nats::jetstream;
+    use async_nats::jetstream::{consumer, stream};
+
     // e2e test for sink forwarder, reads from multi-partitioned buffer and
     // writes to sink.
     #[cfg(feature = "nats-tests")]
