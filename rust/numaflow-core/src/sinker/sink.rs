@@ -1,5 +1,5 @@
 use numaflow_kafka::sink::KafkaSink;
-use numaflow_pb::clients::sink::Status::{Failure, Fallback, Serve, Success};
+use numaflow_pb::clients::sink::Status::{Failure, Fallback, Serve, Success, OnSuccess};
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
 use numaflow_pulsar::sink::Sink as PulsarSink;
@@ -567,7 +567,6 @@ pub(crate) enum ResponseStatusFromSink {
     Fallback,
     /// Write to serving store.
     Serve(Option<Vec<u8>>),
-    // TODO: Add payload to on_success?
     OnSuccess,
 }
 
@@ -587,7 +586,6 @@ impl From<sink_response::Result> for ResponseFromSink {
             Failure => ResponseStatusFromSink::Failed(value.err_msg),
             Fallback => ResponseStatusFromSink::Fallback,
             Serve => ResponseStatusFromSink::Serve(value.serve_response),
-            // TODO: Change sink status proto
             OnSuccess => ResponseStatusFromSink::OnSuccess,
         };
         Self {

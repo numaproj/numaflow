@@ -99,6 +99,7 @@ pub enum Status {
     Failure = 1,
     Fallback = 2,
     Serve = 3,
+    OnSuccess = 4,
 }
 impl Status {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -111,6 +112,7 @@ impl Status {
             Self::Failure => "FAILURE",
             Self::Fallback => "FALLBACK",
             Self::Serve => "SERVE",
+            Self::OnSuccess => "ON_SUCCESS",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -120,6 +122,7 @@ impl Status {
             "FAILURE" => Some(Self::Failure),
             "FALLBACK" => Some(Self::Fallback),
             "SERVE" => Some(Self::Serve),
+            "ON_SUCCESS" => Some(Self::OnSuccess),
             _ => None,
         }
     }
