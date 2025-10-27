@@ -1,5 +1,5 @@
 use axum::body::Body;
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{Router, routing::get};
@@ -178,6 +178,13 @@ pub(crate) struct WatermarkFetcherState {
 pub(crate) struct MetricsState<C: crate::typ::NumaflowTypeConfig> {
     pub(crate) health_checks: ComponentHealthChecks<C>,
     pub(crate) watermark_fetcher_state: Option<WatermarkFetcherState>,
+}
+
+/// WatermarkQueryParams represents the query parameters for the /watermark endpoint
+#[derive(Deserialize, Debug)]
+pub(crate) struct WatermarkQueryParams {
+    /// Optional from vertex name to filter watermarks by edge
+    pub(crate) from: Option<String>,
 }
 
 /// WatermarkResponse represents the response structure for the /watermark endpoint
@@ -1055,9 +1062,11 @@ pub async fn metrics_handler() -> impl IntoResponse {
 }
 
 // watermark_handler is used to fetch and return watermark information
-// for all partitions based on available watermark handles
+// for all partitions based on available watermark handles.
+// Optionally accepts a 'from' query parameter to filter watermarks by edge (from vertex).
 pub async fn watermark_handler<C: crate::typ::NumaflowTypeConfig>(
     State(state): State<MetricsState<C>>,
+    Query(params): Query<WatermarkQueryParams>,
 ) -> impl IntoResponse {
     let Some(watermark_fetcher_state) = &state.watermark_fetcher_state else {
         return Response::builder()
@@ -1072,13 +1081,15 @@ pub async fn watermark_handler<C: crate::typ::NumaflowTypeConfig>(
     let mut partitions = HashMap::new();
     match &watermark_fetcher_state.watermark_handle {
         // For source watermark handle, always fetch only partition 0
+        // Source vertices don't have a 'from' vertex, so ignore the query parameter
         WatermarkHandle::Source(source_handle) => {
             let handle_clone = source_handle.clone();
             let watermark = handle_clone.fetch_head_watermark(0).await;
             partitions.insert("0".to_string(), watermark.timestamp_millis());
         }
 
-        // For every other vertex type, fetch watermarks for all partitions (0 to partition_count-1)
+        // For ISB vertices, fetch watermarks for all partitions
+        // If 'from' query parameter is provided, fetch watermarks only for that specific edge
         WatermarkHandle::ISB(isb_handle) => {
             let handle_clone = isb_handle.clone();
 
@@ -1086,7 +1097,9 @@ pub async fn watermark_handler<C: crate::typ::NumaflowTypeConfig>(
             // For other vertex types, fetch watermarks for all partitions
             // watermark_fetcher_state.partition_count will already be set to 1 for reduce vertex
             for partition_idx in watermark_fetcher_state.partitions.iter() {
-                let watermark = handle_clone.fetch_head_watermark(*partition_idx).await;
+                let watermark = handle_clone
+                    .fetch_head_watermark(params.from.as_deref(), *partition_idx)
+                    .await;
                 partitions.insert(partition_idx.to_string(), watermark.timestamp_millis());
             }
         }
@@ -1096,7 +1109,7 @@ pub async fn watermark_handler<C: crate::typ::NumaflowTypeConfig>(
     let json_response = serde_json::to_string(&response)
         .unwrap_or_else(|_| r#"{"error": "Failed to serialize watermark response"}"#.to_string());
 
-    debug!(?json_response, "Watermark response");
+    debug!(?json_response, ?params.from, "Watermark response");
     Response::builder()
         .status(StatusCode::OK)
         .header(axum::http::header::CONTENT_TYPE, "application/json")

@@ -86,8 +86,9 @@ impl ISBWatermarkState {
     }
 
     /// Fetches the head watermark
-    fn fetch_head_watermark(&mut self, partition_idx: u16) -> Watermark {
-        self.fetcher.fetch_head_watermark(partition_idx)
+    fn fetch_head_watermark(&mut self, from_vertex: Option<&str>, partition_idx: u16) -> Watermark {
+        self.fetcher
+            .fetch_head_watermark(from_vertex, partition_idx)
     }
 
     /// Fetches the head idle WMB for a specific partition
@@ -141,7 +142,7 @@ impl ISBWatermarkState {
             min_wm
         };
 
-        // we now know the lowest watermark to publish to the streams that are idling and we have a
+        // we now know the lowest watermark to publish to the streams that are idling, and we have a
         // barrier offset which can be used safely to publish the idle watermark.
 
         // Identify the streams that are idle and publish the idle watermark
@@ -339,10 +340,14 @@ impl ISBWatermarkHandle {
 
     /// Fetches the head watermark using the watermark fetcher. This returns the minimum
     /// of the head watermarks across all processors for the specified partition.
-    pub(crate) async fn fetch_head_watermark(&self, partition_idx: u16) -> Watermark {
+    pub(crate) async fn fetch_head_watermark(
+        &self,
+        from_vertex: Option<&str>,
+        partition_idx: u16,
+    ) -> Watermark {
         // Acquire lock, fetch watermark, and release immediately
         let mut state = self.state.lock().await;
-        state.fetch_head_watermark(partition_idx)
+        state.fetch_head_watermark(from_vertex, partition_idx)
     }
 
     /// Fetches the head idle WMB for the given partition. Returns the minimum idle WMB across all
@@ -982,7 +987,7 @@ mod tests {
                 )
                 .await;
 
-            let watermark = handle.fetch_head_watermark(0).await;
+            let watermark = handle.fetch_head_watermark(None, 0).await;
 
             if watermark.timestamp_millis() != -1 {
                 fetched_watermark = watermark.timestamp_millis();
