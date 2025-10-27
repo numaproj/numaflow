@@ -3,7 +3,7 @@
 DT in Numaflow is a feature that allows Numaflow to limit number of message concurrently processed by a pipeline at any
 UDF. Users can configure DT at pipeline level and it will be applied to all the UDFs in the pipeline or at each vertex
 level. In the following doc, throttling and rate limiting might be used interchangeably. 
-Design details are available [here](../../../rust/numaflow-throttling/DESIGN.md).
+Design details are available [here](https://github.com/numaproj/numaflow/blob/main/rust/numaflow-throttling/DESIGN.md).
 
 ## Use Cases
 
