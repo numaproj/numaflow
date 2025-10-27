@@ -54,6 +54,7 @@ enum ISBWaterMarkActorMessage {
         oneshot_tx: tokio::sync::oneshot::Sender<()>,
     },
     FetchHead {
+        from_vertex: Option<String>,
         partition_idx: u16,
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
     },
@@ -138,10 +139,13 @@ impl ISBWatermarkActor {
 
             // fetches the head watermark
             ISBWaterMarkActorMessage::FetchHead {
+                from_vertex,
                 partition_idx,
                 oneshot_tx,
             } => {
-                let watermark = self.fetcher.fetch_head_watermark(partition_idx);
+                let watermark = self
+                    .fetcher
+                    .fetch_head_watermark(from_vertex.as_deref(), partition_idx);
 
                 oneshot_tx
                     .send(Ok(watermark))
@@ -433,11 +437,18 @@ impl ISBWatermarkHandle {
 
     /// Fetches the head watermark using the watermark fetcher. This returns the minimum
     /// of the head watermarks across all processors for the specified partition.
-    pub(crate) async fn fetch_head_watermark(&mut self, partition_idx: u16) -> Watermark {
+    /// If `from_vertex` is provided, it fetches the watermark for that specific edge.
+    /// If `from_vertex` is None, it fetches the minimum watermark across all edges.
+    pub(crate) async fn fetch_head_watermark(
+        &mut self,
+        from_vertex: Option<&str>,
+        partition_idx: u16,
+    ) -> Watermark {
         let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
         if let Err(e) = self
             .sender
             .send(ISBWaterMarkActorMessage::FetchHead {
+                from_vertex: from_vertex.map(|s| s.to_string()),
                 partition_idx,
                 oneshot_tx,
             })
@@ -1146,7 +1157,7 @@ mod tests {
                 )
                 .await;
 
-            let watermark = handle.fetch_head_watermark(0).await;
+            let watermark = handle.fetch_head_watermark(None, 0).await;
 
             if watermark.timestamp_millis() != -1 {
                 fetched_watermark = watermark.timestamp_millis();

@@ -31,7 +31,7 @@ import (
 // HTTPWatermarkService manages HTTP-based watermark fetching for all edges in a pipeline
 type HTTPWatermarkService struct {
 	pipeline *v1alpha1.Pipeline
-	fetchers map[v1alpha1.Edge]*HTTPWatermarkFetcher
+	fetchers map[string]*HTTPWatermarkFetcher // key is edge name (from-to)
 	log      *zap.SugaredLogger
 }
 
@@ -41,13 +41,14 @@ func NewHTTPWatermarkService(ctx context.Context, pipeline *v1alpha1.Pipeline) *
 
 	service := &HTTPWatermarkService{
 		pipeline: pipeline,
-		fetchers: make(map[v1alpha1.Edge]*HTTPWatermarkFetcher),
+		fetchers: make(map[string]*HTTPWatermarkFetcher),
 		log:      log,
 	}
 
-	// Create fetchers for all edges
+	// Create fetchers for all edges - cache by edge name
 	for _, edge := range pipeline.ListAllEdges() {
-		service.fetchers[edge] = NewHTTPWatermarkFetcher(ctx, pipeline, edge)
+		edgeName := edge.GetEdgeName()
+		service.fetchers[edgeName] = NewHTTPWatermarkFetcher(ctx, pipeline, edge)
 	}
 
 	log.Infof("Created HTTP watermark service with %d edge fetchers", len(service.fetchers))
@@ -64,9 +65,8 @@ func (s *HTTPWatermarkService) GetPipelineWatermarks(ctx context.Context, _reque
 		timeZero := time.Unix(0, 0).UnixMilli()
 		watermarkArr := make([]*daemon.EdgeWatermark, len(s.fetchers))
 		i := 0
-		for edge := range s.fetchers {
-			edgeName := edge.GetEdgeName()
-			toVertex := s.pipeline.GetVertex(edge.To)
+		for edgeName, fetcher := range s.fetchers {
+			toVertex := s.pipeline.GetVertex(fetcher.edge.To)
 			partitionCount := toVertex.GetPartitionCount()
 
 			watermarks := make([]*wrapperspb.Int64Value, partitionCount)
@@ -79,8 +79,8 @@ func (s *HTTPWatermarkService) GetPipelineWatermarks(ctx context.Context, _reque
 				Edge:               edgeName,
 				Watermarks:         watermarks,
 				IsWatermarkEnabled: wrapperspb.Bool(isWatermarkEnabled),
-				From:               edge.From,
-				To:                 edge.To,
+				From:               fetcher.edge.From,
+				To:                 fetcher.edge.To,
 			}
 			i++
 		}
@@ -91,26 +91,25 @@ func (s *HTTPWatermarkService) GetPipelineWatermarks(ctx context.Context, _reque
 	// Watermark is enabled - serve from cache (background fetching keeps it updated)
 	watermarkArr := make([]*daemon.EdgeWatermark, len(s.fetchers))
 	i := 0
-	for edge, fetcher := range s.fetchers {
-		s.log.Debugf("Getting cached watermarks for edge: %s", edge.GetEdgeName())
+	for edgeName, fetcher := range s.fetchers {
+		s.log.Debugf("Getting cached watermarks for edge: %s", edgeName)
 
 		watermarks, err := fetcher.GetWatermarks()
 		if err != nil {
 			s.log.Errorw("Failed to get watermarks for edge",
-				zap.String("edge", edge.GetEdgeName()),
+				zap.String("edge", edgeName),
 				zap.Error(err))
 			// Continue with other edges even if one fails
 			continue
 		}
 
-		edgeName := edge.GetEdgeName()
 		watermarkArr[i] = &daemon.EdgeWatermark{
 			Pipeline:           s.pipeline.Name,
 			Edge:               edgeName,
 			Watermarks:         watermarks,
 			IsWatermarkEnabled: wrapperspb.Bool(isWatermarkEnabled),
-			From:               edge.From,
-			To:                 edge.To,
+			From:               fetcher.edge.From,
+			To:                 fetcher.edge.To,
 		}
 		i++
 	}
@@ -128,8 +127,8 @@ func (s *HTTPWatermarkService) GetPipelineWatermarks(ctx context.Context, _reque
 func (s *HTTPWatermarkService) Stop() {
 	s.log.Info("Stopping HTTP watermark service")
 
-	for edge, fetcher := range s.fetchers {
-		s.log.Debugf("Stopping fetcher for edge: %s", edge.GetEdgeName())
+	for edgeName, fetcher := range s.fetchers {
+		s.log.Debugf("Stopping fetcher for edge: %s", edgeName)
 		fetcher.Stop()
 	}
 
