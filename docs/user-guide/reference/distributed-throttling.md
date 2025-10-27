@@ -116,7 +116,9 @@ Similar to relaxed mode, the token pool size increase stalls during ramp-up if n
 but its size also stalls when the token utilization is less than the user specified utilization threshold percentage in the previous epoch.
 
 The token utilization is calculated using the number of tokens left over in the token pool vs the total size of the token pool:
-Token utilization % = (1 - tokens left in token pool / total size of the token pool) * 100
+
+`Token utilization % = (1 - tokens left in token pool / total size of the token pool) * 100`
+
 
 `onlyIfUsed` mode full spec example:
 ```yaml
@@ -131,7 +133,7 @@ Unlike the previously discussed modes this mode has penalty for underutilization
 subsequent calls made to the rate limiter. The penalty is reduction in the size of the token pool by slope.
 Slope is calculated as follows, using the user specified values of max tokens, min tokens and ramp-up duration:
 
-Slope = (max - min)/ramp-up duration
+`Slope = (max - min)/ramp-up duration`
 
 So, similar to OnlyIfUsed mode, if the token utilization % is greater than the user specified threshold %, then the token
 pool size increases by slope as usual, but if it falls below the user specified threshold %, then the token pool size is 
