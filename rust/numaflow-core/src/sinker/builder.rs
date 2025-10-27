@@ -7,7 +7,7 @@ use tracing::error;
 
 use crate::Result;
 use crate::config::components::sink::RetryConfig;
-use crate::sinker::actor::{SinkActor};
+use crate::sinker::actor::SinkActor;
 use crate::sinker::sink::serve::ServingStore;
 use crate::sinker::sink::user_defined::UserDefinedSink;
 use crate::sinker::sink::{SinkClientType, SinkWriter};
