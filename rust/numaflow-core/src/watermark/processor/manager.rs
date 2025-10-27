@@ -35,7 +35,6 @@ pub(crate) enum Status {
 
 /// Processor is the smallest unit of entity (from which we fetch data) that does inorder processing
 /// or contains inorder data. It tracks OT for all the partitions of the from-buffer.
-#[derive(Clone)]
 pub(crate) struct Processor {
     /// Name of the processor.
     pub(crate) name: Bytes,
@@ -704,11 +703,15 @@ mod tests {
             let futures: Vec<_> = processor_names
                 .iter()
                 .map(|processor_name| {
-                    let processor = processors.get(processor_name).cloned();
+                    let processor = processors.get(processor_name);
                     async move {
                         if let Some(processor) = processor
                             && processor.status == Status::Active
-                            && let Some(head_wmb) = processor.timelines[&0].get_head_wmb()
+                            && let Some(head_wmb) = processor
+                                .timelines
+                                .get(&0)
+                                .expect("failed to get timeline")
+                                .get_head_wmb()
                         {
                             return head_wmb.watermark == 200 && head_wmb.offset == 1;
                         }
