@@ -108,7 +108,7 @@ func TestRater_Start(t *testing.T) {
 			},
 		},
 	}
-	r := NewRater(ctx, pipeline, WithTaskInterval(1000))
+	r := NewRater(ctx, pipeline, WithTaskInterval(time.Second))
 	podTracker := NewPodTracker(ctx, pipeline, WithRefreshInterval(time.Second*1))
 	podTracker.httpClient = &raterMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
 	r.httpClient = &raterMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}

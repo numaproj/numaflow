@@ -225,7 +225,7 @@ func (r *Rater) Start(ctx context.Context) error {
 		}
 	}
 
-	ticker := time.NewTicker(time.Duration(r.options.taskInterval) * time.Millisecond)
+	ticker := time.NewTicker(r.options.taskInterval)
 	defer ticker.Stop()
 
 	// Following for loop keeps calling assign() function to assign monitoring tasks to the workers.
