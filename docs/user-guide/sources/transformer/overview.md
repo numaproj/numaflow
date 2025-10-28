@@ -92,9 +92,9 @@ Check the links below to see another transformer example in various programming 
         messages.append(Message(value=val, event_time=january_first_2023, tags=["after_year_2022"]))
 
     return messages
-	https://github.com/numaproj/numaflow-python/blob/main/packages/pynumaflow/examples/sourcetransform/event_time_filter/example.py
+	
 	```
-	- [Python full example on numaflow-python on Github](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/sourcetransform/event_time_filter)
+	- [Python full example on numaflow-python on Github](https://github.com/numaproj/numaflow-python/blob/main/packages/pynumaflow/examples/sourcetransform/event_time_filter/example.py)
 
 === "Go"
 
@@ -120,29 +120,39 @@ Check the links below to see another transformer example in various programming 
 			log.Panic("Failed to start source transform server: ", err)
 		}
 	}
-	https://github.com/numaproj/numaflow-go/blob/main/examples/sourcetransformer/event_time_filter/main.go
 	```
-	- [Golang full example on numaflow-go Github](https://github.com/numaproj/numaflow-go/tree/main/examples/sourcetransformer/event_time_filter)
+	- [Golang full example on numaflow-go Github](https://github.com/numaproj/numaflow-go/blob/main/examples/sourcetransformer/event_time_filter/main.go)
 
 === "Rust"
 
 	```rust
+	fn transformer_fn(_ctx: &(), keys: &[String], datum: Datum) -> MessagesBuilder {
+		let payload = datum.value();
+		let json: Value = serde_json::from_slice(payload).unwrap_or_default();
+
+		// Get event time override (optional)
+		let mut event_time = datum.event_time();
+		if let Some(ts) = json.get("ts").and_then(|v| v.as_i64()) {
+			event_time = std::time::UNIX_EPOCH + std::time::Duration::from_secs(ts as u64);
+		}
+
+		// Filter out messages
+		let should_drop = json.get("drop").and_then(|v| v.as_bool()).unwrap_or(false);
+		if should_drop {
+			MessagesBuilder::default().append(MessageT::to_drop(event_time))
+		} else {
+			MessagesBuilder::default().append(
+				MessageT::new(payload.to_vec(), event_time).with_keys(keys.to_vec()),
+			)
+		}
+	}
 	```
-	- [Golang full example on numaflow-rs Github](https://github.com/numaproj/numaflow-go/tree/main/examples/sourcetransformer/event_time_filter)
+	- [Golang full example on numaflow-rs Github](https://github.com/numaproj/numaflow-rs/blob/main/numaflow/proto/sourcetransform.proto)
 
 
 === "Java"
 
 	```java
-	/**
-	 * This is a simple User Defined Function example which receives a message, applies the following
-	 * data transformation, and returns the message.
-	 * <p>
-	 * If the message event time is before year 2022, drop the message with the original event time.
-	 * If it's within year 2022, update the tag to "within_year_2022" and update the message event time to Jan 1st 2022.
-	 * Otherwise, (exclusively after year 2022), update the tag to "after_year_2022" and update the
-	 * message event time to Jan 1st 2023.
-	 */
 	public class EventTimeFilterFunction extends SourceTransformer {
 
 		private static final Instant januaryFirst2022 = Instant.ofEpochMilli(1640995200000L);
@@ -185,9 +195,8 @@ Check the links below to see another transformer example in various programming 
 			}
 		}
 	}
-	https://github.com/numaproj/numaflow-java/blob/main/examples/src/main/java/io/numaproj/numaflow/examples/sourcetransformer/eventtimefilter/EventTimeFilterFunction.java
 	```
-	- [Java full example of numaflow-java on Github](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sourcetransformer/eventtimefilter)
+	- [Java full example of numaflow-java on Github](https://github.com/numaproj/numaflow-java/blob/main/examples/src/main/java/io/numaproj/numaflow/examples/sourcetransformer/eventtimefilter/EventTimeFilterFunction.java)
 
 After building a docker image for the written transformer, specify the image as below in the source vertex spec.
 
