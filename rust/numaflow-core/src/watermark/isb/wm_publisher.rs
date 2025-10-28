@@ -163,19 +163,18 @@ impl ISBWatermarkPublisher {
         watermark: i64,
         idle: bool,
     ) {
-        let last_published_wm_state = self
+        let last_state = self
             .last_published_wm
             .get_mut(stream.vertex)
-            .expect("Invalid vertex, no last published watermark state found");
+            .expect("Invalid vertex, no last published watermark state found")
+            .get_mut(&stream.partition)
+            .expect("should have partition");
 
         // we can avoid publishing the watermark if the offset is smaller than the last published offset
         // since we do unordered writes to ISB, the offsets can be out of order even though the watermark
         // is monotonically increasing.
         // NOTE: in idling case since we reuse the control message offset, we can have the same offset
         // with larger watermark (we should publish it).
-        let last_state = last_published_wm_state
-            .get_mut(&stream.partition)
-            .expect("should have partition");
         if offset < last_state.offset {
             last_state.watermark = last_state.watermark.max(watermark);
             return;
@@ -200,12 +199,17 @@ impl ISBWatermarkPublisher {
             return;
         }
 
-        // if delay is configured, check if the delay has passed, users can configure it to reduce the
-        // number of writes to the ot bucket.
+        // valid offset and watermark, we can update the state
+        last_state.offset = offset;
+        last_state.watermark = watermark;
+
+        // Update state but skip publishing if delay hasn't passed
+        // (users can configure delay to reduce the number of writes to the ot bucket)
         if !last_state.should_publish() {
             return;
         }
 
+        // Publish the watermark to the OT bucket
         let ot_bucket = self.ot_buckets.get(stream.vertex).expect("Invalid vertex");
         let wmb_bytes: BytesMut = WMB {
             idle,
@@ -224,15 +228,8 @@ impl ISBWatermarkPublisher {
             .map_err(|e| warn!(?e, "Failed to write wmb to ot bucket (ignoring)"))
             .ok();
 
-        // update the last published watermark state
-        *last_published_wm_state
-            .get_mut(&stream.partition)
-            .expect("should have partition") = LastPublishedState {
-            offset,
-            watermark,
-            last_published_time: Instant::now(),
-            delay: last_state.delay,
-        };
+        // reset the last published time
+        last_state.last_published_time = Instant::now();
     }
 }
 

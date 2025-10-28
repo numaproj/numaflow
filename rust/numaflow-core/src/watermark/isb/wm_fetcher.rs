@@ -113,60 +113,18 @@ impl ISBWatermarkFetcher {
         from_vertex: Option<&str>,
         partition_idx: u16,
     ) -> Watermark {
-        match from_vertex {
-            Some(vertex) => {
-                // Fetch watermark for a specific edge
-                let Some(processor_manager) = self.processor_managers.get(vertex) else {
-                    // If the from-vertex is not found, return -1
-                    return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
-                };
-
-                if let Some(epoch) =
-                    Self::compute_processor_watermark(processor_manager, partition_idx)
-                {
-                    // update the last processed watermark for this particular edge and the specific partition
-                    *self
-                        .last_processed_wm
-                        .get_mut(vertex)
-                        .unwrap_or_else(|| panic!("invalid vertex {vertex}"))
-                        .get_mut(&partition_idx)
-                        .unwrap_or_else(|| panic!("should have partition index {partition_idx}")) =
-                        epoch;
-
-                    Watermark::from_timestamp_millis(epoch).expect("failed to parse time")
-                } else {
-                    Watermark::from_timestamp_millis(-1).expect("failed to parse time")
-                }
-            }
-            None => {
-                // Fetch minimum watermark across all edges
-                let mut min_wm = i64::MAX;
-
-                for (vertex, processor_manager) in &self.processor_managers {
-                    if let Some(epoch) =
-                        Self::compute_processor_watermark(processor_manager, partition_idx)
-                    {
-                        min_wm = min_wm.min(epoch);
-                        // update the last processed watermark for this particular incoming vertex and
-                        // the specific partition
-                        *self
-                            .last_processed_wm
-                            .get_mut(vertex)
-                            .unwrap_or_else(|| panic!("invalid vertex {vertex}"))
-                            .get_mut(&partition_idx)
-                            .unwrap_or_else(|| {
-                                panic!("should have partition index {partition_idx}")
-                            }) = epoch;
-                    }
-                }
-
-                if min_wm == i64::MAX {
-                    min_wm = -1;
-                }
-
-                Watermark::from_timestamp_millis(min_wm).expect("failed to parse time")
-            }
-        }
+        let epoch = match from_vertex {
+            Some(vertex) => self
+                .processor_managers
+                .get(vertex)
+                .and_then(|pm| Self::compute_processor_watermark(pm, partition_idx)),
+            None => self
+                .processor_managers
+                .values()
+                .filter_map(|pm| Self::compute_processor_watermark(pm, partition_idx))
+                .min(),
+        };
+        Watermark::from_timestamp_millis(epoch.unwrap_or(-1)).expect("failed to parse time")
     }
 
     /// Helper method to compute the minimum watermark across all active processors
