@@ -630,6 +630,8 @@ mod tests {
                     ));
                 } else if datum.keys.first().unwrap() == "serve" {
                     responses.push(sink::Response::serve(datum.id, "serve-response".into()));
+                } else if datum.keys.first().unwrap() == "onSuccess" {
+                    responses.push(sink::Response::on_success(datum.id));
                 } else {
                     responses.push(sink::Response::ok(datum.id));
                 }
@@ -855,6 +857,88 @@ mod tests {
                 Message {
                     typ: Default::default(),
                     keys: Arc::from(vec!["fallback".to_string()]),
+                    tags: None,
+                    value: format!("message {}", i).as_bytes().to_vec().into(),
+                    offset: Offset::Int(IntOffset::new(i, 0)),
+                    event_time: Utc::now(),
+                    watermark: None,
+                    id: MessageID {
+                        vertex_name: "vertex".to_string().into(),
+                        offset: format!("offset_{}", i).into(),
+                        index: i as i32,
+                    },
+                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+                    ..Default::default()
+                }
+            })
+            .collect();
+
+        let (tx, rx) = mpsc::channel(20);
+        for msg in messages {
+            let _ = tx.send(msg).await;
+        }
+
+        drop(tx);
+        let handle = sink_writer
+            .streaming_write(ReceiverStream::new(rx), cln_token)
+            .await
+            .unwrap();
+
+        let _ = handle.await.unwrap();
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
+        }
+
+        // check if the tracker is empty
+        assert!(tracker.is_empty().await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_on_success_write() {
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+
+        // start the server
+        let (_shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sink.sock");
+        let server_info_file = tmp_dir.path().join("sink-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+
+        let _server_handle = tokio::spawn(async move {
+            sink::Server::new(SimpleSink)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("failed to start sink server");
+        });
+
+        // wait for the server to start
+        sleep(Duration::from_millis(100)).await;
+
+        let sink_writer = SinkWriterBuilder::new(
+            10,
+            Duration::from_millis(100),
+            SinkClientType::UserDefined(SinkClient::new(
+                create_rpc_channel(sock_file).await.unwrap(),
+            )),
+        )
+        .on_success_sink_client(SinkClientType::Log)
+        .build()
+        .await
+        .unwrap();
+
+        let mut ack_rxs = vec![];
+        let messages: Vec<Message> = (0..20)
+            .map(|i| {
+                let (ack_tx, ack_rx) = oneshot::channel();
+                ack_rxs.push(ack_rx);
+                Message {
+                    typ: Default::default(),
+                    keys: Arc::from(vec!["onSuccess".to_string()]),
                     tags: None,
                     value: format!("message {}", i).as_bytes().to_vec().into(),
                     offset: Offset::Int(IntOffset::new(i, 0)),

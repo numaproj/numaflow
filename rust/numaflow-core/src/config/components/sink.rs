@@ -567,7 +567,19 @@ mod tests {
                 kafka: None,
                 pulsar: None,
             })),
-            on_success: None,
+            on_success: Some(Box::new(AbstractSink {
+                udsink: None,
+                log: None,
+                blackhole: None,
+                serve: None,
+                sqs: Some(Box::new(SqsSink::new(
+                    "us-west-2".to_string(),
+                    "fallback-queue".to_string(),
+                    "123456789012".to_string(),
+                ))),
+                kafka: None,
+                pulsar: None,
+            })),
             retry_strategy: None,
             kafka: None,
             pulsar: None,
@@ -582,6 +594,17 @@ mod tests {
                 assert_eq!(config.queue_owner_aws_account_id, "123456789012");
             }
             _ => panic!("Expected SinkType::Sqs for fallback sink"),
+        }
+
+        let result = SinkType::on_success_sinktype(&sink);
+        assert!(result.is_ok());
+        match result {
+            Ok(SinkType::Sqs(config)) => {
+                assert_eq!(config.region, "us-west-2");
+                assert_eq!(config.queue_name, "fallback-queue");
+                assert_eq!(config.queue_owner_aws_account_id, "123456789012");
+            }
+            _ => panic!("Expected SinkType::Sqs for on success sink"),
         }
 
         // Test case 2: Missing fallback configuration
@@ -620,12 +643,26 @@ mod tests {
                 kafka: None,
                 pulsar: None,
             })),
-            on_success: None,
+            on_success: Some(Box::new(AbstractSink {
+                udsink: None,
+                log: None,
+                blackhole: None,
+                serve: None,
+                sqs: None,
+                kafka: None,
+                pulsar: None,
+            })),
             retry_strategy: None,
             kafka: None,
             pulsar: None,
         };
         let result = SinkType::fallback_sinktype(&sink_empty_fallback);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Config Error - Sink type not found"
+        );
+        let result = SinkType::on_success_sinktype(&sink_empty_fallback);
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
@@ -772,13 +809,38 @@ mod tests {
                     topic: "fallback-topic".to_string(),
                 })),
             })),
-            on_success: None,
+            on_success: Some(Box::new(AbstractSink {
+                udsink: None,
+                log: None,
+                blackhole: None,
+                serve: None,
+                sqs: None,
+                kafka: None,
+                pulsar: Some(Box::new(PulsarSink {
+                    auth: None,
+                    producer_name: "fallback-producer".to_string(),
+                    server_addr: "pulsar://localhost:6650".to_string(),
+                    topic: "fallback-topic".to_string(),
+                })),
+            })),
             retry_strategy: None,
             kafka: None,
             pulsar: None,
         };
 
         let result = SinkType::fallback_sinktype(&sink);
+        assert!(result.is_ok());
+        match result {
+            Ok(SinkType::Pulsar(config)) => {
+                assert_eq!(config.addr, "pulsar://localhost:6650");
+                assert_eq!(config.topic, "fallback-topic");
+                assert_eq!(config.producer_name, "fallback-producer");
+                assert!(config.auth.is_none());
+            }
+            _ => panic!("Expected SinkType::Pulsar for fallback sink"),
+        }
+
+        let result = SinkType::on_success_sinktype(&sink);
         assert!(result.is_ok());
         match result {
             Ok(SinkType::Pulsar(config)) => {
@@ -822,13 +884,49 @@ mod tests {
                     topic: "fallback-topic".to_string(),
                 })),
             })),
-            on_success: None,
+            on_success: Some(Box::new(AbstractSink {
+                udsink: None,
+                log: None,
+                blackhole: None,
+                serve: None,
+                sqs: None,
+                kafka: None,
+                pulsar: Some(Box::new(PulsarSink {
+                    auth: Some(Box::new(numaflow_models::models::PulsarAuth {
+                        token: Some(SecretKeySelector {
+                            name: secret_name.to_string(),
+                            key: token_key.to_string(),
+                            ..Default::default()
+                        }),
+                        basic_auth: None,
+                    })),
+                    producer_name: "fallback-producer".to_string(),
+                    server_addr: "pulsar://localhost:6650".to_string(),
+                    topic: "fallback-topic".to_string(),
+                })),
+            })),
             retry_strategy: None,
             kafka: None,
             pulsar: None,
         };
 
         let result = SinkType::fallback_sinktype(&sink_with_auth);
+        assert!(result.is_ok());
+        match result {
+            Ok(SinkType::Pulsar(config)) => {
+                assert_eq!(config.addr, "pulsar://localhost:6650");
+                assert_eq!(config.topic, "fallback-topic");
+                assert_eq!(config.producer_name, "fallback-producer");
+                let auth = config.auth.unwrap();
+                let numaflow_pulsar::PulsarAuth::JWT(token) = auth else {
+                    panic!("Expected PulsarAuth::JWT");
+                };
+                assert_eq!(token, "fallback-jwt-token");
+            }
+            _ => panic!("Expected SinkType::Pulsar for fallback sink"),
+        }
+
+        let result = SinkType::on_success_sinktype(&sink_with_auth);
         assert!(result.is_ok());
         match result {
             Ok(SinkType::Pulsar(config)) => {
@@ -875,13 +973,36 @@ mod tests {
                     topic: "fallback-topic".to_string(),
                 })),
             })),
-            on_success: None,
+            on_success: Some(Box::new(AbstractSink {
+                udsink: None,
+                log: None,
+                blackhole: None,
+                serve: None,
+                sqs: None,
+                kafka: None,
+                pulsar: Some(Box::new(PulsarSink {
+                    auth: Some(Box::new(numaflow_models::models::PulsarAuth {
+                        token: None,
+                        basic_auth: None,
+                    })),
+                    producer_name: "fallback-producer".to_string(),
+                    server_addr: "pulsar://localhost:6650".to_string(),
+                    topic: "fallback-topic".to_string(),
+                })),
+            })),
             retry_strategy: None,
             kafka: None,
             pulsar: None,
         };
 
         let result = SinkType::fallback_sinktype(&sink);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Config Error - Authentication configuration is enabled, however credentials are not provided in the Pulsar sink configuration"
+        );
+
+        let result = SinkType::on_success_sinktype(&sink);
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
@@ -922,13 +1043,41 @@ mod tests {
                     topic: "fallback-topic".to_string(),
                 })),
             })),
-            on_success: None,
+            on_success: Some(Box::new(AbstractSink {
+                udsink: None,
+                log: None,
+                blackhole: None,
+                serve: None,
+                sqs: None,
+                kafka: None,
+                pulsar: Some(Box::new(PulsarSink {
+                    auth: Some(Box::new(numaflow_models::models::PulsarAuth {
+                        token: Some(SecretKeySelector {
+                            name: "non-existent-secret".to_string(),
+                            key: "token".to_string(),
+                            ..Default::default()
+                        }),
+                        basic_auth: None,
+                    })),
+                    producer_name: "fallback-producer".to_string(),
+                    server_addr: "pulsar://localhost:6650".to_string(),
+                    topic: "fallback-topic".to_string(),
+                })),
+            })),
             retry_strategy: None,
             kafka: None,
             pulsar: None,
         };
 
         let result = SinkType::fallback_sinktype(&sink);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Failed to get token secret from volume")
+        );
+
+        let result = SinkType::on_success_sinktype(&sink);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(

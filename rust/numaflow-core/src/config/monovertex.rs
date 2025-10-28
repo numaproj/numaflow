@@ -491,6 +491,14 @@ mod tests {
                                 "resources": {}
                             }
                         }
+                    },
+                    "onSuccess": {
+                        "udsink": {
+                            "container": {
+                                "image": "on-success-sink",
+                                "resources": {}
+                            }
+                        }
                     }
                 }
             }
@@ -512,6 +520,11 @@ mod tests {
             config.fb_sink_config.clone().unwrap().sink_type,
             SinkType::UserDefined(_)
         ));
+        assert!(config.on_success_sink_config.is_some());
+        assert!(matches!(
+            config.on_success_sink_config.clone().unwrap().sink_type,
+            SinkType::UserDefined(_)
+        ));
 
         if let SinkType::UserDefined(config) = config.sink_config.sink_type.clone() {
             assert_eq!(config.socket_path, "/var/run/numaflow/sink.sock");
@@ -526,6 +539,14 @@ mod tests {
             assert_eq!(
                 config.server_info_path,
                 "/var/run/numaflow/fb-sinker-server-info"
+            );
+        }
+
+        if let SinkType::UserDefined(config) = config.on_success_sink_config.unwrap().sink_type {
+            assert_eq!(config.socket_path, "/var/run/numaflow/on-success-sink.sock");
+            assert_eq!(
+                config.server_info_path,
+                "/var/run/numaflow/on-success-sinker-server-info"
             );
         }
     }

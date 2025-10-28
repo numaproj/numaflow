@@ -566,7 +566,7 @@ mod version {
         rust_version_map.insert(ContainerType::ReduceStreamer, "0.3.0-z".to_string());
         rust_version_map.insert(ContainerType::SessionReducer, "0.3.0-z".to_string());
         rust_version_map.insert(ContainerType::Accumulator, "0.3.0-z".to_string());
-        rust_version_map.insert(ContainerType::OnSuccessSinker, "0.4.0-z".to_string());
+        rust_version_map.insert(ContainerType::OnSuccessSinker, "0.5.0-z".to_string());
 
         let mut m = HashMap::new();
         m.insert("go".to_string(), go_version_map);
