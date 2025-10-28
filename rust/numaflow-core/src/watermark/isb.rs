@@ -3,11 +3,10 @@
 //! of the watermark published by the previous vertices for each partition and fetches the lowest
 //! watermark among them. It tracks the watermarks of all the inflight messages for each partition,
 //! and publishes the lowest watermark. The watermark published to the ISB will always be monotonically
-//! increasing. Fetch and publish will be two different flows, but we will have natural ordering
-//! because we use actor model. Since we do streaming within the vertex we have to track the
-//! messages so that even if any messages get stuck we consider them while publishing watermarks.
-//! Starts a background task to publish idle watermarks for the downstream idle partitions, idle
-//! partitions are those partitions where we have not published any watermark for a certain time.
+//! increasing. Since we do streaming within the vertex we have to track the messages so that even if
+//! any messages get stuck we consider them while publishing watermarks. Starts a background task to
+//! publish idle watermarks for the downstream idle partitions, idle partitions are those partitions
+//! where we have not published any watermark for a certain time.
 //!
 //!
 //! **Fetch Flow**
@@ -20,16 +19,16 @@
 //! (Write to ISB) -------> (Publish Watermark) ------> (Remove tracked Offset)
 //! ```
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::EdgeWatermarkConfig;
 use crate::config::pipeline::{ToVertexConfig, VertexType};
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::message::{IntOffset, Offset};
 use crate::reduce::reducer::WindowManager;
 use crate::tracker::Tracker;
@@ -42,34 +41,9 @@ use crate::watermark::wmb::{WMB, Watermark};
 pub(crate) mod wm_fetcher;
 pub(crate) mod wm_publisher;
 
-/// Messages that can be sent to the [ISBWatermarkActor].
-enum ISBWaterMarkActorMessage {
-    Fetch {
-        offset: IntOffset,
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
-    },
-    Publish {
-        stream: Stream,
-        offset: IntOffset,
-        oneshot_tx: tokio::sync::oneshot::Sender<()>,
-    },
-    FetchHead {
-        from_vertex: Option<String>,
-        partition_idx: u16,
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
-    },
-    FetchHeadIdleWmb {
-        partition_idx: u16,
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<Option<WMB>>>,
-    },
-    PublishIdleWatermark {
-        oneshot_tx: tokio::sync::oneshot::Sender<()>,
-    },
-}
-
-/// EdgeWatermarkActor comprises EdgeFetcher and EdgePublisher.
+/// Shared state for ISBWatermarkHandle.
 /// Contains all computation logic and data structures.
-struct ISBWatermarkActor {
+struct ISBWatermarkState {
     fetcher: ISBWatermarkFetcher,
     publisher: ISBWatermarkPublisher,
     idle_manager: ISBIdleDetector,
@@ -80,7 +54,7 @@ struct ISBWatermarkActor {
     from_partitions: Vec<u16>,
 }
 
-impl ISBWatermarkActor {
+impl ISBWatermarkState {
     fn new(
         fetcher: ISBWatermarkFetcher,
         publisher: ISBWatermarkPublisher,
@@ -101,89 +75,38 @@ impl ISBWatermarkActor {
         }
     }
 
-    /// run listens for messages and handles them
-    async fn run(mut self, mut receiver: Receiver<ISBWaterMarkActorMessage>) {
-        while let Some(message) = receiver.recv().await {
-            if let Err(e) = self.handle_message(message).await {
-                warn!("error handling watermark actor message: {:?}", e);
-            }
-        }
+    /// Fetches the watermark for the given offset
+    fn fetch_watermark(&mut self, offset: IntOffset) -> Watermark {
+        let watermark = self
+            .fetcher
+            .fetch_watermark(offset.offset, offset.partition_idx);
+
+        self.latest_fetched_wm = std::cmp::max(watermark, self.latest_fetched_wm);
+        watermark
     }
 
-    async fn handle_message(&mut self, message: ISBWaterMarkActorMessage) -> Result<()> {
-        match message {
-            // fetches the watermark for the given offset
-            ISBWaterMarkActorMessage::Fetch { offset, oneshot_tx } => {
-                let watermark = self
-                    .fetcher
-                    .fetch_watermark(offset.offset, offset.partition_idx);
+    /// Fetches the head watermark
+    fn fetch_head_watermark(&mut self, from_vertex: Option<&str>, partition_idx: u16) -> Watermark {
+        self.fetcher
+            .fetch_head_watermark(from_vertex, partition_idx)
+    }
 
-                self.latest_fetched_wm = std::cmp::max(watermark, self.latest_fetched_wm);
+    /// Fetches the head idle WMB for a specific partition
+    fn fetch_head_idle_wmb(&mut self, partition_idx: u16) -> Option<WMB> {
+        let wmb = self.fetcher.fetch_head_idle_wmb(partition_idx);
 
-                oneshot_tx
-                    .send(Ok(watermark))
-                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
-            }
-
-            // publishes the watermark for the given stream and offset
-            ISBWaterMarkActorMessage::Publish {
-                stream,
-                offset,
-                oneshot_tx,
-            } => {
-                self.handle_publish_watermark(stream, offset).await;
-                oneshot_tx
-                    .send(())
-                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
-            }
-
-            // fetches the head watermark
-            ISBWaterMarkActorMessage::FetchHead {
-                from_vertex,
-                partition_idx,
-                oneshot_tx,
-            } => {
-                let watermark = self
-                    .fetcher
-                    .fetch_head_watermark(from_vertex.as_deref(), partition_idx);
-
-                oneshot_tx
-                    .send(Ok(watermark))
-                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
-            }
-
-            // fetches the head idle WMB for a specific partition
-            ISBWaterMarkActorMessage::FetchHeadIdleWmb {
-                partition_idx,
-                oneshot_tx,
-            } => {
-                let wmb = self.fetcher.fetch_head_idle_wmb(partition_idx);
-
-                if let Some(wmb) = wmb {
-                    self.latest_fetched_wm = std::cmp::max(
-                        self.latest_fetched_wm,
-                        Watermark::from_timestamp_millis(wmb.watermark)
-                            .expect("failed to parse time"),
-                    );
-                }
-
-                oneshot_tx
-                    .send(Ok(wmb))
-                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
-            }
-
-            // publishes idle watermark
-            ISBWaterMarkActorMessage::PublishIdleWatermark { oneshot_tx } => {
-                self.handle_publish_idle_watermark().await;
-                oneshot_tx
-                    .send(())
-                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
-            }
+        if let Some(wmb) = wmb {
+            self.latest_fetched_wm = std::cmp::max(
+                self.latest_fetched_wm,
+                Watermark::from_timestamp_millis(wmb.watermark).expect("failed to parse time"),
+            );
         }
+
+        wmb
     }
 
     /// publishes the watermark for the given stream and offset
-    async fn handle_publish_watermark(&mut self, stream: Stream, offset: IntOffset) {
+    async fn publish_watermark(&mut self, stream: Stream, offset: IntOffset) {
         // Compute the minimum watermark
         let min_wm = self.compute_min_watermark().await;
 
@@ -199,7 +122,7 @@ impl ISBWatermarkActor {
     /// Publishes idle watermark. We can directly publish idle watermark with min watermark any time
     /// of because we are publishing based on the lowest watermark in the system. This cannot be true
     /// if min-watermark is -1. This means that we do not have data
-    async fn handle_publish_idle_watermark(&mut self) {
+    async fn publish_idle_watermark(&mut self) {
         // Compute the minimum watermark
         let min_wm = self.compute_min_watermark().await;
 
@@ -219,7 +142,7 @@ impl ISBWatermarkActor {
             min_wm
         };
 
-        // we now know the lowest watermark to publish to the streams that are idling and we have a
+        // we now know the lowest watermark to publish to the streams that are idling, and we have a
         // barrier offset which can be used safely to publish the idle watermark.
 
         // Identify the streams that are idle and publish the idle watermark
@@ -320,11 +243,11 @@ impl ISBWatermarkActor {
     }
 }
 
-/// Handle to interact with the EdgeWatermarkActor, exposes methods to fetch and publish watermarks
-/// for the edges. Lightweight handle that only sends messages to the actor.
+/// Handle to interact with the ISB watermark state, exposes methods to fetch and publish watermarks
+/// for the edges. Cloneable handle with shared state protected by Arc<Mutex>.
 #[derive(Clone)]
 pub(crate) struct ISBWatermarkHandle {
-    sender: mpsc::Sender<ISBWaterMarkActorMessage>,
+    state: Arc<Mutex<ISBWatermarkState>>,
 }
 
 impl ISBWatermarkHandle {
@@ -343,8 +266,6 @@ impl ISBWatermarkHandle {
         tracker: Tracker,
         from_partitions: Vec<u16>,
     ) -> Result<Self> {
-        let (sender, receiver) = mpsc::channel(100);
-
         // create a processor manager map (from_vertex -> ProcessorManager)
         let mut processor_managers = HashMap::new();
         for from_bucket_config in &config.from_vertex_config {
@@ -371,17 +292,16 @@ impl ISBWatermarkHandle {
         let idle_manager =
             ISBIdleDetector::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
 
-        let actor = ISBWatermarkActor::new(
+        let state = Arc::new(Mutex::new(ISBWatermarkState::new(
             fetcher,
             publisher,
             idle_manager.clone(),
             window_manager,
             tracker.clone(),
             from_partitions,
-        );
-        tokio::spawn(async move { actor.run(receiver).await });
+        )));
 
-        let isb_watermark_handle = Self { sender };
+        let isb_watermark_handle = Self { state };
 
         // start a task to keep publishing idle watermarks every idle_timeout
         tokio::spawn({
@@ -407,145 +327,55 @@ impl ISBWatermarkHandle {
 
     /// Fetches the watermark for the given offset, if we are not able to compute the watermark we
     /// return -1.
-    pub(crate) async fn fetch_watermark(&mut self, offset: Offset) -> Watermark {
+    pub(crate) async fn fetch_watermark(&self, offset: Offset) -> Watermark {
         let Offset::Int(offset) = offset else {
             warn!(?offset, "Invalid offset type, cannot compute watermark");
             return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
         };
 
-        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
-        if let Err(e) = self
-            .sender
-            .send(ISBWaterMarkActorMessage::Fetch { offset, oneshot_tx })
-            .await
-        {
-            warn!(?e, "Failed to send message");
-            return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
-        }
-
-        match oneshot_rx.await {
-            Ok(watermark) => watermark.unwrap_or_else(|e| {
-                warn!(?e, "Failed to fetch watermark");
-                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
-            }),
-            Err(e) => {
-                warn!(?e, "Failed to receive response");
-                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
-            }
-        }
+        // Acquire lock, fetch watermark, and release immediately
+        let mut state = self.state.lock().await;
+        state.fetch_watermark(offset)
     }
 
     /// Fetches the head watermark using the watermark fetcher. This returns the minimum
     /// of the head watermarks across all processors for the specified partition.
-    /// If `from_vertex` is provided, it fetches the watermark for that specific edge.
-    /// If `from_vertex` is None, it fetches the minimum watermark across all edges.
     pub(crate) async fn fetch_head_watermark(
-        &mut self,
+        &self,
         from_vertex: Option<&str>,
         partition_idx: u16,
     ) -> Watermark {
-        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
-        if let Err(e) = self
-            .sender
-            .send(ISBWaterMarkActorMessage::FetchHead {
-                from_vertex: from_vertex.map(|s| s.to_string()),
-                partition_idx,
-                oneshot_tx,
-            })
-            .await
-        {
-            warn!(?e, "Failed to send message");
-            return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
-        }
-
-        match oneshot_rx.await {
-            Ok(watermark) => watermark.unwrap_or_else(|e| {
-                warn!(?e, "Failed to fetch head watermark");
-                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
-            }),
-            Err(e) => {
-                warn!(?e, "Failed to receive response");
-                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
-            }
-        }
+        // Acquire lock, fetch watermark, and release immediately
+        let mut state = self.state.lock().await;
+        state.fetch_head_watermark(from_vertex, partition_idx)
     }
 
     /// Fetches the head idle WMB for the given partition. Returns the minimum idle WMB across all
     /// processors for the specified partition, but only if all active processors are idle for that
     /// partition.
-    pub(crate) async fn fetch_head_idle_wmb(&mut self, partition_idx: u16) -> Option<WMB> {
-        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
-        if let Err(e) = self
-            .sender
-            .send(ISBWaterMarkActorMessage::FetchHeadIdleWmb {
-                partition_idx,
-                oneshot_tx,
-            })
-            .await
-        {
-            warn!(?e, "Failed to send message");
-            return None;
-        }
-
-        match oneshot_rx.await {
-            Ok(wmb_result) => wmb_result.unwrap_or_else(|e| {
-                warn!(?e, "Failed to fetch head idle WMB");
-                None
-            }),
-            Err(e) => {
-                warn!(?e, "Failed to receive response");
-                None
-            }
-        }
+    pub(crate) async fn fetch_head_idle_wmb(&self, partition_idx: u16) -> Option<WMB> {
+        // Acquire lock, fetch WMB, and release immediately
+        let mut state = self.state.lock().await;
+        state.fetch_head_idle_wmb(partition_idx)
     }
 
     /// publish_watermark publishes the watermark for the given stream and offset.
-    pub(crate) async fn publish_watermark(&mut self, stream: Stream, offset: Offset) {
+    pub(crate) async fn publish_watermark(&self, stream: Stream, offset: Offset) {
         let Offset::Int(offset) = offset else {
             warn!(?offset, "Invalid offset type, cannot publish watermark");
             return;
         };
 
-        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
-        if let Err(e) = self
-            .sender
-            .send(ISBWaterMarkActorMessage::Publish {
-                stream,
-                offset,
-                oneshot_tx,
-            })
-            .await
-        {
-            warn!(?e, "Failed to send message");
-            return;
-        }
-
-        match oneshot_rx.await {
-            Ok(_) => {}
-            Err(e) => {
-                warn!(?e, "Failed to receive response");
-            }
-        }
+        // Acquire lock, perform operation, and release immediately
+        let mut state = self.state.lock().await;
+        state.publish_watermark(stream, offset).await;
     }
 
     /// publishes the idle watermark for the downstream idle partitions.
     pub(crate) async fn publish_idle_watermark(&self) {
-        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
-        if let Err(e) = self
-            .sender
-            .send(ISBWaterMarkActorMessage::PublishIdleWatermark { oneshot_tx })
-            .await
-        {
-            warn!(?e, "Failed to send message");
-            return;
-        }
-
-        match oneshot_rx.await {
-            Ok(_) => {}
-            Err(e) => {
-                warn!(?e, "Failed to receive response");
-            }
-        }
+        // Acquire lock, perform operation, and release immediately
+        let mut state = self.state.lock().await;
+        state.publish_idle_watermark().await;
     }
 }
 
@@ -665,7 +495,7 @@ mod tests {
         };
         let tracker = Tracker::new(None, CancellationToken::new());
 
-        let mut handle = ISBWatermarkHandle::new(
+        let handle = ISBWatermarkHandle::new(
             vertex_name,
             0,
             VertexType::MapUDF,
@@ -834,7 +664,7 @@ mod tests {
         };
         let tracker = Tracker::new(None, CancellationToken::new());
 
-        let mut handle = ISBWatermarkHandle::new(
+        let handle = ISBWatermarkHandle::new(
             vertex_name,
             0,
             VertexType::MapUDF,
@@ -1106,7 +936,7 @@ mod tests {
         };
         let tracker = Tracker::new(None, CancellationToken::new());
 
-        let mut handle = ISBWatermarkHandle::new(
+        let handle = ISBWatermarkHandle::new(
             vertex_name,
             0,
             VertexType::MapUDF,
