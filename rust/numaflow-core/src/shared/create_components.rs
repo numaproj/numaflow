@@ -185,8 +185,22 @@ pub(crate) async fn create_sink_writer(
                 sink_writer_builder.on_success_sink_client(SinkClientType::Blackhole)
             }
             SinkType::UserDefined(ud_config) => {
-                // TODO: add metrics for on success sink
-                // TODO: Add onSuccessSinker to server_info.rs -> ContainerType
+                let os_server_info =
+                    sdk_server_info(ud_config.server_info_path.clone().into(), cln_token.clone())
+                        .await?;
+
+                let metric_labels = metrics::sdk_info_labels(
+                    config::get_component_type().to_string(),
+                    config::get_vertex_name().to_string(),
+                    os_server_info.language,
+                    os_server_info.version,
+                    ContainerType::OnSuccessSinker.to_string(),
+                );
+
+                metrics::global_metrics()
+                    .sdk_info
+                    .get_or_create(&metric_labels)
+                    .set(1);
 
                 let mut sink_grpc_client = SinkClient::new(
                     grpc::create_rpc_channel(ud_config.socket_path.clone().into()).await?,
