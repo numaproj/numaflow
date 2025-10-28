@@ -1083,7 +1083,7 @@ pub async fn watermark_handler<C: crate::typ::NumaflowTypeConfig>(
         // For source watermark handle, always fetch only partition 0
         // Source vertices don't have a 'from' vertex, so ignore the query parameter
         WatermarkHandle::Source(source_handle) => {
-            let mut handle_clone = source_handle.clone();
+            let handle_clone = source_handle.clone();
             let watermark = handle_clone.fetch_head_watermark(0).await;
             partitions.insert("0".to_string(), watermark.timestamp_millis());
         }
@@ -1091,7 +1091,7 @@ pub async fn watermark_handler<C: crate::typ::NumaflowTypeConfig>(
         // For ISB vertices, fetch watermarks for all partitions
         // If 'from' query parameter is provided, fetch watermarks only for that specific edge
         WatermarkHandle::ISB(isb_handle) => {
-            let mut handle_clone = isb_handle.clone();
+            let handle_clone = isb_handle.clone();
 
             // For reduce vertices, only return partition 0 since they read from single partition
             // For other vertex types, fetch watermarks for all partitions

@@ -105,7 +105,7 @@ mod tests {
         // Create a ProcessorManager with a single Processor and a single OffsetTimeline
         let processor_name = Bytes::from("processor1");
         let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0]);
-        let timeline = OffsetTimeline::new(10);
+        let mut timeline = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
         let wmb1 = WMB {
@@ -153,7 +153,7 @@ mod tests {
         // Create a ProcessorManager with multiple Processors and a single OffsetTimeline
         let processor_name1 = Bytes::from("processor1");
         let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0]);
-        let timeline1 = OffsetTimeline::new(10);
+        let mut timeline1 = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
         let wmb1 = WMB {
@@ -183,7 +183,7 @@ mod tests {
 
         let processor_name2 = Bytes::from("processor2");
         let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0]);
-        let timeline2 = OffsetTimeline::new(10);
+        let mut timeline2 = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
         let wmb4 = WMB {
@@ -232,7 +232,7 @@ mod tests {
         // Create a ProcessorManager with a single Processor and a single OffsetTimeline
         let processor_name = Bytes::from("processor1");
         let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0]);
-        let timeline = OffsetTimeline::new(10);
+        let mut timeline = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
         let wmb1 = WMB {
@@ -280,7 +280,7 @@ mod tests {
         // Create a ProcessorManager with multiple Processors and a single OffsetTimeline
         let processor_name1 = Bytes::from("processor1");
         let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0]);
-        let timeline1 = OffsetTimeline::new(10);
+        let mut timeline1 = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
         let wmb1 = WMB {
@@ -310,7 +310,7 @@ mod tests {
 
         let processor_name2 = Bytes::from("processor2");
         let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0]);
-        let timeline2 = OffsetTimeline::new(10);
+        let mut timeline2 = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
         let wmb4 = WMB {
@@ -359,7 +359,7 @@ mod tests {
         // Create a ProcessorManager with one active and one inactive processor
         let processor_name1 = Bytes::from("processor1");
         let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0]);
-        let timeline1 = OffsetTimeline::new(10);
+        let mut timeline1 = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
         let wmb1 = WMB {
@@ -374,7 +374,7 @@ mod tests {
 
         let processor_name2 = Bytes::from("processor2");
         let mut processor2 = Processor::new(processor_name2.clone(), Status::InActive, &[0]);
-        let timeline2 = OffsetTimeline::new(10);
+        let mut timeline2 = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries (should be ignored)
         let wmb2 = WMB {

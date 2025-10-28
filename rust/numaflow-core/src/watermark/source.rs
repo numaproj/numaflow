@@ -16,15 +16,16 @@
 //! [ISB]: https://numaflow.numaproj.io/core-concepts/inter-step-buffer/
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, warn};
+use tracing::warn;
 
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::config::pipeline::{ToVertexConfig, VertexType};
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::message::{IntOffset, Message, Offset};
 use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::idle::source::SourceIdleDetector;
@@ -39,42 +40,9 @@ pub(crate) mod source_wm_fetcher;
 /// publisher for publishing the source watermark
 pub(crate) mod source_wm_publisher;
 
-/// Messages that can be sent to the SourceWatermarkActor
-#[allow(clippy::enum_variant_names)]
-enum SourceActorMessage {
-    FetchSourceWatermark {
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
-    },
-    FetchHeadWatermark {
-        partition_idx: u16,
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
-    },
-    GenerateAndPublishSourceWatermark {
-        messages: Vec<Message>,
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
-    },
-    PublishSourceISBWatermark {
-        stream: Stream,
-        offset: IntOffset,
-        input_partition: u16,
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
-    },
-    PublishSourceIdleWatermark {
-        partitions: Vec<u16>,
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
-    },
-    PublishISBIdleWatermark {
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
-    },
-    InitializeActivePartitions {
-        partitions: Vec<u16>,
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
-    },
-}
-
-/// SourceWatermarkActor comprises SourcePublisher and SourceFetcher.
+/// Shared state for SourceWatermarkHandle.
 /// Contains all computation logic and data structures.
-struct SourceWatermarkActor {
+struct SourceWatermarkState {
     publisher: SourceWatermarkPublisher,
     fetcher: SourceWatermarkFetcher,
     isb_idle_manager: ISBIdleDetector,
@@ -82,8 +50,8 @@ struct SourceWatermarkActor {
     active_input_partitions: HashMap<u16, bool>,
 }
 
-impl SourceWatermarkActor {
-    /// Creates a new SourceWatermarkActor.
+impl SourceWatermarkState {
+    /// Creates a new SourceWatermarkState.
     fn new(
         publisher: SourceWatermarkPublisher,
         fetcher: SourceWatermarkFetcher,
@@ -99,108 +67,8 @@ impl SourceWatermarkActor {
         }
     }
 
-    /// Runs the SourceWatermarkActor
-    async fn run(mut self, mut receiver: Receiver<SourceActorMessage>) {
-        while let Some(message) = receiver.recv().await {
-            if let Err(e) = self.handle_message(message).await {
-                error!("error handling message: {:?}", e);
-            }
-        }
-    }
-
-    /// Handles the SourceActorMessage.
-    async fn handle_message(&mut self, message: SourceActorMessage) -> Result<()> {
-        match message {
-            // fetch the source watermark
-            SourceActorMessage::FetchSourceWatermark { oneshot_tx } => {
-                let watermark = self.fetcher.fetch_source_watermark();
-
-                oneshot_tx
-                    .send(Ok(watermark))
-                    .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
-            }
-
-            // fetch the head watermark
-            SourceActorMessage::FetchHeadWatermark {
-                partition_idx,
-                oneshot_tx,
-            } => {
-                let watermark = self.fetcher.fetch_head_watermark(partition_idx);
-
-                oneshot_tx
-                    .send(Ok(watermark))
-                    .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
-            }
-
-            // generate and publish source watermark with computation
-            SourceActorMessage::GenerateAndPublishSourceWatermark {
-                messages,
-                oneshot_tx,
-            } => {
-                let result = self
-                    .handle_generate_and_publish_source_watermark(messages)
-                    .await;
-
-                oneshot_tx
-                    .send(result)
-                    .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
-            }
-
-            // publish source ISB watermark with computation
-            SourceActorMessage::PublishSourceISBWatermark {
-                stream,
-                offset,
-                input_partition,
-                oneshot_tx,
-            } => {
-                let result = self
-                    .handle_publish_source_isb_watermark(stream, offset, input_partition)
-                    .await;
-
-                oneshot_tx
-                    .send(result)
-                    .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
-            }
-
-            // publish source idle watermark with computation
-            SourceActorMessage::PublishSourceIdleWatermark {
-                partitions,
-                oneshot_tx,
-            } => {
-                let result = self.handle_publish_source_idle_watermark(partitions).await;
-
-                oneshot_tx
-                    .send(result)
-                    .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
-            }
-
-            // publish ISB idle watermark with computation
-            SourceActorMessage::PublishISBIdleWatermark { oneshot_tx } => {
-                let result = self.handle_publish_isb_idle_watermark().await;
-
-                oneshot_tx
-                    .send(result)
-                    .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
-            }
-            SourceActorMessage::InitializeActivePartitions {
-                partitions,
-                oneshot_tx,
-            } => {
-                self.publisher
-                    .initialize_active_partitions(partitions)
-                    .await;
-
-                oneshot_tx
-                    .send(Ok(()))
-                    .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
-            }
-        }
-
-        Ok(())
-    }
-
     /// Handles generating and publishing source watermark with computation
-    async fn handle_generate_and_publish_source_watermark(
+    async fn generate_and_publish_source_watermark(
         &mut self,
         messages: Vec<Message>,
     ) -> Result<()> {
@@ -244,7 +112,7 @@ impl SourceWatermarkActor {
     }
 
     /// Handles publishing source ISB watermark with computation
-    async fn handle_publish_source_isb_watermark(
+    async fn publish_source_isb_watermark(
         &mut self,
         stream: Stream,
         offset: IntOffset,
@@ -271,7 +139,7 @@ impl SourceWatermarkActor {
     }
 
     /// Handles publishing source idle watermark with computation
-    async fn handle_publish_source_idle_watermark(&mut self, partitions: Vec<u16>) -> Result<()> {
+    async fn publish_source_idle_watermark(&mut self, partitions: Vec<u16>) -> Result<()> {
         // First check if source idle manager exists and if source is idling
         let is_source_idling = if let Some(source_idle_manager) = &self.source_idle_manager {
             source_idle_manager.is_source_idling()
@@ -338,7 +206,7 @@ impl SourceWatermarkActor {
     }
 
     /// Handles publishing ISB idle watermark with computation
-    async fn handle_publish_isb_idle_watermark(&mut self) -> Result<()> {
+    async fn publish_isb_idle_watermark(&mut self) -> Result<()> {
         // if source is idling, we can avoid publishing the idle watermark since we publish
         // the idle watermark for all the downstream partitions in the source idling control flow
         if let Some(source_idle_manager) = &self.source_idle_manager
@@ -386,12 +254,11 @@ impl SourceWatermarkActor {
     }
 }
 
-/// SourceWatermarkHandle is the handle for the SourceWatermarkActor.
-/// Exposes methods to publish the source watermark and edge watermark.
-/// Lightweight handle that only sends messages to the actor.
+/// SourceWatermarkHandle exposes methods to publish and fetch the source watermark.
+/// Contains shared state protected by Arc<Mutex<>> for thread-safe access.
 #[derive(Clone)]
 pub(crate) struct SourceWatermarkHandle {
-    sender: tokio::sync::mpsc::Sender<SourceActorMessage>,
+    state: Arc<Mutex<SourceWatermarkState>>,
 }
 
 impl SourceWatermarkHandle {
@@ -403,7 +270,6 @@ impl SourceWatermarkHandle {
         config: &SourceWatermarkConfig,
         cln_token: CancellationToken,
     ) -> Result<Self> {
-        let (sender, receiver) = tokio::sync::mpsc::channel(100);
         let processor_manager = ProcessorManager::new(
             js_context.clone(),
             &config.source_bucket_config,
@@ -419,8 +285,7 @@ impl SourceWatermarkHandle {
             config.source_bucket_config.clone(),
             config.to_vertex_bucket_config.clone(),
         )
-        .await
-        .map_err(|e| Error::Watermark(e.to_string()))?;
+        .await?;
 
         let source_idle_manager = config
             .idle_config
@@ -430,19 +295,16 @@ impl SourceWatermarkHandle {
         let isb_idle_manager =
             ISBIdleDetector::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
 
-        let actor = SourceWatermarkActor::new(
-            publisher,
-            fetcher,
-            isb_idle_manager.clone(),
-            source_idle_manager.clone(),
-        );
-        tokio::spawn(async move { actor.run(receiver).await });
+        let state =
+            SourceWatermarkState::new(publisher, fetcher, isb_idle_manager, source_idle_manager);
 
-        let source_watermark_handle = Self { sender };
+        let source_watermark_handle = Self {
+            state: Arc::new(Mutex::new(state)),
+        };
 
-        // start a task to keep publishing idle watermarks every 100ms
+        // start a task to keep publishing idle watermarks every idle_timeout duration
         tokio::spawn({
-            let mut source_watermark_handle = source_watermark_handle.clone();
+            let source_watermark_handle = source_watermark_handle.clone();
             let mut interval_ticker = tokio::time::interval(idle_timeout);
             async move {
                 loop {
@@ -462,177 +324,94 @@ impl SourceWatermarkHandle {
     }
 
     /// Generates and Publishes the source watermark for the given messages.
-    pub(crate) async fn generate_and_publish_source_watermark(&mut self, messages: &[Message]) {
-        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
-        if let Err(e) = self
-            .sender
-            .send(SourceActorMessage::GenerateAndPublishSourceWatermark {
-                messages: messages.to_vec(),
-                oneshot_tx,
-            })
-            .await
-        {
-            warn!(?e, "Failed to send message");
-            return;
-        }
+    pub(crate) async fn generate_and_publish_source_watermark(&self, messages: &[Message]) {
+        // Acquire lock, perform operation, and release immediately
+        let result = {
+            let mut state = self.state.lock().await;
+            state
+                .generate_and_publish_source_watermark(messages.to_vec())
+                .await
+        };
 
-        match oneshot_rx.await {
-            Ok(_) => {}
-            Err(e) => {
-                warn!(?e, "Failed to receive response");
-            }
+        if let Err(e) = result {
+            warn!(?e, "Failed to generate and publish source watermark");
         }
     }
 
     /// Publishes the watermark for the given input partition on to the ISB of the next vertex.
     pub(crate) async fn publish_source_isb_watermark(
-        &mut self,
+        &self,
         stream: Stream,
         offset: Offset,
         input_partition: u16,
     ) {
         let Offset::Int(offset) = offset else {
-            error!(?offset, "Invalid offset type, cannot publish watermark");
+            warn!(?offset, "Invalid offset type, cannot publish watermark");
             return;
         };
 
-        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
-        if let Err(e) = self
-            .sender
-            .send(SourceActorMessage::PublishSourceISBWatermark {
-                stream,
-                offset,
-                input_partition,
-                oneshot_tx,
-            })
-            .await
-        {
-            warn!(?e, "Failed to send message");
-            return;
-        }
+        // Acquire lock, perform operation, and release immediately
+        let result = {
+            let mut state = self.state.lock().await;
+            state
+                .publish_source_isb_watermark(stream, offset, input_partition)
+                .await
+        };
 
-        match oneshot_rx.await {
-            Ok(_) => {}
-            Err(e) => {
-                warn!(?e, "Failed to receive response");
-            }
+        if let Err(e) = result {
+            warn!(?e, "Failed to publish source ISB watermark");
         }
     }
 
     /// Fetches the source watermark.
-    pub(crate) async fn fetch_source_watermark(&mut self) -> Watermark {
-        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
-        if let Err(e) = self
-            .sender
-            .send(SourceActorMessage::FetchSourceWatermark { oneshot_tx })
-            .await
-        {
-            warn!(?e, "Failed to send message");
-            return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
-        }
-
-        match oneshot_rx.await {
-            Ok(watermark) => watermark.unwrap_or_else(|e| {
-                warn!(?e, "Failed to fetch watermark");
-                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
-            }),
-            Err(e) => {
-                warn!(?e, "Failed to receive response");
-                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
-            }
-        }
+    pub(crate) async fn fetch_source_watermark(&self) -> Watermark {
+        // Acquire lock, fetch watermark, and release immediately
+        let mut state = self.state.lock().await;
+        state.fetcher.fetch_source_watermark()
     }
 
     /// Fetches the head watermark using the source watermark fetcher. This returns the minimum
     /// of the head watermarks across all active processors for the specified partition.
-    pub(crate) async fn fetch_head_watermark(&mut self, partition_idx: u16) -> Watermark {
-        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
-        if let Err(e) = self
-            .sender
-            .send(SourceActorMessage::FetchHeadWatermark {
-                partition_idx,
-                oneshot_tx,
-            })
-            .await
-        {
-            warn!(?e, "Failed to send message");
-            return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
-        }
+    pub(crate) async fn fetch_head_watermark(&self, partition_idx: u16) -> Watermark {
+        // Acquire lock, fetch watermark, and release immediately
+        let mut state = self.state.lock().await;
+        state.fetcher.fetch_head_watermark(partition_idx)
+    }
 
-        match oneshot_rx.await {
-            Ok(watermark) => watermark.unwrap_or_else(|e| {
-                warn!(?e, "Failed to fetch head watermark");
-                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
-            }),
-            Err(e) => {
-                warn!(?e, "Failed to receive response");
-                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
-            }
+    /// Publishes the source idle watermark for the given partitions.
+    pub(crate) async fn publish_source_idle_watermark(&self, partitions: Vec<u16>) {
+        // Acquire lock, perform operation, and release immediately
+        let result = {
+            let mut state = self.state.lock().await;
+            state.publish_source_idle_watermark(partitions).await
+        };
+
+        if let Err(e) = result {
+            warn!(?e, "Failed to publish source idle watermark");
         }
     }
 
-    pub(crate) async fn publish_source_idle_watermark(&mut self, partitions: Vec<u16>) {
-        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
-        if let Err(e) = self
-            .sender
-            .send(SourceActorMessage::PublishSourceIdleWatermark {
-                partitions,
-                oneshot_tx,
-            })
-            .await
-        {
-            warn!(?e, "Failed to send message");
-            return;
-        }
+    /// Publishes the ISB idle watermark.
+    pub(crate) async fn publish_isb_idle_watermark(&self) {
+        // Acquire lock, perform operation, and release immediately
+        let result = {
+            let mut state = self.state.lock().await;
+            state.publish_isb_idle_watermark().await
+        };
 
-        match oneshot_rx.await {
-            Ok(_) => {}
-            Err(e) => {
-                warn!(?e, "Failed to receive response");
-            }
-        }
-    }
-
-    pub(crate) async fn publish_isb_idle_watermark(&mut self) {
-        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
-        if let Err(e) = self
-            .sender
-            .send(SourceActorMessage::PublishISBIdleWatermark { oneshot_tx })
-            .await
-        {
-            warn!(?e, "Failed to send message");
-            return;
-        }
-
-        match oneshot_rx.await {
-            Ok(_) => {}
-            Err(e) => {
-                warn!(?e, "Failed to receive response");
-            }
+        if let Err(e) = result {
+            warn!(?e, "Failed to publish ISB idle watermark");
         }
     }
 
     /// Initializes the active partitions by creating a publisher for each partition.
     pub(crate) async fn initialize_active_partitions(&self, partitions: Vec<u16>) {
-        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
-        if let Err(e) = self
-            .sender
-            .send(SourceActorMessage::InitializeActivePartitions {
-                partitions,
-                oneshot_tx,
-            })
-            .await
-        {
-            warn!(?e, "Failed to send message");
-            return;
-        }
-
-        match oneshot_rx.await {
-            Ok(_) => {}
-            Err(e) => {
-                warn!(?e, "Failed to receive response");
-            }
-        }
+        // Acquire lock, perform operation, and release immediately
+        let mut state = self.state.lock().await;
+        state
+            .publisher
+            .initialize_active_partitions(partitions)
+            .await;
     }
 }
 
@@ -695,7 +474,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut handle = SourceWatermarkHandle::new(
+        let handle = SourceWatermarkHandle::new(
             Duration::from_millis(100),
             js_context.clone(),
             Default::default(),
@@ -743,8 +522,8 @@ mod tests {
                     .get("source-source_vertex-0")
                     .await
                     .expect("Failed to get wmb");
-                if wmb.is_some() {
-                    let wmb: WMB = wmb.unwrap().try_into().unwrap();
+                if let Some(wmb) = wmb {
+                    let wmb: WMB = wmb.try_into().unwrap();
                     assert_eq!(wmb.watermark, 60000);
                     break;
                 } else {
@@ -849,7 +628,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut handle = SourceWatermarkHandle::new(
+        let handle = SourceWatermarkHandle::new(
             Duration::from_millis(100),
             js_context.clone(),
             &[ToVertexConfig {
@@ -925,8 +704,8 @@ mod tests {
                     .get("source_vertex-0")
                     .await
                     .expect("Failed to get wmb");
-                if wmb.is_some() {
-                    let wmb: WMB = wmb.unwrap().try_into().unwrap();
+                if let Some(wmb) = wmb {
+                    let wmb: WMB = wmb.try_into().unwrap();
                     assert_ne!(wmb.watermark, -1);
                     break;
                 } else {
@@ -1050,7 +829,7 @@ mod tests {
             init_source_delay: None,
         };
 
-        let mut handle = SourceWatermarkHandle::new(
+        let handle = SourceWatermarkHandle::new(
             Duration::from_millis(10),
             js_context.clone(),
             &to_vertex_configs,
@@ -1243,7 +1022,7 @@ mod tests {
             init_source_delay: None,
         };
 
-        let mut handle = SourceWatermarkHandle::new(
+        let handle = SourceWatermarkHandle::new(
             Duration::from_millis(3),
             js_context.clone(),
             &to_vertex_configs,
@@ -1423,7 +1202,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut handle = SourceWatermarkHandle::new(
+        let handle = SourceWatermarkHandle::new(
             Duration::from_millis(100),
             js_context.clone(),
             Default::default(),
