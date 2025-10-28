@@ -147,7 +147,7 @@ Check the links below to see another transformer example in various programming 
 		}
 	}
 	```
-	- [Golang full example on numaflow-rs Github](https://github.com/numaproj/numaflow-rs/blob/main/numaflow/proto/sourcetransform.proto)
+	- [Rust full example on numaflow-rs Github](https://github.com/numaproj/numaflow-rs/blob/main/numaflow/proto/sourcetransform.proto)
 
 
 === "Java"
