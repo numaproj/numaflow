@@ -6,23 +6,23 @@ use crate::metrics::{
     ComponentHealthChecks, LagReader, MetricsState, PendingReaderTasks, PipelineComponents,
     WatermarkFetcherState,
 };
+use crate::pipeline::PipelineContext;
 use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
 use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
-use crate::pipeline::PipelineContext;
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
+use crate::sinker::sink::SinkWriter;
+use crate::sinker::sink::serve::ServingStore;
 use crate::sinker::sink::serve::nats::NatsServingStore;
 use crate::sinker::sink::serve::user_defined::UserDefinedStore;
-use crate::sinker::sink::serve::ServingStore;
-use crate::sinker::sink::SinkWriter;
 use crate::tracker::Tracker;
 use crate::typ::{
-    build_in_memory_rate_limiter_config, build_redis_rate_limiter_config, should_use_redis_rate_limiter, NumaflowTypeConfig,
-    WithInMemoryRateLimiter, WithRedisRateLimiter,
-    WithoutRateLimiter,
+    NumaflowTypeConfig, WithInMemoryRateLimiter, WithRedisRateLimiter, WithoutRateLimiter,
+    build_in_memory_rate_limiter_config, build_redis_rate_limiter_config,
+    should_use_redis_rate_limiter,
 };
 use crate::watermark::WatermarkHandle;
-use crate::{shared, Result};
+use crate::{Result, shared};
 use async_nats::jetstream::Context;
 use futures::future::try_join_all;
 use serving::callback::CallbackHandler;

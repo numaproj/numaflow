@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
 
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use numaflow_models::models::{ForwardConditions, Vertex};
 use serde::Deserialize;
 use serde_json::from_slice;
@@ -13,6 +13,9 @@ use super::{
     DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED,
     ENV_NUMAFLOW_SERVING_RESPONSE_STORE,
 };
+use crate::Result;
+use crate::config::ENV_NUMAFLOW_SERVING_CALLBACK_STORE;
+use crate::config::ENV_NUMAFLOW_SERVING_SPEC;
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::ratelimit::RateLimitConfig;
 use crate::config::components::reduce::{ReducerConfig, StorageConfig};
@@ -26,10 +29,7 @@ use crate::config::get_vertex_replica;
 use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig, Stream};
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
-use crate::config::ENV_NUMAFLOW_SERVING_CALLBACK_STORE;
-use crate::config::ENV_NUMAFLOW_SERVING_SPEC;
 use crate::error::Error;
-use crate::Result;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
@@ -129,7 +129,6 @@ pub(crate) mod map {
 
     /// re-export MapMode from shared.
     pub use numaflow_shared::server_info::MapMode;
-
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct MapVtxConfig {

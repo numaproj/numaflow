@@ -9,20 +9,21 @@ use crate::config::get_vertex_replica;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{
-    PipelineConfig, ToVertexConfig, DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET,
+    DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET, PipelineConfig, ToVertexConfig,
 };
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
 use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
+use crate::reduce::reducer::WindowManager;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
+use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
 use crate::reduce::reducer::unaligned::user_defined::accumulator::UserDefinedAccumulator;
 use crate::reduce::reducer::unaligned::user_defined::session::UserDefinedSessionReduce;
-use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
-use crate::reduce::reducer::WindowManager;
 use crate::shared::grpc;
 use crate::shared::grpc::{create_rpc_channel, wait_until_source_ready};
 use crate::sinker::sink::serve::ServingStore;
 use crate::sinker::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
+use crate::source::Source;
 use crate::source::generator::new_generator;
 use crate::source::http::CoreHttpSource;
 use crate::source::jetstream::new_jetstream_source;
@@ -31,7 +32,6 @@ use crate::source::nats::new_nats_source;
 use crate::source::pulsar::new_pulsar_source;
 use crate::source::sqs::new_sqs_source;
 use crate::source::user_defined::new_source;
-use crate::source::Source;
 use crate::tracker::Tracker;
 use crate::transformer::Transformer;
 use crate::typ::NumaflowTypeConfig;
@@ -49,7 +49,7 @@ use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use numaflow_shared::server_info::{
-    sdk_server_info, supports_nack, ContainerType, Protocol, ServerInfo,
+    ContainerType, Protocol, ServerInfo, sdk_server_info, supports_nack,
 };
 use numaflow_sqs::sink::SqsSinkBuilder;
 use std::path::PathBuf;

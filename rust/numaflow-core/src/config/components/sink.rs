@@ -18,12 +18,12 @@ use std::fmt::Display;
 
 use numaflow_kafka::sink::KafkaSinkConfig;
 use numaflow_models::models::{KafkaSink, PulsarSink, RetryStrategy, Sink, SqsSink};
-use numaflow_pulsar::sink::Config as PulsarSinkConfig;
 use numaflow_pulsar::PulsarAuth;
+use numaflow_pulsar::sink::Config as PulsarSinkConfig;
 use numaflow_sqs::sink::SqsSinkConfig;
 
-use crate::error::Error;
 use crate::Result;
+use crate::error::Error;
 
 use super::parse_kafka_auth_config;
 

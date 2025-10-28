@@ -1,5 +1,5 @@
 use numaflow_kafka::sink::KafkaSink;
-use numaflow_pb::clients::sink::Status::{Failure, Fallback, Serve, Success, OnSuccess};
+use numaflow_pb::clients::sink::Status::{Failure, Fallback, OnSuccess, Serve, Success};
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
 use numaflow_pulsar::sink::Sink as PulsarSink;
