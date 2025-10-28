@@ -551,6 +551,9 @@ func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Cont
 	if mvspec.Sink.Fallback != nil && mvspec.Sink.Fallback.UDSink != nil {
 		sidecarContainers = append(sidecarContainers, mvspec.Sink.getFallbackUDSinkContainer(req))
 	}
+	if mvspec.Sink.OnSuccess != nil && mvspec.Sink.OnSuccess.UDSink != nil {
+		sidecarContainers = append(sidecarContainers, mvspec.Sink.getOnSuccessUDSinkContainer(req))
+	}
 
 	sidecarContainers = append(sidecarContainers, mvspec.Sidecars...)
 	return sidecarContainers, containers
