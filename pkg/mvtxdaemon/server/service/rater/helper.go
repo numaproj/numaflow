@@ -32,27 +32,6 @@ const (
 	rateNotAvailable = float64(math.MinInt)
 )
 
-// UpdateCount updates the count for a given timestamp in the queue.
-func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podReadCounts *PodMetricsCount) {
-	if podReadCounts == nil {
-		return
-	}
-
-	items := q.Items()
-	// find the element matching the input timestamp and update it
-	for _, i := range items {
-		if i.timestamp == time {
-			i.Update(podReadCounts)
-			return
-		}
-	}
-
-	// if we cannot find a matching element, it means we need to add a new timestamped count to the queue
-	tc := NewTimestampedCounts(time)
-	tc.Update(podReadCounts)
-	q.Append(tc)
-}
-
 // CalculateRate calculates the rate of a MonoVertex for a given lookback period.
 func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64) float64 {
 	counts := q.Items()
