@@ -133,7 +133,7 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
             .streaming_write(ReceiverStream::new(wal_rx))
             .await?;
 
-        while let Some(mut msg) = isb_stream.next().await {
+        while let Some(msg) = isb_stream.next().await {
             // Send the message to WAL - it will be converted to bytes internally.
             // The message will be kept alive until the write completes, then dropped
             // (triggering ack via Arc<AckHandle>).
@@ -144,8 +144,6 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
                 .await
                 .expect("Receiver dropped");
 
-            // drop the ack handle of the outgoing message, because we are persisting the data.
-            msg.ack_handle = None;
             tx.send(msg).await.expect("Receiver dropped");
         }
 
