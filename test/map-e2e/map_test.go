@@ -19,9 +19,10 @@ limitations under the License.
 package sdks_e2e
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"testing"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
@@ -143,7 +144,7 @@ func (s *MapSuite) TestPipelineRateLimitWithRedisStore() {
 		_ = client.Close()
 	}()
 
-	w.Expect().VertexPodLogContains("map-udf", "processed=50", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithCount(20))
+	w.Expect().VertexPodLogContains("map-udf", "processed\":\"50", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithCount(20))
 }
 
 func TestMapSuite(t *testing.T) {

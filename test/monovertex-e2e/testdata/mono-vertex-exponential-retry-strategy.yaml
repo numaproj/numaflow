@@ -1,5 +1,5 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
-kind: Pipeline
+kind: MonoVertex
 metadata:
   name: retry-backoff-mvtx
 spec:

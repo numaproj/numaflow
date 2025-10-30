@@ -26,10 +26,6 @@ spec:
           rpu: 300
           duration: 1s
     - name: map-udf
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: !!str "true"
       scale:
         min: 2
       udf:
