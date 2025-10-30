@@ -1,6 +1,7 @@
 use crate::Result;
 use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
 use crate::message::Message;
+use crate::metadata::Metadata;
 use crate::sinker::sink::{ResponseStatusFromSink, Sink};
 use backoff::strategy::exponential::Exponential;
 use std::collections::HashMap;
@@ -8,7 +9,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
-use tracing::{metadata, warn};
+use tracing::warn;
 
 /// Response from the sink actor containing categorized messages
 #[derive(Default)]
@@ -118,32 +119,33 @@ where
                     }
                     Some(ResponseStatusFromSink::OnSuccess(on_success_msg)) => {
                         if let Some(on_success_msg) = on_success_msg {
-                            msg.value = on_success_msg.value.into();
-                            msg.keys = on_success_msg.keys.into();
-                            if let Some(metadata) = &mut msg.metadata {
-                                // TODO: should make_mut be used?
-                                let inner_metadata = Arc::make_mut(metadata);
-                                inner_metadata.user_metadata = on_success_msg
-                                    .user_metadata
-                                    .into_iter()
-                                    .map(|(key, value)| (key, value.into()))
-                                    .collect()
-                            } else {
-                                msg.metadata = Some(
-                                    crate::metadata::Metadata {
-                                        user_metadata: on_success_msg
-                                            .user_metadata
-                                            .into_iter()
-                                            .map(|(key, value)| (key, value.into()))
-                                            .collect(),
-                                        sys_metadata: HashMap::new(),
-                                        previous_vertex: String::new(),
-                                    }
-                                    .into(),
-                                )
-                            }
+                            let on_success_md: Option<Metadata> =
+                                on_success_msg.metadata.map(|md| md.into());
+                            // FIXME: Excessive cloning?
+                            let new_md = match msg.metadata.clone() {
+                                Some(prev_md) => Metadata {
+                                    user_metadata: on_success_md
+                                        .map_or(prev_md.user_metadata.clone(), |md| md.user_metadata),
+                                    sys_metadata: prev_md.sys_metadata.clone(),
+                                    previous_vertex: prev_md.previous_vertex.clone(),
+                                },
+                                None => Metadata {
+                                    user_metadata: on_success_md
+                                        .map_or(HashMap::new(), |md| md.user_metadata),
+                                    ..Default::default()
+                                },
+                            };
+                            let new_msg = Message {
+                                value: on_success_msg.value.into(),
+                                keys: on_success_msg.keys.into(),
+                                metadata: Some(Arc::new(new_md)),
+                                ..msg.clone()
+                            };
+                            on_success_messages.push(new_msg.clone());
+                        } else {
+                            // Send the original message if no payload was provided to the onSuccess sink
+                            on_success_messages.push(msg.clone());
                         }
-                        on_success_messages.push(msg.clone());
                         false // remove from retry list
                     }
                     None => unreachable!("should have response for all messages"), // remove if no response

@@ -100,22 +100,8 @@ pub mod sink_response {
             pub value: ::prost::alloc::vec::Vec<u8>,
             #[prost(string, repeated, tag = "2")]
             pub keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-            #[prost(map = "string, message", tag = "3")]
-            pub user_metadata: ::std::collections::HashMap<
-                ::prost::alloc::string::String,
-                on_success_message::KeyValueGroup,
-            >,
-        }
-        /// Nested message and enum types in `OnSuccessMessage`.
-        pub mod on_success_message {
-            #[derive(Clone, PartialEq, ::prost::Message)]
-            pub struct KeyValueGroup {
-                #[prost(map = "string, bytes", tag = "1")]
-                pub key_value: ::std::collections::HashMap<
-                    ::prost::alloc::string::String,
-                    ::prost::alloc::vec::Vec<u8>,
-                >,
-            }
+            #[prost(message, optional, tag = "3")]
+            pub metadata: ::core::option::Option<crate::common::metadata::Metadata>,
         }
     }
 }

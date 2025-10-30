@@ -88,33 +88,3 @@ impl From<KeyValueGroup> for metadata::KeyValueGroup {
         }
     }
 }
-
-impl From<KeyValueGroup>
-    for numaflow_pb::clients::sink::sink_response::result::on_success_message::KeyValueGroup
-{
-    fn from(group: KeyValueGroup) -> Self {
-        Self {
-            key_value: group
-                .key_value
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect(),
-        }
-    }
-}
-
-impl From<numaflow_pb::clients::sink::sink_response::result::on_success_message::KeyValueGroup>
-    for KeyValueGroup
-{
-    fn from(
-        group: numaflow_pb::clients::sink::sink_response::result::on_success_message::KeyValueGroup,
-    ) -> Self {
-        Self {
-            key_value: group
-                .key_value
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect(),
-        }
-    }
-}
