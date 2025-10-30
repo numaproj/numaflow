@@ -631,7 +631,12 @@ mod tests {
                 } else if datum.keys.first().unwrap() == "serve" {
                     responses.push(sink::Response::serve(datum.id, "serve-response".into()));
                 } else if datum.keys.first().unwrap() == "onSuccess" {
-                    responses.push(sink::Response::on_success(datum.id));
+                    let on_success_msg = sink::OnSuccessMessage {
+                        value: "on-success-message".into(),
+                        keys: None,
+                        user_metadata: None,
+                    };
+                    responses.push(sink::Response::on_success(datum.id, Some(on_success_msg)));
                 } else {
                     responses.push(sink::Response::ok(datum.id));
                 }
