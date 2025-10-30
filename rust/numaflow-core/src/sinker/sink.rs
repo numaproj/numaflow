@@ -1,20 +1,3 @@
-use numaflow_kafka::sink::KafkaSink;
-use numaflow_pb::clients::sink::Status::{Failure, Fallback, OnSuccess, Serve, Success};
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::sink::sink_response;
-use numaflow_pulsar::sink::Sink as PulsarSink;
-use numaflow_sqs::sink::SqsSink;
-use std::sync::atomic::Ordering;
-use std::time::Duration;
-use tokio::sync::{mpsc, oneshot};
-use tokio::task::JoinHandle;
-use tokio::{pin, time};
-use tokio_stream::StreamExt;
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
-use tracing::{error, info};
-
 use crate::Result;
 use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::config::{get_vertex_name, is_mono_vertex};
@@ -25,7 +8,24 @@ use crate::metrics::{
     pipeline_metric_labels, pipeline_metrics,
 };
 use crate::sinker::actor::{SinkActorMessage, SinkActorResponse};
+use numaflow_kafka::sink::KafkaSink;
+use numaflow_pb::clients::sink::Status::{Failure, Fallback, OnSuccess, Serve, Success};
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::sink::sink_response;
+use numaflow_pb::clients::sink::sink_response::result::OnSuccessMessage;
+use numaflow_pulsar::sink::Sink as PulsarSink;
+use numaflow_sqs::sink::SqsSink;
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
+use tokio::{pin, time};
+use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
+use tracing::{error, info};
 
 use crate::sinker::builder::HealthCheckClients;
 use serve::{ServingStore, StoreEntry};
@@ -567,7 +567,7 @@ pub(crate) enum ResponseStatusFromSink {
     Fallback,
     /// Write to serving store.
     Serve(Option<Vec<u8>>),
-    OnSuccess,
+    OnSuccess(Option<OnSuccessMessage>),
 }
 
 /// Sink will give a response per [Message].
@@ -586,7 +586,7 @@ impl From<sink_response::Result> for ResponseFromSink {
             Failure => ResponseStatusFromSink::Failed(value.err_msg),
             Fallback => ResponseStatusFromSink::Fallback,
             Serve => ResponseStatusFromSink::Serve(value.serve_response),
-            OnSuccess => ResponseStatusFromSink::OnSuccess,
+            OnSuccess => ResponseStatusFromSink::OnSuccess(value.on_success_msg),
         };
         Self {
             id: value.id,
@@ -1123,6 +1123,7 @@ mod tests {
                 status: Success as i32,
                 err_msg: "".to_string(),
                 serve_response: None,
+                on_success_msg: None,
             }],
             handshake: None,
             status: None,

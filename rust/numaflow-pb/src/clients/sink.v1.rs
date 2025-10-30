@@ -76,7 +76,7 @@ pub struct SinkResponse {
 }
 /// Nested message and enum types in `SinkResponse`.
 pub mod sink_response {
-    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Result {
         /// id is the ID of the message, can be used to uniquely identify the message.
         #[prost(string, tag = "1")]
@@ -89,6 +89,34 @@ pub mod sink_response {
         pub err_msg: ::prost::alloc::string::String,
         #[prost(bytes = "vec", optional, tag = "4")]
         pub serve_response: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+        #[prost(message, optional, tag = "5")]
+        pub on_success_msg: ::core::option::Option<result::OnSuccessMessage>,
+    }
+    /// Nested message and enum types in `Result`.
+    pub mod result {
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct OnSuccessMessage {
+            #[prost(bytes = "vec", tag = "1")]
+            pub value: ::prost::alloc::vec::Vec<u8>,
+            #[prost(string, repeated, tag = "2")]
+            pub keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+            #[prost(map = "string, message", tag = "3")]
+            pub user_metadata: ::std::collections::HashMap<
+                ::prost::alloc::string::String,
+                on_success_message::KeyValueGroup,
+            >,
+        }
+        /// Nested message and enum types in `OnSuccessMessage`.
+        pub mod on_success_message {
+            #[derive(Clone, PartialEq, ::prost::Message)]
+            pub struct KeyValueGroup {
+                #[prost(map = "string, bytes", tag = "1")]
+                pub key_value: ::std::collections::HashMap<
+                    ::prost::alloc::string::String,
+                    ::prost::alloc::vec::Vec<u8>,
+                >,
+            }
+        }
     }
 }
 /// Status is the status of the response.
