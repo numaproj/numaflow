@@ -1,5 +1,7 @@
+use tracing::Level;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{Layer, filter::EnvFilter, fmt};
 
 use std::backtrace::{Backtrace, BacktraceStatus};
 use std::panic::PanicHookInfo;
@@ -52,17 +54,33 @@ fn report_panic(panic_info: &PanicHookInfo<'_>) {
 }
 
 pub fn register() {
-    // Set up the tracing subscriber. RUST_LOG can be used to set the log level.
-    // The default log level is `info`. The `axum::rejection=trace` enables showing
-    // rejections from built-in extractors at `TRACE` level.
+    // Check the NUMAFLOW_DEBUG environment variable
+    let debug_mode = std::env::var("NUMAFLOW_DEBUG").map_or(false, |v| v.to_lowercase() == "true");
+    let default_log_level = if debug_mode {
+        "debug,h2::codec=info" // "h2::codec" is too noisy
+    } else {
+        "info"
+    };
+
+    let filter = EnvFilter::builder()
+        .with_default_directive(default_log_level.parse().unwrap_or(Level::INFO.into()))
+        .from_env_lossy(); // Read RUST_LOG environment variable
+
+    let layer = if debug_mode {
+        // Text format
+        fmt::layer().boxed()
+    } else {
+        // JSON format, flattened
+        fmt::layer()
+            .with_ansi(false)
+            .json()
+            .flatten_event(true)
+            .boxed()
+    };
+
     tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                // TODO: add a better default based on entry point invocation
-                //  e.g., serving/monovertex might need a different default
-                .unwrap_or_else(|_| "info".into()),
-        )
-        .with(tracing_subscriber::fmt::layer().with_ansi(false))
+        .with(filter)
+        .with(layer)
         .init();
 
     std::panic::set_hook(Box::new(report_panic));
