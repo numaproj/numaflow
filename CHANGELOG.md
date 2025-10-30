@@ -1,5 +1,90 @@
 # Changelog
 
+## v1.7.0-rc1 (2025-10-30)
+
+ * [0bbf43b9](https://github.com/numaproj/numaflow/commit/0bbf43b9d621a16a1cf822de27ee8371208ad2cc) Update manifests to v1.7.0-rc1
+ * [362f942a](https://github.com/numaproj/numaflow/commit/362f942a006c25ed110b56573242c37cd683b28a) fix: remove from tracker after windows are created and fix concurrency issues with rater (#3051)
+ * [367d2121](https://github.com/numaproj/numaflow/commit/367d2121bbf6e97e874e835ab691db33e55d8c17) refactor: watermark to not use actor pattern (#3039)
+ * [3c727dc5](https://github.com/numaproj/numaflow/commit/3c727dc57c1f5ea154ff868bf0223d19ed3480a2) fix: watermark values that are displayed in UI (#3032)
+ * [caa29228](https://github.com/numaproj/numaflow/commit/caa292288e7869ebc5b8290cf5680a4c5981199e) doc: add SDK examples for Accumulate function (#3036)
+ * [d16d948e](https://github.com/numaproj/numaflow/commit/d16d948e2f85045ec4d5c92930bc08ec8c597b2d) doc: content tabs for side input in python/Go/Java (#3033)
+ * [a33e45bd](https://github.com/numaproj/numaflow/commit/a33e45bdddb089f1b562d1b5c68558158a5e6348) refactor: Sink Component (#3021)
+ * [543b4708](https://github.com/numaproj/numaflow/commit/543b4708bde6a9f5a4f4557d312139a227ed8f84) fix: active partitions for source watermark publisher (#3022)
+ * [b5ed6c9d](https://github.com/numaproj/numaflow/commit/b5ed6c9d83cd040a29b771c3e4d195b2f0572122) fix: [::]:50051 is not parsable by ASP.NET.CORE 9  (#3020)
+ * [e9769ec2](https://github.com/numaproj/numaflow/commit/e9769ec26a45c7bb3eaba4cdec1264c018de4c43) fix: Progress watermark for a source idling from the start (#3015)
+ * [20d2d816](https://github.com/numaproj/numaflow/commit/20d2d816fa6c848d213eb4a0fb2aef8bcf154435) fix(doc): point docs to the new python path (#3018)
+ * [4ffad22c](https://github.com/numaproj/numaflow/commit/4ffad22c893308feda227e56abfba0313ddc538e) fix: delete the correct nats Secret if it exists (#3014)
+ * [c20e716e](https://github.com/numaproj/numaflow/commit/c20e716eeece3b344c882465c2668619b83868f5) refactor: ISB Reader and Writer (#2986)
+ * [4fc2af4b](https://github.com/numaproj/numaflow/commit/4fc2af4b1f852041239f2c7d58e87326275f6530) feat(UI): add fallback sink container in MonoVertex graph  (#3004)
+ * [46c9cfe9](https://github.com/numaproj/numaflow/commit/46c9cfe9d3ce8589152d4262edafe170a2d580a4) feat(UI): add udf(map) container in Monovertex graph (#3000)
+ * [73f4dd24](https://github.com/numaproj/numaflow/commit/73f4dd24ac69fbc16b2ec76e626af958574c22c1) feat: enable map in monovertex (#2994)
+ * [f438691b](https://github.com/numaproj/numaflow/commit/f438691bf4c9738e4a5aaa2249023b547676eacf) fix: autoscaling for low throughput non-source vertices (#2996)
+ * [0f121016](https://github.com/numaproj/numaflow/commit/0f1210163df50cb9a93b39fdecad1665bf0332b5) docs(autoscaling): why a built-in autoscaler is needed (#2993)
+ * [05d7ae1d](https://github.com/numaproj/numaflow/commit/05d7ae1d05f68fd7b13c13db0e3f33ce5254919a) doc: Documentation for resumedRampUp (#2991)
+ * [6b528818](https://github.com/numaproj/numaflow/commit/6b5288187a5c66f890b55c0aa83d40956f095eb9) feat: Implement immediate ramp up during re-deployments (#2985)
+ * [94039dc0](https://github.com/numaproj/numaflow/commit/94039dc0f4b2562e436e71a0a69148be80b83e43) fix: make Tags mandatory in ForwardConditions to match Rust backend (#2970)
+ * [9c31c783](https://github.com/numaproj/numaflow/commit/9c31c78378f8e2dafdae584fe034452175416ec6) fix(ci): replace bitnami/kafka with apache/kafka with kRaft (#2988)
+ * [3f8989ff](https://github.com/numaproj/numaflow/commit/3f8989ffb60163c3794a4b7a8d92e356438d8cd9) doc: Document throttling modes (#2987)
+ * [e25b2628](https://github.com/numaproj/numaflow/commit/e25b2628de93b50e705cb2dbd5ac12b8c927d7d9) feat: Control plane wiring for only_if_used and go_back_n modes.  (#2973)
+ * [6595a63b](https://github.com/numaproj/numaflow/commit/6595a63bf901dfb6e41912701ef87248f001cc4a) fix: duplicate envs for monitor container (#2983)
+ * [bf399a52](https://github.com/numaproj/numaflow/commit/bf399a52e12741dfb816ba1452cdc13c021af774) fix(UI): watermark fetch apis for reduce edges (#2965)
+ * [33f112b9](https://github.com/numaproj/numaflow/commit/33f112b91d362a67f4560bb1790284985d690958) fix:  udf write metrics in streaming mode (#2974)
+ * [1b3d65ea](https://github.com/numaproj/numaflow/commit/1b3d65ea8aa310cd908d4fb5f186f45494f1b151) feat: Deposit token logic and add OnlyIfUsed and GoBackN mode (#2962)
+ * [12e28a5b](https://github.com/numaproj/numaflow/commit/12e28a5b0868aaae0a74738da2964d56725d44b4) feat: add assume role for SQS (#2963)
+ * [6a4a4c93](https://github.com/numaproj/numaflow/commit/6a4a4c9386f08281e710dc6bb6f1ebaa6b9a1623) feat: adding nack support for sources (#2952)
+ * [2d8b12dc](https://github.com/numaproj/numaflow/commit/2d8b12dc0c69551ecf2a38c121278d7401e35a76) fix: return none, if any of the Vn-1 processors are not idle (#2948)
+ * [ea3d65d1](https://github.com/numaproj/numaflow/commit/ea3d65d15a9e9478f2d6e373b6adecd073f6f8ea) fix: rater should not consider nil metric data points (#2958)
+ * [bc428e46](https://github.com/numaproj/numaflow/commit/bc428e4610b84e686f101d6665d781248bc68fff) feat: Wiring for scheduled rate limiting mode (#2954)
+ * [1eb8016c](https://github.com/numaproj/numaflow/commit/1eb8016cea86ff143c5890474db4b0d18142d0d1) fix: sqs sink batch entry ID (#2951)
+ * [0ca814e6](https://github.com/numaproj/numaflow/commit/0ca814e65836544095caa5d1b22682bcc45a96ae) feat: introduce throttling modes (#2949)
+ * [5e506269](https://github.com/numaproj/numaflow/commit/5e506269349b981bc8ff0a08a097519a0c0fe8ee) fix: fallback sink validation (#2947)
+ * [1d022dab](https://github.com/numaproj/numaflow/commit/1d022dabcdb8e8ab0bf296ab1f1550874e63e02e) fix: flaky rater test by removing truncation  (#2945)
+ * [f575d53b](https://github.com/numaproj/numaflow/commit/f575d53b9ce5f6a2d7fa4aa01d112825bc87ba1f) fix: Rater should use ticker tick's timestamp for window (#2935)
+ * [252105a5](https://github.com/numaproj/numaflow/commit/252105a51b799451b8960dee621b8735c7b46600) fix: reader should determine the idling (#2932)
+ * [1e8ffc99](https://github.com/numaproj/numaflow/commit/1e8ffc996a944413aae84daebf2f14708535840b) fix: `side_input_operations` test should be behind `nats-tests` feature (#2933)
+ * [39149056](https://github.com/numaproj/numaflow/commit/39149056542da6929146f4f10be88d99c3567c5f) fix: Forward Kafka message keys (#2931)
+ * [7d4b652c](https://github.com/numaproj/numaflow/commit/7d4b652ce6cc40d8bcb6b1d55d2c8e8666dfdcc9) fix: detect terminating pods as soon as possible (#2919)
+ * [04c36cfc](https://github.com/numaproj/numaflow/commit/04c36cfcc84492d5e75b8eb49aaf6e57e4267674) fix: timeout increased for a flaky ui test and check rust formatting in lint target (#2927)
+ * [e6b13952](https://github.com/numaproj/numaflow/commit/e6b139524c2cb5e18d5a3f5227ca29fbabf312a2) feat: Redis Sentinel Mode Support For Rate Limiter (#2917)
+ * [87ea7d55](https://github.com/numaproj/numaflow/commit/87ea7d554f6b472ddbf81b9d3216f819d3470390) chore(deps): bump tracing-subscriber from 0.3.19 to 0.3.20 in /rust (#2920)
+ * [b84b8607](https://github.com/numaproj/numaflow/commit/b84b860729a3c4f6d1b8d45309eca05cd1241dab) fix: Add `spec.replicas` field to minimal CRDs (#2910)
+ * [a3f4a5ea](https://github.com/numaproj/numaflow/commit/a3f4a5ea4364fb4b2de6fcd75fcbcd67894aad93) feat: Integration of Distributed Throttler With Numaflow Data-plane (#2904)
+ * [48cfbe98](https://github.com/numaproj/numaflow/commit/48cfbe989d5d3d2c35210015f538c8c081dcb50b) fix: create service for http source in mvtx (#2908)
+ * [6c7d3eff](https://github.com/numaproj/numaflow/commit/6c7d3eff586b531963bb67408538f353cc6335fd) fix: ack messages which should not be forwarded to any vertices (#2905)
+ * [0e867e4c](https://github.com/numaproj/numaflow/commit/0e867e4cecc338f91871168ea77f6960bcb9e601) fix(UI): loading state when vertex has 0 pods (#2862)
+ * [630d6dd0](https://github.com/numaproj/numaflow/commit/630d6dd02a8ab166866d5e19c5d0b134ee04a2c6) feat: timeout support for rate limiter (#2896)
+ * [3ade3f91](https://github.com/numaproj/numaflow/commit/3ade3f9190c1f75a620952e0daafb17cc7cc3a23) feat: framework for distributed throttling (#2892)
+ * [1b189552](https://github.com/numaproj/numaflow/commit/1b189552486a2e15fa2694348d1f4892227bed3e) doc: document compression (#2885)
+ * [eaa2b21a](https://github.com/numaproj/numaflow/commit/eaa2b21a681e95f120d86f318718e18d9a94200f) chore(deps): bump slab from 0.4.10 to 0.4.11 in /rust (#2880)
+ * [06f4a04b](https://github.com/numaproj/numaflow/commit/06f4a04b2edab997cd3007a75c807e5f428b7bd8) doc: update compatibility (#2868)
+ * [5ea47661](https://github.com/numaproj/numaflow/commit/5ea47661fe36a15093ffee46ed84306d78c0c0b6) fix: default read timeout for pipeline config (#2878)
+ * [d09c31c4](https://github.com/numaproj/numaflow/commit/d09c31c4bfc0d2cff43b4343ca478f3eb0e1dc2e) fix: flaky `timeAlgo` UI test (#2870)
+ * [665553a5](https://github.com/numaproj/numaflow/commit/665553a55a6d6106339ebab2c3a15967c98b9983) Enhance gRPC error logging to include metadata and details (#2864)
+ * [12c4d4e0](https://github.com/numaproj/numaflow/commit/12c4d4e096c868afa1c18851036965eea2a72be2) Use ReadWriteOncePod as default PVC access mode (fixes #2854) (#2865)
+ * [ee27ded4](https://github.com/numaproj/numaflow/commit/ee27ded47760474417b34f86d84ecb4166e42c0b) fix: decode error details of gRPC status (#2866)
+ * [424970f9](https://github.com/numaproj/numaflow/commit/424970f94c89aef10610f27b75cc301b5edb122a) doc: add python accumulator url (#2859)
+ * [a8bb86b9](https://github.com/numaproj/numaflow/commit/a8bb86b9a80383f3673537467e71e86ca3e62a66) Golang made Numaflow possible, Rust for infinity and beyond (#2857)
+
+### Contributors
+
+ * Aayush Sapkota
+ * Adarsh Jain
+ * Da.Sanchez
+ * Derek Wang
+ * Julie Vogelman
+ * Martin Thøgersen
+ * Rachel McGuigan
+ * Roman Alexander
+ * Siddhant Khare
+ * Sreekanth
+ * Vaibhav Kant Tiwari
+ * Vigith Maurice
+ * Yashash
+ * Yashash H L
+ * dependabot[bot]
+ * shrivardhan
+ * yogesh
+
 ## v1.6.0 (2025-08-02)
 
  * [e19334ed](https://github.com/numaproj/numaflow/commit/e19334ed78513f7e557ae545659ba247eea78ddd) Update manifests to v1.6.0
