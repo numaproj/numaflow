@@ -125,7 +125,9 @@ where
                             let new_md = match msg.metadata.clone() {
                                 Some(prev_md) => Metadata {
                                     user_metadata: on_success_md
-                                        .map_or(prev_md.user_metadata.clone(), |md| md.user_metadata),
+                                        .map_or(prev_md.user_metadata.clone(), |md| {
+                                            md.user_metadata
+                                        }),
                                     sys_metadata: prev_md.sys_metadata.clone(),
                                     previous_vertex: prev_md.previous_vertex.clone(),
                                 },
