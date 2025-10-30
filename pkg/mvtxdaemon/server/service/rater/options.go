@@ -16,11 +16,13 @@ limitations under the License.
 
 package rater
 
+import "time"
+
 type options struct {
 	// Number of workers working on collecting counts of processed messages.
 	workers int
-	// Time in milliseconds, each element in the work queue will be picked up in an interval of this period of time.
-	taskInterval int
+	// Time in duration, each element in the work queue will be picked up in an interval of this period of time.
+	taskInterval time.Duration
 }
 
 type Option func(*options)
@@ -34,7 +36,7 @@ func defaultOptions() *options {
 	return &options{
 		workers: 50, // default max replicas is 50
 		// we execute the rater metrics fetching every 5 seconds
-		taskInterval: 5,
+		taskInterval: 5 * time.Second,
 	}
 }
 
@@ -44,8 +46,8 @@ func WithWorkers(n int) Option {
 	}
 }
 
-func WithTaskInterval(n int) Option {
+func WithTaskInterval(duration time.Duration) Option {
 	return func(o *options) {
-		o.taskInterval = n
+		o.taskInterval = duration
 	}
 }

@@ -31,48 +31,6 @@ const (
 	rateNotAvailable = float64(math.MinInt)
 )
 
-// UpdatePendingCount updates the pending count for a pod at a given time
-func UpdatePendingCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podPendingCounts *PodPendingCount) {
-	if podPendingCounts == nil {
-		return
-	}
-
-	items := q.Items()
-	// find the element matching the input timestamp and update it
-	for _, i := range items {
-		if i.timestamp == time {
-			i.UpdatePending(podPendingCounts)
-			return
-		}
-	}
-
-	// if we cannot find a matching element, it means we need to add a new timestamped count to the queue
-	tc := NewTimestampedCounts(time)
-	tc.UpdatePending(podPendingCounts)
-	q.Append(tc)
-}
-
-// UpdateCount updates the count of processed messages for a pod at a given time
-func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podReadCounts *PodReadCount) {
-	if podReadCounts == nil {
-		return
-	}
-
-	items := q.Items()
-	// find the element matching the input timestamp and update it
-	for _, i := range items {
-		if i.timestamp == time {
-			i.Update(podReadCounts)
-			return
-		}
-	}
-
-	// if we cannot find a matching element, it means we need to add a new timestamped count to the queue
-	tc := NewTimestampedCounts(time)
-	tc.Update(podReadCounts)
-	q.Append(tc)
-}
-
 // CalculatePending calculates the pending messages for a given partition in the last lookback seconds
 func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64, partitionName string) int64 {
 	counts := q.Items()

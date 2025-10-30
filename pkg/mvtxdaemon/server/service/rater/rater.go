@@ -22,6 +22,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"sync"
 	"time"
 
 	dto "github.com/prometheus/client_model/go"
@@ -79,6 +80,7 @@ type Rater struct {
 	// lookBackSeconds is the lookback time window used for scaling calculations
 	// this can be updated dynamically, defaults to user-specified value in the spec
 	lookBackSeconds *atomic.Float64
+	mu              sync.Mutex
 	options         *options
 }
 
@@ -179,12 +181,62 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int, times
 				if podPendingCount == nil {
 					log.Debugf("Failed retrieving pending counts for pod %s", pInfo.podName)
 				}
-				UpdateCount(r.timestampedPendingCount, timestamp, podPendingCount)
+				r.updatePendingCount(timestamp, podPendingCount)
 			}
+			r.updateCount(timestamp, podReadCount)
 		}
 	}
-	UpdateCount(r.timestampedPodCounts, timestamp, podReadCount)
 	return nil
+}
+
+func (r *Rater) updateCount(timestamp int64, podReadCount *PodMetricsCount) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if podReadCount == nil {
+		return
+	}
+	q := r.timestampedPodCounts
+
+	// Peek the last element
+	items := q.Items()
+	if len(items) > 0 {
+		last := items[len(items)-1]
+		// Merge if same timestamp
+		if last.timestamp == timestamp {
+			last.Update(podReadCount)
+			return
+		}
+	}
+
+	tc := NewTimestampedCounts(timestamp)
+	tc.Update(podReadCount)
+	q.Append(tc)
+}
+
+func (r *Rater) updatePendingCount(timestamp int64, podPendingCounts *PodMetricsCount) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if podPendingCounts == nil {
+		return
+	}
+	q := r.timestampedPendingCount
+
+	items := q.Items()
+	if len(items) > 0 {
+		last := items[len(items)-1]
+		// Merge if same timestamp
+		if last.timestamp == timestamp {
+			last.Update(podPendingCounts)
+			return
+		}
+	}
+
+	// if we cannot find a matching element, it means we need to add a new timestamped count to the queue
+	tc := NewTimestampedCounts(timestamp)
+	tc.Update(podPendingCounts)
+	q.Append(tc)
 }
 
 // getPodMetrics Fetches the metrics for a given pod from the Prometheus metrics endpoint.
@@ -317,7 +369,7 @@ func (r *Rater) Start(ctx context.Context) error {
 		}
 	}
 
-	ticker := time.NewTicker(time.Duration(r.options.taskInterval) * time.Millisecond)
+	ticker := time.NewTicker(r.options.taskInterval)
 	// Following for loop keeps calling assign() function to assign monitoring tasks to the workers.
 	// It makes sure each element in the list will be assigned every N milliseconds.
 	for {

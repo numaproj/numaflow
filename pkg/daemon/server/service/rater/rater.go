@@ -24,6 +24,7 @@ import (
 	"maps"
 	"math"
 	"net/http"
+	"sync"
 	"time"
 
 	dto "github.com/prometheus/client_model/go"
@@ -69,6 +70,7 @@ type Rater struct {
 	timestampedPendingCount map[string]*sharedqueue.OverflowQueue[*TimestampedCounts]
 	// this can be updated dynamically, defaults to user-specified value in the spec
 	lookBackSeconds map[string]*atomic.Float64
+	mu              sync.RWMutex
 	options         *options
 }
 
@@ -184,13 +186,63 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int, times
 			if podPendingCount == nil {
 				log.Debugf("Failed retrieving pending counts for pod %s vertex %s", podInfo.podName, podInfo.vertexName)
 			}
-			UpdatePendingCount(r.timestampedPendingCount[podInfo.vertexName], timestamp, podPendingCount)
+			r.updatePendingCount(podInfo.vertexName, timestamp, podPendingCount)
 		}
 	} else {
 		log.Debugf("Pod %s does not exist, updating it with nil...", podInfo.podName)
 	}
-	UpdateCount(r.timestampedPodCounts[podInfo.vertexName], timestamp, podReadCount)
+	r.updateCount(podInfo.vertexName, timestamp, podReadCount)
 	return nil
+}
+
+func (r *Rater) updateCount(vertexName string, timestamp int64, podReadCount *PodReadCount) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if podReadCount == nil {
+		return
+	}
+
+	q := r.timestampedPodCounts[vertexName]
+	// Peek the last element
+	items := q.Items()
+	if len(items) > 0 {
+		last := items[len(items)-1]
+		// Merge if same timestamp
+		if last.timestamp == timestamp {
+			last.Update(podReadCount)
+			return
+		}
+	}
+
+	tc := NewTimestampedCounts(timestamp)
+	tc.Update(podReadCount)
+	q.Append(tc)
+}
+
+func (r *Rater) updatePendingCount(vertexName string, timestamp int64, podPendingCounts *PodPendingCount) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if podPendingCounts == nil {
+		return
+	}
+	q := r.timestampedPendingCount[vertexName]
+
+	items := q.Items()
+	if len(items) > 0 {
+		last := items[len(items)-1]
+		// Merge if same timestamp
+		if last.timestamp == timestamp {
+			last.UpdatePending(podPendingCounts)
+			return
+		}
+	}
+
+	// if we cannot find a matching element, it means we need to add a new timestamped count to the queue
+	tc := NewTimestampedCounts(timestamp)
+	tc.UpdatePending(podPendingCounts)
+	q.Append(tc)
 }
 
 func (r *Rater) Start(ctx context.Context) error {
@@ -225,7 +277,7 @@ func (r *Rater) Start(ctx context.Context) error {
 		}
 	}
 
-	ticker := time.NewTicker(time.Duration(r.options.taskInterval) * time.Millisecond)
+	ticker := time.NewTicker(r.options.taskInterval)
 	defer ticker.Stop()
 
 	// Following for loop keeps calling assign() function to assign monitoring tasks to the workers.
