@@ -6,9 +6,9 @@ spec:
   limits:
     readBatchSize: 50
     rateLimit:
-      max: 100  # 100 TPS maximum
-      min: 10   # 10 TPS minimum during ramp up
-      rampUpDuration: 10s  # 10 seconds to ramp up from min to max
+      max: 100 # 100 TPS maximum
+      min: 10 # 10 TPS minimum during ramp up
+      rampUpDuration: 10s # 10 seconds to ramp up from min to max
       store:
         redisStore:
           mode: single
@@ -26,6 +26,10 @@ spec:
           rpu: 300
           duration: 1s
     - name: map-udf
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_DEBUG
+            value: !!str "true"
       scale:
         min: 2
       udf:

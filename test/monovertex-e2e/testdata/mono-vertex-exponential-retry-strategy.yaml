@@ -3,6 +3,10 @@ kind: Pipeline
 metadata:
   name: retry-backoff-mvtx
 spec:
+  containerTemplate:
+    env:
+      - name: NUMAFLOW_DEBUG
+        value: !!str "true"
   source:
     generator:
       rpu: 1
@@ -15,7 +19,7 @@ spec:
         factor: 2
         cap: 3s
         jitter: 0
-      onFailure: 'drop'
+      onFailure: "drop"
     udsink:
       container:
         image: quay.io/numaio/numaflow-go/sink-retry-e2e:stable
