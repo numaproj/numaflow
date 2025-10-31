@@ -1,5 +1,5 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
-kind: Pipeline
+kind: MonoVertex
 metadata:
   name: retry-backoff-mvtx
 spec:
@@ -15,7 +15,7 @@ spec:
         factor: 2
         cap: 3s
         jitter: 0
-      onFailure: 'drop'
+      onFailure: "drop"
     udsink:
       container:
         image: quay.io/numaio/numaflow-go/sink-retry-e2e:stable

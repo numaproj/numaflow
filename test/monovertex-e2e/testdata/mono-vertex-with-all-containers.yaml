@@ -3,6 +3,10 @@ kind: MonoVertex
 metadata:
   name: all-containers-mono-vertex
 spec:
+  containerTemplate:
+    env:
+      - name: NUMAFLOW_DEBUG
+        value: !!str "true"
   scale:
     min: 1
   source:
@@ -12,8 +16,8 @@ spec:
         imagePullPolicy: IfNotPresent
     transformer:
       container:
-          image: quay.io/numaio/numaflow-go/mapt-assign-event-time:stable
-          imagePullPolicy: IfNotPresent
+        image: quay.io/numaio/numaflow-go/mapt-assign-event-time:stable
+        imagePullPolicy: IfNotPresent
   udf:
     container:
       image: quay.io/numaio/numaflow-go/map-cat:stable
@@ -21,15 +25,15 @@ spec:
   sink:
     udsink:
       container:
-         # Sink which returns a fallback response, see https://github.com/numaproj/numaflow-go/tree/main/examples/sinker
+        # Sink which returns a fallback response, see https://github.com/numaproj/numaflow-go/tree/main/examples/sinker
         image: quay.io/numaio/numaflow-go/fb-sink-log:stable
         imagePullPolicy: IfNotPresent
     fallback:
-        udsink:
-          container:
-            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/examples/sinker/fallback
-            image: quay.io/numaio/numaflow-go/redis-sink:stable
-            imagePullPolicy: IfNotPresent
-            env:
-              - name: SINK_HASH_KEY
-                value: "fallback-sink-key"
+      udsink:
+        container:
+          # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/examples/sinker/fallback
+          image: quay.io/numaio/numaflow-go/redis-sink:stable
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SINK_HASH_KEY
+              value: "fallback-sink-key"

@@ -239,7 +239,7 @@ func (s *APISuite) TestAPIsForMetricsAndWatermarkAndPodsForPipeline() {
 		VertexPodLogContains("p1", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("output", LogSinkVertexStartedRustRuntime).
 		DaemonPodLogContains(pipelineName, LogDaemonStarted).
-		VertexPodLogContains("output", `"value":.*EventTime - \d+`)
+		VertexPodLogContains("output", `\\"value\\":.*EventTime - \d+`)
 
 	defer w.UXServerPodPortForward(8146, 8443).TerminateAllPodPortForwards()
 
