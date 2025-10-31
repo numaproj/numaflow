@@ -2491,8 +2491,7 @@ dependencies = [
 [[package]]
 name = "numaflow"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73bef019c3bc666868f9b9e82c1d1439d990a8b75f6486b6b74b7aab31db11ff"
+source = "git+https://github.com/numaproj/numaflow-rs.git?rev=61d0a40057fd39fcc25440afbf31fafe626919c2#61d0a40057fd39fcc25440afbf31fafe626919c2"
 dependencies = [
  "chrono",
  "hyper-util",

@@ -236,6 +236,7 @@ async fn run_all_sink_forwarders<C: NumaflowTypeConfig>(
             context.config.read_timeout,
             sink.sink_config.clone(),
             sink.fb_sink_config.clone(),
+            sink.on_success_sink_config.clone(),
             serving_store.clone(),
             &context.cln_token,
         )
@@ -425,6 +426,7 @@ mod tests {
                     retry_config: None,
                 },
                 fb_sink_config: None,
+                on_success_sink_config: None,
                 serving_store_config: None,
             }),
             metrics_config: MetricsConfig {

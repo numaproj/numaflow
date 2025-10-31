@@ -12086,6 +12086,31 @@ it.
 
 <td>
 
+<code>onSuccess</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractSink"> AbstractSink </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+OnSuccess sink allows triggering a secondary sink operation only after
+the primary sink completes successfully The writes to OnSuccess sink
+will only be initiated if the ud-sink response field sets it. A new
+Message crafted in the Primary sink can be written on the OnSuccess
+sink.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>retryStrategy</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.RetryStrategy"> RetryStrategy
 </a> </em>

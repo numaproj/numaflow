@@ -90,6 +90,10 @@ func (v Vertex) HasFallbackUDSink() bool {
 	return v.Spec.HasFallbackUDSink()
 }
 
+func (v Vertex) HasOnSuccessUDSink() bool {
+	return v.Spec.HasOnSuccessUDSink()
+}
+
 func (v Vertex) IsUDSource() bool {
 	return v.Spec.IsUDSource()
 }
@@ -657,6 +661,10 @@ func (av AbstractVertex) HasUDTransformer() bool {
 
 func (av AbstractVertex) HasFallbackUDSink() bool {
 	return av.IsASink() && av.Sink.Fallback != nil && av.Sink.Fallback.UDSink != nil
+}
+
+func (av AbstractVertex) HasOnSuccessUDSink() bool {
+	return av.IsASink() && av.Sink.OnSuccess != nil && av.Sink.OnSuccess.UDSink != nil
 }
 
 func (av AbstractVertex) IsUDSource() bool {

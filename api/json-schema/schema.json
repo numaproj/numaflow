@@ -22485,6 +22485,10 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log",
           "description": "Log sink is used to write the data to the log."
         },
+        "onSuccess": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.AbstractSink",
+          "description": "OnSuccess sink allows triggering a secondary sink operation only after the primary sink completes successfully The writes to OnSuccess sink will only be initiated if the ud-sink response field sets it. A new Message crafted in the Primary sink can be written on the OnSuccess sink."
+        },
         "pulsar": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarSink",
           "description": "Pulsar sink is used to write the data to the Apache Pulsar."

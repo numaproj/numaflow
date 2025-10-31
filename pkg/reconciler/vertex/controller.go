@@ -379,6 +379,8 @@ func (r *vertexReconciler) orchestratePodsFromTo(ctx context.Context, vertex *df
 				annotations[dfv1.KeyDefaultContainer] = dfv1.CtrUdtransformer
 			} else if vertex.HasFallbackUDSink() {
 				annotations[dfv1.KeyDefaultContainer] = dfv1.CtrFallbackUdsink
+			} else if vertex.HasOnSuccessUDSink() {
+				annotations[dfv1.KeyDefaultContainer] = dfv1.CtrOnSuccessUdsink
 			}
 			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{

@@ -87,6 +87,7 @@ enum Status {
   FAILURE = 1;
   FALLBACK = 2;
   SERVE = 3;
+  ON_SUCCESS = 4;
 }
 
 /**
@@ -94,6 +95,11 @@ enum Status {
  */
 message SinkResponse {
   message Result {
+    message Message {
+      bytes value = 1;
+      repeated string keys = 2;
+      metadata.Metadata metadata = 3;
+    }
     // id is the ID of the message, can be used to uniquely identify the message.
     string id = 1;
     // status denotes the status of persisting to sink. It can be SUCCESS, FAILURE, or FALLBACK.
@@ -101,6 +107,7 @@ message SinkResponse {
     // err_msg is the error message, set it if success is set to false.
     string err_msg = 3;
     optional bytes serve_response = 4;
+    optional Message on_success_msg = 5;
   }
   repeated Result results = 1;
   optional Handshake handshake = 2;

@@ -1,20 +1,3 @@
-use numaflow_kafka::sink::KafkaSink;
-use numaflow_pb::clients::sink::Status::{Failure, Fallback, Serve, Success};
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::sink::sink_response;
-use numaflow_pulsar::sink::Sink as PulsarSink;
-use numaflow_sqs::sink::SqsSink;
-use std::sync::atomic::Ordering;
-use std::time::Duration;
-use tokio::sync::{mpsc, oneshot};
-use tokio::task::JoinHandle;
-use tokio::{pin, time};
-use tokio_stream::StreamExt;
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
-use tracing::{error, info};
-
 use crate::Result;
 use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::config::{get_vertex_name, is_mono_vertex};
@@ -25,7 +8,23 @@ use crate::metrics::{
     pipeline_metric_labels, pipeline_metrics,
 };
 use crate::sinker::actor::{SinkActorMessage, SinkActorResponse};
+use numaflow_kafka::sink::KafkaSink;
+use numaflow_pb::clients::sink::Status::{Failure, Fallback, OnSuccess, Serve, Success};
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::sink::sink_response;
+use numaflow_pulsar::sink::Sink as PulsarSink;
+use numaflow_sqs::sink::SqsSink;
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
+use tokio::{pin, time};
+use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
+use tracing::{error, info};
 
 use crate::sinker::builder::HealthCheckClients;
 use serve::{ServingStore, StoreEntry};
@@ -79,8 +78,8 @@ pub(crate) enum SinkClientType {
 
 /// SinkWriter is a writer that writes messages to the Sink.
 ///
-/// Error handling and shutdown: There can non-retryable errors(udsink panics etc.), in that case we will
-/// cancel the token to indicate the upstream not send any more messages to the sink, we drain any inflight
+/// Error handling and shutdown: There can be non-retryable errors(udsink panics etc.), in that case we will
+/// cancel the token to indicate the upstream will not send any more messages to the sink, we drain any inflight
 /// messages that are in input stream and nack them using the tracker, when the upstream stops sending
 /// messages the input stream will be closed, and we will stop the component.
 #[derive(Clone)]
@@ -89,6 +88,7 @@ pub(crate) struct SinkWriter {
     chunk_timeout: Duration,
     sink_handle: mpsc::Sender<SinkActorMessage>,
     fb_sink_handle: Option<mpsc::Sender<SinkActorMessage>>,
+    on_success_sink_handle: Option<mpsc::Sender<SinkActorMessage>>,
     shutting_down_on_err: bool,
     final_result: Result<()>,
     serving_store: Option<ServingStore>,
@@ -102,6 +102,7 @@ impl SinkWriter {
         chunk_timeout: Duration,
         sink_handle: mpsc::Sender<SinkActorMessage>,
         fb_sink_handle: Option<mpsc::Sender<SinkActorMessage>>,
+        on_success_sink_handle: Option<mpsc::Sender<SinkActorMessage>>,
         serving_store: Option<ServingStore>,
         health_check_clients: HealthCheckClients,
     ) -> Self {
@@ -110,6 +111,7 @@ impl SinkWriter {
             chunk_timeout,
             sink_handle,
             fb_sink_handle,
+            on_success_sink_handle,
             shutting_down_on_err: false,
             final_result: Ok(()),
             serving_store,
@@ -153,6 +155,35 @@ impl SinkWriter {
             cancel,
         };
         let _ = self.fb_sink_handle.as_ref().unwrap().send(msg).await;
+        rx.await.unwrap()
+    }
+
+    /// Sink the messages to the OnSuccess Sink.
+    async fn write_to_on_success_sink(
+        &self,
+        messages: Vec<Message>,
+        cancel: CancellationToken,
+    ) -> Result<SinkActorResponse> {
+        if self.on_success_sink_handle.is_none() {
+            // TODO update link
+            return Err(Error::OsSink(
+                "Response contains OnSuccess messages but no OnSuccess sink is configured. \
+                Please update the spec to configure on-success sink https://numaflow.numaproj.io/user-guide/sinks/onsuccess/ ".to_string(),
+            ));
+        }
+
+        let (tx, rx) = oneshot::channel();
+        let msg = SinkActorMessage {
+            messages,
+            respond_to: tx,
+            cancel,
+        };
+        let _ = self
+            .on_success_sink_handle
+            .as_ref()
+            .unwrap()
+            .send(msg)
+            .await;
         rx.await.unwrap()
     }
 
@@ -265,6 +296,12 @@ impl SinkWriter {
                 .await?;
         }
 
+        // If there are on_success messages, write them to the on_success sink
+        if !response.on_success.is_empty() {
+            self.write_to_on_success(response.on_success, cln_token.clone())
+                .await?;
+        }
+
         // If there are serving messages, write them to the serving store
         if !response.serving.is_empty() {
             self.write_to_serving_store(response.serving).await?;
@@ -279,6 +316,42 @@ impl SinkWriter {
             dropped_messages_size,
             write_start_time,
         );
+
+        Ok(())
+    }
+
+    /// Write messages to the OnSuccess Sink.
+    async fn write_to_on_success(
+        &mut self,
+        messages: Vec<Message>,
+        cln_token: CancellationToken,
+    ) -> Result<()> {
+        // Invoke on_success sink actor (with retry logic inside)
+        let on_success_response = self
+            .write_to_on_success_sink(messages, cln_token.clone())
+            .await?;
+
+        // Check if fallback returned fallback or serving status (not allowed)
+        if !on_success_response.fallback.is_empty() {
+            return Err(Error::FbSink(
+                "OnSuccess response contains fallback messages. \
+                    Specifying fallback status in OnSuccess response is not allowed."
+                    .to_string(),
+            ));
+        }
+        if !on_success_response.serving.is_empty() {
+            return Err(Error::FbSink(
+                "OnSuccess response contains serving messages. \
+                    Specifying serving status in OnSuccess response is not allowed."
+                    .to_string(),
+            ));
+        }
+
+        if !on_success_response.failed.is_empty() {
+            return Err(Error::OsSink(
+                "Failed to write messages to on_success sink after retries".to_string(),
+            ));
+        }
 
         Ok(())
     }
@@ -493,6 +566,7 @@ pub(crate) enum ResponseStatusFromSink {
     Fallback,
     /// Write to serving store.
     Serve(Option<Vec<u8>>),
+    OnSuccess(Option<sink_response::result::Message>),
 }
 
 /// Sink will give a response per [Message].
@@ -511,6 +585,7 @@ impl From<sink_response::Result> for ResponseFromSink {
             Failure => ResponseStatusFromSink::Failed(value.err_msg),
             Fallback => ResponseStatusFromSink::Fallback,
             Serve => ResponseStatusFromSink::Serve(value.serve_response),
+            OnSuccess => ResponseStatusFromSink::OnSuccess(value.on_success_msg),
         };
         Self {
             id: value.id,
@@ -554,6 +629,13 @@ mod tests {
                     ));
                 } else if datum.keys.first().unwrap() == "serve" {
                     responses.push(sink::Response::serve(datum.id, "serve-response".into()));
+                } else if datum.keys.first().unwrap() == "onSuccess" {
+                    let on_success_msg = sink::Message {
+                        value: "ons-message".into(),
+                        keys: None,
+                        user_metadata: None,
+                    };
+                    responses.push(sink::Response::on_success(datum.id, Some(on_success_msg)));
                 } else {
                     responses.push(sink::Response::ok(datum.id));
                 }
@@ -815,6 +897,88 @@ mod tests {
         assert!(tracker.is_empty().await.unwrap());
     }
 
+    #[tokio::test]
+    async fn test_on_success_write() {
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+
+        // start the server
+        let (_shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sink.sock");
+        let server_info_file = tmp_dir.path().join("sink-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+
+        let _server_handle = tokio::spawn(async move {
+            sink::Server::new(SimpleSink)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("failed to start sink server");
+        });
+
+        // wait for the server to start
+        sleep(Duration::from_millis(100)).await;
+
+        let sink_writer = SinkWriterBuilder::new(
+            10,
+            Duration::from_millis(100),
+            SinkClientType::UserDefined(SinkClient::new(
+                create_rpc_channel(sock_file).await.unwrap(),
+            )),
+        )
+        .on_success_sink_client(SinkClientType::Log)
+        .build()
+        .await
+        .unwrap();
+
+        let mut ack_rxs = vec![];
+        let messages: Vec<Message> = (0..20)
+            .map(|i| {
+                let (ack_tx, ack_rx) = oneshot::channel();
+                ack_rxs.push(ack_rx);
+                Message {
+                    typ: Default::default(),
+                    keys: Arc::from(vec!["onSuccess".to_string()]),
+                    tags: None,
+                    value: format!("message {}", i).as_bytes().to_vec().into(),
+                    offset: Offset::Int(IntOffset::new(i, 0)),
+                    event_time: Utc::now(),
+                    watermark: None,
+                    id: MessageID {
+                        vertex_name: "vertex".to_string().into(),
+                        offset: format!("offset_{}", i).into(),
+                        index: i as i32,
+                    },
+                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+                    ..Default::default()
+                }
+            })
+            .collect();
+
+        let (tx, rx) = mpsc::channel(20);
+        for msg in messages {
+            let _ = tx.send(msg).await;
+        }
+
+        drop(tx);
+        let handle = sink_writer
+            .streaming_write(ReceiverStream::new(rx), cln_token)
+            .await
+            .unwrap();
+
+        let _ = handle.await.unwrap();
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
+        }
+
+        // check if the tracker is empty
+        assert!(tracker.is_empty().await.unwrap());
+    }
+
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_serving_write() {
@@ -963,6 +1127,7 @@ mod tests {
                 status: Success as i32,
                 err_msg: "".to_string(),
                 serve_response: None,
+                on_success_msg: None,
             }],
             handshake: None,
             status: None,
