@@ -49,7 +49,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 		VertexPodLogContains("p1", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("output", LogSinkVertexStartedRustRuntime).
 		DaemonPodLogContains(pipelineName, LogDaemonStarted).
-		VertexPodLogContains("output", `"value":.*EventTime - \d+`)
+		VertexPodLogContains("output", `\\"value\\":.*EventTime - \d+`)
 
 	defer w.VertexPodPortForward("input", 8001, dfv1.VertexMetricsPort).
 		VertexPodPortForward("p1", 8002, dfv1.VertexMetricsPort).
@@ -332,9 +332,9 @@ func (s *FunctionalSuite) TestExponentialBackoffRetryStrategyForPipeline() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning().DaemonPodsRunning()
 
-	firstRetryLog := fmt.Sprintf("retry_attempt=%d", 1)
-	secondRetryLog := fmt.Sprintf("retry_attempt=%d", 2)
-	thirdRetryLog := fmt.Sprintf("retry_attempt=%d", 3)
+	firstRetryLog := fmt.Sprintf(`"retry_attempt":"%d"`, 1)
+	secondRetryLog := fmt.Sprintf(`"retry_attempt":"%d"`, 2)
+	thirdRetryLog := fmt.Sprintf(`"retry_attempt":"%d"`, 3)
 	dropLog := "Retries exhausted, dropping messages."
 	w.Expect().VertexPodLogContains(vertexName, firstRetryLog, PodLogCheckOptionWithContainer("numa"))
 	w.Expect().VertexPodLogContains(vertexName, secondRetryLog, PodLogCheckOptionWithContainer("numa"))
