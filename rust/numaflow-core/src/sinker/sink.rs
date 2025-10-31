@@ -12,7 +12,6 @@ use numaflow_kafka::sink::KafkaSink;
 use numaflow_pb::clients::sink::Status::{Failure, Fallback, OnSuccess, Serve, Success};
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
-use numaflow_pb::clients::sink::sink_response::result::OnSuccessMessage;
 use numaflow_pulsar::sink::Sink as PulsarSink;
 use numaflow_sqs::sink::SqsSink;
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
@@ -567,7 +566,7 @@ pub(crate) enum ResponseStatusFromSink {
     Fallback,
     /// Write to serving store.
     Serve(Option<Vec<u8>>),
-    OnSuccess(Option<OnSuccessMessage>),
+    OnSuccess(Option<sink_response::result::Message>),
 }
 
 /// Sink will give a response per [Message].
@@ -631,8 +630,8 @@ mod tests {
                 } else if datum.keys.first().unwrap() == "serve" {
                     responses.push(sink::Response::serve(datum.id, "serve-response".into()));
                 } else if datum.keys.first().unwrap() == "onSuccess" {
-                    let on_success_msg = sink::OnSuccessMessage {
-                        value: "on-success-message".into(),
+                    let on_success_msg = sink::Message {
+                        value: "ons-message".into(),
                         keys: None,
                         user_metadata: None,
                     };

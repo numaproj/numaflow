@@ -3,9 +3,8 @@ const DEFAULT_SINK_SOCKET: &str = "/var/run/numaflow/sink.sock";
 const DEFAULT_SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/sinker-server-info";
 const DEFAULT_FB_SINK_SOCKET: &str = "/var/run/numaflow/fb-sink.sock";
 const DEFAULT_FB_SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/fb-sinker-server-info";
-const DEFAULT_ON_SUCCESS_SINK_SOCKET: &str = "/var/run/numaflow/on-success-sink.sock";
-const DEFAULT_ON_SUCCESS_SINK_SERVER_INFO_FILE: &str =
-    "/var/run/numaflow/on-success-sinker-server-info";
+const DEFAULT_ONS_SINK_SOCKET: &str = "/var/run/numaflow/ons-sink.sock";
+const DEFAULT_ONS_SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/ons-sinker-server-info";
 const DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY: OnFailureStrategy = OnFailureStrategy::Retry;
 const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = u16::MAX;
 const DEFAULT_SINK_INITIAL_RETRY_INTERVAL_IN_MS: u32 = 1;
@@ -380,8 +379,8 @@ impl UserDefinedConfig {
     pub(crate) fn on_success_default() -> Self {
         Self {
             grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-            socket_path: DEFAULT_ON_SUCCESS_SINK_SOCKET.to_string(),
-            server_info_path: DEFAULT_ON_SUCCESS_SINK_SERVER_INFO_FILE.to_string(),
+            socket_path: DEFAULT_ONS_SINK_SOCKET.to_string(),
+            server_info_path: DEFAULT_ONS_SINK_SERVER_INFO_FILE.to_string(),
         }
     }
 }

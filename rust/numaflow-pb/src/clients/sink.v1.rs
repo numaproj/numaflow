@@ -90,12 +90,12 @@ pub mod sink_response {
         #[prost(bytes = "vec", optional, tag = "4")]
         pub serve_response: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
         #[prost(message, optional, tag = "5")]
-        pub on_success_msg: ::core::option::Option<result::OnSuccessMessage>,
+        pub on_success_msg: ::core::option::Option<result::Message>,
     }
     /// Nested message and enum types in `Result`.
     pub mod result {
         #[derive(Clone, PartialEq, ::prost::Message)]
-        pub struct OnSuccessMessage {
+        pub struct Message {
             #[prost(bytes = "vec", tag = "1")]
             pub value: ::prost::alloc::vec::Vec<u8>,
             #[prost(string, repeated, tag = "2")]

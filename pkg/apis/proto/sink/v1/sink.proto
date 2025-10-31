@@ -95,7 +95,7 @@ enum Status {
  */
 message SinkResponse {
   message Result {
-    message OnSuccessMessage {
+    message Message {
       bytes value = 1;
       repeated string keys = 2;
       metadata.Metadata metadata = 3;
@@ -107,7 +107,7 @@ message SinkResponse {
     // err_msg is the error message, set it if success is set to false.
     string err_msg = 3;
     optional bytes serve_response = 4;
-    optional OnSuccessMessage on_success_msg = 5;
+    optional Message on_success_msg = 5;
   }
   repeated Result results = 1;
   optional Handshake handshake = 2;

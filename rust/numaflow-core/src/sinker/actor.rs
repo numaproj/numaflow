@@ -121,15 +121,20 @@ where
                         if let Some(on_success_msg) = on_success_msg {
                             let on_success_md: Option<Metadata> =
                                 on_success_msg.metadata.map(|md| md.into());
-                            // FIXME: Excessive cloning?
-                            let new_md = match msg.metadata.clone() {
-                                Some(prev_md) => Metadata {
-                                    user_metadata: on_success_md
-                                        .map_or(prev_md.user_metadata.clone(), |md| {
-                                            md.user_metadata
-                                        }),
-                                    sys_metadata: prev_md.sys_metadata.clone(),
-                                    previous_vertex: prev_md.previous_vertex.clone(),
+                            let new_md = match &mut msg.metadata {
+                                // Following clones are required explicitly since Arc doesn't allow
+                                // interior mutability, so we cannot move the required fields out of Arc
+                                // without cloning, unless we can guarantee there is only a single reference to Arc
+                                // TODO: Explore safety of Arc::get_mut usage here to avoid explicit cloning.
+                                Some(prev_md) => {
+                                    Metadata {
+                                        user_metadata: on_success_md
+                                            .map_or(prev_md.user_metadata.clone(), |md| {
+                                                md.user_metadata
+                                            }),
+                                        sys_metadata: prev_md.sys_metadata.clone(),
+                                        previous_vertex: prev_md.previous_vertex.clone(),
+                                    }
                                 },
                                 None => Metadata {
                                     user_metadata: on_success_md
@@ -237,5 +242,34 @@ where
         while let Some(msg) = self.actor_messages.recv().await {
             self.handle_message(msg).await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::ops::Deref;
+    use std::ops::DerefMut;
+
+    #[derive(Debug, Clone)]
+    struct Inner {
+        value: usize,
+        map: HashMap<String, usize>,
+    }
+
+    #[derive(Debug, Clone)]
+    struct Outer {
+        value: Arc<Inner>,
+    }
+
+    #[test]
+    fn test_metadata_clone() {
+        let inner = Inner { value: 42, map: HashMap::new() };
+        let mut outer = Outer { value: Arc::new(inner) };
+        let cloned= Inner {
+            value: outer.value.value,
+            map: Arc::make_mut(&mut outer.value).map.clone(),
+        };
     }
 }

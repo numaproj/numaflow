@@ -543,10 +543,10 @@ mod tests {
         }
 
         if let SinkType::UserDefined(config) = config.on_success_sink_config.unwrap().sink_type {
-            assert_eq!(config.socket_path, "/var/run/numaflow/on-success-sink.sock");
+            assert_eq!(config.socket_path, "/var/run/numaflow/ons-sink.sock");
             assert_eq!(
                 config.server_info_path,
-                "/var/run/numaflow/on-success-sinker-server-info"
+                "/var/run/numaflow/ons-sinker-server-info"
             );
         }
     }
