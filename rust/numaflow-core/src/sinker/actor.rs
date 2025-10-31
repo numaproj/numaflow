@@ -126,15 +126,13 @@ where
                                 // interior mutability, so we cannot move the required fields out of Arc
                                 // without cloning, unless we can guarantee there is only a single reference to Arc
                                 // TODO: Explore safety of Arc::get_mut usage here to avoid explicit cloning.
-                                Some(prev_md) => {
-                                    Metadata {
-                                        user_metadata: on_success_md
-                                            .map_or(prev_md.user_metadata.clone(), |md| {
-                                                md.user_metadata
-                                            }),
-                                        sys_metadata: prev_md.sys_metadata.clone(),
-                                        previous_vertex: prev_md.previous_vertex.clone(),
-                                    }
+                                Some(prev_md) => Metadata {
+                                    user_metadata: on_success_md
+                                        .map_or(prev_md.user_metadata.clone(), |md| {
+                                            md.user_metadata
+                                        }),
+                                    sys_metadata: prev_md.sys_metadata.clone(),
+                                    previous_vertex: prev_md.previous_vertex.clone(),
                                 },
                                 None => Metadata {
                                     user_metadata: on_success_md
@@ -248,9 +246,9 @@ where
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::sync::Arc;
     use std::ops::Deref;
     use std::ops::DerefMut;
+    use std::sync::Arc;
 
     #[derive(Debug, Clone)]
     struct Inner {
@@ -265,9 +263,14 @@ mod tests {
 
     #[test]
     fn test_metadata_clone() {
-        let inner = Inner { value: 42, map: HashMap::new() };
-        let mut outer = Outer { value: Arc::new(inner) };
-        let cloned= Inner {
+        let inner = Inner {
+            value: 42,
+            map: HashMap::new(),
+        };
+        let mut outer = Outer {
+            value: Arc::new(inner),
+        };
+        let cloned = Inner {
             value: outer.value.value,
             map: Arc::make_mut(&mut outer.value).map.clone(),
         };
