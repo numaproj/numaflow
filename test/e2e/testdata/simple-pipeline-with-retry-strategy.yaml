@@ -10,10 +10,6 @@ spec:
           rpu: 1
           duration: 1s
     - name: output
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: !!str "true"
       sink:
         retryStrategy:
           backoff:

@@ -3,10 +3,6 @@ kind: MonoVertex
 metadata:
   name: retry-backoff-mvtx
 spec:
-  containerTemplate:
-    env:
-      - name: NUMAFLOW_DEBUG
-        value: !!str "true"
   source:
     generator:
       rpu: 1
