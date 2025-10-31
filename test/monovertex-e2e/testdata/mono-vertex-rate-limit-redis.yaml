@@ -3,10 +3,6 @@ kind: MonoVertex
 metadata:
   name: rate-limit-redis-mv
 spec:
-  containerTemplate:
-    env:
-      - name: NUMAFLOW_DEBUG
-        value: !!str "true"
   scale:
     min: 2
   limits:
