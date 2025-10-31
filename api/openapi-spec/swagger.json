@@ -22473,7 +22473,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log"
         },
         "onSuccess": {
-          "description": "OnSuccess sink allows triggering a secondary sink operation only after the primary sink completes successfully The writes to OnSuccess sink will only be initiated if the ud-sink response field sets it.",
+          "description": "OnSuccess sink allows triggering a secondary sink operation only after the primary sink completes successfully The writes to OnSuccess sink will only be initiated if the ud-sink response field sets it. A new Message crafted in the Primary sink can be written on the OnSuccess sink.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.AbstractSink"
         },
         "pulsar": {

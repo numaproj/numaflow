@@ -29,6 +29,7 @@ type Sink struct {
 	Fallback *AbstractSink `json:"fallback,omitempty" protobuf:"bytes,2,opt,name=fallback"`
 	// OnSuccess sink allows triggering a secondary sink operation only after the primary sink completes successfully
 	// The writes to OnSuccess sink will only be initiated if the ud-sink response field sets it.
+	// A new Message crafted in the Primary sink can be written on the OnSuccess sink.
 	// +optional
 	OnSuccess *AbstractSink `json:"onSuccess,omitempty" protobuf:"bytes,3,opt,name=onSuccess"`
 	// RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.

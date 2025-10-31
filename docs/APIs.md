@@ -12098,7 +12098,9 @@ it.
 
 OnSuccess sink allows triggering a secondary sink operation only after
 the primary sink completes successfully The writes to OnSuccess sink
-will only be initiated if the ud-sink response field sets it.
+will only be initiated if the ud-sink response field sets it. A new
+Message crafted in the Primary sink can be written on the OnSuccess
+sink.
 </p>
 
 </td>

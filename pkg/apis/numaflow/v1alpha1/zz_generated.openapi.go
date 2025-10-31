@@ -5703,7 +5703,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Sink(ref common.ReferenceCallback) common
 					},
 					"onSuccess": {
 						SchemaProps: spec.SchemaProps{
-							Description: "OnSuccess sink allows triggering a secondary sink operation only after the primary sink completes successfully The writes to OnSuccess sink will only be initiated if the ud-sink response field sets it.",
+							Description: "OnSuccess sink allows triggering a secondary sink operation only after the primary sink completes successfully The writes to OnSuccess sink will only be initiated if the ud-sink response field sets it. A new Message crafted in the Primary sink can be written on the OnSuccess sink.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink"),
 						},
 					},
