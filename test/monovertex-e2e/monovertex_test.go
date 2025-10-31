@@ -71,9 +71,9 @@ func (s *MonoVertexSuite) TestExponentialBackoffRetryStrategy() {
 	w := s.Given().MonoVertex("@testdata/mono-vertex-exponential-retry-strategy.yaml").When().CreateMonoVertexAndWait()
 	defer w.DeleteMonoVertexAndWait()
 	w.Expect().MonoVertexPodsRunning()
-	firstRetryLog := fmt.Sprintf("retry_attempt=%d", 1)
-	secondRetryLog := fmt.Sprintf("retry_attempt=%d", 2)
-	thirdLog := fmt.Sprintf("retry_attempt=%d", 3)
+	firstRetryLog := fmt.Sprintf(`"retry_attempt":"%d"`, 1)
+	secondRetryLog := fmt.Sprintf(`"retry_attempt":"%d"`, 2)
+	thirdLog := fmt.Sprintf(`"retry_attempt":"%d"`, 3)
 	dropLog := "Retries exhausted, dropping messages."
 	w.Expect().MonoVertexPodLogContains(firstRetryLog, PodLogCheckOptionWithContainer("numa"))
 	w.Expect().MonoVertexPodLogContains(secondRetryLog, PodLogCheckOptionWithContainer("numa"))
@@ -102,7 +102,7 @@ func (s *MonoVertexSuite) TestMonoVertexRateLimitWithRedisStore() {
 		_ = client.Close()
 	}()
 
-	w.Expect().MonoVertexPodLogContains("processed=50", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithCount(20))
+	w.Expect().MonoVertexPodLogContains("\"processed\":\"50", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithCount(20))
 }
 
 func TestMonoVertexSuite(t *testing.T) {
