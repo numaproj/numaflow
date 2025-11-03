@@ -42,6 +42,7 @@ pub(crate) struct MonovertexConfig {
     pub(crate) sink_config: SinkConfig,
     pub(crate) transformer_config: Option<TransformerConfig>,
     pub(crate) fb_sink_config: Option<SinkConfig>,
+    pub(crate) on_success_sink_config: Option<SinkConfig>,
     pub(crate) metrics_config: MetricsConfig,
     pub(crate) callback_config: Option<ServingCallbackConfig>,
     pub(crate) rate_limit: Option<RateLimitConfig>,
@@ -66,6 +67,7 @@ impl Default for MonovertexConfig {
             map_config: None,
             transformer_config: None,
             fb_sink_config: None,
+            on_success_sink_config: None,
             metrics_config: MetricsConfig::default(),
             callback_config: None,
             rate_limit: None,
@@ -183,6 +185,15 @@ impl MonovertexConfig {
             None
         };
 
+        let on_success_sink_config = if sink.on_success.is_some() {
+            Some(SinkConfig {
+                sink_type: SinkType::on_success_sinktype(&sink)?,
+                retry_config: None,
+            })
+        } else {
+            None
+        };
+
         let look_back_window = mono_vertex_obj
             .spec
             .scale
@@ -229,6 +240,7 @@ impl MonovertexConfig {
             sink_config,
             transformer_config,
             fb_sink_config,
+            on_success_sink_config,
             callback_config,
             rate_limit,
         })
@@ -479,6 +491,14 @@ mod tests {
                                 "resources": {}
                             }
                         }
+                    },
+                    "onSuccess": {
+                        "udsink": {
+                            "container": {
+                                "image": "on-success-sink",
+                                "resources": {}
+                            }
+                        }
                     }
                 }
             }
@@ -500,6 +520,11 @@ mod tests {
             config.fb_sink_config.clone().unwrap().sink_type,
             SinkType::UserDefined(_)
         ));
+        assert!(config.on_success_sink_config.is_some());
+        assert!(matches!(
+            config.on_success_sink_config.clone().unwrap().sink_type,
+            SinkType::UserDefined(_)
+        ));
 
         if let SinkType::UserDefined(config) = config.sink_config.sink_type.clone() {
             assert_eq!(config.socket_path, "/var/run/numaflow/sink.sock");
@@ -514,6 +539,14 @@ mod tests {
             assert_eq!(
                 config.server_info_path,
                 "/var/run/numaflow/fb-sinker-server-info"
+            );
+        }
+
+        if let SinkType::UserDefined(config) = config.on_success_sink_config.unwrap().sink_type {
+            assert_eq!(config.socket_path, "/var/run/numaflow/ons-sink.sock");
+            assert_eq!(
+                config.server_info_path,
+                "/var/run/numaflow/ons-sinker-server-info"
             );
         }
     }

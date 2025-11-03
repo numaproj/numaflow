@@ -125,6 +125,13 @@ func fakeMonoVertex() *dfv1.MonoVertex {
 						},
 					},
 				},
+				OnSuccess: &dfv1.AbstractSink{
+					UDSink: &dfv1.UDSink{
+						Container: &dfv1.Container{
+							Image: "my-os-image",
+						},
+					},
+				},
 			},
 		},
 	}

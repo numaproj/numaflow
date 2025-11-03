@@ -1,9 +1,11 @@
 use crate::Result;
 use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
 use crate::message::Message;
+use crate::metadata::Metadata;
 use crate::sinker::sink::{ResponseStatusFromSink, Sink};
 use backoff::strategy::exponential::Exponential;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
@@ -16,6 +18,7 @@ pub(super) struct SinkActorResponse {
     pub(super) fallback: Vec<Message>,
     pub(super) serving: Vec<Message>,
     pub(super) dropped: Vec<Message>,
+    pub(super) on_success: Vec<Message>,
 }
 
 /// SinkActorMessage is a message that is sent to the SinkActor.
@@ -64,6 +67,7 @@ where
         let mut fallback_messages = Vec::new();
         let mut serving_messages = Vec::new();
         let mut dropped_messages = Vec::new();
+        let mut on_success_messages = Vec::new();
 
         // Build backoff iterator from retry config
         let backoff = Exponential::from_millis(
@@ -113,6 +117,42 @@ where
                         serving_messages.push(msg.clone());
                         false // remove from retry list
                     }
+                    Some(ResponseStatusFromSink::OnSuccess(on_success_msg)) => {
+                        if let Some(on_success_msg) = on_success_msg {
+                            let on_success_md: Option<Metadata> =
+                                on_success_msg.metadata.map(|md| md.into());
+                            let new_md = match &mut msg.metadata {
+                                // Following clones are required explicitly since Arc doesn't allow
+                                // interior mutability, so we cannot move the required fields out of Arc
+                                // without cloning, unless we can guarantee there is only a single reference to Arc
+                                // TODO: Explore safety of Arc::get_mut usage here to avoid explicit cloning.
+                                Some(prev_md) => Metadata {
+                                    user_metadata: on_success_md
+                                        .map_or(prev_md.user_metadata.clone(), |md| {
+                                            md.user_metadata
+                                        }),
+                                    sys_metadata: prev_md.sys_metadata.clone(),
+                                    previous_vertex: prev_md.previous_vertex.clone(),
+                                },
+                                None => Metadata {
+                                    user_metadata: on_success_md
+                                        .map_or(HashMap::new(), |md| md.user_metadata),
+                                    ..Default::default()
+                                },
+                            };
+                            let new_msg = Message {
+                                value: on_success_msg.value.into(),
+                                keys: on_success_msg.keys.into(),
+                                metadata: Some(Arc::new(new_md)),
+                                ..msg.clone()
+                            };
+                            on_success_messages.push(new_msg.clone());
+                        } else {
+                            // Send the original message if no payload was provided to the onSuccess sink
+                            on_success_messages.push(msg.clone());
+                        }
+                        false // remove from retry list
+                    }
                     None => unreachable!("should have response for all messages"), // remove if no response
                 }
             });
@@ -131,6 +171,7 @@ where
                     fallback: fallback_messages,
                     serving: serving_messages,
                     dropped: dropped_messages,
+                    on_success: on_success_messages,
                 });
             }
 
@@ -184,6 +225,7 @@ where
             fallback: fallback_messages,
             serving: serving_messages,
             dropped: dropped_messages,
+            on_success: on_success_messages,
         })
     }
 
@@ -198,5 +240,39 @@ where
         while let Some(msg) = self.actor_messages.recv().await {
             self.handle_message(msg).await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::ops::Deref;
+    use std::ops::DerefMut;
+    use std::sync::Arc;
+
+    #[derive(Debug, Clone)]
+    struct Inner {
+        value: usize,
+        map: HashMap<String, usize>,
+    }
+
+    #[derive(Debug, Clone)]
+    struct Outer {
+        value: Arc<Inner>,
+    }
+
+    #[test]
+    fn test_metadata_clone() {
+        let inner = Inner {
+            value: 42,
+            map: HashMap::new(),
+        };
+        let mut outer = Outer {
+            value: Arc::new(inner),
+        };
+        let cloned = Inner {
+            value: outer.value.value,
+            map: Arc::make_mut(&mut outer.value).map.clone(),
+        };
     }
 }

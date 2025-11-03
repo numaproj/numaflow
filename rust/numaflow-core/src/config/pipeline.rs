@@ -168,6 +168,7 @@ pub(crate) mod map {
 pub(crate) struct SinkVtxConfig {
     pub(crate) sink_config: SinkConfig,
     pub(crate) fb_sink_config: Option<SinkConfig>,
+    pub(crate) on_success_sink_config: Option<SinkConfig>,
     pub(crate) serving_store_config: Option<ServingStoreType>,
 }
 
@@ -386,6 +387,15 @@ impl PipelineConfig {
                 None
             };
 
+            let on_success_sink_config = if sink.on_success.as_ref().is_some() {
+                Some(SinkConfig {
+                    sink_type: SinkType::on_success_sinktype(&sink)?,
+                    retry_config: None,
+                })
+            } else {
+                None
+            };
+
             let serving_store_config = if let Some(serving_spec) =
                 env_vars.get(ENV_NUMAFLOW_SERVING_SPEC)
             {
@@ -428,6 +438,7 @@ impl PipelineConfig {
                         retry_config: sink.retry_strategy.clone().map(|retry| retry.into()),
                     },
                     fb_sink_config,
+                    on_success_sink_config,
                     serving_store_config,
                 }),
                 VertexType::Sink,
@@ -740,6 +751,7 @@ mod tests {
                 retry_config: None,
             },
             fb_sink_config: None,
+            on_success_sink_config: None,
             serving_store_config: None,
         });
         assert_eq!(sink_type.to_string(), "Sink");
@@ -810,6 +822,7 @@ mod tests {
                     retry_config: Some(RetryConfig::default()),
                 },
                 fb_sink_config: None,
+                on_success_sink_config: None,
                 serving_store_config: Some(ServingStoreType::Nats(NatsStoreConfig {
                     rs_store_name: "test-kv-store".into(),
                 })),

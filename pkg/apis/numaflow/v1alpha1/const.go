@@ -63,6 +63,7 @@ const (
 	CtrUdf               = "udf"
 	CtrUdsink            = "udsink"
 	CtrFallbackUdsink    = "fb-udsink"
+	CtrOnSuccessUdsink   = "ons-udsink"
 	CtrUdsource          = "udsource"
 	CtrUdtransformer     = "transformer"
 	CtrUdSideInput       = "udsi"
@@ -73,13 +74,14 @@ const (
 	CtrUdStore           = "udstore"
 
 	// user-defined container types
-	UDContainerFunction     = "udf"
-	UDContainerSink         = "udsink"
-	UDContainerFallbackSink = "fb-udsink"
-	UDContainerTransformer  = "transformer"
-	UDContainerSource       = "udsource"
-	UDContainerSideInputs   = "udsi"
-	UDContainerStore        = "udstore"
+	UDContainerFunction      = "udf"
+	UDContainerSink          = "udsink"
+	UDContainerFallbackSink  = "fb-udsink"
+	UDContainerOnSuccessSink = "ons-udsink"
+	UDContainerTransformer   = "transformer"
+	UDContainerSource        = "udsource"
+	UDContainerSideInputs    = "udsi"
+	UDContainerStore         = "udstore"
 
 	// components
 	ComponentISBSvc            = "isbsvc"

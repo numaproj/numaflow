@@ -397,7 +397,8 @@ func isReservedContainerName(name string) bool {
 		name == dfv1.CtrUdSideInput ||
 		name == dfv1.CtrInitSideInputs ||
 		name == dfv1.CtrSideInputsWatcher ||
-		name == dfv1.CtrFallbackUdsink
+		name == dfv1.CtrFallbackUdsink ||
+		name == dfv1.CtrOnSuccessUdsink
 }
 
 // validateCycles verifies that there are no invalid cycles in the pipeline.
