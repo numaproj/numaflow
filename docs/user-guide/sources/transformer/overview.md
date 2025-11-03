@@ -70,29 +70,28 @@ Check the links below to see another transformer example in various programming 
 
 	```python
 	def my_handler(keys: list[str], datum: Datum) -> Messages:
-    val = datum.value
-    event_time = datum.event_time
-    messages = Messages()
+		val = datum.value
+		event_time = datum.event_time
+		messages = Messages()
 
-    if event_time < january_first_2022:
-        logging.info("Got event time:%s, it is before 2022, so dropping", event_time)
-        messages.append(Message.to_drop(event_time))
-    elif event_time < january_first_2023:
-        logging.info(
-            "Got event time:%s, it is within year 2022, so forwarding to within_year_2022",
-            event_time,
-        )
-        messages.append(
-            Message(value=val, event_time=january_first_2022, tags=["within_year_2022"])
-        )
-    else:
-        logging.info(
-            "Got event time:%s, it is after year 2022, so forwarding to after_year_2022", event_time
-        )
-        messages.append(Message(value=val, event_time=january_first_2023, tags=["after_year_2022"]))
+		if event_time < january_first_2022:
+			logging.info("Got event time:%s, it is before 2022, so dropping", event_time)
+			messages.append(Message.to_drop(event_time))
+		elif event_time < january_first_2023:
+			logging.info(
+				"Got event time:%s, it is within year 2022, so forwarding to within_year_2022",
+				event_time,
+			)
+			messages.append(
+				Message(value=val, event_time=january_first_2022, tags=["within_year_2022"])
+			)
+		else:
+			logging.info(
+				"Got event time:%s, it is after year 2022, so forwarding to after_year_2022", event_time
+			)
+			messages.append(Message(value=val, event_time=january_first_2023, tags=["after_year_2022"]))
 
-    return messages
-	
+		return messages
 	```
 	- [Python full example on numaflow-python on Github](https://github.com/numaproj/numaflow-python/blob/main/packages/pynumaflow/examples/sourcetransform/event_time_filter/example.py)
 
