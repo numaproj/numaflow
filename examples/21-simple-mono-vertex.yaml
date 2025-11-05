@@ -7,10 +7,15 @@ spec:
     udsource:
       container:
         image: quay.io/numaio/numaflow-rs/simple-source:stable
-    # transformer is an optional container to do any transformation to the incoming data before passing to the sink
+    # transformer is an optional container to do any transformation
     transformer:
       container:
         image: quay.io/numaio/numaflow-rs/source-transformer-now:stable
+  # map is an optional container to do any map operations (available from Numaflow Version 1.7)
+  udf:
+    container:
+      image: quay.io/numaio/numaflow-go/map-cat:stable
+      imagePullPolicy: IfNotPresent        
   sink:
     udsink:
       container:
