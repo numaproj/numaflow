@@ -64,7 +64,7 @@ async-trait = "0.1.88"
 [dev-dependencies]
 tempfile = "3.11.0"
 # TODO: Remove this when OnSuccess sink support is added in numaflow-rs SDK
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "61d0a40057fd39fcc25440afbf31fafe626919c2" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "45aff2913bdc7fb75bdf2b49e535fceb1544a81a" }
 pulsar = { version = "6.3.0", default-features = false, features = ["tokio-rustls-runtime"] }
 hyper = "1.6.0"
 hyper-rustls = "0.27.5"
