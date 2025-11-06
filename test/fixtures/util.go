@@ -342,23 +342,6 @@ func WaitForVertexPodRunning(kubeClient kubernetes.Interface, vertexClient flowp
 		for _, p := range podList.Items {
 			log.Println("Checking for vertex pod ready: ", p.Name)
 			ok = ok && isPodReady(p)
-			// TODO: ADDED FOR DEBUGGING, REMOVE BEFORE MERGING
-			if !ok {
-				stream, err := kubeClient.CoreV1().Pods(namespace).GetLogs(p.Name, &corev1.PodLogOptions{Follow: false, Container: "numa"}).Stream(ctx)
-				if err != nil {
-					return fmt.Errorf("timeout after %v waiting for vertex pod running. Error getting logs: %s", timeout, err)
-				}
-
-				scanner := bufio.NewScanner(stream)
-				for scanner.Scan() {
-					log.Println(scanner.Text())
-				}
-
-				err = stream.Close()
-				if err != nil {
-					log.Println("Error closing stream: ", err)
-				}
-			}
 		}
 		if ok {
 			return nil
