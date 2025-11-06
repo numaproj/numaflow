@@ -326,28 +326,6 @@ func WaitForVertexPodRunning(kubeClient kubernetes.Interface, vertexClient flowp
 	for {
 		select {
 		case <-ctx.Done():
-
-			// TODO: ADDED FOR DEBUGGING, REMOVE BEFORE MERGING
-			podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
-			if err != nil {
-				return fmt.Errorf("error getting vertex pod name: %w", err)
-			}
-			for _, p := range podList.Items {
-				stream, err := kubeClient.CoreV1().Pods(namespace).GetLogs(p.Name, &corev1.PodLogOptions{Follow: false, Container: "numa"}).Stream(ctx)
-				if err != nil {
-					return fmt.Errorf("timeout after %v waiting for vertex pod running. Error getting logs: %s", timeout, err)
-				}
-
-				scanner := bufio.NewScanner(stream)
-				for scanner.Scan() {
-					log.Println(scanner.Text())
-				}
-
-				err = stream.Close()
-				if err != nil {
-					log.Println("Error closing stream: ", err)
-				}
-			}
 			return fmt.Errorf("timeout after %v waiting for vertex pod running", timeout)
 		default:
 		}
@@ -364,6 +342,23 @@ func WaitForVertexPodRunning(kubeClient kubernetes.Interface, vertexClient flowp
 		for _, p := range podList.Items {
 			log.Println("Checking for vertex pod ready: ", p.Name)
 			ok = ok && isPodReady(p)
+			// TODO: ADDED FOR DEBUGGING, REMOVE BEFORE MERGING
+			if !ok {
+				stream, err := kubeClient.CoreV1().Pods(namespace).GetLogs(p.Name, &corev1.PodLogOptions{Follow: false, Container: "numa"}).Stream(ctx)
+				if err != nil {
+					return fmt.Errorf("timeout after %v waiting for vertex pod running. Error getting logs: %s", timeout, err)
+				}
+
+				scanner := bufio.NewScanner(stream)
+				for scanner.Scan() {
+					log.Println(scanner.Text())
+				}
+
+				err = stream.Close()
+				if err != nil {
+					log.Println("Error closing stream: ", err)
+				}
+			}
 		}
 		if ok {
 			return nil
