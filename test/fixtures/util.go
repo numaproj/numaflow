@@ -333,7 +333,7 @@ func WaitForVertexPodRunning(kubeClient kubernetes.Interface, vertexClient flowp
 				return fmt.Errorf("error getting vertex pod name: %w", err)
 			}
 			for _, p := range podList.Items {
-				stream, err := kubeClient.CoreV1().Pods(namespace).GetLogs(p.Name, &corev1.PodLogOptions{Follow: true}).Stream(ctx)
+				stream, err := kubeClient.CoreV1().Pods(namespace).GetLogs(p.Name, &corev1.PodLogOptions{Follow: false, Container: "numa"}).Stream(ctx)
 				if err != nil {
 					return fmt.Errorf("timeout after %v waiting for vertex pod running. Error getting logs: %s", timeout, err)
 				}
