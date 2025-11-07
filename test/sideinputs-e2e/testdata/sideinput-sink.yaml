@@ -10,7 +10,7 @@ spec:
         image: quay.io/numaio/numaflow-go/sideinput-function:stable
         imagePullPolicy: IfNotPresent
       trigger:
-        schedule: "*/5 * * * * *"
+        schedule: "0 */5 * * * *"
         # timezone: America/Los_Angeles
   vertices:
     - name: in

@@ -22,13 +22,13 @@ spec:
       container:
         image: my-sideinputs-s3-image:v1
       trigger:
-        schedule: "*/15 * * * *"
+        schedule: "0 */15 * * * *"
         # timezone: America/Los_Angeles
     - name: redis
       container:
         image: my-sideinputs-redis-image:v1
       trigger:
-        schedule: "*/15 * * * *"
+        schedule: "0 */15 * * * *"
         # timezone: America/Los_Angeles
   vertices:
     - name: my-vertex
