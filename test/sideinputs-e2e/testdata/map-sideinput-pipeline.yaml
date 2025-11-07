@@ -10,7 +10,7 @@ spec:
         image: quay.io/numaio/numaflow-go/map-sideinput:stable
         imagePullPolicy: IfNotPresent
       trigger:
-        schedule: "0 */5 * * * *"
+        schedule: "*/5 * * * * *"
   vertices:
     - name: in
       limits:
