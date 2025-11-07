@@ -13,7 +13,7 @@ spec:
         image: quay.io/numaio/numaflow-go/reduce-sideinput:stable
         imagePullPolicy: IfNotPresent
       trigger:
-        schedule: "*/5 * * * * *"
+        schedule: "0 */5 * * * *"
   vertices:
     - name: in
       limits:

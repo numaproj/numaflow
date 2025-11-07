@@ -74,7 +74,7 @@ describe("NodeInfo", () => {
           imagePullPolicy: "Always",
         },
         trigger: {
-          schedule: "*/2 * * * *",
+          schedule: "0 */2 * * * *",
           timezone: null,
         },
       },
