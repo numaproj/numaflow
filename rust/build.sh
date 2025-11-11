@@ -12,7 +12,7 @@ ARCH=$(uname -m)
 
 # Initialize the build environment
 initialize() {
-    apt update && apt install -y curl protobuf-compiler build-essential cmake
+    apt update && apt install -y curl protobuf-compiler build-essential cmake libclang-dev
 
     if [ ! -f "$HOME/.cargo/env" ]; then
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
