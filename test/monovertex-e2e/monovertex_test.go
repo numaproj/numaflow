@@ -105,6 +105,27 @@ func (s *MonoVertexSuite) TestMonoVertexRateLimitWithRedisStore() {
 	w.Expect().MonoVertexPodLogContains("\"processed\":\"50", PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithCount(20))
 }
 
+func (s *MonoVertexSuite) TestMonoVertexUserMetadataPropagation() {
+	w := s.Given().MonoVertex("@testdata/metadata-monovertex.yaml").
+		When().
+		CreateMonoVertexAndWait()
+	defer w.DeleteMonoVertexAndWait()
+
+	w.Expect().MonoVertexPodsRunning()
+
+	w.Expect().
+		MonoVertexPodLogContains("Groups at mapper:", PodLogCheckOptionWithContainer("udf")).
+		MonoVertexPodLogContains("event-time-group", PodLogCheckOptionWithContainer("udf")).
+		MonoVertexPodLogContains("simple-source", PodLogCheckOptionWithContainer("udf"))
+
+	w.Expect().
+		MonoVertexPodLogContains("User Metadata:", PodLogCheckOptionWithContainer("udsink")).
+		MonoVertexPodLogContains("event-time-group", PodLogCheckOptionWithContainer("udsink")).
+		MonoVertexPodLogContains("simple-source", PodLogCheckOptionWithContainer("udsink")).
+		MonoVertexPodLogContains("map-group", PodLogCheckOptionWithContainer("udsink")).
+		MonoVertexPodLogContains("txn-id", PodLogCheckOptionWithContainer("udsink"))
+}
+
 func TestMonoVertexSuite(t *testing.T) {
 	suite.Run(t, new(MonoVertexSuite))
 }
