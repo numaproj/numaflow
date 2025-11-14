@@ -5,7 +5,7 @@ use crate::error::Error;
 use crate::message::Message;
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
-    pipeline_metric_labels, pipeline_metrics,
+    pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::sinker::actor::{SinkActorMessage, SinkActorResponse};
 use numaflow_kafka::sink::KafkaSink;
@@ -453,7 +453,6 @@ impl SinkWriter {
         dropped_messages_size: usize,
         write_start_time: time::Instant,
     ) {
-        // TODO: add metric for dropped messages because of retry strategy
         if is_mono_vertex() {
             monovertex_metrics()
                 .sink
@@ -465,6 +464,14 @@ impl SinkWriter {
                 .write_total
                 .get_or_create(mvtx_forward_metric_labels())
                 .inc_by((messages_count - fallback_messages_count - dropped_messages_count) as u64);
+
+            if dropped_messages_count > 0 {
+                monovertex_metrics()
+                    .sink
+                    .dropped_total
+                    .get_or_create(mvtx_forward_metric_labels())
+                    .inc_by(dropped_messages_count as u64);
+            }
         } else {
             let mut labels = pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
             labels.push((
@@ -487,6 +494,18 @@ impl SinkWriter {
                 .write_processing_time
                 .get_or_create(&labels)
                 .observe(write_start_time.elapsed().as_micros() as f64);
+
+            if dropped_messages_count > 0 {
+                pipeline_metrics()
+                    .forwarder
+                    .drop_total
+                    .get_or_create(&pipeline_drop_metric_labels(
+                        VERTEX_TYPE_SINK,
+                        get_vertex_name(),
+                        "Retries exhausted in the Sink",
+                    ))
+                    .inc_by(dropped_messages_count as u64);
+            }
         }
     }
 
