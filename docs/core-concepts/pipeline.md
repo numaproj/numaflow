@@ -20,7 +20,7 @@ spec:
     - name: input-source
       source:
        ...
-    - name: vtx1
+    - name: process
       udf:
         container:
          ...
@@ -38,14 +38,13 @@ spec:
 
 ## Vertex Connections and Data Flow
 
-Vertices in a Pipeline are connected through `edges`, which define the data flow path and create 
-[Inter-Step Buffers](./inter-step-buffer.md) between processing stages. Each edge specifies a `from` vertex and a `to` 
-vertex, enabling complex topologies including fan-out (one-to-many) and fan-in (many-to-one) patterns.
+Vertices in a Pipeline are connected through `edges`, which define the data flow path, and 
+[Inter-Step Buffers](./inter-step-buffer.md) are responsible for passing data between vertices. Each edge specifies a 
+`from` vertex and a `to` vertex, enabling complex topologies.
 
 Data flows through these buffers asynchronously, providing durability and backpressure handling. Vertices can process 
 data in parallel when multiple edges target the same destination vertex, and conditional routing is supported through 
 message tagging for advanced use cases.
-
 
 ## Autoscaling and Performance
 
