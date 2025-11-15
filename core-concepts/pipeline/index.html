@@ -489,9 +489,61 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Pipeline
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         Pipeline
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#vertex-connections-and-data-flow" class="md-nav__link">
+    Vertex Connections and Data Flow
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#autoscaling-and-performance" class="md-nav__link">
+    Autoscaling and Performance
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pipeline-configuration-and-tuning" class="md-nav__link">
+    Pipeline Configuration and Tuning
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operational-management" class="md-nav__link">
+    Operational Management
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -2608,6 +2660,42 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#vertex-connections-and-data-flow" class="md-nav__link">
+    Vertex Connections and Data Flow
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#autoscaling-and-performance" class="md-nav__link">
+    Autoscaling and Performance
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pipeline-configuration-and-tuning" class="md-nav__link">
+    Pipeline Configuration and Tuning
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operational-management" class="md-nav__link">
+    Operational Management
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2637,31 +2725,59 @@ most important concept in Numaflow, it defines:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
 <span class="nt">metadata</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">simple-pipeline</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
 <span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">input-source</span>
 <span class="w">      </span><span class="nt">source</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">generator</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">rpu</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
-<span class="w">          </span><span class="nt">duration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1s</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
+<span class="w">       </span><span class="l l-Scalar l-Scalar-Plain">...</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">process</span>
 <span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">container</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quay.io/numaio/numaflow-go/map-cat:stable</span><span class="w"> </span><span class="c1"># A UDF which simply cats the message</span>
-<span class="w">          </span><span class="nt">imagePullPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Always</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+<span class="w">         </span><span class="l l-Scalar l-Scalar-Plain">...</span>
+<span class="w">    </span><span class="c1"># ... other vertices</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">output-sink</span>
 <span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">        </span><span class="l l-Scalar l-Scalar-Plain">..</span>
 <span class="w">  </span><span class="nt">edges</span><span class="p">:</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
-<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
-<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">input-source</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">process</span>
+<span class="w">    </span><span class="c1"># ... more edges and conditions</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">process</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">output-sink</span>
 </code></pre></div>
+<h2 id="vertex-connections-and-data-flow">Vertex Connections and Data Flow<a class="headerlink" href="#vertex-connections-and-data-flow" title="Permanent link">&para;</a></h2>
+<p>Vertices in a Pipeline are connected through <code>edges</code>, which define the data flow path, and 
+<a href="../inter-step-buffer/">Inter-Step Buffers</a> are responsible for passing data between vertices. Each edge specifies a 
+<code>from</code> vertex and a <code>to</code> vertex, enabling complex topologies.</p>
+<p>Data flows through these buffers asynchronously, providing durability and backpressure handling. Vertices can process 
+data in parallel when multiple edges target the same destination vertex, and conditional routing is supported through 
+message tagging for advanced use cases.</p>
+<h2 id="autoscaling-and-performance">Autoscaling and Performance<a class="headerlink" href="#autoscaling-and-performance" title="Permanent link">&para;</a></h2>
+<p>Each vertex in a Pipeline can be configured with independent autoscaling behavior through the <code>scale</code> configuration.
+Numaflow provides built-in autoscaling that monitors buffer depth and processing rates, making scaling decisions based
+on actual workload rather than generic CPU/memory metrics.</p>
+<p>For high-throughput scenarios, vertices can be configured with multiple <code>partitions</code> to enable parallel processing withi
+n a single vertex, distributing the workload across multiple buffer streams.</p>
+<p>Learn more:
+- <a href="../../user-guide/reference/autoscaling/">Autoscaling Guide</a> - Detailed autoscaling configuration and best practices
+- <a href="../../specifications/autoscaling/">Autoscaling Specification</a> - Technical details of Numaflow's autoscaling mechanism</p>
+<h2 id="pipeline-configuration-and-tuning">Pipeline Configuration and Tuning<a class="headerlink" href="#pipeline-configuration-and-tuning" title="Permanent link">&para;</a></h2>
+<p>Pipelines support both global and vertex-specific configuration through the <code>limits</code> section. Global limits apply to all
+vertices but can be overridden at the vertex level for fine-tuned performance control.</p>
+<p>Additional pipeline-level configurations include watermark settings for event-time processing, graceful shutdown
+timeouts, and custom metadata through labels and annotations for operational management.</p>
+<p>Learn more:
+- <a href="../../user-guide/reference/pipeline-tuning/">Pipeline Tuning Guide</a> - Comprehensive guide to tuning pipeline performance
+- <a href="../../user-guide/reference/configuration/pipeline-customization/">Pipeline Customization</a> - Advanced configuration options
+- <a href="../../user-guide/reference/configuration/container-resources/">Container Resources</a> - CPU and memory resource configuration</p>
+<h2 id="operational-management">Operational Management<a class="headerlink" href="#operational-management" title="Permanent link">&para;</a></h2>
 <p>To query <code>Pipeline</code> objects with <code>kubectl</code>:</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>get<span class="w"> </span>pipeline<span class="w"> </span><span class="c1"># or &quot;pl&quot; as a short name</span>
 </code></pre></div>
+<p>Pipelines automatically generate individual <code>Vertex</code> objects that are managed by the Numaflow controller. </p>
+<p>The Pipeline controller handles the complete lifecycle including buffer provisioning, vertex deployment, and cleanup, 
+while maintaining the desired state and handling failures gracefully.</p>
 
               
             </article>
