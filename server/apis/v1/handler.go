@@ -103,7 +103,7 @@ type handler struct {
 	healthChecker          *HealthChecker
 	opts                   *handlerOptions
 
-	mcpHandler *mcpHandler
+	mcpToolRegistry ToolRegistry
 }
 
 // NewHandler is used to provide a new instance of the handler type
@@ -135,7 +135,8 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 			opt(o)
 		}
 	}
-	handler := &handler{
+	mcpToolRegistry := NewMCPToolkit(kubeClient, numaflowClient, metricsClient, daemonClientsCache, mvtxDaemonClientsCache)
+	return &handler{
 		kubeClient:             kubeClient,
 		metricsClient:          metricsClient,
 		promQlServiceObj:       promQlServiceObj,
@@ -146,17 +147,12 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 		localUsersAuthObject:   localUsersAuthObject,
 		healthChecker:          NewHealthChecker(ctx),
 		opts:                   o,
-	}
-
-	mcpToolRegistry := NewMCPToolkit(kubeClient, numaflowClient, metricsClient, daemonClientsCache, mvtxDaemonClientsCache)
-	mcpHandler := NewMCPHandler(mcpToolRegistry)
-	handler.mcpHandler = mcpHandler
-
-	return handler, nil
+		mcpToolRegistry:        mcpToolRegistry,
+	}, nil
 }
 
-func (h *handler) GetMCPHandler() *mcpHandler {
-	return h.mcpHandler
+func (h *handler) GetMCPToolRegistry() ToolRegistry {
+	return h.mcpToolRegistry
 }
 
 // AuthInfo loads and returns auth info from cookie
