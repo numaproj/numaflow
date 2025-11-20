@@ -48,7 +48,7 @@ import (
 	dfv1versiond "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
-	mvtdaemonclient "github.com/numaproj/numaflow/pkg/mvtxdaemon/client"
+	mvtxdaemonclient "github.com/numaproj/numaflow/pkg/mvtxdaemon/client"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/webhook/validator"
 	"github.com/numaproj/numaflow/server/authn"
@@ -92,16 +92,18 @@ func WithReadOnlyMode() HandlerOption {
 }
 
 type handler struct {
-	kubeClient            kubernetes.Interface
-	metricsClient         metricsclientv1beta1.MetricsV1beta1Interface
-	promQlServiceObj      PromQl
-	numaflowClient        dfv1clients.NumaflowV1alpha1Interface
-	daemonClientsCache    *lru.Cache[string, daemonclient.DaemonClient]
-	mvtDaemonClientsCache *lru.Cache[string, mvtdaemonclient.MonoVertexDaemonClient]
-	dexObj                *DexObject
-	localUsersAuthObject  *LocalUsersAuthObject
-	healthChecker         *HealthChecker
-	opts                  *handlerOptions
+	kubeClient             kubernetes.Interface
+	metricsClient          metricsclientv1beta1.MetricsV1beta1Interface
+	promQlServiceObj       PromQl
+	numaflowClient         dfv1clients.NumaflowV1alpha1Interface
+	daemonClientsCache     *lru.Cache[string, daemonclient.DaemonClient]
+	mvtxDaemonClientsCache *lru.Cache[string, mvtxdaemonclient.MonoVertexDaemonClient]
+	dexObj                 *DexObject
+	localUsersAuthObject   *LocalUsersAuthObject
+	healthChecker          *HealthChecker
+	opts                   *handlerOptions
+
+	mcpHandler *mcpHandler
 }
 
 // NewHandler is used to provide a new instance of the handler type
@@ -120,10 +122,10 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	}
 	metricsClient := metricsclientv1beta1.NewForConfigOrDie(k8sRestConfig)
 	numaflowClient := dfv1versiond.NewForConfigOrDie(k8sRestConfig).NumaflowV1alpha1()
-	daemonClientsCache, _ := lru.NewWithEvict[string, daemonclient.DaemonClient](500, func(key string, value daemonclient.DaemonClient) {
+	daemonClientsCache, _ := lru.NewWithEvict(500, func(key string, value daemonclient.DaemonClient) {
 		_ = value.Close()
 	})
-	mvtDaemonClientsCache, _ := lru.NewWithEvict[string, mvtdaemonclient.MonoVertexDaemonClient](500, func(key string, value mvtdaemonclient.MonoVertexDaemonClient) {
+	mvtxDaemonClientsCache, _ := lru.NewWithEvict(500, func(key string, value mvtxdaemonclient.MonoVertexDaemonClient) {
 		_ = value.Close()
 	})
 
@@ -133,18 +135,28 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 			opt(o)
 		}
 	}
-	return &handler{
-		kubeClient:            kubeClient,
-		metricsClient:         metricsClient,
-		promQlServiceObj:      promQlServiceObj,
-		numaflowClient:        numaflowClient,
-		daemonClientsCache:    daemonClientsCache,
-		mvtDaemonClientsCache: mvtDaemonClientsCache,
-		dexObj:                dexObj,
-		localUsersAuthObject:  localUsersAuthObject,
-		healthChecker:         NewHealthChecker(ctx),
-		opts:                  o,
-	}, nil
+	handler := &handler{
+		kubeClient:             kubeClient,
+		metricsClient:          metricsClient,
+		promQlServiceObj:       promQlServiceObj,
+		numaflowClient:         numaflowClient,
+		daemonClientsCache:     daemonClientsCache,
+		mvtxDaemonClientsCache: mvtxDaemonClientsCache,
+		dexObj:                 dexObj,
+		localUsersAuthObject:   localUsersAuthObject,
+		healthChecker:          NewHealthChecker(ctx),
+		opts:                   o,
+	}
+
+	mcpToolRegistry := NewMCPToolkit(kubeClient, numaflowClient, metricsClient, daemonClientsCache, mvtxDaemonClientsCache)
+	mcpHandler := NewMCPHandler(mcpToolRegistry)
+	handler.mcpHandler = mcpHandler
+
+	return handler, nil
+}
+
+func (h *handler) GetMCPHandler() *mcpHandler {
+	return h.mcpHandler
 }
 
 // AuthInfo loads and returns auth info from cookie
@@ -162,7 +174,8 @@ func (h *handler) AuthInfo(c *gin.Context) {
 		return
 	}
 
-	if loginType == "dex" {
+	switch loginType {
+	case "dex":
 		cookies := c.Request.Cookies()
 		userIdentityTokenStr, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
 		if err != nil {
@@ -198,7 +211,7 @@ func (h *handler) AuthInfo(c *gin.Context) {
 		res := authn.NewUserInfo(&claims, userInfo.IDToken, userInfo.RefreshToken)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 		return
-	} else if loginType == "local" {
+	case "local":
 		userIdentityTokenStr, err := c.Cookie(common.JWTCookieName)
 		if err != nil {
 			errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
@@ -226,10 +239,10 @@ func (h *handler) AuthInfo(c *gin.Context) {
 		res := authn.NewUserInfo(&itc, userIdentityTokenStr, "")
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 		return
+	default:
+		errMsg := fmt.Sprintf("Unidentified login type received: %v", loginType)
+		c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 	}
-
-	errMsg := fmt.Sprintf("Unidentified login type received: %v", loginType)
-	c.JSON(http.StatusUnauthorized, NewNumaflowAPIResponse(&errMsg, nil))
 }
 
 // ListNamespaces is used to provide all the namespaces that have numaflow pipelines running
@@ -399,7 +412,7 @@ func (h *handler) CreatePipeline(c *gin.Context) {
 // ListPipelines is used to provide all the numaflow pipelines in a given namespace
 func (h *handler) ListPipelines(c *gin.Context) {
 	ns := c.Param("namespace")
-	plList, err := getPipelines(h, ns)
+	plList, err := getPipelines(h.numaflowClient, ns)
 
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch all pipelines for namespace %q, %s", ns, err.Error()))
@@ -644,7 +657,7 @@ func (h *handler) CreateInterStepBufferService(c *gin.Context) {
 // ListInterStepBufferServices is used to provide all the interstepbuffer services in a namespace
 func (h *handler) ListInterStepBufferServices(c *gin.Context) {
 	ns := c.Param("namespace")
-	isbList, err := getIsbServices(h, ns)
+	isbList, err := getIsbServices(h.numaflowClient, ns)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch all interstepbuffer services for namespace %q, %s", ns, err.Error()))
 		return
@@ -1105,7 +1118,7 @@ func (h *handler) GetPipelineStatus(c *gin.Context) {
 // ListMonoVertices is used to provide all the mono vertices in a namespace.
 func (h *handler) ListMonoVertices(c *gin.Context) {
 	ns := c.Param("namespace")
-	mvtList, err := getMonoVertices(h, ns)
+	mvtList, err := getMonoVertices(h.numaflowClient, ns)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch all mono vertices for namespace %q, %s", ns, err.Error()))
 		return
@@ -1419,8 +1432,8 @@ func getAllNamespaces(h *handler) ([]string, error) {
 }
 
 // getPipelines is a utility used to fetch all the pipelines in a given namespace
-func getPipelines(h *handler, namespace string) (Pipelines, error) {
-	plList, err := h.numaflowClient.Pipelines(namespace).List(context.Background(), metav1.ListOptions{})
+func getPipelines(numaflowClient dfv1clients.NumaflowV1alpha1Interface, namespace string) (Pipelines, error) {
+	plList, err := numaflowClient.Pipelines(namespace).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -1439,8 +1452,8 @@ func getPipelines(h *handler, namespace string) (Pipelines, error) {
 }
 
 // getIsbServices is used to fetch all the interstepbuffer services in a given namespace
-func getIsbServices(h *handler, namespace string) (ISBServices, error) {
-	isbSvcs, err := h.numaflowClient.InterStepBufferServices(namespace).List(context.Background(), metav1.ListOptions{})
+func getIsbServices(numaflowClient dfv1clients.NumaflowV1alpha1Interface, namespace string) (ISBServices, error) {
+	isbSvcs, err := numaflowClient.InterStepBufferServices(namespace).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -1457,8 +1470,8 @@ func getIsbServices(h *handler, namespace string) (ISBServices, error) {
 }
 
 // getMonoVertices is a utility used to fetch all the mono vertices in a given namespace
-func getMonoVertices(h *handler, namespace string) (MonoVertices, error) {
-	mvtList, err := h.numaflowClient.MonoVertices(namespace).List(context.Background(), metav1.ListOptions{})
+func getMonoVertices(numaflowClient dfv1clients.NumaflowV1alpha1Interface, namespace string) (MonoVertices, error) {
+	mvtList, err := numaflowClient.MonoVertices(namespace).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -1478,33 +1491,34 @@ func getMonoVertices(h *handler, namespace string) (MonoVertices, error) {
 // TODO(API): Change the Daemon service to return the consolidated status of the pipeline
 // to save on multiple calls to the daemon service
 func getPipelineStatus(pipeline *dfv1.Pipeline) (string, error) {
-	retStatus := dfv1.PipelineStatusHealthy
-	// Check if the pipeline is paused, if so, return inactive status
-	if pipeline.GetDesiredPhase() == dfv1.PipelinePhasePaused {
-		retStatus = dfv1.PipelineStatusInactive
-	} else if pipeline.GetDesiredPhase() == dfv1.PipelinePhaseRunning {
-		retStatus = dfv1.PipelineStatusHealthy
-	} else if pipeline.GetDesiredPhase() == dfv1.PipelinePhaseFailed {
-		retStatus = dfv1.PipelineStatusCritical
+	switch pipeline.GetDesiredPhase() {
+	case dfv1.PipelinePhasePaused:
+		return dfv1.PipelineStatusInactive, nil
+	case dfv1.PipelinePhaseRunning:
+		return dfv1.PipelineStatusHealthy, nil
+	case dfv1.PipelinePhaseFailed:
+		return dfv1.PipelineStatusCritical, nil
+	default:
+		return dfv1.PipelineStatusHealthy, nil
 	}
-	return retStatus, nil
 }
 
 // GetIsbServiceStatus is used to provide the status of a given InterStepBufferService
 // TODO: Figure out the correct way to determine if a ISBService is healthy
 func getIsbServiceStatus(isbsvc *dfv1.InterStepBufferService) (string, error) {
-	retStatus := ISBServiceStatusHealthy
-	if isbsvc.Status.Phase == dfv1.ISBSvcPhaseUnknown {
-		retStatus = ISBServiceStatusInactive
-	} else if isbsvc.Status.Phase == dfv1.ISBSvcPhasePending || isbsvc.Status.Phase == dfv1.ISBSvcPhaseRunning {
-		retStatus = ISBServiceStatusHealthy
-	} else if isbsvc.Status.Phase == dfv1.ISBSvcPhaseFailed {
-		retStatus = ISBServiceStatusCritical
+	switch isbsvc.Status.Phase {
+	case dfv1.ISBSvcPhaseUnknown:
+		return ISBServiceStatusInactive, nil
+	case dfv1.ISBSvcPhasePending, dfv1.ISBSvcPhaseRunning:
+		return ISBServiceStatusHealthy, nil
+	case dfv1.ISBSvcPhaseFailed:
+		return ISBServiceStatusCritical, nil
+	default:
+		return ISBServiceStatusHealthy, nil
 	}
-	return retStatus, nil
 }
 
-func getMonoVertexStatus(mvt *dfv1.MonoVertex) (string, error) {
+func getMonoVertexStatus(_ *dfv1.MonoVertex) (string, error) {
 	// TODO - add more logic to determine the status of a mono vertex
 	return dfv1.MonoVertexStatusHealthy, nil
 }
@@ -1626,20 +1640,20 @@ func (h *handler) getPipelineDaemonClient(ns, pipeline string) (daemonclient.Dae
 	}
 }
 
-func (h *handler) getMonoVertexDaemonClient(ns, mvtName string) (mvtdaemonclient.MonoVertexDaemonClient, error) {
-	if mvtDaemonClient, ok := h.mvtDaemonClientsCache.Get(monoVertexDaemonSvcAddress(ns, mvtName)); !ok {
+func (h *handler) getMonoVertexDaemonClient(ns, mvtName string) (mvtxdaemonclient.MonoVertexDaemonClient, error) {
+	if mvtDaemonClient, ok := h.mvtxDaemonClientsCache.Get(monoVertexDaemonSvcAddress(ns, mvtName)); !ok {
 		var err error
-		var c mvtdaemonclient.MonoVertexDaemonClient
+		var c mvtxdaemonclient.MonoVertexDaemonClient
 		// Default to use gRPC client
 		if strings.EqualFold(h.opts.daemonClientProtocol, "http") {
-			c, err = mvtdaemonclient.NewRESTfulClient(monoVertexDaemonSvcAddress(ns, mvtName))
+			c, err = mvtxdaemonclient.NewRESTfulClient(monoVertexDaemonSvcAddress(ns, mvtName))
 		} else {
-			c, err = mvtdaemonclient.NewGRPCClient(monoVertexDaemonSvcAddress(ns, mvtName))
+			c, err = mvtxdaemonclient.NewGRPCClient(monoVertexDaemonSvcAddress(ns, mvtName))
 		}
 		if err != nil {
 			return nil, err
 		}
-		h.mvtDaemonClientsCache.Add(monoVertexDaemonSvcAddress(ns, mvtName), c)
+		h.mvtxDaemonClientsCache.Add(monoVertexDaemonSvcAddress(ns, mvtName), c)
 		return c, nil
 	} else {
 		return mvtDaemonClient, nil

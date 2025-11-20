@@ -189,6 +189,10 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.POST("/metrics-proxy", handler.GetMetricData)
 	// Discover the metrics for a given object type.
 	r.GET("/metrics-discovery/object/:object", handler.DiscoverMetrics)
+
+	// MCP Server
+	r.GET("/mcp", handler.GetMCPHandler().HandleGet)
+	r.POST("/mcp", handler.GetMCPHandler().HandlePost)
 }
 
 // authMiddleware is the middleware for AuthN/AuthZ.
@@ -210,17 +214,17 @@ func authMiddleware(ctx context.Context, authorizer authz.Authorizer, dexAuthent
 		}
 
 		// Authenticate the user based on the login type.
-		if loginType == "dex" {
+		switch loginType {
+		case "dex":
 			userInfo, err = dexAuthenticator.Authenticate(c)
-		} else if loginType == "local" {
+		case "local":
 			userInfo, err = localUsersAuthenticator.Authenticate(c)
-		} else {
+		default:
 			errMsg := fmt.Sprintf("unidentified login type received: %v", loginType)
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()
 			return
 		}
-
 		if err != nil {
 			errMsg := fmt.Sprintf("Failed to authenticate user: %v", err)
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
