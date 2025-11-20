@@ -20,9 +20,12 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	mcpserver "github.com/mark3labs/mcp-go/server"
 
+	"github.com/numaproj/numaflow"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
 	"github.com/numaproj/numaflow/server/authn"
@@ -189,6 +192,33 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.POST("/metrics-proxy", handler.GetMetricData)
 	// Discover the metrics for a given object type.
 	r.GET("/metrics-discovery/object/:object", handler.DiscoverMetrics)
+
+	// MCP Server
+	s := mcpserver.NewMCPServer("numaflow-mcp", numaflow.GetVersion().String(),
+		mcpserver.WithToolCapabilities(false),
+		mcpserver.WithResourceCapabilities(true, true),
+		mcpserver.WithRecovery(),
+		mcpserver.WithLogging(),
+	)
+
+	for _, t := range handler.GetMCPToolRegistry().RegisteredTools() {
+		s.AddTool(t.Tool, t.Handler)
+	}
+
+	httpServer := mcpserver.NewStreamableHTTPServer(s,
+		mcpserver.WithHeartbeatInterval(30*time.Second),
+		mcpserver.WithStateLess(true),
+		// mcpserver.WithStreamableHTTPServer()
+	)
+	r.GET("/mcp", func(c *gin.Context) {
+		httpServer.ServeHTTP(c.Writer, c.Request)
+	})
+	r.POST("/mcp", func(c *gin.Context) {
+		httpServer.ServeHTTP(c.Writer, c.Request)
+	})
+	r.DELETE("/mcp", func(c *gin.Context) {
+		httpServer.ServeHTTP(c.Writer, c.Request)
+	})
 }
 
 // authMiddleware is the middleware for AuthN/AuthZ.
@@ -210,17 +240,17 @@ func authMiddleware(ctx context.Context, authorizer authz.Authorizer, dexAuthent
 		}
 
 		// Authenticate the user based on the login type.
-		if loginType == "dex" {
+		switch loginType {
+		case "dex":
 			userInfo, err = dexAuthenticator.Authenticate(c)
-		} else if loginType == "local" {
+		case "local":
 			userInfo, err = localUsersAuthenticator.Authenticate(c)
-		} else {
+		default:
 			errMsg := fmt.Sprintf("unidentified login type received: %v", loginType)
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
 			c.Abort()
 			return
 		}
-
 		if err != nil {
 			errMsg := fmt.Sprintf("Failed to authenticate user: %v", err)
 			c.JSON(http.StatusUnauthorized, v1.NewNumaflowAPIResponse(&errMsg, nil))
