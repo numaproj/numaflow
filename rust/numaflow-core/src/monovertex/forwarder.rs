@@ -175,6 +175,7 @@ mod tests {
                         },
                         keys: vec![],
                         headers: Default::default(),
+                        user_metadata: None,
                     })
                     .await
                     .unwrap();
