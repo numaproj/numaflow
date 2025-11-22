@@ -18,6 +18,7 @@ package rater
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -26,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
