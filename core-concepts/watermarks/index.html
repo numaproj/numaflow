@@ -642,6 +642,13 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#initsourcedelay" class="md-nav__link">
+    InitSourceDelay
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#example" class="md-nav__link">
     Example
   </a>
@@ -2778,6 +2785,13 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#initsourcedelay" class="md-nav__link">
+    InitSourceDelay
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#example" class="md-nav__link">
     Example
   </a>
@@ -2875,6 +2889,10 @@ To enable this, we provide the following setting:</p>
 <p>Default Value: 0s</p>
 <h4 id="incrementby">IncrementBy<a class="headerlink" href="#incrementby" title="Permanent link">&para;</a></h4>
 <p>IncrementBy is the duration to be added to the current watermark to progress the watermark when the source is idling.</p>
+<h4 id="initsourcedelay">InitSourceDelay<a class="headerlink" href="#initsourcedelay" title="Permanent link">&para;</a></h4>
+<p>InitSourceDelay is the duration after which, if the source doesn't produce any data (from the inception of the pipeline), the watermark is initialized with the current wall clock time.
+If InitSourceDelay is not set, the watermark will not be initialized under the abovementioned condition.</p>
+<p>This is always useful to initialize the pipeline which contains sources that don't emit data for a long time.</p>
 <h4 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h4>
 <p>The below example will consider the source as idle after there is no data at the source for 5s. After 5s, every other 2s
 an idle watermark will be emitted which increments the watermark by 3s.</p>
@@ -2883,6 +2901,7 @@ an idle watermark will be emitted which increments the watermark by 3s.</p>
 <span class="w">      </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5s</span><span class="w"> </span><span class="c1"># The pipeline will be considered idle if the source has not emitted any data for given threshold value.</span>
 <span class="w">      </span><span class="nt">incrementBy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3s</span><span class="w"> </span><span class="c1"># If source is found to be idle then increment the watermark by given incrementBy value.</span>
 <span class="w">      </span><span class="nt">stepInterval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2s</span><span class="w"> </span><span class="c1"># If source is idling then publish the watermark only when step interval has passed.</span>
+<span class="w">      </span><span class="nt">initSourceDelay</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span><span class="w"> </span><span class="c1"># The initial watermark will be progressed after 10s to prevent one inactive source from holding up the pipeline.  </span>
 </code></pre></div>
 <h3 id="maxdelay">maxDelay<a class="headerlink" href="#maxdelay" title="Permanent link">&para;</a></h3>
 <p>Watermark assignments happen at the source. Sources could be out of order, so sometimes we want to extend the
