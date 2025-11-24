@@ -39,6 +39,13 @@ Default Value: 0s
 
 IncrementBy is the duration to be added to the current watermark to progress the watermark when the source is idling.
 
+#### InitSourceDelay
+
+InitSourceDelay is the duration after which, if the source doesn't produce any data (from the inception of the pipeline), the watermark is initialized with the current wall clock time.
+If InitSourceDelay is not set, the watermark will not be initialized under the abovementioned condition.
+
+This is always useful to initialize the pipeline which contains sources that don't emit data for a long time.
+
 #### Example
 
 The below example will consider the source as idle after there is no data at the source for 5s. After 5s, every other 2s
@@ -50,6 +57,7 @@ an idle watermark will be emitted which increments the watermark by 3s.
       threshold: 5s # The pipeline will be considered idle if the source has not emitted any data for given threshold value.
       incrementBy: 3s # If source is found to be idle then increment the watermark by given incrementBy value.
       stepInterval: 2s # If source is idling then publish the watermark only when step interval has passed.
+      initSourceDelay: 10s # The initial watermark will be progressed after 10s to prevent one inactive source from holding up the pipeline.  
 ```
 
 ### maxDelay
