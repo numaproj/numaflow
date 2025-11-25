@@ -1,0 +1,13 @@
+{
+  "apiVersion": "numaflow.numaproj.io/v1alpha1",
+  "kind": "Pipeline",
+  "metadata": { "name": "test-pipeline", "namespace": "default" },
+  "spec": {
+    "vertices": [
+      { "name": "in",  "source": { "generator": { "duration": "1s" } } },
+      { "name": "out", "sink":   { "log": {} } }
+    ],
+    "edges": [{ "from": "in", "to": "out" }]
+  }
+}
+

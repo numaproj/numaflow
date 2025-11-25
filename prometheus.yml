@@ -1,0 +1,11 @@
+# prometheus.yml
+global:
+  scrape_interval: 10s
+scrape_configs:
+  - job_name: numaflow-daemon
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true
+    static_configs:
+      - targets: ['host.docker.internal:4327']  # on macOS Docker
+
