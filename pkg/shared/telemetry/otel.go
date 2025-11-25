@@ -19,7 +19,6 @@ package telemetry
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -31,16 +30,18 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.uber.org/zap"
 
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 // InitOTLPExporter initializes OpenTelemetry Protocol (OTLP) exporter if
 // OTEL_EXPORTER_OTLP_ENDPOINT environment variable is set. This allows metrics
 // to be exported to an OTLP collector while keeping Prometheus scraping unchanged.
 func InitOTLPExporter(ctx context.Context, componentName, componentInstance string, gatherer prometheus.Gatherer) (func(context.Context) error, error) {
-	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	endpoint := util.LookupEnvStringOr("OTEL_EXPORTER_OTLP_ENDPOINT", "")
 	if endpoint == "" {
-		endpoint = os.Getenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT")
+		endpoint = util.LookupEnvStringOr("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "")
 	}
 	if endpoint == "" {
 		// OTLP is not configured, skip initialization
@@ -52,8 +53,7 @@ func InitOTLPExporter(ctx context.Context, componentName, componentInstance stri
 
 	var opts []otlpmetricgrpc.Option
 	opts = append(opts, otlpmetricgrpc.WithEndpoint(endpoint))
-
-	if os.Getenv("OTEL_EXPORTER_OTLP_INSECURE") == "true" {
+	if util.LookupEnvStringOr("OTEL_EXPORTER_OTLP_INSECURE", "") == "true" {
 		opts = append(opts, otlpmetricgrpc.WithInsecure())
 	}
 
@@ -67,7 +67,7 @@ func InitOTLPExporter(ctx context.Context, componentName, componentInstance stri
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			attribute.String("service.name", componentName),
-			attribute.String("service.namespace", "numaflow"),
+			attribute.String("service.namespace", v1alpha1.Project),
 			attribute.String("service.instance.id", componentInstance),
 		),
 	)
