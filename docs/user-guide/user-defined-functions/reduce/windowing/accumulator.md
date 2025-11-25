@@ -176,6 +176,13 @@ such as "300ms", "1.5h" or "2h45m". Valid time units are "ns", "us" (or "µs"), 
 The `timeout` is the duration of inactivity (no data flowing in for a particular key) after which the accumulator state
 is removed. This helps prevent memory leaks by cleaning up state for keys that are no longer active.
 
+Note: The determination of whether a key is inactive, or has timed out, is based on the watermark progressing. 
+In order to close the accumulator window, we compare this timeout against the watermark. 
+If the watermark progression for the vertex has stalled for some reason, eg: due to one of the sources idling in a multi-source setup, 
+the timeout may not be triggered without configuring [idle watermark detection](https://numaflow.numaproj.io/core-concepts/watermarks/#idle-detection).
+Currently, in such cases, the accumulator window may not close as it continues to hold on to the state for the key while ingesting
+more data, hoping to progress watermark with the next datum. This might lead to OOM situations.
+
 ## How It Works
 
 The Accumulator window works by:
