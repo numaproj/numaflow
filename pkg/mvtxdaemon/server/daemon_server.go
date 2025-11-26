@@ -29,6 +29,7 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/soheilhy/cmux"
 	"go.uber.org/zap"
@@ -43,6 +44,7 @@ import (
 	rateServer "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/rater"
 	runtimeinfo "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/runtime"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/shared/telemetry"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 )
 
@@ -117,6 +119,16 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 			log.Panic(fmt.Errorf("failed to start the MonoVertex runtime cache refresher: %w", err))
 		}
 	}()
+
+	// Initialize OTLP exporter if OTEL_EXPORTER_OTLP_ENDPOINT is set
+	shutdown, err := telemetry.InitOTLPExporter(ctx, v1alpha1.ComponentMonoVertexDaemon, ds.monoVtx.Name, prometheus.DefaultGatherer)
+	if err != nil {
+		log.Warnw("Failed to initialize OTLP exporter, continuing without OTLP", zap.Error(err))
+	} else {
+		defer func() {
+			_ = shutdown(context.Background())
+		}()
+	}
 
 	version := numaflow.GetVersion()
 	// Todo: clean it up in v1.6
