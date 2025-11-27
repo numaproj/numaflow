@@ -46,7 +46,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/shared/telemetry"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type daemonServer struct {
@@ -151,6 +153,16 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	}()
 
 	go ds.exposeMetrics(ctx)
+
+	// Initialize OTLP exporter if OTEL_EXPORTER_OTLP_ENDPOINT is set
+	shutdown, err := telemetry.InitOTLPExporter(ctx, v1alpha1.ComponentDaemon, ds.pipeline.Name, prometheus.DefaultGatherer)
+	if err != nil {
+		log.Warnw("Failed to initialize OTLP exporter, continuing without OTLP", zap.Error(err))
+	} else {
+		defer func() {
+			_ = shutdown(context.Background())
+		}()
+	}
 
 	version := numaflow.GetVersion()
 	metrics.BuildInfo.WithLabelValues(v1alpha1.ComponentDaemon, ds.pipeline.Name, version.Version, version.Platform).Set(1)
