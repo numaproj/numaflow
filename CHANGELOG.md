@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.7.0 (2025-11-11)
+
+ * [2d68ff45](https://github.com/numaproj/numaflow/commit/2d68ff4536274a659b7282a2a65cac210f64e523) Update manifests to v1.7.0
+ * [e6a9f3c8](https://github.com/numaproj/numaflow/commit/e6a9f3c8d027b716886dcf4269ebb95c46da7470) fix: build issues in #3071 (#3072)
+
+### Contributors
+
+ * Sreekanth
+ * Yashash H L
+
 ## v1.7.0-rc1 (2025-10-30)
 
  * [0bbf43b9](https://github.com/numaproj/numaflow/commit/0bbf43b9d621a16a1cf822de27ee8371208ad2cc) Update manifests to v1.7.0-rc1

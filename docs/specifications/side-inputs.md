@@ -111,7 +111,7 @@ spec:
       container:
         image: my-sideinputs-image:v1
       trigger:
-        schedule: "*/15 * * * *"
+        schedule: "0 */15 * * * *"
         # interval: 180s
         # timezone: America/Los_Angeles
   vertices:
