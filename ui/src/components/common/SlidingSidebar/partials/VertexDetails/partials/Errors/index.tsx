@@ -182,15 +182,15 @@ export const Errors = ({ details, square }: ErrorsProps) => {
           <>
             <Box className={"vertex-errors-table-title"}>
               <Box sx={{ width: "5rem" }} />
-              <Box className={"vertex-error-common-title-text"}>Pod Name</Box>
-              <Box className={"vertex-error-common-title-text"}>Container</Box>
+              <Box className={"vertex-error-common-title-text"} sx={{ flex: 1 }}>Pod Name</Box>
+              <Box className={"vertex-error-common-title-text"} sx={{ flex: 0.6 }}>Container</Box>
               <Box
                 className={"vertex-error-common-title-text"}
-                sx={{ flexGrow: 1 }}
+                sx={{ flex: 2.4 }}
               >
                 Message
               </Box>
-              <Box className={"vertex-error-common-title-text"}>
+              <Box className={"vertex-error-common-title-text"} sx={{ flex: 1 }}>
                 Last Occurred
               </Box>
             </Box>

@@ -12,11 +12,10 @@
 }
 
 .collapsable-error-common-title-text {
-  width: 25rem;
   height: 100%;
   font-weight: 500;
   color: #878789;
-  overflow: scroll;
+  word-break: break-word;
 }
 
 .collapsable-error-accordion-details {
@@ -35,8 +34,6 @@
 }
 
 .collapsable-error-accordion-details-title {
-  margin-left: 6rem;
-  width: 25rem;
   font-weight: 500;
   color: #878789;
 }
@@ -44,7 +41,5 @@
 .collapsable-error-accordion-details-title-content {
   font-size: 1.4rem;
   height: 30rem;
-  width: 50rem;
-  flex-grow: 1;
   overflow: scroll;
 }

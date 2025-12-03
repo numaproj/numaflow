@@ -64,35 +64,37 @@ export const CollapsableError = ({ detail }: CollapsableErrorProps) => {
         aria-controls="container-dropdown-content"
         id="container-dropdown-header"
         sx={{
-          height: "7rem",
+          minHeight: "7rem",
           "& .MuiAccordionSummary-content": {
             display: "flex",
             alignItems: "center",
             gap: "0.5rem",
-            overflow: "scroll",
+            my: "1rem",
           },
           "& .MuiAccordionSummary-expandIconWrapper": {
             order: -1,
+            alignSelf: "flex-start",
+            mt: "2rem",
           },
         }}
       >
         <Box className={"collapsable-error-title-box"}>
           <Box
             className={"collapsable-error-common-title-text"}
-            sx={{ ml: "4.6rem" }}
+            sx={{ ml: "5rem", flex: 1 }}
           >
             {detail?.pod || "Missing pod name"}
           </Box>
-          <Box className={"collapsable-error-common-title-text"}>
+          <Box className={"collapsable-error-common-title-text"} sx={{ flex: 0.6 }}>
             {detail?.container || "Missing container name"}
           </Box>
           <Box
             className={"collapsable-error-common-title-text"}
-            sx={{ flexGrow: 1 }}
+            sx={{ flex: 2.4 }}
           >
             {detail?.message || "Missing error message"}
           </Box>
-          <Box className={"collapsable-error-common-title-text"}>
+          <Box className={"collapsable-error-common-title-text"} sx={{ flex: 1 }}>
             <Box>{ago(new Date(detail?.timestamp))}</Box>
             <Box>
               {moment(new Date(detail?.timestamp)).calendar(null, {
@@ -107,11 +109,12 @@ export const CollapsableError = ({ detail }: CollapsableErrorProps) => {
       </AccordionSummary>
       <AccordionDetails className={"collapsable-error-accordion-details"}>
         <Box className={"collapsable-error-accordion-details-box"}>
-          <Box className={"collapsable-error-accordion-details-title"}>
+          <Box sx={{ width: "5rem" }} />
+          <Box className={"collapsable-error-accordion-details-title"} sx={{ flex: 1 }}>
             Details
           </Box>
           <Divider orientation="vertical" flexItem color={"#878789"} />
-          <Box className={"collapsable-error-accordion-details-title-content"}>
+          <Box className={"collapsable-error-accordion-details-title-content"} sx={{ flex: 3 }}>
             <pre style={{ whiteSpace: "pre-wrap", wordWrap: "break-word" }}>
               {detail?.details
                 ? highlightFilePaths(detail.details)
@@ -122,8 +125,8 @@ export const CollapsableError = ({ detail }: CollapsableErrorProps) => {
             orientation="vertical"
             flexItem
             color={"#878789"}
-            sx={{ mr: "25rem" }}
           />
+          <Box sx={{ flex: 1 }} />
         </Box>
       </AccordionDetails>
     </Accordion>

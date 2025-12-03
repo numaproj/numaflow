@@ -139,7 +139,7 @@ impl Transformer {
                 "UDF_PARTIAL_RESPONSE(transformer)",
                 Bytes::from_static(
                     b"received End-Of-Transmission (EOT) before all responses are received from the transformer,\
-                            we will wait indefinitely for the remaining responses. This indicates that there is a bug\
+                            we will wait indefinitely for the remaining responses. This indicates that there is a bug \
                             in the user-code. Please check whether you are accidentally skipping the messages.",
                 ),
             ));
