@@ -211,7 +211,7 @@ impl JetStreamReader {
     /// Acknowledge the offset
     pub(crate) async fn ack(&self, offset: &Offset) -> Result<()> {
         if let Some(msg) = self.get_js_message(offset, true) {
-            let _ = msg.double_ack().await;
+            let _ = msg.ack().await;
         }
         Ok(())
     }
