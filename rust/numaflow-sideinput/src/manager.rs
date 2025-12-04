@@ -1,6 +1,4 @@
 //! Runs the user-defined side-input generator at specified intervals (cron expr).
-
-use std::fmt::format;
 use crate::create_js_context;
 use crate::error::{Error, Result};
 use crate::manager::client::UserDefinedSideInputClient;
