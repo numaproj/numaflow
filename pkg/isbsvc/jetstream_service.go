@@ -183,7 +183,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 				MaxMsgs:    v.GetInt64("stream.maxMsgs"),
 				MaxAge:     v.GetDuration("stream.maxAge"),
 				MaxBytes:   v.GetInt64("stream.maxBytes"),
-				Storage:    nats.MemoryStorage,
+				Storage:    nats.StorageType(v.GetInt("stream.storage")),
 				Replicas:   v.GetInt("stream.replicas"),
 				Duplicates: v.GetDuration("stream.duplicates"), // No duplication in this period
 			}); err != nil {
