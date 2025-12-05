@@ -17,6 +17,7 @@ limitations under the License.
 package rater
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -29,7 +30,6 @@ import (
 	"github.com/prometheus/common/expfmt"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
-	"golang.org/x/net/context"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"

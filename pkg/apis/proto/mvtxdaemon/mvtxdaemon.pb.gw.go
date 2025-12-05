@@ -10,6 +10,7 @@ package mvtxdaemon
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 
@@ -25,116 +26,110 @@ import (
 )
 
 // Suppress "imported and not used" errors
-var _ codes.Code
-var _ io.Reader
-var _ status.Status
-var _ = runtime.String
-var _ = utilities.NewDoubleArray
-var _ = metadata.Join
+var (
+	_ codes.Code
+	_ io.Reader
+	_ status.Status
+	_ = errors.New
+	_ = runtime.String
+	_ = utilities.NewDoubleArray
+	_ = metadata.Join
+)
 
 func request_MonoVertexDaemonService_GetMonoVertexMetrics_0(ctx context.Context, marshaler runtime.Marshaler, client MonoVertexDaemonServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq emptypb.Empty
-	var metadata runtime.ServerMetadata
-
+	var (
+		protoReq emptypb.Empty
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
 	msg, err := client.GetMonoVertexMetrics(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
-
 }
 
 func local_request_MonoVertexDaemonService_GetMonoVertexMetrics_0(ctx context.Context, marshaler runtime.Marshaler, server MonoVertexDaemonServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq emptypb.Empty
-	var metadata runtime.ServerMetadata
-
+	var (
+		protoReq emptypb.Empty
+		metadata runtime.ServerMetadata
+	)
 	msg, err := server.GetMonoVertexMetrics(ctx, &protoReq)
 	return msg, metadata, err
-
 }
 
 func request_MonoVertexDaemonService_GetMonoVertexStatus_0(ctx context.Context, marshaler runtime.Marshaler, client MonoVertexDaemonServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq emptypb.Empty
-	var metadata runtime.ServerMetadata
-
+	var (
+		protoReq emptypb.Empty
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
 	msg, err := client.GetMonoVertexStatus(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
-
 }
 
 func local_request_MonoVertexDaemonService_GetMonoVertexStatus_0(ctx context.Context, marshaler runtime.Marshaler, server MonoVertexDaemonServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq emptypb.Empty
-	var metadata runtime.ServerMetadata
-
+	var (
+		protoReq emptypb.Empty
+		metadata runtime.ServerMetadata
+	)
 	msg, err := server.GetMonoVertexStatus(ctx, &protoReq)
 	return msg, metadata, err
-
 }
 
 func request_MonoVertexDaemonService_GetMonoVertexErrors_0(ctx context.Context, marshaler runtime.Marshaler, client MonoVertexDaemonServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetMonoVertexErrorsRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetMonoVertexErrorsRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["monoVertex"]
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["monoVertex"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "monoVertex")
 	}
-
 	protoReq.MonoVertex, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "monoVertex", err)
 	}
-
 	msg, err := client.GetMonoVertexErrors(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
-
 }
 
 func local_request_MonoVertexDaemonService_GetMonoVertexErrors_0(ctx context.Context, marshaler runtime.Marshaler, server MonoVertexDaemonServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetMonoVertexErrorsRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetMonoVertexErrorsRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["monoVertex"]
+	val, ok := pathParams["monoVertex"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "monoVertex")
 	}
-
 	protoReq.MonoVertex, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "monoVertex", err)
 	}
-
 	msg, err := server.GetMonoVertexErrors(ctx, &protoReq)
 	return msg, metadata, err
-
 }
 
 // RegisterMonoVertexDaemonServiceHandlerServer registers the http handlers for service MonoVertexDaemonService to "mux".
 // UnaryRPC     :call MonoVertexDaemonServiceServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
 // Note that using this registration option will cause many gRPC library features to stop working. Consider using RegisterMonoVertexDaemonServiceHandlerFromEndpoint instead.
+// GRPC interceptors will not work for this type of registration. To use interceptors, you must use the "runtime.WithMiddlewares" option in the "runtime.NewServeMux" call.
 func RegisterMonoVertexDaemonServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux, server MonoVertexDaemonServiceServer) error {
-
-	mux.Handle("GET", pattern_MonoVertexDaemonService_GetMonoVertexMetrics_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_MonoVertexDaemonService_GetMonoVertexMetrics_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexMetrics", runtime.WithHTTPPathPattern("/api/v1/metrics"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexMetrics", runtime.WithHTTPPathPattern("/api/v1/metrics"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -146,20 +141,15 @@ func RegisterMonoVertexDaemonServiceHandlerServer(ctx context.Context, mux *runt
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_MonoVertexDaemonService_GetMonoVertexMetrics_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_MonoVertexDaemonService_GetMonoVertexStatus_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_MonoVertexDaemonService_GetMonoVertexStatus_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexStatus", runtime.WithHTTPPathPattern("/api/v1/status"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexStatus", runtime.WithHTTPPathPattern("/api/v1/status"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -171,20 +161,15 @@ func RegisterMonoVertexDaemonServiceHandlerServer(ctx context.Context, mux *runt
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_MonoVertexDaemonService_GetMonoVertexStatus_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_MonoVertexDaemonService_GetMonoVertexErrors_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_MonoVertexDaemonService_GetMonoVertexErrors_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexErrors", runtime.WithHTTPPathPattern("/api/v1/mono-vertices/{monoVertex}/errors"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexErrors", runtime.WithHTTPPathPattern("/api/v1/mono-vertices/{monoVertex}/errors"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -196,9 +181,7 @@ func RegisterMonoVertexDaemonServiceHandlerServer(ctx context.Context, mux *runt
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_MonoVertexDaemonService_GetMonoVertexErrors_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
 
 	return nil
@@ -225,7 +208,6 @@ func RegisterMonoVertexDaemonServiceHandlerFromEndpoint(ctx context.Context, mux
 			}
 		}()
 	}()
-
 	return RegisterMonoVertexDaemonServiceHandler(ctx, mux, conn)
 }
 
@@ -239,16 +221,13 @@ func RegisterMonoVertexDaemonServiceHandler(ctx context.Context, mux *runtime.Se
 // to "mux". The handlers forward requests to the grpc endpoint over the given implementation of "MonoVertexDaemonServiceClient".
 // Note: the gRPC framework executes interceptors within the gRPC handler. If the passed in "MonoVertexDaemonServiceClient"
 // doesn't go through the normal gRPC flow (creating a gRPC client etc.) then it will be up to the passed in
-// "MonoVertexDaemonServiceClient" to call the correct interceptors.
+// "MonoVertexDaemonServiceClient" to call the correct interceptors. This client ignores the HTTP middlewares.
 func RegisterMonoVertexDaemonServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux, client MonoVertexDaemonServiceClient) error {
-
-	mux.Handle("GET", pattern_MonoVertexDaemonService_GetMonoVertexMetrics_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_MonoVertexDaemonService_GetMonoVertexMetrics_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexMetrics", runtime.WithHTTPPathPattern("/api/v1/metrics"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexMetrics", runtime.WithHTTPPathPattern("/api/v1/metrics"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -259,18 +238,13 @@ func RegisterMonoVertexDaemonServiceHandlerClient(ctx context.Context, mux *runt
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_MonoVertexDaemonService_GetMonoVertexMetrics_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_MonoVertexDaemonService_GetMonoVertexStatus_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_MonoVertexDaemonService_GetMonoVertexStatus_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexStatus", runtime.WithHTTPPathPattern("/api/v1/status"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexStatus", runtime.WithHTTPPathPattern("/api/v1/status"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -281,18 +255,13 @@ func RegisterMonoVertexDaemonServiceHandlerClient(ctx context.Context, mux *runt
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_MonoVertexDaemonService_GetMonoVertexStatus_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_MonoVertexDaemonService_GetMonoVertexErrors_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_MonoVertexDaemonService_GetMonoVertexErrors_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexErrors", runtime.WithHTTPPathPattern("/api/v1/mono-vertices/{monoVertex}/errors"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexErrors", runtime.WithHTTPPathPattern("/api/v1/mono-vertices/{monoVertex}/errors"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -303,26 +272,19 @@ func RegisterMonoVertexDaemonServiceHandlerClient(ctx context.Context, mux *runt
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_MonoVertexDaemonService_GetMonoVertexErrors_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
 	return nil
 }
 
 var (
 	pattern_MonoVertexDaemonService_GetMonoVertexMetrics_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "metrics"}, ""))
-
-	pattern_MonoVertexDaemonService_GetMonoVertexStatus_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "status"}, ""))
-
-	pattern_MonoVertexDaemonService_GetMonoVertexErrors_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "mono-vertices", "monoVertex", "errors"}, ""))
+	pattern_MonoVertexDaemonService_GetMonoVertexStatus_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "status"}, ""))
+	pattern_MonoVertexDaemonService_GetMonoVertexErrors_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v1", "mono-vertices", "monoVertex", "errors"}, ""))
 )
 
 var (
 	forward_MonoVertexDaemonService_GetMonoVertexMetrics_0 = runtime.ForwardResponseMessage
-
-	forward_MonoVertexDaemonService_GetMonoVertexStatus_0 = runtime.ForwardResponseMessage
-
-	forward_MonoVertexDaemonService_GetMonoVertexErrors_0 = runtime.ForwardResponseMessage
+	forward_MonoVertexDaemonService_GetMonoVertexStatus_0  = runtime.ForwardResponseMessage
+	forward_MonoVertexDaemonService_GetMonoVertexErrors_0  = runtime.ForwardResponseMessage
 )
