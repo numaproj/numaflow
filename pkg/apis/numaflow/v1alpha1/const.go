@@ -136,7 +136,6 @@ const (
 	EnvCPULimit                         = "NUMAFLOW_CPU_LIMIT"
 	EnvMemoryRequest                    = "NUMAFLOW_MEMORY_REQUEST"
 	EnvMemoryLimit                      = "NUMAFLOW_MEMORY_LIMIT"
-	EnvGoDebug                          = "GODEBUG"
 	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
 	EnvK8sServerVersion                 = "K8S_SERVER_VERSION"
 	EnvNumaflowRuntime                  = "NUMAFLOW_RUNTIME"

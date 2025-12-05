@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 	"strconv"
 	"time"
@@ -230,7 +229,6 @@ func (mv MonoVertex) GetDaemonDeploymentObj(req GetMonoVertexDaemonDeploymentReq
 		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
 		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 		{Name: EnvMonoVertexObject, Value: encodedMonoVtx},
-		{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)},
 	}
 	envVars = append(envVars, req.Env...)
 	c := corev1.Container{

@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -251,7 +250,6 @@ func (p Pipeline) GetSideInputsManagerDeployments(req GetSideInputDeploymentReq)
 		for i := 0; i < len(deployment.Spec.Template.Spec.Containers); i++ {
 			deployment.Spec.Template.Spec.Containers[i].Env = append(deployment.Spec.Template.Spec.Containers[i].Env, commonEnvVars...)
 		}
-		deployment.Spec.Template.Spec.InitContainers[0].Env = append(deployment.Spec.Template.Spec.InitContainers[0].Env, corev1.EnvVar{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)})
 		deployment.Spec.Template.Spec.Containers[0].Env = append(deployment.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: EnvNumaflowRuntime, Value: "rust"})
 		deployments = append(deployments, deployment)
 	}
@@ -276,7 +274,6 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
 		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 		{Name: EnvPipelineObject, Value: encodedPipeline},
-		{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)},
 	}
 	envVars = append(envVars, req.Env...)
 	c := corev1.Container{
@@ -358,9 +355,7 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 }
 
 func (p Pipeline) getDaemonPodInitContainer(req GetDaemonDeploymentReq) corev1.Container {
-	envVars := []corev1.EnvVar{
-		{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)},
-	}
+	var envVars []corev1.EnvVar
 	envVars = append(envVars, req.Env...)
 	c := corev1.Container{
 		Name:            CtrInit,
