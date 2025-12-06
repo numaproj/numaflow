@@ -22,7 +22,7 @@ spec:
       sink:
         udsink:
           container:
-            image: quay.io/numaio/numaflow-go/on-success-log:stable
+            image: quay.io/numaio/numaflow-rs/on-success-log:stable
             imagePullPolicy: IfNotPresent
         onSuccess:
           udsink:
