@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -113,6 +114,17 @@ func (t *Expect) VertexPodsRunning() *Expect {
 	timeout := 3 * time.Minute
 	for _, v := range t.pipeline.Spec.Vertices {
 		if err := WaitForVertexPodRunning(t.kubeClient, t.vertexClient, Namespace, t.pipeline.Name, v.Name, timeout); err != nil {
+			// TODO: remove this
+			labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, t.pipeline.Name, dfv1.KeyVertexName, v.Name)
+			podList, err := t.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+			if err != nil {
+				t.t.Fatalf("Failed to list pods for vertex %q: %v", v.Name, err)
+			}
+			for _, pod := range podList.Items {
+				pLog := t.kubeClient.CoreV1().Pods(Namespace).GetLogs(pod.Name, &v1.PodLogOptions{Container: "numa"})
+				t.t.Logf("Vertex %q pod log: %v", v.Name, pLog)
+			}
+			// TODO: until this
 			t.t.Fatalf("Expected vertex %q pod running: %v", v.Name, err)
 		}
 	}
