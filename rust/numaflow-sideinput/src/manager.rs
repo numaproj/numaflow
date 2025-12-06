@@ -1,5 +1,4 @@
 //! Runs the user-defined side-input generator at specified intervals (cron expr).
-
 use crate::create_js_context;
 use crate::error::{Error, Result};
 use crate::manager::client::UserDefinedSideInputClient;
@@ -28,8 +27,12 @@ pub(crate) struct SideInputTrigger {
 impl SideInputTrigger {
     /// Creates a new SideInputTrigger from the schedule string and optional timezone string.
     pub fn new(schedule_str: &'static str, timezone_str: Option<&'static str>) -> Result<Self> {
-        let schedule =
-            Schedule::from_str(schedule_str).map_err(|e| Error::Schedule(e.to_string()))?;
+        let schedule = Schedule::from_str(schedule_str).map_err(|e| {
+            Error::Schedule(format!(
+                "Failed to parse cron expression: {}",
+                e.to_string()
+            ))
+        })?;
 
         // Default to UTC if no timezone is provided
         let timezone = match timezone_str {

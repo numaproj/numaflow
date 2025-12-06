@@ -23,7 +23,7 @@ import (
 )
 
 var DefaultVolumeSize = apiresource.MustParse("20Gi")
-var DefaultAccessMode = corev1.ReadWriteOncePod
+var DefaultAccessMode = corev1.ReadWriteOnce
 
 // PersistenceStrategy defines the strategy of persistence
 type PersistenceStrategy struct {
@@ -46,7 +46,6 @@ func (ps PersistenceStrategy) GetPVCSpec(name string) corev1.PersistentVolumeCla
 	if ps.VolumeSize != nil {
 		volSize = *ps.VolumeSize
 	}
-	// Default to ReadWriteOncePod
 	accessMode := DefaultAccessMode
 	if ps.AccessMode != nil {
 		accessMode = *ps.AccessMode

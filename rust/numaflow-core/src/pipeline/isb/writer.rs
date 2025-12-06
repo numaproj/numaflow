@@ -123,7 +123,12 @@ impl ISBWriter {
     async fn write_to_isb(&self, message: Message, cln_token: CancellationToken) -> Result<()> {
         // Handle dropped messages
         if message.dropped() {
-            self.publish_stream_drop_metric("n/a", "to_drop", message.value.len());
+            // Increment metric for user-initiated drops via DROP tag
+            pipeline_metrics()
+                .forwarder
+                .udf_drop_total
+                .get_or_create(pipeline_metric_labels(self.vertex_type.as_str()))
+                .inc();
             return Ok(());
         }
 

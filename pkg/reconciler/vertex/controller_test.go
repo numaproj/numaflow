@@ -689,7 +689,7 @@ func Test_reconcile(t *testing.T) {
 					Image: "test",
 				},
 				Trigger: &dfv1.SideInputTrigger{
-					Schedule: "1 * * * *",
+					Schedule: "0 1 * * * *",
 				},
 			},
 		}
