@@ -155,11 +155,9 @@ impl SqsSink {
                 entry = entry.message_deduplication_id(dedup_id);
             }
 
-            let entry = entry
-                .build()
-                .map_err(|e| {
-                    SqsSinkError::from(Error::Other(format!("Failed to build entry: {}", e)))
-                })?;
+            let entry = entry.build().map_err(|e| {
+                SqsSinkError::from(Error::Other(format!("Failed to build entry: {}", e)))
+            })?;
 
             entries.push(entry);
         }
@@ -417,7 +415,7 @@ mod tests {
     #[test(tokio::test)]
     async fn test_sqs_sink_send_messages_with_headers() {
         let queue_url_output = get_queue_url_output();
-        
+
         // Custom rule to verify that the headers were correctly applied to the request
         let send_message_output = mock!(aws_sdk_sqs::Client::send_message_batch)
             .match_requests(|inp| {
@@ -426,11 +424,11 @@ mod tests {
                     return false;
                 }
                 let entry = &entries[0];
-                
+
                 // Verify all our headers were mapped correctly
-                entry.delay_seconds() == Some(10) &&
-                entry.message_group_id() == Some("group-1") &&
-                entry.message_deduplication_id() == Some("dedup-1")
+                entry.delay_seconds() == Some(10)
+                    && entry.message_group_id() == Some("group-1")
+                    && entry.message_deduplication_id() == Some("dedup-1")
             })
             .then_output(|| {
                 let successful = aws_sdk_sqs::types::SendMessageBatchResultEntry::builder()
