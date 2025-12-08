@@ -1,0 +1,40 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: simple-on-success
+spec:
+  vertices:
+    - name: in
+      limits:
+        readBatchSize: 1
+      source:
+        http: {}
+    - name: udf
+      scale:
+        min: 1
+      udf:
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
+          imagePullPolicy: IfNotPresent
+    - name: output
+      scale:
+        min: 1
+      sink:
+        udsink:
+          container:
+            image: quay.io/numaio/numaflow-go/on-success-log:stable
+            imagePullPolicy: IfNotPresent
+        onSuccess:
+          udsink:
+            container:
+              image: quay.io/numaio/numaflow-rs/redis-sink:stable
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: SINK_HASH_KEY
+                  # The key is set in the format of "pipeline_name-vertex_name"
+                  value: "simple-on-success-output"
+  edges:
+    - from: in
+      to: udf
+    - from: udf
+      to: output

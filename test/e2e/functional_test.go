@@ -321,6 +321,23 @@ func (s *FunctionalSuite) TestFallbackSink() {
 	w.Expect().RedisSinkContains("simple-fallback-output", "fallback-message")
 }
 
+func (s *FunctionalSuite) TestOnSuccessSink() {
+
+	w := s.Given().Pipeline("@testdata/simple-on-success.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "simple-on-success"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	// send a message to the pipeline
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("on-success-message")))
+
+	w.Expect().RedisSinkContains("simple-on-success-output", "on-success-message")
+}
+
 func (s *FunctionalSuite) TestExponentialBackoffRetryStrategyForPipeline() {
 	w := s.Given().Pipeline("@testdata/simple-pipeline-with-retry-strategy.yaml").
 		When().
