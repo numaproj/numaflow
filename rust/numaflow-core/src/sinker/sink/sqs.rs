@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use numaflow_sqs::sink::{SqsSink, SqsSinkMessage};
 
 use crate::error;
@@ -10,9 +12,22 @@ impl TryFrom<Message> for SqsSinkMessage {
 
     fn try_from(msg: Message) -> crate::Result<Self> {
         let id = msg.id.to_string();
+        let mut headers = HashMap::new();
+
+        if let Some(metadata) = &msg.metadata {
+            if let Some(sqs_meta) = metadata.user_metadata.get("sqs") {
+                for (k, v) in &sqs_meta.key_value {
+                    if let Ok(val_str) = String::from_utf8(v.to_vec()) {
+                        headers.insert(k.clone(), val_str);
+                    }
+                }
+            }
+        }
+
         Ok(SqsSinkMessage {
             id,
             message_body: msg.value,
+            headers,
         })
     }
 }
