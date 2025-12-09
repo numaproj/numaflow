@@ -251,14 +251,15 @@ impl MapHandle {
                     tokio::select! {
                         biased;
                         Some(error) = error_rx.recv() => {
-                            // when we get an error we cancel the token to signal the upstream to stop
-                            // sending new messages, and we empty the input stream and return the error.
                             if self.final_result.is_ok() {
                                 error!(?error, "error received while performing unary map operation");
                                 cln_token.cancel();
-                                // we mark that we are in error state, but we cannot act on the error yet.
                                 self.final_result = Err(error);
                                 self.shutting_down_on_err = true;
+                            } else {
+                                // store the error so that latest error will be propagated
+                                // to the UI.
+                                self.final_result = Err(error);
                             }
                         },
                         read_msg = input_stream.next() => {
