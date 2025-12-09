@@ -20,3 +20,8 @@ spec:
     udsink:
       container:
         image: quay.io/numaio/numaflow-rs/sink-log:stable
+    # fallback is an optional container for sink to fallback to incase the primary sink has failures
+    fallback:
+      udsink:
+        container:
+          image: quay.io/numaio/numaflow-go/fb-sink-log:stable
