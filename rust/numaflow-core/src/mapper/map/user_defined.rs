@@ -147,12 +147,17 @@ impl UserDefinedUnaryMap {
             .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
             .inc();
 
-        self.senders
-            .lock()
-            .await
-            .insert(key.clone(), (msg_info, respond_to));
+        let mut senders = self.senders.lock().await;
+        // only insert if we are able to send the message to the server
+        if let Err(e) = self.read_tx.send(message.into()).await {
+            error!(?e, "Failed to send message to server");
+            let _ = respond_to.send(Err(Error::Mapper(format!(
+                "failed to send message to unary map server: {e}"
+            ))));
+            return;
+        }
 
-        let _ = self.read_tx.send(message.into()).await;
+        senders.insert(key.clone(), (msg_info, respond_to));
     }
 }
 
@@ -261,14 +266,17 @@ impl UserDefinedBatchMap {
                 .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
                 .inc();
 
-            self.senders
-                .lock()
-                .await
-                .insert(key, (msg_info, respond_to));
-            self.read_tx
-                .send(message.into())
-                .await
-                .expect("failed to send message");
+            let mut senders = self.senders.lock().await;
+            // only insert if we are able to send the message to the server
+            if let Err(e) = self.read_tx.send(message.into()).await {
+                error!(?e, "Failed to send message to server");
+                let _ = respond_to.send(Err(Error::Mapper(format!(
+                    "failed to send message to batch map server: {e}"
+                ))));
+                return;
+            }
+
+            senders.insert(key.clone(), (msg_info, respond_to));
         }
 
         // send eot request
@@ -481,15 +489,17 @@ impl UserDefinedStreamMap {
             .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
             .inc();
 
-        self.senders
-            .lock()
-            .await
-            .insert(key, (msg_info, respond_to));
+        let mut senders = self.senders.lock().await;
+        // only insert if we are able to send the message to the server
+        if let Err(e) = self.read_tx.send(message.into()).await {
+            error!(?e, "Failed to send message to server");
+            let _ = respond_to.send(Err(Error::Mapper(format!(
+                "failed to send message to stream map server: {e}"
+            ))));
+            return;
+        }
 
-        self.read_tx
-            .send(message.into())
-            .await
-            .expect("failed to send message");
+        senders.insert(key.clone(), (msg_info, respond_to));
     }
 }
 
