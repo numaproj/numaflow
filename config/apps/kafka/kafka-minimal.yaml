@@ -41,6 +41,7 @@ spec:
             - --node-id=0
             - --check=false
             - --advertise-kafka-addr=redpanda-0.kafka:9092
+            - --set redpanda.auto_create_topics_enabled=false
           ports:
             - containerPort: 9092
               name: kafka
