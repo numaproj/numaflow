@@ -101,7 +101,8 @@ func (kh *KafkaController) CreateTopicHandler(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Invalid number of partitions", http.StatusBadRequest)
 		return
 	}
-	if err = kafkaAdminClient.CreateTopic(topic, &sarama.TopicDetail{NumPartitions: int32(partitions), ReplicationFactor: 1}, true); err != nil {
+	log.Printf("Creating Kafka topics, topic: %s, partitions: %d\n", topic, partitions)
+	if err = kafkaAdminClient.CreateTopic(topic, &sarama.TopicDetail{NumPartitions: int32(partitions), ReplicationFactor: 1}, false); err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -248,6 +249,7 @@ func (kh *KafkaController) ProduceTopicHandler(w http.ResponseWriter, r *http.Re
 		Key:       sarama.ByteEncoder(key),
 		Partition: int32(partition),
 	}
+	log.Printf("Pumping a message to topic: %s, key: %s, partition: %d\n", topic, key, partition)
 	p, of, err := kafkaProducer.SendMessage(message)
 	if err != nil {
 		log.Printf("Failed to produce message to topic %s: %s\n", topic, err.Error())

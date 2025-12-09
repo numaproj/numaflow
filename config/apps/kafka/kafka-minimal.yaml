@@ -7,58 +7,49 @@ spec:
   ports:
     - name: kafka-client
       port: 9092
+    - name: admin
+      port: 9644
   selector:
-    app: kafka
+    app: redpanda
 
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: kafka
+  name: redpanda
 spec:
   serviceName: kafka
   replicas: 1
   selector:
     matchLabels:
-      app: kafka
+      app: redpanda
   template:
     metadata:
       labels:
-        app: kafka
+        app: redpanda
     spec:
       containers:
-        - name: kafka
-          image: apache/kafka:3.7.0
-          imagePullPolicy: IfNotPresent
+        - name: redpanda
+          image: docker.redpanda.com/redpandadata/redpanda:latest
+          args:
+            - redpanda
+            - start
+            - --overprovisioned
+            - --smp=1
+            - --memory=1G
+            - --reserve-memory=0M
+            - --node-id=0
+            - --check=false
+            - --advertise-kafka-addr=redpanda-0.kafka:9092
+            - --set redpanda.auto_create_topics_enabled=false
           ports:
             - containerPort: 9092
-          command:
-            - /bin/bash
-            - -c
-            - |
-              set -e
-
-              # Format storage for KRaft mode (idempotent with --ignore-formatted)
-              /opt/kafka/bin/kafka-storage.sh format \
-                --ignore-formatted \
-                --cluster-id test-cluster \
-                --config /opt/kafka/config/kraft/server.properties
-
-              # Start Kafka with overrides (single broker, controller local)
-              exec /opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/kraft/server.properties \
-                --override process.roles=broker,controller \
-                --override node.id=1 \
-                --override controller.quorum.voters=1@localhost:9093 \
-                --override listeners=PLAINTEXT://:9092,CONTROLLER://:9093 \
-                --override advertised.listeners=PLAINTEXT://kafka:9092 \
-                --override listener.security.protocol.map=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
-                --override controller.listener.names=CONTROLLER \
-                --override inter.broker.listener.name=PLAINTEXT \
-                --override auto.create.topics.enable=true \
-                --override delete.topic.enable=true \
-                --override num.partitions=2
-          readinessProbe:
-            tcpSocket:
-              port: 9092
-            initialDelaySeconds: 10
-            periodSeconds: 5
+              name: kafka
+            - containerPort: 9644
+              name: admin
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/redpanda/data
+      volumes:
+        - name: data
+          emptyDir: {}
