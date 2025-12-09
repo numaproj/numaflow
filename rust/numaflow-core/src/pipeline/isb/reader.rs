@@ -170,6 +170,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                             );
                         },
                         ReadAck::Nak => {
+                            info!(?params.offset, "Nak received for offset");
                             Self::nak_with_retry(&params.jsr, &params.offset, &params.cancel).await;
                         },
                     }
@@ -212,9 +213,12 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         let _ = Retry::new(
             interval,
             async || {
-                jsr.nack(offset)
+                let nack_result = jsr
+                    .nack(offset)
                     .await
-                    .map_err(|e| Error::ISB(format!("Failed to send Nak to JetStream: {e}")))
+                    .map_err(|e| Error::ISB(format!("Failed to send Nak to JetStream: {e}")));
+                info!(?offset, "Nak sent for offset");
+                nack_result
             },
             |e: &Error| {
                 if cancel.is_cancelled() {
