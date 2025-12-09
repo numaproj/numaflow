@@ -2,8 +2,8 @@ use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Instant;
-use tokio::sync::Mutex;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
@@ -107,8 +107,12 @@ impl UserDefinedUnaryMap {
         while let Some(resp) = match resp_stream.message().await {
             Ok(message) => message,
             Err(e) => {
-                let mut senders = sender_map.lock().await;
-                for (_, (_, sender)) in senders.drain() {
+                let senders = {
+                    let mut senders = sender_map.lock().expect("failed to acquire poisoned lock");
+                    senders.drain().collect::<Vec<_>>()
+                };
+
+                for (_, (_, sender)) in senders {
                     let _ = sender.send(Err(Error::Grpc(Box::new(e.clone()))));
                     pipeline_metrics()
                         .forwarder
@@ -147,7 +151,6 @@ impl UserDefinedUnaryMap {
             .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
             .inc();
 
-        let mut senders = self.senders.lock().await;
         // only insert if we are able to send the message to the server
         if let Err(e) = self.read_tx.send(message.into()).await {
             error!(?e, "Failed to send message to server");
@@ -157,7 +160,11 @@ impl UserDefinedUnaryMap {
             return;
         }
 
-        senders.insert(key.clone(), (msg_info, respond_to));
+        // insert the sender into the map
+        self.senders
+            .lock()
+            .expect("failed to acquire poisoned lock")
+            .insert(key.clone(), (msg_info, respond_to));
     }
 }
 
@@ -212,8 +219,12 @@ impl UserDefinedBatchMap {
         while let Some(resp) = match resp_stream.message().await {
             Ok(message) => message,
             Err(e) => {
-                let mut senders = sender_map.lock().await;
-                for (_, (_, sender)) in senders.drain() {
+                let senders = {
+                    let mut senders = sender_map.lock().expect("failed to acquire poisoned lock");
+                    senders.drain().collect::<Vec<_>>()
+                };
+
+                for (_, (_, sender)) in senders {
                     sender
                         .send(Err(Error::Grpc(Box::new(e.clone()))))
                         .expect("failed to send error response");
@@ -227,7 +238,11 @@ impl UserDefinedBatchMap {
             }
         } {
             if let Some(map::TransmissionStatus { eot: true }) = resp.status {
-                if !sender_map.lock().await.is_empty() {
+                if !sender_map
+                    .lock()
+                    .expect("failed to acquire poisoned lock")
+                    .is_empty()
+                {
                     error!("received EOT but not all responses have been received");
                 }
                 pipeline_metrics()
@@ -237,6 +252,7 @@ impl UserDefinedBatchMap {
                     .observe(Instant::now().elapsed().as_micros() as f64);
                 continue;
             }
+
             process_response(&sender_map, resp).await
         }
     }
@@ -266,7 +282,6 @@ impl UserDefinedBatchMap {
                 .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
                 .inc();
 
-            let mut senders = self.senders.lock().await;
             // only insert if we are able to send the message to the server
             if let Err(e) = self.read_tx.send(message.into()).await {
                 error!(?e, "Failed to send message to server");
@@ -276,7 +291,10 @@ impl UserDefinedBatchMap {
                 return;
             }
 
-            senders.insert(key.clone(), (msg_info, respond_to));
+            self.senders
+                .lock()
+                .expect("failed to acquire poisoned lock")
+                .insert(key.clone(), (msg_info, respond_to));
         }
 
         // send eot request
@@ -296,7 +314,13 @@ impl UserDefinedBatchMap {
 /// based on the message id entry in the map.
 async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
     let msg_id = resp.id;
-    if let Some((msg_info, sender)) = sender_map.lock().await.remove(&msg_id) {
+
+    let sender_entry = sender_map
+        .lock()
+        .expect("failed to acquire poisoned lock")
+        .remove(&msg_id);
+
+    if let Some((msg_info, sender)) = sender_entry {
         let mut response_messages = vec![];
         for (i, result) in resp.results.into_iter().enumerate() {
             response_messages.push(UserDefinedMessage(result, &msg_info, i as i32).into());
@@ -409,8 +433,12 @@ impl UserDefinedStreamMap {
         while let Some(resp) = match resp_stream.message().await {
             Ok(message) => message,
             Err(e) => {
-                let mut senders = sender_map.lock().await;
-                for (_, (_, sender)) in senders.drain() {
+                let senders = {
+                    let mut senders = sender_map.lock().expect("failed to acquire poisoned lock");
+                    senders.drain().collect::<Vec<_>>()
+                };
+
+                for (_, (_, sender)) in senders {
                     let _ = sender.send(Err(Error::Grpc(Box::new(e.clone())))).await;
                     pipeline_metrics()
                         .forwarder
@@ -423,7 +451,7 @@ impl UserDefinedStreamMap {
         } {
             let (mut message_info, response_sender) = sender_map
                 .lock()
-                .await
+                .expect("failed to acquire poisoned lock")
                 .remove(&resp.id)
                 .expect("map entry should always be present");
 
@@ -460,7 +488,7 @@ impl UserDefinedStreamMap {
             // more responses for the same request
             sender_map
                 .lock()
-                .await
+                .expect("failed to acquire poisoned lock")
                 .insert(resp.id, (message_info, response_sender));
         }
     }
@@ -489,7 +517,6 @@ impl UserDefinedStreamMap {
             .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
             .inc();
 
-        let mut senders = self.senders.lock().await;
         // only insert if we are able to send the message to the server
         if let Err(e) = self.read_tx.send(message.into()).await {
             error!(?e, "Failed to send message to server");
@@ -499,7 +526,10 @@ impl UserDefinedStreamMap {
             return;
         }
 
-        senders.insert(key.clone(), (msg_info, respond_to));
+        self.senders
+            .lock()
+            .expect("failed to acquire poisoned lock")
+            .insert(key.clone(), (msg_info, respond_to));
     }
 }
 
