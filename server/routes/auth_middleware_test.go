@@ -608,4 +608,3 @@ func TestAuthMiddleware_BothAuthTypesWork(t *testing.T) {
 	router.ServeHTTP(w2, req2)
 	assert.Equal(t, http.StatusOK, w2.Code)
 }
-
