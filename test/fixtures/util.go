@@ -296,6 +296,7 @@ func WaitForMonoVertexPodRunning(kubeClient kubernetes.Interface, monoVertexClie
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, monoVertexName, dfv1.KeyComponent, dfv1.ComponentMonoVertex)
+	log.Println("Waiting for MonoVertex pod running(labelSelector): ", labelSelector)
 	for {
 		select {
 		case <-ctx.Done():
@@ -311,8 +312,10 @@ func WaitForMonoVertexPodRunning(kubeClient kubernetes.Interface, monoVertexClie
 			return fmt.Errorf("error getting monovertex pod list: %w", err)
 		}
 		ok := len(podList.Items) > 0 && len(podList.Items) == monoVertex.CalculateReplicas() // pod number should equal to desired replicas
+		log.Println("MonoVertex pod list: ", podList.Items)
 		for _, p := range podList.Items {
 			ok = ok && isPodReady(p)
+			log.Println("Checking for mono vertex pod ready: ", p.Name, ok)
 		}
 		if ok {
 			return nil
