@@ -421,7 +421,7 @@ func TestCleanResponseMiddleware_EdgeCases(t *testing.T) {
 		router.GET("/test", func(c *gin.Context) {
 			// Write malformed JSON directly
 			c.Writer.WriteHeader(http.StatusOK)
-			c.Writer.Write([]byte(`{invalid json`))
+			_, _ = c.Writer.Write([]byte(`{invalid json`))
 		})
 
 		req, _ := http.NewRequest(http.MethodGet, "/test", nil)
