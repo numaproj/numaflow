@@ -59,7 +59,7 @@ func cleanResponseMiddleware() gin.HandlerFunc {
 		// Only process JSON responses
 		contentType := w.ResponseWriter.Header().Get("Content-Type")
 		if !strings.Contains(contentType, "application/json") {
-			w.ResponseWriter.Write(originalBody)
+			_, _ = w.ResponseWriter.Write(originalBody)
 			return
 		}
 
@@ -69,11 +69,11 @@ func cleanResponseMiddleware() gin.HandlerFunc {
 
 			cleanedBody, err := json.Marshal(data)
 			if err == nil {
-				w.ResponseWriter.Write(cleanedBody)
+				_, _ = w.ResponseWriter.Write(cleanedBody)
 				return
 			}
 		}
-		w.ResponseWriter.Write(originalBody)
+		_, _ = w.ResponseWriter.Write(originalBody)
 	}
 }
 
