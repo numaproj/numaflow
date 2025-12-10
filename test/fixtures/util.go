@@ -262,6 +262,7 @@ func WaitForPipelineRunning(ctx context.Context, pipelineClient flowpkg.Pipeline
 
 func WaitForMonoVertexRunning(ctx context.Context, monoVertexClient flowpkg.MonoVertexInterface, monoVertexName string, timeout time.Duration) error {
 	fieldSelector := "metadata.name=" + monoVertexName
+	log.Println("Waiting for MonoVertex running: ", fieldSelector)
 	opts := metav1.ListOptions{FieldSelector: fieldSelector}
 	watch, err := monoVertexClient.Watch(ctx, opts)
 	if err != nil {
@@ -270,6 +271,7 @@ func WaitForMonoVertexRunning(ctx context.Context, monoVertexClient flowpkg.Mono
 	defer watch.Stop()
 	timeoutCh := make(chan bool, 1)
 	go func() {
+		log.Println("Sleeping for timeout: ", timeout)
 		time.Sleep(timeout)
 		timeoutCh <- true
 	}()
