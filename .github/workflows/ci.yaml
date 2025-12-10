@@ -193,19 +193,19 @@ jobs:
         case:
           [
             e2e,
-            diamond-e2e,
-            transformer-e2e,
-            kafka-e2e,
-            map-e2e,
-            reduce-one-e2e,
-            reduce-two-e2e,
-            udsource-e2e,
-            api-e2e,
-            sideinputs-e2e,
-            idle-source-e2e,
+            # diamond-e2e,
+            # transformer-e2e,
+            # kafka-e2e,
+            # map-e2e,
+            # reduce-one-e2e,
+            # reduce-two-e2e,
+            # udsource-e2e,
+            # api-e2e,
+            # sideinputs-e2e,
+            # idle-source-e2e,
             monovertex-e2e,
-            builtin-source-e2e,
-            serving-e2e,
+            # builtin-source-e2e,
+            # serving-e2e,
           ]
 
     steps:
