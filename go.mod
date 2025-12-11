@@ -34,7 +34,7 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.11.1
-	github.com/tidwall/gjson v1.14.4
+	github.com/tidwall/gjson v1.18.0
 	github.com/xdg-go/scram v1.1.2
 	go.opentelemetry.io/contrib/bridges/prometheus v0.63.0
 	go.opentelemetry.io/otel v1.38.0
