@@ -190,10 +190,10 @@ func (s *APISuite) TestAPIsForIsbAndPipelineAndMonoVertex() {
 	clusterSummaryBody := HTTPExpect(s.T(), "https://localhost:8145").GET("/api/v1/cluster-summary").
 		Expect().
 		Status(200).Body().Raw()
-	var pipelineSummaryExpect = `{"active":{"Healthy":2,"Warning":0,"Critical":0},"inactive":0},"isbServiceSummary":{"active":{"Healthy":1,"Warning":0,"Critical":0},"inactive":0},"monoVertexSummary":{"active":{"Healthy":1,"Warning":0,"Critical":0},"inactive":0}`
-	AssertJsonExists(s.T(), clusterSummaryBody, "data.isEmpty")
-	AssertJsonEqual(s.T(), clusterSummaryBody, "data.namespace", "numaflow-system")
-	AssertJsonEqual(s.T(), clusterSummaryBody, "data.pipelineSummary", Json(pipelineSummaryExpect))
+	var pipelineSummaryExpect = `{"pipelineSummary":{"active":{"Healthy":2,"Warning":0,"Critical":0},"inactive":0},"isbServiceSummary":{"active":{"Healthy":1,"Warning":0,"Critical":0},"inactive":0},"monoVertexSummary":{"active":{"Healthy":1,"Warning":0,"Critical":0},"inactive":0}}`
+	AssertJsonExists(s.T(), clusterSummaryBody, "data.0.isEmpty")
+	AssertJsonEqual(s.T(), clusterSummaryBody, "data.0.namespace", "numaflow-system")
+	AssertJsonEqual(s.T(), clusterSummaryBody, "data.0.pipelineSummary", Json(pipelineSummaryExpect))
 
 	listPipelineBody := HTTPExpect(s.T(), "https://localhost:8145").GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines", Namespace)).
 		Expect().
