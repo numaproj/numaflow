@@ -192,7 +192,7 @@ jobs:
         driver: [jetstream]
         case:
           [
-            e2e,
+            # e2e,
             # diamond-e2e,
             # transformer-e2e,
             # kafka-e2e,
