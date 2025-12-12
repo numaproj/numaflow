@@ -13,10 +13,9 @@ sink successfully.
 
 ## Caveats
 
-- OnSuccess sink can only be configured when the primary sink is a user-defined sink.
-- For a given OnSuccess sink, we cannot configure another fallback or onSuccess sink.
-- Consequence of the above point is that, if the OnSuccess sink is a user-defined sink, then we cannot wrap the
-message sent from this onSuccess UD sink as a onSuccess/fallback response.  
+- OnSuccess sink is more meaningful when the primary sink is a user-defined sink because builtins are not written to support on-success responses.
+- For a given OnSuccess sink, we cannot configure another fallback or onSuccess sink. This means, if the OnSuccess sink 
+  is a user-defined sink, then we cannot wrap the message sent from this onSuccess UD sink as a onSuccess/fallback response.  
 
 ## How to use
 
