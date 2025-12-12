@@ -175,18 +175,25 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 				discard = nats.DiscardOld
 			}
 
-			if _, err := jss.js.AddStream(&nats.StreamConfig{
-				Name:       streamName,
-				Subjects:   []string{streamName}, // Use the stream name as the only subject
-				Retention:  retention,
-				Discard:    discard,
-				MaxMsgs:    v.GetInt64("stream.maxMsgs"),
-				MaxAge:     v.GetDuration("stream.maxAge"),
-				MaxBytes:   v.GetInt64("stream.maxBytes"),
-				Storage:    nats.StorageType(v.GetInt("stream.storage")),
-				Replicas:   v.GetInt("stream.replicas"),
-				Duplicates: v.GetDuration("stream.duplicates"), // No duplication in this period
-			}); err != nil {
+			streamConfig := &nats.StreamConfig{
+				Name:      streamName,
+				Subjects:  []string{streamName}, // Use the stream name as the only subject
+				Retention: retention,
+				Discard:   discard,
+				MaxMsgs:   v.GetInt64("stream.maxMsgs"),
+				MaxAge:    v.GetDuration("stream.maxAge"),
+				MaxBytes:  v.GetInt64("stream.maxBytes"),
+				Storage:   nats.StorageType(v.GetInt("stream.storage")),
+				Replicas:  v.GetInt("stream.replicas"),
+			}
+			// Only set Duplicates window when exactly-once is enabled
+			if creatOpts.dedupWindow != nil {
+				streamConfig.Duplicates = *creatOpts.dedupWindow
+			} else {
+				streamConfig.Duplicates = 0
+			}
+
+			if _, err := jss.js.AddStream(streamConfig); err != nil {
 				return fmt.Errorf("failed to create stream %q and buffers, %w", streamName, err)
 			}
 			log.Infow("Succeeded to create a stream", zap.String("stream", streamName))

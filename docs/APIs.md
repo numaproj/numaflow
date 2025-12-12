@@ -2494,6 +2494,106 @@ discardLatest. if not provided, the default value is set to
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.ExactlyOnce">
+
+ExactlyOnce
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>enabled</code></br> <em> bool </em>
+</td>
+
+<td>
+
+<p>
+
+Enabled enables exactly once processing.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>consistentAck</code></br> <em> bool </em>
+</td>
+
+<td>
+
+<p>
+
+ConsistentAck enables consistent acknowledgement of offsets to ISB
+throughout the pipeline.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>dedupWindow</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+DedupWindow is the duration for which the deduplication will be enabled.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.FixedWindow">
 
 FixedWindow
@@ -7843,6 +7943,27 @@ InterStepBuffer configuration specific to this pipeline.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>exactlyOnce</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ExactlyOnce"> ExactlyOnce </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+ExactlyOnce is the exactly-once settings for the pipeline.
+</p>
+
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -8262,6 +8383,27 @@ InterStepBuffer </a> </em>
 <p>
 
 InterStepBuffer configuration specific to this pipeline.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>exactlyOnce</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ExactlyOnce"> ExactlyOnce </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+ExactlyOnce is the exactly-once settings for the pipeline.
 </p>
 
 </td>
@@ -13788,6 +13930,28 @@ InterStepBuffer configuration specific to this pipeline.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>exactlyOnce</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ExactlyOnce"> ExactlyOnce </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+ExactlyOnce indicates the exactly-once settings for the vertex, it’s
+populated from the pipeline exactlyOnce settings.
+</p>
+
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -14313,6 +14477,28 @@ InterStepBuffer </a> </em>
 <p>
 
 InterStepBuffer configuration specific to this pipeline.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>exactlyOnce</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ExactlyOnce"> ExactlyOnce </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+ExactlyOnce indicates the exactly-once settings for the vertex, it’s
+populated from the pipeline exactlyOnce settings.
 </p>
 
 </td>

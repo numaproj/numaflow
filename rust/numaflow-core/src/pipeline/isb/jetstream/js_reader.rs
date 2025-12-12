@@ -108,6 +108,8 @@ pub(crate) struct JetStreamReader {
     offset2jsmsg: Arc<RwLock<HashMap<Offset, JetstreamMessage>>>,
     /// interval at which we should send wip ack to avoid redelivery.
     wip_ack_interval: Duration,
+    /// whether to use double_ack (consistent ack) or simple ack
+    consistent_ack: bool,
 }
 
 impl JetStreamReader {
@@ -127,13 +129,21 @@ impl JetStreamReader {
             .map_err(|e| Error::ISB(format!("Failed to get consumer info {e}")))?;
 
         let ack_wait_seconds = consumer_info.config.ack_wait.as_secs();
+        let (compression_type, consistent_ack) = match isb_config {
+            Some(config) => (
+                Some(config.compression.compress_type),
+                config.exactly_once.consistent_ack,
+            ),
+            None => (None, false),
+        };
         Ok(Self {
             stream,
             read_consumer: Arc::new(consumer.clone()),
             js_context: Arc::new(js_ctx),
-            compression_type: isb_config.map(|c| c.compression.compress_type),
+            compression_type,
             offset2jsmsg: Arc::new(RwLock::new(HashMap::new())),
             wip_ack_interval: Duration::from_secs(ack_wait_seconds / 3), // give 2 chances
+            consistent_ack,
         })
     }
 
@@ -203,15 +213,28 @@ impl JetStreamReader {
     /// Mark message as in progress by sending work in progress ack.
     pub(crate) async fn mark_wip(&self, offset: &Offset) -> Result<()> {
         if let Some(msg) = self.get_js_message(offset, false) {
-            let _ = msg.ack_with(AckKind::Progress).await;
+            msg.ack_with(AckKind::Progress).await.map_err(|e| {
+                Error::ISB(format!(
+                    "Failed to send work in progress ack to JetStream: {e}"
+                ))
+            })?;
         }
         Ok(())
     }
 
-    /// Acknowledge the offset
+    /// Acknowledge the offset.
+    /// Uses double_ack when consistent_ack is enabled, otherwise uses simple ack.
     pub(crate) async fn ack(&self, offset: &Offset) -> Result<()> {
         if let Some(msg) = self.get_js_message(offset, true) {
-            let _ = msg.double_ack().await;
+            if self.consistent_ack {
+                msg.double_ack()
+                    .await
+                    .map_err(|e| Error::ISB(format!("Failed to double ack message: {e}")))?;
+            } else {
+                msg.ack()
+                    .await
+                    .map_err(|e| Error::ISB(format!("Failed to ack message: {e}")))?;
+            }
         }
         Ok(())
     }
@@ -219,7 +242,9 @@ impl JetStreamReader {
     /// Negatively acknowledge the offset
     pub(crate) async fn nack(&self, offset: &Offset) -> Result<()> {
         if let Some(msg) = self.get_js_message(offset, true) {
-            let _ = msg.ack_with(AckKind::Nak(None)).await;
+            msg.ack_with(AckKind::Nak(None))
+                .await
+                .map_err(|e| Error::ISB(format!("Failed to nack message: {e}")))?;
         }
         Ok(())
     }
@@ -310,6 +335,7 @@ mod tests {
             compression: Compression {
                 compress_type: CompressionType::Gzip,
             },
+            exactly_once: crate::config::pipeline::isb::ExactlyOnceConfig::default(),
         };
 
         let mut js_reader = JetStreamReader::new(stream.clone(), context.clone(), Some(isb_config))

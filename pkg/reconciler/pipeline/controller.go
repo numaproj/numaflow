@@ -329,6 +329,10 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 		}
 		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")), fmt.Sprintf("--buckets=%s", strings.Join(bks, ","))}
 		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
+		// Add dedup window when exactly-once is enabled
+		if pl.Spec.ExactlyOnce != nil && pl.Spec.ExactlyOnce.Enabled {
+			args = append(args, fmt.Sprintf("--dedup-window=%s", pl.Spec.ExactlyOnce.GetDedupWindow()))
+		}
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-create", args, "cre")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
 			r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateJobForISBCreationFailed", "Failed to create a Job: %w", err.Error())
@@ -685,6 +689,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 				DesiredPhase: dfv1.VertexPhase(pl.GetDesiredPhase()),
 			},
 			InterStepBuffer: pl.Spec.InterStepBuffer,
+			ExactlyOnce:     pl.Spec.ExactlyOnce,
 		}
 		hash := sharedutil.MustHash(spec.DeepCopyWithoutReplicasAndLifecycle())
 		obj := dfv1.Vertex{

@@ -20129,6 +20129,23 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.ExactlyOnce": {
+      "type": "object",
+      "properties": {
+        "consistentAck": {
+          "description": "ConsistentAck enables consistent acknowledgement of offsets to ISB throughout the pipeline.",
+          "type": "boolean"
+        },
+        "dedupWindow": {
+          "description": "DedupWindow is the duration for which the deduplication will be enabled.",
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        },
+        "enabled": {
+          "description": "Enabled enables exactly once processing.",
+          "type": "boolean"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.FixedWindow": {
       "description": "FixedWindow describes a fixed window",
       "type": "object",
@@ -21524,6 +21541,10 @@
             "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Edge"
           }
         },
+        "exactlyOnce": {
+          "description": "ExactlyOnce is the exactly-once settings for the pipeline.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ExactlyOnce"
+        },
         "interStepBuffer": {
           "description": "InterStepBuffer configuration specific to this pipeline.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.InterStepBuffer"
@@ -22899,6 +22920,10 @@
         "dnsPolicy": {
           "description": "Set DNS policy for the pod. Defaults to \"ClusterFirst\". Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'.",
           "type": "string"
+        },
+        "exactlyOnce": {
+          "description": "ExactlyOnce indicates the exactly-once settings for the vertex, it's populated from the pipeline exactlyOnce settings.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ExactlyOnce"
         },
         "fromEdges": {
           "type": "array",

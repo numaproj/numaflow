@@ -19,6 +19,7 @@ package isbsvc
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // ISBService is an interface used to do the operations on ISBSvc
@@ -37,6 +38,9 @@ type ISBService interface {
 type createOptions struct {
 	// config is configuration for the to be created buffers and buckets
 	config string
+	// dedupWindow is the duration for deduplication window when exactly-once is enabled
+	// If nil, deduplication is disabled
+	dedupWindow *time.Duration
 }
 
 type CreateOption func(*createOptions) error
@@ -45,6 +49,14 @@ type CreateOption func(*createOptions) error
 func WithConfig(conf string) CreateOption {
 	return func(o *createOptions) error {
 		o.config = conf
+		return nil
+	}
+}
+
+// WithDedupWindow sets the deduplication window duration for exactly-once processing
+func WithDedupWindow(d time.Duration) CreateOption {
+	return func(o *createOptions) error {
+		o.dedupWindow = &d
 		return nil
 	}
 }

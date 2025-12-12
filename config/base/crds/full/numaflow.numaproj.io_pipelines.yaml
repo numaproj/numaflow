@@ -98,6 +98,18 @@ spec:
                   - to
                   type: object
                 type: array
+              exactlyOnce:
+                properties:
+                  consistentAck:
+                    default: true
+                    type: boolean
+                  dedupWindow:
+                    default: 2m
+                    type: string
+                  enabled:
+                    default: false
+                    type: boolean
+                type: object
               interStepBuffer:
                 properties:
                   compression:

@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -40,6 +41,7 @@ func NewISBSvcCreateCommand() *cobra.Command {
 		buckets            []string
 		sideInputsStore    string
 		servingSourceStore string
+		dedupWindow        string
 	)
 
 	command := &cobra.Command{
@@ -79,6 +81,13 @@ func NewISBSvcCreateCommand() *cobra.Command {
 					return err
 				}
 				opts = append(opts, isbsvc.WithConfig(isbSvcConfig.JetStream.StreamConfig))
+				if dedupWindow != "" {
+					d, err := time.ParseDuration(dedupWindow)
+					if err != nil {
+						return fmt.Errorf("failed to parse dedup window duration %q, %w", dedupWindow, err)
+					}
+					opts = append(opts, isbsvc.WithDedupWindow(d))
+				}
 			default:
 				cmd.HelpFunc()(cmd, args)
 				return fmt.Errorf("unsupported isb service type %q", isbSvcType)
@@ -98,5 +107,6 @@ func NewISBSvcCreateCommand() *cobra.Command {
 	command.Flags().StringSliceVar(&buckets, "buckets", []string{}, "Buckets to create") // --buckets=xxa,xxb --buckets=xxc
 	command.Flags().StringVar(&sideInputsStore, "side-inputs-store", "", "Name of the side inputs store")
 	command.Flags().StringVar(&servingSourceStore, "serving-store", "", "Serving source streams to create") // --serving-store=a
+	command.Flags().StringVar(&dedupWindow, "dedup-window", "", "Deduplication window duration for exactly-once processing, e.g. 2m")
 	return command
 }

@@ -9806,6 +9806,18 @@ spec:
                   - to
                   type: object
                 type: array
+              exactlyOnce:
+                properties:
+                  consistentAck:
+                    default: true
+                    type: boolean
+                  dedupWindow:
+                    default: 2m
+                    type: string
+                  enabled:
+                    default: false
+                    type: boolean
+                type: object
               interStepBuffer:
                 properties:
                   compression:
@@ -22911,6 +22923,18 @@ spec:
                       - to
                       type: object
                     type: array
+                  exactlyOnce:
+                    properties:
+                      consistentAck:
+                        default: true
+                        type: boolean
+                      dedupWindow:
+                        default: 2m
+                        type: string
+                      enabled:
+                        default: false
+                        type: boolean
+                    type: object
                   interStepBuffer:
                     properties:
                       compression:
@@ -37853,6 +37877,18 @@ spec:
                 type: object
               dnsPolicy:
                 type: string
+              exactlyOnce:
+                properties:
+                  consistentAck:
+                    default: true
+                    type: boolean
+                  dedupWindow:
+                    default: 2m
+                    type: string
+                  enabled:
+                    default: false
+                    type: boolean
+                type: object
               fromEdges:
                 items:
                   properties:

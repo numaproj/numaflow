@@ -467,6 +467,21 @@ message Edge {
   optional string onFull = 4;
 }
 
+message ExactlyOnce {
+  // Enabled enables exactly once processing.
+  // +kubebuilder:default=false
+  optional bool enabled = 1;
+
+  // ConsistentAck enables consistent acknowledgement of offsets to ISB throughout the pipeline.
+  // +kubebuilder:default=true
+  optional bool consistentAck = 2;
+
+  // DedupWindow is the duration for which the deduplication will be enabled.
+  // +optional
+  // +kubebuilder:default="2m"
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration dedupWindow = 3;
+}
+
 // FixedWindow describes a fixed window
 message FixedWindow {
   // Length is the duration of the fixed window.
@@ -1307,6 +1322,10 @@ message PipelineSpec {
   // InterStepBuffer configuration specific to this pipeline.
   // +optional
   optional InterStepBuffer interStepBuffer = 9;
+
+  // ExactlyOnce is the exactly-once settings for the pipeline.
+  // +optional
+  optional ExactlyOnce exactlyOnce = 10;
 }
 
 message PipelineStatus {
@@ -2241,6 +2260,10 @@ message VertexSpec {
   // InterStepBuffer configuration specific to this pipeline.
   // +optional
   optional InterStepBuffer interStepBuffer = 9;
+
+  // ExactlyOnce indicates the exactly-once settings for the vertex, it's populated from the pipeline exactlyOnce settings.
+  // +optional
+  optional ExactlyOnce exactlyOnce = 10;
 }
 
 message VertexStatus {
