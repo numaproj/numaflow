@@ -753,6 +753,18 @@ spec:
                 type: object
               dnsPolicy:
                 type: string
+              exactlyOnce:
+                properties:
+                  consistentAck:
+                    default: true
+                    type: boolean
+                  dedupWindow:
+                    default: 2m
+                    type: string
+                  enabled:
+                    default: false
+                    type: boolean
+                type: object
               fromEdges:
                 items:
                   properties:

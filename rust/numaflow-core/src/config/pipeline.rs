@@ -634,8 +634,22 @@ impl PipelineConfig {
             });
         }
 
+        // Parse exactly_once from the spec level
+        let exactly_once = match vertex_obj.spec.exactly_once.as_ref() {
+            None => isb::ExactlyOnceConfig::default(),
+            Some(eo) => isb::ExactlyOnceConfig {
+                enabled: eo.enabled.unwrap_or(false),
+                consistent_ack: eo.consistent_ack.unwrap_or(true),
+            },
+        };
+
         let isb_config: Option<isb::ISBConfig> = match vertex_obj.spec.inter_step_buffer.as_ref() {
-            None => None,
+            None => Some(isb::ISBConfig {
+                compression: isb::Compression {
+                    compress_type: isb::CompressionType::None,
+                },
+                exactly_once,
+            }),
             Some(isb_spec) => {
                 let compress_type = match isb_spec.compression.as_ref() {
                     None => isb::CompressionType::None,
@@ -655,6 +669,7 @@ impl PipelineConfig {
                 };
                 Some(isb::ISBConfig {
                     compression: isb::Compression { compress_type },
+                    exactly_once,
                 })
             }
         };

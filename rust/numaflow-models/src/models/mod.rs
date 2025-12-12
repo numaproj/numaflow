@@ -32,6 +32,8 @@ pub mod daemon_template;
 pub use self::daemon_template::DaemonTemplate;
 pub mod edge;
 pub use self::edge::Edge;
+pub mod exactly_once;
+pub use self::exactly_once::ExactlyOnce;
 pub mod fixed_window;
 pub use self::fixed_window::FixedWindow;
 pub mod forward_conditions;
