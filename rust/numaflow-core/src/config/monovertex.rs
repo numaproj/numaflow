@@ -129,7 +129,7 @@ impl MonovertexConfig {
             .source
             .clone()
             .ok_or_else(|| Error::Config("Source not found".to_string()))?;
-        
+
         let source_to_sink_conditional = source
             .transformer
             .clone()
@@ -177,10 +177,8 @@ impl MonovertexConfig {
             .clone()
             .ok_or_else(|| Error::Config("Map UDF not found".to_string()));
 
-        let map_to_sink_conditional = udf.clone()
-            .ok()
-            .and_then(|udf| udf.sink_conditionals);
-        
+        let map_to_sink_conditional = udf.clone().ok().and_then(|udf| udf.sink_conditionals);
+
         let map_config = match udf {
             Ok(udf) => Some(MapVtxConfig {
                 concurrency: batch_size as usize,
@@ -248,8 +246,10 @@ impl MonovertexConfig {
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
             graceful_shutdown_time: Duration::from_secs(graceful_shutdown_time_secs),
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
-            source_to_sink_condition: source_to_sink_conditional.and_then(|condition| condition.try_into().ok()),
-            map_to_sink_condition: map_to_sink_conditional.and_then(|condition| condition.try_into().ok()),
+            source_to_sink_condition: source_to_sink_conditional
+                .and_then(|condition| condition.try_into().ok()),
+            map_to_sink_condition: map_to_sink_conditional
+                .and_then(|condition| condition.try_into().ok()),
             source_config,
             map_config,
             sink_config,
