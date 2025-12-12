@@ -262,7 +262,6 @@ func WaitForPipelineRunning(ctx context.Context, pipelineClient flowpkg.Pipeline
 
 func WaitForMonoVertexRunning(ctx context.Context, monoVertexClient flowpkg.MonoVertexInterface, monoVertexName string, timeout time.Duration) error {
 	fieldSelector := "metadata.name=" + monoVertexName
-	// log.Println("Waiting for MonoVertex running: ", fieldSelector)
 	opts := metav1.ListOptions{FieldSelector: fieldSelector}
 	watch, err := monoVertexClient.Watch(ctx, opts)
 	if err != nil {
@@ -271,7 +270,6 @@ func WaitForMonoVertexRunning(ctx context.Context, monoVertexClient flowpkg.Mono
 	defer watch.Stop()
 	timeoutCh := make(chan bool, 1)
 	go func() {
-		// log.Println("Sleeping for timeout: ", timeout)
 		time.Sleep(timeout)
 		timeoutCh <- true
 	}()
@@ -296,7 +294,6 @@ func WaitForMonoVertexPodRunning(kubeClient kubernetes.Interface, monoVertexClie
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, monoVertexName, dfv1.KeyComponent, dfv1.ComponentMonoVertex)
-	// log.Println("Waiting for MonoVertex pod running(labelSelector): ", labelSelector)
 	for {
 		select {
 		case <-ctx.Done():
@@ -312,11 +309,8 @@ func WaitForMonoVertexPodRunning(kubeClient kubernetes.Interface, monoVertexClie
 			return fmt.Errorf("error getting monovertex pod list: %w", err)
 		}
 		ok := len(podList.Items) > 0 && len(podList.Items) == monoVertex.CalculateReplicas() // pod number should equal to desired replicas
-		// log.Println("MonoVertex pod list: ", podList.Items)
 		for _, p := range podList.Items {
-			log.Println("value of ok: ", ok)
 			ok = ok && isPodReady(p)
-			log.Println("Checking for mono vertex pod ready: ", p.Name, ok)
 		}
 		if ok {
 			return nil
@@ -442,7 +436,6 @@ func WaitForServingServerPodsRunning(kubeClient kubernetes.Interface, namespace,
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyServingPipelineName, servingPipelineName, dfv1.KeyComponent, dfv1.ComponentServingServer)
-	// log.Println("LabelSelector for serving deployment: ", labelSelector)
 	for {
 		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
 		if err != nil {
@@ -450,7 +443,6 @@ func WaitForServingServerPodsRunning(kubeClient kubernetes.Interface, namespace,
 		}
 		ok := len(podList.Items) > 0
 		for _, p := range podList.Items {
-			// log.Println("Checking serving server pod: ", p.Name)
 			ok = ok && isPodReady(p)
 		}
 		if ok {
