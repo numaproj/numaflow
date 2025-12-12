@@ -100,6 +100,8 @@ pub mod mono_vertex_limits;
 pub use self::mono_vertex_limits::MonoVertexLimits;
 pub mod mono_vertex_list;
 pub use self::mono_vertex_list::MonoVertexList;
+pub mod mono_vertex_sinker_condition;
+pub use self::mono_vertex_sinker_condition::MonoVertexSinkerCondition;
 pub mod mono_vertex_spec;
 pub use self::mono_vertex_spec::MonoVertexSpec;
 pub mod mono_vertex_status;

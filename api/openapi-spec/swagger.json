@@ -21143,6 +21143,20 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.MonoVertexSinkerCondition": {
+      "type": "object",
+      "properties": {
+        "fallback": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions"
+        },
+        "onSuccess": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions"
+        },
+        "sink": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.MonoVertexSpec": {
       "type": "object",
       "properties": {
@@ -22720,6 +22734,10 @@
         },
         "groupBy": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.GroupBy"
+        },
+        "sinkConditionals": {
+          "description": "MonoVertexSinkConditions is used to define conditions based on which the data from the UDF is forwarded to the different sinks. Only used for mono vertex.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.MonoVertexSinkerCondition"
         }
       }
     },
@@ -22750,6 +22768,10 @@
       "properties": {
         "container": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
+        },
+        "sinkConditionals": {
+          "description": "MonoVertexSinkConditions is used to define conditions based on which the data from the transformer is forwarded to the different sinks. Only used for mono vertex.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.MonoVertexSinkerCondition"
         }
       }
     },

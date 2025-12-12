@@ -23,6 +23,7 @@ use crate::{metrics, shared};
 /// - Calls the Sinker to write the batch to the Sink
 /// - Send Acknowledgement back to the Source
 pub(crate) mod forwarder;
+mod stream_splitter;
 
 pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,

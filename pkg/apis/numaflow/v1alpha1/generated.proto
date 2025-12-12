@@ -1030,6 +1030,17 @@ message MonoVertexList {
   repeated MonoVertex items = 2;
 }
 
+message MonoVertexSinkerCondition {
+  // +optional
+  optional ForwardConditions sink = 1;
+
+  // +optional
+  optional ForwardConditions fallback = 2;
+
+  // +optional
+  optional ForwardConditions onSuccess = 3;
+}
+
 message MonoVertexSpec {
   // +kubebuilder:default=1
   // +optional
@@ -2107,6 +2118,11 @@ message UDF {
 
   // +optional
   optional GroupBy groupBy = 3;
+
+  // +optional
+  // MonoVertexSinkConditions is used to define conditions based on which the data from
+  // the UDF is forwarded to the different sinks. Only used for mono vertex.
+  optional MonoVertexSinkerCondition sinkConditionals = 4;
 }
 
 message UDSink {
@@ -2120,6 +2136,11 @@ message UDSource {
 message UDTransformer {
   // +optional
   optional Container container = 1;
+
+  // +optional
+  // MonoVertexSinkConditions is used to define conditions based on which the data from
+  // the transformer is forwarded to the different sinks. Only used for mono vertex.
+  optional MonoVertexSinkerCondition sinkConditionals = 2;
 }
 
 // UpdateStrategy indicates the strategy that the
