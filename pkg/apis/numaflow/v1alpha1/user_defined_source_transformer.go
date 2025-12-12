@@ -19,8 +19,4 @@ package v1alpha1
 type UDTransformer struct {
 	// +optional
 	Container *Container `json:"container" protobuf:"bytes,1,opt,name=container"`
-	// +optional
-	// MonoVertexSinkConditions is used to define conditions based on which the data from
-	// the transformer is forwarded to the different sinks. Only used for mono vertex.
-	MonoVertexSinkConditions *MonoVertexSinkerCondition `json:"sinkConditionals" protobuf:"bytes,2,opt,name=sinkConditionals"`
 }

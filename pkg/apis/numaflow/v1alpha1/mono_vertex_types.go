@@ -514,6 +514,8 @@ type MonoVertexSpec struct {
 	// +kubebuilder:default={"desiredPhase": Running}
 	// +optional
 	Lifecycle MonoVertexLifecycle `json:"lifecycle,omitempty" protobuf:"bytes,14,opt,name=lifecycle"`
+	// +optional
+	ForwardingRules *MonoVertexForwarding `json:"forwardingRules,omitempty" protobuf:"bytes,15,opt,name=forwardingRules"`
 }
 
 func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
