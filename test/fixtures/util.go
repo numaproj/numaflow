@@ -359,6 +359,7 @@ func WaitForVertexPodRunning(kubeClient kubernetes.Interface, vertexClient flowp
 func isPodReady(pod corev1.Pod) bool {
 	log.Println("value of pod.Status.Phase: ", pod.Status.Phase)
 	log.Println("value of pod.Status.ContainerStatuses: ", pod.Status.ContainerStatuses)
+	log.Println("value of pod.Status.InitContainerStatuses: ", pod.Status.InitContainerStatuses)
 	if pod.Status.Phase != corev1.PodRunning {
 		return false
 	}
