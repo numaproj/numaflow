@@ -1,0 +1,33 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: pipeline
+spec:
+  vertices:
+    - name: input
+      source:
+        udsource:
+          container:
+            image: quay.io/numaio/numaflow-go/source-metadata:stable # Source (sends 100 messages) creates user metadata with group "simple-source" and adds txn-id
+            imagePullPolicy: IfNotPresent
+        transformer:
+          container:
+            image: quay.io/numaio/numaflow-go/transformer-metadata:stable # Transformer adds event-time to group "event-time-group"
+            imagePullPolicy: IfNotPresent
+    - name: map
+      udf:
+        container:
+          image: quay.io/numaio/numaflow-go/map-metadata:stable # Map logs both groups: "Groups at mapper: [event-time-group simple-source]"/ and creates additional group "map-group" with map-key
+          imagePullPolicy: IfNotPresent
+    - name: sink
+      sink:
+        udsink:
+          container:
+            image: quay.io/numaio/numaflow-go/sink-metadata:stable # Sink logs all user metadata received
+            imagePullPolicy: IfNotPresent
+  edges:
+    - from: input
+      to: map
+    - from: map
+      to: sink
+

@@ -131,11 +131,13 @@ func (w *When) CreateMonoVertexAndWait() *When {
 		w.t.Fatal("No MonoVertex to create")
 	}
 	w.t.Log("Creating MonoVertex", w.monoVertex.Name)
+	w.t.Log("MonoVertex: ", w.monoVertex)
 	ctx := context.Background()
 	i, err := w.monoVertexClient.Create(ctx, w.monoVertex, metav1.CreateOptions{})
 	if err != nil {
 		w.t.Fatal(err)
 	} else {
+		w.t.Log("MonoVertex created: ", i)
 		w.monoVertex = i
 	}
 	// wait
