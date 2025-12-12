@@ -258,11 +258,19 @@ func validateVertex(v dfv1.AbstractVertex) error {
 		return nil
 	}
 
+	if v.Source.UDTransformer.MonoVertexSinkConditions != nil {
+		return fmt.Errorf("invalid vertex %q: monoVertex Sink forwarding conditions are not supported in pipeline", v.Name)
+	}
+
 	if v.UDF != nil {
 		if err := validateUDF(*v.UDF); err != nil {
 			return fmt.Errorf("invalid vertex %q: %w", v.Name, err)
 		}
 		return nil
+	}
+
+	if v.UDF.MonoVertexSinkConditions != nil {
+		return fmt.Errorf("invalid vertex %q: monoVertex Sink forwarding conditions are not supported in pipeline", v.Name)
 	}
 
 	if v.Sink != nil {

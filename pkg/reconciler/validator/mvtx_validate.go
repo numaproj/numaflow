@@ -41,6 +41,14 @@ func ValidateMonoVertex(mvtx *dfv1.MonoVertex) error {
 	if err := validateSource(*mvtx.Spec.Source); err != nil {
 		return fmt.Errorf("invalid source: %w", err)
 	}
+	if mvtx.Spec.Source.UDTransformer != nil && mvtx.Spec.Source.UDTransformer.MonoVertexSinkConditions != nil {
+		if mvtx.Spec.Source.UDTransformer.MonoVertexSinkConditions.Fallback != nil && mvtx.Spec.Sink.Fallback == nil {
+			return fmt.Errorf("invalid transformer: fallback sink is not defined while conditionals for it exist")
+		}
+		if mvtx.Spec.Source.UDTransformer.MonoVertexSinkConditions.OnSuccess != nil && mvtx.Spec.Sink.OnSuccess == nil {
+			return fmt.Errorf("invalid transformer: onSuccess sink is not defined while conditionals for it exist")
+		}
+	}
 	if mvtx.Spec.Sink == nil {
 		return fmt.Errorf("sink is not defined")
 	}
@@ -58,6 +66,15 @@ func ValidateMonoVertex(mvtx *dfv1.MonoVertex) error {
 			return fmt.Errorf("invalid udf: groupBy/reduce is not supported in monovertex")
 		} else if err := validateUDF(*mvtx.Spec.UDF); err != nil {
 			return fmt.Errorf("invalid udf: %w", err)
+		}
+
+		if mvtx.Spec.UDF.MonoVertexSinkConditions != nil {
+			if mvtx.Spec.UDF.MonoVertexSinkConditions.Fallback != nil && mvtx.Spec.Sink.Fallback == nil {
+				return fmt.Errorf("invalid udf: fallback sink is not defined while conditionals for it exist")
+			}
+			if mvtx.Spec.UDF.MonoVertexSinkConditions.OnSuccess != nil && mvtx.Spec.Sink.OnSuccess == nil {
+				return fmt.Errorf("invalid udf: onSuccess sink is not defined while conditionals for it exist")
+			}
 		}
 	}
 

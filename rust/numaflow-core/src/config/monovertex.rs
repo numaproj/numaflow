@@ -21,7 +21,7 @@ use crate::config::pipeline::map::MapVtxConfig;
 use crate::error::Error;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
-use numaflow_models::models::MonoVertex;
+use numaflow_models::models::{ForwardConditions, MonoVertex, MonoVertexSinkerCondition};
 use serde_json::from_slice;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
@@ -38,7 +38,9 @@ pub(crate) struct MonovertexConfig {
     pub(crate) graceful_shutdown_time: Duration,
     pub(crate) replica: u16,
     pub(crate) source_config: SourceConfig,
+    pub(crate) source_to_sink_condition: Option<ToSinkCondition>,
     pub(crate) map_config: Option<MapVtxConfig>,
+    pub(crate) map_to_sink_condition: Option<ToSinkCondition>,
     pub(crate) sink_config: SinkConfig,
     pub(crate) transformer_config: Option<TransformerConfig>,
     pub(crate) fb_sink_config: Option<SinkConfig>,
@@ -60,11 +62,13 @@ impl Default for MonovertexConfig {
                 read_ahead: false,
                 source_type: SourceType::Generator(GeneratorConfig::default()),
             },
+            source_to_sink_condition: None,
             sink_config: SinkConfig {
                 sink_type: SinkType::Log(sink::LogConfig::default()),
                 retry_config: None,
             },
             map_config: None,
+            map_to_sink_condition: None,
             transformer_config: None,
             fb_sink_config: None,
             on_success_sink_config: None,
@@ -120,21 +124,16 @@ impl MonovertexConfig {
             .and_then(|metadata| metadata.name.clone())
             .ok_or_else(|| Error::Config("MonoVertex name not found".to_string()))?;
 
-        let transformer_config = mono_vertex_obj
-            .spec
-            .source
-            .as_ref()
-            .and_then(|source| source.transformer.as_ref())
-            .map(|_| TransformerConfig {
-                concurrency: batch_size as usize, // FIXME: introduce a new config called udf concurrency in the spec
-                transformer_type: TransformerType::UserDefined(UserDefinedConfig::default()),
-            });
-
         let source = mono_vertex_obj
             .spec
             .source
             .clone()
             .ok_or_else(|| Error::Config("Source not found".to_string()))?;
+        
+        let source_to_sink_conditional = source
+            .transformer
+            .clone()
+            .and_then(|transformer| transformer.sink_conditionals);
 
         let source = SourceSpec::new(mono_vertex_name.clone(), "mvtx".into(), source);
         let source_type: SourceType = source.try_into()?;
@@ -148,6 +147,16 @@ impl MonovertexConfig {
                 .unwrap(),
             source_type,
         };
+
+        let transformer_config = mono_vertex_obj
+            .spec
+            .source
+            .as_ref()
+            .and_then(|source| source.transformer.as_ref())
+            .map(|_| TransformerConfig {
+                concurrency: batch_size as usize, // FIXME: introduce a new config called udf concurrency in the spec
+                transformer_type: TransformerType::UserDefined(UserDefinedConfig::default()),
+            });
 
         let sink = mono_vertex_obj
             .spec
@@ -168,6 +177,10 @@ impl MonovertexConfig {
             .clone()
             .ok_or_else(|| Error::Config("Map UDF not found".to_string()));
 
+        let map_to_sink_conditional = udf.clone()
+            .ok()
+            .and_then(|udf| udf.sink_conditionals);
+        
         let map_config = match udf {
             Ok(udf) => Some(MapVtxConfig {
                 concurrency: batch_size as usize,
@@ -235,6 +248,8 @@ impl MonovertexConfig {
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
             graceful_shutdown_time: Duration::from_secs(graceful_shutdown_time_secs),
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
+            source_to_sink_condition: source_to_sink_conditional.and_then(|condition| condition.try_into().ok()),
+            map_to_sink_condition: map_to_sink_conditional.and_then(|condition| condition.try_into().ok()),
             source_config,
             map_config,
             sink_config,
@@ -243,6 +258,24 @@ impl MonovertexConfig {
             on_success_sink_config,
             callback_config,
             rate_limit,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ToSinkCondition {
+    pub(crate) sink: Option<Box<ForwardConditions>>,
+    pub(crate) fallback: Option<Box<ForwardConditions>>,
+    pub(crate) on_success: Option<Box<ForwardConditions>>,
+}
+
+impl TryFrom<Box<MonoVertexSinkerCondition>> for ToSinkCondition {
+    type Error = Error;
+    fn try_from(mvtx_sinker_condition: Box<MonoVertexSinkerCondition>) -> Result<Self> {
+        Ok(ToSinkCondition {
+            sink: mvtx_sinker_condition.sink,
+            fallback: mvtx_sinker_condition.fallback,
+            on_success: mvtx_sinker_condition.on_success,
         })
     }
 }

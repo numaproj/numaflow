@@ -20,10 +20,15 @@ limitations under the License.
 pub struct UdTransformer {
     #[serde(rename = "container", skip_serializing_if = "Option::is_none")]
     pub container: Option<Box<crate::models::Container>>,
+    #[serde(rename = "sinkConditionals", skip_serializing_if = "Option::is_none")]
+    pub sink_conditionals: Option<Box<crate::models::MonoVertexSinkerCondition>>,
 }
 
 impl UdTransformer {
     pub fn new() -> UdTransformer {
-        UdTransformer { container: None }
+        UdTransformer {
+            container: None,
+            sink_conditionals: None,
+        }
     }
 }

@@ -22,6 +22,8 @@ pub struct Udf {
     pub container: Option<Box<crate::models::Container>>,
     #[serde(rename = "groupBy", skip_serializing_if = "Option::is_none")]
     pub group_by: Option<Box<crate::models::GroupBy>>,
+    #[serde(rename = "sinkConditionals", skip_serializing_if = "Option::is_none")]
+    pub sink_conditionals: Option<Box<crate::models::MonoVertexSinkerCondition>>,
 }
 
 impl Udf {
@@ -29,6 +31,7 @@ impl Udf {
         Udf {
             container: None,
             group_by: None,
+            sink_conditionals: None,
         }
     }
 }

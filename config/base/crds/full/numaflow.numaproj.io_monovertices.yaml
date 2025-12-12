@@ -6609,6 +6609,69 @@ spec:
                               type: object
                             type: array
                         type: object
+                      sinkConditionals:
+                        properties:
+                          fallback:
+                            properties:
+                              tags:
+                                properties:
+                                  operator:
+                                    enum:
+                                    - and
+                                    - or
+                                    - not
+                                    type: string
+                                  values:
+                                    items:
+                                      type: string
+                                    type: array
+                                required:
+                                - values
+                                type: object
+                            required:
+                            - tags
+                            type: object
+                          onSuccess:
+                            properties:
+                              tags:
+                                properties:
+                                  operator:
+                                    enum:
+                                    - and
+                                    - or
+                                    - not
+                                    type: string
+                                  values:
+                                    items:
+                                      type: string
+                                    type: array
+                                required:
+                                - values
+                                type: object
+                            required:
+                            - tags
+                            type: object
+                          sink:
+                            properties:
+                              tags:
+                                properties:
+                                  operator:
+                                    enum:
+                                    - and
+                                    - or
+                                    - not
+                                    type: string
+                                  values:
+                                    items:
+                                      type: string
+                                    type: array
+                                required:
+                                - values
+                                type: object
+                            required:
+                            - tags
+                            type: object
+                        type: object
                     type: object
                   udsource:
                     properties:
@@ -7286,6 +7349,69 @@ spec:
                         type: object
                     required:
                     - window
+                    type: object
+                  sinkConditionals:
+                    properties:
+                      fallback:
+                        properties:
+                          tags:
+                            properties:
+                              operator:
+                                enum:
+                                - and
+                                - or
+                                - not
+                                type: string
+                              values:
+                                items:
+                                  type: string
+                                type: array
+                            required:
+                            - values
+                            type: object
+                        required:
+                        - tags
+                        type: object
+                      onSuccess:
+                        properties:
+                          tags:
+                            properties:
+                              operator:
+                                enum:
+                                - and
+                                - or
+                                - not
+                                type: string
+                              values:
+                                items:
+                                  type: string
+                                type: array
+                            required:
+                            - values
+                            type: object
+                        required:
+                        - tags
+                        type: object
+                      sink:
+                        properties:
+                          tags:
+                            properties:
+                              operator:
+                                enum:
+                                - and
+                                - or
+                                - not
+                                type: string
+                              values:
+                                items:
+                                  type: string
+                                type: array
+                            required:
+                            - values
+                            type: object
+                        required:
+                        - tags
+                        type: object
                     type: object
                 type: object
               updateStrategy:

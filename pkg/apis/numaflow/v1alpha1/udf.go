@@ -29,6 +29,10 @@ type UDF struct {
 	Container *Container `json:"container" protobuf:"bytes,1,opt,name=container"`
 	// +optional
 	GroupBy *GroupBy `json:"groupBy" protobuf:"bytes,3,opt,name=groupBy"`
+	// +optional
+	// MonoVertexSinkConditions is used to define conditions based on which the data from
+	// the UDF is forwarded to the different sinks. Only used for mono vertex.
+	MonoVertexSinkConditions *MonoVertexSinkerCondition `json:"sinkConditionals" protobuf:"bytes,4,opt,name=sinkConditionals"`
 }
 
 func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {

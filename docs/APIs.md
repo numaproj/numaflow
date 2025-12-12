@@ -2587,7 +2587,8 @@ ForwardConditions
 <p>
 
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.Edge">Edge</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.Edge">Edge</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSinkerCondition">MonoVertexSinkerCondition</a>)
 </p>
 
 <p>
@@ -6499,6 +6500,96 @@ MonoVertexPhase (<code>string</code> alias)
 <p>
 
 </p>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.MonoVertexSinkerCondition">
+
+MonoVertexSinkerCondition
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.UDF">UDF</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.UDTransformer">UDTransformer</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>sink</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ForwardConditions">
+ForwardConditions </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>fallback</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ForwardConditions">
+ForwardConditions </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>onSuccess</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ForwardConditions">
+ForwardConditions </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
 
 <h3 id="numaflow.numaproj.io/v1alpha1.MonoVertexSpec">
 
@@ -13279,6 +13370,29 @@ Description
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>sinkConditionals</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSinkerCondition">
+MonoVertexSinkerCondition </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+MonoVertexSinkConditions is used to define conditions based on which the
+data from the UDF is forwarded to the different sinks. Only used for
+mono vertex.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -13441,6 +13555,29 @@ Description
 <td>
 
 <em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>sinkConditionals</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSinkerCondition">
+MonoVertexSinkerCondition </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+MonoVertexSinkConditions is used to define conditions based on which the
+data from the transformer is forwarded to the different sinks. Only used
+for mono vertex.
+</p>
+
 </td>
 
 </tr>

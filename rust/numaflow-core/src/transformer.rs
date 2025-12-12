@@ -71,7 +71,7 @@ pub(crate) struct Transformer {
     sender: mpsc::Sender<TransformerActorMessage>,
     concurrency: usize,
     graceful_shutdown_time: Duration,
-    tracker: Tracker,
+    tracker: Tracker, 
     health_checker: Option<SourceTransformClient<Channel>>,
 }
 
