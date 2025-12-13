@@ -13,7 +13,7 @@
     
     
       
-        <title>Overview - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>OnSuccess Sink - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#sinks" class="md-skip">
+        <a href="#onsuccess-sink" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Overview
+              OnSuccess Sink
             
           </span>
         </div>
@@ -904,59 +904,11 @@
               
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          Overview
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
         Overview
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#fallback-sink-dlq" class="md-nav__link">
-    Fallback Sink (DLQ)
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#onsuccess-sink" class="md-nav__link">
-    OnSuccess Sink
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1036,11 +988,86 @@
               
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../on-success/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          OnSuccess Sink
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         OnSuccess Sink
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#use-case" class="md-nav__link">
+    Use Case
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caveats" class="md-nav__link">
+    Caveats
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-use" class="md-nav__link">
+    How to use
+  </a>
+  
+    <nav class="md-nav" aria-label="How to use">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-update-the-specification" class="md-nav__link">
+    Step 1 - update the specification
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-update-the-user-defined-sink-implementation" class="md-nav__link">
+    Step 2 - update the user-defined sink implementation
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2667,16 +2694,43 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#fallback-sink-dlq" class="md-nav__link">
-    Fallback Sink (DLQ)
+  <a href="#use-case" class="md-nav__link">
+    Use Case
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#onsuccess-sink" class="md-nav__link">
-    OnSuccess Sink
+  <a href="#caveats" class="md-nav__link">
+    Caveats
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-use" class="md-nav__link">
+    How to use
+  </a>
+  
+    <nav class="md-nav" aria-label="How to use">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-update-the-specification" class="md-nav__link">
+    Step 1 - update the specification
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-update-the-user-defined-sink-implementation" class="md-nav__link">
+    Step 2 - update the user-defined sink implementation
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2692,39 +2746,124 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/sinks/overview.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/sinks/on-success.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="sinks">Sinks<a class="headerlink" href="#sinks" title="Permanent link">&para;</a></h1>
-<p>The Sink serves as the endpoint for processed data that has been outputted from the platform,
-which is then sent to an external system or application. The purpose of the Sink is to deliver 
-the processed data to its ultimate destination, such as a database, data warehouse, visualization 
-tool, or alerting system. It's the opposite of the Source vertex, which receives input data into the platform.
-Sink vertex may require transformation or formatting of data prior to sending it to the target system. Depending on the 
-target system's needs, this transformation can be simple or complex.</p>
-<p>A pipeline can have many Sink vertices, unlike the Source vertex.</p>
-<p>Numaflow currently supports the following Sinks</p>
+<h1 id="onsuccess-sink">OnSuccess Sink<a class="headerlink" href="#onsuccess-sink" title="Permanent link">&para;</a></h1>
+<p>OnSuccess sink is used to write the messages to a sink only when the processing of the original message has completed 
+successfully in the primary sink.</p>
+<h2 id="use-case">Use Case<a class="headerlink" href="#use-case" title="Permanent link">&para;</a></h2>
+<p>OnSuccess sink is useful in following scenarios:</p>
 <ul>
-<li><a href="../kafka/">Kafka</a></li>
-<li><a href="../log/">Log</a></li>
-<li><a href="../blackhole/">Black Hole</a></li>
-<li><a href="../user-defined-sinks/">User-defined Sink</a></li>
+<li>When you want to write a confirmation message to a sink when the original message has been written to the primary
+sink successfully.</li>
+<li>When you want to write the original message to a secondary sink after it has been written to the primary sink successfully.</li>
 </ul>
-<p>A user-defined sink is a custom Sink that a user can write using Numaflow SDK when 
-the user needs to output the processed data to a system or using a certain transformation that is not 
-supported by the platform's built-in sinks. As an example, once we have processed the input messages, 
-we can use Elasticsearch as a user-defined sink to store the processed data and enable search and 
-analysis on the data.</p>
-<h2 id="fallback-sink-dlq">Fallback Sink (DLQ)<a class="headerlink" href="#fallback-sink-dlq" title="Permanent link">&para;</a></h2>
-<p>There is an explicit DLQ support for sinks using a concept called <a href="../fallback/">fallback sink</a>. For the rest of vertices,
-if you need DLQ, please use <a href="../../reference/conditional-forwarding/">conditional-forwarding</a>.
-Sink cannot do conditional-forwarding since it is a terminal state and hence we have explicit fallback option. </p>
-<h2 id="onsuccess-sink">OnSuccess Sink<a class="headerlink" href="#onsuccess-sink" title="Permanent link">&para;</a></h2>
-<p>There is a concept of <a href="../on-success/">onSuccess sink</a> that can be used to write the messages to a sink only when the 
-processing of the original message has completed successfully in the primary sink.</p>
+<h2 id="caveats">Caveats<a class="headerlink" href="#caveats" title="Permanent link">&para;</a></h2>
+<ul>
+<li>OnSuccess sink is more meaningful when the primary sink is a user-defined sink because builtins are not written to support on-success responses.</li>
+<li>For a given OnSuccess sink, we cannot configure another fallback or onSuccess sink. This means, if the OnSuccess sink 
+  is a user-defined sink, then we cannot wrap the message sent from this onSuccess UD sink as a onSuccess/fallback response.  </li>
+</ul>
+<h2 id="how-to-use">How to use<a class="headerlink" href="#how-to-use" title="Permanent link">&para;</a></h2>
+<p>To configure onSuccess sink, changes need to be made to the pipeline specification and the user-defined sink implementation.</p>
+<h3 id="step-1-update-the-specification">Step 1 - update the specification<a class="headerlink" href="#step-1-update-the-specification" title="Permanent link">&para;</a></h3>
+<p>Add a <code>onSuccess</code> field to the sink configuration in the pipeline specification file.</p>
+<p>The following example uses the builtin kafka as an onSuccess sink.</p>
+<div class="highlight"><pre><span></span><code><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+<span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">udsink</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink:latest</span>
+<span class="w">        </span><span class="nt">onSuccess</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">kafka</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">brokers</span><span class="p">:</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-broker1:19700</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-broker2:19700</span>
+<span class="w">            </span><span class="nt">topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-topic</span>
+</code></pre></div>
+<p>A onSuccess sink can also be a user-defined sink.</p>
+<div class="highlight"><pre><span></span><code><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+<span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">udsink</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink:latest</span>
+<span class="w">        </span><span class="nt">onSuccess</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">udsink</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink:latest</span>
+</code></pre></div>
+<h3 id="step-2-update-the-user-defined-sink-implementation">Step 2 - update the user-defined sink implementation<a class="headerlink" href="#step-2-update-the-user-defined-sink-implementation" title="Permanent link">&para;</a></h3>
+<p>Code changes have to be made in the primary sink to generate an <strong>onSuccess</strong> response.</p>
+<p>SDK methods to generate an onSuccess response in a primary user-defined sink:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Golang</label><label for="__tabbed_1_2">Java</label><label for="__tabbed_1_3">Rust</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p><div class="highlight"><pre><span></span><code><span class="kn">package</span><span class="w"> </span><span class="nx">main</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="nx">sinksdk</span><span class="w"> </span><span class="s">&quot;github.com/numaproj/numaflow-go/pkg/sinker&quot;</span>
+<span class="p">)</span>
+
+<span class="c1">// onSuccessLogSink is a sinker implementation that logs the input to stdout</span>
+<span class="kd">type</span><span class="w"> </span><span class="nx">onSuccessLogSink</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<span class="p">}</span>
+
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">onSuccessLogSink</span><span class="p">)</span><span class="w"> </span><span class="nx">Sink</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">datumStreamCh</span><span class="w"> </span><span class="o">&lt;-</span><span class="kd">chan</span><span class="w"> </span><span class="nx">sinksdk</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">sinksdk</span><span class="p">.</span><span class="nx">Responses</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">result</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">sinksdk</span><span class="p">.</span><span class="nx">ResponsesBuilder</span><span class="p">()</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="k">range</span><span class="w"> </span><span class="nx">datumStreamCh</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">result</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">result</span><span class="p">.</span><span class="nx">Append</span><span class="p">(</span><span class="nx">sinksdk</span><span class="p">.</span><span class="nx">ResponseOnSuccess</span><span class="p">(</span><span class="nx">d</span><span class="p">.</span><span class="nx">id</span><span class="p">,</span><span class="w"> </span><span class="nx">sinksdk</span><span class="p">.</span><span class="nx">NewMessage</span><span class="p">([]</span><span class="nb">byte</span><span class="p">(</span><span class="s">&quot;primary sink write succeeded&quot;</span><span class="p">))))</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">result</span>
+<span class="p">}</span>
+</code></pre></div>
+- <a href="https://github.com/numaproj/numaflow-go/blob/a75410dfc101ae70edeec4becb30c10f02abca53/pkg/sinker/types.go#L61-L63">Golang Response Struct</a></p>
+</div>
+<div class="tabbed-block">
+<p><div class="highlight"><pre><span></span><code><span class="nd">@Override</span>
+<span class="kd">public</span><span class="w"> </span><span class="n">ResponseList</span><span class="w"> </span><span class="nf">processMessages</span><span class="p">(</span><span class="n">DatumIterator</span><span class="w"> </span><span class="n">datumIterator</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">ResponseList</span><span class="p">.</span><span class="na">ResponseListBuilder</span><span class="w"> </span><span class="n">responseListBuilder</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ResponseList</span><span class="p">.</span><span class="na">newBuilder</span><span class="p">();</span>
+<span class="w">    </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">datumIterator</span><span class="p">.</span><span class="na">next</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">responseListBuilder</span><span class="p">.</span><span class="na">addResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">.</span><span class="na">responseOnSuccess</span><span class="p">(</span><span class="n">datum</span><span class="p">.</span><span class="na">getId</span><span class="p">(),</span>
+<span class="w">                    </span><span class="n">Message</span><span class="p">.</span><span class="na">builder</span><span class="p">()</span>
+<span class="w">                            </span><span class="p">.</span><span class="na">value</span><span class="p">(</span><span class="n">String</span><span class="p">.</span><span class="na">format</span><span class="p">(</span><span class="s">&quot;Successfully wrote message with ID: %s&quot;</span><span class="p">,</span>
+<span class="w">                                    </span><span class="n">datum</span><span class="p">.</span><span class="na">getId</span><span class="p">()).</span><span class="na">getBytes</span><span class="p">())</span>
+<span class="w">                            </span><span class="p">.</span><span class="na">build</span><span class="p">()));</span>
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="n">Exception</span><span class="w"> </span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">log</span><span class="p">.</span><span class="na">warn</span><span class="p">(</span><span class="s">&quot;Error while writing to any sink: &quot;</span><span class="p">,</span><span class="w"> </span><span class="n">e</span><span class="p">);</span>
+<span class="w">            </span><span class="n">responseListBuilder</span><span class="p">.</span><span class="na">addResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">.</span><span class="na">responseFailure</span><span class="p">(</span>
+<span class="w">                    </span><span class="n">datum</span><span class="p">.</span><span class="na">getId</span><span class="p">(),</span>
+<span class="w">                    </span><span class="n">e</span><span class="p">.</span><span class="na">getMessage</span><span class="p">()));</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">responseListBuilder</span><span class="p">.</span><span class="na">build</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></div>
+- <a href="https://github.com/numaproj/numaflow-java/blob/3180f88f71c6b6bd2f1fbff1a690d359710265cf/src/main/java/io/numaproj/numaflow/sinker/Response.java#L99">Java Response Class</a></p>
+</div>
+<div class="tabbed-block">
+<p><div class="highlight"><pre><span></span><code><span class="cp">#[tonic::async_trait]</span>
+<span class="k">impl</span><span class="w"> </span><span class="n">sink</span><span class="p">::</span><span class="n">Sinker</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">SinkHandler</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">async</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">sink</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">input</span><span class="p">:</span><span class="w"> </span><span class="nc">tokio</span><span class="p">::</span><span class="n">sync</span><span class="p">::</span><span class="n">mpsc</span><span class="p">::</span><span class="n">Receiver</span><span class="o">&lt;</span><span class="n">SinkRequest</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Response</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">responses</span><span class="p">:</span><span class="w"> </span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Response</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Vec</span><span class="p">::</span><span class="n">new</span><span class="p">();</span>
+<span class="w">        </span><span class="k">while</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">datum</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">recv</span><span class="p">().</span><span class="k">await</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">responses</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">Response</span><span class="p">::</span><span class="n">on_success</span><span class="p">(</span>
+<span class="w">                </span><span class="n">datum</span><span class="p">.</span><span class="n">id</span><span class="p">,</span>
+<span class="w">                </span><span class="c1">// To write the original message to the on success sink</span>
+<span class="w">                </span><span class="nb">None</span><span class="p">,</span><span class="w">  </span>
+<span class="w">            </span><span class="p">));</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+- <a href="https://github.com/numaproj/numaflow-rs/blob/0a496b1df9771146cb01930e27bb27f02c69dbee/numaflow/src/sink.rs#L550">Rust Response Struct</a></p>
+</div>
+</div>
+</div>
 
               
             </article>
@@ -2747,7 +2886,7 @@ processing of the original message has completed successfully in the primary sin
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../../sources/transformer/builtin-transformers/time-extraction-filter/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Event Time Extraction Filter" rel="prev">
+        <a href="../fallback/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Fallback Sink" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -2756,20 +2895,20 @@ processing of the original message has completed successfully in the primary sin
               <span class="md-footer__direction">
                 Previous
               </span>
-              Event Time Extraction Filter
+              Fallback Sink
             </div>
           </div>
         </a>
       
       
         
-        <a href="../kafka/" class="md-footer__link md-footer__link--next" aria-label="Next: Kafka Sink" rel="next">
+        <a href="../retry-strategy/" class="md-footer__link md-footer__link--next" aria-label="Next: Retry Strategy" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              Kafka Sink
+              Retry Strategy
             </div>
           </div>
           <div class="md-footer__button md-icon">
