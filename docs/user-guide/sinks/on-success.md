@@ -25,7 +25,7 @@ To configure onSuccess sink, changes need to be made to the pipeline specificati
 
 Add a `onSuccess` field to the sink configuration in the pipeline specification file.
 
-The following example uses the builtin kafka as a fallback sink.
+The following example uses the builtin kafka as an onSuccess sink.
 
 ```yaml
     - name: out
