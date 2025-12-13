@@ -340,7 +340,6 @@ func WaitForVertexPodRunning(kubeClient kubernetes.Interface, vertexClient flowp
 		}
 		ok = ok && len(podList.Items) > 0 && len(podList.Items) == vertexList.Items[0].CalculateReplicas() // pod number should equal to desired replicas
 		for _, p := range podList.Items {
-			log.Println("Checking for vertex pod ready: ", p.Name)
 			ok = ok && isPodReady(p)
 		}
 		if ok {
@@ -351,9 +350,6 @@ func WaitForVertexPodRunning(kubeClient kubernetes.Interface, vertexClient flowp
 }
 
 func isPodReady(pod corev1.Pod) bool {
-	log.Println("value of pod.Status.Phase: ", pod.Status.Phase)
-	log.Println("value of pod.Status.ContainerStatuses: ", pod.Status.ContainerStatuses)
-	log.Println("value of pod.Status.InitContainerStatuses: ", pod.Status.InitContainerStatuses)
 	if pod.Status.Phase != corev1.PodRunning {
 		return false
 	}
