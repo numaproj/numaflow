@@ -158,7 +158,7 @@ func (hc *HealthChecker) getDesiredReplica(mvtxMetrics *mvtxdaemon.MonoVertexMet
 	// Extract the processing rate from the metrics for the default lookback period
 	rate, existing := mvtxMetrics.ProcessingRates["default"]
 	// Rate not available
-	// send back error that we calculate the health status right now
+	// send back error that we cannot calculate the health status right now
 	if !existing || rate.GetValue() < 0 {
 		return 0, fmt.Errorf("cannot check data health, MonoVertex %s has no rate information", mvtxMetrics.MonoVertex)
 	} else {
