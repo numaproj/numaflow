@@ -997,6 +997,14 @@ message MonoVertex {
   optional MonoVertexStatus status = 3;
 }
 
+message MonoVertexForwarding {
+  // +optional
+  optional MonoVertexSinkerCondition source = 1;
+
+  // +optional
+  optional MonoVertexSinkerCondition map = 2;
+}
+
 message MonoVertexLifecycle {
   // DesiredPhase used to bring the MonoVertex from current phase to desired phase
   // +kubebuilder:default=Running
@@ -1095,6 +1103,9 @@ message MonoVertexSpec {
   // +kubebuilder:default={"desiredPhase": Running}
   // +optional
   optional MonoVertexLifecycle lifecycle = 14;
+
+  // +optional
+  optional MonoVertexForwarding forwardingRules = 15;
 }
 
 message MonoVertexStatus {
@@ -2118,11 +2129,6 @@ message UDF {
 
   // +optional
   optional GroupBy groupBy = 3;
-
-  // +optional
-  // MonoVertexSinkConditions is used to define conditions based on which the data from
-  // the UDF is forwarded to the different sinks. Only used for mono vertex.
-  optional MonoVertexSinkerCondition sinkConditionals = 4;
 }
 
 message UDSink {
@@ -2136,11 +2142,6 @@ message UDSource {
 message UDTransformer {
   // +optional
   optional Container container = 1;
-
-  // +optional
-  // MonoVertexSinkConditions is used to define conditions based on which the data from
-  // the transformer is forwarded to the different sinks. Only used for mono vertex.
-  optional MonoVertexSinkerCondition sinkConditionals = 2;
 }
 
 // UpdateStrategy indicates the strategy that the

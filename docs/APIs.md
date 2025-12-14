@@ -6290,6 +6290,22 @@ Lifecycle defines the Lifecycle properties of a MonoVertex
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>forwardingRules</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexForwarding">
+MonoVertexForwarding </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -6303,6 +6319,79 @@ Lifecycle defines the Lifecycle properties of a MonoVertex
 <code>status</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexStatus">
 MonoVertexStatus </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.MonoVertexForwarding">
+
+MonoVertexForwarding
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>fromSource</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSinkerCondition">
+MonoVertexSinkerCondition </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>fromMap</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSinkerCondition">
+MonoVertexSinkerCondition </a> </em>
 </td>
 
 <td>
@@ -6509,8 +6598,7 @@ MonoVertexSinkerCondition
 <p>
 
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.UDF">UDF</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.UDTransformer">UDTransformer</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexForwarding">MonoVertexForwarding</a>)
 </p>
 
 <p>
@@ -6888,6 +6976,22 @@ MonoVertexLifecycle </a> </em>
 Lifecycle defines the Lifecycle properties of a MonoVertex
 </p>
 
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>forwardingRules</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexForwarding">
+MonoVertexForwarding </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -13370,29 +13474,6 @@ Description
 
 </tr>
 
-<tr>
-
-<td>
-
-<code>sinkConditionals</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSinkerCondition">
-MonoVertexSinkerCondition </a> </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-<p>
-
-MonoVertexSinkConditions is used to define conditions based on which the
-data from the UDF is forwarded to the different sinks. Only used for
-mono vertex.
-</p>
-
-</td>
-
-</tr>
-
 </tbody>
 
 </table>
@@ -13555,29 +13636,6 @@ Description
 <td>
 
 <em>(Optional)</em>
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>sinkConditionals</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSinkerCondition">
-MonoVertexSinkerCondition </a> </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-<p>
-
-MonoVertexSinkConditions is used to define conditions based on which the
-data from the transformer is forwarded to the different sinks. Only used
-for mono vertex.
-</p>
-
 </td>
 
 </tr>
