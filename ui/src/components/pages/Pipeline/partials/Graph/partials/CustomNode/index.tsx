@@ -138,6 +138,8 @@ const CustomNode: FC<NodeProps> = ({
       border: `${isSelected(highlightValues[data?.name])} ${getBorderColor(
         data?.type
       )}`,
+      display: "flex",
+      flexDirection: "column",
       ...commonStyle,
     };
   }, [highlightValues, data]);
@@ -292,10 +294,30 @@ const CustomNode: FC<NodeProps> = ({
   // arrow for containers in monoVertex
   const arrowSvg = useMemo(() => {
     return (
-      <svg height="1" width="18">
+      <svg height="20" width="18">
         <line x1="0" y1="10" x2="18" y2="10" stroke="#d1dee9" />
         <line x1="14" y1="7" x2="18" y2="10" stroke="#d1dee9" />
         <line x1="14" y1="13" x2="18" y2="10" stroke="#d1dee9" />
+      </svg>
+    );
+  }, []);
+
+  const arrowUpSvg = useMemo(() => {
+    return (
+      <svg height="16" width="12">
+        <line x1="0" y1="16" x2="12" y2="8" stroke="#d1dee9" />
+        <line x1="7" y1="7.7" x2="12" y2="8" stroke="#d1dee9" />
+        <line x1="10.3" y1="12.7" x2="12" y2="8" stroke="#d1dee9" />
+      </svg>
+    );
+  }, []);
+
+  const arrowDownSvg = useMemo(() => {
+    return (
+      <svg height="16" width="12">
+        <line x1="0" y1="0" x2="12" y2="8" stroke="#d1dee9" />
+        <line x1="7" y1="8.3" x2="12" y2="8" stroke="#d1dee9" />
+        <line x1="10.3" y1="3.3" x2="12" y2="8" stroke="#d1dee9" />
       </svg>
     );
   }, []);
@@ -317,7 +339,14 @@ const CustomNode: FC<NodeProps> = ({
         {data?.type === "monoVertex" && (
           <>
             <Box className="node-info-mono">{data?.name}</Box>
-            <Box style={{ display: "flex", justifyContent: "center" }}>
+            <Box
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                flex: 1,
+              }}
+            >
               <Tooltip
                 title={<Box className={"node-tooltip"}>Source Container</Box>}
                 arrow
@@ -371,7 +400,12 @@ const CustomNode: FC<NodeProps> = ({
               <Tooltip
                 title={<Box className={"node-tooltip"}>Sink Container</Box>}
                 arrow
-                placement={data?.nodeInfo?.sink?.fallback ? "bottom" : "right"}
+                placement={
+                  data?.nodeInfo?.sink?.fallback ||
+                  data?.nodeInfo?.sink?.onSuccess
+                    ? "bottom"
+                    : "right"
+                }
               >
                 <Box className={"mono-vertex-img-wrapper"}>
                   <img
@@ -381,23 +415,113 @@ const CustomNode: FC<NodeProps> = ({
                   />
                 </Box>
               </Tooltip>
-              {data?.nodeInfo?.sink?.fallback && arrowSvg}
-              {data?.nodeInfo?.sink?.fallback && (
-                <Tooltip
-                  title={
-                    <Box className={"node-tooltip"}>Fallback Sink Container</Box>
-                  }
-                  arrow
-                  placement={"right"}
+              {(data?.nodeInfo?.sink?.fallback ||
+                data?.nodeInfo?.sink?.onSuccess) && (
+                <Box
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.2rem",
+                  }}
                 >
-                  <Box className={"mono-vertex-img-wrapper"}>
-                    <img
-                      className={"mono-vertex-img"}
-                      src={fallback}
-                      alt={"fallback-sink-container"}
-                    />
-                  </Box>
-                </Tooltip>
+                  {data?.nodeInfo?.sink?.onSuccess &&
+                    !data?.nodeInfo?.sink?.fallback && (
+                      <Box style={{ display: "flex", alignItems: "center" }}>
+                        {arrowSvg}
+                        <Tooltip
+                          title={
+                            <Box className={"node-tooltip"}>
+                              OnSuccess Sink Container
+                            </Box>
+                          }
+                          arrow
+                          placement={"right"}
+                        >
+                          <Box className={"mono-vertex-img-wrapper"}>
+                            <img
+                              className={"mono-vertex-img"}
+                              src={sink}
+                              alt={"on-success-sink-container"}
+                            />
+                          </Box>
+                        </Tooltip>
+                      </Box>
+                    )}
+                  {data?.nodeInfo?.sink?.fallback &&
+                    !data?.nodeInfo?.sink?.onSuccess && (
+                      <Box style={{ display: "flex", alignItems: "center" }}>
+                        {arrowSvg}
+                        <Tooltip
+                          title={
+                            <Box className={"node-tooltip"}>
+                              Fallback Sink Container
+                            </Box>
+                          }
+                          arrow
+                          placement={"right"}
+                        >
+                          <Box className={"mono-vertex-img-wrapper"}>
+                            <img
+                              className={"mono-vertex-img"}
+                              src={fallback}
+                              alt={"fallback-sink-container"}
+                            />
+                          </Box>
+                        </Tooltip>
+                      </Box>
+                    )}
+                  {data?.nodeInfo?.sink?.onSuccess &&
+                    data?.nodeInfo?.sink?.fallback && (
+                      <Box
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 0,
+                        }}
+                      >
+                        <Box style={{ display: "flex", alignItems: "center" }}>
+                          {arrowUpSvg}
+                          <Tooltip
+                            title={
+                              <Box className={"node-tooltip"}>
+                                OnSuccess Sink Container
+                              </Box>
+                            }
+                            arrow
+                            placement={"right"}
+                          >
+                            <Box className={"mono-vertex-img-wrapper"}>
+                              <img
+                                className={"mono-vertex-img"}
+                                src={sink}
+                                alt={"on-success-sink-container"}
+                              />
+                            </Box>
+                          </Tooltip>
+                        </Box>
+                        <Box style={{ display: "flex", alignItems: "center" }}>
+                          {arrowDownSvg}
+                          <Tooltip
+                            title={
+                              <Box className={"node-tooltip"}>
+                                Fallback Sink Container
+                              </Box>
+                            }
+                            arrow
+                            placement={"right"}
+                          >
+                            <Box className={"mono-vertex-img-wrapper"}>
+                              <img
+                                className={"mono-vertex-img"}
+                                src={fallback}
+                                alt={"fallback-sink-container"}
+                              />
+                            </Box>
+                          </Tooltip>
+                        </Box>
+                      </Box>
+                    )}
+                </Box>
               )}
             </Box>
           </>
