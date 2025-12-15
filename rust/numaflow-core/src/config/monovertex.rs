@@ -130,10 +130,11 @@ impl MonovertexConfig {
             .clone()
             .ok_or_else(|| Error::Config("Source not found".to_string()))?;
 
-        let source_to_sink_conditional = source
-            .transformer
+        let source_to_sink_conditional = mono_vertex_obj
+            .spec
+            .forwarding_rules
             .clone()
-            .and_then(|transformer| transformer.sink_conditionals);
+            .and_then(|forwarding_rules| forwarding_rules.from_source);
 
         let source = SourceSpec::new(mono_vertex_name.clone(), "mvtx".into(), source);
         let source_type: SourceType = source.try_into()?;
@@ -177,7 +178,11 @@ impl MonovertexConfig {
             .clone()
             .ok_or_else(|| Error::Config("Map UDF not found".to_string()));
 
-        let map_to_sink_conditional = udf.clone().ok().and_then(|udf| udf.sink_conditionals);
+        let map_to_sink_conditional = mono_vertex_obj
+            .spec
+            .forwarding_rules
+            .clone()
+            .and_then(|forwarding_rules| forwarding_rules.from_map);
 
         let map_config = match udf {
             Ok(udf) => Some(MapVtxConfig {

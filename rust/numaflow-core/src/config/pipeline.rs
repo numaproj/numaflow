@@ -1105,7 +1105,6 @@ mod tests {
                 volume_mounts: None,
             })),
             group_by: None,
-            sink_conditionals: None,
         };
 
         let map_type = MapType::try_from(Box::new(udf)).unwrap();
