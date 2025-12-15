@@ -154,9 +154,11 @@ func (mvs *MonoVertexService) startHealthCheck(ctx context.Context) {
 			criticality, err := mvs.healthChecker.getMonoVertexDataCriticality(ctx, mvtxMetrics.Metrics)
 			logger.Debugw("MonoVertex Health check", zap.Any("criticality", criticality))
 			if err != nil {
+				// Warn level is used to avoid flooding the logs with errors
+				// in case there are 0 pods running.
+				logger.Warnw("Failed to check MonoVertex data criticality, perhaps there are no running pods!", zap.Error(err))
 				// If there is an error, set the current health status to unknown.
-				// as we are not able to determine the health of the pipeline.
-				logger.Errorw("Failed to MonoVertex data criticality", zap.Error(err))
+				// as we are not able to determine the health of the MonoVertex.
 				mvs.healthChecker.setCurrentHealth(defaultDataHealthResponse)
 			} else {
 				// convert the MonoVertex health state to API response
