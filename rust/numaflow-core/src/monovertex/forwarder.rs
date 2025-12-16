@@ -47,6 +47,7 @@ pub(crate) struct Forwarder<C: crate::typ::NumaflowTypeConfig> {
     source: Source<C>,
     mapper: Option<MapHandle>,
     sink_writer: SinkWriter,
+    // TODO: Add optional splitter and merger
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
@@ -63,6 +64,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
     }
 
     pub(crate) async fn start(self, cln_token: CancellationToken) -> crate::Result<()> {
+        // TODO: based on presence of splitter branch into two methods
+        //       one to handle the default case, other to handle case with splitter and merger
         let (read_messages_stream, reader_handle) =
             self.source.streaming_read(cln_token.clone())?;
 

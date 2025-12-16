@@ -122,7 +122,7 @@ impl SinkWriter {
     /// Sink the messages to the Primary Sink.
     async fn write_to_primary_sink(
         &self,
-        messages: Vec<Message>,
+        messages: Vec<Message>, // TODO: messages wrapped in an enum which dictate the type of message
         cancel: CancellationToken,
     ) -> Result<SinkActorResponse> {
         let (tx, rx) = oneshot::channel();
@@ -189,6 +189,9 @@ impl SinkWriter {
 
     /// Streaming write the messages to the Sink, it will keep writing messages until the stream is
     /// closed or the cancellation token is triggered.
+    /// TODO: Create a streaming write that accepts a wrapped Message stream,
+    ///       Invoke the write method for ones to primary sink, otherwise
+    ///       Invoke the write_to_fb_sink method for fallback sink, and write_to_on_success_sink for on-success sink.
     pub(crate) async fn streaming_write(
         mut self,
         messages_stream: ReceiverStream<Message>,
