@@ -74,11 +74,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log":                              schema_pkg_apis_numaflow_v1alpha1_Log(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata":                         schema_pkg_apis_numaflow_v1alpha1_Metadata(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertex":                       schema_pkg_apis_numaflow_v1alpha1_MonoVertex(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexForwarding":             schema_pkg_apis_numaflow_v1alpha1_MonoVertexForwarding(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexBypassCondition":        schema_pkg_apis_numaflow_v1alpha1_MonoVertexBypassCondition(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexLifecycle":              schema_pkg_apis_numaflow_v1alpha1_MonoVertexLifecycle(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexLimits":                 schema_pkg_apis_numaflow_v1alpha1_MonoVertexLimits(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexList":                   schema_pkg_apis_numaflow_v1alpha1_MonoVertexList(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexSinkerCondition":        schema_pkg_apis_numaflow_v1alpha1_MonoVertexSinkerCondition(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexSpec":                   schema_pkg_apis_numaflow_v1alpha1_MonoVertexSpec(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexStatus":                 schema_pkg_apis_numaflow_v1alpha1_MonoVertexStatus(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsAuth":                         schema_pkg_apis_numaflow_v1alpha1_NatsAuth(ref),
@@ -3148,27 +3147,35 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertex(ref common.ReferenceCallback) 
 	}
 }
 
-func schema_pkg_apis_numaflow_v1alpha1_MonoVertexForwarding(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_pkg_apis_numaflow_v1alpha1_MonoVertexBypassCondition(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"source": {
+					"sink": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexSinkerCondition"),
+							Description: "Conditions to trigger bypass to primary sink component. Definition is similar to \"conditions\" in pipeline spec for edges.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions"),
 						},
 					},
-					"udf": {
+					"fallback": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexSinkerCondition"),
+							Description: "Conditions to trigger bypass to fallback sink component. Definition is similar to \"conditions\" in pipeline spec for edges.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions"),
+						},
+					},
+					"onSuccess": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Conditions to trigger bypass to onSuccess sink component. Definition is similar to \"conditions\" in pipeline spec for edges.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexSinkerCondition"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions"},
 	}
 }
 
@@ -3269,35 +3276,6 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexList(ref common.ReferenceCallba
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertex", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
-	}
-}
-
-func schema_pkg_apis_numaflow_v1alpha1_MonoVertexSinkerCondition(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"sink": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions"),
-						},
-					},
-					"fallback": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions"),
-						},
-					},
-					"onSuccess": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions"),
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions"},
 	}
 }
 
@@ -3550,16 +3528,17 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexSpec(ref common.ReferenceCallba
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexLifecycle"),
 						},
 					},
-					"forwardingRules": {
+					"bypass": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexForwarding"),
+							Description: "Bypass defines the bypass destination and conditions to trigger bypass for the mono vertex components. If specified, the bypass will be triggered if the conditions are met at any of the components. The first level of the bypass spec specifies the destination to which the message will be forwarded to, and the next level specifies the conditions to trigger the said bypass. For example, if the bypass spec is: bypass:\n  fallback:\n    tags:\n      operator: or\n      values:\n      - \"error\"\nThen a bypass to fallback sink will be triggered if the message is encountered at any component (source, UDF) that has a tag \"error\".",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexBypassCondition"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexForwarding", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexLifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexBypassCondition", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexLifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
 	}
 }
 

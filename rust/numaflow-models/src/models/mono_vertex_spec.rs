@@ -26,6 +26,8 @@ pub struct MonoVertexSpec {
         skip_serializing_if = "Option::is_none"
     )]
     pub automount_service_account_token: Option<bool>,
+    #[serde(rename = "bypass", skip_serializing_if = "Option::is_none")]
+    pub bypass: Option<Box<crate::models::MonoVertexBypassCondition>>,
     #[serde(rename = "containerTemplate", skip_serializing_if = "Option::is_none")]
     pub container_template: Option<Box<crate::models::ContainerTemplate>>,
     #[serde(rename = "daemonTemplate", skip_serializing_if = "Option::is_none")]
@@ -35,8 +37,6 @@ pub struct MonoVertexSpec {
     /// Set DNS policy for the pod. Defaults to \"ClusterFirst\". Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'.
     #[serde(rename = "dnsPolicy", skip_serializing_if = "Option::is_none")]
     pub dns_policy: Option<String>,
-    #[serde(rename = "forwardingRules", skip_serializing_if = "Option::is_none")]
-    pub forwarding_rules: Option<Box<crate::models::MonoVertexForwarding>>,
     /// ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec. If specified, these secrets will be passed to individual puller implementations for them to use. For example, in the case of docker, only DockerConfig type secrets are honored. More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod
     #[serde(rename = "imagePullSecrets", skip_serializing_if = "Option::is_none")]
     pub image_pull_secrets: Option<Vec<k8s_openapi::api::core::v1::LocalObjectReference>>,
@@ -96,11 +96,11 @@ impl MonoVertexSpec {
         MonoVertexSpec {
             affinity: None,
             automount_service_account_token: None,
+            bypass: None,
             container_template: None,
             daemon_template: None,
             dns_config: None,
             dns_policy: None,
-            forwarding_rules: None,
             image_pull_secrets: None,
             init_containers: None,
             lifecycle: None,

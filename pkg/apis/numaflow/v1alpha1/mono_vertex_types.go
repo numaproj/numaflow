@@ -514,8 +514,21 @@ type MonoVertexSpec struct {
 	// +kubebuilder:default={"desiredPhase": Running}
 	// +optional
 	Lifecycle MonoVertexLifecycle `json:"lifecycle,omitempty" protobuf:"bytes,14,opt,name=lifecycle"`
+	// Bypass defines the bypass destination and conditions to trigger bypass for the mono vertex components.
+	// If specified, the bypass will be triggered if the conditions are met at any of the components.
+	// The first level of the bypass spec specifies the destination to which the message will be forwarded to,
+	// and the next level specifies the conditions to trigger the said bypass.
+	// For example, if the bypass spec is:
+	// bypass:
+	//   fallback:
+	//     tags:
+	//       operator: or
+	//       values:
+	//       - "error"
+	// Then a bypass to fallback sink will be triggered if the message is encountered at any
+	// component (source, UDF) that has a tag "error".
 	// +optional
-	ForwardingRules *MonoVertexForwarding `json:"forwardingRules,omitempty" protobuf:"bytes,15,opt,name=forwardingRules"`
+	Bypass *MonoVertexBypassCondition `json:"bypass,omitempty" protobuf:"bytes,15,opt,name=bypass"`
 }
 
 func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {

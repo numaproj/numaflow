@@ -21096,13 +21096,19 @@
       ],
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.MonoVertexForwarding": {
+    "io.numaproj.numaflow.v1alpha1.MonoVertexBypassCondition": {
       "properties": {
-        "source": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.MonoVertexSinkerCondition"
+        "fallback": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions",
+          "description": "Conditions to trigger bypass to fallback sink component. Definition is similar to \"conditions\" in pipeline spec for edges."
         },
-        "udf": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.MonoVertexSinkerCondition"
+        "onSuccess": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions",
+          "description": "Conditions to trigger bypass to onSuccess sink component. Definition is similar to \"conditions\" in pipeline spec for edges."
+        },
+        "sink": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions",
+          "description": "Conditions to trigger bypass to primary sink component. Definition is similar to \"conditions\" in pipeline spec for edges."
         }
       },
       "type": "object"
@@ -21159,20 +21165,6 @@
       ],
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.MonoVertexSinkerCondition": {
-      "properties": {
-        "fallback": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions"
-        },
-        "onSuccess": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions"
-        },
-        "sink": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions"
-        }
-      },
-      "type": "object"
-    },
     "io.numaproj.numaflow.v1alpha1.MonoVertexSpec": {
       "properties": {
         "affinity": {
@@ -21182,6 +21174,10 @@
         "automountServiceAccountToken": {
           "description": "AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.",
           "type": "boolean"
+        },
+        "bypass": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.MonoVertexBypassCondition",
+          "description": "Bypass defines the bypass destination and conditions to trigger bypass for the mono vertex components. If specified, the bypass will be triggered if the conditions are met at any of the components. The first level of the bypass spec specifies the destination to which the message will be forwarded to, and the next level specifies the conditions to trigger the said bypass. For example, if the bypass spec is: bypass:\n  fallback:\n    tags:\n      operator: or\n      values:\n      - \"error\"\nThen a bypass to fallback sink will be triggered if the message is encountered at any component (source, UDF) that has a tag \"error\"."
         },
         "containerTemplate": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate",
@@ -21198,9 +21194,6 @@
         "dnsPolicy": {
           "description": "Set DNS policy for the pod. Defaults to \"ClusterFirst\". Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'.",
           "type": "string"
-        },
-        "forwardingRules": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.MonoVertexForwarding"
         },
         "imagePullSecrets": {
           "description": "ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec. If specified, these secrets will be passed to individual puller implementations for them to use. For example, in the case of docker, only DockerConfig type secrets are honored. More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod",

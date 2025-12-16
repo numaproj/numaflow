@@ -16,18 +16,17 @@ limitations under the License.
 
 package v1alpha1
 
-type MonoVertexForwarding struct {
-	// +optional
-	SourceForwarding *MonoVertexSinkerCondition `json:"source" protobuf:"bytes,1,opt,name=source"`
-	// +optional
-	UdfForwarding *MonoVertexSinkerCondition `json:"udf" protobuf:"bytes,2,opt,name=udf"`
-}
-
-type MonoVertexSinkerCondition struct {
+type MonoVertexBypassCondition struct {
+	// Conditions to trigger bypass to primary sink component.
+	// Definition is similar to "conditions" in pipeline spec for edges.
 	// +optional
 	Sink *ForwardConditions `json:"sink" protobuf:"bytes,1,opt,name=sink"`
+	// Conditions to trigger bypass to fallback sink component.
+	// Definition is similar to "conditions" in pipeline spec for edges.
 	// +optional
 	Fallback *ForwardConditions `json:"fallback" protobuf:"bytes,2,opt,name=fallback"`
+	// Conditions to trigger bypass to onSuccess sink component.
+	// Definition is similar to "conditions" in pipeline spec for edges.
 	// +optional
 	OnSuccess *ForwardConditions `json:"onSuccess" protobuf:"bytes,3,opt,name=onSuccess"`
 }
