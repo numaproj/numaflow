@@ -3154,12 +3154,12 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexForwarding(ref common.Reference
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"fromSource": {
+					"source": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexSinkerCondition"),
 						},
 					},
-					"fromMap": {
+					"udf": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexSinkerCondition"),
 						},

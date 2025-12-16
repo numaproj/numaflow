@@ -6373,7 +6373,7 @@ Description
 
 <td>
 
-<code>fromSource</code></br> <em>
+<code>source</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSinkerCondition">
 MonoVertexSinkerCondition </a> </em>
 </td>
@@ -6389,7 +6389,7 @@ MonoVertexSinkerCondition </a> </em>
 
 <td>
 
-<code>fromMap</code></br> <em>
+<code>udf</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSinkerCondition">
 MonoVertexSinkerCondition </a> </em>
 </td>

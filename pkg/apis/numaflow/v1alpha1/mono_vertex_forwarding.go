@@ -18,9 +18,9 @@ package v1alpha1
 
 type MonoVertexForwarding struct {
 	// +optional
-	SourceForwarding *MonoVertexSinkerCondition `json:"fromSource" protobuf:"bytes,1,opt,name=source"`
+	SourceForwarding *MonoVertexSinkerCondition `json:"source" protobuf:"bytes,1,opt,name=source"`
 	// +optional
-	MapForwarding *MonoVertexSinkerCondition `json:"fromMap" protobuf:"bytes,2,opt,name=map"`
+	UdfForwarding *MonoVertexSinkerCondition `json:"udf" protobuf:"bytes,2,opt,name=udf"`
 }
 
 type MonoVertexSinkerCondition struct {

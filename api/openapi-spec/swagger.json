@@ -21094,10 +21094,10 @@
     "io.numaproj.numaflow.v1alpha1.MonoVertexForwarding": {
       "type": "object",
       "properties": {
-        "fromMap": {
+        "source": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.MonoVertexSinkerCondition"
         },
-        "fromSource": {
+        "udf": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.MonoVertexSinkerCondition"
         }
       }

@@ -18,17 +18,17 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MonoVertexForwarding {
-    #[serde(rename = "fromMap", skip_serializing_if = "Option::is_none")]
-    pub from_map: Option<Box<crate::models::MonoVertexSinkerCondition>>,
-    #[serde(rename = "fromSource", skip_serializing_if = "Option::is_none")]
-    pub from_source: Option<Box<crate::models::MonoVertexSinkerCondition>>,
+    #[serde(rename = "source", skip_serializing_if = "Option::is_none")]
+    pub source: Option<Box<crate::models::MonoVertexSinkerCondition>>,
+    #[serde(rename = "udf", skip_serializing_if = "Option::is_none")]
+    pub udf: Option<Box<crate::models::MonoVertexSinkerCondition>>,
 }
 
 impl MonoVertexForwarding {
     pub fn new() -> MonoVertexForwarding {
         MonoVertexForwarding {
-            from_map: None,
-            from_source: None,
+            source: None,
+            udf: None,
         }
     }
 }

@@ -1002,7 +1002,7 @@ message MonoVertexForwarding {
   optional MonoVertexSinkerCondition source = 1;
 
   // +optional
-  optional MonoVertexSinkerCondition map = 2;
+  optional MonoVertexSinkerCondition udf = 2;
 }
 
 message MonoVertexLifecycle {

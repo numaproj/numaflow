@@ -1502,8 +1502,8 @@ func (in *MonoVertexForwarding) DeepCopyInto(out *MonoVertexForwarding) {
 		*out = new(MonoVertexSinkerCondition)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.MapForwarding != nil {
-		in, out := &in.MapForwarding, &out.MapForwarding
+	if in.UdfForwarding != nil {
+		in, out := &in.UdfForwarding, &out.UdfForwarding
 		*out = new(MonoVertexSinkerCondition)
 		(*in).DeepCopyInto(*out)
 	}

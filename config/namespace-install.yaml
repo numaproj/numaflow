@@ -3368,7 +3368,7 @@ spec:
                 type: string
               forwardingRules:
                 properties:
-                  fromMap:
+                  source:
                     properties:
                       fallback:
                         properties:
@@ -3431,7 +3431,7 @@ spec:
                         - tags
                         type: object
                     type: object
-                  fromSource:
+                  udf:
                     properties:
                       fallback:
                         properties:
