@@ -134,7 +134,7 @@ impl MonovertexConfig {
             .spec
             .forwarding_rules
             .clone()
-            .and_then(|forwarding_rules| forwarding_rules.from_source);
+            .and_then(|forwarding_rules| forwarding_rules.source);
 
         let source = SourceSpec::new(mono_vertex_name.clone(), "mvtx".into(), source);
         let source_type: SourceType = source.try_into()?;
@@ -182,7 +182,7 @@ impl MonovertexConfig {
             .spec
             .forwarding_rules
             .clone()
-            .and_then(|forwarding_rules| forwarding_rules.from_map);
+            .and_then(|forwarding_rules| forwarding_rules.udf);
 
         let map_config = match udf {
             Ok(udf) => Some(MapVtxConfig {
