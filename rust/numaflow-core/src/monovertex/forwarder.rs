@@ -38,9 +38,9 @@ use tokio_util::sync::CancellationToken;
 use crate::Error;
 use crate::error;
 use crate::mapper::map::MapHandle;
+use crate::monovertex::splitter::Splitter;
 use crate::sinker::sink::SinkWriter;
 use crate::source::Source;
-use crate::monovertex::splitter::Splitter;
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
@@ -58,7 +58,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
         source: Source<C>,
         mapper: Option<MapHandle>,
         sink_writer: SinkWriter,
-        splitter: Option<Splitter>
+        splitter: Option<Splitter>,
     ) -> Self {
         Self {
             source,
@@ -114,14 +114,19 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
         Ok(())
     }
 
-    pub(crate) async fn start_with_splitter(self, cln_token: CancellationToken) -> crate::Result<()> {
+    pub(crate) async fn start_with_splitter(
+        self,
+        cln_token: CancellationToken,
+    ) -> crate::Result<()> {
         let splitter = self.splitter.expect("splitter must be initialized");
         // TODO: utilize bypass_rx to send messages to sink
         let (bypass_tx, bypass_rx) = tokio::sync::mpsc::channel(splitter.batch_size);
         let (read_messages_stream, reader_handle) =
             self.source.streaming_read(cln_token.clone())?;
 
-        let (first_splitter_stream, first_splitter_handle) = splitter.run(read_messages_stream, bypass_tx.clone()).await?;
+        let (first_splitter_stream, first_splitter_handle) = splitter
+            .run(read_messages_stream, bypass_tx.clone())
+            .await?;
 
         let (mapper_stream, mapper_handle) = match self.mapper {
             Some(mapper) => {
@@ -129,18 +134,17 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
                     .streaming_map(first_splitter_stream, cln_token.clone())
                     .await?;
 
-                let (second_splitter_stream, second_splitter_handle) = splitter.run(mapper_stream, bypass_tx).await?;
+                let (second_splitter_stream, second_splitter_handle) =
+                    splitter.run(mapper_stream, bypass_tx).await?;
 
                 let joined_handle: JoinHandle<error::Result<()>> = tokio::spawn(async move {
-                    let (mapper_result, second_splitter_result) = tokio::try_join!(
-                       mapper_handle,
-                       second_splitter_handle
-                    ).map_err(|e| {
-                        error!(?e, "Error while joining reader, mapper and sink writer");
-                        Error::Forwarder(format!(
-                            "Error while joining reader, mapper and sink writer: {e:?}"
-                        ))
-                    })?;
+                    let (mapper_result, second_splitter_result) =
+                        tokio::try_join!(mapper_handle, second_splitter_handle).map_err(|e| {
+                            error!(?e, "Error while joining reader, mapper and sink writer");
+                            Error::Forwarder(format!(
+                                "Error while joining reader, mapper and sink writer: {e:?}"
+                            ))
+                        })?;
 
                     mapper_result.inspect_err(|e| {
                         error!(?e, "Error while applying map to messages");

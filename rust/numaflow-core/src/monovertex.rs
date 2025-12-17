@@ -6,6 +6,7 @@ use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self};
 use crate::mapper::map::MapHandle;
 use crate::metrics::{LagReader, PendingReaderTasks};
+use crate::monovertex::splitter::Splitter;
 use crate::shared::create_components;
 use crate::sinker::sink::SinkWriter;
 use crate::source::Source;
@@ -15,7 +16,6 @@ use crate::typ::{
     should_use_redis_rate_limiter,
 };
 use crate::{metrics, shared};
-use crate::monovertex::splitter::Splitter;
 
 /// [forwarder] orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
 /// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:
@@ -162,9 +162,13 @@ async fn start<C: crate::typ::NumaflowTypeConfig>(
         None
     };
 
-    let splitter = match  mvtx_config.bypass_condition {
+    let splitter = match mvtx_config.bypass_condition {
         None => None,
-        Some(bypass_condition) => Some(Splitter::new(mvtx_config.batch_size, mvtx_config.read_timeout, bypass_condition))
+        Some(bypass_condition) => Some(Splitter::new(
+            mvtx_config.batch_size,
+            mvtx_config.read_timeout,
+            bypass_condition,
+        )),
     };
 
     let forwarder = forwarder::Forwarder::<C>::new(source, mapper, sink, splitter);
