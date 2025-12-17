@@ -1177,6 +1177,26 @@ accumulator is removed.
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.AtLeastOnce">
+
+AtLeastOnce
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Delivery">Delivery</a>)
+</p>
+
+<p>
+
+<p>
+
+AtLeastOnce is the at-least-once delivery settings (default behavior).
+</p>
+
+</p>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.Authorization">
 
 Authorization
@@ -2381,6 +2401,96 @@ ContainerTemplate </a> </em>
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.Delivery">
+
+Delivery
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
+</p>
+
+<p>
+
+<p>
+
+Delivery is the delivery semantics for the pipeline.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>exactlyOnce</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ExactlyOnce"> ExactlyOnce </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+ExactlyOnce enables exactly-once processing semantics.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>atLeastOnce</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AtLeastOnce"> AtLeastOnce </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+AtLeastOnce enables at-least-once processing semantics (default
+behavior).
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.Edge">
 
 Edge
@@ -2502,11 +2612,15 @@ ExactlyOnce
 <p>
 
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.Delivery">Delivery</a>)
 </p>
 
 <p>
+
+<p>
+
+ExactlyOnce is the exactly-once delivery settings.
+</p>
 
 </p>
 
@@ -2531,24 +2645,6 @@ Description
 </thead>
 
 <tbody>
-
-<tr>
-
-<td>
-
-<code>enabled</code></br> <em> bool </em>
-</td>
-
-<td>
-
-<p>
-
-Enabled enables exactly once processing.
-</p>
-
-</td>
-
-</tr>
 
 <tr>
 
@@ -7947,9 +8043,8 @@ InterStepBuffer configuration specific to this pipeline.
 
 <td>
 
-<code>exactlyOnce</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.ExactlyOnce"> ExactlyOnce </a>
-</em>
+<code>delivery</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Delivery"> Delivery </a> </em>
 </td>
 
 <td>
@@ -7957,7 +8052,7 @@ InterStepBuffer configuration specific to this pipeline.
 <em>(Optional)</em>
 <p>
 
-ExactlyOnce is the exactly-once settings for the pipeline.
+Delivery is the delivery semantics for the pipeline.
 </p>
 
 </td>
@@ -8393,9 +8488,8 @@ InterStepBuffer configuration specific to this pipeline.
 
 <td>
 
-<code>exactlyOnce</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.ExactlyOnce"> ExactlyOnce </a>
-</em>
+<code>delivery</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Delivery"> Delivery </a> </em>
 </td>
 
 <td>
@@ -8403,7 +8497,7 @@ InterStepBuffer configuration specific to this pipeline.
 <em>(Optional)</em>
 <p>
 
-ExactlyOnce is the exactly-once settings for the pipeline.
+Delivery is the delivery semantics for the pipeline.
 </p>
 
 </td>
@@ -13934,9 +14028,8 @@ InterStepBuffer configuration specific to this pipeline.
 
 <td>
 
-<code>exactlyOnce</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.ExactlyOnce"> ExactlyOnce </a>
-</em>
+<code>delivery</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Delivery"> Delivery </a> </em>
 </td>
 
 <td>
@@ -13944,8 +14037,8 @@ InterStepBuffer configuration specific to this pipeline.
 <em>(Optional)</em>
 <p>
 
-ExactlyOnce indicates the exactly-once settings for the vertex, it’s
-populated from the pipeline exactlyOnce settings.
+Delivery indicates the delivery semantics for the vertex, it’s populated
+from the pipeline delivery settings.
 </p>
 
 </td>
@@ -14487,9 +14580,8 @@ InterStepBuffer configuration specific to this pipeline.
 
 <td>
 
-<code>exactlyOnce</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.ExactlyOnce"> ExactlyOnce </a>
-</em>
+<code>delivery</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Delivery"> Delivery </a> </em>
 </td>
 
 <td>
@@ -14497,8 +14589,8 @@ InterStepBuffer configuration specific to this pipeline.
 <em>(Optional)</em>
 <p>
 
-ExactlyOnce indicates the exactly-once settings for the vertex, it’s
-populated from the pipeline exactlyOnce settings.
+Delivery indicates the delivery semantics for the vertex, it’s populated
+from the pipeline delivery settings.
 </p>
 
 </td>

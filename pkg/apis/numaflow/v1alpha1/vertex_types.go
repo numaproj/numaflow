@@ -557,9 +557,9 @@ type VertexSpec struct {
 	// InterStepBuffer configuration specific to this pipeline.
 	// +optional
 	InterStepBuffer *InterStepBuffer `json:"interStepBuffer,omitempty" protobuf:"bytes,9,opt,name=interStepBuffer"`
-	// ExactlyOnce indicates the exactly-once settings for the vertex, it's populated from the pipeline exactlyOnce settings.
+	// Delivery indicates the delivery semantics for the vertex, it's populated from the pipeline delivery settings.
 	// +optional
-	ExactlyOnce *ExactlyOnce `json:"exactlyOnce,omitempty" protobuf:"bytes,10,opt,name=exactlyOnce"`
+	Delivery *Delivery `json:"delivery,omitempty" protobuf:"bytes,10,opt,name=delivery"`
 }
 
 type AbstractVertex struct {

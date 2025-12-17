@@ -728,6 +728,20 @@ spec:
                         type: object
                     type: object
                 type: object
+              delivery:
+                properties:
+                  atLeastOnce:
+                    type: object
+                  exactlyOnce:
+                    properties:
+                      consistentAck:
+                        default: false
+                        type: boolean
+                      dedupWindow:
+                        default: 2m
+                        type: string
+                    type: object
+                type: object
               dnsConfig:
                 properties:
                   nameservers:
@@ -753,18 +767,6 @@ spec:
                 type: object
               dnsPolicy:
                 type: string
-              exactlyOnce:
-                properties:
-                  consistentAck:
-                    default: true
-                    type: boolean
-                  dedupWindow:
-                    default: 2m
-                    type: string
-                  enabled:
-                    default: false
-                    type: boolean
-                type: object
               fromEdges:
                 items:
                   properties:
