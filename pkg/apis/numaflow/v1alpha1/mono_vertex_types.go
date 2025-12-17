@@ -518,15 +518,6 @@ type MonoVertexSpec struct {
 	// If specified, the bypass will be triggered if the conditions are met at any of the components.
 	// The first level of the bypass spec specifies the destination to which the message will be forwarded to,
 	// and the next level specifies the conditions to trigger the said bypass.
-	// For example, if the bypass spec is:
-	// bypass:
-	//   fallback:
-	//     tags:
-	//       operator: or
-	//       values:
-	//       - "error"
-	// Then a bypass to fallback sink will be triggered if the message is encountered at any
-	// component (source, UDF) that has a tag "error".
 	// +optional
 	Bypass *MonoVertexBypassCondition `json:"bypass,omitempty" protobuf:"bytes,15,opt,name=bypass"`
 }

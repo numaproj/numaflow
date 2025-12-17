@@ -24,6 +24,7 @@ use crate::monovertex::splitter::Splitter;
 /// - Calls the Sinker to write the batch to the Sink
 /// - Send Acknowledgement back to the Source
 pub(crate) mod forwarder;
+mod stream_splitter;
 
 /// [splitter] splits the input stream based on the bypass conditions.
 /// In the case of when bypass conditions are specified in the monovertex spec,

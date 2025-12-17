@@ -38,7 +38,7 @@ pub(crate) struct MonovertexConfig {
     pub(crate) graceful_shutdown_time: Duration,
     pub(crate) replica: u16,
     pub(crate) source_config: SourceConfig,
-    pub(crate) bypass_conditions: Option<BypassConditions>,
+    pub(crate) bypass_condition: Option<ToSinkCondition>,
     pub(crate) map_config: Option<MapVtxConfig>,
     pub(crate) sink_config: SinkConfig,
     pub(crate) transformer_config: Option<TransformerConfig>,
@@ -69,7 +69,7 @@ impl Default for MonovertexConfig {
             transformer_config: None,
             fb_sink_config: None,
             on_success_sink_config: None,
-            bypass_conditions: None,
+            bypass_condition: None,
             metrics_config: MetricsConfig::default(),
             callback_config: None,
             rate_limit: None,
@@ -239,7 +239,7 @@ impl MonovertexConfig {
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
             graceful_shutdown_time: Duration::from_secs(graceful_shutdown_time_secs),
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
-            bypass_conditions: bypass_condition.and_then(|condition| condition.try_into().ok()),
+            bypass_condition: bypass_condition.and_then(|condition| condition.try_into().ok()),
             source_config,
             map_config,
             sink_config,
@@ -253,16 +253,16 @@ impl MonovertexConfig {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct BypassConditions {
+pub(crate) struct ToSinkCondition {
     pub(crate) sink: Option<Box<ForwardConditions>>,
     pub(crate) fallback: Option<Box<ForwardConditions>>,
     pub(crate) on_success: Option<Box<ForwardConditions>>,
 }
 
-impl TryFrom<Box<MonoVertexBypassCondition>> for BypassConditions {
+impl TryFrom<Box<MonoVertexBypassCondition>> for ToSinkCondition {
     type Error = Error;
     fn try_from(mvtx_sinker_condition: Box<MonoVertexBypassCondition>) -> Result<Self> {
-        Ok(BypassConditions {
+        Ok(ToSinkCondition {
             sink: mvtx_sinker_condition.sink,
             fallback: mvtx_sinker_condition.fallback,
             on_success: mvtx_sinker_condition.on_success,
