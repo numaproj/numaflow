@@ -33,6 +33,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink":                     schema_pkg_apis_numaflow_v1alpha1_AbstractSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex":                   schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AccumulatorWindow":                schema_pkg_apis_numaflow_v1alpha1_AccumulatorWindow(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AtLeastOnce":                      schema_pkg_apis_numaflow_v1alpha1_AtLeastOnce(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization":                    schema_pkg_apis_numaflow_v1alpha1_Authorization(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Backoff":                          schema_pkg_apis_numaflow_v1alpha1_Backoff(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BasicAuth":                        schema_pkg_apis_numaflow_v1alpha1_BasicAuth(ref),
@@ -43,7 +44,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container":                        schema_pkg_apis_numaflow_v1alpha1_Container(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate":                schema_pkg_apis_numaflow_v1alpha1_ContainerTemplate(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate":                   schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Delivery":                         schema_pkg_apis_numaflow_v1alpha1_Delivery(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge":                             schema_pkg_apis_numaflow_v1alpha1_Edge(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ExactlyOnce":                      schema_pkg_apis_numaflow_v1alpha1_ExactlyOnce(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.FixedWindow":                      schema_pkg_apis_numaflow_v1alpha1_FixedWindow(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions":                schema_pkg_apis_numaflow_v1alpha1_ForwardConditions(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GSSAPI":                           schema_pkg_apis_numaflow_v1alpha1_GSSAPI(ref),
@@ -726,6 +729,17 @@ func schema_pkg_apis_numaflow_v1alpha1_AccumulatorWindow(ref common.ReferenceCal
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_AtLeastOnce(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AtLeastOnce is the at-least-once delivery settings (default behavior).",
+				Type:        []string{"object"},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_Authorization(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -1329,6 +1343,33 @@ func schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref common.ReferenceCallba
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_Delivery(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Delivery is the delivery semantics for the pipeline.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"exactlyOnce": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ExactlyOnce enables exactly-once processing semantics.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ExactlyOnce"),
+						},
+					},
+					"atLeastOnce": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AtLeastOnce enables at-least-once processing semantics (default behavior).",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AtLeastOnce"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AtLeastOnce", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ExactlyOnce"},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_Edge(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -1368,6 +1409,34 @@ func schema_pkg_apis_numaflow_v1alpha1_Edge(ref common.ReferenceCallback) common
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_ExactlyOnce(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ExactlyOnce is the exactly-once delivery settings.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"consistentAck": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ConsistentAck enables consistent acknowledgement of offsets to ISB throughout the pipeline.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"dedupWindow": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DedupWindow is the duration for which the deduplication will be enabled.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
@@ -4024,11 +4093,17 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref common.ReferenceCallback
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer"),
 						},
 					},
+					"delivery": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Delivery is the delivery semantics for the pipeline.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Delivery"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Delivery", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"},
 	}
 }
 
@@ -6757,12 +6832,18 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer"),
 						},
 					},
+					"delivery": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Delivery indicates the delivery semantics for the vertex, it's populated from the pipeline delivery settings.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Delivery"),
+						},
+					},
 				},
 				Required: []string{"name", "pipelineName"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Delivery", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
 	}
 }
 

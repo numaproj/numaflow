@@ -19793,6 +19793,10 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.AtLeastOnce": {
+      "description": "AtLeastOnce is the at-least-once delivery settings (default behavior).",
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.Authorization": {
       "type": "object",
       "properties": {
@@ -20106,6 +20110,20 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.Delivery": {
+      "description": "Delivery is the delivery semantics for the pipeline.",
+      "type": "object",
+      "properties": {
+        "atLeastOnce": {
+          "description": "AtLeastOnce enables at-least-once processing semantics (default behavior).",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.AtLeastOnce"
+        },
+        "exactlyOnce": {
+          "description": "ExactlyOnce enables exactly-once processing semantics.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ExactlyOnce"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.Edge": {
       "type": "object",
       "required": [
@@ -20126,6 +20144,20 @@
         },
         "to": {
           "type": "string"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.ExactlyOnce": {
+      "description": "ExactlyOnce is the exactly-once delivery settings.",
+      "type": "object",
+      "properties": {
+        "consistentAck": {
+          "description": "ConsistentAck enables consistent acknowledgement of offsets to ISB throughout the pipeline.",
+          "type": "boolean"
+        },
+        "dedupWindow": {
+          "description": "DedupWindow is the duration for which the deduplication will be enabled.",
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         }
       }
     },
@@ -21517,6 +21549,10 @@
     "io.numaproj.numaflow.v1alpha1.PipelineSpec": {
       "type": "object",
       "properties": {
+        "delivery": {
+          "description": "Delivery is the delivery semantics for the pipeline.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Delivery"
+        },
         "edges": {
           "description": "Edges define the relationships between vertices",
           "type": "array",
@@ -22891,6 +22927,10 @@
         "containerTemplate": {
           "description": "Container template for the main numa container.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
+        },
+        "delivery": {
+          "description": "Delivery indicates the delivery semantics for the vertex, it's populated from the pipeline delivery settings.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Delivery"
         },
         "dnsConfig": {
           "description": "Specifies the DNS parameters of a pod. Parameters specified here will be merged to the generated DNS configuration based on DNSPolicy.",

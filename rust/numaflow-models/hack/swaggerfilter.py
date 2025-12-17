@@ -40,6 +40,7 @@ def main():
             "io.numaproj.numaflow.v1alpha1.RateLimiterInMemoryStore",
             "io.numaproj.numaflow.v1alpha1.RateLimiterRelaxed",
             "io.numaproj.numaflow.v1alpha1.RateLimiterScheduled",
+            "io.numaproj.numaflow.v1alpha1.AtLeastOnce",
         ]:
             defs[k]["allOf"] = []
 

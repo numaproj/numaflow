@@ -186,11 +186,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
         let _ = Retry::new(
             interval,
-            async || {
-                jsr.ack(offset)
-                    .await
-                    .map_err(|e| Error::ISB(format!("Failed to send Ack to JetStream: {e}")))
-            },
+            async || jsr.ack(offset).await,
             |e: &Error| {
                 if cancel.is_cancelled() {
                     error!(
@@ -212,14 +208,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
         let _ = Retry::new(
             interval,
-            async || {
-                let nack_result = jsr
-                    .nack(offset)
-                    .await
-                    .map_err(|e| Error::ISB(format!("Failed to send Nak to JetStream: {e}")));
-                info!(?offset, "Nak sent for offset");
-                nack_result
-            },
+            async || jsr.nack(offset).await,
             |e: &Error| {
                 if cancel.is_cancelled() {
                     error!(
@@ -234,6 +223,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
             },
         )
         .await;
+        info!(?offset, "Nak sent for offset");
     }
 
     /// Creates and writes a WMB message for reduce vertex when it is idle.
@@ -886,6 +876,7 @@ mod tests {
             compression: crate::config::pipeline::isb::Compression {
                 compress_type: CompressionType::Gzip,
             },
+            exactly_once: None,
         };
 
         let buf_reader_config = BufferReaderConfig {

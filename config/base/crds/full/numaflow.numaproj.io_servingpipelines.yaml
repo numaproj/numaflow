@@ -40,6 +40,20 @@ spec:
             properties:
               pipeline:
                 properties:
+                  delivery:
+                    properties:
+                      atLeastOnce:
+                        type: object
+                      exactlyOnce:
+                        properties:
+                          consistentAck:
+                            default: false
+                            type: boolean
+                          dedupWindow:
+                            default: 2m
+                            type: string
+                        type: object
+                    type: object
                   edges:
                     items:
                       properties:

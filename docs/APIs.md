@@ -1177,6 +1177,26 @@ accumulator is removed.
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.AtLeastOnce">
+
+AtLeastOnce
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Delivery">Delivery</a>)
+</p>
+
+<p>
+
+<p>
+
+AtLeastOnce is the at-least-once delivery settings (default behavior).
+</p>
+
+</p>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.Authorization">
 
 Authorization
@@ -2381,6 +2401,96 @@ ContainerTemplate </a> </em>
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.Delivery">
+
+Delivery
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
+</p>
+
+<p>
+
+<p>
+
+Delivery is the delivery semantics for the pipeline.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>exactlyOnce</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ExactlyOnce"> ExactlyOnce </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+ExactlyOnce enables exactly-once processing semantics.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>atLeastOnce</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AtLeastOnce"> AtLeastOnce </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+AtLeastOnce enables at-least-once processing semantics (default
+behavior).
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.Edge">
 
 Edge
@@ -2484,6 +2594,92 @@ OnFull specifies the behaviour for the write actions when the inter step
 buffer is full. There are currently two options, retryUntilSuccess and
 discardLatest. if not provided, the default value is set to
 “retryUntilSuccess”
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.ExactlyOnce">
+
+ExactlyOnce
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Delivery">Delivery</a>)
+</p>
+
+<p>
+
+<p>
+
+ExactlyOnce is the exactly-once delivery settings.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>consistentAck</code></br> <em> bool </em>
+</td>
+
+<td>
+
+<p>
+
+ConsistentAck enables consistent acknowledgement of offsets to ISB
+throughout the pipeline.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>dedupWindow</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+DedupWindow is the duration for which the deduplication will be enabled.
 </p>
 
 </td>
@@ -7843,6 +8039,26 @@ InterStepBuffer configuration specific to this pipeline.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>delivery</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Delivery"> Delivery </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Delivery is the delivery semantics for the pipeline.
+</p>
+
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -8262,6 +8478,26 @@ InterStepBuffer </a> </em>
 <p>
 
 InterStepBuffer configuration specific to this pipeline.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>delivery</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Delivery"> Delivery </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Delivery is the delivery semantics for the pipeline.
 </p>
 
 </td>
@@ -13788,6 +14024,27 @@ InterStepBuffer configuration specific to this pipeline.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>delivery</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Delivery"> Delivery </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Delivery indicates the delivery semantics for the vertex, it’s populated
+from the pipeline delivery settings.
+</p>
+
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -14313,6 +14570,27 @@ InterStepBuffer </a> </em>
 <p>
 
 InterStepBuffer configuration specific to this pipeline.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>delivery</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Delivery"> Delivery </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Delivery indicates the delivery semantics for the vertex, it’s populated
+from the pipeline delivery settings.
 </p>
 
 </td>

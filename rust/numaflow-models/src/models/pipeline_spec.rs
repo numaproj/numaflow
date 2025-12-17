@@ -18,6 +18,8 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PipelineSpec {
+    #[serde(rename = "delivery", skip_serializing_if = "Option::is_none")]
+    pub delivery: Option<Box<crate::models::Delivery>>,
     /// Edges define the relationships between vertices
     #[serde(rename = "edges", skip_serializing_if = "Option::is_none")]
     pub edges: Option<Vec<crate::models::Edge>>,
@@ -47,6 +49,7 @@ pub struct PipelineSpec {
 impl PipelineSpec {
     pub fn new() -> PipelineSpec {
         PipelineSpec {
+            delivery: None,
             edges: None,
             inter_step_buffer: None,
             inter_step_buffer_service_name: None,

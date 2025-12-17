@@ -520,9 +520,11 @@ impl UserDefinedStreamMap {
         // only insert if we are able to send the message to the server
         if let Err(e) = self.read_tx.send(message.into()).await {
             error!(?e, "Failed to send message to server");
-            let _ = respond_to.send(Err(Error::Mapper(format!(
-                "failed to send message to stream map server: {e}"
-            ))));
+            let _ = respond_to
+                .send(Err(Error::Mapper(format!(
+                    "failed to send message to stream map server: {e}"
+                ))))
+                .await;
             return;
         }
 

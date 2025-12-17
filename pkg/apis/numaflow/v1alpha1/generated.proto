@@ -271,6 +271,10 @@ message AccumulatorWindow {
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration timeout = 1;
 }
 
+// AtLeastOnce is the at-least-once delivery settings (default behavior).
+message AtLeastOnce {
+}
+
 message Authorization {
   // A secret selector which contains bearer token
   // To use this, the client needs to add "Authorization: Bearer <token>" in the header
@@ -450,6 +454,17 @@ message DaemonTemplate {
   optional ContainerTemplate initContainerTemplate = 4;
 }
 
+// Delivery is the delivery semantics for the pipeline.
+message Delivery {
+  // ExactlyOnce enables exactly-once processing semantics.
+  // +optional
+  optional ExactlyOnce exactlyOnce = 1;
+
+  // AtLeastOnce enables at-least-once processing semantics (default behavior).
+  // +optional
+  optional AtLeastOnce atLeastOnce = 2;
+}
+
 message Edge {
   optional string from = 1;
 
@@ -465,6 +480,18 @@ message Edge {
   // +kubebuilder:validation:Enum=retryUntilSuccess;discardLatest
   // +optional
   optional string onFull = 4;
+}
+
+// ExactlyOnce is the exactly-once delivery settings.
+message ExactlyOnce {
+  // ConsistentAck enables consistent acknowledgement of offsets to ISB throughout the pipeline.
+  // +kubebuilder:default=false
+  optional bool consistentAck = 1;
+
+  // DedupWindow is the duration for which the deduplication will be enabled.
+  // +optional
+  // +kubebuilder:default="2m"
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration dedupWindow = 2;
 }
 
 // FixedWindow describes a fixed window
@@ -1307,6 +1334,10 @@ message PipelineSpec {
   // InterStepBuffer configuration specific to this pipeline.
   // +optional
   optional InterStepBuffer interStepBuffer = 9;
+
+  // Delivery is the delivery semantics for the pipeline.
+  // +optional
+  optional Delivery delivery = 10;
 }
 
 message PipelineStatus {
@@ -2241,6 +2272,10 @@ message VertexSpec {
   // InterStepBuffer configuration specific to this pipeline.
   // +optional
   optional InterStepBuffer interStepBuffer = 9;
+
+  // Delivery indicates the delivery semantics for the vertex, it's populated from the pipeline delivery settings.
+  // +optional
+  optional Delivery delivery = 10;
 }
 
 message VertexStatus {

@@ -113,7 +113,7 @@ func (p Pipeline) GetVertex(vertexName string) *AbstractVertex {
 
 // ListAllEdges returns a copy of all the edges.
 func (p Pipeline) ListAllEdges() []Edge {
-	edges := []Edge{}
+	var edges []Edge
 	for _, e := range p.Spec.Edges {
 		edgeCopy := e.DeepCopy()
 		edges = append(edges, *edgeCopy)
@@ -511,6 +511,9 @@ type PipelineSpec struct {
 	// InterStepBuffer configuration specific to this pipeline.
 	// +optional
 	InterStepBuffer *InterStepBuffer `json:"interStepBuffer,omitempty" protobuf:"bytes,9,opt,name=interStepBuffer"`
+	// Delivery is the delivery semantics for the pipeline.
+	// +optional
+	Delivery *Delivery `json:"delivery,omitempty" protobuf:"bytes,10,opt,name=delivery"`
 }
 
 // InterStepBuffer configuration specifically for the pipeline.
@@ -519,6 +522,43 @@ type InterStepBuffer struct {
 	// +optional
 	Compression *Compression `json:"compression,omitempty" protobuf:"bytes,2,opt,name=compression"`
 }
+
+// Delivery is the delivery semantics for the pipeline.
+type Delivery struct {
+	// ExactlyOnce enables exactly-once processing semantics.
+	// +optional
+	ExactlyOnce *ExactlyOnce `json:"exactlyOnce,omitempty" protobuf:"bytes,1,opt,name=exactlyOnce"`
+	// AtLeastOnce enables at-least-once processing semantics (default behavior).
+	// +optional
+	AtLeastOnce *AtLeastOnce `json:"atLeastOnce,omitempty" protobuf:"bytes,2,opt,name=atLeastOnce"`
+}
+
+// IsExactlyOnce returns true if exactly-once delivery is enabled.
+func (d *Delivery) IsExactlyOnce() bool {
+	return d != nil && d.ExactlyOnce != nil
+}
+
+// GetDedupWindow returns the dedup window duration string, defaulting to "2m" if not set.
+func (d *Delivery) GetDedupWindow() string {
+	if d != nil && d.ExactlyOnce != nil && d.ExactlyOnce.DedupWindow != nil {
+		return d.ExactlyOnce.DedupWindow.Duration.String()
+	}
+	return "2m"
+}
+
+// ExactlyOnce is the exactly-once delivery settings.
+type ExactlyOnce struct {
+	// ConsistentAck enables consistent acknowledgement of offsets to ISB throughout the pipeline.
+	// +kubebuilder:default=false
+	ConsistentAck bool `json:"consistentAck,omitempty" protobuf:"bytes,1,opt,name=consistentAck"`
+	// DedupWindow is the duration for which the deduplication will be enabled.
+	// +optional
+	// +kubebuilder:default="2m"
+	DedupWindow *metav1.Duration `json:"dedupWindow,omitempty" protobuf:"bytes,2,opt,name=dedupWindow"`
+}
+
+// AtLeastOnce is the at-least-once delivery settings (default behavior).
+type AtLeastOnce struct{}
 
 // Compression is the compression settings for the messages in the InterStepBuffer
 type Compression struct {

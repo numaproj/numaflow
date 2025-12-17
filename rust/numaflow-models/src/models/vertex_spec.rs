@@ -28,6 +28,8 @@ pub struct VertexSpec {
     pub automount_service_account_token: Option<bool>,
     #[serde(rename = "containerTemplate", skip_serializing_if = "Option::is_none")]
     pub container_template: Option<Box<crate::models::ContainerTemplate>>,
+    #[serde(rename = "delivery", skip_serializing_if = "Option::is_none")]
+    pub delivery: Option<Box<crate::models::Delivery>>,
     #[serde(rename = "dnsConfig", skip_serializing_if = "Option::is_none")]
     pub dns_config: Option<k8s_openapi::api::core::v1::PodDNSConfig>,
     /// Set DNS policy for the pod. Defaults to \"ClusterFirst\". Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'.
@@ -126,6 +128,7 @@ impl VertexSpec {
             affinity: None,
             automount_service_account_token: None,
             container_template: None,
+            delivery: None,
             dns_config: None,
             dns_policy: None,
             from_edges: None,
