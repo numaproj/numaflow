@@ -3530,7 +3530,7 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexSpec(ref common.ReferenceCallba
 					},
 					"bypass": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Bypass defines the bypass destination and conditions to trigger bypass for the mono vertex components. If specified, the bypass will be triggered if the conditions are met at any of the components. The first level of the bypass spec specifies the destination to which the message will be forwarded to, and the next level specifies the conditions to trigger the said bypass. For example, if the bypass spec is: bypass:\n  fallback:\n    tags:\n      operator: or\n      values:\n      - \"error\"\nThen a bypass to fallback sink will be triggered if the message is encountered at any component (source, UDF) that has a tag \"error\".",
+							Description: "Bypass defines the bypass destination and conditions to trigger bypass for the mono vertex components. If specified, the bypass will be triggered if the conditions are met at any of the components. The first level of the bypass spec specifies the destination to which the message will be forwarded to, and the next level specifies the conditions to trigger the said bypass.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexBypassCondition"),
 						},
 					},
