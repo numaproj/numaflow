@@ -17,7 +17,7 @@ use bytes::Bytes;
 use prost::Message as ProtoMessage;
 use serde_json::json;
 use tokio_stream::StreamExt;
-use tracing::warn;
+use tracing::{info, warn};
 
 /// JSWrappedMessage is a wrapper around the JetStream message that includes the
 /// partition index and the vertex name.
@@ -137,6 +137,9 @@ impl JetStreamReader {
                     .exactly_once
                     .map(|eo| eo.consistent_ack)
                     .unwrap_or(false);
+                if double_ack {
+                    info!("Exactly-once with consistent_ack is enabled");
+                }
                 (compression, double_ack)
             }
             None => (None, false),
