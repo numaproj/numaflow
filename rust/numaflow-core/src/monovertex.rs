@@ -24,7 +24,6 @@ use crate::monovertex::splitter::Splitter;
 /// - Calls the Sinker to write the batch to the Sink
 /// - Send Acknowledgement back to the Source
 pub(crate) mod forwarder;
-mod stream_splitter;
 
 /// [splitter] splits the input stream based on the bypass conditions.
 /// In the case of when bypass conditions are specified in the monovertex spec,
@@ -163,9 +162,9 @@ async fn start<C: crate::typ::NumaflowTypeConfig>(
         None
     };
 
-    let splitter = match  mvtx_config.bypass_conditions {
+    let splitter = match  mvtx_config.bypass_condition {
         None => None,
-        Some(bypass_conditions) => Some(Splitter::new(mvtx_config.batch_size, mvtx_config.read_timeout, bypass_conditions))
+        Some(bypass_condition) => Some(Splitter::new(mvtx_config.batch_size, mvtx_config.read_timeout, bypass_condition))
     };
 
     let forwarder = forwarder::Forwarder::<C>::new(source, mapper, sink, splitter);
