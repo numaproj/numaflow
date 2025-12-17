@@ -198,14 +198,13 @@ mod tests {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ISBConfig {
     pub(crate) compression: Compression,
-    pub(crate) exactly_once: ExactlyOnceConfig,
+    /// Exactly-once configuration. None means at-least-once delivery.
+    pub(crate) exactly_once: Option<ExactlyOnceConfig>,
 }
 
 /// Configuration for exactly-once semantics.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ExactlyOnceConfig {
-    /// Whether exactly-once processing is enabled.
-    pub(crate) enabled: bool,
     /// Whether consistent acknowledgement of offsets to ISB is enabled.
     /// When true, double_ack is used; when false, simple ack is used.
     pub(crate) consistent_ack: bool,

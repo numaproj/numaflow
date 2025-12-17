@@ -108,8 +108,8 @@ pub(crate) struct JetStreamReader {
     offset2jsmsg: Arc<RwLock<HashMap<Offset, JetstreamMessage>>>,
     /// interval at which we should send wip ack to avoid redelivery.
     wip_ack_interval: Duration,
-    /// whether to use double_ack (consistent ack) or simple ack
-    consistent_ack: bool,
+    /// whether to use double_ack (exactly-once with consistent_ack) or simple ack
+    use_double_ack: bool,
 }
 
 impl JetStreamReader {
@@ -129,11 +129,16 @@ impl JetStreamReader {
             .map_err(|e| Error::ISB(format!("Failed to get consumer info {e}")))?;
 
         let ack_wait_seconds = consumer_info.config.ack_wait.as_secs();
-        let (compression_type, consistent_ack) = match isb_config {
-            Some(config) => (
-                Some(config.compression.compress_type),
-                config.exactly_once.consistent_ack,
-            ),
+        let (compression_type, use_double_ack) = match isb_config {
+            Some(config) => {
+                let compression = Some(config.compression.compress_type);
+                // Use double_ack only when exactly_once is set AND consistent_ack is true
+                let double_ack = config
+                    .exactly_once
+                    .map(|eo| eo.consistent_ack)
+                    .unwrap_or(false);
+                (compression, double_ack)
+            }
             None => (None, false),
         };
         Ok(Self {
@@ -143,7 +148,7 @@ impl JetStreamReader {
             compression_type,
             offset2jsmsg: Arc::new(RwLock::new(HashMap::new())),
             wip_ack_interval: Duration::from_secs(ack_wait_seconds / 3), // give 2 chances
-            consistent_ack,
+            use_double_ack,
         })
     }
 
@@ -223,10 +228,10 @@ impl JetStreamReader {
     }
 
     /// Acknowledge the offset.
-    /// Uses double_ack when consistent_ack is enabled, otherwise uses simple ack.
+    /// Uses double_ack when exactly_once with consistent_ack is enabled, otherwise uses simple ack.
     pub(crate) async fn ack(&self, offset: &Offset) -> Result<()> {
         if let Some(msg) = self.get_js_message(offset, true) {
-            if self.consistent_ack {
+            if self.use_double_ack {
                 msg.double_ack()
                     .await
                     .map_err(|e| Error::ISB(format!("Failed to double ack message: {e}")))?;
@@ -335,7 +340,7 @@ mod tests {
             compression: Compression {
                 compress_type: CompressionType::Gzip,
             },
-            exactly_once: crate::config::pipeline::isb::ExactlyOnceConfig::default(),
+            exactly_once: None,
         };
 
         let mut js_reader = JetStreamReader::new(stream.clone(), context.clone(), Some(isb_config))

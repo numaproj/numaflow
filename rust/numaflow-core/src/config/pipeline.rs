@@ -634,14 +634,18 @@ impl PipelineConfig {
             });
         }
 
-        // Parse exactly_once from the spec level
-        let exactly_once = match vertex_obj.spec.exactly_once.as_ref() {
-            None => isb::ExactlyOnceConfig::default(),
-            Some(eo) => isb::ExactlyOnceConfig {
-                enabled: eo.enabled.unwrap_or(false),
-                consistent_ack: eo.consistent_ack.unwrap_or(true),
-            },
-        };
+        // Parse exactly_once from the delivery settings
+        // If delivery.exactly_once is Some, exactly-once is enabled
+        // double_ack is used only when exactly_once is set AND consistent_ack is true
+        let exactly_once = vertex_obj
+            .spec
+            .delivery
+            .as_ref()
+            .and_then(|d| d.exactly_once.as_ref())
+            .map(|eo| isb::ExactlyOnceConfig {
+                // Default to false if not specified
+                consistent_ack: eo.consistent_ack.unwrap_or(false),
+            });
 
         let isb_config: Option<isb::ISBConfig> = match vertex_obj.spec.inter_step_buffer.as_ref() {
             None => Some(isb::ISBConfig {

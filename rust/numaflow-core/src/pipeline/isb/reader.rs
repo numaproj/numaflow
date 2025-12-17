@@ -876,7 +876,7 @@ mod tests {
             compression: crate::config::pipeline::isb::Compression {
                 compress_type: CompressionType::Gzip,
             },
-            exactly_once: crate::config::pipeline::isb::ExactlyOnceConfig::default(),
+            exactly_once: None,
         };
 
         let buf_reader_config = BufferReaderConfig {
