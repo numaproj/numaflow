@@ -20,6 +20,16 @@ pub enum MessageToSink {
     OnSuccess(Message),
 }
 
+impl MessageToSink {
+    pub fn inner(&self) -> &Message {
+        match self {
+            MessageToSink::Primary(msg)
+            | MessageToSink::Fallback(msg)
+            | MessageToSink::OnSuccess(msg) => msg,
+        }
+    }
+}
+
 /// Splitter is a component that splits the input stream based on the bypass conditions.
 /// In the case of when bypass conditions are specified in the monovertex spec,
 /// the splitter component will be run after every component starting from the source and except for the sink.

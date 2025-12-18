@@ -26,9 +26,9 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{error, info};
 
+use crate::monovertex::splitter::MessageToSink;
 use crate::sinker::builder::HealthCheckClients;
 use serve::{ServingStore, StoreEntry};
-
 // Re-export SinkWriterBuilder for external use
 pub(crate) use crate::sinker::builder::SinkWriterBuilder;
 
@@ -242,6 +242,145 @@ impl SinkWriter {
                         cln_token.cancel();
 
                         for ack_handle in ack_handles {
+                            ack_handle
+                                .as_ref()
+                                .expect("ack handle should be present")
+                                .is_failed
+                                .store(true, Ordering::Relaxed);
+                        }
+
+                        self.final_result = Err(e);
+                        self.shutting_down_on_err = true;
+                    }
+                }
+
+                // finalize
+                self.final_result
+            }
+        }))
+    }
+
+    pub(crate) async fn streaming_bypass_write(
+        mut self,
+        messages_stream: ReceiverStream<MessageToSink>,
+        cln_token: CancellationToken,
+    ) -> Result<JoinHandle<Result<()>>> {
+        Ok(tokio::spawn({
+            async move {
+                info!(?self.batch_size, ?self.chunk_timeout, "Starting sink writer");
+
+                // Combine chunking and timeout into a stream
+                let chunk_stream =
+                    messages_stream.chunks_timeout(self.batch_size, self.chunk_timeout);
+                pin!(chunk_stream);
+
+                // Main processing loop
+                while let Some(batch) = chunk_stream.next().await {
+                    // we are in shutting down mode, we will not be writing to the sink,
+                    // mark the messages as failed, and on Drop they will be nack'ed.
+                    if self.shutting_down_on_err {
+                        for msg in &batch {
+                            msg.inner()
+                                .ack_handle
+                                .as_ref()
+                                .expect("ack handle should be present")
+                                .is_failed
+                                .store(true, Ordering::Relaxed);
+                        }
+                        continue;
+                    }
+
+                    // collect ack handles for later failure tracking
+                    let ack_handles = batch
+                        .iter()
+                        .map(|msg| msg.inner().ack_handle.clone())
+                        .collect::<Vec<_>>();
+
+                    // filter out messages that are marked for drop
+                    let batch: Vec<_> = batch
+                        .into_iter()
+                        .filter(|msg| !msg.inner().dropped())
+                        .collect();
+
+                    // skip if all were dropped
+                    if batch.is_empty() {
+                        continue;
+                    }
+
+                    let mut primary_messages: Vec<Message> = vec![];
+                    let mut primary_ack_handles = vec![];
+                    let mut fallback_messages: Vec<Message> = vec![];
+                    let mut fallback_ack_handles = vec![];
+                    let mut on_success_messages: Vec<Message> = vec![];
+                    let mut on_success_ack_handles = vec![];
+
+                    for msg in batch {
+                        match msg {
+                            MessageToSink::Primary(msg) => {
+                                primary_ack_handles.push(msg.ack_handle.clone());
+                                primary_messages.push(msg);
+                            }
+                            MessageToSink::Fallback(msg) => {
+                                fallback_ack_handles.push(msg.ack_handle.clone());
+                                fallback_messages.push(msg)
+                            }
+                            MessageToSink::OnSuccess(msg) => {
+                                on_success_ack_handles.push(msg.ack_handle.clone());
+                                on_success_messages.push(msg)
+                            }
+                        }
+                    }
+
+                    // perform the write operation
+                    if let Err(e) = self.write(primary_messages, cln_token.clone()).await {
+                        // critical error, cancel upstream and mark all acks as failed
+                        error!(?e, "Error writing to sink, initiating shutdown.");
+                        cln_token.cancel();
+
+                        for ack_handle in primary_ack_handles {
+                            ack_handle
+                                .as_ref()
+                                .expect("ack handle should be present")
+                                .is_failed
+                                .store(true, Ordering::Relaxed);
+                        }
+
+                        self.final_result = Err(e);
+                        self.shutting_down_on_err = true;
+                    }
+
+                    // perform the fallback write operation
+                    if let Err(e) = self
+                        .write_to_fallback(fallback_messages, cln_token.clone())
+                        .await
+                    {
+                        // critical error, cancel upstream and mark all acks as failed
+                        error!(?e, "Error writing to fallback sink, initiating shutdown.");
+                        cln_token.cancel();
+
+                        // TODO: determine if we should check for error before every write
+                        for ack_handle in fallback_ack_handles {
+                            ack_handle
+                                .as_ref()
+                                .expect("ack handle should be present")
+                                .is_failed
+                                .store(true, Ordering::Relaxed);
+                        }
+
+                        self.final_result = Err(e);
+                        self.shutting_down_on_err = true;
+                    }
+
+                    // perform the fallback write operation
+                    if let Err(e) = self
+                        .write_to_on_success(on_success_messages, cln_token.clone())
+                        .await
+                    {
+                        // critical error, cancel upstream and mark all acks as failed
+                        error!(?e, "Error writing to fallback sink, initiating shutdown.");
+                        cln_token.cancel();
+
+                        for ack_handle in on_success_ack_handles {
                             ack_handle
                                 .as_ref()
                                 .expect("ack handle should be present")

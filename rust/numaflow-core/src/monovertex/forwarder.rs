@@ -33,6 +33,7 @@
 //! [Actor Pattern]: https://ryhl.io/blog/actors-with-tokio/
 
 use tokio::task::JoinHandle;
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 
 use crate::Error;
@@ -135,7 +136,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
                     .await?;
 
                 let (second_splitter_stream, second_splitter_handle) =
-                    splitter.run(mapper_stream, bypass_tx).await?;
+                    splitter.run(mapper_stream, bypass_tx.clone()).await?;
 
                 let joined_handle: JoinHandle<error::Result<()>> = tokio::spawn(async move {
                     let (mapper_result, second_splitter_result) =
@@ -165,28 +166,48 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
             ),
         };
 
-        // TODO: run the converter for mapper stream
+        let converter_handle = splitter.converter(mapper_stream, bypass_tx).await?;
 
         let sink_writer_handle = self
             .sink_writer
-            .streaming_write(mapper_stream, cln_token.clone())
+            .streaming_bypass_write(ReceiverStream::new(bypass_rx), cln_token.clone())
             .await?;
 
         // Join the reader and sink writer
-        let (reader_result, mapper_handle_result, sink_writer_result) =
-            tokio::try_join!(reader_handle, mapper_handle, sink_writer_handle).map_err(|e| {
-                error!(?e, "Error while joining reader, mapper and sink writer");
-                Error::Forwarder(format!(
-                    "Error while joining reader, mapper and sink writer: {e:?}"
-                ))
-            })?;
+        let (
+            reader_result,
+            first_splitter_result,
+            mapper_handle_result,
+            converter_result,
+            sink_writer_result,
+        ) = tokio::try_join!(
+            reader_handle,
+            first_splitter_handle,
+            mapper_handle,
+            converter_handle,
+            sink_writer_handle
+        )
+        .map_err(|e| {
+            error!(?e, "Error while joining reader, mapper and sink writer");
+            Error::Forwarder(format!(
+                "Error while joining reader, mapper and sink writer: {e:?}"
+            ))
+        })?;
 
         sink_writer_result.inspect_err(|e| {
             error!(?e, "Error while writing messages");
         })?;
 
+        converter_result.inspect_err(|e| {
+            error!(?e, "Error while converting messages");
+        })?;
+
         mapper_handle_result.inspect_err(|e| {
             error!(?e, "Error while applying map to messages");
+        })?;
+
+        first_splitter_result.inspect_err(|e| {
+            error!(?e, "Error while splitting messages from map");
         })?;
 
         reader_result.inspect_err(|e| {
