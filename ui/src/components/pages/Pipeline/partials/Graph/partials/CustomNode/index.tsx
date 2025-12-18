@@ -326,6 +326,18 @@ const CustomNode: FC<NodeProps> = ({
     return rate !== undefined && rate >= 0 ? `${rate}/sec` : "Not Available";
   };
 
+  const hasBothSinks =
+    data?.nodeInfo?.sink?.onSuccess && data?.nodeInfo?.sink?.fallback;
+  const wrapperClass = hasBothSinks
+    ? "mono-vertex-img-wrapper-small"
+    : "mono-vertex-img-wrapper";
+  const imgClass = hasBothSinks ? "mono-vertex-img-small" : "mono-vertex-img";
+  const nodeRateWrapperClass = hasBothSinks ? "node-rate-small" : "node-rate";
+  const nodeRateStyle =
+    data?.type === "monoVertex" && hasBothSinks
+      ? { bottom: "-1rem" }
+      : {};
+
   return (
     <Box data-testid={data?.name}>
       <Box
@@ -352,9 +364,9 @@ const CustomNode: FC<NodeProps> = ({
                 arrow
                 placement={"left"}
               >
-                <Box className={"mono-vertex-img-wrapper"}>
+                <Box className={wrapperClass}>
                   <img
-                    className={"mono-vertex-img"}
+                    className={imgClass}
                     src={source}
                     alt={"source-container"}
                   />
@@ -369,9 +381,9 @@ const CustomNode: FC<NodeProps> = ({
                   arrow
                   placement={"bottom"}
                 >
-                  <Box className={"mono-vertex-img-wrapper"}>
+                  <Box className={wrapperClass}>
                     <img
-                      className={"mono-vertex-img"}
+                      className={imgClass}
                       src={transformer}
                       alt={"transformer-container"}
                     />
@@ -387,9 +399,9 @@ const CustomNode: FC<NodeProps> = ({
                   arrow
                   placement={"bottom"}
                 >
-                  <Box className={"mono-vertex-img-wrapper"}>
+                  <Box className={wrapperClass}>
                     <img
-                      className={"mono-vertex-img"}
+                      className={imgClass}
                       src={udf}
                       alt={"udf-container"}
                     />
@@ -407,9 +419,9 @@ const CustomNode: FC<NodeProps> = ({
                     : "right"
                 }
               >
-                <Box className={"mono-vertex-img-wrapper"}>
+                <Box className={wrapperClass}>
                   <img
-                    className={"mono-vertex-img"}
+                    className={imgClass}
                     src={sink}
                     alt={"sink-container"}
                   />
@@ -437,9 +449,9 @@ const CustomNode: FC<NodeProps> = ({
                           arrow
                           placement={"right"}
                         >
-                          <Box className={"mono-vertex-img-wrapper"}>
+                          <Box className={wrapperClass}>
                             <img
-                              className={"mono-vertex-img"}
+                              className={imgClass}
                               src={sink}
                               alt={"on-success-sink-container"}
                             />
@@ -460,9 +472,9 @@ const CustomNode: FC<NodeProps> = ({
                           arrow
                           placement={"right"}
                         >
-                          <Box className={"mono-vertex-img-wrapper"}>
+                          <Box className={wrapperClass}>
                             <img
-                              className={"mono-vertex-img"}
+                              className={imgClass}
                               src={fallback}
                               alt={"fallback-sink-container"}
                             />
@@ -490,9 +502,9 @@ const CustomNode: FC<NodeProps> = ({
                             arrow
                             placement={"right"}
                           >
-                            <Box className={"mono-vertex-img-wrapper"}>
+                            <Box className={wrapperClass}>
                               <img
-                                className={"mono-vertex-img"}
+                                className={imgClass}
                                 src={sink}
                                 alt={"on-success-sink-container"}
                               />
@@ -510,9 +522,9 @@ const CustomNode: FC<NodeProps> = ({
                             arrow
                             placement={"right"}
                           >
-                            <Box className={"mono-vertex-img-wrapper"}>
+                            <Box className={wrapperClass}>
                               <img
-                                className={"mono-vertex-img"}
+                                className={imgClass}
                                 src={fallback}
                                 alt={"fallback-sink-container"}
                               />
@@ -573,9 +585,12 @@ const CustomNode: FC<NodeProps> = ({
           arrow
           placement={"bottom-end"}
         >
-          <Box className={"node-rate"}>
+          <Box className={nodeRateWrapperClass} style={nodeRateStyle}>
             {formatRate(data?.vertexMetrics?.ratePerMin)}
           </Box>
+          {/* <Box className={"node-rate"} style={nodeRateStyle}>
+            {formatRate(data?.vertexMetrics?.ratePerMin)}
+          </Box> */}
         </Tooltip>
 
         {(data?.type === "udf" || data?.type === "sink") && (
