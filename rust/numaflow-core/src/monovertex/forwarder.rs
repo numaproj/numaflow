@@ -120,7 +120,6 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
         cln_token: CancellationToken,
     ) -> crate::Result<()> {
         let splitter = self.splitter.expect("splitter must be initialized");
-        // TODO: utilize bypass_rx to send messages to sink
         let (bypass_tx, bypass_rx) = tokio::sync::mpsc::channel(splitter.batch_size);
         let (read_messages_stream, reader_handle) =
             self.source.streaming_read(cln_token.clone())?;
@@ -138,6 +137,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
                 let (second_splitter_stream, second_splitter_handle) =
                     splitter.run(mapper_stream, bypass_tx.clone()).await?;
 
+                // Join the mapper and second splitter handle and returns a single handle
                 let joined_handle: JoinHandle<error::Result<()>> = tokio::spawn(async move {
                     let (mapper_result, second_splitter_result) =
                         tokio::try_join!(mapper_handle, second_splitter_handle).map_err(|e| {
@@ -173,7 +173,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
             .streaming_bypass_write(ReceiverStream::new(bypass_rx), cln_token.clone())
             .await?;
 
-        // Join the reader and sink writer
+        // Join the all the handlers
         let (
             reader_result,
             first_splitter_result,
@@ -188,9 +188,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
             sink_writer_handle
         )
         .map_err(|e| {
-            error!(?e, "Error while joining reader, mapper and sink writer");
+            error!(
+                ?e,
+                "Error while joining reader, mapper, splitter, converter and sink handles"
+            );
             Error::Forwarder(format!(
-                "Error while joining reader, mapper and sink writer: {e:?}"
+                "Error while joining reader, mapper, splitter, converter and sink handles: {e:?}"
             ))
         })?;
 
