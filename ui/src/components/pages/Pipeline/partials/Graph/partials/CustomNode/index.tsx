@@ -133,16 +133,7 @@ const CustomNode: FC<NodeProps> = ({
     return style;
   };
 
-  const nodeStyle = useMemo(() => {
-    return {
-      border: `${isSelected(highlightValues[data?.name])} ${getBorderColor(
-        data?.type
-      )}`,
-      display: "flex",
-      flexDirection: "column",
-      ...commonStyle,
-    };
-  }, [highlightValues, data]);
+
 
   const genStyle = (text: string) => {
     return {
@@ -291,37 +282,6 @@ const CustomNode: FC<NodeProps> = ({
     setHighlightValues({});
   }, [setHidden, setHighlightValues]);
 
-  // arrow for containers in monoVertex
-  const arrowSvg = useMemo(() => {
-    return (
-      <svg height="20" width="18">
-        <line x1="0" y1="10" x2="18" y2="10" stroke="#d1dee9" />
-        <line x1="14" y1="7" x2="18" y2="10" stroke="#d1dee9" />
-        <line x1="14" y1="13" x2="18" y2="10" stroke="#d1dee9" />
-      </svg>
-    );
-  }, []);
-
-  const arrowUpSvg = useMemo(() => {
-    return (
-      <svg height="16" width="12">
-        <line x1="0" y1="16" x2="12" y2="8" stroke="#d1dee9" />
-        <line x1="7" y1="7.7" x2="12" y2="8" stroke="#d1dee9" />
-        <line x1="10.3" y1="12.7" x2="12" y2="8" stroke="#d1dee9" />
-      </svg>
-    );
-  }, []);
-
-  const arrowDownSvg = useMemo(() => {
-    return (
-      <svg height="16" width="12">
-        <line x1="0" y1="0" x2="12" y2="8" stroke="#d1dee9" />
-        <line x1="7" y1="8.3" x2="12" y2="8" stroke="#d1dee9" />
-        <line x1="10.3" y1="3.3" x2="12" y2="8" stroke="#d1dee9" />
-      </svg>
-    );
-  }, []);
-
   const formatRate = (rate?: number): string => {
     return rate !== undefined && rate >= 0 ? `${rate}/sec` : "Not Available";
   };
@@ -337,6 +297,57 @@ const CustomNode: FC<NodeProps> = ({
     data?.type === "monoVertex" && hasBothSinks
       ? { bottom: "-1rem" }
       : {};
+
+
+  const nodeStyle = useMemo(() => {
+    return {
+      border: `${isSelected(highlightValues[data?.name])} ${getBorderColor(
+        data?.type
+      )}`,
+      ...(hasBothSinks
+        ? {
+            display: "flex",
+            flexDirection: "column",
+          }
+        : {}),
+      ...commonStyle,
+    };
+  }, [highlightValues, data, hasBothSinks]);
+
+  // arrow for containers in monoVertex
+  const arrowSvg = useMemo(() => {
+    return (
+      <svg height="20" width="18">
+        <line x1="0" y1="10" x2="18" y2="10" stroke="#d1dee9" />
+        <line x1="14" y1="7" x2="18" y2="10" stroke="#d1dee9" />
+        <line x1="14" y1="13" x2="18" y2="10" stroke="#d1dee9" />
+      </svg>
+    );
+  });
+
+  // up arrow in case both onSuccess and fallback sinks are configured
+  // will point to onSuccess
+  const arrowUpSvg = useMemo(() => {
+    return (
+      <svg height="16" width="16">
+        <line x1="0" y1="16" x2="16" y2="8" stroke="#d1dee9" />
+        <line x1="11.1" y1="7.1" x2="16" y2="8" stroke="#d1dee9" />
+        <line x1="13.7" y1="12.5" x2="16" y2="8" stroke="#d1dee9" />
+      </svg>
+    );
+  }, []);
+
+  // down arrow in case both onSuccess and fallback sinks are configured
+  // will point to fallback
+  const arrowDownSvg = useMemo(() => {
+    return (
+      <svg height="16" width="16">
+        <line x1="0" y1="0" x2="16" y2="8" stroke="#d1dee9" />
+        <line x1="11.1" y1="8.9" x2="16" y2="8" stroke="#d1dee9" />
+        <line x1="13.7" y1="3.5" x2="16" y2="8" stroke="#d1dee9" />
+      </svg>
+    );
+  }, []);
 
   return (
     <Box data-testid={data?.name}>
@@ -588,9 +599,6 @@ const CustomNode: FC<NodeProps> = ({
           <Box className={nodeRateWrapperClass} style={nodeRateStyle}>
             {formatRate(data?.vertexMetrics?.ratePerMin)}
           </Box>
-          {/* <Box className={"node-rate"} style={nodeRateStyle}>
-            {formatRate(data?.vertexMetrics?.ratePerMin)}
-          </Box> */}
         </Tooltip>
 
         {(data?.type === "udf" || data?.type === "sink") && (
