@@ -66,11 +66,24 @@ func ValidateMonoVertex(mvtx *dfv1.MonoVertex) error {
 			return fmt.Errorf("invalid sidecar container name: %q is reserved for containers created by numaflow", sc.Name)
 		}
 	}
+	if err := validateBypass(mvtx); err != nil {
+		return fmt.Errorf("invalid bypass spec: %w", err)
+	}
 	// Validate the update strategy.
 	maxUvail := mvtx.Spec.UpdateStrategy.GetRollingUpdateStrategy().GetMaxUnavailable()
 	_, err := intstr.GetScaledValueFromIntOrPercent(&maxUvail, 1, true) // maxUnavailable should be an interger or a percentage in string
 	if err != nil {
 		return fmt.Errorf("invalid maxUnavailable: %w", err)
+	}
+	return nil
+}
+
+func validateBypass(mvtx *dfv1.MonoVertex) error {
+	if mvtx.Spec.Bypass.Fallback != nil && mvtx.Spec.Sink.Fallback == nil {
+		return fmt.Errorf("bypass to fallback sink is defined but fallback sink itself is not defined")
+	}
+	if mvtx.Spec.Bypass.OnSuccess != nil && mvtx.Spec.Sink.OnSuccess == nil {
+		return fmt.Errorf("bypass to on-success sink is defined but on-success sink itself is not defined")
 	}
 	return nil
 }

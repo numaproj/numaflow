@@ -166,10 +166,9 @@ impl SinkWriter {
         cancel: CancellationToken,
     ) -> Result<SinkActorResponse> {
         if self.on_success_sink_handle.is_none() {
-            // TODO update link
             return Err(Error::OsSink(
                 "Response contains OnSuccess messages but no OnSuccess sink is configured. \
-                Please update the spec to configure on-success sink https://numaflow.numaproj.io/user-guide/sinks/onsuccess/ ".to_string(),
+                Please update the spec to configure on-success sink https://numaflow.numaproj.io/user-guide/sinks/on-success/ ".to_string(),
             ));
         }
 
@@ -339,14 +338,18 @@ impl SinkWriter {
                         continue;
                     }
 
-                    // perform the fallback write operation
-                    self.selective_write(
-                        MessageToSink::Fallback(Message::default()),
-                        fallback_messages,
-                        fallback_ack_handles,
-                        cln_token.clone(),
-                    )
-                    .await?;
+                    // perform the fallback write operation if fallback sink exists
+                    // The check/error throwing for trying to write to fallback sink if it doesn't
+                    // exist should be done at controller level
+                    if !self.fb_sink_handle.is_none() {
+                        self.selective_write(
+                            MessageToSink::Fallback(Message::default()),
+                            fallback_messages,
+                            fallback_ack_handles,
+                            cln_token.clone(),
+                        )
+                        .await?;
+                    }
 
                     // we are in shutting down mode, we will not be writing to the sink,
                     // mark the messages as failed, and on Drop they will be nack'ed.
@@ -356,14 +359,18 @@ impl SinkWriter {
                         continue;
                     }
 
-                    // perform the on_success write operation
-                    self.selective_write(
-                        MessageToSink::OnSuccess(Message::default()),
-                        on_success_messages,
-                        on_success_ack_handles,
-                        cln_token.clone(),
-                    )
-                    .await?;
+                    // perform the on_success write operation if on-success sink exists
+                    // The check/error throwing for trying to write to on-success sink if it doesn't
+                    // exist should be done at controller level
+                    if !self.on_success_sink_handle.is_none() {
+                        self.selective_write(
+                            MessageToSink::OnSuccess(Message::default()),
+                            on_success_messages,
+                            on_success_ack_handles,
+                            cln_token.clone(),
+                        )
+                        .await?;
+                    }
                 }
 
                 // finalize
