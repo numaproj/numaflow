@@ -51,7 +51,6 @@ pub(crate) struct Forwarder<C: crate::typ::NumaflowTypeConfig> {
     mapper: Option<MapHandle>,
     sink_writer: SinkWriter,
     splitter: Option<Splitter>,
-    // TODO: Add optional splitter and merger
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {

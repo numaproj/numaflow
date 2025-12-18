@@ -79,11 +79,13 @@ func ValidateMonoVertex(mvtx *dfv1.MonoVertex) error {
 }
 
 func validateBypass(mvtx *dfv1.MonoVertex) error {
-	if mvtx.Spec.Bypass.Fallback != nil && mvtx.Spec.Sink.Fallback == nil {
-		return fmt.Errorf("bypass to fallback sink is defined but fallback sink itself is not defined")
-	}
-	if mvtx.Spec.Bypass.OnSuccess != nil && mvtx.Spec.Sink.OnSuccess == nil {
-		return fmt.Errorf("bypass to on-success sink is defined but on-success sink itself is not defined")
+	if mvtx.Spec.Bypass != nil {
+		if mvtx.Spec.Bypass.Fallback != nil && mvtx.Spec.Sink.Fallback == nil {
+			return fmt.Errorf("bypass to fallback sink is defined but fallback sink itself is not defined")
+		}
+		if mvtx.Spec.Bypass.OnSuccess != nil && mvtx.Spec.Sink.OnSuccess == nil {
+			return fmt.Errorf("bypass to on-success sink is defined but on-success sink itself is not defined")
+		}
 	}
 	return nil
 }
