@@ -12,6 +12,7 @@ import source from "../../../../../../../images/source.png";
 import map from "../../../../../../../images/map.png";
 import reduce from "../../../../../../../images/reduce.png";
 import sink from "../../../../../../../images/sink.png";
+import onSuccess from "../../../../../../../images/onSuccess.png";
 import monoVertex from "../../../../../../../images/monoVertex.svg";
 import transformer from "../../../../../../../images/transformer.svg";
 import udf from "../../../../../../../images/map.png";
@@ -463,7 +464,7 @@ const CustomNode: FC<NodeProps> = ({
                           <Box className={wrapperClass}>
                             <img
                               className={imgClass}
-                              src={sink}
+                              src={onSuccess}
                               alt={"on-success-sink-container"}
                             />
                           </Box>
@@ -516,7 +517,7 @@ const CustomNode: FC<NodeProps> = ({
                             <Box className={wrapperClass}>
                               <img
                                 className={imgClass}
-                                src={sink}
+                                src={onSuccess}
                                 alt={"on-success-sink-container"}
                               />
                             </Box>
