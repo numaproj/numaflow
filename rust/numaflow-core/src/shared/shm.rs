@@ -257,7 +257,7 @@ impl ShmPacketHeader {
             epoch_id,
             generation_id,
             partition_id,
-            flags: 1, // Default to published for simple construction
+            flags: 0, // Default to Invalid/Not Ready. Writer must explicitly set to 1.
         }
     }
 
@@ -307,7 +307,8 @@ mod tests {
     #[test]
     fn test_shm_packet_header_roundtrip() {
         // Updated to use new u32 partition_id
-        let original = ShmPacketHeader::new(1024, 123456789, 987654321, 55555);
+        let mut original = ShmPacketHeader::new(1024, 123456789, 987654321, 55555);
+        original.flags = 1; // Manually set to Valid for roundtrip test
         let bytes = original.to_le_bytes();
         assert_eq!(bytes.len(), ShmPacketHeader::SIZE);
         

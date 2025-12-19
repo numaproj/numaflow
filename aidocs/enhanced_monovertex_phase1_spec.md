@@ -21,18 +21,18 @@ The "Nervous System" phase focused on hardening the ownership and transport laye
 A strict wire format was introduced for the Shared Memory ring buffer to ensure data integrity and ownership validation.
 
 **New Header Layout (Rust representation):**
-```rust
-#[repr(C)]
-pub struct ShmHeader {
-    pub magic: u16,         // 0x5050 (ASCII 'PP')
-    pub version: u16,       // Protocol version (currently 1)
-    pub length: u32,        // Payload length
-    pub epoch_id: u64,      // Monotonically increasing epoch (scope: generation)
-    pub generation_id: u64, // Unique vertex lifespan ID
-    pub partition_id: u32,  // Pagination/Partition ID (Future proof)
-    pub flags: u32,         // Status/Validity flags (Bit 0: Published)
-}
-```
+#### 1. Header Format (Fixed 32 Bytes)
+| Offset | Field | Type | Description |
+|---|---|---|---|
+| 0 | Magic | `u32` | `0x5F4E4D46` ("_NMF") |
+| 4 | Version | `u16` | Protocol Version (1) |
+| 6 | Length | `u32` | Payload Length (Little Endian) |
+| 10 | EpochID | `u64` | Monotonically increasing ID |
+| 18 | GenID | `u64` | Producer Generation Injection |
+| 26 | PartID | `u32` | Partition ID (Ownership) |
+| 30 | Flags | `u16` | Status flags (Bit 0: Valid) |
+*   **Header**: Fixed 32-byte layout. `magic` (u32), `version` (u16), `length` (u32), `epoch_id` (u64), `generation_id` (u64), `partition_id` (u32), `flags` (u16).
+*   **Alignment**: 32-byte header ensures 8-byte alignment for u64 fields.
 
 **Behavior:**
 - **Write Protocol (Two-Phase)**:

@@ -81,28 +81,21 @@ impl MapUdfClient for ShmMapClient {
                              let gen_valid = header.generation_id == generation_id;
 
                              if !magic_valid || !version_valid || !flags_valid {
-                                  // Invalid header or torn write (flags=0)
-                                  // Wait/Backoff if flags=0 (partially written)?
-                                  // For now, treat as invalid or not ready.
-                                  // Ideally we shouldn't see flags=0 unless we raced with writer who updated head?
-                                  // But our writer updates head LAST. So we should only see flags=1.
-                                  // If we see flags=0, it's a corruption or logic error.
-                                  tracing::warn!("Invalid SHM Header (magic/flags bad). waiting.");
-                                  // Should we break or continue?
-                                  // If head moved but flags=0, writer failed?
+                                  // Critical Invariant Violation: Torn write or corruption.
+                                  // Fail Fast to prevent livelock and force restart.
+                                  tracing::error!("Invalid SHM Header (magic/ver/flags: {}/{}/{}). Terminating.", header.magic, header.version, header.flags);
+                                  std::process::exit(1); 
                              } else if !gen_valid {
                                   // Phase 1.4: Reader Generation Validation -> Fence Self
-                                  tracing::error!("Generation ID Mismatch! Expected {}, Got {}. Revoked?", generation_id, header.generation_id);
-                                  // Fence: Stop consuming, Stop producing.
-                                  // Return error to terminate task.
-                                  return; 
+                                  tracing::error!("Generation ID Mismatch! Expected {}, Got {}. Revoked? Terminating.", generation_id, header.generation_id);
+                                  std::process::exit(1); 
                              } else {
                                   msg_len = Some(header.length as usize);
                              }
                          } else {
                              // Invalid Magic (from_le_bytes checking magic failure case? No it returns None on len or magic)
-                             tracing::error!("Invalid SHM Header Bytes.");
-                             return; // Terminal error (proto desync)
+                             tracing::error!("Invalid SHM Header Bytes. Terminating.");
+                             std::process::exit(1);
                          }
                      }
                  }
