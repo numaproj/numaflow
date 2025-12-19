@@ -67,12 +67,15 @@ impl ShmRingBuffer {
         }
     }
 
-    pub fn write(&mut self, data: &[u8]) -> Result<usize> {
+    pub fn write_message(&mut self, payload: &[u8], epoch_id: u64, generation_id: u64, partition_id: u32) -> Result<usize> {
+        let header_size = ShmPacketHeader::SIZE;
+        let payload_len = payload.len();
+        let total_len = header_size + payload_len;
+
         let (head, tail) = {
             let header = self.header();
             (header.head.load(Ordering::Acquire), header.tail.load(Ordering::Acquire))
         };
-        let len = data.len();
 
         let available = if head >= tail {
              self.capacity - (head - tail)
@@ -80,27 +83,67 @@ impl ShmRingBuffer {
              tail - head
         };
 
-        // Always keep 1 byte empty to distinguish full vs empty
-        if len >= available {
+        // Always keep 1 byte empty
+        if total_len >= available {
             return Ok(0);
         }
 
         let capacity = self.capacity;
+        
+        // 1. Prepare Invalid Header
+        let mut header = ShmPacketHeader::new(payload_len as u32, epoch_id, generation_id, partition_id);
+        header.flags = 0; // Set Invalid initially
+        let header_bytes = header.to_le_bytes();
+
+        // 2. Write Header (Invalid) + Payload
         {
             let buffer = self.data_mut();
             
-            // Circular write
-            let first_chunk = std::cmp::min(len, capacity - head);
-            buffer[head..head + first_chunk].copy_from_slice(&data[0..first_chunk]);
+            // Helper to write circular
+            let mut write_circular = |data: &[u8], start_offset: usize| {
+                let len = data.len();
+                let start = start_offset % capacity;
+                let first_chunk = std::cmp::min(len, capacity - start);
+                buffer[start..start + first_chunk].copy_from_slice(&data[0..first_chunk]);
+                if first_chunk < len {
+                    buffer[0..(len - first_chunk)].copy_from_slice(&data[first_chunk..len]);
+                }
+            };
+
+            // Write Header
+            write_circular(&header_bytes, head);
+            // Write Payload
+            write_circular(payload, head + header_size);
+        }
+
+        // 3. Memory Barrier
+        std::sync::atomic::fence(Ordering::Release);
+
+        // 4. Validate Header (Flags = 1)
+        {
+            let buffer = self.data_mut();
+            header.flags = 1; // Valid
+            let valid_header_bytes = header.to_le_bytes();
             
-            if first_chunk < len {
-                buffer[0..(len - first_chunk)].copy_from_slice(&data[first_chunk..len]);
+            // Rewrite header only
+            let start = head % capacity;
+            let first_chunk = std::cmp::min(header_size, capacity - start);
+             buffer[start..start + first_chunk].copy_from_slice(&valid_header_bytes[0..first_chunk]);
+            if first_chunk < header_size {
+                 buffer[0..(header_size - first_chunk)].copy_from_slice(&valid_header_bytes[first_chunk..header_size]);
             }
         }
 
-        let header = self.header();
-        header.head.store((head + len) % self.capacity, Ordering::Release);
-        Ok(len)
+        // 5. Publish (Update Head)
+        let header_ring = self.header();
+        header_ring.head.store((head + total_len) % self.capacity, Ordering::Release);
+        
+        Ok(total_len)
+    }
+
+    /// Deprecated: Use write_message instead
+    pub fn write(&mut self, data: &[u8]) -> Result<usize> {
+        self.write_message(data, 0, 0, 0)
     }
 
     pub fn bytes_available(&self) -> usize {
@@ -190,7 +233,7 @@ pub const SHM_VERSION: u16 = 1;
 
 /// Fixed-size header that precedes every SHM message.
 /// Wire format:
-/// [Magic: 4] [Version: 2] [Length: 4] [Epoch: 8] [GenID: 8] [Partition: 2] [Reserved: 4] = 32 bytes
+/// [Magic: 4] [Version: 2] [Length: 4] [Epoch: 8] [GenID: 8] [Partition: 4] [Flags: 2] = 32 bytes
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ShmPacketHeader {
@@ -199,14 +242,14 @@ pub struct ShmPacketHeader {
     pub length: u32,
     pub epoch_id: u64,
     pub generation_id: u64,
-    pub partition_id: u16,
-    pub _reserved: u32, // Padding to 32 bytes
+    pub partition_id: u32,
+    pub flags: u16, // Status/Validity flags (Bit 0: Published)
 }
 
 impl ShmPacketHeader {
     pub const SIZE: usize = 32;
 
-    pub fn new(length: u32, epoch_id: u64, generation_id: u64, partition_id: u16) -> Self {
+    pub fn new(length: u32, epoch_id: u64, generation_id: u64, partition_id: u32) -> Self {
         Self {
             magic: SHM_MAGIC,
             version: SHM_VERSION,
@@ -214,7 +257,7 @@ impl ShmPacketHeader {
             epoch_id,
             generation_id,
             partition_id,
-            _reserved: 0,
+            flags: 1, // Default to published for simple construction
         }
     }
 
@@ -225,8 +268,8 @@ impl ShmPacketHeader {
         buf[6..10].copy_from_slice(&self.length.to_le_bytes());
         buf[10..18].copy_from_slice(&self.epoch_id.to_le_bytes());
         buf[18..26].copy_from_slice(&self.generation_id.to_le_bytes());
-        buf[26..28].copy_from_slice(&self.partition_id.to_le_bytes());
-        // reserved 28..32 is zero
+        buf[26..30].copy_from_slice(&self.partition_id.to_le_bytes());
+        buf[30..32].copy_from_slice(&self.flags.to_le_bytes());
         buf
     }
 
@@ -242,7 +285,8 @@ impl ShmPacketHeader {
         let length = u32::from_le_bytes(buf[6..10].try_into().unwrap());
         let epoch_id = u64::from_le_bytes(buf[10..18].try_into().unwrap());
         let generation_id = u64::from_le_bytes(buf[18..26].try_into().unwrap());
-        let partition_id = u16::from_le_bytes(buf[26..28].try_into().unwrap());
+        let partition_id = u32::from_le_bytes(buf[26..30].try_into().unwrap());
+        let flags = u16::from_le_bytes(buf[30..32].try_into().unwrap());
 
         Some(Self {
             magic,
@@ -251,7 +295,7 @@ impl ShmPacketHeader {
             epoch_id,
             generation_id,
             partition_id,
-            _reserved: 0,
+            flags,
         })
     }
 }
@@ -262,7 +306,8 @@ mod tests {
 
     #[test]
     fn test_shm_packet_header_roundtrip() {
-        let original = ShmPacketHeader::new(1024, 123456789, 987654321, 55);
+        // Updated to use new u32 partition_id
+        let original = ShmPacketHeader::new(1024, 123456789, 987654321, 55555);
         let bytes = original.to_le_bytes();
         assert_eq!(bytes.len(), ShmPacketHeader::SIZE);
         
@@ -273,7 +318,8 @@ mod tests {
         assert_eq!(deserialized.length, 1024);
         assert_eq!(deserialized.epoch_id, 123456789);
         assert_eq!(deserialized.generation_id, 987654321);
-        assert_eq!(deserialized.partition_id, 55);
+        assert_eq!(deserialized.partition_id, 55555);
+        assert_eq!(deserialized.flags, 1); // Default flag
     }
 
     #[test]
@@ -283,6 +329,32 @@ mod tests {
         bytes[0] = 0xAA; 
         assert!(ShmPacketHeader::from_le_bytes(&bytes).is_none());
     }
+
+    #[test]
+    fn test_shm_write_message() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir.path().join("shm_test");
+        let mut ring = ShmRingBuffer::new(&path, 1024).unwrap();
+        
+        let payload = b"Hello World";
+        let epoch = 100;
+        let gen_id = 200;
+        let part = 300;
+        
+        // Write message
+        let len = ring.write_message(payload, epoch, gen_id, part).unwrap();
+        assert_eq!(len, ShmPacketHeader::SIZE + payload.len());
+        
+        // Read manually to verify
+        // The read_exact method in ring buffer is raw bytes, so we can use it to fetch header + payload
+        let read_bytes = ring.read_exact(len).unwrap();
+        
+        let header = ShmPacketHeader::from_le_bytes(&read_bytes[0..ShmPacketHeader::SIZE]).unwrap();
+        assert_eq!(header.magic, SHM_MAGIC);
+        assert_eq!(header.length, payload.len() as u32);
+        assert_eq!(header.flags, 1);
+        
+        // Verify payload
+        assert_eq!(&read_bytes[ShmPacketHeader::SIZE..], payload);
+    }
 }
-
-

@@ -41,17 +41,10 @@ impl MapUdfClient for ShmMapClient {
              while let Some(req) = input_stream.next().await {
                  let mut buf = Vec::new();
                  if req.encode(&mut buf).is_ok() {
-                     // Phase 1.1: Use ShmPacketHeader with injected generation_id
-                     let header = crate::shared::shm::ShmPacketHeader::new(buf.len() as u32, 0, generation_id, 0);
-                     let header_bytes = header.to_le_bytes();
-                     
-                     let mut framed = Vec::with_capacity(header_bytes.len() + buf.len());
-                     framed.extend_from_slice(&header_bytes);
-                     framed.extend_from_slice(&buf);
-                     
                      loop {
                          let mut ring = req_buf.lock().await;
-                         match ring.write(&framed) {
+                         // Phase 1.4: Use write_message for Two-Phase Write ordering
+                         match ring.write_message(&buf, 0, generation_id, 0) {
                              Ok(0) => {
                                  // Full, backoff
                                  drop(ring);
@@ -81,15 +74,35 @@ impl MapUdfClient for ShmMapClient {
                      let ring = resp_buf.lock().await;
                      if let Ok(bytes) = ring.peek_exact(header_size) {
                          if let Some(header) = crate::shared::shm::ShmPacketHeader::from_le_bytes(&bytes) {
-                             msg_len = Some(header.length as usize);
+                             // Phase 1.4: Validation
+                             let magic_valid = header.magic == crate::shared::shm::SHM_MAGIC;
+                             let version_valid = header.version == crate::shared::shm::SHM_VERSION;
+                             let flags_valid = header.flags == 1; // Strict published check
+                             let gen_valid = header.generation_id == generation_id;
+
+                             if !magic_valid || !version_valid || !flags_valid {
+                                  // Invalid header or torn write (flags=0)
+                                  // Wait/Backoff if flags=0 (partially written)?
+                                  // For now, treat as invalid or not ready.
+                                  // Ideally we shouldn't see flags=0 unless we raced with writer who updated head?
+                                  // But our writer updates head LAST. So we should only see flags=1.
+                                  // If we see flags=0, it's a corruption or logic error.
+                                  tracing::warn!("Invalid SHM Header (magic/flags bad). waiting.");
+                                  // Should we break or continue?
+                                  // If head moved but flags=0, writer failed?
+                             } else if !gen_valid {
+                                  // Phase 1.4: Reader Generation Validation -> Fence Self
+                                  tracing::error!("Generation ID Mismatch! Expected {}, Got {}. Revoked?", generation_id, header.generation_id);
+                                  // Fence: Stop consuming, Stop producing.
+                                  // Return error to terminate task.
+                                  return; 
+                             } else {
+                                  msg_len = Some(header.length as usize);
+                             }
                          } else {
-                             // Invalid Magic/Header. 
-                             // Critical Error? For now, we unfortunately would spin if we don't consume.
-                             // Ideally we consume and discard, or panic.
-                             tracing::error!("Invalid SHM Header Magic/Version. Transport Desync.");
-                             // To avoid infinite loop of peeking bad header, we might want to close connection?
-                             // But breaking loop closes channel and tears down Map.
-                             break;
+                             // Invalid Magic (from_le_bytes checking magic failure case? No it returns None on len or magic)
+                             tracing::error!("Invalid SHM Header Bytes.");
+                             return; // Terminal error (proto desync)
                          }
                      }
                  }
