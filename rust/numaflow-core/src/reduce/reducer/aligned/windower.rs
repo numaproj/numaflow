@@ -140,6 +140,8 @@ pub(crate) enum AlignedWindowOperation {
     Close { window: Window },
     /// Append inserts more data into the opened Window.
     Append { message: Message, window: Window },
+    /// Barrier message to be emitted downstream.
+    Barrier { message: Message },
 }
 
 /// Aligned Window Message.

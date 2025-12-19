@@ -12,6 +12,7 @@ use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_metric_labels, pipeline_metrics,
 };
+use chrono::Utc;
 use crate::source::http::CoreHttpSource;
 use crate::tracker::Tracker;
 use crate::{
@@ -421,6 +422,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             let semaphore = Arc::new(Semaphore::new(max_ack_tasks));
 
             let mut result = Ok(());
+            let mut last_checkpoint = Instant::now();
+            let mut checkpoint_id: u64 = 0;
             loop {
                 // Acquire the semaphore permit before reading the next batch to make
                 // sure we are not reading ahead and all the inflight messages are acked.
@@ -441,6 +444,33 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         == 0
                 {
                     continue;
+                }
+
+                if last_checkpoint.elapsed() >= Duration::from_secs(5) {
+                    last_checkpoint = Instant::now();
+                    checkpoint_id += 1;
+                    
+                    // We use the first active partition as the identifier for this source task's barrier
+                    // Valid assumptions for Sidecar mode? Usually 1 partition per pod.
+                    let partitions = Self::partitions(self.sender.clone())
+                                .await
+                                .unwrap_or_default();
+                    let partition_id = partitions.first().copied().unwrap_or(0);
+
+                    let mut value = Vec::with_capacity(10);
+                    value.extend_from_slice(&checkpoint_id.to_le_bytes());
+                    value.extend_from_slice(&partition_id.to_le_bytes());
+
+                    let barrier = Message {
+                        typ: crate::message::MessageType::Barrier,
+                        value: value.into(),
+                        offset: Offset::Int(crate::message::IntOffset::default()),
+                        event_time: Utc::now(),
+                        ..Default::default()
+                    };
+                    if messages_tx.send(barrier).await.is_err() {
+                         break;
+                    }
                 }
 
                 let read_start_time = Instant::now();
@@ -484,6 +514,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 let mut ack_handles = vec![];
                 let mut ack_batch = Vec::with_capacity(msgs_len);
                 for message in messages.iter_mut() {
+                    // Inject Partition ID into Header so it survives downstream vertex writes (where Offset is overwritten)
+                    let partition_idx = message.offset.partition_idx();
+                    let mut headers = (*message.headers).clone();
+                    headers.insert("x-numaflow-partition-id".to_string(), partition_idx.to_string());
+                    message.headers = Arc::new(headers);
+
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
                     message.ack_handle = Some(Arc::new(AckHandle::new(resp_ack_tx)));
 

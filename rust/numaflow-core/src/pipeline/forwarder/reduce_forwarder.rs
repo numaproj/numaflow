@@ -136,11 +136,13 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     )
     .await?;
 
-    let reader_config = &config
+    let from_vertex = config
         .from_vertex_config
         .first()
-        .ok_or_else(|| crate::error::Error::Config("No from vertex config found".to_string()))?
-        .reader_config;
+        .ok_or_else(|| crate::error::Error::Config("No from vertex config found".to_string()))?;
+    
+    let reader_config = &from_vertex.reader_config;
+    let upstream_partitions = from_vertex.partitions;
 
     // reduce pod always reads from a single stream (pod per partition)
     let stream = reader_config
@@ -222,6 +224,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
             aligned_config.window_config.allowed_lateness,
             config.graceful_shutdown_time,
             reduce_vtx_config.keyed,
+            upstream_partitions,
         )
         .await,
     );

@@ -97,6 +97,8 @@ pub(crate) enum MessageType {
     /// the payload is a control message.
     #[allow(clippy::upper_case_acronyms)]
     WMB,
+    /// the payload is a Checkpoint Barrier
+    Barrier,
 }
 
 impl fmt::Display for MessageType {
@@ -104,6 +106,7 @@ impl fmt::Display for MessageType {
         match self {
             MessageType::Data => write!(f, "Data"),
             MessageType::WMB => write!(f, "WMB"),
+            MessageType::Barrier => write!(f, "Barrier"),
         }
     }
 }
@@ -113,7 +116,8 @@ impl From<i32> for MessageType {
     fn from(kind: i32) -> Self {
         match kind {
             0 => MessageType::Data,
-            _ => MessageType::WMB,
+            1 => MessageType::WMB,
+            _ => MessageType::Barrier,
         }
     }
 }
@@ -123,6 +127,7 @@ impl From<MessageType> for i32 {
         match kind {
             MessageType::Data => 0,
             MessageType::WMB => 1,
+            MessageType::Barrier => 2,
         }
     }
 }

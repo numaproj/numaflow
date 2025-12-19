@@ -37,12 +37,14 @@ use crate::transformer::Transformer;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
-use crate::{config, error, metrics, source};
+use crate::{config, metrics, source};
+use tracing::info;
+use crate::error as crate_error;
 use async_nats::jetstream::Context;
 use numaflow_models::models::{NatsAuth, Tls};
 use numaflow_nats::{TlsClientAuthCerts, TlsConfig};
-use numaflow_pb::clients::accumulator::accumulator_client::AccumulatorClient;
-use numaflow_pb::clients::map::map_client::MapClient;
+use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
 use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
 use numaflow_pb::clients::sessionreduce::session_reduce_client::SessionReduceClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
@@ -52,9 +54,9 @@ use numaflow_shared::server_info::{
     ContainerType, Protocol, ServerInfo, sdk_server_info, supports_nack,
 };
 use numaflow_sqs::sink::SqsSinkBuilder;
+use numaflow_pb::clients::accumulator::accumulator_client::AccumulatorClient;
+use numaflow_pb::clients::map::map_client::MapClient;
 use std::path::PathBuf;
-use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
 
 /// Creates a sink writer based on the configuration
 pub(crate) async fn create_sink_writer(
@@ -65,7 +67,7 @@ pub(crate) async fn create_sink_writer(
     on_success_sink: Option<SinkConfig>,
     serving_store: Option<ServingStore>,
     cln_token: &CancellationToken,
-) -> error::Result<SinkWriter> {
+) -> crate_error::Result<SinkWriter> {
     let mut sink_writer_builder =
         append_primary_sink_client(batch_size, read_timeout, primary_sink, cln_token).await?;
 
@@ -271,7 +273,7 @@ pub(crate) async fn create_transformer(
     transformer_config: Option<TransformerConfig>,
     tracker: Tracker,
     cln_token: CancellationToken,
-) -> error::Result<Option<Transformer>> {
+) -> crate_error::Result<Option<Transformer>> {
     if let Some(transformer_config) = transformer_config
         && let config::components::transformer::TransformerType::UserDefined(ud_transformer) =
             &transformer_config.transformer_type
@@ -320,7 +322,7 @@ pub(crate) async fn create_mapper(
     map_config: MapVtxConfig,
     tracker: Tracker,
     cln_token: CancellationToken,
-) -> error::Result<MapHandle> {
+) -> crate_error::Result<MapHandle> {
     match map_config.map_type {
         MapType::UserDefined(mut config) => {
             let server_info =
@@ -370,37 +372,77 @@ pub(crate) async fn create_mapper(
                     .await?)
                 }
                 Protocol::UDS => {
-                    // based on the map mode that is set in the server info, we will override the socket path
-                    // so that the clients can connect to the appropriate socket.
-                    let config = match server_info.get_map_mode().unwrap_or(MapMode::Unary) {
-                        MapMode::Unary => config,
-                        MapMode::Batch => {
-                            config.socket_path = DEFAULT_BATCH_MAP_SOCKET.into();
-                            config
-                        }
-                        MapMode::Stream => {
-                            config.socket_path = DEFAULT_STREAM_MAP_SOCKET.into();
-                            config
-                        }
-                    };
+                    // Check transport from config
+                    if matches!(config.transport, crate::config::pipeline::map::UdfTransportType::SharedMemory) {
+                        info!("Initializing Shared Memory Map Client");
+                        // For SHM, we'll assume a path convention or use the socket_path as a base
+                        // For MVP, just reusing socket_path config field, but maybe we need a separate field or check.
+                        // Assuming the shm_file_path is predefined or derived.
+                        // Let's assume convention: map.sock -> /dev/shm/map_shm
+                        // But wait, the user provided socket_path might be irrelevant for SHM or used for signalling.
+                        
+                        // NOTE: ShmRingBuffer needs a file path and capacity.
+                        // Capacity currently hardcoded or config?
+                        // Using a dummy path for now or deriving.
+                        let req_path = "/dev/shm/numaflow_map_req"; 
+                        let resp_path = "/dev/shm/numaflow_map_resp"; 
 
-                    let mut map_grpc_client = MapClient::new(
-                        grpc::create_rpc_channel(config.socket_path.clone().into()).await?,
-                    )
-                    .max_encoding_message_size(config.grpc_max_message_size)
-                    .max_decoding_message_size(config.grpc_max_message_size);
+                        // Initialize ShmRingBuffers
+                        // FIXME: Capacity should be configurable or dynamic
+                        let req_ring = crate::shared::shm::ShmRingBuffer::new(req_path, config.grpc_max_message_size + 1024)
+                            .map_err(|e| Error::Mapper(format!("Failed to create Req ShmRingBuffer: {:?}", e)))?;
+                        let resp_ring = crate::shared::shm::ShmRingBuffer::new(resp_path, config.grpc_max_message_size + 1024)
+                             .map_err(|e| Error::Mapper(format!("Failed to create Resp ShmRingBuffer: {:?}", e)))?;
 
-                    grpc::wait_until_mapper_ready(&cln_token, &mut map_grpc_client).await?;
-                    Ok(MapHandle::new(
-                        server_info.get_map_mode().unwrap_or(MapMode::Unary),
-                        batch_size,
-                        read_timeout,
-                        graceful_timeout,
-                        map_config.concurrency,
-                        map_grpc_client.clone(),
-                        tracker,
-                    )
-                    .await?)
+                        let shm_client = crate::mapper::map::shm_client::ShmMapClient::new(req_ring, resp_ring);
+                        // We still might need to wait for readiness? 
+                        // The current shm client implementation doesn't check readiness from UDF yet via shm.
+                        // We might default to UDS for control/readiness check if hybrid mode is used.
+                        // For now, let's proceed with just the SHM client.
+                        
+                        Ok(MapHandle::new(
+                            server_info.get_map_mode().unwrap_or(MapMode::Unary),
+                            batch_size,
+                            read_timeout,
+                            graceful_timeout,
+                            map_config.concurrency,
+                            shm_client,
+                            tracker,
+                        ).await?)
+
+                    } else {
+                        // based on the map mode that is set in the server info, we will override the socket path
+                        // so that the clients can connect to the appropriate socket.
+                        let config = match server_info.get_map_mode().unwrap_or(MapMode::Unary) {
+                            MapMode::Unary => config,
+                            MapMode::Batch => {
+                                config.socket_path = DEFAULT_BATCH_MAP_SOCKET.into();
+                                config
+                            }
+                            MapMode::Stream => {
+                                config.socket_path = DEFAULT_STREAM_MAP_SOCKET.into();
+                                config
+                            }
+                        };
+    
+                        let mut map_grpc_client = MapClient::new(
+                            grpc::create_rpc_channel(config.socket_path.clone().into()).await?,
+                        )
+                        .max_encoding_message_size(config.grpc_max_message_size)
+                        .max_decoding_message_size(config.grpc_max_message_size);
+    
+                        grpc::wait_until_mapper_ready(&cln_token, &mut map_grpc_client).await?;
+                        Ok(MapHandle::new(
+                            server_info.get_map_mode().unwrap_or(MapMode::Unary),
+                            batch_size,
+                            read_timeout,
+                            graceful_timeout,
+                            map_config.concurrency,
+                            map_grpc_client.clone(),
+                            tracker,
+                        )
+                        .await?)
+                    }
                 }
             }
         }
@@ -418,7 +460,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
     watermark_handle: Option<SourceWatermarkHandle>,
     cln_token: CancellationToken,
     rate_limiter: Option<C::RateLimiter>,
-) -> error::Result<Source<C>> {
+) -> crate_error::Result<Source<C>> {
     match &source_config.source_type {
         SourceType::Generator(generator_config) => {
             let (generator, generator_ack, generator_lag) =
@@ -575,7 +617,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
 async fn create_source_client(
     user_defined_config: &config::components::source::UserDefinedConfig,
     cln_token: CancellationToken,
-) -> error::Result<(SourceClient<Channel>, ServerInfo)> {
+) -> crate_error::Result<(SourceClient<Channel>, ServerInfo)> {
     let server_info = sdk_server_info(
         user_defined_config.server_info_path.clone().into(),
         cln_token.clone(),
@@ -817,7 +859,7 @@ pub async fn create_edge_watermark_handle(
     window_manager: Option<WindowManager>,
     tracker: Tracker,
     from_partitions: Vec<u16>,
-) -> error::Result<Option<ISBWatermarkHandle>> {
+) -> crate_error::Result<Option<ISBWatermarkHandle>> {
     match &config.watermark_config {
         Some(WatermarkConfig::Edge(edge_config)) => {
             let handle = ISBWatermarkHandle::new(

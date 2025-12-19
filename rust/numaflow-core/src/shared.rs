@@ -10,3 +10,6 @@ pub(crate) mod create_components;
 
 /// Shared methods for forwarding messages.
 pub(crate) mod forward;
+
+/// Shared memory IPC
+pub(crate) mod shm;

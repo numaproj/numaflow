@@ -141,6 +141,13 @@ pub(crate) mod map {
         UserDefined(UserDefinedConfig),
     }
 
+    #[derive(Debug, Clone, PartialEq, Default)]
+    pub(crate) enum UdfTransportType {
+        #[default]
+        Grpc,
+        SharedMemory,
+    }
+
     impl TryFrom<Box<Udf>> for MapType {
         type Error = Error;
         fn try_from(udf: Box<Udf>) -> Result<Self, Self::Error> {
@@ -149,6 +156,7 @@ pub(crate) mod map {
                     grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
                     socket_path: DEFAULT_MAP_SOCKET.to_string(),
                     server_info_path: DEFAULT_MAP_SERVER_INFO_FILE.to_string(),
+                    transport: UdfTransportType::Grpc,
                 }))
             } else {
                 Err(Error::Config("Invalid UDF".to_string()))
@@ -161,6 +169,7 @@ pub(crate) mod map {
         pub grpc_max_message_size: usize,
         pub socket_path: String,
         pub server_info_path: String,
+        pub transport: UdfTransportType,
     }
 }
 
@@ -327,6 +336,7 @@ impl PipelineConfig {
 
         let namespace = vertex_obj
             .metadata
+            .clone()
             .ok_or_else(|| Error::Config("Missing metadata in vertex spec".to_string()))?
             .namespace
             .ok_or_else(|| Error::Config("Missing namespace in vertex spec".to_string()))?;
@@ -464,11 +474,27 @@ impl PipelineConfig {
                 )
             } else {
                 // This is a map vertex
+                let mut map_config: MapVtxConfig = MapVtxConfig {
+                    concurrency: batch_size as usize,
+                    map_type: udf.try_into()?,
+                };
+
+                // Check for annotation
+                if let Some(metadata) = &vertex_obj.metadata {
+                    if let Some(annotations) = &metadata.annotations {
+                        if let Some(transport) = annotations.get("numaflow.numaproj.io/transport") {
+                             if transport == "shm" {
+                                 if let map::MapType::UserDefined(ref mut ud_config) = map_config.map_type {
+                                     ud_config.transport = map::UdfTransportType::SharedMemory;
+                                     info!("Enabled Shared Memory transport for Map vertex");
+                                 }
+                             }
+                        }
+                    }
+                }
+
                 (
-                    VertexConfig::Map(MapVtxConfig {
-                        concurrency: batch_size as usize,
-                        map_type: udf.try_into()?,
-                    }),
+                    VertexConfig::Map(map_config),
                     VertexType::MapUDF,
                 )
             }
@@ -1160,6 +1186,7 @@ mod tests {
                     grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
                     socket_path: DEFAULT_MAP_SOCKET.to_string(),
                     server_info_path: DEFAULT_MAP_SERVER_INFO_FILE.to_string(),
+                    transport: Default::default(),
                 }),
             }),
             metrics_config: MetricsConfig::default(),

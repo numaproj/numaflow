@@ -39,7 +39,7 @@ pub(crate) struct MonovertexConfig {
     pub(crate) replica: u16,
     pub(crate) source_config: SourceConfig,
     pub(crate) bypass_condition: Option<ToSinkCondition>,
-    pub(crate) map_config: Option<MapVtxConfig>,
+    pub(crate) map_configs: Vec<MapVtxConfig>,
     pub(crate) sink_config: SinkConfig,
     pub(crate) transformer_config: Option<TransformerConfig>,
     pub(crate) fb_sink_config: Option<SinkConfig>,
@@ -65,7 +65,7 @@ impl Default for MonovertexConfig {
                 sink_type: SinkType::Log(sink::LogConfig::default()),
                 retry_config: None,
             },
-            map_config: None,
+            map_configs: vec![],
             transformer_config: None,
             fb_sink_config: None,
             on_success_sink_config: None,
@@ -172,12 +172,12 @@ impl MonovertexConfig {
             .clone()
             .ok_or_else(|| Error::Config("Map UDF not found".to_string()));
 
-        let map_config = match udf {
-            Ok(udf) => Some(MapVtxConfig {
+        let map_configs = match udf {
+            Ok(udf) => vec![MapVtxConfig {
                 concurrency: batch_size as usize,
                 map_type: udf.try_into()?,
-            }),
-            Err(_) => None,
+            }],
+            Err(_) => vec![],
         };
 
         let fb_sink_config = if sink.fallback.is_some() {
@@ -227,7 +227,7 @@ impl MonovertexConfig {
                     "{}-{}_SERVING_CALLBACK_STORE",
                     get_namespace(),
                     get_pipeline_name(),
-                ))),
+                    ))),
                 callback_concurrency,
             });
         }
@@ -241,7 +241,7 @@ impl MonovertexConfig {
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
             bypass_condition: bypass_condition.and_then(|condition| condition.try_into().ok()),
             source_config,
-            map_config,
+            map_configs,
             sink_config,
             transformer_config,
             fb_sink_config,

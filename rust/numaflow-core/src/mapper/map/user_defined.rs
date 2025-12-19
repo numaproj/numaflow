@@ -13,6 +13,8 @@ use tracing::error;
 use crate::config::get_vertex_name;
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
+use crate::mapper::map::transport::{MapStream, MapUdfClient};
+use futures::StreamExt;
 use crate::message::{AckHandle, Message, MessageID, Offset};
 use crate::metadata::Metadata;
 use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
@@ -72,12 +74,12 @@ impl Drop for UserDefinedUnaryMap {
 
 impl UserDefinedUnaryMap {
     /// Performs handshake with the server and creates a new UserDefinedMap.
-    pub(in crate::mapper) async fn new(
+    pub(in crate::mapper) async fn new<T: MapUdfClient>(
         batch_size: usize,
-        mut client: MapClient<Channel>,
+        client: T,
     ) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
-        let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
+        let resp_stream = create_response_stream(read_tx.clone(), read_rx, &client).await?;
 
         // map to track the oneshot sender for each request along with the message info
         let sender_map = Arc::new(Mutex::new(HashMap::new()));
@@ -102,27 +104,28 @@ impl UserDefinedUnaryMap {
     /// and sends the response.
     async fn receive_unary_responses(
         sender_map: ResponseSenderMap,
-        mut resp_stream: Streaming<MapResponse>,
+        mut resp_stream: MapStream,
     ) {
-        while let Some(resp) = match resp_stream.message().await {
-            Ok(message) => message,
-            Err(e) => {
-                let senders = {
-                    let mut senders = sender_map.lock().expect("failed to acquire poisoned lock");
-                    senders.drain().collect::<Vec<_>>()
-                };
+        while let Some(item) = resp_stream.next().await {
+            let resp = match item {
+                Ok(msg) => msg,
+                Err(e) => {
+                    let senders = {
+                        let mut senders = sender_map.lock().expect("failed to acquire poisoned lock");
+                        senders.drain().collect::<Vec<_>>()
+                    };
 
-                for (_, (_, sender)) in senders {
-                    let _ = sender.send(Err(Error::Grpc(Box::new(e.clone()))));
-                    pipeline_metrics()
-                        .forwarder
-                        .udf_error_total
-                        .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                        .inc();
+                    for (_, (_, sender)) in senders {
+                        let _ = sender.send(Err(Error::Grpc(Box::new(e.clone()))));
+                        pipeline_metrics()
+                            .forwarder
+                            .udf_error_total
+                            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                            .inc();
+                    }
+                    break;
                 }
-                None
-            }
-        } {
+            };
             process_response(&sender_map, resp).await
         }
     }
@@ -185,12 +188,12 @@ impl Drop for UserDefinedBatchMap {
 
 impl UserDefinedBatchMap {
     /// Performs handshake with the server and creates a new UserDefinedMap.
-    pub(in crate::mapper) async fn new(
+    pub(in crate::mapper) async fn new<T: MapUdfClient>(
         batch_size: usize,
-        mut client: MapClient<Channel>,
+        client: T,
     ) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
-        let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
+        let resp_stream = create_response_stream(read_tx.clone(), read_rx, &client).await?;
 
         // map to track the oneshot response sender for each request along with the message info
         let sender_map = Arc::new(Mutex::new(HashMap::new()));
@@ -214,29 +217,31 @@ impl UserDefinedBatchMap {
     /// and sends the response.
     async fn receive_batch_responses(
         sender_map: ResponseSenderMap,
-        mut resp_stream: Streaming<MapResponse>,
+        mut resp_stream: MapStream,
     ) {
-        while let Some(resp) = match resp_stream.message().await {
-            Ok(message) => message,
-            Err(e) => {
-                let senders = {
-                    let mut senders = sender_map.lock().expect("failed to acquire poisoned lock");
-                    senders.drain().collect::<Vec<_>>()
-                };
+        while let Some(item) = resp_stream.next().await {
+            let resp = match item {
+                Ok(msg) => msg,
+                Err(e) => {
+                    let senders = {
+                        let mut senders = sender_map.lock().expect("failed to acquire poisoned lock");
+                        senders.drain().collect::<Vec<_>>()
+                    };
 
-                for (_, (_, sender)) in senders {
-                    sender
-                        .send(Err(Error::Grpc(Box::new(e.clone()))))
-                        .expect("failed to send error response");
-                    pipeline_metrics()
-                        .forwarder
-                        .udf_error_total
-                        .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                        .inc();
+                    for (_, (_, sender)) in senders {
+                        sender
+                            .send(Err(Error::Grpc(Box::new(e.clone()))))
+                            .expect("failed to send error response");
+                        pipeline_metrics()
+                            .forwarder
+                            .udf_error_total
+                            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                            .inc();
+                    }
+                    break;
                 }
-                None
-            }
-        } {
+            };
+
             if let Some(map::TransmissionStatus { eot: true }) = resp.status {
                 if !sender_map
                     .lock()
@@ -345,11 +350,11 @@ async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
 }
 
 /// Performs handshake with the server and returns the response stream to receive responses.
-async fn create_response_stream(
+async fn create_response_stream<T: MapUdfClient>(
     read_tx: mpsc::Sender<MapRequest>,
     read_rx: mpsc::Receiver<MapRequest>,
-    client: &mut MapClient<Channel>,
-) -> Result<Streaming<MapResponse>> {
+    client: &T,
+) -> Result<MapStream> {
     let handshake_request = MapRequest {
         request: None,
         id: "".to_string(),
@@ -363,18 +368,16 @@ async fn create_response_stream(
         .map_err(|e| Error::Mapper(format!("failed to send handshake request: {e}")))?;
 
     let mut resp_stream = client
-        .map_fn(Request::new(ReceiverStream::new(read_rx)))
+        .map(Request::new(ReceiverStream::new(read_rx)))
         .await
         .map_err(|e| Error::Grpc(Box::new(e)))?
         .into_inner();
 
     let handshake_response = resp_stream
-        .message()
+        .next()
         .await
-        .map_err(|e| Error::Grpc(Box::new(e)))?
-        .ok_or(Error::Mapper(
-            "failed to receive handshake response".to_string(),
-        ))?;
+        .ok_or(Error::Mapper("failed to receive handshake response".to_string()))?
+        .map_err(|e| Error::Grpc(Box::new(e)))?;
 
     if handshake_response.handshake.is_none_or(|h| !h.sot) {
         return Err(Error::Mapper("invalid handshake response".to_string()));
@@ -399,12 +402,12 @@ impl Drop for UserDefinedStreamMap {
 
 impl UserDefinedStreamMap {
     /// Performs handshake with the server and creates a new UserDefinedMap.
-    pub(in crate::mapper) async fn new(
+    pub(in crate::mapper) async fn new<T: MapUdfClient>(
         batch_size: usize,
-        mut client: MapClient<Channel>,
+        client: T,
     ) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
-        let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
+        let resp_stream = create_response_stream(read_tx.clone(), read_rx, &client).await?;
 
         // map to track the oneshot response sender for each request along with the message info
         let sender_map = Arc::new(Mutex::new(HashMap::new()));
@@ -428,27 +431,29 @@ impl UserDefinedStreamMap {
     /// and sends the response.
     async fn receive_stream_responses(
         sender_map: StreamResponseSenderMap,
-        mut resp_stream: Streaming<MapResponse>,
+        mut resp_stream: MapStream,
     ) {
-        while let Some(resp) = match resp_stream.message().await {
-            Ok(message) => message,
-            Err(e) => {
-                let senders = {
-                    let mut senders = sender_map.lock().expect("failed to acquire poisoned lock");
-                    senders.drain().collect::<Vec<_>>()
-                };
+        while let Some(item) = resp_stream.next().await {
+            let resp = match item {
+                Ok(msg) => msg,
+                Err(e) => {
+                    let senders = {
+                        let mut senders = sender_map.lock().expect("failed to acquire poisoned lock");
+                        senders.drain().collect::<Vec<_>>()
+                    };
 
-                for (_, (_, sender)) in senders {
-                    let _ = sender.send(Err(Error::Grpc(Box::new(e.clone())))).await;
-                    pipeline_metrics()
-                        .forwarder
-                        .udf_error_total
-                        .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                        .inc();
+                    for (_, (_, sender)) in senders {
+                        let _ = sender.send(Err(Error::Grpc(Box::new(e.clone())))).await;
+                        pipeline_metrics()
+                            .forwarder
+                            .udf_error_total
+                            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                            .inc();
+                    }
+                    break;
                 }
-                None
-            }
-        } {
+            };
+
             let (mut message_info, response_sender) = sender_map
                 .lock()
                 .expect("failed to acquire poisoned lock")

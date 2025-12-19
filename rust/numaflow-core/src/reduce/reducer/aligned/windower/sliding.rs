@@ -841,6 +841,9 @@ mod tests {
                 AlignedWindowOperation::Close { .. } => {
                     panic!("Expected Open or Append operation");
                 }
+                AlignedWindowOperation::Barrier { .. } => {
+                    panic!("Unexpected Barrier operation in window assignment");
+                }
             };
 
             // Verify window matches expected window
@@ -870,6 +873,9 @@ mod tests {
                 }
                 AlignedWindowOperation::Close { .. } | AlignedWindowOperation::Open { .. } => {
                     panic!("Expected Append operation");
+                }
+                AlignedWindowOperation::Barrier { .. } => {
+                    panic!("Unexpected Barrier operation in window assignment");
                 }
             }
         }

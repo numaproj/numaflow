@@ -104,6 +104,9 @@ impl From<AlignedWindowMessage> for ReduceRequest {
                     operation,
                 }
             }
+            AlignedWindowOperation::Barrier { .. } => {
+                unreachable!("Barrier messages should be handled by the Actor and not forwarded to the UDF");
+            }
         }
     }
 }

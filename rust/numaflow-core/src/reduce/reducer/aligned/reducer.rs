@@ -1,6 +1,6 @@
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
-use crate::message::{Message, MessageType};
+use crate::message::{Message, MessageType, Offset};
 use crate::metrics::{pipeline_drop_metric_labels, pipeline_metrics};
 use crate::pipeline::isb::writer::ISBWriter;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
@@ -240,6 +240,12 @@ impl AlignedReduceActor {
             AlignedWindowOperation::Open { .. } => self.window_open(window_msg).await,
             AlignedWindowOperation::Append { .. } => self.window_append(window_msg).await,
             AlignedWindowOperation::Close { .. } => self.window_close(window_msg).await,
+            AlignedWindowOperation::Barrier { message } => {
+                let token = self.cln_token.clone();
+                if let Err(e) = self.isb_writer.write_message(message.clone(), token).await {
+                    error!(?e, "Failed to write barrier");
+                }
+            }
         }
     }
 
@@ -351,6 +357,8 @@ impl AlignedReduceActor {
     }
 }
 
+use std::collections::{HashSet, VecDeque};
+
 /// Processes messages and forwards results to the next stage.
 pub(crate) struct AlignedReducer {
     client: UserDefinedAlignedReduce,
@@ -372,6 +380,16 @@ pub(crate) struct AlignedReducer {
     keyed: bool,
     /// Graceful shutdown timeout duration.
     graceful_timeout: Duration,
+    /// Total number of upstream partitions to align barriers from.
+    upstream_partitions: u16,
+    /// Map of partition_idx -> last_seen_barrier_snapshot_id
+    barriers: HashMap<u16, u64>,
+    /// Set of blocked partitions (waiting for alignment)
+    blocked_partitions: HashSet<u16>,
+    /// Backlog of data messages from blocked partitions
+    backlog: VecDeque<Message>,
+    /// Map of partition_idx -> last_seen_watermark
+    partition_watermarks: HashMap<u16, DateTime<Utc>>,
 }
 
 impl AlignedReducer {
@@ -384,6 +402,7 @@ impl AlignedReducer {
         allowed_lateness: Duration,
         graceful_timeout: Duration,
         keyed: bool,
+        upstream_partitions: u16,
     ) -> Self {
         Self {
             client,
@@ -396,6 +415,11 @@ impl AlignedReducer {
             graceful_timeout,
             shutting_down_on_err: false,
             final_result: Ok(()),
+            upstream_partitions,
+            barriers: HashMap::new(),
+            blocked_partitions: HashSet::new(),
+            backlog: VecDeque::new(),
+            partition_watermarks: HashMap::new(),
         }
     }
 
@@ -484,12 +508,9 @@ impl AlignedReducer {
                                     msg.keys = Arc::new([DEFAULT_KEY_FOR_NON_KEYED_STREAM.to_string()]);
                                 }
 
-                                // Update the watermark - use max to ensure it never regresses
-                                self.current_watermark = self
-                                    .current_watermark
-                                    .max(msg.watermark.unwrap_or_default());
-
-                                self.assign_and_close_windows(msg, &actor_tx).await;
+                                // Watermark update is now handled inside handle_input_message per-partition
+                                
+                                self.handle_input_message(msg, &actor_tx).await;
                             }
                             None => {
                                 // Stream ended
@@ -622,6 +643,129 @@ impl AlignedReducer {
         // Send each window message to the actor for processing
         for window_msg in window_messages {
             actor_tx.send(window_msg).await.expect("Receiver dropped");
+        }
+    }
+
+    fn get_partition_id(&self, msg: &Message) -> u16 {
+        if msg.typ == MessageType::Barrier {
+            if msg.value.len() >= 10 {
+                let bytes = &msg.value[8..10];
+                return u16::from_le_bytes(bytes.try_into().unwrap());
+            }
+        } else {
+            if let Some(v) = msg.headers.get("x-numaflow-partition-id") {
+                if let Ok(p) = v.parse::<u16>() {
+                    return p;
+                }
+            }
+        }
+        0 // Default to 0 if not found
+    }
+
+    async fn process_msg_internal(
+        &mut self,
+        msg: Message,
+        actor_tx: &mpsc::Sender<AlignedWindowMessage>,
+    ) {
+        let partition_id = self.get_partition_id(&msg);
+
+        // Update Partition Watermark
+        if let Some(wm) = msg.watermark {
+            self.partition_watermarks.insert(partition_id, wm);
+            if !self.partition_watermarks.is_empty() {
+                 if let Some(min_wm) = self.partition_watermarks.values().min() {
+                     if *min_wm > self.current_watermark {
+                         self.current_watermark = *min_wm;
+                     }
+                 }
+            }
+        }
+
+        // Check if partition is currently blocked
+        if self.blocked_partitions.contains(&partition_id) {
+            self.backlog.push_back(msg);
+            return;
+        }
+
+        if msg.typ == MessageType::Barrier {
+            // Extract Barrier Snapshot ID (first 8 bytes)
+            if msg.value.len() >= 8 {
+                let snapshot_id = u64::from_le_bytes(msg.value[0..8].try_into().unwrap());
+                self.barriers.insert(partition_id, snapshot_id);
+                self.blocked_partitions.insert(partition_id);
+
+                // Check Alignment
+                let mut aligned_count = 0;
+                for (_, &id) in &self.barriers {
+                    if id == snapshot_id {
+                        aligned_count += 1;
+                    }
+                }
+
+                if aligned_count >= self.upstream_partitions {
+                   info!(snapshot_id, "Barrier Alignment Reached");
+                   
+                   // Unblock all partitions.
+                   self.blocked_partitions.clear();
+                   
+                   // Emit Barrier Downstream
+                   // We send it to the actor to preserve ordering with window results
+                   // Note: 'msg' captures the barrier. We need to construct a new message or forward this one.
+                   // The original barrier message from source has ID/Offset/PartitionID.
+                   // Downstream expects a Barrier.
+                   // We should update the PartitionID in the barrier value to OUR partition (0)?
+                   // Actually, if we just forward the source barrier 'msg', it has Source-Partition.
+                   // If Reducer has 1 partition, it should emit barrier as Reducer-Partition-0.
+                   // But for MVP transparency we might forward? 
+                   // No, strict correctness requires us to act as the barrier generator for the next stage.
+                   // Let's create a new Barrier Message with current info.
+                   // Value: SnapshotID (8 bytes) + PartitionID (2 bytes -> 0).
+                   let mut value = Vec::with_capacity(10);
+                   value.extend_from_slice(&snapshot_id.to_le_bytes());
+                   value.extend_from_slice(&(0u16).to_le_bytes()); // Reduce always partition 0
+                   
+                   let barrier_msg = Message {
+                       typ: MessageType::Barrier,
+                       value: value.into(),
+                       offset: Offset::Int(crate::message::IntOffset::default()),
+                       event_time: Utc::now(),
+                       ..Default::default() // headers etc?
+                   };
+                   
+                   let op_msg = AlignedWindowMessage {
+                       operation: AlignedWindowOperation::Barrier { message: barrier_msg },
+                       pnf_slot: "BARRIER".into(),
+                   };
+                   let _ = actor_tx.send(op_msg).await;
+                }
+            }
+        } else {
+             // Data Message processing
+             self.assign_and_close_windows(msg, actor_tx).await;
+        }
+    }
+
+    async fn handle_input_message(
+        &mut self,
+        msg: Message,
+        actor_tx: &mpsc::Sender<AlignedWindowMessage>,
+    ) {
+        self.process_msg_internal(msg, actor_tx).await;
+        
+        // Loop to drain backlog if unblocked
+        loop {
+            let mut has_unblocked = false;
+            if let Some(front) = self.backlog.front() {
+                let pid = self.get_partition_id(front);
+                if !self.blocked_partitions.contains(&pid) {
+                    has_unblocked = true;
+                }
+            }
+            
+            if !has_unblocked { break; }
+            
+            let msg = self.backlog.pop_front().unwrap();
+            self.process_msg_internal(msg, actor_tx).await;
         }
     }
 }

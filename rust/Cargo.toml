@@ -21,7 +21,7 @@ members = [
 ]
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "deny"
 unused_must_use = "forbid"
 rust_2018_idioms = { level = "deny", priority = -1 }
 

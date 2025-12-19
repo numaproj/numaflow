@@ -45,19 +45,19 @@ use crate::source::Source;
 /// back to the source.
 pub(crate) struct Forwarder<C: crate::typ::NumaflowTypeConfig> {
     source: Source<C>,
-    mapper: Option<MapHandle>,
+    mappers: Vec<MapHandle>,
     sink_writer: SinkWriter,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
     pub(crate) fn new(
         source: Source<C>,
-        mapper: Option<MapHandle>,
+        mappers: Vec<MapHandle>,
         sink_writer: SinkWriter,
     ) -> Self {
         Self {
             source,
-            mapper,
+            mappers,
             sink_writer,
         }
     }
@@ -66,39 +66,45 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
         let (read_messages_stream, reader_handle) =
             self.source.streaming_read(cln_token.clone())?;
 
-        let (mapper_stream, mapper_handle) = match self.mapper {
-            Some(mapper) => {
-                mapper
-                    // Performs respective map operation (unary, batch, stream) based on actor_sender
-                    .streaming_map(read_messages_stream, cln_token.clone())
-                    .await?
-            }
-            None => (
-                read_messages_stream,
-                tokio::task::spawn(async { Ok::<(), Error>(()) }),
-            ),
-        };
+        let mut current_stream = read_messages_stream;
+        let mut mapper_handles = Vec::with_capacity(self.mappers.len());
+
+        for mapper in self.mappers {
+             let (next_stream, handle) = mapper
+                 .streaming_map(current_stream, cln_token.clone())
+                 .await?;
+             current_stream = next_stream;
+             mapper_handles.push(handle);
+        }
 
         let sink_writer_handle = self
             .sink_writer
-            .streaming_write(mapper_stream, cln_token.clone())
+            .streaming_write(current_stream, cln_token.clone())
             .await?;
 
-        // Join the reader and sink writer
-        let (reader_result, mapper_handle_result, sink_writer_result) =
-            tokio::try_join!(reader_handle, mapper_handle, sink_writer_handle).map_err(|e| {
-                error!(?e, "Error while joining reader, mapper and sink writer");
-                Error::Forwarder(format!(
-                    "Error while joining reader, mapper and sink writer: {e:?}"
-                ))
-            })?;
-
-        sink_writer_result.inspect_err(|e| {
-            error!(?e, "Error while writing messages");
+        // Wait for reader
+        let reader_result = reader_handle.await.map_err(|e| {
+             error!(?e, "Error executing reader task");
+             Error::Forwarder(format!("Error executing reader task: {e:?}"))
         })?;
 
-        mapper_handle_result.inspect_err(|e| {
-            error!(?e, "Error while applying map to messages");
+        // Wait for mappers
+        let mapper_results = futures::future::join_all(mapper_handles).await;
+        for res in mapper_results {
+             res.map_err(|e| {
+                 error!(?e, "Error executing mapper task");
+                 Error::Forwarder(format!("Error executing mapper task: {e:?}"))
+             })??;
+        }
+
+        // Wait for sink
+        let sink_result = sink_writer_handle.await.map_err(|e| {
+             error!(?e, "Error executing sink writer task");
+             Error::Forwarder(format!("Error executing sink writer task: {e:?}"))
+        })?;
+
+        sink_result.inspect_err(|e| {
+            error!(?e, "Error while writing messages");
         })?;
 
         reader_result.inspect_err(|e| {
@@ -303,7 +309,7 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), None, sink_writer);
+        let forwarder = Forwarder::new(source.clone(), vec![], sink_writer);
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
@@ -432,7 +438,7 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), None, sink_writer);
+        let forwarder = Forwarder::new(source.clone(), vec![], sink_writer);
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
@@ -603,7 +609,7 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
+        let forwarder = Forwarder::new(source.clone(), vec![mapper], sink_writer);
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> =
@@ -719,7 +725,7 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
+        let forwarder = Forwarder::new(source.clone(), vec![mapper], sink_writer);
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> =
@@ -835,7 +841,7 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
+        let forwarder = Forwarder::new(source.clone(), vec![mapper], sink_writer);
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> =
@@ -978,7 +984,7 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
+        let forwarder = Forwarder::new(source.clone(), vec![mapper], sink_writer);
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> =

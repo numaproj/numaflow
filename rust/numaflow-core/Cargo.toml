@@ -60,6 +60,7 @@ flate2 = "1.1.2"
 zstd = "0.13.3"
 lz4 = "1.28.1"
 async-trait = "0.1.88"
+memmap2 = "0.9"
 
 [dev-dependencies]
 tempfile = "3.11.0"

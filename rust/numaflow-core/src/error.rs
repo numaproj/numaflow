@@ -77,6 +77,9 @@ pub enum Error {
     #[error("WAL Error - {0}")]
     #[allow(clippy::upper_case_acronyms)]
     WAL(String),
+
+    #[error("Shared Memory Error - {0}")]
+    SharedMemory(String),
 }
 
 impl From<numaflow_shared::error::Error> for Error {

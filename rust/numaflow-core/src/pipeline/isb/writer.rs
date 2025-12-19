@@ -116,6 +116,11 @@ impl ISBWriter {
         Ok(handle)
     }
 
+    /// Writes a single message to the ISB.
+    pub(crate) async fn write_message(&self, message: Message, cln_token: CancellationToken) -> Result<()> {
+        self.write_to_isb(message, cln_token).await
+    }
+
     /// Writes a single message to the ISB. It will keep retrying until it succeeds or is cancelled.
     /// Writes are ordered only if PAF concurrency is 1 because during retries we cannot guarantee order.
     /// This calls `write_to_stream` internally once it has figured out the target streams. This Write
