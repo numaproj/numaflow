@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{fence, Ordering};
 use tokio::sync::Mutex;
 use crate::shared::shm::ShmRingBuffer;
 use crate::mapper::map::transport::{MapUdfClient, MapStream};
@@ -90,6 +91,8 @@ impl MapUdfClient for ShmMapClient {
                                   tracing::error!("Generation ID Mismatch! Expected {}, Got {}. Revoked? Terminating.", generation_id, header.generation_id);
                                   std::process::exit(1); 
                              } else {
+                                  // Acquire after seeing published header to pair with writer's release fence.
+                                  fence(Ordering::Acquire);
                                   msg_len = Some(header.length as usize);
                              }
                          } else {
