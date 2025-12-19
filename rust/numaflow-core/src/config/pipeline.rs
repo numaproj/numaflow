@@ -78,6 +78,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) callback_config: Option<ServingCallbackConfig>,
     pub(crate) isb_config: Option<isb::ISBConfig>,
     pub(crate) rate_limit: Option<RateLimitConfig>,
+    pub(crate) generation_id: u64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -109,6 +110,7 @@ impl Default for PipelineConfig {
             callback_config: None,
             isb_config: None,
             rate_limit: None,
+            generation_id: 0,
         }
     }
 }
@@ -484,10 +486,9 @@ impl PipelineConfig {
                     if let Some(annotations) = &metadata.annotations {
                         if let Some(transport) = annotations.get("numaflow.numaproj.io/transport") {
                              if transport == "shm" {
-                                 if let map::MapType::UserDefined(ref mut ud_config) = map_config.map_type {
-                                     ud_config.transport = map::UdfTransportType::SharedMemory;
-                                     info!("Enabled Shared Memory transport for Map vertex");
-                                 }
+                                 let map::MapType::UserDefined(ref mut ud_config) = map_config.map_type;
+                                 ud_config.transport = map::UdfTransportType::SharedMemory;
+                                 info!("Enabled Shared Memory transport for Map vertex");
                              }
                         }
                     }
@@ -716,6 +717,10 @@ impl PipelineConfig {
             callback_config,
             isb_config,
             rate_limit,
+            generation_id: env_vars
+                .get("NUMAFLOW_GENERATION_ID")
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(0),
         })
     }
 }
@@ -757,6 +762,7 @@ mod tests {
             callback_config: None,
             isb_config: None,
             rate_limit: None,
+            generation_id: 0,
         };
 
         let config = PipelineConfig::default();
@@ -870,6 +876,7 @@ mod tests {
                 }],
                 to_vertex_config: vec![],
             })),
+            generation_id: 0,
             ..Default::default()
         };
         assert_eq!(pipeline_config, expected);
@@ -1034,6 +1041,7 @@ mod tests {
             }),
             metrics_config: Default::default(),
             watermark_config: None,
+            generation_id: 0,
             ..Default::default()
         };
 

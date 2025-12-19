@@ -38,6 +38,7 @@ impl From<JetstreamMessage> for Message {
             metadata: Some(Arc::new(Metadata::default())),
             is_late: false,
             ack_handle: None,
+            generation_id: 0,
         }
     }
 }

@@ -107,6 +107,7 @@ impl From<AccumulatorResponse> for Message {
             metadata: None,
             is_late: false,
             ack_handle: None,
+            generation_id: 0,
         }
     }
 }

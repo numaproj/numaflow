@@ -47,6 +47,7 @@ pub(crate) struct MonovertexConfig {
     pub(crate) metrics_config: MetricsConfig,
     pub(crate) callback_config: Option<ServingCallbackConfig>,
     pub(crate) rate_limit: Option<RateLimitConfig>,
+    pub(crate) generation_id: u64,
 }
 
 impl Default for MonovertexConfig {
@@ -73,6 +74,7 @@ impl Default for MonovertexConfig {
             metrics_config: MetricsConfig::default(),
             callback_config: None,
             rate_limit: None,
+            generation_id: 0,
         }
     }
 }
@@ -232,6 +234,11 @@ impl MonovertexConfig {
             });
         }
 
+        let generation_id = env_vars
+            .get("NUMAFLOW_GENERATION_ID")
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(0);
+
         Ok(MonovertexConfig {
             name: mono_vertex_name,
             replica: *get_vertex_replica(),
@@ -248,9 +255,11 @@ impl MonovertexConfig {
             on_success_sink_config,
             callback_config,
             rate_limit,
+            generation_id,
         })
     }
 }
+
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ToSinkCondition {

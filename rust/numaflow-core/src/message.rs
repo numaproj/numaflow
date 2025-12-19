@@ -56,6 +56,8 @@ pub(crate) struct Message {
     /// ack_handle is used to send the ack/nak to the source. It is optional because it is not used
     /// when the message is originated from the WAL (reduce vertex).
     pub(crate) ack_handle: Option<Arc<AckHandle>>,
+    /// Generation ID of the vertex replica that produced this message.
+    pub(crate) generation_id: u64,
 }
 
 /// AckHandle is used to send the ack/nak to the source but it is reference counted and makes sure
@@ -147,9 +149,11 @@ impl Default for Message {
             typ: Default::default(),
             is_late: false,
             ack_handle: None,
+            generation_id: 0,
         }
     }
 }
+
 
 /// Offset of the message which will be used to acknowledge the message.
 #[derive(Debug, Clone, Hash, Serialize, Deserialize, Eq, PartialEq)]

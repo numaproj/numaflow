@@ -80,6 +80,7 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
         None,
         cln_token.clone(),
         rate_limiter,
+        config.generation_id,
     )
     .await?;
 
@@ -92,6 +93,7 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
             map_config.clone(),
             tracker.clone(),
             cln_token.clone(),
+            config.generation_id,
         )
         .await?;
         mappers.push(mapper);
@@ -104,6 +106,7 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
         config.fb_sink_config.clone(),
         config.on_success_sink_config.clone(),
         None,
+        Some(tracker.clone()),
         &cln_token,
     )
     .await?;

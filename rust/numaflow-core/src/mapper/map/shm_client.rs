@@ -13,13 +13,15 @@ use tokio::sync::mpsc;
 pub struct ShmMapClient {
     request_buffer: Arc<Mutex<ShmRingBuffer>>,
     response_buffer: Arc<Mutex<ShmRingBuffer>>,
+    generation_id: u64,
 }
 
 impl ShmMapClient {
-    pub fn new(request_buffer: ShmRingBuffer, response_buffer: ShmRingBuffer) -> Self {
+    pub fn new(request_buffer: ShmRingBuffer, response_buffer: ShmRingBuffer, generation_id: u64) -> Self {
         Self {
             request_buffer: Arc::new(Mutex::new(request_buffer)),
             response_buffer: Arc::new(Mutex::new(response_buffer)),
+            generation_id,
         }
     }
 }
@@ -32,14 +34,19 @@ impl MapUdfClient for ShmMapClient {
     ) -> Result<Response<MapStream>, Status> {
          let mut input_stream = request.into_inner();
          let req_buf = self.request_buffer.clone();
+         let generation_id = self.generation_id;
          
          // Spawn writer task: reads from gRPC input stream (from Numaflow) -> Writes to SHM
          tokio::spawn(async move {
              while let Some(req) = input_stream.next().await {
                  let mut buf = Vec::new();
                  if req.encode(&mut buf).is_ok() {
-                     let mut framed = Vec::with_capacity(4 + buf.len());
-                     framed.extend_from_slice(&(buf.len() as u32).to_le_bytes());
+                     // Phase 1.1: Use ShmPacketHeader with injected generation_id
+                     let header = crate::shared::shm::ShmPacketHeader::new(buf.len() as u32, 0, generation_id, 0);
+                     let header_bytes = header.to_le_bytes();
+                     
+                     let mut framed = Vec::with_capacity(header_bytes.len() + buf.len());
+                     framed.extend_from_slice(&header_bytes);
                      framed.extend_from_slice(&buf);
                      
                      loop {
@@ -68,10 +75,22 @@ impl MapUdfClient for ShmMapClient {
          tokio::spawn(async move {
              loop {
                  let mut msg_len: Option<usize> = None;
+                 let header_size = crate::shared::shm::ShmPacketHeader::SIZE;
+                 
                  {
                      let ring = resp_buf.lock().await;
-                     if let Ok(bytes) = ring.peek_exact(4) {
-                         msg_len = Some(u32::from_le_bytes(bytes.try_into().unwrap()) as usize);
+                     if let Ok(bytes) = ring.peek_exact(header_size) {
+                         if let Some(header) = crate::shared::shm::ShmPacketHeader::from_le_bytes(&bytes) {
+                             msg_len = Some(header.length as usize);
+                         } else {
+                             // Invalid Magic/Header. 
+                             // Critical Error? For now, we unfortunately would spin if we don't consume.
+                             // Ideally we consume and discard, or panic.
+                             tracing::error!("Invalid SHM Header Magic/Version. Transport Desync.");
+                             // To avoid infinite loop of peeking bad header, we might want to close connection?
+                             // But breaking loop closes channel and tears down Map.
+                             break;
+                         }
                      }
                  }
                  
@@ -79,9 +98,9 @@ impl MapUdfClient for ShmMapClient {
                      let mut payload: Option<Vec<u8>> = None;
                      {
                          let mut ring = resp_buf.lock().await;
-                         if ring.bytes_available() >= 4 + len {
-                             if let Ok(data) = ring.read_exact(4 + len) {
-                                 payload = Some(data[4..].to_vec());
+                         if ring.bytes_available() >= header_size + len {
+                             if let Ok(data) = ring.read_exact(header_size + len) {
+                                 payload = Some(data[header_size..].to_vec());
                              }
                          }
                      }

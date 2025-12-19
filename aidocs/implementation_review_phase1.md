@@ -1,5 +1,4 @@
 # Enhanced MonoVertex Phase 1 Review
- **Commit**: `43e42ad1a4a84404a559dc79b44dc944fff6b0aa`
  **Status**: **PARTIAL** (Foundation present, Invariants missing)
 
 ## 1. Compliance Checklist

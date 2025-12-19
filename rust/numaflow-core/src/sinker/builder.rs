@@ -12,6 +12,7 @@ use crate::sinker::sink::serve::ServingStore;
 use crate::sinker::sink::user_defined::UserDefinedSink;
 use crate::sinker::sink::{SinkClientType, SinkWriter};
 use crate::sinker::sink::{blackhole, log, serve};
+use crate::tracker::Tracker;
 
 /// User defined clients which will be used for doing sidecar health checks.
 #[derive(Clone)]
@@ -140,6 +141,7 @@ pub(crate) struct SinkWriterBuilder {
     fb_sink_client: Option<SinkClientType>,
     on_success_sink_client: Option<SinkClientType>,
     serving_store: Option<ServingStore>,
+    tracker: Option<Tracker>,
 }
 
 impl SinkWriterBuilder {
@@ -156,6 +158,7 @@ impl SinkWriterBuilder {
             fb_sink_client: None,
             on_success_sink_client: None,
             serving_store: None,
+            tracker: None,
         }
     }
 
@@ -176,6 +179,11 @@ impl SinkWriterBuilder {
 
     pub(crate) fn on_success_sink_client(mut self, on_success_sink_client: SinkClientType) -> Self {
         self.on_success_sink_client = Some(on_success_sink_client);
+        self
+    }
+
+    pub(crate) fn tracker(mut self, tracker: Tracker) -> Self {
+        self.tracker = Some(tracker);
         self
     }
 
@@ -369,6 +377,7 @@ impl SinkWriterBuilder {
             os_sink_handle,
             self.serving_store,
             health_check_clients,
+            self.tracker,
         ))
     }
 }

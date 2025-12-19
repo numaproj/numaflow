@@ -66,6 +66,7 @@ pub(crate) async fn create_sink_writer(
     fallback_sink: Option<SinkConfig>,
     on_success_sink: Option<SinkConfig>,
     serving_store: Option<ServingStore>,
+    tracker: Option<Tracker>,
     cln_token: &CancellationToken,
 ) -> crate_error::Result<SinkWriter> {
     let mut sink_writer_builder =
@@ -85,6 +86,10 @@ pub(crate) async fn create_sink_writer(
 
     if let Some(serving_store) = serving_store {
         sink_writer_builder = sink_writer_builder.serving_store(serving_store);
+    }
+
+    if let Some(tracker) = tracker {
+        sink_writer_builder = sink_writer_builder.tracker(tracker);
     }
 
     sink_writer_builder.build().await
@@ -322,6 +327,7 @@ pub(crate) async fn create_mapper(
     map_config: MapVtxConfig,
     tracker: Tracker,
     cln_token: CancellationToken,
+    generation_id: u64,
 ) -> crate_error::Result<MapHandle> {
     match map_config.map_type {
         MapType::UserDefined(mut config) => {
@@ -368,6 +374,7 @@ pub(crate) async fn create_mapper(
                         map_config.concurrency,
                         map_grpc_client.clone(),
                         tracker,
+                        generation_id,
                     )
                     .await?)
                 }
@@ -394,7 +401,7 @@ pub(crate) async fn create_mapper(
                         let resp_ring = crate::shared::shm::ShmRingBuffer::new(resp_path, config.grpc_max_message_size + 1024)
                              .map_err(|e| Error::Mapper(format!("Failed to create Resp ShmRingBuffer: {:?}", e)))?;
 
-                        let shm_client = crate::mapper::map::shm_client::ShmMapClient::new(req_ring, resp_ring);
+                        let shm_client = crate::mapper::map::shm_client::ShmMapClient::new(req_ring, resp_ring, generation_id);
                         // We still might need to wait for readiness? 
                         // The current shm client implementation doesn't check readiness from UDF yet via shm.
                         // We might default to UDS for control/readiness check if hybrid mode is used.
@@ -408,6 +415,7 @@ pub(crate) async fn create_mapper(
                             map_config.concurrency,
                             shm_client,
                             tracker,
+                            generation_id,
                         ).await?)
 
                     } else {
@@ -440,6 +448,7 @@ pub(crate) async fn create_mapper(
                             map_config.concurrency,
                             map_grpc_client.clone(),
                             tracker,
+                            generation_id,
                         )
                         .await?)
                     }
@@ -460,6 +469,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
     watermark_handle: Option<SourceWatermarkHandle>,
     cln_token: CancellationToken,
     rate_limiter: Option<C::RateLimiter>,
+    generation_id: u64,
 ) -> crate_error::Result<Source<C>> {
     match &source_config.source_type {
         SourceType::Generator(generator_config) => {
@@ -473,6 +483,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
+                generation_id,
             )
             .await)
         }
@@ -493,6 +504,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
+                generation_id,
             )
             .await)
         }
@@ -513,6 +525,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
+                generation_id,
             )
             .await)
         }
@@ -532,6 +545,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
+                generation_id,
             )
             .await)
         }
@@ -551,6 +565,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
+                generation_id,
             )
             .await)
         }
@@ -566,6 +581,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
+                generation_id,
             )
             .await)
         }
@@ -581,6 +597,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
+                generation_id,
             )
             .await)
         }
@@ -606,6 +623,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
+                generation_id,
             )
             .await)
         }

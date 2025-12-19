@@ -27,6 +27,7 @@ use tonic::transport::Channel;
 use tracing::{error, info};
 
 use crate::sinker::builder::HealthCheckClients;
+use crate::tracker::Tracker;
 use serve::{ServingStore, StoreEntry};
 
 // Re-export SinkWriterBuilder for external use
@@ -93,6 +94,7 @@ pub(crate) struct SinkWriter {
     final_result: Result<()>,
     serving_store: Option<ServingStore>,
     health_check_clients: HealthCheckClients,
+    tracker: Option<Tracker>,
 }
 
 impl SinkWriter {
@@ -105,6 +107,7 @@ impl SinkWriter {
         on_success_sink_handle: Option<mpsc::Sender<SinkActorMessage>>,
         serving_store: Option<ServingStore>,
         health_check_clients: HealthCheckClients,
+        tracker: Option<Tracker>,
     ) -> Self {
         Self {
             batch_size,
@@ -116,6 +119,7 @@ impl SinkWriter {
             final_result: Ok(()),
             serving_store,
             health_check_clients,
+            tracker,
         }
     }
 
@@ -216,6 +220,21 @@ impl SinkWriter {
                                 .store(true, Ordering::Relaxed);
                         }
                         continue;
+                    }
+
+                    // Check if fenced
+                    if let Some(tracker) = &self.tracker {
+                        if tracker.is_fenced() {
+                            info!("SinkWriter: Dropping batch because vertex is fenced.");
+                            for msg in &batch {
+                                msg.ack_handle
+                                    .as_ref()
+                                    .expect("ack handle should be present")
+                                    .is_failed
+                                    .store(true, Ordering::Relaxed);
+                            }
+                            continue;
+                        }
                     }
 
                     // collect ack handles for later failure tracking
@@ -1164,5 +1183,67 @@ mod tests {
             results.first().unwrap().status,
             ResponseStatusFromSink::Success
         );
+    }
+
+    #[tokio::test]
+    async fn test_streaming_write_fenced() {
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let sink_writer =
+            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
+                .tracker(tracker.clone())
+                .build()
+                .await
+                .unwrap();
+
+        let mut ack_rxs = vec![];
+        let messages: Vec<Message> = (0..10)
+            .map(|i| {
+                let (ack_tx, ack_rx) = oneshot::channel();
+                ack_rxs.push(ack_rx);
+                Message {
+                    typ: Default::default(),
+                    keys: Arc::from(vec![format!("key_{}", i)]),
+                    tags: None,
+                    value: format!("message {}", i).as_bytes().to_vec().into(),
+                    offset: Offset::Int(IntOffset::new(i, 0)),
+                    event_time: Utc::now(),
+                    watermark: None,
+                    id: MessageID {
+                        vertex_name: "vertex".to_string().into(),
+                        offset: format!("offset_{}", i).into(),
+                        index: i as i32,
+                    },
+                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+                    ..Default::default()
+                }
+            })
+            .collect();
+
+        let (tx, rx) = mpsc::channel(10);
+        for msg in messages {
+            let _ = tx.send(msg).await;
+        }
+        drop(tx);
+
+        // Fence the tracker immediately
+        tracker.fence();
+
+        let handle = sink_writer
+            .streaming_write(ReceiverStream::new(rx), cln_token)
+            .await
+            .unwrap();
+
+        let _ = handle.await.unwrap();
+
+        // Since we fenced, the messages are dropped.
+        // We verify that the sink writer finishes execution without panic/error
+        // and tracker sees them as processed (or dropped/nacked).
+        // Actually, if we drop them, they are Ack'ed or Nack'ed?
+        // Our logic sets `is_failed` to true.
+        // It should result in Nak.
+        for ack_rx in ack_rxs {
+             assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak);
+        }
     }
 }

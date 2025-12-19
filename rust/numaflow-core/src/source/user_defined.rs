@@ -180,6 +180,7 @@ impl TryFrom<read_response::Result> for Message {
             })),
             is_late: false,
             ack_handle: None,
+            generation_id: 0,
         })
     }
 }

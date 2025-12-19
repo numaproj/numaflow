@@ -157,6 +157,7 @@ impl MapHandle {
 
         client: T,
         tracker: Tracker,
+        generation_id: u64,
     ) -> error::Result<Self> {
         let client = Arc::new(client);
         // Based on the map mode, spawn the appropriate map actor
@@ -166,7 +167,7 @@ impl MapHandle {
                 let (sender, receiver) = mpsc::channel(batch_size);
                 let mapper_actor = UnaryMapperActor::new(
                     receiver,
-                    UserDefinedUnaryMap::new(batch_size, client.clone()).await?,
+                    UserDefinedUnaryMap::new(batch_size, client.clone(), generation_id).await?,
                 );
                 tokio::spawn(async move {
                     mapper_actor.run().await;
@@ -177,7 +178,7 @@ impl MapHandle {
                 let (batch_sender, batch_receiver) = mpsc::channel(batch_size);
                 let batch_mapper_actor = BatchMapActor::new(
                     batch_receiver,
-                    UserDefinedBatchMap::new(batch_size, client.clone()).await?,
+                    UserDefinedBatchMap::new(batch_size, client.clone(), generation_id).await?,
                 );
                 tokio::spawn(async move {
                     batch_mapper_actor.run().await;
@@ -188,7 +189,7 @@ impl MapHandle {
                 let (stream_sender, stream_receiver) = mpsc::channel(batch_size);
                 let stream_mapper_actor = StreamMapActor::new(
                     stream_receiver,
-                    UserDefinedStreamMap::new(batch_size, client.clone()).await?,
+                    UserDefinedStreamMap::new(batch_size, client.clone(), generation_id).await?,
                 );
                 tokio::spawn(async move {
                     stream_mapper_actor.run().await;
@@ -758,6 +759,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            0,
         )
         .await?;
 
@@ -850,6 +852,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            0,
         )
         .await?;
 
@@ -942,6 +945,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            0,
         )
         .await?;
 
@@ -1053,6 +1057,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            0,
         )
         .await?;
 
@@ -1168,6 +1173,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            0,
         )
         .await?;
 
@@ -1293,6 +1299,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            0,
         )
         .await?;
 
@@ -1392,6 +1399,7 @@ mod tests {
             10,
             client,
             tracker,
+            0,
         )
         .await?;
 

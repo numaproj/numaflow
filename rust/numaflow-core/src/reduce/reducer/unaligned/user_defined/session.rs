@@ -156,6 +156,7 @@ impl From<UserDefinedSessionResponse> for Message {
             metadata: None,
             is_late: false,
             ack_handle: None,
+            generation_id: 0,
         }
     }
 }

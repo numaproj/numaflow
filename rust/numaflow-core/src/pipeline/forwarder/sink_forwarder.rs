@@ -238,6 +238,7 @@ async fn run_all_sink_forwarders<C: NumaflowTypeConfig>(
             sink.fb_sink_config.clone(),
             sink.on_success_sink_config.clone(),
             serving_store.clone(),
+            Some(context.tracker.clone()),
             &context.cln_token,
         )
         .await?;

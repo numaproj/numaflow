@@ -299,6 +299,7 @@ mod tests {
             Some(transformer),
             None,
             None,
+            0,
         )
         .await;
 
@@ -428,6 +429,7 @@ mod tests {
             Some(transformer),
             None,
             None,
+            0,
         )
         .await;
 
@@ -569,6 +571,7 @@ mod tests {
             None,
             None,
             None,
+            0,
         )
         .await;
 
@@ -598,6 +601,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            0,
         )
         .await
         .unwrap();
@@ -685,6 +689,7 @@ mod tests {
             None,
             None,
             None,
+            0,
         )
         .await;
 
@@ -714,6 +719,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            0,
         )
         .await
         .unwrap();
@@ -801,6 +807,7 @@ mod tests {
             None,
             None,
             None,
+            0,
         )
         .await;
 
@@ -830,6 +837,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            0,
         )
         .await
         .unwrap();
@@ -944,6 +952,7 @@ mod tests {
             Some(transformer),
             None,
             None,
+            0,
         )
         .await;
 
@@ -973,6 +982,7 @@ mod tests {
             10,
             client,
             tracker_handle.clone(),
+            0,
         )
         .await
         .unwrap();

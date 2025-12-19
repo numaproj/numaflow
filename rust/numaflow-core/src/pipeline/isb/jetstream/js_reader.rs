@@ -88,6 +88,7 @@ impl JSWrappedMessage {
             metadata: header.metadata.map(|m| Arc::new(Metadata::from(m))),
             is_late: message_info.is_late,
             ack_handle: None,
+            generation_id: 0,
         })
     }
 }

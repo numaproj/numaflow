@@ -32,6 +32,7 @@ impl TryFrom<SqsMessage> for Message {
             metadata: Some(Arc::new(crate::metadata::Metadata::default())),
             is_late: false,
             ack_handle: None,
+            generation_id: 0,
         })
     }
 }

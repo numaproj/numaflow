@@ -71,6 +71,7 @@ impl From<UserDefinedTransformerMessage<'_>> for Message {
             },
             is_late: value.1.is_late,
             ack_handle: value.1.ack_handle.clone(),
+            generation_id: 0,
         }
     }
 }

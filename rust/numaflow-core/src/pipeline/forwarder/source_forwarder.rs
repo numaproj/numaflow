@@ -183,6 +183,7 @@ async fn run_source_forwarder<C: NumaflowTypeConfig>(
         source_watermark_handle.clone(),
         context.cln_token.clone(),
         rate_limiter,
+        context.config.generation_id,
     )
     .await?;
 
@@ -413,6 +414,7 @@ mod tests {
             Some(transformer),
             None,
             None,
+            0,
         )
         .await;
 

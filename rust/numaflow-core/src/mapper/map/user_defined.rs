@@ -77,6 +77,7 @@ impl UserDefinedUnaryMap {
     pub(in crate::mapper) async fn new<T: MapUdfClient>(
         batch_size: usize,
         client: T,
+        generation_id: u64,
     ) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &client).await?;
@@ -89,6 +90,7 @@ impl UserDefinedUnaryMap {
         let task_handle = tokio::spawn(Self::receive_unary_responses(
             Arc::clone(&sender_map),
             resp_stream,
+            generation_id,
         ));
 
         let mapper = Self {
@@ -105,6 +107,7 @@ impl UserDefinedUnaryMap {
     async fn receive_unary_responses(
         sender_map: ResponseSenderMap,
         mut resp_stream: MapStream,
+        generation_id: u64,
     ) {
         while let Some(item) = resp_stream.next().await {
             let resp = match item {
@@ -126,7 +129,7 @@ impl UserDefinedUnaryMap {
                     break;
                 }
             };
-            process_response(&sender_map, resp).await
+            process_response(&sender_map, resp, generation_id).await
         }
     }
 
@@ -191,6 +194,7 @@ impl UserDefinedBatchMap {
     pub(in crate::mapper) async fn new<T: MapUdfClient>(
         batch_size: usize,
         client: T,
+        generation_id: u64,
     ) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &client).await?;
@@ -203,6 +207,7 @@ impl UserDefinedBatchMap {
         let task_handle = tokio::spawn(Self::receive_batch_responses(
             Arc::clone(&sender_map),
             resp_stream,
+            generation_id,
         ));
 
         let mapper = Self {
@@ -218,6 +223,7 @@ impl UserDefinedBatchMap {
     async fn receive_batch_responses(
         sender_map: ResponseSenderMap,
         mut resp_stream: MapStream,
+        generation_id: u64,
     ) {
         while let Some(item) = resp_stream.next().await {
             let resp = match item {
@@ -258,7 +264,7 @@ impl UserDefinedBatchMap {
                 continue;
             }
 
-            process_response(&sender_map, resp).await
+            process_response(&sender_map, resp, generation_id).await
         }
     }
 
@@ -317,7 +323,7 @@ impl UserDefinedBatchMap {
 
 /// Processes the response from the server and sends it to the appropriate oneshot sender
 /// based on the message id entry in the map.
-async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
+async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse, generation_id: u64) {
     let msg_id = resp.id;
 
     let sender_entry = sender_map
@@ -328,7 +334,7 @@ async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
     if let Some((msg_info, sender)) = sender_entry {
         let mut response_messages = vec![];
         for (i, result) in resp.results.into_iter().enumerate() {
-            response_messages.push(UserDefinedMessage(result, &msg_info, i as i32).into());
+            response_messages.push(UserDefinedMessage(result, &msg_info, i as i32, generation_id).into());
         }
 
         pipeline_metrics()
@@ -405,6 +411,7 @@ impl UserDefinedStreamMap {
     pub(in crate::mapper) async fn new<T: MapUdfClient>(
         batch_size: usize,
         client: T,
+        generation_id: u64,
     ) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &client).await?;
@@ -417,6 +424,7 @@ impl UserDefinedStreamMap {
         let task_handle = tokio::spawn(Self::receive_stream_responses(
             Arc::clone(&sender_map),
             resp_stream,
+            generation_id,
         ));
 
         let mapper = Self {
@@ -432,6 +440,7 @@ impl UserDefinedStreamMap {
     async fn receive_stream_responses(
         sender_map: StreamResponseSenderMap,
         mut resp_stream: MapStream,
+        generation_id: u64,
     ) {
         while let Some(item) = resp_stream.next().await {
             let resp = match item {
@@ -477,6 +486,7 @@ impl UserDefinedStreamMap {
                         result,
                         &message_info,
                         message_info.current_index,
+                        generation_id,
                     )
                     .into()))
                     .await
@@ -540,7 +550,7 @@ impl UserDefinedStreamMap {
 
 // we are passing the reference for msg info because we can have more than 1 response for a single request and
 // each response will use the same parent message info.
-struct UserDefinedMessage<'a>(map::map_response::Result, &'a ParentMessageInfo, i32);
+struct UserDefinedMessage<'a>(map::map_response::Result, &'a ParentMessageInfo, i32, u64);
 
 impl From<UserDefinedMessage<'_>> for Message {
     fn from(value: UserDefinedMessage<'_>) -> Self {
@@ -573,6 +583,7 @@ impl From<UserDefinedMessage<'_>> for Message {
                 Some(Arc::new(metadata))
             },
             ack_handle: value.1.ack_handle.clone(),
+            generation_id: value.3,
         }
     }
 }
@@ -630,7 +641,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let mut client =
-            UserDefinedUnaryMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
+            UserDefinedUnaryMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?), 0)
                 .await?;
 
         let message = crate::message::Message {
@@ -718,7 +729,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let mut client =
-            UserDefinedBatchMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
+            UserDefinedBatchMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?), 0)
                 .await?;
 
         let messages = vec![
@@ -832,7 +843,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let mut client =
-            UserDefinedStreamMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
+            UserDefinedStreamMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?), 0)
                 .await?;
 
         let message = crate::message::Message {

@@ -13,7 +13,7 @@ use serving::callback::CallbackHandler;
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
@@ -108,6 +108,8 @@ pub(crate) struct Tracker {
     idle_offset_map: Arc<RwLock<HashMap<u16, Option<i64>>>>,
     serving_callback_handler: Option<CallbackHandler>,
     processed_msg_count: Arc<AtomicUsize>,
+    is_fenced: Arc<AtomicBool>,
+    cln_token: CancellationToken,
 }
 
 impl Tracker {
@@ -117,6 +119,7 @@ impl Tracker {
         cln_token: CancellationToken,
     ) -> Self {
         let processed_msg_count = Arc::new(AtomicUsize::new(0));
+        let is_fenced = Arc::new(AtomicBool::new(false));
 
         let state = Arc::new(RwLock::new(TrackerState {
             entries: HashMap::new(),
@@ -128,6 +131,8 @@ impl Tracker {
             idle_offset_map,
             serving_callback_handler,
             processed_msg_count: Arc::clone(&processed_msg_count),
+            is_fenced: Arc::clone(&is_fenced),
+            cln_token: cln_token.clone(),
         };
 
         // spawn a task to log the number of processed messages every second, cln_token is used to
@@ -356,6 +361,17 @@ impl Tracker {
     pub(crate) async fn get_idle_offset(&self) -> Result<HashMap<u16, Option<i64>>> {
         let idle_map = self.idle_offset_map.read().await;
         Ok(idle_map.clone())
+    }
+
+    /// Fences the tracker, indicating that the vertex has been revoked.
+    pub(crate) fn fence(&self) {
+        self.is_fenced.store(true, Ordering::Relaxed);
+        self.cln_token.cancel();
+    }
+
+    /// Checks if the tracker is fenced.
+    pub(crate) fn is_fenced(&self) -> bool {
+        self.is_fenced.load(Ordering::Relaxed)
     }
 }
 

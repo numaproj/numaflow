@@ -220,6 +220,7 @@ pub(crate) struct Source<C: crate::typ::NumaflowTypeConfig> {
     watermark_handle: Option<SourceWatermarkHandle>,
     health_checker: Option<SourceClient<Channel>>,
     rate_limiter: Option<C::RateLimiter>,
+    generation_id: u64,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
@@ -232,6 +233,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         transformer: Option<Transformer>,
         watermark_handle: Option<SourceWatermarkHandle>,
         rate_limiter: Option<C::RateLimiter>,
+        generation_id: u64,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(batch_size);
         let mut health_checker = None;
@@ -321,6 +323,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             watermark_handle,
             health_checker,
             rate_limiter,
+            generation_id,
         }
     }
 
@@ -425,6 +428,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             let mut last_checkpoint = Instant::now();
             let mut checkpoint_id: u64 = 0;
             loop {
+                // Check if the source is fenced
+                if self.tracker.is_fenced() {
+                    info!("Source is fenced, stopping.");
+                    break;
+                }
+
                 // Acquire the semaphore permit before reading the next batch to make
                 // sure we are not reading ahead and all the inflight messages are acked.
                 let _permit = Arc::clone(&semaphore)
@@ -519,6 +528,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     let mut headers = (*message.headers).clone();
                     headers.insert("x-numaflow-partition-id".to_string(), partition_idx.to_string());
                     message.headers = Arc::new(headers);
+                    // Phase 1.2: Inject GenerationID
+                    message.generation_id = self.generation_id;
 
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
                     message.ack_handle = Some(Arc::new(AckHandle::new(resp_ack_tx)));
@@ -999,6 +1010,7 @@ mod tests {
             None,
             None,
             None,
+            0,
         )
         .await;
 
