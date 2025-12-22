@@ -21096,6 +21096,23 @@
       ],
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.MonoVertexBypassCondition": {
+      "properties": {
+        "fallback": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions",
+          "description": "Conditions to trigger bypass to fallback sink component. Definition is similar to \"conditions\" in pipeline spec for edges."
+        },
+        "onSuccess": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions",
+          "description": "Conditions to trigger bypass to onSuccess sink component. Definition is similar to \"conditions\" in pipeline spec for edges."
+        },
+        "sink": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions",
+          "description": "Conditions to trigger bypass to primary sink component. Definition is similar to \"conditions\" in pipeline spec for edges."
+        }
+      },
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.MonoVertexLifecycle": {
       "properties": {
         "desiredPhase": {
@@ -21157,6 +21174,10 @@
         "automountServiceAccountToken": {
           "description": "AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.",
           "type": "boolean"
+        },
+        "bypass": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.MonoVertexBypassCondition",
+          "description": "Bypass defines the bypass destination and conditions to trigger bypass for the mono vertex components. If specified, the bypass will be triggered if the conditions are met at any of the components. The first level of the bypass spec specifies the destination to which the message will be forwarded to, and the next level specifies the conditions to trigger the said bypass."
         },
         "containerTemplate": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate",

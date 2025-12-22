@@ -17,6 +17,25 @@
   right: 8%;
 }
 
+.node-rate-small {
+  display: flex;
+  min-width: 9rem;
+  height: 1.8rem;
+  border-radius: 2rem;
+  background: #d1dee9;
+  color: #274c77;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 1.2rem;
+  font-style: normal;
+  font-weight: 500;
+  line-height: normal;
+  justify-content: center;
+  align-items: center;
+  position: absolute;
+  bottom: -12.5%;
+  right: 8%;
+}
+
 .node-pods {
   display: flex;
   width: 10rem;
@@ -120,6 +139,21 @@
 .mono-vertex-img {
   height: 1rem;
   width: 1rem;
+}
+
+.mono-vertex-img-wrapper-small {
+  height: 1.6rem;
+  width: 1.6rem;
+  border-radius: 50%;
+  border: 1px solid #d1dee9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mono-vertex-img-small {
+  height: 0.9rem;
+  width: 0.9rem;
 }
 
 .node-icon {

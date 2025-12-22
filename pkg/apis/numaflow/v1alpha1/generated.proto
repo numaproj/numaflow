@@ -997,6 +997,23 @@ message MonoVertex {
   optional MonoVertexStatus status = 3;
 }
 
+message MonoVertexBypassCondition {
+  // Conditions to trigger bypass to primary sink component.
+  // Definition is similar to "conditions" in pipeline spec for edges.
+  // +optional
+  optional ForwardConditions sink = 1;
+
+  // Conditions to trigger bypass to fallback sink component.
+  // Definition is similar to "conditions" in pipeline spec for edges.
+  // +optional
+  optional ForwardConditions fallback = 2;
+
+  // Conditions to trigger bypass to onSuccess sink component.
+  // Definition is similar to "conditions" in pipeline spec for edges.
+  // +optional
+  optional ForwardConditions onSuccess = 3;
+}
+
 message MonoVertexLifecycle {
   // DesiredPhase used to bring the MonoVertex from current phase to desired phase
   // +kubebuilder:default=Running
@@ -1084,6 +1101,13 @@ message MonoVertexSpec {
   // +kubebuilder:default={"desiredPhase": Running}
   // +optional
   optional MonoVertexLifecycle lifecycle = 14;
+
+  // Bypass defines the bypass destination and conditions to trigger bypass for the mono vertex components.
+  // If specified, the bypass will be triggered if the conditions are met at any of the components.
+  // The first level of the bypass spec specifies the destination to which the message will be forwarded to,
+  // and the next level specifies the conditions to trigger the said bypass.
+  // +optional
+  optional MonoVertexBypassCondition bypass = 15;
 }
 
 message MonoVertexStatus {
