@@ -3,17 +3,6 @@ kind: MonoVertex
 metadata:
   name: simple-mono-vertex
 spec:
-  bypass:
-    fallback:
-      tags:
-        operator: or
-        values:
-          - fallback
-    onSuccess:
-      tags:
-        operator: or
-        values:
-          - onSuccess
   source:
     udsource:
       container:
@@ -25,7 +14,7 @@ spec:
   # map is an optional container to do any map operations (available from Numaflow Version 1.7)
   udf:
     container:
-      image: quay.io/numaio/numaflow-go/map-cat-bypass:stable
+      image: quay.io/numaio/numaflow-go/map-cat:stable
       imagePullPolicy: IfNotPresent        
   sink:
     udsink:
@@ -36,7 +25,3 @@ spec:
       udsink:
         container:
           image: quay.io/numaio/numaflow-go/fb-sink-log:stable
-    onSuccess:
-      udsink:
-        container:
-          image: quay.io/numaio/numaflow-rs/sink-log:stable

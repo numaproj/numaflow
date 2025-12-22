@@ -3,9 +3,6 @@ kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
-  limits:
-    rateLimit:
-      max: 100
   vertices:
     - name: in
       scale:
