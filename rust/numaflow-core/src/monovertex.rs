@@ -165,10 +165,10 @@ async fn start<C: crate::typ::NumaflowTypeConfig>(
 
     let splitter = match mvtx_config.bypass_condition {
         None => None,
-        Some(bypass_condition) => Some(Splitter::new(
+        Some(bypass_conditions) => Some(Splitter::new(
             mvtx_config.batch_size,
             mvtx_config.read_timeout,
-            bypass_condition,
+            bypass_conditions,
         )),
     };
 
