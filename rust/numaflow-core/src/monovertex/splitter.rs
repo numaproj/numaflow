@@ -60,8 +60,6 @@ impl Splitter {
     /// The splitter reads the `input_stream` and when the bypass condition is applicable on the message read,
     /// it sends the message to the `bypass_tx` channel wrapped in `MessageToSink` enum.
     /// Otherwise, it returns a stream to read the messages not matching the bypass conditions.
-    ///
-    /// TODO: use cancellation tokens for shutting down the spawned task
     pub(crate) async fn run(
         &self,
         input_stream: ReceiverStream<Message>,
@@ -69,51 +67,54 @@ impl Splitter {
     ) -> error::Result<(ReceiverStream<Message>, JoinHandle<error::Result<()>>)> {
         let (message_tx, message_rx) = mpsc::channel(self.batch_size);
         let bypass_conditions = self.bypass_conditions.clone();
+        let batch_size = self.batch_size;
+        let chunk_timeout = self.chunk_timeout;
         let handle = tokio::spawn(async move {
-            let mut input_stream = input_stream;
             let sink_condition_exists = bypass_conditions.sink.is_some();
             let fallback_condition_exists = bypass_conditions.fallback.is_some();
             let on_success_condition_exists = bypass_conditions.on_success.is_some();
-            while let Some(msg) = input_stream.next().await {
-                if sink_condition_exists
-                    && should_forward(msg.tags.clone(), bypass_conditions.sink.clone())
-                {
-                    bypass_tx
-                        .send(MessageToSink::Primary(msg))
-                        .await
-                        .map_err(|e| {
-                            Error::Forwarder(format!(
-                                "Error while sending message to bypass channel: {e:?}"
-                            ))
-                        })?;
-                } else if fallback_condition_exists
-                    && should_forward(msg.tags.clone(), bypass_conditions.fallback.clone())
-                {
-                    bypass_tx
-                        .send(MessageToSink::Fallback(msg))
-                        .await
-                        .map_err(|e| {
-                            Error::Forwarder(format!(
-                                "Error while sending message to bypass channel: {e:?}"
-                            ))
-                        })?;
-                } else if on_success_condition_exists
-                    && should_forward(msg.tags.clone(), bypass_conditions.on_success.clone())
-                {
-                    bypass_tx
-                        .send(MessageToSink::OnSuccess(msg))
-                        .await
-                        .map_err(|e| {
-                            Error::Forwarder(format!(
-                                "Error while sending message to bypass channel: {e:?}"
-                            ))
-                        })?;
-                } else {
-                    message_tx.send(msg).await.map_err(|e| {
-                        Error::Forwarder(format!(
-                            "Error while sending message to message channel: {e:?}"
-                        ))
-                    })?;
+
+            // Read from a chunked stream of messages
+            let chunked_stream =
+                input_stream.chunks_timeout(batch_size, chunk_timeout);
+            tokio::pin!(chunked_stream);
+
+            while let Some(msgs) = chunked_stream.next().await {
+                for msg in msgs {
+                    let msg_clone = msg.clone();
+                    let message_to_sink = if sink_condition_exists
+                        && should_forward(msg.tags.clone(), bypass_conditions.sink.clone()) {
+                        Some(MessageToSink::Primary(msg_clone))
+                    } else if fallback_condition_exists
+                        && should_forward(msg.tags.clone(), bypass_conditions.fallback.clone()) {
+                        Some(MessageToSink::Fallback(msg_clone))
+                    } else if on_success_condition_exists
+                        && should_forward(msg.tags.clone(), bypass_conditions.on_success.clone()) {
+                        Some(MessageToSink::OnSuccess(msg_clone))
+                    } else {
+                        None
+                    };
+
+                    // TODO: nack the messages if send fails?
+                    match message_to_sink {
+                        Some(msg_to_sink) => {
+                            bypass_tx
+                                .send(msg_to_sink)
+                                .await
+                                .map_err(|e| {
+                                    Error::Forwarder(format!(
+                                        "Error while sending message to bypass channel: {e:?}"
+                                    ))
+                                })?;
+                        },
+                        None => {
+                            message_tx.send(msg).await.map_err(|e| {
+                                Error::Forwarder(format!(
+                                    "Error while sending message to message channel: {e:?}"
+                                ))
+                            })?;
+                        }
+                    }
                 }
             }
             Ok(())
