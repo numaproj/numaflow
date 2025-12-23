@@ -26,6 +26,7 @@ pub enum MessageToSink {
     OnSuccess(Message),
 }
 
+/// Returns a reference to the inner message wrapped by the enum.
 impl MessageToSink {
     pub fn inner(&self) -> &Message {
         match self {
@@ -62,15 +63,15 @@ impl Router {
         }
     }
 
-    /// The Router's `route` method takes an `input_stream` and a `bypass_tx` channel as arguments.
+    /// The Router's `route` method takes an `input_stream` and a `sink_tx` channel as arguments.
     /// The input stream is the stream of original messages sent from either the Source or the UDF.
     /// The Router reads the `input_stream` and when the bypass condition is applicable on the message read,
-    /// it sends the message to the `bypass_tx` channel wrapped in [MessageToSink].
+    /// it sends the message to the `sink_tx` channel wrapped in [MessageToSink].
     /// Otherwise, it returns a stream to read the messages not matching the bypass conditions.
     pub(crate) async fn route(
         &self,
         input_stream: ReceiverStream<Message>,
-        bypass_tx: Sender<MessageToSink>,
+        sink_tx: Sender<MessageToSink>,
     ) -> error::Result<(ReceiverStream<Message>, JoinHandle<error::Result<()>>)> {
         let (message_tx, message_rx) = mpsc::channel(self.batch_size);
         let bypass_conditions = self.bypass_conditions.clone();
@@ -86,6 +87,8 @@ impl Router {
             tokio::pin!(chunked_stream);
 
             while let Some(msgs) = chunked_stream.next().await {
+                // for each message read from the chunked stream determine which sink it should be sent to
+                // based on the bypass conditions and wrap it in respective MessageToSink enum value
                 for msg in msgs {
                     let msg_clone = msg.clone();
                     let message_to_sink = if sink_condition_exists
@@ -107,7 +110,7 @@ impl Router {
                     // FIXME: nack the messages if send fails?
                     match message_to_sink {
                         Some(msg_to_sink) => {
-                            bypass_tx.send(msg_to_sink).await.map_err(|e| {
+                            sink_tx.send(msg_to_sink).await.map_err(|e| {
                                 Error::Forwarder(format!(
                                     "Error while sending message to bypass channel: {e:?}"
                                 ))
@@ -129,11 +132,14 @@ impl Router {
         Ok((ReceiverStream::new(message_rx), handle))
     }
 
-    /// At the end of the component chain, there could be some messages left in the stream which are
-    /// destined for primary sink.
-    /// - If bypass condition for primary sink is present, it should already be written to the primary sink (via sink_tx).
-    ///   This means, we can safely drop those messages from the stream.
+    /// At the end of the component chain and their subsequent routing calls, there could be some
+    /// messages left in the input stream. This could be because either they didn't match the
+    /// bypass conditions for primary sink or the bypass conditions for primary sink are absent.
+    ///
+    /// The [Router::process_non_routable_msgs] method hence performs either one of the following actions:
     /// - If bypass condition for primary sink is absent, it writes all messages to the primary sink via sink_tx.
+    /// - If bypass condition for primary sink is present, it should already be written to the primary sink (via sink_tx).
+    ///   So this method simply drops these messages from the stream.
     ///
     /// This method ingests the input stream after the last [Router::route] call.
     pub(crate) async fn process_non_routable_msgs(
@@ -161,6 +167,9 @@ impl Router {
                 }
                 Ok(())
             }),
+            // If bypass condition for primary sink is present, the pending messages in the input stream
+            // should've already been written to the primary sink (via sink_tx). If they don't conform to
+            // bypass conditions for primary sink, they will be simply dropped here.
             Some(_) => tokio::spawn(async move {
                 while let Some(_) = input_stream.next().await {
                     // FIXME: determine what to do with the message

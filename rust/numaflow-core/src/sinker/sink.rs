@@ -259,6 +259,11 @@ impl SinkWriter {
 
     /// Write to the sink based on the [MessageToSink] type. This is a special case and this
     /// method is only invoked if bypass is configured for MonoVertex.
+    ///
+    /// This method ingests the `sink_tx` stream that the [Router] has been effectively writing to.
+    /// Each message in the stream is an enum variant of [MessageToSink] which wraps the original
+    /// [Message]. This method then writes the messages to the appropriate
+    /// sink (sink/fallback/onSuccess) based on the enum variant (Primary/Fallback/OnSuccess).
     pub(crate) async fn streaming_bypass_write(
         mut self,
         messages_stream: ReceiverStream<MessageToSink>,
@@ -381,6 +386,8 @@ impl SinkWriter {
         }))
     }
 
+    /// Helper method for marking messages as failed. Used in [SinkWriter::streaming_bypass_write]
+    /// when we are in shutting down mode.
     fn mark_msgs_failed(&self, batch: &Vec<Message>) {
         for msg in batch {
             msg.ack_handle
@@ -391,6 +398,8 @@ impl SinkWriter {
         }
     }
 
+    /// Helper method for writing messages to the appropriate sink based on the enum variant.
+    /// Used in [SinkWriter::streaming_bypass_write] to remove redundant code.
     async fn selective_write(
         &mut self,
         msg_type: MessageToSink,
