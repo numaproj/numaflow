@@ -32,11 +32,14 @@
 //! [Stream]: https://docs.rs/tokio-stream/latest/tokio_stream/wrappers/struct.ReceiverStream.html
 //! [Actor Pattern]: https://ryhl.io/blog/actors-with-tokio/
 
+use tokio::task::JoinHandle;
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 
 use crate::Error;
 use crate::error;
 use crate::mapper::map::MapHandle;
+use crate::monovertex::bypass::Router;
 use crate::sinker::sink::SinkWriter;
 use crate::source::Source;
 
@@ -47,6 +50,7 @@ pub(crate) struct Forwarder<C: crate::typ::NumaflowTypeConfig> {
     source: Source<C>,
     mapper: Option<MapHandle>,
     sink_writer: SinkWriter,
+    router: Option<Router>,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
@@ -54,15 +58,17 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
         source: Source<C>,
         mapper: Option<MapHandle>,
         sink_writer: SinkWriter,
+        splitter: Option<Router>,
     ) -> Self {
         Self {
             source,
             mapper,
             sink_writer,
+            router: splitter,
         }
     }
 
-    pub(crate) async fn start(self, cln_token: CancellationToken) -> crate::Result<()> {
+    pub(crate) async fn start_default(self, cln_token: CancellationToken) -> crate::Result<()> {
         let (read_messages_stream, reader_handle) =
             self.source.streaming_read(cln_token.clone())?;
 
@@ -106,6 +112,122 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
         })?;
 
         Ok(())
+    }
+
+    /// Starts the forwarder with a sink channel so that we can short-circuit the messages to the sink
+    /// early on (from source or UDF) based on the bypass conditions, set by tags.
+    pub(crate) async fn start_with_router(self, cln_token: CancellationToken) -> crate::Result<()> {
+        let router = self.router.expect("Router must be initialized");
+        // create the sink channel
+        let (sink_tx, sink_rx) = tokio::sync::mpsc::channel(router.batch_size);
+        let (read_messages_stream, reader_handle) =
+            self.source.streaming_read(cln_token.clone())?;
+
+        // check whether we should route after reading from the source
+        let (source_router_stream, source_router_handle) =
+            router.route(read_messages_stream, sink_tx.clone()).await?;
+
+        // check whether UDF exists, and whether we should route after applying the UDF (based on tags)
+        let (mapper_stream, mapper_handle) = match self.mapper {
+            Some(mapper) => {
+                let (mapper_stream, mapper_handle) = mapper
+                    .streaming_map(source_router_stream, cln_token.clone())
+                    .await?;
+
+                // check whether we have to route
+                let (udf_router_stream, udf_router_handle) =
+                    router.route(mapper_stream, sink_tx.clone()).await?;
+
+                // Join the mapper and second splitter handle and returns a single handle
+                let joined_handle: JoinHandle<error::Result<()>> = tokio::spawn(async move {
+                    let (mapper_result, second_splitter_result) =
+                        tokio::try_join!(mapper_handle, udf_router_handle).map_err(|e| {
+                            error!(?e, "Error while joining reader, mapper and sink writer");
+                            Error::Forwarder(format!(
+                                "Error while joining reader, mapper and sink writer: {e:?}"
+                            ))
+                        })?;
+
+                    mapper_result.inspect_err(|e| {
+                        error!(?e, "Error while applying map to messages");
+                    })?;
+
+                    second_splitter_result.inspect_err(|e| {
+                        error!(?e, "Error while splitting messages from map");
+                    })?;
+
+                    Ok(())
+                });
+
+                (udf_router_stream, joined_handle)
+            }
+            None => (
+                source_router_stream,
+                tokio::task::spawn(async { Ok::<(), Error>(()) }),
+            ),
+        };
+
+        let converter_handle = router
+            .process_non_routable_msgs(mapper_stream, sink_tx)
+            .await?;
+
+        let sink_writer_handle = self
+            .sink_writer
+            .streaming_bypass_write(ReceiverStream::new(sink_rx), cln_token.clone())
+            .await?;
+
+        // Join the all the handlers
+        let (
+            reader_result,
+            first_splitter_result,
+            mapper_handle_result,
+            converter_result,
+            sink_writer_result,
+        ) = tokio::try_join!(
+            reader_handle,
+            source_router_handle,
+            mapper_handle,
+            converter_handle,
+            sink_writer_handle
+        )
+        .map_err(|e| {
+            error!(
+                ?e,
+                "Error while joining reader, mapper, splitter, converter and sink handles"
+            );
+            Error::Forwarder(format!(
+                "Error while joining reader, mapper, splitter, converter and sink handles: {e:?}"
+            ))
+        })?;
+
+        sink_writer_result.inspect_err(|e| {
+            error!(?e, "Error while writing messages");
+        })?;
+
+        converter_result.inspect_err(|e| {
+            error!(?e, "Error while converting messages");
+        })?;
+
+        mapper_handle_result.inspect_err(|e| {
+            error!(?e, "Error while applying map to messages");
+        })?;
+
+        first_splitter_result.inspect_err(|e| {
+            error!(?e, "Error while splitting messages from map");
+        })?;
+
+        reader_result.inspect_err(|e| {
+            error!(?e, "Error while reading messages");
+        })?;
+
+        Ok(())
+    }
+
+    pub(crate) async fn start(self, cln_token: CancellationToken) -> crate::Result<()> {
+        match self.router {
+            None => self.start_default(cln_token).await,
+            Some(_) => self.start_with_router(cln_token).await,
+        }
     }
 }
 
@@ -303,7 +425,7 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), None, sink_writer);
+        let forwarder = Forwarder::new(source.clone(), None, sink_writer, None);
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
@@ -432,7 +554,7 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), None, sink_writer);
+        let forwarder = Forwarder::new(source.clone(), None, sink_writer, None);
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
@@ -603,7 +725,7 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
+        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer, None);
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> =
@@ -719,7 +841,7 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
+        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer, None);
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> =
@@ -835,7 +957,7 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
+        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer, None);
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> =
@@ -978,7 +1100,7 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
+        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer, None);
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> =
