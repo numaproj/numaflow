@@ -6,7 +6,7 @@ use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self};
 use crate::mapper::map::MapHandle;
 use crate::metrics::{LagReader, PendingReaderTasks};
-use crate::monovertex::splitter::Splitter;
+use crate::monovertex::bypass::Router;
 use crate::shared::create_components;
 use crate::sinker::sink::SinkWriter;
 use crate::source::Source;
@@ -25,10 +25,10 @@ use crate::{metrics, shared};
 /// - Send Acknowledgement back to the Source
 pub(crate) mod forwarder;
 
-/// [splitter] splits the input stream based on the bypass conditions.
+/// [bypass] splits the input stream based on the bypass conditions.
 /// In the case of when bypass conditions are specified in the monovertex spec,
 /// the splitter component will be run after every component starting from the source and except for the sink.
-pub(crate) mod splitter;
+pub(crate) mod bypass;
 
 pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
@@ -164,7 +164,7 @@ async fn start<C: crate::typ::NumaflowTypeConfig>(
 
     let splitter = match mvtx_config.bypass_condition {
         None => None,
-        Some(bypass_condition) => Some(Splitter::new(
+        Some(bypass_condition) => Some(Router::new(
             mvtx_config.batch_size,
             mvtx_config.read_timeout,
             bypass_condition,

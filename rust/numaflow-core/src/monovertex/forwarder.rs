@@ -39,7 +39,7 @@ use tokio_util::sync::CancellationToken;
 use crate::Error;
 use crate::error;
 use crate::mapper::map::MapHandle;
-use crate::monovertex::splitter::Splitter;
+use crate::monovertex::bypass::Router;
 use crate::sinker::sink::SinkWriter;
 use crate::source::Source;
 
@@ -50,7 +50,7 @@ pub(crate) struct Forwarder<C: crate::typ::NumaflowTypeConfig> {
     source: Source<C>,
     mapper: Option<MapHandle>,
     sink_writer: SinkWriter,
-    splitter: Option<Splitter>,
+    router: Option<Router>,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
@@ -58,13 +58,13 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
         source: Source<C>,
         mapper: Option<MapHandle>,
         sink_writer: SinkWriter,
-        splitter: Option<Splitter>,
+        splitter: Option<Router>,
     ) -> Self {
         Self {
             source,
             mapper,
             sink_writer,
-            splitter,
+            router: splitter,
         }
     }
 
@@ -114,32 +114,34 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
         Ok(())
     }
 
-    pub(crate) async fn start_with_splitter(
-        self,
-        cln_token: CancellationToken,
-    ) -> crate::Result<()> {
-        let splitter = self.splitter.expect("splitter must be initialized");
-        let (bypass_tx, bypass_rx) = tokio::sync::mpsc::channel(splitter.batch_size);
+    /// Starts the forwarder with a sink channel so that we can short-circuit the messages to the sink
+    /// early on (from source or UDF) based on the bypass conditions, set by tags.
+    pub(crate) async fn start_with_router(self, cln_token: CancellationToken) -> crate::Result<()> {
+        let router = self.router.expect("Router must be initialized");
+        // create the sink channel
+        let (sink_tx, sink_rx) = tokio::sync::mpsc::channel(router.batch_size);
         let (read_messages_stream, reader_handle) =
             self.source.streaming_read(cln_token.clone())?;
 
-        let (first_splitter_stream, first_splitter_handle) = splitter
-            .run(read_messages_stream, bypass_tx.clone())
-            .await?;
+        // check whether we should route after reading from the source
+        let (source_router_stream, source_router_handle) =
+            router.route(read_messages_stream, sink_tx.clone()).await?;
 
+        // check whether UDF exists, and whether we should route after applying the UDF (based on tags)
         let (mapper_stream, mapper_handle) = match self.mapper {
             Some(mapper) => {
                 let (mapper_stream, mapper_handle) = mapper
-                    .streaming_map(first_splitter_stream, cln_token.clone())
+                    .streaming_map(source_router_stream, cln_token.clone())
                     .await?;
 
-                let (second_splitter_stream, second_splitter_handle) =
-                    splitter.run(mapper_stream, bypass_tx.clone()).await?;
+                // check whether we have to route
+                let (udf_router_stream, udf_router_handle) =
+                    router.route(mapper_stream, sink_tx.clone()).await?;
 
                 // Join the mapper and second splitter handle and returns a single handle
                 let joined_handle: JoinHandle<error::Result<()>> = tokio::spawn(async move {
                     let (mapper_result, second_splitter_result) =
-                        tokio::try_join!(mapper_handle, second_splitter_handle).map_err(|e| {
+                        tokio::try_join!(mapper_handle, udf_router_handle).map_err(|e| {
                             error!(?e, "Error while joining reader, mapper and sink writer");
                             Error::Forwarder(format!(
                                 "Error while joining reader, mapper and sink writer: {e:?}"
@@ -157,19 +159,21 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
                     Ok(())
                 });
 
-                (second_splitter_stream, joined_handle)
+                (udf_router_stream, joined_handle)
             }
             None => (
-                first_splitter_stream,
+                source_router_stream,
                 tokio::task::spawn(async { Ok::<(), Error>(()) }),
             ),
         };
 
-        let converter_handle = splitter.converter(mapper_stream, bypass_tx).await?;
+        let converter_handle = router
+            .process_non_routable_msgs(mapper_stream, sink_tx)
+            .await?;
 
         let sink_writer_handle = self
             .sink_writer
-            .streaming_bypass_write(ReceiverStream::new(bypass_rx), cln_token.clone())
+            .streaming_bypass_write(ReceiverStream::new(sink_rx), cln_token.clone())
             .await?;
 
         // Join the all the handlers
@@ -181,7 +185,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
             sink_writer_result,
         ) = tokio::try_join!(
             reader_handle,
-            first_splitter_handle,
+            source_router_handle,
             mapper_handle,
             converter_handle,
             sink_writer_handle
@@ -220,9 +224,9 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
     }
 
     pub(crate) async fn start(self, cln_token: CancellationToken) -> crate::Result<()> {
-        match self.splitter {
+        match self.router {
             None => self.start_default(cln_token).await,
-            Some(_) => self.start_with_splitter(cln_token).await,
+            Some(_) => self.start_with_router(cln_token).await,
         }
     }
 }

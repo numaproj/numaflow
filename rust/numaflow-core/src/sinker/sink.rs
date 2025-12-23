@@ -27,7 +27,7 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{error, info};
 
-use crate::monovertex::splitter::MessageToSink;
+use crate::monovertex::bypass::MessageToSink;
 use crate::sinker::builder::HealthCheckClients;
 use serve::{ServingStore, StoreEntry};
 // Re-export SinkWriterBuilder for external use
@@ -257,6 +257,8 @@ impl SinkWriter {
         }))
     }
 
+    /// Write to the sink based on the [MessageToSink] type. This is a special case and this
+    /// method is only invoked if bypass is configured for MonoVertex.
     pub(crate) async fn streaming_bypass_write(
         mut self,
         messages_stream: ReceiverStream<MessageToSink>,
@@ -264,7 +266,7 @@ impl SinkWriter {
     ) -> Result<JoinHandle<Result<()>>> {
         Ok(tokio::spawn({
             async move {
-                info!(?self.batch_size, ?self.chunk_timeout, "Starting sink writer");
+                info!(?self.batch_size, ?self.chunk_timeout, "Starting sink writer in Bypass Mode");
 
                 // Combine chunking and timeout into a stream
                 let chunk_stream =
