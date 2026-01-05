@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -418,7 +417,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 	envVars := []corev1.EnvVar{
 		{Name: EnvPipelineName, Value: v.Spec.PipelineName},
-		{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)},
 	}
 	envVars = append(envVars, req.Env...)
 	initContainers := []corev1.Container{

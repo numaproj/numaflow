@@ -26,6 +26,8 @@ pub struct MonoVertexSpec {
         skip_serializing_if = "Option::is_none"
     )]
     pub automount_service_account_token: Option<bool>,
+    #[serde(rename = "bypass", skip_serializing_if = "Option::is_none")]
+    pub bypass: Option<Box<crate::models::MonoVertexBypassCondition>>,
     #[serde(rename = "containerTemplate", skip_serializing_if = "Option::is_none")]
     pub container_template: Option<Box<crate::models::ContainerTemplate>>,
     #[serde(rename = "daemonTemplate", skip_serializing_if = "Option::is_none")]
@@ -94,6 +96,7 @@ impl MonoVertexSpec {
         MonoVertexSpec {
             affinity: None,
             automount_service_account_token: None,
+            bypass: None,
             container_template: None,
             daemon_template: None,
             dns_config: None,

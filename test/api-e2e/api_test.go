@@ -45,12 +45,12 @@ func (s *APISuite) TestGetSysInfo() {
 	sysinfoBody := HTTPExpect(s.T(), "https://localhost:8043").GET("/api/v1/sysinfo").
 		Expect().
 		Status(200).Body().Raw()
-	var sysinfoExpect = `{"data":{"managedNamespace":"numaflow-system","namespaced":false`
-	assert.Contains(s.T(), sysinfoBody, sysinfoExpect)
-	assert.Contains(s.T(), sysinfoBody, "Version")
-	assert.Contains(s.T(), sysinfoBody, "BuildDate")
-	assert.Contains(s.T(), sysinfoBody, "GoVersion")
-	assert.Contains(s.T(), sysinfoBody, "Platform")
+	AssertJsonEqual(s.T(), sysinfoBody, "data.managedNamespace", "numaflow-system")
+	AssertJsonExists(s.T(), sysinfoBody, "data.isReadOnly")
+	AssertJsonStringContains(s.T(), sysinfoBody, "data.version", "Version")
+	AssertJsonStringContains(s.T(), sysinfoBody, "data.version", "BuildDate")
+	AssertJsonStringContains(s.T(), sysinfoBody, "data.version", "GoVersion")
+	AssertJsonStringContains(s.T(), sysinfoBody, "data.version", "Platform")
 }
 
 func (s *APISuite) TestISBSVC() {
@@ -190,8 +190,11 @@ func (s *APISuite) TestAPIsForIsbAndPipelineAndMonoVertex() {
 	clusterSummaryBody := HTTPExpect(s.T(), "https://localhost:8145").GET("/api/v1/cluster-summary").
 		Expect().
 		Status(200).Body().Raw()
-	var clusterSummaryExpect = `{"isEmpty":false,"namespace":"numaflow-system","pipelineSummary":{"active":{"Healthy":2,"Warning":0,"Critical":0},"inactive":0},"isbServiceSummary":{"active":{"Healthy":1,"Warning":0,"Critical":0},"inactive":0},"monoVertexSummary":{"active":{"Healthy":1,"Warning":0,"Critical":0},"inactive":0}}`
-	assert.Contains(s.T(), clusterSummaryBody, clusterSummaryExpect)
+	AssertJsonEqual(s.T(), clusterSummaryBody, `data.#(namespace=="numaflow-system").isEmpty`, false)
+	AssertJsonEqual(s.T(), clusterSummaryBody, `data.#(namespace=="default").isEmpty`, true)
+	AssertJsonEqual(s.T(), clusterSummaryBody, `data.#(namespace=="numaflow-system").pipelineSummary`, Json(`{"active":{"Healthy":2,"Warning":0,"Critical":0},"inactive":0}`))
+	AssertJsonEqual(s.T(), clusterSummaryBody, `data.#(namespace=="numaflow-system").isbServiceSummary`, Json(`{"active":{"Healthy":1,"Warning":0,"Critical":0},"inactive":0}`))
+	AssertJsonEqual(s.T(), clusterSummaryBody, `data.#(namespace=="numaflow-system").monoVertexSummary`, Json(`{"active":{"Healthy":1,"Warning":0,"Critical":0},"inactive":0}`))
 
 	listPipelineBody := HTTPExpect(s.T(), "https://localhost:8145").GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines", Namespace)).
 		Expect().
@@ -272,16 +275,15 @@ func (s *APISuite) TestAPIsForMetricsAndWatermarkAndPodsForPipeline() {
 	getPipelineWatermarksBody := HTTPExpect(s.T(), "https://localhost:8146").GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/watermarks", Namespace, pipelineName)).
 		Expect().
 		Status(200).Body().Raw()
-	assert.Contains(s.T(), getPipelineWatermarksBody, `watermarks`)
-	assert.Contains(s.T(), getPipelineWatermarksBody, `"edge":"input-p1"`)
-	assert.Contains(s.T(), getPipelineWatermarksBody, `"edge":"p1-output"`)
+	AssertJsonExists(s.T(), getPipelineWatermarksBody, `data.#(edge=="input-p1").watermarks`)
+	AssertJsonExists(s.T(), getPipelineWatermarksBody, `data.#(edge=="p1-output").watermarks`)
 
 	getVerticesMetricsBody := HTTPExpect(s.T(), "https://localhost:8146").GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/vertices/metrics", Namespace, pipelineName)).
 		Expect().
 		Status(200).Body().Raw()
-	assert.Contains(s.T(), getVerticesMetricsBody, `"vertex":"input","processingRates"`)
-	assert.Contains(s.T(), getVerticesMetricsBody, `"vertex":"p1","processingRates"`)
-	assert.Contains(s.T(), getVerticesMetricsBody, `"vertex":"output","processingRates"`)
+	AssertJsonExists(s.T(), getVerticesMetricsBody, `data.input.#(vertex=="input").processingRates`)
+	AssertJsonExists(s.T(), getVerticesMetricsBody, `data.p1.#(vertex=="p1").processingRates`)
+	AssertJsonExists(s.T(), getVerticesMetricsBody, `data.output.#(vertex=="output").processingRates`)
 
 	getVerticesPodsBody := HTTPExpect(s.T(), "https://localhost:8146").GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/vertices/input/pods", Namespace, pipelineName)).
 		Expect().

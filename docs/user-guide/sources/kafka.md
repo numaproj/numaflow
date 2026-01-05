@@ -172,4 +172,4 @@ bin/kafka-consumer-groups.sh --bootstrap-server <BOOTSTRAP_BROKER_LIST> --comman
 
 Reference:
 - [How to Use Kafka Tools With Confluent Cloud](https://docs.confluent.io/kafka/operations-tools/use-kafka-tools-ccloud.html#create-a-configuration-file)
-- [Apache Kafka Security](https://kafka.apache.org/documentation/#security)
+- [Apache Kafka Security](https://kafka.apache.org/41/security/)

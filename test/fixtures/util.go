@@ -340,7 +340,6 @@ func WaitForVertexPodRunning(kubeClient kubernetes.Interface, vertexClient flowp
 		}
 		ok = ok && len(podList.Items) > 0 && len(podList.Items) == vertexList.Items[0].CalculateReplicas() // pod number should equal to desired replicas
 		for _, p := range podList.Items {
-			log.Println("Checking for vertex pod ready: ", p.Name)
 			ok = ok && isPodReady(p)
 		}
 		if ok {
@@ -433,7 +432,6 @@ func WaitForServingServerPodsRunning(kubeClient kubernetes.Interface, namespace,
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyServingPipelineName, servingPipelineName, dfv1.KeyComponent, dfv1.ComponentServingServer)
-	log.Println("LabelSelector for serving deployment: ", labelSelector)
 	for {
 		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
 		if err != nil {
@@ -441,7 +439,6 @@ func WaitForServingServerPodsRunning(kubeClient kubernetes.Interface, namespace,
 		}
 		ok := len(podList.Items) > 0
 		for _, p := range podList.Items {
-			log.Println("Checking serving server pod: ", p.Name)
 			ok = ok && isPodReady(p)
 		}
 		if ok {

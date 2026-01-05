@@ -359,6 +359,27 @@ func (s *FunctionalSuite) TestExponentialBackoffRetryStrategyForPipeline() {
 	w.Expect().VertexPodLogNotContains(vertexName, thirdRetryLog, PodLogCheckOptionWithContainer("numa"))
 }
 
+func (s *FunctionalSuite) TestPipelineUserMetadataPropagation() {
+	w := s.Given().Pipeline("@testdata/metadata-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+
+	w.Expect().VertexPodsRunning()
+
+	w.Expect().
+		VertexPodLogContains("map", "Groups at mapper:", PodLogCheckOptionWithContainer("udf")).
+		VertexPodLogContains("map", "event-time-group", PodLogCheckOptionWithContainer("udf")).
+		VertexPodLogContains("map", "simple-source", PodLogCheckOptionWithContainer("udf"))
+
+	w.Expect().
+		VertexPodLogContains("sink", "User Metadata:", PodLogCheckOptionWithContainer("udsink")).
+		VertexPodLogContains("sink", "event-time-group", PodLogCheckOptionWithContainer("udsink")).
+		VertexPodLogContains("sink", "simple-source", PodLogCheckOptionWithContainer("udsink")).
+		VertexPodLogContains("sink", "map-group", PodLogCheckOptionWithContainer("udsink")).
+		VertexPodLogContains("sink", "txn-id", PodLogCheckOptionWithContainer("udsink"))
+}
+
 func TestFunctionalSuite(t *testing.T) {
 	suite.Run(t, new(FunctionalSuite))
 }

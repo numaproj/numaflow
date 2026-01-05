@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"os"
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -437,7 +436,6 @@ func (sp ServingPipeline) buildJetStreamSource(req GetServingPipelineResourceReq
 func (sp ServingPipeline) getStreamValidationInitContainerSpec(req GetServingPipelineResourceReq) corev1.Container {
 	envVars := []corev1.EnvVar{
 		{Name: EnvPipelineName, Value: sp.GetPipelineName()},
-		{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)},
 	}
 	envVars = append(envVars, req.Env...)
 	c := corev1.Container{

@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 	"strconv"
 	"time"
@@ -230,7 +229,6 @@ func (mv MonoVertex) GetDaemonDeploymentObj(req GetMonoVertexDaemonDeploymentReq
 		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
 		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 		{Name: EnvMonoVertexObject, Value: encodedMonoVtx},
-		{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)},
 	}
 	envVars = append(envVars, req.Env...)
 	c := corev1.Container{
@@ -516,6 +514,12 @@ type MonoVertexSpec struct {
 	// +kubebuilder:default={"desiredPhase": Running}
 	// +optional
 	Lifecycle MonoVertexLifecycle `json:"lifecycle,omitempty" protobuf:"bytes,14,opt,name=lifecycle"`
+	// Bypass defines the bypass destination and conditions to trigger bypass for the mono vertex components.
+	// If specified, the bypass will be triggered if the conditions are met at any of the components.
+	// The first level of the bypass spec specifies the destination to which the message will be forwarded to,
+	// and the next level specifies the conditions to trigger the said bypass.
+	// +optional
+	Bypass *MonoVertexBypassCondition `json:"bypass,omitempty" protobuf:"bytes,15,opt,name=bypass"`
 }
 
 func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {

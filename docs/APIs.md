@@ -2587,7 +2587,8 @@ ForwardConditions
 <p>
 
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.Edge">Edge</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.Edge">Edge</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexBypassCondition">MonoVertexBypassCondition</a>)
 </p>
 
 <p>
@@ -6289,6 +6290,32 @@ Lifecycle defines the Lifecycle properties of a MonoVertex
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>bypass</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexBypassCondition">
+MonoVertexBypassCondition </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Bypass defines the bypass destination and conditions to trigger bypass
+for the mono vertex components. If specified, the bypass will be
+triggered if the conditions are met at any of the components. The first
+level of the bypass spec specifies the destination to which the message
+will be forwarded to, and the next level specifies the conditions to
+trigger the said bypass.
+</p>
+
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -6307,6 +6334,113 @@ MonoVertexStatus </a> </em>
 <td>
 
 <em>(Optional)</em>
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.MonoVertexBypassCondition">
+
+MonoVertexBypassCondition
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>sink</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ForwardConditions">
+ForwardConditions </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Conditions to trigger bypass to primary sink component. Definition is
+similar to “conditions” in pipeline spec for edges.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>fallback</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ForwardConditions">
+ForwardConditions </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Conditions to trigger bypass to fallback sink component. Definition is
+similar to “conditions” in pipeline spec for edges.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>onSuccess</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ForwardConditions">
+ForwardConditions </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Conditions to trigger bypass to onSuccess sink component. Definition is
+similar to “conditions” in pipeline spec for edges.
+</p>
+
 </td>
 
 </tr>
@@ -6795,6 +6929,32 @@ MonoVertexLifecycle </a> </em>
 <p>
 
 Lifecycle defines the Lifecycle properties of a MonoVertex
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>bypass</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexBypassCondition">
+MonoVertexBypassCondition </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Bypass defines the bypass destination and conditions to trigger bypass
+for the mono vertex components. If specified, the bypass will be
+triggered if the conditions are met at any of the components. The first
+level of the bypass spec specifies the destination to which the message
+will be forwarded to, and the next level specifies the conditions to
+trigger the said bypass.
 </p>
 
 </td>
