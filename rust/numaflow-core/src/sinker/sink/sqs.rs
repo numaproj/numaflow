@@ -12,7 +12,7 @@ impl TryFrom<Message> for SqsSinkMessage {
 
     fn try_from(msg: Message) -> crate::Result<Self> {
         let id = msg.id.to_string();
-        let mut headers = HashMap::new();
+        let mut headers = (*msg.headers).clone();
 
         if let Some(metadata) = &msg.metadata {
             if let Some(sqs_meta) = metadata.user_metadata.get("sqs") {
