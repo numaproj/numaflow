@@ -6,6 +6,7 @@ use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
 use crate::config::get_vertex_replica;
+use crate::config::monovertex::BypassConditions;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{
@@ -13,6 +14,7 @@ use crate::config::pipeline::{
 };
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
+use crate::monovertex::bypass_router::BypassRouter;
 use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
 use crate::reduce::reducer::WindowManager;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
@@ -65,6 +67,7 @@ pub(crate) async fn create_sink_writer(
     on_success_sink: Option<SinkConfig>,
     serving_store: Option<ServingStore>,
     cln_token: &CancellationToken,
+    bypass_condition: Option<BypassConditions>,
 ) -> error::Result<SinkWriter> {
     let mut sink_writer_builder =
         append_primary_sink_client(batch_size, read_timeout, primary_sink, cln_token).await?;
@@ -83,6 +86,10 @@ pub(crate) async fn create_sink_writer(
 
     if let Some(serving_store) = serving_store {
         sink_writer_builder = sink_writer_builder.serving_store(serving_store);
+    }
+
+    if let Some(bypass_condition) = bypass_condition {
+        sink_writer_builder = sink_writer_builder.bypass_conditions(bypass_condition);
     }
 
     sink_writer_builder.build().await
@@ -320,6 +327,7 @@ pub(crate) async fn create_mapper(
     map_config: MapVtxConfig,
     tracker: Tracker,
     cln_token: CancellationToken,
+    bypass_router: Option<BypassRouter>,
 ) -> error::Result<MapHandle> {
     match map_config.map_type {
         MapType::UserDefined(mut config) => {
@@ -366,6 +374,7 @@ pub(crate) async fn create_mapper(
                         map_config.concurrency,
                         map_grpc_client.clone(),
                         tracker,
+                        bypass_router,
                     )
                     .await?)
                 }
@@ -399,6 +408,7 @@ pub(crate) async fn create_mapper(
                         map_config.concurrency,
                         map_grpc_client.clone(),
                         tracker,
+                        bypass_router,
                     )
                     .await?)
                 }
@@ -418,6 +428,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
     watermark_handle: Option<SourceWatermarkHandle>,
     cln_token: CancellationToken,
     rate_limiter: Option<C::RateLimiter>,
+    bypass_router: Option<BypassRouter>,
 ) -> error::Result<Source<C>> {
     match &source_config.source_type {
         SourceType::Generator(generator_config) => {
@@ -431,6 +442,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
+                bypass_router,
             )
             .await)
         }
@@ -451,6 +463,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
+                bypass_router,
             )
             .await)
         }
@@ -471,6 +484,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
+                bypass_router,
             )
             .await)
         }
@@ -490,6 +504,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
+                bypass_router,
             )
             .await)
         }
@@ -509,6 +524,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
+                bypass_router,
             )
             .await)
         }
@@ -524,6 +540,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
+                bypass_router,
             )
             .await)
         }
@@ -539,6 +556,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
+                bypass_router,
             )
             .await)
         }
@@ -564,6 +582,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
+                bypass_router,
             )
             .await)
         }

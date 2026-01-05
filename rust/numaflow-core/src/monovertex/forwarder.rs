@@ -32,6 +32,7 @@
 //! [Stream]: https://docs.rs/tokio-stream/latest/tokio_stream/wrappers/struct.ReceiverStream.html
 //! [Actor Pattern]: https://ryhl.io/blog/actors-with-tokio/
 
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::Error;
@@ -47,6 +48,7 @@ pub(crate) struct Forwarder<C: crate::typ::NumaflowTypeConfig> {
     source: Source<C>,
     mapper: Option<MapHandle>,
     sink_writer: SinkWriter,
+    bypass_handle: error::Result<JoinHandle<error::Result<()>>>,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
@@ -54,11 +56,13 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
         source: Source<C>,
         mapper: Option<MapHandle>,
         sink_writer: SinkWriter,
+        bypass_handle: error::Result<JoinHandle<error::Result<()>>>,
     ) -> Self {
         Self {
             source,
             mapper,
             sink_writer,
+            bypass_handle,
         }
     }
 
@@ -84,9 +88,17 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
             .streaming_write(mapper_stream, cln_token.clone())
             .await?;
 
+        let bypass_result = self.bypass_handle.expect("");
+
         // Join the reader and sink writer
-        let (reader_result, mapper_handle_result, sink_writer_result) =
-            tokio::try_join!(reader_handle, mapper_handle, sink_writer_handle).map_err(|e| {
+        let (reader_result, mapper_handle_result, sink_writer_result, bypass_result) =
+            tokio::try_join!(
+                reader_handle,
+                mapper_handle,
+                sink_writer_handle,
+                bypass_result
+            )
+            .map_err(|e| {
                 error!(?e, "Error while joining reader, mapper and sink writer");
                 Error::Forwarder(format!(
                     "Error while joining reader, mapper and sink writer: {e:?}"
@@ -103,6 +115,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
 
         reader_result.inspect_err(|e| {
             error!(?e, "Error while reading messages");
+        })?;
+
+        bypass_result.inspect_err(|e| {
+            error!(?e, "Error in bypass router handle");
         })?;
 
         Ok(())
@@ -293,6 +309,7 @@ mod tests {
             Some(transformer),
             None,
             None,
+            None,
         )
         .await;
 
@@ -303,7 +320,12 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), None, sink_writer);
+        let forwarder = Forwarder::new(
+            source.clone(),
+            None,
+            sink_writer,
+            Ok(tokio::task::spawn(async { Ok(()) })),
+        );
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
@@ -422,6 +444,7 @@ mod tests {
             Some(transformer),
             None,
             None,
+            None,
         )
         .await;
 
@@ -432,7 +455,12 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), None, sink_writer);
+        let forwarder = Forwarder::new(
+            source.clone(),
+            None,
+            sink_writer,
+            Ok(tokio::task::spawn(async { Ok(()) })),
+        );
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
@@ -563,6 +591,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
         .await;
 
@@ -592,6 +621,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            None,
         )
         .await
         .unwrap();
@@ -603,7 +633,12 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
+        let forwarder = Forwarder::new(
+            source.clone(),
+            Some(mapper),
+            sink_writer,
+            Ok(tokio::task::spawn(async { Ok(()) })),
+        );
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> =
@@ -679,6 +714,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
         .await;
 
@@ -708,6 +744,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            None,
         )
         .await
         .unwrap();
@@ -719,7 +756,12 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
+        let forwarder = Forwarder::new(
+            source.clone(),
+            Some(mapper),
+            sink_writer,
+            Ok(tokio::task::spawn(async { Ok(()) })),
+        );
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> =
@@ -795,6 +837,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
         .await;
 
@@ -824,6 +867,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            None,
         )
         .await
         .unwrap();
@@ -835,7 +879,12 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
+        let forwarder = Forwarder::new(
+            source.clone(),
+            Some(mapper),
+            sink_writer,
+            Ok(tokio::task::spawn(async { Ok(()) })),
+        );
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> =
@@ -938,6 +987,7 @@ mod tests {
             Some(transformer),
             None,
             None,
+            None,
         )
         .await;
 
@@ -967,6 +1017,7 @@ mod tests {
             10,
             client,
             tracker_handle.clone(),
+            None,
         )
         .await
         .unwrap();
@@ -978,7 +1029,12 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), Some(mapper), sink_writer);
+        let forwarder = Forwarder::new(
+            source.clone(),
+            Some(mapper),
+            sink_writer,
+            Ok(tokio::task::spawn(async { Ok(()) })),
+        );
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<Result<()>> =

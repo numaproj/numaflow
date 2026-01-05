@@ -7,11 +7,12 @@
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
-use crate::message::{AckHandle, ReadAck};
+use crate::message::{AckHandle, MessageID, ReadAck};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_metric_labels, pipeline_metrics,
 };
+use crate::monovertex::bypass_router::BypassRouter;
 use crate::source::http::CoreHttpSource;
 use crate::tracker::Tracker;
 use crate::{
@@ -27,6 +28,7 @@ use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SqsSource;
 use numaflow_throttling::RateLimiter;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use tokio::sync::OwnedSemaphorePermit;
@@ -219,6 +221,7 @@ pub(crate) struct Source<C: crate::typ::NumaflowTypeConfig> {
     watermark_handle: Option<SourceWatermarkHandle>,
     health_checker: Option<SourceClient<Channel>>,
     rate_limiter: Option<C::RateLimiter>,
+    bypass_router: Option<BypassRouter>,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
@@ -231,6 +234,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         transformer: Option<Transformer>,
         watermark_handle: Option<SourceWatermarkHandle>,
         rate_limiter: Option<C::RateLimiter>,
+        bypass_router: Option<BypassRouter>,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(batch_size);
         let mut health_checker = None;
@@ -320,6 +324,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             watermark_handle,
             health_checker,
             rate_limiter,
+            bypass_router,
         }
     }
 
@@ -544,6 +549,41 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     for message in messages.iter_mut() {
                         message.is_late = message.event_time < watermark;
                     }
+                }
+
+                // handle messages that are bypassed to sink if bypass router is present
+                if let Some(ref bypass_router) = self.bypass_router {
+                    let mut bypass_map: HashMap<MessageID, Option<mpsc::Sender<Message>>> =
+                        HashMap::new();
+                    // messages that will be forwarded to the next component
+                    let mut forwarded_messages = vec![];
+
+                    // Iterate over messages and insert the corresponding Some(bypass channel) in the bypass_map
+                    // If the bypass channel is not present/message not to be forwarded, insert None
+                    messages.iter().for_each(|msg| {
+                        bypass_map.insert(
+                            msg.id.clone(),
+                            bypass_router.get_bypass_channel(msg.clone()),
+                        );
+                    });
+
+                    // Iterate over messages and send the message to the bypass channel if present
+                    // else add to forwarded_messages
+                    for msg in messages {
+                        match bypass_map.get(&msg.id) {
+                            Some(Some(channel)) => {
+                                channel
+                                    .send(msg.clone())
+                                    .await
+                                    .expect("send should not fail");
+                            }
+                            Some(None) | None => {
+                                forwarded_messages.push(msg.clone());
+                            }
+                        }
+                    }
+
+                    messages = forwarded_messages;
                 }
 
                 // write the messages to downstream.
@@ -960,6 +1000,7 @@ mod tests {
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
             tracker.clone(),
             true,
+            None,
             None,
             None,
             None,

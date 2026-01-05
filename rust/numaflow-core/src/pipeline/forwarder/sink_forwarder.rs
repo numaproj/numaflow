@@ -239,6 +239,7 @@ async fn run_all_sink_forwarders<C: NumaflowTypeConfig>(
             sink.on_success_sink_config.clone(),
             serving_store.clone(),
             &context.cln_token,
+            None,
         )
         .await?;
 

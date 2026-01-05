@@ -38,7 +38,7 @@ pub(crate) struct MonovertexConfig {
     pub(crate) graceful_shutdown_time: Duration,
     pub(crate) replica: u16,
     pub(crate) source_config: SourceConfig,
-    pub(crate) bypass_condition: Option<ToSinkCondition>,
+    pub(crate) bypass_condition: Option<BypassConditions>,
     pub(crate) map_config: Option<MapVtxConfig>,
     pub(crate) sink_config: SinkConfig,
     pub(crate) transformer_config: Option<TransformerConfig>,
@@ -253,16 +253,16 @@ impl MonovertexConfig {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ToSinkCondition {
+pub(crate) struct BypassConditions {
     pub(crate) sink: Option<Box<ForwardConditions>>,
     pub(crate) fallback: Option<Box<ForwardConditions>>,
     pub(crate) on_success: Option<Box<ForwardConditions>>,
 }
 
-impl TryFrom<Box<MonoVertexBypassCondition>> for ToSinkCondition {
+impl TryFrom<Box<MonoVertexBypassCondition>> for BypassConditions {
     type Error = Error;
     fn try_from(mvtx_sinker_condition: Box<MonoVertexBypassCondition>) -> Result<Self> {
-        Ok(ToSinkCondition {
+        Ok(BypassConditions {
             sink: mvtx_sinker_condition.sink,
             fallback: mvtx_sinker_condition.fallback,
             on_success: mvtx_sinker_condition.on_success,

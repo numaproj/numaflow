@@ -26,9 +26,10 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{error, info};
 
+use crate::config::monovertex::BypassConditions;
+use crate::monovertex::bypass_router::BypassSink;
 use crate::sinker::builder::HealthCheckClients;
 use serve::{ServingStore, StoreEntry};
-
 // Re-export SinkWriterBuilder for external use
 pub(crate) use crate::sinker::builder::SinkWriterBuilder;
 
@@ -93,6 +94,7 @@ pub(crate) struct SinkWriter {
     final_result: Result<()>,
     serving_store: Option<ServingStore>,
     health_check_clients: HealthCheckClients,
+    bypass_conditions: Option<BypassConditions>,
 }
 
 impl SinkWriter {
@@ -105,6 +107,7 @@ impl SinkWriter {
         on_success_sink_handle: Option<mpsc::Sender<SinkActorMessage>>,
         serving_store: Option<ServingStore>,
         health_check_clients: HealthCheckClients,
+        bypass_conditions: Option<BypassConditions>,
     ) -> Self {
         Self {
             batch_size,
@@ -116,6 +119,7 @@ impl SinkWriter {
             final_result: Ok(()),
             serving_store,
             health_check_clients,
+            bypass_conditions,
         }
     }
 
@@ -205,6 +209,15 @@ impl SinkWriter {
 
                 // Main processing loop
                 while let Some(batch) = chunk_stream.next().await {
+                    // If bypass conditions exist for primary sink, drop the batch
+                    let batch = if let Some(conditions) = &self.bypass_conditions
+                        && let Some(_) = conditions.clone().sink
+                    {
+                        vec![]
+                    } else {
+                        batch
+                    };
+
                     // we are in shutting down mode, we will not be writing to the sink,
                     // mark the messages as failed, and on Drop they will be nack'ed.
                     if self.shutting_down_on_err {
@@ -234,6 +247,84 @@ impl SinkWriter {
 
                     // perform the write operation
                     if let Err(e) = self.write(batch, cln_token.clone()).await {
+                        // critical error, cancel upstream and mark all acks as failed
+                        error!(?e, "Error writing to sink, initiating shutdown.");
+                        cln_token.cancel();
+
+                        for ack_handle in ack_handles {
+                            ack_handle
+                                .as_ref()
+                                .expect("ack handle should be present")
+                                .is_failed
+                                .store(true, Ordering::Relaxed);
+                        }
+
+                        self.final_result = Err(e);
+                        self.shutting_down_on_err = true;
+                    }
+                }
+
+                // finalize
+                self.final_result
+            }
+        }))
+    }
+
+    /// Write bypass messages to the respective sink based on BypassSink Enum
+    pub(crate) async fn streaming_bypass_write(
+        mut self,
+        messages_stream: ReceiverStream<Message>,
+        bypass_sink: BypassSink,
+        cln_token: CancellationToken,
+    ) -> Result<JoinHandle<Result<()>>> {
+        Ok(tokio::spawn({
+            async move {
+                info!(?self.batch_size, ?self.chunk_timeout, "Starting sink writer");
+
+                // Combine chunking and timeout into a stream
+                let chunk_stream =
+                    messages_stream.chunks_timeout(self.batch_size, self.chunk_timeout);
+                pin!(chunk_stream);
+
+                // Main processing loop
+                while let Some(batch) = chunk_stream.next().await {
+                    // we are in shutting down mode, we will not be writing to the sink,
+                    // mark the messages as failed, and on Drop they will be nack'ed.
+                    if self.shutting_down_on_err {
+                        for msg in &batch {
+                            msg.ack_handle
+                                .as_ref()
+                                .expect("ack handle should be present")
+                                .is_failed
+                                .store(true, Ordering::Relaxed);
+                        }
+                        continue;
+                    }
+
+                    // collect ack handles for later failure tracking
+                    let ack_handles = batch
+                        .iter()
+                        .map(|msg| msg.ack_handle.clone())
+                        .collect::<Vec<_>>();
+
+                    // filter out messages that are marked for drop
+                    let batch: Vec<_> = batch.into_iter().filter(|msg| !msg.dropped()).collect();
+
+                    // skip if all were dropped
+                    if batch.is_empty() {
+                        continue;
+                    }
+
+                    // perform the write operation
+                    if let Err(e) = match bypass_sink {
+                        BypassSink::Sink => self.write(batch, cln_token.clone()).await,
+                        BypassSink::Fallback => {
+                            self.write_to_fallback(batch, cln_token.clone()).await
+                        }
+                        BypassSink::OnSuccess => {
+                            self.write_to_on_success(batch, cln_token.clone()).await
+                        }
+                    } {
                         // critical error, cancel upstream and mark all acks as failed
                         error!(?e, "Error writing to sink, initiating shutdown.");
                         cln_token.cancel();
