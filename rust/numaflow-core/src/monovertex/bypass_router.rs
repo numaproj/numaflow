@@ -2,6 +2,17 @@
 //! messages to different sinks directly from Source and UDF components of MonoVertex based on
 //! bypass conditions.
 //!
+//! The bypass router struct is initialized to be stored in the source and mapper handles.
+//! During initialization a background router task is also spawned to read messages from the respective
+//! receiver streams for the different sinks to which bypass messages will be sent by the source and mapper.
+//!
+//! The source and mapper handles use helper methods for bypass router to determine if a message
+//! should be bypassed to a sink, and if so, the message is sent to one of the bypass channels held
+//! by the router accordingly.
+//!
+//! The background router task is responsible for reading messages from the bypass channels and
+//! writing them to the respective sinks.
+//!
 //! ```text
 //! +==========================================================================+
 //! |                                MonoVertex                                |
