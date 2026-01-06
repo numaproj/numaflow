@@ -81,8 +81,8 @@ pub struct SqsMessage {
     pub payload: Bytes,
     pub offset: String,
     pub event_time: DateTime<Utc>,
-    pub attributes: Option<HashMap<String, String>>,
     pub headers: HashMap<String, String>,
+    pub user_metadata: HashMap<String, HashMap<String, Vec<u8>>>,
 }
 
 /// Internal actor implementation for managing SQS interactions.
@@ -256,31 +256,25 @@ impl SqsActor {
                     .and_then(|timestamp| Utc.timestamp_millis_opt(timestamp).single())
                     .unwrap_or_else(Utc::now);
 
-                let attributes = msg.message_attributes.as_ref().map(|attrs| {
-                    attrs
-                        .iter()
-                        .map(|(k, v)| (k.clone(), v.string_value.clone().unwrap_or_default()))
-                        .collect()
-                });
-
-                let headers = msg
-                    .attributes
-                    .as_ref()
-                    .map(|attrs| {
-                        attrs
-                            .iter()
-                            .map(|(k, v)| (k.to_string(), v.to_string()))
-                            .collect()
-                    })
-                    .unwrap_or_default();
+                let mut user_metadata = HashMap::new();
+                if let Some(msg_attrs) = &msg.message_attributes {
+                    let mut sqs_attrs = HashMap::new();
+                    for (k, v) in msg_attrs {
+                        if let Some(val) = &v.string_value {
+                            sqs_attrs.insert(k.clone(), val.clone().into_bytes());
+                        }
+                    }
+                    user_metadata.insert("sqs".to_string(), sqs_attrs);
+                }
 
                 SqsMessage {
                     key,
                     payload,
                     offset,
                     event_time,
-                    attributes,
+                    attributes: None, // No longer needed
                     headers,
+                    user_metadata,
                 }
             })
             .collect();

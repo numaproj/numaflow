@@ -8,11 +8,30 @@ use crate::error::Error;
 use crate::message::{Message, MessageID, Offset, StringOffset};
 use crate::source;
 
+use crate::metadata::{KeyValueMap, Metadata};
+
 impl TryFrom<SqsMessage> for Message {
     type Error = Error;
 
     fn try_from(message: SqsMessage) -> crate::Result<Self> {
         let offset = Offset::String(StringOffset::new(message.offset, *get_vertex_replica()));
+
+        let metadata = if message.user_metadata.is_empty() {
+            Some(Arc::new(Metadata::default()))
+        } else {
+            let user_metadata = message
+                .user_metadata
+                .into_iter()
+                .map(|(k, v)| {
+                    let key_value = v.into_iter().map(|(ik, iv)| (ik, iv)).collect();
+                    (k, KeyValueMap { key_value })
+                })
+                .collect();
+            Some(Arc::new(Metadata {
+                user_metadata,
+                ..Default::default()
+            }))
+        };
 
         Ok(Message {
             typ: Default::default(),
@@ -28,8 +47,7 @@ impl TryFrom<SqsMessage> for Message {
                 index: 0,
             },
             headers: Arc::new(message.headers),
-            // Set default metadata so that metadata is always present.
-            metadata: Some(Arc::new(crate::metadata::Metadata::default())),
+            metadata,
             is_late: false,
             ack_handle: None,
         })
