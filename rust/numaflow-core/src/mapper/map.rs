@@ -980,6 +980,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            None,
         )
         .await?;
 
@@ -1207,6 +1208,7 @@ mod tests {
             10,
             client,
             tracker.clone(),
+            None,
         )
         .await?;
 
@@ -1432,6 +1434,7 @@ mod tests {
             10,
             client,
             tracker,
+            None,
         )
         .await?;
 
