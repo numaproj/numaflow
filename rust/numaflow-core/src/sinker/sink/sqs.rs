@@ -185,7 +185,12 @@ pub mod tests {
         // let source = get_sqs_source().await;
         let sink_writer = get_sqs_sink().await;
         // create the forwarder with the source, transformer, and writer
-        let forwarder = Forwarder::new(source.clone(), None, sink_writer, Ok(tokio::task::spawn(async { Ok(()) })));
+        let forwarder = Forwarder::new(
+            source.clone(),
+            None,
+            sink_writer,
+            Ok(tokio::task::spawn(async { Ok(()) })),
+        );
 
         let cancel_token = cln_token.clone();
         let forwarder_handle: JoinHandle<crate::error::Result<()>> = tokio::spawn(async move {
