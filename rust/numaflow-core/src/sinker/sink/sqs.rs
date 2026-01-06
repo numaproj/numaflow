@@ -123,8 +123,14 @@ mod unit_tests {
 
         let sink_msg: SqsSinkMessage = msg.try_into().unwrap();
 
-        assert_eq!(sink_msg.headers.get("SentTimestamp"), Some(&"1677112427387".to_string()));
-        assert_eq!(sink_msg.headers.get("MessageGroupId"), Some(&"group-1".to_string()));
+        assert_eq!(
+            sink_msg.headers.get("SentTimestamp"),
+            Some(&"1677112427387".to_string())
+        );
+        assert_eq!(
+            sink_msg.headers.get("MessageGroupId"),
+            Some(&"group-1".to_string())
+        );
         assert_eq!(sink_msg.message_body, Bytes::from("test payload"));
     }
 
@@ -135,11 +141,19 @@ mod unit_tests {
 
         let mut sqs_custom = HashMap::new();
         sqs_custom.insert("MessageGroupId".to_string(), Bytes::from("fifo-group-1"));
-        sqs_custom.insert("MessageDeduplicationId".to_string(), Bytes::from("dedup-123"));
+        sqs_custom.insert(
+            "MessageDeduplicationId".to_string(),
+            Bytes::from("dedup-123"),
+        );
         sqs_custom.insert("trace_id".to_string(), Bytes::from("trace-abc"));
 
         let mut user_metadata = HashMap::new();
-        user_metadata.insert("sqs".to_string(), KeyValueGroup { key_value: sqs_custom });
+        user_metadata.insert(
+            "sqs".to_string(),
+            KeyValueGroup {
+                key_value: sqs_custom,
+            },
+        );
 
         let metadata = Metadata {
             previous_vertex: "".to_string(),
@@ -168,10 +182,22 @@ mod unit_tests {
 
         let sink_msg: SqsSinkMessage = msg.try_into().unwrap();
 
-        assert_eq!(sink_msg.headers.get("SentTimestamp"), Some(&"1677112427387".to_string()));
-        assert_eq!(sink_msg.headers.get("MessageGroupId"), Some(&"fifo-group-1".to_string()));
-        assert_eq!(sink_msg.headers.get("MessageDeduplicationId"), Some(&"dedup-123".to_string()));
-        assert_eq!(sink_msg.headers.get("trace_id"), Some(&"trace-abc".to_string()));
+        assert_eq!(
+            sink_msg.headers.get("SentTimestamp"),
+            Some(&"1677112427387".to_string())
+        );
+        assert_eq!(
+            sink_msg.headers.get("MessageGroupId"),
+            Some(&"fifo-group-1".to_string())
+        );
+        assert_eq!(
+            sink_msg.headers.get("MessageDeduplicationId"),
+            Some(&"dedup-123".to_string())
+        );
+        assert_eq!(
+            sink_msg.headers.get("trace_id"),
+            Some(&"trace-abc".to_string())
+        );
     }
 
     #[test]
@@ -180,10 +206,18 @@ mod unit_tests {
         headers.insert("MessageGroupId".to_string(), "original-group".to_string());
 
         let mut sqs_custom = HashMap::new();
-        sqs_custom.insert("MessageGroupId".to_string(), Bytes::from("overridden-group"));
+        sqs_custom.insert(
+            "MessageGroupId".to_string(),
+            Bytes::from("overridden-group"),
+        );
 
         let mut user_metadata = HashMap::new();
-        user_metadata.insert("sqs".to_string(), KeyValueGroup { key_value: sqs_custom });
+        user_metadata.insert(
+            "sqs".to_string(),
+            KeyValueGroup {
+                key_value: sqs_custom,
+            },
+        );
 
         let metadata = Metadata {
             previous_vertex: "".to_string(),
@@ -213,7 +247,10 @@ mod unit_tests {
         let sink_msg: SqsSinkMessage = msg.try_into().unwrap();
 
         // Metadata overrides headers
-        assert_eq!(sink_msg.headers.get("MessageGroupId"), Some(&"overridden-group".to_string()));
+        assert_eq!(
+            sink_msg.headers.get("MessageGroupId"),
+            Some(&"overridden-group".to_string())
+        );
     }
 }
 
