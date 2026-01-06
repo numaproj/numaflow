@@ -69,20 +69,17 @@ enum SQSActorMessage {
     },
 }
 
-/// Represents a message received from SQS with metadata.
-///
-/// Design choices:
-/// - Uses Bytes for efficient handling of message payloads
-/// - Includes full message metadata for debugging
-/// - Maintains original SQS attributes and headers
+/// A message received from SQS.
 #[derive(Debug)]
 pub struct SqsMessage {
     pub key: String,
     pub payload: Bytes,
     pub offset: String,
     pub event_time: DateTime<Utc>,
-    pub headers: HashMap<String, String>,
-    pub user_metadata: HashMap<String, HashMap<String, Vec<u8>>>,
+    /// SQS system attributes (SentTimestamp, MessageGroupId, etc.)
+    pub system_attributes: HashMap<String, String>,
+    /// User-defined message attributes from `message_attributes`, keyed by namespace.
+    pub custom_attributes: HashMap<String, HashMap<String, Vec<u8>>>,
 }
 
 /// Internal actor implementation for managing SQS interactions.
@@ -256,7 +253,18 @@ impl SqsActor {
                     .and_then(|timestamp| Utc.timestamp_millis_opt(timestamp).single())
                     .unwrap_or_else(Utc::now);
 
-                let mut user_metadata = HashMap::new();
+                let system_attributes: HashMap<String, String> = msg
+                    .attributes
+                    .as_ref()
+                    .map(|attrs| {
+                        attrs
+                            .iter()
+                            .map(|(k, v)| (k.as_str().to_string(), v.clone()))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                let mut custom_attributes = HashMap::new();
                 if let Some(msg_attrs) = &msg.message_attributes {
                     let mut sqs_attrs = HashMap::new();
                     for (k, v) in msg_attrs {
@@ -264,7 +272,7 @@ impl SqsActor {
                             sqs_attrs.insert(k.clone(), val.clone().into_bytes());
                         }
                     }
-                    user_metadata.insert("sqs".to_string(), sqs_attrs);
+                    custom_attributes.insert("sqs".to_string(), sqs_attrs);
                 }
 
                 SqsMessage {
@@ -272,9 +280,8 @@ impl SqsActor {
                     payload,
                     offset,
                     event_time,
-                    attributes: None, // No longer needed
-                    headers,
-                    user_metadata,
+                    system_attributes,
+                    custom_attributes,
                 }
             })
             .collect();
@@ -663,7 +670,12 @@ mod tests {
             msg1.offset,
             "AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q"
         );
-        assert_eq!(msg1.attributes.clone().unwrap().len(), 1);
+        assert_eq!(msg1.system_attributes.len(), 1);
+        assert!(msg1.system_attributes.contains_key("SentTimestamp"));
+
+        assert!(msg1.custom_attributes.contains_key("sqs"));
+        let sqs_attrs = msg1.custom_attributes.get("sqs").unwrap();
+        assert!(sqs_attrs.contains_key("AwsTraceHeader"));
 
         // test another config
 

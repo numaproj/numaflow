@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use numaflow_sqs::sink::{SqsSink, SqsSinkMessage};
 
 use crate::error;
@@ -83,6 +81,139 @@ impl Sink for SqsSink {
             }
         }
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    use bytes::Bytes;
+    use chrono::Utc;
+    use numaflow_sqs::sink::SqsSinkMessage;
+
+    use crate::message::{Message, MessageID, Offset, StringOffset};
+    use crate::metadata::{KeyValueGroup, Metadata};
+
+    #[test]
+    fn test_message_to_sqs_sink_message_with_headers_only() {
+        let mut headers = HashMap::new();
+        headers.insert("SentTimestamp".to_string(), "1677112427387".to_string());
+        headers.insert("MessageGroupId".to_string(), "group-1".to_string());
+
+        let msg = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key".to_string()]),
+            tags: None,
+            value: Bytes::from("test payload"),
+            offset: Offset::String(StringOffset::new("offset".to_string(), 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "test".to_string().into(),
+                offset: "offset".to_string().into(),
+                index: 0,
+            },
+            headers: Arc::new(headers.clone()),
+            metadata: None,
+            is_late: false,
+            ack_handle: None,
+        };
+
+        let sink_msg: SqsSinkMessage = msg.try_into().unwrap();
+
+        assert_eq!(sink_msg.headers.get("SentTimestamp"), Some(&"1677112427387".to_string()));
+        assert_eq!(sink_msg.headers.get("MessageGroupId"), Some(&"group-1".to_string()));
+        assert_eq!(sink_msg.message_body, Bytes::from("test payload"));
+    }
+
+    #[test]
+    fn test_message_to_sqs_sink_message_with_metadata_merge() {
+        let mut headers = HashMap::new();
+        headers.insert("SentTimestamp".to_string(), "1677112427387".to_string());
+
+        let mut sqs_custom = HashMap::new();
+        sqs_custom.insert("MessageGroupId".to_string(), Bytes::from("fifo-group-1"));
+        sqs_custom.insert("MessageDeduplicationId".to_string(), Bytes::from("dedup-123"));
+        sqs_custom.insert("trace_id".to_string(), Bytes::from("trace-abc"));
+
+        let mut user_metadata = HashMap::new();
+        user_metadata.insert("sqs".to_string(), KeyValueGroup { key_value: sqs_custom });
+
+        let metadata = Metadata {
+            previous_vertex: "".to_string(),
+            sys_metadata: HashMap::new(),
+            user_metadata,
+        };
+
+        let msg = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key".to_string()]),
+            tags: None,
+            value: Bytes::from("test payload"),
+            offset: Offset::String(StringOffset::new("offset".to_string(), 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "test".to_string().into(),
+                offset: "offset".to_string().into(),
+                index: 0,
+            },
+            headers: Arc::new(headers),
+            metadata: Some(Arc::new(metadata)),
+            is_late: false,
+            ack_handle: None,
+        };
+
+        let sink_msg: SqsSinkMessage = msg.try_into().unwrap();
+
+        assert_eq!(sink_msg.headers.get("SentTimestamp"), Some(&"1677112427387".to_string()));
+        assert_eq!(sink_msg.headers.get("MessageGroupId"), Some(&"fifo-group-1".to_string()));
+        assert_eq!(sink_msg.headers.get("MessageDeduplicationId"), Some(&"dedup-123".to_string()));
+        assert_eq!(sink_msg.headers.get("trace_id"), Some(&"trace-abc".to_string()));
+    }
+
+    #[test]
+    fn test_message_to_sqs_sink_message_metadata_overrides_headers() {
+        let mut headers = HashMap::new();
+        headers.insert("MessageGroupId".to_string(), "original-group".to_string());
+
+        let mut sqs_custom = HashMap::new();
+        sqs_custom.insert("MessageGroupId".to_string(), Bytes::from("overridden-group"));
+
+        let mut user_metadata = HashMap::new();
+        user_metadata.insert("sqs".to_string(), KeyValueGroup { key_value: sqs_custom });
+
+        let metadata = Metadata {
+            previous_vertex: "".to_string(),
+            sys_metadata: HashMap::new(),
+            user_metadata,
+        };
+
+        let msg = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key".to_string()]),
+            tags: None,
+            value: Bytes::from("test payload"),
+            offset: Offset::String(StringOffset::new("offset".to_string(), 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "test".to_string().into(),
+                offset: "offset".to_string().into(),
+                index: 0,
+            },
+            headers: Arc::new(headers),
+            metadata: Some(Arc::new(metadata)),
+            is_late: false,
+            ack_handle: None,
+        };
+
+        let sink_msg: SqsSinkMessage = msg.try_into().unwrap();
+
+        // Metadata overrides headers
+        assert_eq!(sink_msg.headers.get("MessageGroupId"), Some(&"overridden-group".to_string()));
     }
 }
 
