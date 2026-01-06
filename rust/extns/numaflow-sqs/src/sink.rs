@@ -130,6 +130,10 @@ impl SqsSink {
         &self,
         messages: Vec<SqsSinkMessage>,
     ) -> Result<Vec<SqsSinkResponse>> {
+        for msg in &messages {
+            // TODO: Remove this debug log after verifying SQS headers
+            tracing::debug!(id = ?msg.id, headers = ?msg.headers, "SqsSink received message");
+        }
         let mut entries = Vec::with_capacity(messages.len());
         let mut id_correlation = std::collections::HashMap::with_capacity(messages.len());
 
