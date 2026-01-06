@@ -56,6 +56,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
         source: Source<C>,
         mapper: Option<MapHandle>,
         sink_writer: SinkWriter,
+        // TODO: REVIEW - Should this be here?
         bypass_handle: error::Result<JoinHandle<error::Result<()>>>,
     ) -> Self {
         Self {
