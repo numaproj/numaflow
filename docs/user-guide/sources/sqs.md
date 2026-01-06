@@ -115,9 +115,50 @@ kubectl get pods -l numaflow.numaproj.io/vertex-name=sqs-reader
 ```
 
 
-## Miscellaneous
+## Message Attributes and Headers
 
-### Troubleshooting
+The SQS source propagates message attributes through the pipeline, making them available to UDFs and downstream sinks.
+
+### System Attributes
+
+When `attributeNames` is configured, SQS system attributes (e.g., `SentTimestamp`, `ApproximateReceiveCount`, `MessageGroupId`, `MessageDeduplicationId`) are propagated as **message headers**. These are accessible in UDFs via `datum.Headers()` (Go) or `datum.headers` (Python).
+
+### Custom Attributes
+
+When `messageAttributeNames` is configured, user-defined message attributes are propagated as **message metadata** under the `sqs` namespace. These are accessible in UDFs via the metadata API.
+
+### Example: Accessing SQS Attributes in a UDF
+
+**Go SDK:**
+```go
+func handler(ctx context.Context, keys []string, datum functionsdk.Datum) functionsdk.Messages {
+    // Access system attributes via headers
+    headers := datum.Headers()
+    sentTimestamp := headers["SentTimestamp"]
+    messageGroupId := headers["MessageGroupId"]
+    
+    // Process message...
+    return functionsdk.MessagesBuilder().Append(datum.Value())
+}
+```
+
+**Python SDK:**
+```python
+def handler(keys: list[str], datum: Datum) -> Messages:
+    # Access system attributes via headers
+    headers = datum.headers
+    sent_timestamp = headers.get("SentTimestamp")
+    message_group_id = headers.get("MessageGroupId")
+    
+    # Process message...
+    return Messages(Message(datum.value))
+```
+
+### FIFO Queue Support
+
+For FIFO queues, the `MessageGroupId` and `MessageDeduplicationId` attributes are automatically propagated through the pipeline. When using an SQS sink, these values are passed to the destination queue to maintain FIFO ordering and deduplication.
+
+## Troubleshooting
 
 - Check the pods logs for any errors:
 ```bash

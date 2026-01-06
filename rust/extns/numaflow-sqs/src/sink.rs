@@ -7,7 +7,7 @@ use aws_sdk_sqs::Client;
 use aws_sdk_sqs::types::SendMessageBatchRequestEntry;
 use bytes::Bytes;
 
-use crate::{AssumeRoleConfig, Error, SqsConfig, SqsSinkError};
+use crate::{AssumeRoleConfig, Error, SqsConfig, SqsSinkError, extract_aws_error};
 
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 
@@ -107,7 +107,7 @@ impl SqsSinkBuilder {
             .queue_owner_aws_account_id(queue_owner_aws_account_id)
             .send()
             .await
-            .map_err(|err| Error::Sqs(err.into()))?;
+            .map_err(|err| Error::Sqs(extract_aws_error(&err)))?;
 
         let queue_url = get_queue_url_output
             .queue_url
@@ -174,7 +174,7 @@ impl SqsSink {
             .set_entries(Some(entries))
             .send()
             .await
-            .map_err(|e| SqsSinkError::from(Error::Sqs(e.into())))?;
+            .map_err(|e| SqsSinkError::from(Error::Sqs(extract_aws_error(&e))))?;
 
         let mut responses = Vec::new();
 
@@ -409,10 +409,8 @@ mod tests {
         assert!(result.is_err());
 
         let error = result.unwrap_err();
-        assert_eq!(
-            error.to_string(),
-            "SQS Sink Error: Failed with SQS error - unhandled error (InvalidParameterValue)"
-        );
+        // Error now includes both code and message from AWS
+        assert!(error.to_string().contains("InvalidParameterValue"));
         assert!(matches!(error, SqsSinkError::Error(Error::Sqs(_))));
     }
 

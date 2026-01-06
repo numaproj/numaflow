@@ -22,7 +22,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 use crate::Error::ActorTaskTerminated;
-use crate::{AssumeRoleConfig, Error, SqsConfig, SqsSourceError};
+use crate::{AssumeRoleConfig, Error, SqsConfig, SqsSourceError, extract_aws_error};
 
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 
@@ -230,7 +230,7 @@ impl SqsActor {
                     queue_url = self.queue_url,
                     "failed to receive messages from SQS"
                 );
-                return Some(Err(SqsSourceError::from(Error::Sqs(err.into()))));
+                return Some(Err(SqsSourceError::from(Error::Sqs(extract_aws_error(&err)))));
             }
         };
 
@@ -316,7 +316,7 @@ impl SqsActor {
                     .build()
                     .map_err(|err| {
                         error!(?err, "Failed to build DeleteMessageBatchRequestEntry",);
-                        Error::Sqs(err.into())
+                        Error::Other(format!("Failed to build delete request: {}", err))
                     })?,
             );
         }
@@ -327,7 +327,7 @@ impl SqsActor {
                 queue_url = self.queue_url,
                 "Failed to delete messages from SQS"
             );
-            return Err(SqsSourceError::from(Error::Sqs(e.into())));
+            return Err(SqsSourceError::from(Error::Sqs(extract_aws_error(&e))));
         }
         Ok(())
     }
@@ -353,7 +353,7 @@ impl SqsActor {
                     queue_url = ?self.queue_url,
                     "failed to get queue attributes from SQS"
                 );
-                return Err(SqsSourceError::from(Error::Sqs(err.into())));
+                return Err(SqsSourceError::from(Error::Sqs(extract_aws_error(&err))));
             }
         };
 
@@ -485,7 +485,7 @@ impl SqsSourceBuilder {
             .queue_owner_aws_account_id(queue_owner_aws_account_id)
             .send()
             .await
-            .map_err(|err| Error::Sqs(err.into()))?;
+            .map_err(|err| Error::Sqs(extract_aws_error(&err)))?;
 
         let queue_url = get_queue_url_output
             .queue_url
@@ -750,10 +750,8 @@ mod tests {
         match messages {
             Some(Ok(_)) => panic!("Expected an error, but got a successful response"),
             Some(Err(err)) => {
-                assert_eq!(
-                    err.to_string(),
-                    "SQS Source Error: Failed with SQS error - unhandled error (InvalidAddress)"
-                );
+                // Error contains the AWS error code
+                assert!(err.to_string().contains("InvalidAddress"));
             }
             None => panic!("Expected an error, but got None"),
         }
