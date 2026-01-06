@@ -60,7 +60,7 @@ impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
 
         let (mapped_messages_stream, mapper_handle) = self
             .mapper
-            .streaming_map(read_messages_stream, cln_token.clone())
+            .streaming_map(read_messages_stream, cln_token.clone(), None)
             .await?;
 
         let writer_handle = self
@@ -252,7 +252,6 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
             map_vtx_config.clone(),
             context.tracker.clone(),
             context.cln_token.clone(),
-            None,
         )
         .await?;
 

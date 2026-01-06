@@ -138,7 +138,6 @@ pub(crate) struct MapHandle {
     /// The moment we see an error, we will set this to true.
     shutting_down_on_err: bool,
     health_checker: Option<MapClient<Channel>>,
-    bypass_router: Option<BypassRouter>,
 }
 
 /// Response channel size for streaming map.
@@ -156,7 +155,6 @@ impl MapHandle {
         concurrency: usize,
         client: MapClient<Channel>,
         tracker: Tracker,
-        bypass_router: Option<BypassRouter>,
     ) -> error::Result<Self> {
         // Based on the map mode, spawn the appropriate map actor
         // and store the sender handle in the actor_sender.
@@ -206,7 +204,6 @@ impl MapHandle {
             final_result: Ok(()),
             shutting_down_on_err: false,
             health_checker: Some(client),
-            bypass_router,
         })
     }
 
@@ -218,6 +215,7 @@ impl MapHandle {
         mut self,
         input_stream: ReceiverStream<Message>,
         cln_token: CancellationToken,
+        bypass_router: Option<BypassRouter>,
     ) -> error::Result<(ReceiverStream<Message>, JoinHandle<error::Result<()>>)> {
         let (output_tx, output_rx) = mpsc::channel(self.batch_size);
         let (error_tx, mut error_rx) = mpsc::channel(self.batch_size);
@@ -287,7 +285,7 @@ impl MapHandle {
                                     self.tracker.clone(),
                                     error_tx.clone(),
                                     hard_shutdown_token.clone(),
-                                    self.bypass_router.clone(),
+                                    bypass_router.clone(),
                                 ).await;
                             }
                         },
@@ -324,7 +322,7 @@ impl MapHandle {
                                 batch,
                                 output_tx.clone(),
                                 self.tracker.clone(),
-                                self.bypass_router.clone(),
+                                bypass_router.clone(),
                             )
                             .await
                         {
@@ -382,7 +380,7 @@ impl MapHandle {
                                     self.tracker.clone(),
                                     error_tx,
                                     cln_token.clone(),
-                                    self.bypass_router.clone(),
+                                    bypass_router.clone(),
                                 ).await;
                             }
                         },
@@ -468,14 +466,20 @@ impl MapHandle {
                                 .await
                                 .expect("failed to update tracker");
 
-                            let mapped_messages = Self::bypass_router_helper(mapped_messages, bypass_router.clone()).await;
-
                             // send messages downstream
                             for mapped_message in mapped_messages {
-                                output_tx
+                                if let Some(ref bypass_router) = bypass_router &&
+                                let Some(bypass_tx) = bypass_router.get_bypass_channel(mapped_message.clone()) {
+                                    bypass_tx
+                                    .send(mapped_message)
+                                    .await
+                                    .expect("bypass send should not fail");
+                                } else {
+                                    output_tx
                                     .send(mapped_message)
                                     .await
                                     .expect("failed to send response");
+                                }
                             }
                         }
                         Ok(Err(map_err)) => {
@@ -557,14 +561,21 @@ impl MapHandle {
                             .await?;
                     }
 
-                    let mapped_messages =
-                        Self::bypass_router_helper(mapped_messages, bypass_router.clone()).await;
-
                     for mapped_message in mapped_messages {
-                        output_tx
-                            .send(mapped_message)
-                            .await
-                            .expect("failed to send response");
+                        if let Some(ref bypass_router) = bypass_router
+                            && let Some(bypass_tx) =
+                                bypass_router.get_bypass_channel(mapped_message.clone())
+                        {
+                            bypass_tx
+                                .send(mapped_message)
+                                .await
+                                .expect("bypass send should not fail");
+                        } else {
+                            output_tx
+                                .send(mapped_message)
+                                .await
+                                .expect("failed to send response");
+                        }
                     }
                 }
                 Ok(Err(_map_err)) => {
@@ -638,7 +649,8 @@ impl MapHandle {
                                     .await
                                     .expect("failed to update tracker");
 
-                                if let Some(ref bypass_router) = bypass_router && let Some(bypass_channel) = bypass_router.get_bypass_channel(mapped_message.clone()){
+                                if let Some(ref bypass_router) = bypass_router &&
+                                let Some(bypass_channel) = bypass_router.get_bypass_channel(mapped_message.clone()){
                                     bypass_channel.send(mapped_message).await.expect("failed to send bypass message");
                                 } else {
                                     output_tx.send(mapped_message).await.expect("failed to send response");
@@ -793,7 +805,6 @@ mod tests {
             10,
             client,
             tracker.clone(),
-            None,
         )
         .await?;
 
@@ -887,7 +898,6 @@ mod tests {
             10,
             client,
             tracker.clone(),
-            None,
         )
         .await?;
 
@@ -915,7 +925,7 @@ mod tests {
         drop(input_tx);
 
         let (output_stream, map_handle) = mapper
-            .streaming_map(input_stream, CancellationToken::new())
+            .streaming_map(input_stream, CancellationToken::new(), None)
             .await?;
 
         let mut output_rx = output_stream.into_inner();
@@ -980,7 +990,6 @@ mod tests {
             10,
             client,
             tracker.clone(),
-            None,
         )
         .await?;
 
@@ -988,7 +997,7 @@ mod tests {
         let input_stream = ReceiverStream::new(input_rx);
         let cln_token = CancellationToken::new();
         let (_output_stream, map_handle) = mapper
-            .streaming_map(input_stream, cln_token.clone())
+            .streaming_map(input_stream, cln_token.clone(), None)
             .await?;
         let mut ack_rxs = vec![];
         // send 10 requests to the mapper
@@ -1092,7 +1101,6 @@ mod tests {
             10,
             client,
             tracker.clone(),
-            None,
         )
         .await?;
 
@@ -1138,7 +1146,7 @@ mod tests {
         drop(input_tx);
 
         let (output_stream, map_handle) = mapper
-            .streaming_map(input_stream, CancellationToken::new())
+            .streaming_map(input_stream, CancellationToken::new(), None)
             .await?;
         let mut output_rx = output_stream.into_inner();
 
@@ -1208,7 +1216,6 @@ mod tests {
             10,
             client,
             tracker.clone(),
-            None,
         )
         .await?;
 
@@ -1257,7 +1264,7 @@ mod tests {
         }
 
         let (_output_stream, map_handle) = mapper
-            .streaming_map(input_stream, cln_token.clone())
+            .streaming_map(input_stream, cln_token.clone(), None)
             .await?;
 
         drop(input_tx);
@@ -1334,7 +1341,6 @@ mod tests {
             10,
             client,
             tracker.clone(),
-            None,
         )
         .await?;
 
@@ -1361,7 +1367,7 @@ mod tests {
         drop(input_tx);
 
         let (mut output_stream, map_handle) = mapper
-            .streaming_map(input_stream, CancellationToken::new())
+            .streaming_map(input_stream, CancellationToken::new(), None)
             .await?;
 
         let mut responses = vec![];
@@ -1434,7 +1440,6 @@ mod tests {
             10,
             client,
             tracker,
-            None,
         )
         .await?;
 
@@ -1442,7 +1447,7 @@ mod tests {
         let input_stream = ReceiverStream::new(input_rx);
 
         let (_output_stream, map_handle) = mapper
-            .streaming_map(input_stream, cln_token.clone())
+            .streaming_map(input_stream, cln_token.clone(), None)
             .await?;
 
         let mut ack_rxs = vec![];

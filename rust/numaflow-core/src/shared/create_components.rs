@@ -327,7 +327,6 @@ pub(crate) async fn create_mapper(
     map_config: MapVtxConfig,
     tracker: Tracker,
     cln_token: CancellationToken,
-    bypass_router: Option<BypassRouter>,
 ) -> error::Result<MapHandle> {
     match map_config.map_type {
         MapType::UserDefined(mut config) => {
@@ -374,7 +373,6 @@ pub(crate) async fn create_mapper(
                         map_config.concurrency,
                         map_grpc_client.clone(),
                         tracker,
-                        bypass_router,
                     )
                     .await?)
                 }
@@ -408,7 +406,6 @@ pub(crate) async fn create_mapper(
                         map_config.concurrency,
                         map_grpc_client.clone(),
                         tracker,
-                        bypass_router,
                     )
                     .await?)
                 }
@@ -428,7 +425,6 @@ pub async fn create_source<C: NumaflowTypeConfig>(
     watermark_handle: Option<SourceWatermarkHandle>,
     cln_token: CancellationToken,
     rate_limiter: Option<C::RateLimiter>,
-    bypass_router: Option<BypassRouter>,
 ) -> error::Result<Source<C>> {
     match &source_config.source_type {
         SourceType::Generator(generator_config) => {
@@ -442,7 +438,6 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
-                bypass_router,
             )
             .await)
         }
@@ -463,7 +458,6 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
-                bypass_router,
             )
             .await)
         }
@@ -484,7 +478,6 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
-                bypass_router,
             )
             .await)
         }
@@ -504,7 +497,6 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
-                bypass_router,
             )
             .await)
         }
@@ -524,7 +516,6 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
-                bypass_router,
             )
             .await)
         }
@@ -540,7 +531,6 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
-                bypass_router,
             )
             .await)
         }
@@ -556,7 +546,6 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
-                bypass_router,
             )
             .await)
         }
@@ -582,7 +571,6 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 transformer,
                 watermark_handle,
                 rate_limiter,
-                bypass_router,
             )
             .await)
         }

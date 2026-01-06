@@ -7,6 +7,7 @@ use crate::metrics::{
 };
 use crate::pipeline::PipelineContext;
 
+use crate::monovertex::bypass_router::BypassRouter;
 use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
@@ -40,7 +41,8 @@ impl<C: crate::typ::NumaflowTypeConfig> SourceForwarder<C> {
 
     /// Start the forwarder by starting the streaming source, transformer, and writer.
     pub(crate) async fn start(self, cln_token: CancellationToken) -> error::Result<()> {
-        let (messages_stream, reader_handle) = self.source.streaming_read(cln_token.clone())?;
+        let (messages_stream, reader_handle) =
+            self.source.streaming_read(cln_token.clone(), None)?;
 
         let writer_handle = self
             .writer
@@ -183,7 +185,6 @@ async fn run_source_forwarder<C: NumaflowTypeConfig>(
         source_watermark_handle.clone(),
         context.cln_token.clone(),
         rate_limiter,
-        None,
     )
     .await?;
 
@@ -412,7 +413,6 @@ mod tests {
             tracker.clone(),
             true,
             Some(transformer),
-            None,
             None,
             None,
         )

@@ -221,7 +221,6 @@ pub(crate) struct Source<C: crate::typ::NumaflowTypeConfig> {
     watermark_handle: Option<SourceWatermarkHandle>,
     health_checker: Option<SourceClient<Channel>>,
     rate_limiter: Option<C::RateLimiter>,
-    bypass_router: Option<BypassRouter>,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
@@ -234,7 +233,6 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         transformer: Option<Transformer>,
         watermark_handle: Option<SourceWatermarkHandle>,
         rate_limiter: Option<C::RateLimiter>,
-        bypass_router: Option<BypassRouter>,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(batch_size);
         let mut health_checker = None;
@@ -324,7 +322,6 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             watermark_handle,
             health_checker,
             rate_limiter,
-            bypass_router,
         }
     }
 
@@ -402,6 +399,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     pub(crate) fn streaming_read(
         mut self,
         cln_token: CancellationToken,
+        bypass_router: Option<BypassRouter>,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.read_batch_size);
 
@@ -551,47 +549,21 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     }
                 }
 
-                // handle messages that are bypassed to sink if bypass router is present
-                if let Some(ref bypass_router) = self.bypass_router {
-                    let mut bypass_map: HashMap<MessageID, Option<mpsc::Sender<Message>>> =
-                        HashMap::new();
-                    // messages that will be forwarded to the next component
-                    let mut forwarded_messages = vec![];
-
-                    // Iterate over messages and insert the corresponding Some(bypass channel) in the bypass_map
-                    // If the bypass channel is not present/message not to be forwarded, insert None
-                    messages.iter().for_each(|msg| {
-                        bypass_map.insert(
-                            msg.id.clone(),
-                            bypass_router.get_bypass_channel(msg.clone()),
-                        );
-                    });
-
-                    // Iterate over messages and send the message to the bypass channel if present
-                    // else add to forwarded_messages
-                    for msg in messages {
-                        match bypass_map.get(&msg.id) {
-                            Some(Some(channel)) => {
-                                channel
-                                    .send(msg.clone())
-                                    .await
-                                    .expect("send should not fail");
-                            }
-                            Some(None) | None => {
-                                forwarded_messages.push(msg.clone());
-                            }
-                        }
-                    }
-
-                    messages = forwarded_messages;
-                }
-
                 // write the messages to downstream.
                 for message in messages {
-                    messages_tx
-                        .send(message)
-                        .await
-                        .expect("send should not fail");
+                    if let Some(ref bypass_router) = bypass_router
+                        && let Some(bypass_tx) = bypass_router.get_bypass_channel(message.clone())
+                    {
+                        bypass_tx
+                            .send(message)
+                            .await
+                            .expect("bypass send should not fail");
+                    } else {
+                        messages_tx
+                            .send(message)
+                            .await
+                            .expect("send should not fail");
+                    }
                 }
             }
             info!(status=?result, "Source stopped, waiting for inflight messages to be acked/nacked");
@@ -1003,13 +975,15 @@ mod tests {
             None,
             None,
             None,
-            None,
         )
         .await;
 
         let sender = source.sender.clone();
 
-        let (mut stream, handle) = source.clone().streaming_read(cln_token.clone()).unwrap();
+        let (mut stream, handle) = source
+            .clone()
+            .streaming_read(cln_token.clone(), None)
+            .unwrap();
         let mut offsets = vec![];
         let mut messages = Vec::with_capacity(50);
         // we should read all the 100 messages
