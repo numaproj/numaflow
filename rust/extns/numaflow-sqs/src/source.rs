@@ -230,7 +230,9 @@ impl SqsActor {
                     queue_url = self.queue_url,
                     "failed to receive messages from SQS"
                 );
-                return Some(Err(SqsSourceError::from(Error::Sqs(extract_aws_error(&err)))));
+                return Some(Err(SqsSourceError::from(Error::Sqs(extract_aws_error(
+                    &err,
+                )))));
             }
         };
 
