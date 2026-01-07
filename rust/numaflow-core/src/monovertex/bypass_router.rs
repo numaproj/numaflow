@@ -56,7 +56,7 @@ use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 
-pub(crate) enum BypassSink {
+pub(crate) enum BypassToSink {
     Sink,
     Fallback,
     OnSuccess,
@@ -204,13 +204,13 @@ impl BypassRouter {
         cln_token: CancellationToken,
     ) -> error::Result<JoinHandle<error::Result<()>>> {
         let sink_join_handle = self
-            .get_bypass_write_handle(sink_rx, BypassSink::Sink, cln_token.clone())
+            .get_bypass_write_handle(sink_rx, BypassToSink::Sink, cln_token.clone())
             .await?;
         let fallback_join_handle = self
-            .get_bypass_write_handle(fallback_rx, BypassSink::Fallback, cln_token.clone())
+            .get_bypass_write_handle(fallback_rx, BypassToSink::Fallback, cln_token.clone())
             .await?;
         let onsuccess_join_handle = self
-            .get_bypass_write_handle(on_success_rx, BypassSink::OnSuccess, cln_token.clone())
+            .get_bypass_write_handle(on_success_rx, BypassToSink::OnSuccess, cln_token.clone())
             .await?;
 
         // Join the mapper and second splitter handle and returns a single handle
@@ -252,7 +252,7 @@ impl BypassRouter {
     async fn get_bypass_write_handle(
         &self,
         rx: Option<Receiver<Message>>,
-        bypass_sink: BypassSink,
+        bypass_sink: BypassToSink,
         cln_token: CancellationToken,
     ) -> error::Result<JoinHandle<error::Result<()>>> {
         if let Some(rx) = rx {

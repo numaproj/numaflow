@@ -27,7 +27,7 @@ use tonic::transport::Channel;
 use tracing::{error, info};
 
 use crate::config::monovertex::BypassConditions;
-use crate::monovertex::bypass_router::BypassSink;
+use crate::monovertex::bypass_router::BypassToSink;
 use crate::sinker::builder::HealthCheckClients;
 use serve::{ServingStore, StoreEntry};
 // Re-export SinkWriterBuilder for external use
@@ -274,7 +274,7 @@ impl SinkWriter {
     pub(crate) async fn streaming_bypass_write(
         mut self,
         messages_stream: ReceiverStream<Message>,
-        bypass_sink: BypassSink,
+        bypass_sink: BypassToSink,
         cln_token: CancellationToken,
     ) -> Result<JoinHandle<Result<()>>> {
         Ok(tokio::spawn({
@@ -317,11 +317,11 @@ impl SinkWriter {
 
                     // perform the write operation
                     if let Err(e) = match bypass_sink {
-                        BypassSink::Sink => self.write(batch, cln_token.clone()).await,
-                        BypassSink::Fallback => {
+                        BypassToSink::Sink => self.write(batch, cln_token.clone()).await,
+                        BypassToSink::Fallback => {
                             self.write_to_fallback(batch, cln_token.clone()).await
                         }
-                        BypassSink::OnSuccess => {
+                        BypassToSink::OnSuccess => {
                             self.write_to_on_success(batch, cln_token.clone()).await
                         }
                     } {
