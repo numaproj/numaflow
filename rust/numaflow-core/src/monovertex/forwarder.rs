@@ -68,11 +68,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
 
     pub(crate) async fn start(self, cln_token: CancellationToken) -> crate::Result<()> {
         let (bypass_router, router_handle) = match self.bypass_router_manager {
-            Some(bypass_router_manager) => bypass_router_manager.start().await,
-            None => (None, Ok(tokio::task::spawn(async { Ok(()) }))),
+            Some(bypass_router_manager) => {
+                let (router, handle) = bypass_router_manager.start().await;
+                (router, handle?)
+            }
+            None => (None, tokio::task::spawn(async { Ok(()) })),
         };
-
-        let router_handle = router_handle.expect("");
 
         let (read_messages_stream, reader_handle) = self
             .source
@@ -124,7 +125,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
         })?;
 
         bypass_result.inspect_err(|e| {
-            error!(?e, "Error in bypass router handle");
+            error!(?e, "Error in bypass router receiver background task");
         })?;
 
         Ok(())

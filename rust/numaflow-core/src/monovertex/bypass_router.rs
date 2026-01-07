@@ -2,11 +2,14 @@
 //! messages to different sinks directly from Source and UDF components of MonoVertex based on
 //! bypass conditions.
 //!
-//! The bypass router struct is initialized to be stored in the source and mapper handles.
-//! During initialization a background router task is also spawned to read messages from the respective
-//! receiver streams for the different sinks to which bypass messages will be sent by the source and mapper.
+//! The bypass manager is responsible for initializing the bypass router and starting the
+//! background router task. The bypass router contains information regarding the channels
+//! to which bypass messages will be sent by the source and mapper, as well as the
+//! sink writer handle using which bypass router will write messages to the respective sinks.
 //!
-//! The source and mapper handles use helper methods for bypass router to determine if a message
+//! The bypass router struct is initialized to be passed to the methods of source and mapper handles.
+//!
+//! The source and mapper handle methods use helper methods for bypass router to determine if a message
 //! should be bypassed to a sink, and if so, the message is sent to one of the bypass channels held
 //! by the router accordingly.
 //!
@@ -26,7 +29,7 @@
 //! |    +----|------+          +-------|------------+          +-----------+  |
 //! |         |                         |                                      |
 //! |         |                         |                                      |
-//!           v                         v                                      |
+//! |         v                         v                                      |
 //! |  +----BypassRouterTask-------------------------------------------------+ |
 //! |  |                                                                     | |
 //! |  |  primary      ----------------------------------------------------> | |
@@ -59,6 +62,8 @@ pub(crate) enum BypassSink {
     OnSuccess,
 }
 
+/// [BypassRouterManager] is responsible for initializing the bypass router and starting the
+/// background router task.
 pub(crate) struct BypassRouterManager {
     bypass_conditions: Option<BypassConditions>,
     batch_size: usize,
@@ -82,9 +87,10 @@ impl BypassRouterManager {
         })
     }
 
-    /// Initializes the bypass router as well as starts a tokio task for writing bypassed messages to different sinks
-    /// based on bypass conditions.
-    /// Returns the initialized bypass router and a join handle for the tokio task started to write bypassed messages to sinks.
+    /// Initializes the bypass router as well as starts a tokio task for writing bypassed messages
+    /// to different sinks based on bypass conditions.
+    /// Returns the initialized bypass router and a join handle for the tokio task started
+    /// to write bypassed messages to sinks.
     pub(crate) async fn start(
         self,
     ) -> (
