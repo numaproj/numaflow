@@ -121,7 +121,7 @@ The SQS source propagates message attributes through the pipeline, making them a
 
 ### System Attributes
 
-When `attributeNames` is configured, SQS system attributes (e.g., `SentTimestamp`, `ApproximateReceiveCount`, `MessageGroupId`, `MessageDeduplicationId`) are propagated as **message headers**. These are accessible in UDFs via `datum.Headers()` (Go) or `datum.headers` (Python).
+When `attributeNames` is configured, SQS system attributes (e.g., `SentTimestamp`, `ApproximateReceiveCount`, `MessageGroupId`, `MessageDeduplicationId`) are propagated as **message headers**. These are accessible in UDFs (e.g., `datum.Headers()` (Go),  `datum.headers` (Python), etc.).
 
 ### Custom Attributes
 
