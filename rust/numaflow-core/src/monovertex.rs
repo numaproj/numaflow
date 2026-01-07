@@ -1,13 +1,11 @@
-use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::config::is_mono_vertex;
-use crate::config::monovertex::MonovertexConfig;
+use crate::config::monovertex::{BypassConditions, MonovertexConfig};
 use crate::error::{self};
 use crate::mapper::map::MapHandle;
 use crate::metrics::{LagReader, PendingReaderTasks};
-use crate::monovertex::bypass_router::{BypassRouter, BypassRouterManager};
 use crate::shared::create_components;
 use crate::sinker::sink::SinkWriter;
 use crate::source::Source;
@@ -77,13 +75,6 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
     )
     .await?;
 
-    let bypass_router_manager = BypassRouterManager::new(
-        config.bypass_condition.clone(),
-        config.batch_size,
-        sink_writer.clone(),
-        cln_token.clone(),
-    );
-
     let transformer = create_components::create_transformer(
         config.batch_size,
         config.graceful_shutdown_time,
@@ -144,7 +135,7 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
         source,
         mapper,
         sink_writer,
-        bypass_router_manager,
+        (config.bypass_condition.clone(), config.batch_size),
         cln_token,
     )
     .await?;
@@ -159,7 +150,7 @@ async fn start<C: crate::typ::NumaflowTypeConfig>(
     source: Source<C>,
     mapper: Option<MapHandle>,
     sink: SinkWriter,
-    bypass_router_manager: Option<BypassRouterManager>,
+    bypass_config: (Option<BypassConditions>, usize),
     cln_token: CancellationToken,
 ) -> error::Result<()> {
     // Store the pending reader handle outside, so it doesn't get dropped immediately.
@@ -177,7 +168,7 @@ async fn start<C: crate::typ::NumaflowTypeConfig>(
         None
     };
 
-    let forwarder = forwarder::Forwarder::<C>::new(source, mapper, sink, bypass_router_manager);
+    let forwarder = forwarder::Forwarder::<C>::new(source, mapper, sink, bypass_config);
 
     info!("Forwarder is starting...");
     // start the forwarder, it will return only on Signal

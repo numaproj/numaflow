@@ -2,8 +2,7 @@
 //! messages to different sinks directly from Source and UDF components of MonoVertex based on
 //! bypass conditions.
 //!
-//! The bypass manager is responsible for initializing the bypass router and starting the
-//! background router task. The bypass router contains information regarding the channels
+//! The bypass router contains information regarding the channels
 //! to which bypass messages will be sent by the source and mapper, as well as the
 //! sink writer handle using which bypass router will write messages to the respective sinks.
 //!
@@ -62,85 +61,6 @@ pub(crate) enum BypassToSink {
     OnSuccess,
 }
 
-/// [BypassRouterManager] is responsible for initializing the bypass router and starting the
-/// background router task.
-pub(crate) struct BypassRouterManager {
-    bypass_conditions: Option<BypassConditions>,
-    batch_size: usize,
-    sink_handle: SinkWriter,
-    cln_token: CancellationToken,
-}
-
-impl BypassRouterManager {
-    /// Initializes the bypass router manager.
-    pub(crate) fn new(
-        bypass_conditions: Option<BypassConditions>,
-        batch_size: usize,
-        sink_handle: SinkWriter,
-        cln_token: CancellationToken,
-    ) -> Option<Self> {
-        Some(Self {
-            bypass_conditions,
-            batch_size,
-            sink_handle,
-            cln_token,
-        })
-    }
-
-    /// Initializes the bypass router as well as starts a tokio task for writing bypassed messages
-    /// to different sinks based on bypass conditions.
-    /// Returns the initialized bypass router and a join handle for the tokio task started
-    /// to write bypassed messages to sinks.
-    pub(crate) async fn start(
-        self,
-    ) -> (
-        Option<BypassRouter>,
-        error::Result<JoinHandle<error::Result<()>>>,
-    ) {
-        match self.bypass_conditions {
-            Some(ref bypass_conditions) => {
-                let (sink_tx, sink_rx) = self.create_bypass_channels(&bypass_conditions.sink);
-                let (fallback_tx, fallback_rx) =
-                    self.create_bypass_channels(&bypass_conditions.fallback);
-                let (on_success_tx, on_success_rx) =
-                    self.create_bypass_channels(&bypass_conditions.on_success);
-
-                let bypass_router = BypassRouter::new(
-                    sink_tx,
-                    fallback_tx,
-                    on_success_tx,
-                    bypass_conditions.clone(),
-                    self.sink_handle,
-                );
-
-                let router_join_handle = bypass_router
-                    .start(sink_rx, fallback_rx, on_success_rx, self.cln_token)
-                    .await;
-                (Some(bypass_router), router_join_handle)
-            }
-            None => (None, Ok(tokio::task::spawn(async { Ok(()) }))),
-        }
-    }
-
-    /// Helper function to create tx, rx channels based on presence of bypass condition
-    /// Added to reduce redundant code
-    fn create_bypass_channels(
-        &self,
-        bypass_condition: &Option<Box<ForwardConditions>>,
-    ) -> (
-        Option<mpsc::Sender<Message>>,
-        Option<mpsc::Receiver<Message>>,
-    ) {
-        match bypass_condition {
-            None => (None, None),
-            Some(_) => {
-                let (tx, rx) = mpsc::channel(self.batch_size);
-                (Some(tx), Some(rx))
-            }
-        }
-    }
-}
-
 /// [BypassRouter] is used by source and udf components for routing any bypassed messages to
 /// different sinks based on bypass conditions.
 #[derive(Clone)]
@@ -151,6 +71,23 @@ pub(crate) struct BypassRouter {
     bypass_conditions: BypassConditions,
     sink_handle: SinkWriter,
 }
+
+/*
+
+#[derive(Clone)]
+pub(crate) struct BypassRouter {
+    bypass_conditions: BypassConditions,
+    sink_handle: SinkWriter,
+    bypass_routes: Option<BypassRoutes>,
+}
+
+pub(crate) struct BypassRoutes {
+    sink: Option<mpsc::Sender<Message>>,
+    fallback: Option<mpsc::Sender<Message>>,
+    on_success: Option<mpsc::Sender<Message>>,
+}
+
+ */
 
 impl BypassRouter {
     /// Returns the channel to send the bypassed message in case of bypass conditions match.
@@ -174,6 +111,54 @@ impl BypassRouter {
             self.on_success.clone()
         } else {
             None
+        }
+    }
+
+    /// Initializes the bypass router as well as starts a tokio task for writing bypassed messages
+    /// to different sinks based on bypass conditions.
+    /// Returns the initialized bypass router and a join handle for the tokio task started
+    /// to write bypassed messages to sinks.
+    pub(crate) async fn initialize(
+        bypass_conditions: BypassConditions,
+        batch_size: usize,
+        sink_handle: SinkWriter,
+        cln_token: CancellationToken,
+    ) -> (BypassRouter, error::Result<JoinHandle<error::Result<()>>>) {
+        let (sink_tx, sink_rx) = Self::create_bypass_channels(&bypass_conditions.sink, batch_size);
+        let (fallback_tx, fallback_rx) =
+            Self::create_bypass_channels(&bypass_conditions.fallback, batch_size);
+        let (on_success_tx, on_success_rx) =
+            Self::create_bypass_channels(&bypass_conditions.on_success, batch_size);
+
+        let bypass_router = BypassRouter::new(
+            sink_tx,
+            fallback_tx,
+            on_success_tx,
+            bypass_conditions.clone(),
+            sink_handle,
+        );
+
+        let router_join_handle = bypass_router
+            .start(sink_rx, fallback_rx, on_success_rx, cln_token)
+            .await;
+        (bypass_router, router_join_handle)
+    }
+
+    /// Helper function to create tx, rx channels based on presence of bypass condition
+    /// Added to reduce redundant code
+    fn create_bypass_channels(
+        bypass_condition: &Option<Box<ForwardConditions>>,
+        batch_size: usize,
+    ) -> (
+        Option<mpsc::Sender<Message>>,
+        Option<mpsc::Receiver<Message>>,
+    ) {
+        match bypass_condition {
+            None => (None, None),
+            Some(_) => {
+                let (tx, rx) = mpsc::channel(batch_size);
+                (Some(tx), Some(rx))
+            }
         }
     }
 
