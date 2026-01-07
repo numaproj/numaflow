@@ -72,23 +72,6 @@ pub(crate) struct BypassRouter {
     sink_handle: SinkWriter,
 }
 
-/*
-
-#[derive(Clone)]
-pub(crate) struct BypassRouter {
-    bypass_conditions: BypassConditions,
-    sink_handle: SinkWriter,
-    bypass_routes: Option<BypassRoutes>,
-}
-
-pub(crate) struct BypassRoutes {
-    sink: Option<mpsc::Sender<Message>>,
-    fallback: Option<mpsc::Sender<Message>>,
-    on_success: Option<mpsc::Sender<Message>>,
-}
-
- */
-
 impl BypassRouter {
     /// Returns the channel to send the bypassed message in case of bypass conditions match.
     /// If no bypass conditions match, returns None.
