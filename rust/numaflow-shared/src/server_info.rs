@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -59,7 +59,7 @@ pub enum ContainerType {
 
 impl ContainerType {
     /// Returns the string representation of the [ContainerType].
-    pub fn as_str(&self) -> &'static str {
+    pub(crate) fn as_str(&self) -> &'static str {
         match self {
             ContainerType::Sourcer => "sourcer",
             ContainerType::SourceTransformer => "sourcetransformer",
@@ -83,9 +83,9 @@ impl fmt::Display for ContainerType {
     }
 }
 
-impl From<String> for ContainerType {
-    fn from(s: String) -> Self {
-        match s.as_str() {
+impl From<&str> for ContainerType {
+    fn from(s: &str) -> Self {
+        match s {
             "sourcer" => ContainerType::Sourcer,
             "sourcetransformer" => ContainerType::SourceTransformer,
             "sinker" => ContainerType::Sinker,
@@ -102,6 +102,17 @@ impl From<String> for ContainerType {
     }
 }
 
+impl From<PathBuf> for ContainerType {
+    fn from(path: PathBuf) -> Self {
+        let file_name = path.file_name().unwrap_or_default();
+        let ctnr_str = file_name
+            .to_str()
+            .unwrap_or_default()
+            .trim_end_matches("-server-info");
+        ContainerType::from(ctnr_str)
+    }
+}
+
 /// ServerInfo structure to store server-related information
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ServerInfo {
@@ -111,6 +122,7 @@ pub struct ServerInfo {
     /// Language of the SDK/container. This is for publishing metrics.
     #[serde(default)]
     pub language: String,
+    /// Minimum Numaflow version required for the SDK/container.
     #[serde(default)]
     pub minimum_numaflow_version: String,
     /// SDK version used for publishing metrics.
@@ -129,7 +141,8 @@ pub enum Protocol {
 }
 
 impl ServerInfo {
-    /// get_map_mode returns the [MapMode] from the metadata.
+    /// get_map_mode returns the [MapMode] if the server is a mapper.
+    /// None if the server is not a mapper.
     pub fn get_map_mode(&self) -> Option<MapMode> {
         if let Some(metadata) = &self.metadata
             && let Some(map_mode) = metadata.get(MAP_MODE_KEY)
@@ -169,7 +182,7 @@ pub async fn sdk_server_info(
     let server_info = read_server_info(&file_path, cln_token).await?;
 
     // Get the container type from the server info file
-    let container_type = get_container_type(&file_path).unwrap_or(ContainerType::Unknown);
+    let container_type = ContainerType::from(file_path);
 
     // Log the server info
     info!(?container_type, ?server_info, "Server info file");
@@ -385,14 +398,6 @@ fn trim_after_dash(input: &str) -> &str {
     } else {
         input
     }
-}
-
-/// Extracts the container type from the server info file.
-/// The file name is in the format of <container_type>-server-info.
-fn get_container_type(server_info_file: &Path) -> Option<ContainerType> {
-    let file_name = server_info_file.file_name()?;
-    let container_type = file_name.to_str()?.trim_end_matches("-server-info");
-    Some(ContainerType::from(container_type.to_string()))
 }
 
 /// Reads the server info file and returns the parsed ServerInfo struct.
