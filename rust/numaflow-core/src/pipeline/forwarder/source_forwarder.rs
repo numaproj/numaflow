@@ -7,7 +7,6 @@ use crate::metrics::{
 };
 use crate::pipeline::PipelineContext;
 
-use crate::monovertex::bypass_router::BypassRouter;
 use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;

@@ -48,36 +48,80 @@ use crate::error::Error;
 use crate::message::Message;
 use crate::shared::forward::should_forward;
 use crate::sinker::sink::SinkWriter;
-use numaflow_models::models::ForwardConditions;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::Receiver;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 
-pub(crate) enum BypassToSink {
-    Sink,
-    Fallback,
-    OnSuccess,
+/// Message Wrapper introduced to allow sink component to route the messages to the
+/// appropriate sink based on the bypass condition.
+#[derive(Debug, Clone)]
+pub enum MessageToSink {
+    Primary(Message),
+    Fallback(Message),
+    OnSuccess(Message),
+}
+
+/// Returns a reference to the inner message wrapped by the enum.
+impl MessageToSink {
+    pub fn inner(&self) -> &Message {
+        match self {
+            MessageToSink::Primary(msg)
+            | MessageToSink::Fallback(msg)
+            | MessageToSink::OnSuccess(msg) => msg,
+        }
+    }
+}
+
+pub(crate) struct BypassRouterConfig {
+    bypass_conditions: BypassConditions,
+    batch_size: usize,
+}
+
+impl BypassRouterConfig {
+    pub(crate) fn new(bypass_conditions: BypassConditions, batch_size: usize) -> Self {
+        Self {
+            bypass_conditions,
+            batch_size,
+        }
+    }
 }
 
 /// [BypassRouter] is used by source and udf components for routing any bypassed messages to
 /// different sinks based on bypass conditions.
 #[derive(Clone)]
 pub(crate) struct BypassRouter {
-    sink: Option<mpsc::Sender<Message>>,
-    fallback: Option<mpsc::Sender<Message>>,
-    on_success: Option<mpsc::Sender<Message>>,
+    bypass_tx: mpsc::Sender<MessageToSink>,
     bypass_conditions: BypassConditions,
-    sink_handle: SinkWriter,
-    batch_size: usize,
-    cln_token: CancellationToken,
 }
 
 impl BypassRouter {
-    /// Returns the channel to send the bypassed message in case of bypass conditions match.
-    /// If no bypass conditions match, returns None.
-    pub(crate) fn get_bypass_channel(&self, msg: Message) -> Option<mpsc::Sender<Message>> {
+    /// Initializes the bypass router as well as starts a tokio task for writing bypassed messages
+    /// to different sinks based on bypass conditions.
+    /// Returns the initialized bypass router and a join handle for the tokio task started
+    /// to write bypassed messages to sink.
+    pub(crate) async fn initialize(
+        config: BypassRouterConfig,
+        sink_writer: SinkWriter,
+        cln_token: CancellationToken,
+    ) -> (Self, error::Result<JoinHandle<error::Result<()>>>) {
+        // Create bypass channels based on bypass conditions
+        let (tx, rx) = mpsc::channel(config.batch_size);
+
+        // Initialize the bypass router with the created channels
+        let bypass_router = BypassRouter {
+            bypass_tx: tx,
+            bypass_conditions: config.bypass_conditions.clone(),
+        };
+
+        let router_join_handle = sink_writer
+            .streaming_bypass_write(ReceiverStream::new(rx), cln_token.clone())
+            .await;
+
+        (bypass_router, router_join_handle)
+    }
+
+    pub(crate) fn get_routed_message(&self, msg: Message) -> Option<MessageToSink> {
         let sink_condition_exists = self.bypass_conditions.sink.is_some();
         let fallback_condition_exists = self.bypass_conditions.fallback.is_some();
         let on_success_condition_exists = self.bypass_conditions.on_success.is_some();
@@ -85,157 +129,23 @@ impl BypassRouter {
         if sink_condition_exists
             && should_forward(msg.tags.clone(), self.bypass_conditions.sink.clone())
         {
-            self.sink.clone()
+            Some(MessageToSink::Primary(msg))
         } else if fallback_condition_exists
             && should_forward(msg.tags.clone(), self.bypass_conditions.fallback.clone())
         {
-            self.fallback.clone()
+            Some(MessageToSink::Fallback(msg))
         } else if on_success_condition_exists
             && should_forward(msg.tags.clone(), self.bypass_conditions.on_success.clone())
         {
-            self.on_success.clone()
+            Some(MessageToSink::OnSuccess(msg))
         } else {
             None
         }
     }
 
-    /// Initializes the bypass router with empty senders.
-    pub(crate) fn new(
-        bypass_conditions: BypassConditions,
-        sink_handle: SinkWriter,
-        batch_size: usize,
-        cln_token: CancellationToken,
-    ) -> Self {
-        Self {
-            sink: None,
-            fallback: None,
-            on_success: None,
-            bypass_conditions,
-            sink_handle,
-            batch_size,
-            cln_token,
-        }
-    }
-
-    /// Initializes the bypass router as well as starts a tokio task for writing bypassed messages
-    /// to different sinks based on bypass conditions.
-    /// Returns the initialized bypass router and a join handle for the tokio task started
-    /// to write bypassed messages to sinks.
-    pub(crate) async fn start(self) -> (Self, error::Result<JoinHandle<error::Result<()>>>) {
-        // Create bypass channels based on bypass conditions
-        let (sink_tx, sink_rx) =
-            Self::create_bypass_channels(&self.bypass_conditions.sink, self.batch_size);
-        let (fallback_tx, fallback_rx) =
-            Self::create_bypass_channels(&self.bypass_conditions.fallback, self.batch_size);
-        let (on_success_tx, on_success_rx) =
-            Self::create_bypass_channels(&self.bypass_conditions.on_success, self.batch_size);
-
-        // Initialize the bypass router with the created channels
-        let bypass_router = BypassRouter {
-            sink: sink_tx,
-            fallback: fallback_tx,
-            on_success: on_success_tx,
-            bypass_conditions: self.bypass_conditions.clone(),
-            sink_handle: self.sink_handle,
-            batch_size: self.batch_size,
-            cln_token: self.cln_token.clone(),
-        };
-
-        let router_join_handle = bypass_router
-            .start_receivers(sink_rx, fallback_rx, on_success_rx)
-            .await;
-        (bypass_router, router_join_handle)
-    }
-
-    /// Helper function to create tx, rx channels based on presence of bypass condition
-    /// Added to reduce redundant code
-    fn create_bypass_channels(
-        bypass_condition: &Option<Box<ForwardConditions>>,
-        batch_size: usize,
-    ) -> (
-        Option<mpsc::Sender<Message>>,
-        Option<mpsc::Receiver<Message>>,
-    ) {
-        match bypass_condition {
-            None => (None, None),
-            Some(_) => {
-                let (tx, rx) = mpsc::channel(batch_size);
-                (Some(tx), Some(rx))
-            }
-        }
-    }
-
-    /// Starts a tokio task to write bypassed messages to different sinks based on bypass conditions.
-    /// Returns a tokio join handle for the task.
-    async fn start_receivers(
-        &self,
-        sink_rx: Option<Receiver<Message>>,
-        fallback_rx: Option<Receiver<Message>>,
-        on_success_rx: Option<Receiver<Message>>,
-    ) -> error::Result<JoinHandle<error::Result<()>>> {
-        let sink_join_handle = self
-            .get_bypass_write_handle(sink_rx, BypassToSink::Sink, self.cln_token.clone())
-            .await?;
-        let fallback_join_handle = self
-            .get_bypass_write_handle(fallback_rx, BypassToSink::Fallback, self.cln_token.clone())
-            .await?;
-        let onsuccess_join_handle = self
-            .get_bypass_write_handle(
-                on_success_rx,
-                BypassToSink::OnSuccess,
-                self.cln_token.clone(),
-            )
-            .await?;
-
-        // Join the mapper and second splitter handle and returns a single handle
-        let joined_handle: JoinHandle<error::Result<()>> = tokio::spawn(async move {
-            let (sink_result, fallback_result, onsuccess_result) = tokio::try_join!(
-                sink_join_handle,
-                fallback_join_handle,
-                onsuccess_join_handle
-            )
-            .map_err(|e| {
-                error!(
-                    ?e,
-                    "Error while joining primary, fallback and on-success bypass handles"
-                );
-                Error::Forwarder(format!(
-                    "Error while joining primary, fallback and on-success bypass handles: {e:?}"
-                ))
-            })?;
-
-            sink_result.inspect_err(|e| {
-                error!(?e, "Error while writing bypass messages to sink");
-            })?;
-
-            fallback_result.inspect_err(|e| {
-                error!(?e, "Error while writing bypass messages to fallback sink");
-            })?;
-
-            onsuccess_result.inspect_err(|e| {
-                error!(?e, "Error while writing bypass messages to on-success sink");
-            })?;
-
-            Ok(())
-        });
-
-        Ok(joined_handle)
-    }
-
-    /// Helper function for [start_router_receiver] to start a tokio task to write bypassed messages to a specific sink.
-    async fn get_bypass_write_handle(
-        &self,
-        rx: Option<Receiver<Message>>,
-        bypass_sink: BypassToSink,
-        cln_token: CancellationToken,
-    ) -> error::Result<JoinHandle<error::Result<()>>> {
-        if let Some(rx) = rx {
-            self.sink_handle
-                .clone()
-                .streaming_bypass_write(ReceiverStream::new(rx), bypass_sink, cln_token.clone())
-                .await
-        } else {
-            Ok(tokio::task::spawn(async { Ok(()) }))
-        }
+    pub(crate) async fn route(&self, msg: MessageToSink) -> error::Result<()> {
+        self.bypass_tx.send(msg).await.map_err(|e| {
+            Error::BypassRouter(format!("Failed to send message through bypass router: {e}"))
+        })
     }
 }

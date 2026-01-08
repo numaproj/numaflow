@@ -14,7 +14,6 @@ use crate::config::pipeline::{
 };
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
-use crate::monovertex::bypass_router::BypassRouter;
 use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
 use crate::reduce::reducer::WindowManager;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;

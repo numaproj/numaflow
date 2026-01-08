@@ -2,7 +2,7 @@ use crate::Result;
 use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
-use crate::message::Message;
+use crate::message::{AckHandle, Message};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
@@ -15,6 +15,7 @@ use numaflow_pb::clients::sink::sink_response;
 use numaflow_pulsar::sink::Sink as PulsarSink;
 use numaflow_sqs::sink::SqsSink;
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
@@ -27,7 +28,7 @@ use tonic::transport::Channel;
 use tracing::{error, info};
 
 use crate::config::monovertex::BypassConditions;
-use crate::monovertex::bypass_router::BypassToSink;
+use crate::monovertex::bypass_router::MessageToSink;
 use crate::sinker::builder::HealthCheckClients;
 use serve::{ServingStore, StoreEntry};
 // Re-export SinkWriterBuilder for external use
@@ -270,16 +271,14 @@ impl SinkWriter {
         }))
     }
 
-    /// Write bypass messages to the respective sink based on BypassSink Enum
     pub(crate) async fn streaming_bypass_write(
         mut self,
-        messages_stream: ReceiverStream<Message>,
-        bypass_sink: BypassToSink,
+        messages_stream: ReceiverStream<MessageToSink>,
         cln_token: CancellationToken,
     ) -> Result<JoinHandle<Result<()>>> {
         Ok(tokio::spawn({
             async move {
-                info!(?self.batch_size, ?self.chunk_timeout, "Starting sink writer");
+                info!(?self.batch_size, ?self.chunk_timeout, "Starting sink writer in Bypass Mode");
 
                 // Combine chunking and timeout into a stream
                 let chunk_stream =
@@ -288,57 +287,103 @@ impl SinkWriter {
 
                 // Main processing loop
                 while let Some(batch) = chunk_stream.next().await {
-                    // we are in shutting down mode, we will not be writing to the sink,
-                    // mark the messages as failed, and on Drop they will be nack'ed.
-                    if self.shutting_down_on_err {
-                        for msg in &batch {
-                            msg.ack_handle
-                                .as_ref()
-                                .expect("ack handle should be present")
-                                .is_failed
-                                .store(true, Ordering::Relaxed);
-                        }
-                        continue;
-                    }
-
-                    // collect ack handles for later failure tracking
-                    let ack_handles = batch
-                        .iter()
-                        .map(|msg| msg.ack_handle.clone())
-                        .collect::<Vec<_>>();
-
                     // filter out messages that are marked for drop
-                    let batch: Vec<_> = batch.into_iter().filter(|msg| !msg.dropped()).collect();
+                    let batch: Vec<_> = batch
+                        .into_iter()
+                        .filter(|msg| !msg.inner().dropped())
+                        .collect();
 
                     // skip if all were dropped
                     if batch.is_empty() {
                         continue;
                     }
 
-                    // perform the write operation
-                    if let Err(e) = match bypass_sink {
-                        BypassToSink::Sink => self.write(batch, cln_token.clone()).await,
-                        BypassToSink::Fallback => {
-                            self.write_to_fallback(batch, cln_token.clone()).await
-                        }
-                        BypassToSink::OnSuccess => {
-                            self.write_to_on_success(batch, cln_token.clone()).await
-                        }
-                    } {
-                        // critical error, cancel upstream and mark all acks as failed
-                        error!(?e, "Error writing to sink, initiating shutdown.");
-                        cln_token.cancel();
+                    let mut primary_messages: Vec<Message> = vec![];
+                    let mut primary_ack_handles = vec![];
+                    let mut fallback_messages: Vec<Message> = vec![];
+                    let mut fallback_ack_handles = vec![];
+                    let mut on_success_messages: Vec<Message> = vec![];
+                    let mut on_success_ack_handles = vec![];
 
-                        for ack_handle in ack_handles {
-                            ack_handle
-                                .as_ref()
-                                .expect("ack handle should be present")
-                                .is_failed
-                                .store(true, Ordering::Relaxed);
+                    // Convert MessageToSink to Message and create respective
+                    // vectors of Messages and ack handles
+                    for msg in batch {
+                        match msg {
+                            MessageToSink::Primary(msg) => {
+                                primary_ack_handles.push(msg.ack_handle.clone());
+                                primary_messages.push(msg);
+                            }
+                            MessageToSink::Fallback(msg) => {
+                                fallback_ack_handles.push(msg.ack_handle.clone());
+                                fallback_messages.push(msg)
+                            }
+                            MessageToSink::OnSuccess(msg) => {
+                                on_success_ack_handles.push(msg.ack_handle.clone());
+                                on_success_messages.push(msg)
+                            }
                         }
+                    }
 
-                        self.final_result = Err(e);
-                        self.shutting_down_on_err = true;
+                    // we are in shutting down mode, we will not be writing to the sink,
+                    // mark the messages as failed, and on Drop they will be nack'ed.
+                    // If we're in shutdown mode, we don't want to continue to write to any of the sinks
+                    if self.shutting_down_on_err {
+                        self.mark_msgs_failed(&primary_messages);
+                        self.mark_msgs_failed(&fallback_messages);
+                        self.mark_msgs_failed(&on_success_messages);
+                        continue;
+                    }
+
+                    // perform the primary write operation
+                    self.selective_write(
+                        MessageToSink::Primary(Message::default()),
+                        primary_messages,
+                        primary_ack_handles,
+                        cln_token.clone(),
+                    )
+                    .await?;
+
+                    // we are in shutting down mode, we will not be writing to the sink,
+                    // mark the messages as failed, and on Drop they will be nack'ed.
+                    // If we're in shutdown mode, we don't want to continue to write to fallback and on-success sinks
+                    if self.shutting_down_on_err {
+                        self.mark_msgs_failed(&fallback_messages);
+                        self.mark_msgs_failed(&on_success_messages);
+                        continue;
+                    }
+
+                    // perform the fallback write operation if fallback sink exists
+                    // The check/error throwing for trying to write to fallback sink if it doesn't
+                    // exist should be done at controller level
+                    if self.fb_sink_handle.is_some() {
+                        self.selective_write(
+                            MessageToSink::Fallback(Message::default()),
+                            fallback_messages,
+                            fallback_ack_handles,
+                            cln_token.clone(),
+                        )
+                        .await?;
+                    }
+
+                    // we are in shutting down mode, we will not be writing to the sink,
+                    // mark the messages as failed, and on Drop they will be nack'ed.
+                    // If we're in shutdown mode, we don't want to continue to write to on-success sink
+                    if self.shutting_down_on_err {
+                        self.mark_msgs_failed(&on_success_messages);
+                        continue;
+                    }
+
+                    // perform the on_success write operation if on-success sink exists
+                    // The check/error throwing for trying to write to on-success sink if it doesn't
+                    // exist should be done at controller level
+                    if self.on_success_sink_handle.is_some() {
+                        self.selective_write(
+                            MessageToSink::OnSuccess(Message::default()),
+                            on_success_messages,
+                            on_success_ack_handles,
+                            cln_token.clone(),
+                        )
+                        .await?;
                     }
                 }
 
@@ -346,6 +391,51 @@ impl SinkWriter {
                 self.final_result
             }
         }))
+    }
+
+    /// Helper method for marking messages as failed. Used in [SinkWriter::streaming_bypass_write]
+    /// when we are in shutting down mode.
+    fn mark_msgs_failed(&self, batch: &Vec<Message>) {
+        for msg in batch {
+            msg.ack_handle
+                .as_ref()
+                .expect("ack handle should be present")
+                .is_failed
+                .store(true, Ordering::Relaxed);
+        }
+    }
+
+    /// Helper method for writing messages to the appropriate sink based on the enum variant.
+    /// Used in [SinkWriter::streaming_bypass_write] to remove redundant code.
+    async fn selective_write(
+        &mut self,
+        msg_type: MessageToSink,
+        batch: Vec<Message>,
+        ack_handles: Vec<Option<Arc<AckHandle>>>,
+        cln_token: CancellationToken,
+    ) -> Result<()> {
+        if let Err(e) = match msg_type {
+            MessageToSink::Primary(_) => self.write(batch, cln_token.clone()).await,
+            MessageToSink::Fallback(_) => self.write_to_fallback(batch, cln_token.clone()).await,
+            MessageToSink::OnSuccess(_) => self.write_to_on_success(batch, cln_token.clone()).await,
+        } {
+            // critical error, cancel upstream and mark all acks as failed
+            error!(?e, "Error writing to sink, initiating shutdown.");
+            cln_token.cancel();
+
+            for ack_handle in ack_handles {
+                ack_handle
+                    .as_ref()
+                    .expect("ack handle should be present")
+                    .is_failed
+                    .store(true, Ordering::Relaxed);
+            }
+
+            self.final_result = Err(e);
+            self.shutting_down_on_err = true;
+        }
+
+        Ok(())
     }
 
     /// Write the messages to the Sink.

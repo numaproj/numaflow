@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -18,7 +17,7 @@ use crate::error::Error;
 use crate::mapper::map::user_defined::{
     UserDefinedBatchMap, UserDefinedStreamMap, UserDefinedUnaryMap,
 };
-use crate::message::{AckHandle, Message, MessageID, Offset};
+use crate::message::{AckHandle, Message, Offset};
 use crate::monovertex::bypass_router::BypassRouter;
 use crate::tracker::Tracker;
 pub(super) mod user_defined;
@@ -469,11 +468,12 @@ impl MapHandle {
                             // send messages downstream
                             for mapped_message in mapped_messages {
                                 if let Some(ref bypass_router) = bypass_router &&
-                                let Some(bypass_tx) = bypass_router.get_bypass_channel(mapped_message.clone()) {
-                                    bypass_tx
-                                    .send(mapped_message)
-                                    .await
-                                    .expect("bypass send should not fail");
+                                let Some(bypass_msg) = bypass_router.get_routed_message(mapped_message.clone())
+                                {
+                                    bypass_router
+                                        .route(bypass_msg)
+                                        .await
+                                        .expect("bypass send should not fail");
                                 } else {
                                     output_tx
                                     .send(mapped_message)
@@ -563,11 +563,11 @@ impl MapHandle {
 
                     for mapped_message in mapped_messages {
                         if let Some(ref bypass_router) = bypass_router
-                            && let Some(bypass_tx) =
-                                bypass_router.get_bypass_channel(mapped_message.clone())
+                            && let Some(bypass_msg) =
+                                bypass_router.get_routed_message(mapped_message.clone())
                         {
-                            bypass_tx
-                                .send(mapped_message)
+                            bypass_router
+                                .route(bypass_msg)
                                 .await
                                 .expect("bypass send should not fail");
                         } else {
@@ -650,8 +650,12 @@ impl MapHandle {
                                     .expect("failed to update tracker");
 
                                 if let Some(ref bypass_router) = bypass_router &&
-                                let Some(bypass_channel) = bypass_router.get_bypass_channel(mapped_message.clone()){
-                                    bypass_channel.send(mapped_message).await.expect("failed to send bypass message");
+                                let Some(bypass_msg) = bypass_router.get_routed_message(mapped_message.clone())
+                                {
+                                    bypass_router
+                                        .route(bypass_msg)
+                                        .await
+                                        .expect("bypass send should not fail");
                                 } else {
                                     output_tx.send(mapped_message).await.expect("failed to send response");
                                 }
@@ -700,47 +704,6 @@ impl MapHandle {
             }
         } else {
             false
-        }
-    }
-
-    pub(crate) async fn bypass_router_helper(
-        mapped_messages: Vec<Message>,
-        bypass_router: Option<BypassRouter>,
-    ) -> Vec<Message> {
-        // handle messages that are bypassed to sink if bypass router is present
-        if let Some(ref bypass_router) = bypass_router {
-            let mut bypass_map: HashMap<MessageID, Option<mpsc::Sender<Message>>> = HashMap::new();
-            // messages that will be forwarded to the next component
-            let mut forwarded_messages = vec![];
-
-            // Iterate over messages and insert the corresponding Some(bypass channel) in the bypass_map
-            // If the bypass channel is not present/message not to be forwarded, insert None
-            mapped_messages.iter().for_each(|msg| {
-                bypass_map.insert(
-                    msg.id.clone(),
-                    bypass_router.get_bypass_channel(msg.clone()),
-                );
-            });
-
-            // Iterate over messages and send the message to the bypass channel if present
-            // else add to forwarded_messages
-            for msg in mapped_messages {
-                match bypass_map.get(&msg.id) {
-                    Some(Some(channel)) => {
-                        channel
-                            .send(msg.clone())
-                            .await
-                            .expect("send should not fail");
-                    }
-                    Some(None) | None => {
-                        forwarded_messages.push(msg.clone());
-                    }
-                }
-            }
-
-            forwarded_messages
-        } else {
-            mapped_messages
         }
     }
 }

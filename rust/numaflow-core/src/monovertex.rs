@@ -2,11 +2,11 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::config::is_mono_vertex;
-use crate::config::monovertex::{BypassConditions, MonovertexConfig};
+use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self};
 use crate::mapper::map::MapHandle;
 use crate::metrics::{LagReader, PendingReaderTasks};
-use crate::monovertex::bypass_router::BypassRouter;
+use crate::monovertex::bypass_router::BypassRouterConfig;
 use crate::shared::create_components;
 use crate::sinker::sink::SinkWriter;
 use crate::source::Source;
@@ -77,12 +77,7 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
     .await?;
 
     let bypass_router = config.bypass_condition.as_ref().map(|bypass_condition| {
-        BypassRouter::new(
-            bypass_condition.clone(),
-            sink_writer.clone(),
-            config.batch_size,
-            cln_token.clone(),
-        )
+        BypassRouterConfig::new(bypass_condition.clone(), config.batch_size)
     });
 
     let transformer = create_components::create_transformer(
@@ -160,7 +155,7 @@ async fn start<C: crate::typ::NumaflowTypeConfig>(
     source: Source<C>,
     mapper: Option<MapHandle>,
     sink: SinkWriter,
-    bypass_router: Option<BypassRouter>,
+    bypass_router_config: Option<BypassRouterConfig>,
     cln_token: CancellationToken,
 ) -> error::Result<()> {
     // Store the pending reader handle outside, so it doesn't get dropped immediately.
@@ -178,7 +173,7 @@ async fn start<C: crate::typ::NumaflowTypeConfig>(
         None
     };
 
-    let forwarder = forwarder::Forwarder::<C>::new(source, mapper, sink, bypass_router);
+    let forwarder = forwarder::Forwarder::<C>::new(source, mapper, sink, bypass_router_config);
 
     info!("Forwarder is starting...");
     // start the forwarder, it will return only on Signal

@@ -7,7 +7,7 @@
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
-use crate::message::{AckHandle, MessageID, ReadAck};
+use crate::message::{AckHandle, ReadAck};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_metric_labels, pipeline_metrics,
@@ -28,7 +28,6 @@ use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SqsSource;
 use numaflow_throttling::RateLimiter;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use tokio::sync::OwnedSemaphorePermit;
@@ -552,10 +551,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 // write the messages to downstream.
                 for message in messages {
                     if let Some(ref bypass_router) = bypass_router
-                        && let Some(bypass_tx) = bypass_router.get_bypass_channel(message.clone())
+                        && let Some(bypass_msg) = bypass_router.get_routed_message(message.clone())
                     {
-                        bypass_tx
-                            .send(message)
+                        bypass_router
+                            .route(bypass_msg)
                             .await
                             .expect("bypass send should not fail");
                     } else {

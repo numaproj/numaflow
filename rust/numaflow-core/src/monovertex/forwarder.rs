@@ -33,10 +33,9 @@
 //! [Actor Pattern]: https://ryhl.io/blog/actors-with-tokio/
 
 use crate::Error;
-use crate::config::monovertex::BypassConditions;
 use crate::error;
 use crate::mapper::map::MapHandle;
-use crate::monovertex::bypass_router::BypassRouter;
+use crate::monovertex::bypass_router::{BypassRouter, BypassRouterConfig};
 use crate::sinker::sink::SinkWriter;
 use crate::source::Source;
 use tokio_util::sync::CancellationToken;
@@ -48,7 +47,7 @@ pub(crate) struct Forwarder<C: crate::typ::NumaflowTypeConfig> {
     source: Source<C>,
     mapper: Option<MapHandle>,
     sink_writer: SinkWriter,
-    bypass_router: Option<BypassRouter>,
+    bypass_router_config: Option<BypassRouterConfig>,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
@@ -56,20 +55,25 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
         source: Source<C>,
         mapper: Option<MapHandle>,
         sink_writer: SinkWriter,
-        bypass_router: Option<BypassRouter>,
+        bypass_router_config: Option<BypassRouterConfig>,
     ) -> Self {
         Self {
             source,
             mapper,
             sink_writer,
-            bypass_router,
+            bypass_router_config,
         }
     }
 
     pub(crate) async fn start(self, cln_token: CancellationToken) -> crate::Result<()> {
-        let (bypass_router, router_handle) = match self.bypass_router {
-            Some(bypass_router) => {
-                let (router, handle) = bypass_router.start().await;
+        let (bypass_router, router_handle) = match self.bypass_router_config {
+            Some(bypass_router_config) => {
+                let (router, handle) = BypassRouter::initialize(
+                    bypass_router_config,
+                    self.sink_writer.clone(),
+                    cln_token.clone(),
+                )
+                .await;
                 (Some(router), handle?)
             }
             None => (None, tokio::task::spawn(async { Ok(()) })),
