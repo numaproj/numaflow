@@ -1,5 +1,5 @@
 use rdkafka::config::ClientConfig;
-use tracing::{warn};
+use tracing::warn;
 
 pub mod sink;
 pub mod source;
