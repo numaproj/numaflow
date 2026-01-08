@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
-use std::path::PathBuf;
+use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -102,8 +102,8 @@ impl From<&str> for ContainerType {
     }
 }
 
-impl From<PathBuf> for ContainerType {
-    fn from(path: PathBuf) -> Self {
+impl From<&Path> for ContainerType {
+    fn from(path: &Path) -> Self {
         let file_name = path.file_name().unwrap_or_default();
         let ctnr_str = file_name
             .to_str()
@@ -175,7 +175,7 @@ impl ServerInfo {
 /// sdk_server_info waits until the server info file is ready and check whether the
 /// server is compatible with Numaflow.
 pub async fn sdk_server_info(
-    file_path: PathBuf,
+    file_path: &Path,
     cln_token: CancellationToken,
 ) -> error::Result<ServerInfo> {
     // Read the server info file
@@ -404,7 +404,7 @@ fn trim_after_dash(input: &str) -> &str {
 /// The cancellation token is used to stop ready-check of server_info file in case it is missing.
 /// This cancellation token is closed via the global shutdown handler.
 async fn read_server_info(
-    file_path: &PathBuf,
+    file_path: &Path,
     cln_token: CancellationToken,
 ) -> error::Result<ServerInfo> {
     // Infinite loop to keep checking until the file is ready
@@ -418,7 +418,7 @@ async fn read_server_info(
         }
 
         // Check if the file exists and has content
-        if let Ok(metadata) = fs::metadata(file_path.as_path())
+        if let Ok(metadata) = fs::metadata(file_path)
             && metadata.len() > 0
         {
             // Break out of the loop if the file is ready (has content)
@@ -434,7 +434,7 @@ async fn read_server_info(
     let contents;
     loop {
         // Attempt to read the file
-        match fs::read_to_string(file_path.as_path()) {
+        match fs::read_to_string(file_path) {
             Ok(data) => {
                 if data.ends_with(END) {
                     // If the file ends with the END marker, trim it and break out of the loop
@@ -515,9 +515,12 @@ mod version {
 
     use super::ContainerType;
 
+    // SdkConstraints are the minimum supported version of each SDK for the current numaflow version.
+    // Key is the SDK language name, go, python, java, rust etc.
+    // Value is a map of container type to minimum supported version.
     pub(crate) type SdkConstraints = HashMap<String, HashMap<ContainerType, String>>;
 
-    // MINIMUM_SUPPORTED_SDK_VERSIONS is the minimum supported version of each SDK for the current numaflow version.
+    // MINIMUM_SUPPORTED_SDK_VERSIONS is the minimum supported version of each SDK for the current numaflow controller version.
     static MINIMUM_SUPPORTED_SDK_VERSIONS: LazyLock<SdkConstraints> = LazyLock::new(|| {
         // TODO: populate this from a static file and make it part of the release process
         // the value of the map matches `minimumSupportedSDKVersions` in pkg/sdkclient/serverinfo/types.go
@@ -1217,7 +1220,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_container_type_from_file_valid() {
-        let file_path = PathBuf::from("/var/run/numaflow/sourcer-server-info");
+        let file_path = Path::new("/var/run/numaflow/sourcer-server-info");
         let container_type = ContainerType::from(file_path);
         assert_eq!(ContainerType::Sourcer, container_type);
     }
