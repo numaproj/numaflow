@@ -189,23 +189,23 @@ pub async fn sdk_server_info(
 
     // Extract relevant fields from server info
     let sdk_version = &server_info.version;
-    let min_numaflow_version = &server_info.minimum_numaflow_version;
+    let min_controller_version = &server_info.minimum_numaflow_version;
     let sdk_language = &server_info.language;
 
-    // Get version information
-    let version_info = version::get_version_info();
-    let numaflow_version = &version_info.version;
+    // Get controllerversion information
+    let controller_version_info = version::get_controller_version_info();
+    let controller_version = &controller_version_info.version;
 
-    if min_numaflow_version.is_empty() {
+    if min_controller_version.is_empty() {
         warn!(
-            "Failed to get the minimum numaflow version, skipping numaflow version compatibility check"
+            "Failed to get the minimum controller version, skipping controller version compatibility check"
         );
-    } else if !numaflow_version.contains("latest")
-        && !numaflow_version.contains(&version_info.git_commit)
+    } else if !controller_version.contains("latest")
+        && !controller_version.contains(&controller_version_info.git_commit)
     {
-        // Check the compatibility between the SDK and Numaflow versions
+        // Check the compatibility between the SDK and controller versions
         // If any error occurs, return the error
-        check_numaflow_compatibility(numaflow_version, min_numaflow_version)?;
+        check_controller_compatibility(controller_version, min_controller_version)?;
     }
 
     // Check SDK compatibility if version and language are specified
@@ -225,8 +225,8 @@ pub async fn sdk_server_info(
     Ok(server_info)
 }
 
-/// Checks if the current numaflow version is compatible with the given minimum numaflow version.
-fn check_numaflow_compatibility(
+/// Checks if the current numaflow controller version is compatible with the given minimum controller version.
+fn check_controller_compatibility(
     numaflow_version: &str,
     min_numaflow_version: &str,
 ) -> error::Result<()> {
@@ -597,9 +597,9 @@ mod version {
             m
         });
 
-    /// Struct to hold version information.
+    /// Struct to hold the controller version information.
     #[derive(Debug, PartialEq)]
-    pub struct VersionInfo {
+    pub(crate) struct ControllerVersionInfo {
         pub version: String,
         pub build_date: String,
         pub git_commit: String,
@@ -610,7 +610,7 @@ mod version {
         pub platform: String,
     }
 
-    impl VersionInfo {
+    impl ControllerVersionInfo {
         /// Initialize with environment variables or default values.
         fn init() -> Self {
             let version = env::var("VERSION").unwrap_or_else(|_| "latest".to_string());
@@ -640,7 +640,7 @@ mod version {
                     version_str
                 };
 
-            VersionInfo {
+            ControllerVersionInfo {
                 version: version_str,
                 build_date,
                 git_commit,
@@ -654,10 +654,11 @@ mod version {
     }
 
     /// Use std::sync::LazyLock for thread-safe, one-time initialization
-    static VERSION_INFO: LazyLock<VersionInfo> = LazyLock::new(VersionInfo::init);
+    static VERSION_INFO: LazyLock<ControllerVersionInfo> =
+        LazyLock::new(ControllerVersionInfo::init);
 
     /// Getter function for VersionInfo
-    pub fn get_version_info() -> &'static VersionInfo {
+    pub(crate) fn get_controller_version_info() -> &'static ControllerVersionInfo {
         &VERSION_INFO
     }
 }
@@ -1115,11 +1116,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_numaflow_compatibility_invalid_version_string() {
+    async fn test_controller_compatibility_invalid_version_string() {
         let numaflow_version = "v1.abc.7";
         let min_numaflow_version = "1.1.6-z";
 
-        let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
+        let result = check_controller_compatibility(numaflow_version, min_numaflow_version);
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains(
@@ -1127,21 +1128,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_numaflow_compatibility_min_stable_version_stable_valid() {
+    async fn test_controller_compatibility_min_stable_version_stable_valid() {
         let numaflow_version = "v1.1.7";
         let min_numaflow_version = "1.1.6-z";
 
-        let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
+        let result = check_controller_compatibility(numaflow_version, min_numaflow_version);
 
         assert!(result.is_ok());
     }
 
     #[tokio::test]
-    async fn test_numaflow_compatibility_min_stable_version_stable_invalid() {
+    async fn test_controller_compatibility_min_stable_version_stable_invalid() {
         let numaflow_version = "v1.1.6";
         let min_numaflow_version = "1.1.7-z";
 
-        let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
+        let result = check_controller_compatibility(numaflow_version, min_numaflow_version);
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains(
@@ -1149,21 +1150,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_numaflow_compatibility_min_stable_version_pre_release_valid() {
-        let numaflow_version = "1.1.7-rc1";
-        let min_numaflow_version = "1.1.6-z";
+    async fn test_controller_compatibility_min_stable_version_pre_release_valid() {
+        let controller_version = "1.1.7-rc1";
+        let min_controller_version = "1.1.6-z";
 
-        let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
+        let result = check_controller_compatibility(controller_version, min_controller_version);
 
         assert!(result.is_ok());
     }
 
     #[tokio::test]
-    async fn test_numaflow_compatibility_min_stable_version_pre_release_invalid() {
-        let numaflow_version = "v1.1.6-rc1";
-        let min_numaflow_version = "1.1.6-z";
+    async fn test_controller_compatibility_min_stable_version_pre_release_invalid() {
+        let controller_version = "v1.1.6-rc1";
+        let min_controller_version = "1.1.6-z";
 
-        let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
+        let result = check_controller_compatibility(controller_version, min_controller_version);
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains(
@@ -1171,11 +1172,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_numaflow_compatibility_min_rc_version_stable_invalid() {
-        let numaflow_version = "v1.1.6";
-        let min_numaflow_version = "1.1.7-rc1";
+    async fn test_controller_compatibility_min_rc_version_stable_invalid() {
+        let controller_version = "v1.1.6";
+        let min_controller_version = "1.1.7-rc1";
 
-        let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
+        let result = check_controller_compatibility(controller_version, min_controller_version);
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains(
@@ -1183,31 +1184,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_numaflow_compatibility_min_rc_version_stable_valid() {
-        let numaflow_version = "1.1.7";
-        let min_numaflow_version = "1.1.6-rc1";
+    async fn test_controller_compatibility_min_rc_version_stable_valid() {
+        let controller_version = "1.1.7";
+        let min_controller_version = "1.1.6-rc1";
 
-        let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
-
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_numaflow_compatibility_min_rc_version_pre_release_valid() {
-        let numaflow_version = "1.1.7-rc3";
-        let min_numaflow_version = "1.1.7-rc2";
-
-        let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
+        let result = check_controller_compatibility(controller_version, min_controller_version);
 
         assert!(result.is_ok());
     }
 
     #[tokio::test]
-    async fn test_numaflow_compatibility_min_rc_version_pre_release_invalid() {
-        let numaflow_version = "v1.1.6-rc1";
-        let min_numaflow_version = "1.1.6-rc2";
+    async fn test_controller_compatibility_min_rc_version_pre_release_valid() {
+        let controller_version = "1.1.7-rc3";
+        let min_controller_version = "1.1.7-rc2";
 
-        let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
+        let result = check_controller_compatibility(controller_version, min_controller_version);
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_controller_compatibility_min_rc_version_pre_release_invalid() {
+        let controller_version = "1.1.6-rc1";
+        let min_controller_version = "1.1.6-rc2";
+
+        let result = check_controller_compatibility(controller_version, min_controller_version);
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains(
@@ -1217,8 +1218,8 @@ mod tests {
     #[tokio::test]
     async fn test_get_container_type_from_file_valid() {
         let file_path = PathBuf::from("/var/run/numaflow/sourcer-server-info");
-        let container_type = get_container_type(&file_path);
-        assert_eq!(ContainerType::Sourcer, container_type.unwrap());
+        let container_type = ContainerType::from(file_path);
+        assert_eq!(ContainerType::Sourcer, container_type);
     }
 
     #[tokio::test]
