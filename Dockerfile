@@ -43,7 +43,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
         "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
     *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
     esac && \
-    RUSTFLAGS='-C target-feature=+crt-static' cargo chef cook --workspace --release --target ${TARGET} --recipe-path recipe.json
+    RUSTFLAGS='-C target-feature=+crt-static' cargo chef cook --workspace --profile quick-release --target ${TARGET} --recipe-path recipe.json
 
 # Copy the actual source code files of the main project and the subprojects
 COPY ./rust/ .
@@ -73,9 +73,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
         "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
     *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
     esac && \
-    RUSTFLAGS='-C target-feature=+crt-static' cargo build --workspace --all --release --target ${TARGET} && \
-    cp -pv target/${TARGET}/release/numaflow /root/numaflow && \
-    cp -pv target/${TARGET}/release/entrypoint /root/entrypoint
+    RUSTFLAGS='-C target-feature=+crt-static' cargo build --workspace --all --profile quick-release --target ${TARGET} && \
+    cp -pv target/${TARGET}/quick-release/numaflow /root/numaflow && \
+    cp -pv target/${TARGET}/quick-release/entrypoint /root/entrypoint
 
 ####################################################################################################
 # numaflow
