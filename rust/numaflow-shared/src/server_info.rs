@@ -179,10 +179,8 @@ pub struct ServerInfo {
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Protocol {
-    /// TCP protocol for multi-proc mode.
     #[allow(clippy::upper_case_acronyms)]
     TCP,
-    /// Unix Domain Socket (default).
     #[default]
     #[serde(other)]
     #[allow(clippy::upper_case_acronyms)]
@@ -1227,7 +1225,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_controller_compatibility_min_rc_version_pre_release_invalid() {
-        let controller_version = "1.1.6-rc1";
+        let controller_version = "v1.1.6-rc1";
         let min_controller_version = "1.1.6-rc2";
 
         let result = check_controller_compatibility(controller_version, min_controller_version);
