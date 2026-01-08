@@ -69,7 +69,7 @@ Regardless of whether a Vertex uses ISB-based communication or Direct Transfer, 
 
 To address this issue, we define the MultiNetwork used by a Pipeline and associate it with Vertices and ISBs. This approach unifies the network configuration used by each Pipeline and simplifies network management.
 
-![Network Architecture](./assets/network_architecture)
+![Network Architecture](./assets/network_architecture.drawio.png)
 
 #### Specification
 ```
@@ -154,7 +154,8 @@ spec:
 2. Deploying ResourceClaims (Templates) and DeviceClasses
 
 ### Deployment Sequence of Pipeline resources
-[Deployment Sequence](./assets/deployment_sequence.drawio.png)
+
+![Deployment Sequence](./assets/deployment_seqence.drawio.png)
 
 1. Deploy the numaNetwork and store its resource information in etcd.
 2. Deploy the Pipeline.
