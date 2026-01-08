@@ -40,6 +40,49 @@ impl From<&str> for MapMode {
     }
 }
 
+/// Language represents the SDK language used by the container.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Language {
+    Go,
+    Python,
+    Java,
+    Rust,
+    /// Unknown language - used for forward compatibility with new SDK languages.
+    #[default]
+    #[serde(other)]
+    Unknown,
+}
+
+impl Language {
+    /// Returns the string representation of the [Language].
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Language::Go => "go",
+            Language::Python => "python",
+            Language::Java => "java",
+            Language::Rust => "rust",
+            Language::Unknown => "unknown",
+        }
+    }
+
+    /// Returns true if the language is Python (uses PEP 440 versioning).
+    pub fn is_python(&self) -> bool {
+        matches!(self, Language::Python)
+    }
+
+    /// Returns true if the language is unknown.
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, Language::Unknown)
+    }
+}
+
+impl fmt::Display for Language {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 /// ContainerType represents the type of processor containers used in Numaflow.
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum ContainerType {
@@ -118,10 +161,10 @@ impl From<&Path> for ContainerType {
 pub struct ServerInfo {
     /// Protocol used by the server. This is for multi-proc mode.
     #[serde(default)]
-    pub protocol: String,
+    pub protocol: Protocol,
     /// Language of the SDK/container. This is for publishing metrics.
     #[serde(default)]
-    pub language: String,
+    pub language: Language,
     /// Minimum Numaflow version required for the SDK/container.
     #[serde(default)]
     pub minimum_numaflow_version: String,
@@ -132,10 +175,16 @@ pub struct ServerInfo {
     pub metadata: Option<HashMap<String, String>>, // Metadata is optional
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+/// Protocol represents the communication protocol used by the server.
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
 pub enum Protocol {
+    /// TCP protocol for multi-proc mode.
     #[allow(clippy::upper_case_acronyms)]
     TCP,
+    /// Unix Domain Socket (default).
+    #[default]
+    #[serde(other)]
     #[allow(clippy::upper_case_acronyms)]
     UDS,
 }
@@ -162,24 +211,17 @@ impl ServerInfo {
         }
         vec![]
     }
-
-    /// get_protocol returns the protocol used by the server. This is for multi-proc mode.
-    pub fn get_protocol(&self) -> Protocol {
-        match self.protocol.as_str() {
-            "tcp" => Protocol::TCP,
-            _ => Protocol::UDS,
-        }
-    }
 }
 
 /// sdk_server_info waits until the server info file is ready and check whether the
 /// server is compatible with Numaflow.
 pub async fn sdk_server_info(
-    file_path: &Path,
+    file_path: impl AsRef<Path>,
     cln_token: CancellationToken,
 ) -> error::Result<ServerInfo> {
+    let file_path = file_path.as_ref();
     // Read the server info file
-    let server_info = read_server_info(&file_path, cln_token).await?;
+    let server_info = read_server_info(file_path, cln_token).await?;
 
     // Get the container type from the server info file
     let container_type = ContainerType::from(file_path);
@@ -190,7 +232,7 @@ pub async fn sdk_server_info(
     // Extract relevant fields from server info
     let sdk_version = &server_info.version;
     let min_controller_version = &server_info.minimum_numaflow_version;
-    let sdk_language = &server_info.language;
+    let sdk_language = server_info.language;
 
     // Get controllerversion information
     let controller_version_info = version::get_controller_version_info();
@@ -209,7 +251,7 @@ pub async fn sdk_server_info(
     }
 
     // Check SDK compatibility if version and language are specified
-    if sdk_version.is_empty() || sdk_language.is_empty() {
+    if sdk_version.is_empty() || sdk_language.is_unknown() {
         warn!("Failed to get the SDK version/language, skipping SDK version compatibility check");
     } else {
         // Get minimum supported SDK versions and check compatibility
@@ -255,25 +297,25 @@ fn check_controller_compatibility(
 /// Checks if the current SDK version is compatible with the given language's minimum supported SDK version.
 fn check_sdk_compatibility(
     sdk_version: &str,
-    sdk_language: &str,
+    sdk_language: Language,
     container_type: &ContainerType,
     min_supported_sdk_versions: &SdkConstraints,
 ) -> error::Result<()> {
     // Check if the SDK language is present in the minimum supported SDK versions
-    if !min_supported_sdk_versions.contains_key(sdk_language) {
+    if !min_supported_sdk_versions.contains_key(&sdk_language) {
         return Err(Error::ServerInfo(format!(
             "SDK version constraint not found for language: {sdk_language}, container type: {container_type}"
         )));
     }
     let empty_map = HashMap::new();
     let lang_constraints = min_supported_sdk_versions
-        .get(sdk_language)
+        .get(&sdk_language)
         .unwrap_or(&empty_map);
     if let Some(sdk_required_version) = lang_constraints.get(container_type) {
         let sdk_constraint = format!(">={sdk_required_version}");
 
         // For Python, use Pep440 versioning
-        if sdk_language.to_lowercase() == "python" {
+        if sdk_language.is_python() {
             let sdk_version_pep440 = PepVersion::from_str(sdk_version)
                 .map_err(|e| Error::ServerInfo(format!("Error parsing SDK version: {e}")))?;
 
@@ -472,9 +514,9 @@ async fn read_server_info(
 
 /// Checks if the given SDK version supports nack functionality
 // DEPRECATE(0.12): We added this in 0.11
-pub fn supports_nack(sdk_version: &str, sdk_language: &str) -> bool {
-    // If version or language is empty, assume no nack support for safety
-    if sdk_version.is_empty() || sdk_language.is_empty() {
+pub fn supports_nack(sdk_version: &str, sdk_language: Language) -> bool {
+    // If version is empty or language is unknown, assume no nack support for safety
+    if sdk_version.is_empty() || sdk_language.is_unknown() {
         return false;
     }
 
@@ -482,11 +524,11 @@ pub fn supports_nack(sdk_version: &str, sdk_language: &str) -> bool {
     let nack_constraints = &version::NACK_SUPPORT_SDK_VERSIONS;
 
     // Check if the SDK language is present in the nack support versions
-    if let Some(required_version) = nack_constraints.get(sdk_language) {
+    if let Some(required_version) = nack_constraints.get(&sdk_language) {
         let constraint = format!(">={required_version}");
 
         // For Python, use Pep440 versioning
-        if sdk_language.to_lowercase() == "python" {
+        if sdk_language.is_python() {
             if let Ok(sdk_version_pep440) = PepVersion::from_str(sdk_version)
                 && let Ok(specifiers) = VersionSpecifier::from_str(&constraint)
             {
@@ -513,12 +555,12 @@ mod version {
     use std::env;
     use std::sync::LazyLock;
 
-    use super::ContainerType;
+    use super::{ContainerType, Language};
 
     // SdkConstraints are the minimum supported version of each SDK for the current numaflow version.
-    // Key is the SDK language name, go, python, java, rust etc.
+    // Key is the SDK language.
     // Value is a map of container type to minimum supported version.
-    pub(crate) type SdkConstraints = HashMap<String, HashMap<ContainerType, String>>;
+    pub(crate) type SdkConstraints = HashMap<Language, HashMap<ContainerType, String>>;
 
     // MINIMUM_SUPPORTED_SDK_VERSIONS is the minimum supported version of each SDK for the current numaflow controller version.
     static MINIMUM_SUPPORTED_SDK_VERSIONS: LazyLock<SdkConstraints> = LazyLock::new(|| {
@@ -577,10 +619,10 @@ mod version {
         rust_version_map.insert(ContainerType::OnsSinker, "0.4.0-z".to_string());
 
         let mut m = HashMap::new();
-        m.insert("go".to_string(), go_version_map);
-        m.insert("python".to_string(), python_version_map);
-        m.insert("java".to_string(), java_version_map);
-        m.insert("rust".to_string(), rust_version_map);
+        m.insert(Language::Go, go_version_map);
+        m.insert(Language::Python, python_version_map);
+        m.insert(Language::Java, java_version_map);
+        m.insert(Language::Rust, rust_version_map);
         m
     });
 
@@ -590,13 +632,13 @@ mod version {
     }
 
     // NACK_SUPPORT_SDK_VERSIONS defines the minimum SDK versions that support nack functionality.
-    pub(crate) static NACK_SUPPORT_SDK_VERSIONS: LazyLock<HashMap<String, String>> =
+    pub(crate) static NACK_SUPPORT_SDK_VERSIONS: LazyLock<HashMap<Language, String>> =
         LazyLock::new(|| {
             let mut m = HashMap::new();
-            m.insert("go".to_string(), "0.11.0-z".to_string());
-            m.insert("python".to_string(), "0.11.0rc100".to_string());
-            m.insert("java".to_string(), "0.11.0-z".to_string());
-            m.insert("rust".to_string(), "0.4.0-z".to_string());
+            m.insert(Language::Go, "0.11.0-z".to_string());
+            m.insert(Language::Python, "0.11.0rc100".to_string());
+            m.insert(Language::Java, "0.11.0-z".to_string());
+            m.insert(Language::Rust, "0.4.0-z".to_string());
             m
         });
 
@@ -678,9 +720,6 @@ mod tests {
 
     // Constants for the tests
     const MINIMUM_NUMAFLOW_VERSION: &str = "1.2.0-rc4";
-    const TCP: &str = "tcp";
-    const PYTHON: &str = "python";
-    const GOLANG: &str = "go";
     const TEST_CONTAINER_TYPE: ContainerType = ContainerType::Sourcer;
 
     async fn write_server_info(
@@ -742,10 +781,10 @@ mod tests {
         rust_version_map.insert(TEST_CONTAINER_TYPE, "0.1.0-z".to_string());
 
         let mut m = HashMap::new();
-        m.insert("go".to_string(), go_version_map);
-        m.insert("python".to_string(), python_version_map);
-        m.insert("java".to_string(), java_version_map);
-        m.insert("rust".to_string(), rust_version_map);
+        m.insert(Language::Go, go_version_map);
+        m.insert(Language::Python, python_version_map);
+        m.insert(Language::Java, java_version_map);
+        m.insert(Language::Rust, rust_version_map);
         m
     }
 
@@ -761,22 +800,21 @@ mod tests {
         rust_version_map.insert(TEST_CONTAINER_TYPE, "0.1.0-rc3".to_string());
 
         let mut m = HashMap::new();
-        m.insert("go".to_string(), go_version_map);
-        m.insert("python".to_string(), python_version_map);
-        m.insert("java".to_string(), java_version_map);
-        m.insert("rust".to_string(), rust_version_map);
+        m.insert(Language::Go, go_version_map);
+        m.insert(Language::Python, python_version_map);
+        m.insert(Language::Java, java_version_map);
+        m.insert(Language::Rust, rust_version_map);
         m
     }
 
     #[tokio::test]
     async fn test_sdk_compatibility_min_stable_python_stable_release_valid() {
         let sdk_version = "1.3.0";
-        let sdk_language = "python";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Python,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -787,12 +825,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_stable_python_stable_release_invalid() {
         let sdk_version = "1.1.0";
-        let sdk_language = "python";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Python,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -806,12 +843,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_stable_python_pre_release_valid() {
         let sdk_version = "v1.3.0a1";
-        let sdk_language = "python";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Python,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -822,12 +858,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_stable_python_pre_release_invalid() {
         let sdk_version = "1.1.0a1";
-        let sdk_language = "python";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Python,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -841,12 +876,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_stable_java_stable_release_valid() {
         let sdk_version = "v2.1.0";
-        let sdk_language = "java";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Java,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -857,12 +891,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_stable_java_rc_release_invalid() {
         let sdk_version = "2.0.0-rc1";
-        let sdk_language = "java";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Java,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -876,12 +909,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_stable_go_rc_release_valid() {
         let sdk_version = "0.11.0-rc2";
-        let sdk_language = "go";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Go,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -892,12 +924,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_stable_go_pre_release_invalid() {
         let sdk_version = "0.10.0-0.20240913163521-4910018031a7";
-        let sdk_language = "go";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Go,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -911,12 +942,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_stable_rust_pre_release_valid() {
         let sdk_version = "v0.1.1-0.20240913163521-4910018031a7";
-        let sdk_language = "rust";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Rust,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -927,12 +957,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_stable_rust_stable_release_invalid() {
         let sdk_version = "0.0.9";
-        let sdk_language = "rust";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Rust,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -946,12 +975,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_pre_release_python_stable_release_valid() {
         let sdk_version = "1.3.0";
-        let sdk_language = "python";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Python,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -962,12 +990,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_pre_release_python_stable_release_invalid() {
         let sdk_version = "1.1.0";
-        let sdk_language = "python";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Python,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -981,12 +1008,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_pre_release_python_pre_release_valid() {
         let sdk_version = "v1.3.0a1";
-        let sdk_language = "python";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Python,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -997,12 +1023,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_pre_release_python_pre_release_invalid() {
         let sdk_version = "1.2.0a1";
-        let sdk_language = "python";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Python,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -1016,12 +1041,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_pre_release_java_stable_release_valid() {
         let sdk_version = "v2.1.0";
-        let sdk_language = "java";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Java,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -1032,12 +1056,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_pre_release_java_rc_release_invalid() {
         let sdk_version = "2.0.0-rc1";
-        let sdk_language = "java";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Java,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -1051,12 +1074,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_pre_release_go_rc_release_valid() {
         let sdk_version = "0.11.0-rc2";
-        let sdk_language = "go";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Go,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -1067,12 +1089,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_pre_release_go_pre_release_invalid() {
         let sdk_version = "0.10.0-0.20240913163521-4910018031a7";
-        let sdk_language = "go";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Go,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -1086,12 +1107,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_pre_release_rust_pre_release_valid() {
         let sdk_version = "v0.1.1-0.20240913163521-4910018031a7";
-        let sdk_language = "rust";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Rust,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -1102,12 +1122,11 @@ mod tests {
     #[tokio::test]
     async fn test_sdk_compatibility_min_pre_release_rust_stable_release_invalid() {
         let sdk_version = "0.0.9";
-        let sdk_language = "rust";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result = check_sdk_compatibility(
             sdk_version,
-            sdk_language,
+            Language::Rust,
             &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
@@ -1233,8 +1252,8 @@ mod tests {
 
         // Server info to write
         let server_info = ServerInfo {
-            protocol: TCP.to_string(),
-            language: GOLANG.to_string(),
+            protocol: Protocol::TCP,
+            language: Language::Go,
             minimum_numaflow_version: MINIMUM_NUMAFLOW_VERSION.to_string(),
             version: "1.0.0".to_string(),
             metadata: {
@@ -1266,8 +1285,8 @@ mod tests {
 
         // Server info to write
         let server_info = ServerInfo {
-            protocol: TCP.parse().unwrap(),
-            language: GOLANG.parse().unwrap(),
+            protocol: Protocol::TCP,
+            language: Language::Go,
             minimum_numaflow_version: MINIMUM_NUMAFLOW_VERSION.to_string(),
             version: "1.0.0".to_string(),
             metadata: {
@@ -1301,8 +1320,8 @@ mod tests {
 
         // Server info to write
         let server_info = ServerInfo {
-            protocol: TCP.parse().unwrap(),
-            language: PYTHON.parse().unwrap(),
+            protocol: Protocol::TCP,
+            language: Language::Python,
             minimum_numaflow_version: MINIMUM_NUMAFLOW_VERSION.to_string(),
             version: "1.0.0".to_string(),
             metadata: {
@@ -1320,15 +1339,15 @@ mod tests {
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
 
         let server_info = result.unwrap();
-        assert_eq!(server_info.protocol, "tcp");
-        assert_eq!(server_info.language, "python");
+        assert_eq!(server_info.protocol, Protocol::TCP);
+        assert_eq!(server_info.language, Language::Python);
         assert_eq!(server_info.minimum_numaflow_version, "1.2.0-rc4");
         assert_eq!(server_info.version, "1.0.0");
         // Check metadata
         assert!(server_info.metadata.is_some());
-        let server_info = server_info.metadata.unwrap();
-        assert_eq!(server_info.len(), 1);
-        assert_eq!(server_info.get("key1").unwrap(), "value1");
+        let metadata = server_info.metadata.unwrap();
+        assert_eq!(metadata.len(), 1);
+        assert_eq!(metadata.get("key1").unwrap(), "value1");
     }
 
     #[tokio::test]
@@ -1367,15 +1386,81 @@ mod tests {
         })
         .to_string();
 
-        let _expected_server_info = ServerInfo {
-            protocol: "uds".to_string(),
-            language: "go".to_string(),
-            minimum_numaflow_version: "1.2.0-rc4".to_string(),
-            version: "v0.7.0-rc2".to_string(),
-            metadata: Some(HashMap::new()), // Expecting an empty HashMap here
-        };
-
-        let _parsed_server_info: ServerInfo =
+        let parsed_server_info: ServerInfo =
             serde_json::from_str(&json_data).expect("Failed to parse JSON");
+
+        // Verify the parsed values match expected enum variants
+        assert_eq!(parsed_server_info.protocol, Protocol::UDS);
+        assert_eq!(parsed_server_info.language, Language::Go);
+        assert_eq!(parsed_server_info.minimum_numaflow_version, "1.2.0-rc4");
+        assert_eq!(parsed_server_info.version, "v0.7.0-rc2");
+        assert_eq!(parsed_server_info.metadata, None);
+    }
+
+    #[test]
+    fn test_deserialize_with_unknown_language() {
+        // Test backward compatibility: unknown language should deserialize to Language::Unknown
+        let json_data = json!({
+            "protocol": "tcp",
+            "language": "kotlin",
+            "minimum_numaflow_version": "1.2.0",
+            "version": "1.0.0",
+            "metadata": null
+        })
+        .to_string();
+
+        let parsed_server_info: ServerInfo =
+            serde_json::from_str(&json_data).expect("Failed to parse JSON");
+
+        assert_eq!(parsed_server_info.protocol, Protocol::TCP);
+        assert_eq!(parsed_server_info.language, Language::Unknown);
+    }
+
+    #[test]
+    fn test_deserialize_with_unknown_protocol() {
+        // Test backward compatibility: unknown protocol should deserialize to Protocol::UDS (default)
+        let json_data = json!({
+            "protocol": "grpc",
+            "language": "rust",
+            "minimum_numaflow_version": "1.2.0",
+            "version": "1.0.0",
+            "metadata": null
+        })
+        .to_string();
+
+        let parsed_server_info: ServerInfo =
+            serde_json::from_str(&json_data).expect("Failed to parse JSON");
+
+        assert_eq!(parsed_server_info.protocol, Protocol::UDS); // Falls back to default
+        assert_eq!(parsed_server_info.language, Language::Rust);
+    }
+
+    #[test]
+    fn test_metadata_serde_with_map_mode() {
+        // Test metadata serialization/deserialization and verify get_map_mode works correctly
+        let json_data = json!({
+            "protocol": "uds",
+            "language": "python",
+            "minimum_numaflow_version": "1.2.0",
+            "version": "1.0.0",
+            "metadata": {
+                "MAP_MODE": "batch-map",
+                "other_key": "other_value"
+            }
+        })
+        .to_string();
+
+        let parsed_server_info: ServerInfo =
+            serde_json::from_str(&json_data).expect("Failed to parse JSON");
+
+        // Verify metadata was deserialized correctly
+        assert!(parsed_server_info.metadata.is_some());
+        let metadata = parsed_server_info.metadata.as_ref().unwrap();
+        assert_eq!(metadata.get("MAP_MODE"), Some(&"batch-map".to_string()));
+        assert_eq!(metadata.get("other_key"), Some(&"other_value".to_string()));
+
+        // Verify get_map_mode returns the correct MapMode
+        let map_mode = parsed_server_info.get_map_mode();
+        assert_eq!(map_mode, Some(MapMode::Batch));
     }
 }
