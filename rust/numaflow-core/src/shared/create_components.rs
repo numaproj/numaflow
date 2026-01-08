@@ -102,8 +102,7 @@ async fn append_primary_sink_client(
         SinkType::Serve => SinkWriterBuilder::new(batch_size, read_timeout, SinkClientType::Serve),
         SinkType::UserDefined(ud_config) => {
             let sink_server_info =
-                sdk_server_info(ud_config.server_info_path.clone(), cln_token.clone())
-                    .await?;
+                sdk_server_info(ud_config.server_info_path.clone(), cln_token.clone()).await?;
 
             let metric_labels = metrics::sdk_info_labels(
                 config::get_component_type().to_string(),
@@ -166,8 +165,7 @@ async fn append_fallback_sink_client(
         SinkType::Blackhole(_) => sink_writer_builder.fb_sink_client(SinkClientType::Blackhole),
         SinkType::UserDefined(ud_config) => {
             let fb_server_info =
-                sdk_server_info(ud_config.server_info_path.clone(), cln_token.clone())
-                    .await?;
+                sdk_server_info(ud_config.server_info_path.clone(), cln_token.clone()).await?;
 
             let metric_labels = metrics::sdk_info_labels(
                 config::get_component_type().to_string(),
@@ -221,8 +219,7 @@ async fn append_ons_sink_client(
         }
         SinkType::UserDefined(ud_config) => {
             let os_server_info =
-                sdk_server_info(ud_config.server_info_path.clone(), cln_token.clone())
-                    .await?;
+                sdk_server_info(ud_config.server_info_path.clone(), cln_token.clone()).await?;
 
             let metric_labels = metrics::sdk_info_labels(
                 config::get_component_type().to_string(),
@@ -276,11 +273,8 @@ pub(crate) async fn create_transformer(
         && let config::components::transformer::TransformerType::UserDefined(ud_transformer) =
             &transformer_config.transformer_type
     {
-        let server_info = sdk_server_info(
-            ud_transformer.server_info_path.clone(),
-            cln_token.clone(),
-        )
-        .await?;
+        let server_info =
+            sdk_server_info(ud_transformer.server_info_path.clone(), cln_token.clone()).await?;
         let metric_labels = metrics::sdk_info_labels(
             config::get_component_type().to_string(),
             config::get_vertex_name().to_string(),
