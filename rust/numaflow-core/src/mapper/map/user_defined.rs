@@ -522,7 +522,7 @@ impl UserDefinedStreamMap {
             error!(?e, "Failed to send message to server");
             let _ = respond_to.send(Err(Error::Mapper(format!(
                 "failed to send message to stream map server: {e}"
-            ))));
+            )))).await;
             return;
         }
 
