@@ -8,11 +8,30 @@ use crate::error::Error;
 use crate::message::{Message, MessageID, Offset, StringOffset};
 use crate::source;
 
+use crate::metadata::{KeyValueGroup, Metadata};
+
 impl TryFrom<SqsMessage> for Message {
     type Error = Error;
 
     fn try_from(message: SqsMessage) -> crate::Result<Self> {
         let offset = Offset::String(StringOffset::new(message.offset, *get_vertex_replica()));
+
+        let metadata = if message.custom_attributes.is_empty() {
+            Some(Arc::new(Metadata::default()))
+        } else {
+            let user_metadata = message
+                .custom_attributes
+                .into_iter()
+                .map(|(k, v)| {
+                    let key_value = v.into_iter().map(|(ik, iv)| (ik, iv.into())).collect();
+                    (k, KeyValueGroup { key_value })
+                })
+                .collect();
+            Some(Arc::new(Metadata {
+                user_metadata,
+                ..Default::default()
+            }))
+        };
 
         Ok(Message {
             typ: Default::default(),
@@ -27,9 +46,8 @@ impl TryFrom<SqsMessage> for Message {
                 offset: offset.to_string().into(),
                 index: 0,
             },
-            headers: Arc::new(message.headers),
-            // Set default metadata so that metadata is always present.
-            metadata: Some(Arc::new(crate::metadata::Metadata::default())),
+            headers: Arc::new(message.system_attributes),
+            metadata,
             is_late: false,
             ack_handle: None,
         })
@@ -149,8 +167,8 @@ pub mod tests {
             payload: Bytes::from("value".to_string()),
             offset: "offset".to_string(),
             event_time: ts,
-            attributes: None,
-            headers: headers.clone(),
+            system_attributes: headers.clone(),
+            custom_attributes: HashMap::new(),
         };
 
         let message: Message = sqs_message.try_into().unwrap();
@@ -164,6 +182,56 @@ pub mod tests {
         );
         assert_eq!(message.event_time, ts);
         assert_eq!(*message.headers, headers);
+    }
+
+    #[tokio::test]
+    async fn test_sqs_message_conversion_with_custom_attributes() {
+        let ts = Utc::now();
+
+        let mut system_attrs = HashMap::new();
+        system_attrs.insert("SentTimestamp".to_string(), "1677112427387".to_string());
+        system_attrs.insert("MessageGroupId".to_string(), "group-1".to_string());
+
+        let mut sqs_custom_attrs = HashMap::new();
+        sqs_custom_attrs.insert("trace_id".to_string(), b"abc123".to_vec());
+        sqs_custom_attrs.insert("correlation_id".to_string(), b"xyz789".to_vec());
+
+        let mut custom_attributes = HashMap::new();
+        custom_attributes.insert("sqs".to_string(), sqs_custom_attrs);
+
+        let sqs_message = SqsMessage {
+            key: "key".to_string(),
+            payload: Bytes::from("test payload"),
+            offset: "offset".to_string(),
+            event_time: ts,
+            system_attributes: system_attrs.clone(),
+            custom_attributes,
+        };
+
+        let message: Message = sqs_message.try_into().unwrap();
+
+        assert_eq!(*message.headers, system_attrs);
+        assert_eq!(
+            message.headers.get("SentTimestamp"),
+            Some(&"1677112427387".to_string())
+        );
+        assert_eq!(
+            message.headers.get("MessageGroupId"),
+            Some(&"group-1".to_string())
+        );
+
+        let metadata = message.metadata.expect("missing metadata");
+        assert!(metadata.user_metadata.contains_key("sqs"));
+
+        let sqs_meta = metadata.user_metadata.get("sqs").unwrap();
+        assert_eq!(
+            sqs_meta.key_value.get("trace_id").map(|v| v.as_ref()),
+            Some(b"abc123".as_slice())
+        );
+        assert_eq!(
+            sqs_meta.key_value.get("correlation_id").map(|v| v.as_ref()),
+            Some(b"xyz789".as_slice())
+        );
     }
 
     #[tokio::test]
