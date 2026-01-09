@@ -126,9 +126,15 @@ impl fmt::Display for ContainerType {
     }
 }
 
-impl From<&str> for ContainerType {
-    fn from(s: &str) -> Self {
-        match s {
+impl From<&Path> for ContainerType {
+    fn from(path: &Path) -> Self {
+        let file_name = path.file_name().unwrap_or_default();
+        let ctnr_str = file_name
+            .to_str()
+            .unwrap_or_default()
+            .trim_end_matches("-server-info");
+
+        match ctnr_str {
             "sourcer" => ContainerType::Sourcer,
             "sourcetransformer" => ContainerType::SourceTransformer,
             "sinker" => ContainerType::Sinker,
@@ -142,17 +148,6 @@ impl From<&str> for ContainerType {
             "ons-sinker" => ContainerType::OnsSinker,
             _ => ContainerType::Unknown,
         }
-    }
-}
-
-impl From<&Path> for ContainerType {
-    fn from(path: &Path) -> Self {
-        let file_name = path.file_name().unwrap_or_default();
-        let ctnr_str = file_name
-            .to_str()
-            .unwrap_or_default()
-            .trim_end_matches("-server-info");
-        ContainerType::from(ctnr_str)
     }
 }
 
