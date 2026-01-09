@@ -18,6 +18,7 @@ use crate::mapper::map::user_defined::{
     UserDefinedBatchMap, UserDefinedStreamMap, UserDefinedUnaryMap,
 };
 use crate::message::{AckHandle, Message, Offset};
+use crate::monovertex::bypass_router::BypassRouter;
 use crate::tracker::Tracker;
 pub(super) mod user_defined;
 
@@ -213,6 +214,7 @@ impl MapHandle {
         mut self,
         input_stream: ReceiverStream<Message>,
         cln_token: CancellationToken,
+        bypass_router: Option<BypassRouter>,
     ) -> error::Result<(ReceiverStream<Message>, JoinHandle<error::Result<()>>)> {
         let (output_tx, output_rx) = mpsc::channel(self.batch_size);
         let (error_tx, mut error_rx) = mpsc::channel(self.batch_size);
@@ -282,6 +284,7 @@ impl MapHandle {
                                     self.tracker.clone(),
                                     error_tx.clone(),
                                     hard_shutdown_token.clone(),
+                                    bypass_router.clone(),
                                 ).await;
                             }
                         },
@@ -318,6 +321,7 @@ impl MapHandle {
                                 batch,
                                 output_tx.clone(),
                                 self.tracker.clone(),
+                                bypass_router.clone(),
                             )
                             .await
                         {
@@ -375,6 +379,7 @@ impl MapHandle {
                                     self.tracker.clone(),
                                     error_tx,
                                     cln_token.clone(),
+                                    bypass_router.clone(),
                                 ).await;
                             }
                         },
@@ -418,6 +423,7 @@ impl MapHandle {
         tracker: Tracker,
         error_tx: mpsc::Sender<Error>,
         cln_token: CancellationToken,
+        bypass_router: Option<BypassRouter>,
     ) {
         let output_tx = output_tx.clone();
 
@@ -461,10 +467,19 @@ impl MapHandle {
 
                             // send messages downstream
                             for mapped_message in mapped_messages {
-                                output_tx
+                                if let Some(ref bypass_router) = bypass_router &&
+                                let Some(bypass_msg) = bypass_router.get_routed_message(mapped_message.clone())
+                                {
+                                    bypass_router
+                                        .route(bypass_msg)
+                                        .await
+                                        .expect("bypass send should not fail");
+                                } else {
+                                    output_tx
                                     .send(mapped_message)
                                     .await
                                     .expect("failed to send response");
+                                }
                             }
                         }
                         Ok(Err(map_err)) => {
@@ -513,6 +528,7 @@ impl MapHandle {
         batch: Vec<Message>,
         output_tx: mpsc::Sender<Message>,
         tracker: Tracker,
+        bypass_router: Option<BypassRouter>,
     ) -> error::Result<()> {
         let (senders, receivers): (Vec<_>, Vec<_>) =
             batch.iter().map(|_| oneshot::channel()).unzip();
@@ -544,11 +560,22 @@ impl MapHandle {
                             )
                             .await?;
                     }
+
                     for mapped_message in mapped_messages {
-                        output_tx
-                            .send(mapped_message)
-                            .await
-                            .expect("failed to send response");
+                        if let Some(ref bypass_router) = bypass_router
+                            && let Some(bypass_msg) =
+                                bypass_router.get_routed_message(mapped_message.clone())
+                        {
+                            bypass_router
+                                .route(bypass_msg)
+                                .await
+                                .expect("bypass send should not fail");
+                        } else {
+                            output_tx
+                                .send(mapped_message)
+                                .await
+                                .expect("failed to send response");
+                        }
                     }
                 }
                 Ok(Err(_map_err)) => {
@@ -580,6 +607,7 @@ impl MapHandle {
         tracker: Tracker,
         error_tx: mpsc::Sender<Error>,
         cln_token: CancellationToken,
+        bypass_router: Option<BypassRouter>,
     ) {
         let output_tx = output_tx.clone();
         tokio::spawn(async move {
@@ -620,7 +648,17 @@ impl MapHandle {
                                     .serving_append(mapped_message.offset.clone(), mapped_message.tags.clone())
                                     .await
                                     .expect("failed to update tracker");
-                                output_tx.send(mapped_message).await.expect("failed to send response");
+
+                                if let Some(ref bypass_router) = bypass_router &&
+                                let Some(bypass_msg) = bypass_router.get_routed_message(mapped_message.clone())
+                                {
+                                    bypass_router
+                                        .route(bypass_msg)
+                                        .await
+                                        .expect("bypass send should not fail");
+                                } else {
+                                    output_tx.send(mapped_message).await.expect("failed to send response");
+                                }
                             }
                             Some(Err(e)) => {
                                 error!(?e, "failed to map message");
@@ -767,6 +805,7 @@ mod tests {
             tracker,
             error_tx,
             CancellationToken::new(),
+            None,
         )
         .await;
 
@@ -849,7 +888,7 @@ mod tests {
         drop(input_tx);
 
         let (output_stream, map_handle) = mapper
-            .streaming_map(input_stream, CancellationToken::new())
+            .streaming_map(input_stream, CancellationToken::new(), None)
             .await?;
 
         let mut output_rx = output_stream.into_inner();
@@ -921,7 +960,7 @@ mod tests {
         let input_stream = ReceiverStream::new(input_rx);
         let cln_token = CancellationToken::new();
         let (_output_stream, map_handle) = mapper
-            .streaming_map(input_stream, cln_token.clone())
+            .streaming_map(input_stream, cln_token.clone(), None)
             .await?;
         let mut ack_rxs = vec![];
         // send 10 requests to the mapper
@@ -1070,7 +1109,7 @@ mod tests {
         drop(input_tx);
 
         let (output_stream, map_handle) = mapper
-            .streaming_map(input_stream, CancellationToken::new())
+            .streaming_map(input_stream, CancellationToken::new(), None)
             .await?;
         let mut output_rx = output_stream.into_inner();
 
@@ -1188,7 +1227,7 @@ mod tests {
         }
 
         let (_output_stream, map_handle) = mapper
-            .streaming_map(input_stream, cln_token.clone())
+            .streaming_map(input_stream, cln_token.clone(), None)
             .await?;
 
         drop(input_tx);
@@ -1291,7 +1330,7 @@ mod tests {
         drop(input_tx);
 
         let (mut output_stream, map_handle) = mapper
-            .streaming_map(input_stream, CancellationToken::new())
+            .streaming_map(input_stream, CancellationToken::new(), None)
             .await?;
 
         let mut responses = vec![];
@@ -1371,7 +1410,7 @@ mod tests {
         let input_stream = ReceiverStream::new(input_rx);
 
         let (_output_stream, map_handle) = mapper
-            .streaming_map(input_stream, cln_token.clone())
+            .streaming_map(input_stream, cln_token.clone(), None)
             .await?;
 
         let mut ack_rxs = vec![];

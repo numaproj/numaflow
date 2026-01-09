@@ -40,7 +40,8 @@ impl<C: crate::typ::NumaflowTypeConfig> SourceForwarder<C> {
 
     /// Start the forwarder by starting the streaming source, transformer, and writer.
     pub(crate) async fn start(self, cln_token: CancellationToken) -> error::Result<()> {
-        let (messages_stream, reader_handle) = self.source.streaming_read(cln_token.clone())?;
+        let (messages_stream, reader_handle) =
+            self.source.streaming_read(cln_token.clone(), None)?;
 
         let writer_handle = self
             .writer

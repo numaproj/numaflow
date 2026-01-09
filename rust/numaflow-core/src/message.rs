@@ -285,7 +285,7 @@ pub(crate) enum ReadAck {
 }
 
 /// Message ID which is used to uniquely identify a message. It cheap to clone this.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub(crate) struct MessageID {
     pub(crate) vertex_name: Bytes,
     pub(crate) offset: Bytes,

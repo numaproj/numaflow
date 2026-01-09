@@ -28,6 +28,9 @@ pub enum Error {
     #[error("Forwarder Error - {0}")]
     Forwarder(String),
 
+    #[error("Bypass Router Error - {0}")]
+    BypassRouter(String),
+
     #[error("Connection Error - {0}")]
     Connection(String),
 
