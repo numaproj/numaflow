@@ -22,7 +22,7 @@ use crate::error::Error;
 use crate::message::Message;
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
-    pipeline_metric_labels, pipeline_metrics, pipeline_drop_metric_labels
+    pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::sinker::actor::{SinkActorMessage, SinkActorResponse};
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
@@ -130,7 +130,8 @@ impl SinkWriter {
             cancel,
         };
         let _ = self.sink_handle.send(msg).await;
-        rx.await.expect("Error receiving response from sink actor")
+        rx.await
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// Sink the messages to the Fallback Sink.
@@ -153,7 +154,8 @@ impl SinkWriter {
             cancel,
         };
         let _ = self.fb_sink_handle.as_ref().unwrap().send(msg).await;
-        rx.await.unwrap()
+        rx.await
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// Streaming write the messages to the Sink, it will keep writing messages until the stream is
