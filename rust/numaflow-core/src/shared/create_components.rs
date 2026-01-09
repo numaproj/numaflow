@@ -102,13 +102,12 @@ async fn append_primary_sink_client(
         SinkType::Serve => SinkWriterBuilder::new(batch_size, read_timeout, SinkClientType::Serve),
         SinkType::UserDefined(ud_config) => {
             let sink_server_info =
-                sdk_server_info(ud_config.server_info_path.clone().into(), cln_token.clone())
-                    .await?;
+                sdk_server_info(ud_config.server_info_path.clone(), cln_token.clone()).await?;
 
             let metric_labels = metrics::sdk_info_labels(
                 config::get_component_type().to_string(),
                 config::get_vertex_name().to_string(),
-                sink_server_info.language,
+                sink_server_info.language.to_string(),
                 sink_server_info.version,
                 ContainerType::Sinker.to_string(),
             );
@@ -166,13 +165,12 @@ async fn append_fallback_sink_client(
         SinkType::Blackhole(_) => sink_writer_builder.fb_sink_client(SinkClientType::Blackhole),
         SinkType::UserDefined(ud_config) => {
             let fb_server_info =
-                sdk_server_info(ud_config.server_info_path.clone().into(), cln_token.clone())
-                    .await?;
+                sdk_server_info(ud_config.server_info_path.clone(), cln_token.clone()).await?;
 
             let metric_labels = metrics::sdk_info_labels(
                 config::get_component_type().to_string(),
                 config::get_vertex_name().to_string(),
-                fb_server_info.language,
+                fb_server_info.language.to_string(),
                 fb_server_info.version,
                 ContainerType::FbSinker.to_string(),
             );
@@ -221,13 +219,12 @@ async fn append_ons_sink_client(
         }
         SinkType::UserDefined(ud_config) => {
             let os_server_info =
-                sdk_server_info(ud_config.server_info_path.clone().into(), cln_token.clone())
-                    .await?;
+                sdk_server_info(ud_config.server_info_path.clone(), cln_token.clone()).await?;
 
             let metric_labels = metrics::sdk_info_labels(
                 config::get_component_type().to_string(),
                 config::get_vertex_name().to_string(),
-                os_server_info.language,
+                os_server_info.language.to_string(),
                 os_server_info.version,
                 ContainerType::OnsSinker.to_string(),
             );
@@ -276,15 +273,12 @@ pub(crate) async fn create_transformer(
         && let config::components::transformer::TransformerType::UserDefined(ud_transformer) =
             &transformer_config.transformer_type
     {
-        let server_info = sdk_server_info(
-            ud_transformer.server_info_path.clone().into(),
-            cln_token.clone(),
-        )
-        .await?;
+        let server_info =
+            sdk_server_info(ud_transformer.server_info_path.clone(), cln_token.clone()).await?;
         let metric_labels = metrics::sdk_info_labels(
             config::get_component_type().to_string(),
             config::get_vertex_name().to_string(),
-            server_info.language,
+            server_info.language.to_string(),
             server_info.version,
             ContainerType::SourceTransformer.to_string(),
         );
@@ -324,13 +318,13 @@ pub(crate) async fn create_mapper(
     match map_config.map_type {
         MapType::UserDefined(mut config) => {
             let server_info =
-                sdk_server_info(config.server_info_path.clone().into(), cln_token.clone()).await?;
+                sdk_server_info(config.server_info_path.clone(), cln_token.clone()).await?;
 
             // add sdk info metric
             let metric_labels = metrics::sdk_info_labels(
                 config::get_component_type().to_string(),
                 config::get_vertex_name().to_string(),
-                server_info.language.clone(),
+                server_info.language.to_string(),
                 server_info.version.clone(),
                 ContainerType::Mapper.to_string(),
             );
@@ -339,7 +333,7 @@ pub(crate) async fn create_mapper(
                 .get_or_create(&metric_labels)
                 .set(1);
 
-            match server_info.get_protocol() {
+            match server_info.protocol {
                 Protocol::TCP => {
                     // tcp is only used for multi proc mode in python
                     let endpoints = server_info.get_http_endpoints();
@@ -547,7 +541,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             let (source_client, server_info) =
                 create_source_client(user_defined_config, cln_token.clone()).await?;
             // Check if the SDK version supports nack functionality
-            let supports_nack = supports_nack(&server_info.version, &server_info.language);
+            let supports_nack = supports_nack(&server_info.version, server_info.language);
             let (ud_read, ud_ack, ud_lag) = new_source(
                 source_client,
                 batch_size,
@@ -577,7 +571,7 @@ async fn create_source_client(
     cln_token: CancellationToken,
 ) -> error::Result<(SourceClient<Channel>, ServerInfo)> {
     let server_info = sdk_server_info(
-        user_defined_config.server_info_path.clone().into(),
+        user_defined_config.server_info_path.clone(),
         cln_token.clone(),
     )
     .await?;
@@ -585,7 +579,7 @@ async fn create_source_client(
     let metric_labels = metrics::sdk_info_labels(
         config::get_component_type().to_string(),
         config::get_vertex_name().to_string(),
-        server_info.language.clone(),
+        server_info.language.to_string(),
         server_info.version.clone(),
         ContainerType::Sourcer.to_string(),
     );
@@ -607,7 +601,7 @@ pub(crate) async fn create_aligned_reducer(
     cln_token: CancellationToken,
 ) -> crate::Result<UserDefinedAlignedReduce> {
     let server_info = sdk_server_info(
-        reducer_config.user_defined_config.server_info_path.into(),
+        reducer_config.user_defined_config.server_info_path,
         cln_token.clone(),
     )
     .await?;
@@ -615,7 +609,7 @@ pub(crate) async fn create_aligned_reducer(
     let metric_labels = metrics::sdk_info_labels(
         config::get_component_type().to_string(),
         config::get_vertex_name().to_string(),
-        server_info.language,
+        server_info.language.to_string(),
         server_info.version,
         ContainerType::Reducer.to_string(),
     );
@@ -643,7 +637,7 @@ pub(crate) async fn create_unaligned_reducer(
     cln_token: CancellationToken,
 ) -> crate::Result<UserDefinedUnalignedReduce> {
     let server_info = sdk_server_info(
-        reducer_config.user_defined_config.server_info_path.into(),
+        reducer_config.user_defined_config.server_info_path,
         cln_token.clone(),
     )
     .await?;
@@ -651,7 +645,7 @@ pub(crate) async fn create_unaligned_reducer(
     let metric_labels = metrics::sdk_info_labels(
         config::get_component_type().to_string(),
         config::get_vertex_name().to_string(),
-        server_info.language,
+        server_info.language.to_string(),
         server_info.version,
         ContainerType::Reducer.to_string(),
     );
