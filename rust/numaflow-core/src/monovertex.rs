@@ -77,7 +77,11 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
     .await?;
 
     let bypass_router = config.bypass_condition.as_ref().map(|bypass_condition| {
-        BypassRouterConfig::new(bypass_condition.clone(), config.batch_size)
+        BypassRouterConfig::new(
+            bypass_condition.clone(),
+            config.batch_size,
+            config.read_timeout,
+        )
     });
 
     let transformer = create_components::create_transformer(
