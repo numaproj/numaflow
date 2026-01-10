@@ -14,8 +14,7 @@ use crate::error::{Error, Result};
 use crate::message::Message;
 use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 
-use super::unary::process_unary_response;
-use super::{ParentMessageInfo, ResponseSenderMap, create_response_stream};
+use super::{ParentMessageInfo, ResponseSenderMap, UserDefinedMessage, create_response_stream};
 
 /// UserDefinedBatchMap is a grpc client that sends batch requests to the map server
 /// and forwards the responses.
@@ -23,6 +22,13 @@ use super::{ParentMessageInfo, ResponseSenderMap, create_response_stream};
 pub(in crate::mapper) struct UserDefinedBatchMap {
     read_tx: mpsc::Sender<MapRequest>,
     senders: ResponseSenderMap,
+    handle: Arc<tokio::task::JoinHandle<()>>,
+}
+
+impl Drop for UserDefinedBatchMap {
+    fn drop(&mut self) {
+        self.handle.abort();
+    }
 }
 
 impl UserDefinedBatchMap {
@@ -40,13 +46,14 @@ impl UserDefinedBatchMap {
         // background task to receive responses from the server and send them to the appropriate
         // oneshot response sender based on the id
         let sender_map_clone = Arc::clone(&sender_map);
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             Self::receive_batch_responses(sender_map_clone, resp_stream).await;
         });
 
         let mapper = Self {
             read_tx,
             senders: sender_map,
+            handle: Arc::new(handle),
         };
         Ok(mapper)
     }
@@ -94,7 +101,41 @@ impl UserDefinedBatchMap {
                 continue;
             }
 
-            process_unary_response(&sender_map, resp).await
+            Self::process_response(&sender_map, resp).await
+        }
+    }
+
+    /// Processes the response from the server and sends it to the appropriate oneshot sender
+    /// based on the message id entry in the map.
+    async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
+        let msg_id = resp.id;
+
+        let sender_entry = sender_map
+            .lock()
+            .expect("failed to acquire poisoned lock")
+            .remove(&msg_id);
+
+        if let Some((msg_info, sender)) = sender_entry {
+            let mut response_messages = vec![];
+            for (i, result) in resp.results.into_iter().enumerate() {
+                response_messages.push(UserDefinedMessage(result, &msg_info, i as i32).into());
+            }
+
+            pipeline_metrics()
+                .forwarder
+                .udf_write_total
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                .inc_by(response_messages.len() as u64);
+
+            pipeline_metrics()
+                .forwarder
+                .udf_processing_time
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                .observe(msg_info.start_time.elapsed().as_micros() as f64);
+
+            sender
+                .send(Ok(response_messages))
+                .expect("failed to send response");
         }
     }
 
@@ -208,7 +249,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let mut client =
+        let client =
             UserDefinedBatchMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
                 .await?;
 
@@ -252,11 +293,10 @@ mod tests {
             Duration::from_secs(2),
             client.batch_map(messages, vec![tx1, tx2]),
         )
-        .await
-        .unwrap();
+        .await?;
 
-        let messages1 = rx1.await.unwrap();
-        let messages2 = rx2.await.unwrap();
+        let messages1 = rx1.await?;
+        let messages2 = rx2.await?;
 
         assert!(messages1.is_ok());
         assert!(messages2.is_ok());

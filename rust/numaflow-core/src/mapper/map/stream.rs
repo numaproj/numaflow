@@ -16,45 +16,18 @@ use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 
 use super::{ParentMessageInfo, StreamResponseSenderMap, create_response_stream};
 
-/// Processes stream responses and sends them to the appropriate mpsc sender
-async fn process_stream_response(
-    sender_map: &StreamResponseSenderMap,
-    msg_id: String,
-    mut message_info: ParentMessageInfo,
-    response_sender: mpsc::Sender<crate::error::Result<Message>>,
-    results: Vec<map::map_response::Result>,
-) {
-    for result in results.into_iter() {
-        response_sender
-            .send(Ok(super::UserDefinedMessage(
-                result,
-                &message_info,
-                message_info.current_index,
-            )
-            .into()))
-            .await
-            .expect("failed to send response");
-        message_info.current_index += 1;
-        pipeline_metrics()
-            .forwarder
-            .udf_write_total
-            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-            .inc();
-    }
-
-    // Write the sender back to the map, because we need to send
-    // more responses for the same request
-    sender_map
-        .lock()
-        .expect("failed to acquire poisoned lock")
-        .insert(msg_id, (message_info, response_sender));
-}
-
 /// UserDefinedStreamMap is a grpc client that sends stream requests to the map server
 #[derive(Clone)]
 pub(in crate::mapper) struct UserDefinedStreamMap {
     read_tx: mpsc::Sender<MapRequest>,
     senders: StreamResponseSenderMap,
+    handle: Arc<tokio::task::JoinHandle<()>>,
+}
+
+impl Drop for UserDefinedStreamMap {
+    fn drop(&mut self) {
+        self.handle.abort();
+    }
 }
 
 impl UserDefinedStreamMap {
@@ -72,13 +45,14 @@ impl UserDefinedStreamMap {
         // background task to receive responses from the server and send them to the appropriate
         // mpsc sender based on the id
         let sender_map_clone = Arc::clone(&sender_map);
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             Self::receive_stream_responses(sender_map_clone, resp_stream).await;
         });
 
         let mapper = Self {
             read_tx,
             senders: sender_map,
+            handle: Arc::new(handle),
         };
         Ok(mapper)
     }
@@ -125,7 +99,7 @@ impl UserDefinedStreamMap {
                 continue;
             }
 
-            process_stream_response(
+            Self::process_stream_response(
                 &sender_map,
                 resp.id,
                 message_info,
@@ -175,6 +149,40 @@ impl UserDefinedStreamMap {
             .lock()
             .expect("failed to acquire poisoned lock")
             .insert(key.clone(), (msg_info, respond_to));
+    }
+
+    /// Processes stream responses and sends them to the appropriate mpsc sender
+    async fn process_stream_response(
+        sender_map: &StreamResponseSenderMap,
+        msg_id: String,
+        mut message_info: ParentMessageInfo,
+        response_sender: mpsc::Sender<Result<Message>>,
+        results: Vec<map::map_response::Result>,
+    ) {
+        for result in results.into_iter() {
+            response_sender
+                .send(Ok(super::UserDefinedMessage(
+                    result,
+                    &message_info,
+                    message_info.current_index,
+                )
+                .into()))
+                .await
+                .expect("failed to send response");
+            message_info.current_index += 1;
+            pipeline_metrics()
+                .forwarder
+                .udf_write_total
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                .inc();
+        }
+
+        // Write the sender back to the map, because we need to send
+        // more responses for the same request
+        sender_map
+            .lock()
+            .expect("failed to acquire poisoned lock")
+            .insert(msg_id, (message_info, response_sender));
     }
 }
 

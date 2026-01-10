@@ -16,46 +16,19 @@ use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 
 use super::{ParentMessageInfo, ResponseSenderMap, create_response_stream};
 
-/// Processes the response from the server and sends it to the appropriate oneshot sender
-/// based on the message id entry in the map.
-pub(super) async fn process_unary_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
-    let msg_id = resp.id;
-
-    let sender_entry = sender_map
-        .lock()
-        .expect("failed to acquire poisoned lock")
-        .remove(&msg_id);
-
-    if let Some((msg_info, sender)) = sender_entry {
-        let mut response_messages = vec![];
-        for (i, result) in resp.results.into_iter().enumerate() {
-            response_messages.push(super::UserDefinedMessage(result, &msg_info, i as i32).into());
-        }
-
-        pipeline_metrics()
-            .forwarder
-            .udf_write_total
-            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-            .inc_by(response_messages.len() as u64);
-
-        pipeline_metrics()
-            .forwarder
-            .udf_processing_time
-            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-            .observe(msg_info.start_time.elapsed().as_micros() as f64);
-
-        sender
-            .send(Ok(response_messages))
-            .expect("failed to send response");
-    }
-}
-
 /// UserDefinedUnaryMap is a grpc client that sends unary requests to the map server
 /// and forwards the responses.
 #[derive(Clone)]
 pub(in crate::mapper) struct UserDefinedUnaryMap {
     read_tx: mpsc::Sender<MapRequest>,
     senders: ResponseSenderMap,
+    handle: Arc<tokio::task::JoinHandle<()>>,
+}
+
+impl Drop for UserDefinedUnaryMap {
+    fn drop(&mut self) {
+        self.handle.abort();
+    }
 }
 
 impl UserDefinedUnaryMap {
@@ -73,13 +46,14 @@ impl UserDefinedUnaryMap {
         // background task to receive responses from the server and send them to the appropriate
         // oneshot sender based on the message id
         let sender_map_clone = Arc::clone(&sender_map);
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             Self::receive_unary_responses(sender_map_clone, resp_stream).await;
         });
 
         let mapper = Self {
             read_tx,
             senders: sender_map,
+            handle: Arc::new(handle),
         };
 
         Ok(mapper)
@@ -110,7 +84,7 @@ impl UserDefinedUnaryMap {
                 None
             }
         } {
-            process_unary_response(&sender_map, resp).await
+            Self::process_unary_response(&sender_map, resp).await
         }
     }
 
@@ -152,6 +126,41 @@ impl UserDefinedUnaryMap {
             .lock()
             .expect("failed to acquire poisoned lock")
             .insert(key.clone(), (msg_info, respond_to));
+    }
+
+    /// Processes the response from the server and sends it to the appropriate oneshot sender
+    /// based on the message id entry in the map.
+    pub(super) async fn process_unary_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
+        let msg_id = resp.id;
+
+        let sender_entry = sender_map
+            .lock()
+            .expect("failed to acquire poisoned lock")
+            .remove(&msg_id);
+
+        if let Some((msg_info, sender)) = sender_entry {
+            let mut response_messages = vec![];
+            for (i, result) in resp.results.into_iter().enumerate() {
+                response_messages
+                    .push(super::UserDefinedMessage(result, &msg_info, i as i32).into());
+            }
+
+            pipeline_metrics()
+                .forwarder
+                .udf_write_total
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                .inc_by(response_messages.len() as u64);
+
+            pipeline_metrics()
+                .forwarder
+                .udf_processing_time
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                .observe(msg_info.start_time.elapsed().as_micros() as f64);
+
+            sender
+                .send(Ok(response_messages))
+                .expect("failed to send response");
+        }
     }
 }
 

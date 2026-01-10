@@ -475,7 +475,7 @@ impl MapHandle {
             tokio::select! {
                 result = receiver => {
                     match result {
-                        Ok(Ok(mapped_messages)) => {
+                        Ok( Ok(mapped_messages)) => {
                             // update the tracker with the number of messages sent and send the mapped messages
                             tracker
                                 .serving_update(
