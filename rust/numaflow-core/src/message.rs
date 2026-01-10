@@ -12,7 +12,7 @@ use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicUsize};
 
 use crate::metadata::Metadata;
 use crate::shared::grpc::prost_timestamp_from_utc;
@@ -64,6 +64,7 @@ pub(crate) struct Message {
 pub(crate) struct AckHandle {
     pub(crate) ack_handle: Option<oneshot::Sender<ReadAck>>,
     pub(crate) is_failed: AtomicBool,
+    pub(crate) ref_count: Arc<AtomicUsize>,
 }
 
 impl AckHandle {
@@ -72,6 +73,7 @@ impl AckHandle {
         Self {
             ack_handle: Some(ack_handle),
             is_failed: AtomicBool::new(false),
+            ref_count: Arc::new(AtomicUsize::new(1)),
         }
     }
 }
@@ -79,7 +81,7 @@ impl AckHandle {
 impl Drop for AckHandle {
     fn drop(&mut self) {
         if let Some(ack_handle) = self.ack_handle.take() {
-            if self.is_failed.load(std::sync::atomic::Ordering::Relaxed) {
+            if self.ref_count.load(std::sync::atomic::Ordering::Relaxed) > 0 {
                 ack_handle.send(ReadAck::Nak).expect("Failed to send nak");
             } else {
                 ack_handle.send(ReadAck::Ack).expect("Failed to send ack");
