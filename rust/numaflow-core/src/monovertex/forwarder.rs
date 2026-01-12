@@ -28,6 +28,12 @@
 //! () -> Streaming Interface
 //! ```
 //!
+//! Forwarder with Bypass Router:
+//! Forwarder allows initializing a bypass router to directly route/send messages from
+//! Source Transformer / UDF to one of the Sinks based on tags.
+//! The bypass router is initialized in the forwarder and the bypass router receiver join_handle is
+//! awaited with other component handles (reader, mapper, sink writer).
+//!
 //! [MonoVertex]: https://numaflow.numaproj.io/core-concepts/monovertex/
 //! [Stream]: https://docs.rs/tokio-stream/latest/tokio_stream/wrappers/struct.ReceiverStream.html
 //! [Actor Pattern]: https://ryhl.io/blog/actors-with-tokio/
@@ -87,18 +93,17 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
             Some(mapper) => {
                 mapper
                     // Performs respective map operation (unary, batch, stream) based on actor_sender
-                    .streaming_map(
-                        read_messages_stream,
-                        cln_token.clone(),
-                        bypass_router.clone(),
-                    )
+                    .streaming_map(read_messages_stream, cln_token.clone(), bypass_router)
                     .await?
             }
-            None => (read_messages_stream, tokio::task::spawn(async { Ok(()) })),
+            None => (
+                read_messages_stream,
+                tokio::task::spawn(async move {
+                    drop(bypass_router);
+                    Ok(())
+                }),
+            ),
         };
-
-        // drop bypass router to allow closing the bypass router receiver background task at shutdown
-        drop(bypass_router);
 
         let sink_writer_handle = self
             .sink_writer
@@ -155,10 +160,12 @@ mod tests {
     use crate::transformer::Transformer;
     use chrono::{DateTime, Utc};
     use numaflow::shared::ServerExtras;
+    use numaflow::sink::{Response, SinkRequest};
     use numaflow::source::{Message, Offset, SourceReadRequest};
-    use numaflow::{batchmap, map, mapstream, source, sourcetransform};
+    use numaflow::{batchmap, map, mapstream, sink, source, sourcetransform};
     use numaflow_models::models::{ForwardConditions, TagConditions};
     use numaflow_pb::clients::map::map_client::MapClient;
+    use numaflow_pb::clients::sink::sink_client::SinkClient;
     use numaflow_pb::clients::source::source_client::SourceClient;
     use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
     use numaflow_shared::server_info::MapMode;
@@ -1119,6 +1126,48 @@ mod tests {
         }
     }
 
+    struct SinkLog {
+        messages_received: AtomicUsize,
+    }
+
+    impl SinkLog {
+        fn new() -> Self {
+            Self {
+                messages_received: AtomicUsize::new(0),
+            }
+        }
+    }
+
+    #[tonic::async_trait]
+    impl sink::Sinker for SinkLog {
+        async fn sink(&self, mut input: tokio::sync::mpsc::Receiver<SinkRequest>) -> Vec<Response> {
+            let mut responses: Vec<Response> = Vec::new();
+
+            while let Some(datum) = input.recv().await {
+                // do something better, but for now let's just log it.
+                // please note that `from_utf8` is working because the input in this
+                // example uses utf-8 data.
+                let response = match std::str::from_utf8(&datum.value) {
+                    Ok(v) => {
+                        self.messages_received.fetch_add(1, Ordering::SeqCst);
+                        println!(
+                            "Message Count: {}",
+                            self.messages_received.load(Ordering::SeqCst)
+                        );
+                        // record the response
+                        Response::ok(datum.id)
+                    }
+                    Err(e) => Response::failure(datum.id, format!("Invalid UTF-8 sequence: {}", e)),
+                };
+
+                // return the responses
+                responses.push(response);
+            }
+
+            responses
+        }
+    }
+
     #[tokio::test]
     async fn test_source_transformer_with_bypass() {
         let tracker = Tracker::new(None, CancellationToken::new());
@@ -1184,6 +1233,7 @@ mod tests {
         .await
         .unwrap();
 
+        // create the source
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("source.sock");
@@ -1224,6 +1274,258 @@ mod tests {
             None,
         )
         .await;
+
+        // Create the sink
+        let (sink_shutdown_tx, sink_shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sink.sock");
+        let server_info_file = tmp_dir.path().join("sink-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let sink_handle = tokio::spawn(async move {
+            // a simple source which generates total of 100 messages
+            sink::Server::new(SinkLog::new())
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(sink_shutdown_rx)
+                .await
+                .unwrap()
+        });
+
+        let sink_client = SinkClient::new(create_rpc_channel(sock_file).await.unwrap());
+
+        let sink_writer = SinkWriterBuilder::new(
+            10,
+            Duration::from_millis(100),
+            SinkClientType::UserDefined(sink_client),
+        )
+        .fb_sink_client(SinkClientType::Log)
+        .on_success_sink_client(SinkClientType::Log)
+        .build()
+        .await
+        .unwrap();
+
+        // create the forwarder with the source, transformer, and writer
+        let forwarder = Forwarder::new(
+            source.clone(),
+            None,
+            sink_writer,
+            Some(bypass_router_config),
+            //None,
+        );
+
+        let cancel_token = cln_token.clone();
+        let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
+            forwarder.start(cancel_token).await?;
+            Ok(())
+        });
+
+        // wait for one sec to check if the pending becomes zero, because all the messages
+        // should be read and acked; if it doesn't, then fail the test
+        let cancel_token = cln_token.clone();
+        let tokio_result = tokio::time::timeout(Duration::from_secs(150), async move {
+            loop {
+                let pending = source.pending().await.unwrap();
+                if pending == Some(0) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        assert!(
+            tokio_result.is_ok(),
+            "Timeout occurred before pending became zero"
+        );
+        cln_token.cancel();
+        forwarder_handle.await.unwrap().unwrap();
+        st_shutdown_tx.send(()).unwrap();
+        src_shutdown_tx.send(()).unwrap();
+        source_handle.await.unwrap();
+        sink_shutdown_tx.send(()).unwrap();
+        sink_handle.await.unwrap();
+        transformer_handle.await.unwrap();
+    }
+
+    struct BypassCat {
+        sink_max_count: usize,
+        fallback_max_count: usize,
+        on_success_max_count: usize,
+        sink_count: AtomicUsize,
+        fallback_count: AtomicUsize,
+        on_success_count: AtomicUsize,
+        sink_tags: Option<Vec<String>>,
+        fallback_tags: Option<Vec<String>>,
+        on_success_tags: Option<Vec<String>>,
+    }
+
+    impl BypassCat {
+        pub(crate) fn new(
+            sink_count: usize,
+            fallback_count: usize,
+            on_success_count: usize,
+            sink_tags: Option<Vec<String>>,
+            fallback_tags: Option<Vec<String>>,
+            on_success_tags: Option<Vec<String>>,
+        ) -> Self {
+            Self {
+                sink_max_count: sink_count,
+                fallback_max_count: fallback_count,
+                on_success_max_count: on_success_count,
+                sink_count: AtomicUsize::new(0),
+                fallback_count: AtomicUsize::new(0),
+                on_success_count: AtomicUsize::new(0),
+                sink_tags,
+                fallback_tags,
+                on_success_tags,
+            }
+        }
+    }
+
+    #[tonic::async_trait]
+    impl map::Mapper for BypassCat {
+        async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
+            let message = map::Message::new(input.value).with_keys(input.keys);
+
+            let message = if self.sink_count.load(Ordering::SeqCst) < self.sink_max_count {
+                self.sink_count.fetch_add(1, Ordering::SeqCst);
+                message.with_tags(
+                    self.sink_tags
+                        .clone()
+                        .expect("sink_tags is None when sink_max_count > 0"),
+                )
+            } else if self.fallback_count.load(Ordering::SeqCst) < self.fallback_max_count {
+                self.fallback_count.fetch_add(1, Ordering::SeqCst);
+                message.with_tags(
+                    self.fallback_tags
+                        .clone()
+                        .expect("fallback_tags is None when fallback_max_count > 0"),
+                )
+            } else if self.on_success_count.load(Ordering::SeqCst) < self.on_success_max_count {
+                self.on_success_count.fetch_add(1, Ordering::SeqCst);
+                message.with_tags(
+                    self.on_success_tags
+                        .clone()
+                        .expect("on_success_tags is None when on_success_max_count > 0"),
+                )
+            } else {
+                message
+            };
+
+            vec![message]
+        }
+    }
+
+    #[tokio::test]
+    async fn test_source_map_with_bypass() {
+        let tracker = Tracker::new(None, CancellationToken::new());
+
+        // create the source which produces x number of messages
+        let cln_token = CancellationToken::new();
+
+        // create the bypass router config to pass to the forwarder
+        let batch_size: usize = 10;
+        let sink_tags = vec!["sink".to_string()];
+        let fallback_tags = vec!["fallback".to_string()];
+        let on_success_tags = vec!["on_success".to_string()];
+        let conditions = BypassConditions {
+            sink: None,
+            // sink: Some(Box::new(ForwardConditions::new(TagConditions {
+            //     values: sink_tags,
+            //     operator: Some("or".to_string()),
+            // }))),
+            fallback: Some(Box::new(ForwardConditions::new(TagConditions {
+                values: fallback_tags.clone(),
+                operator: Some("or".to_string()),
+            }))),
+            on_success: Some(Box::new(ForwardConditions::new(TagConditions {
+                values: on_success_tags.clone(),
+                operator: Some("or".to_string()),
+            }))),
+        };
+        let bypass_router_config =
+            BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
+
+        // Create the source
+        let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("source.sock");
+        let server_info_file = tmp_dir.path().join("source-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let source_handle = tokio::spawn(async move {
+            // a simple source which generates total of 100 messages
+            source::Server::new(SimpleSource::new(100))
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(src_shutdown_rx)
+                .await
+                .unwrap()
+        });
+
+        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
+
+        let (src_read, src_ack, lag_reader) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
+        let tracker = Tracker::new(None, CancellationToken::new());
+        let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
+            5,
+            SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
+            tracker.clone(),
+            true,
+            None,
+            None,
+            None,
+        )
+        .await;
+
+        // create a mapper
+        let (mp_shutdown_tx, mp_shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("mapper.sock");
+        let server_info_file = tmp_dir.path().join("mapper-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let map_handle = tokio::spawn(async move {
+            map::Server::new(BypassCat::new(
+                0,
+                10,
+                10,
+                None,
+                Some(fallback_tags),
+                Some(on_success_tags),
+            ))
+            .with_socket_file(server_socket)
+            .with_server_info_file(server_info)
+            .start_with_shutdown(mp_shutdown_rx)
+            .await
+            .expect("server failed");
+        });
+
+        let client = MapClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let mapper = MapHandle::new(
+            MapMode::Unary,
+            10,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+            client,
+            tracker.clone(),
+        )
+        .await
+        .unwrap();
 
         let sink_writer =
             SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
@@ -1268,9 +1570,7 @@ mod tests {
         );
         cln_token.cancel();
         forwarder_handle.await.unwrap().unwrap();
-        st_shutdown_tx.send(()).unwrap();
         src_shutdown_tx.send(()).unwrap();
         source_handle.await.unwrap();
-        transformer_handle.await.unwrap();
     }
 }

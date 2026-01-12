@@ -247,7 +247,7 @@ impl SinkWriter {
                     }
 
                     // perform the write operation
-                    if let Err(e) = self.write(batch, cln_token.clone()).await {
+                    if let Err(e) = self.write_to_sink(batch, cln_token.clone()).await {
                         // critical error, cancel upstream and mark all acks as failed
                         error!(?e, "Error writing to sink, initiating shutdown.");
                         cln_token.cancel();
@@ -273,7 +273,7 @@ impl SinkWriter {
 
     /// Write the messages to the Sink.
     /// Invokes the primary sink actor, handles fallback messages, serving messages, and errors.
-    pub(crate) async fn write(
+    pub(crate) async fn write_to_sink(
         &mut self,
         messages: Vec<Message>,
         cln_token: CancellationToken,
@@ -708,7 +708,7 @@ mod tests {
             })
             .collect();
 
-        let result = sink_writer.write(messages.clone(), cln_token).await;
+        let result = sink_writer.write_to_sink(messages.clone(), cln_token).await;
         assert!(result.is_ok());
     }
 

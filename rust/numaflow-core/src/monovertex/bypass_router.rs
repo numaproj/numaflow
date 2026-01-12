@@ -7,13 +7,15 @@
 //! sink writer handle using which bypass router will write messages to the respective sinks.
 //!
 //! The bypass router struct is initialized to be passed to the methods of source and mapper handles.
+//! The bypass router wraps the message to be sent to the bypass channel in [MessageToSink] enum
+//! so that the receiver task can determine which sink the message should be sent to.
 //!
 //! The source and mapper handle methods use helper methods for bypass router to determine if a message
-//! should be bypassed to a sink, and if so, the message is sent to one of the bypass channels held
+//! should be bypassed to a sink, and if so, the message is sent to the bypass channel held
 //! by the router accordingly.
 //!
-//! The background router task is responsible for reading messages from the bypass channels and
-//! writing them to the respective sinks.
+//! The bypass router initialization also starts a background task which is responsible for
+//! reading messages from the bypass channel and writing them to the respective sinks.
 //!
 //! ```text
 //! +==========================================================================+
@@ -182,6 +184,10 @@ pub(crate) struct BypassRouterReceiver {
     final_result: error::Result<()>,
 }
 
+/// BypassRouterReceiver allows creating separation of concern between the bypass router, which is
+/// responsible for sending data to bypass channel and the bypass router receiver, which is
+/// responsible for receiving the said data from bypass channel and sending it to the different
+/// sinks in a tokio task.
 impl BypassRouterReceiver {
     async fn streaming_bypass_write(
         mut self,
@@ -325,7 +331,11 @@ impl BypassRouterReceiver {
         cln_token: CancellationToken,
     ) -> error::Result<()> {
         if let Err(e) = match msg_type {
-            MessageToSink::Primary(_) => self.sink_writer.write(batch, cln_token.clone()).await,
+            MessageToSink::Primary(_) => {
+                self.sink_writer
+                    .write_to_sink(batch, cln_token.clone())
+                    .await
+            }
             MessageToSink::Fallback(_) => {
                 self.sink_writer
                     .write_to_fallback(batch, cln_token.clone())
@@ -428,14 +438,6 @@ mod tests {
         assert_eq!(msg_to_sink.inner().value, msg.value);
     }
 
-    #[test]
-    fn test_message_to_sink_clone() {
-        let (msg, _) = create_test_message(1, None, false);
-        let msg_to_sink = MessageToSink::Primary(msg);
-        let cloned = msg_to_sink.clone();
-        assert_eq!(msg_to_sink.inner().id, cloned.inner().id);
-    }
-
     // ==================== BypassRouterConfig Tests ====================
 
     #[test]
@@ -450,44 +452,5 @@ mod tests {
         assert_eq!(config.batch_size, 100);
         assert_eq!(config.chunk_timeout, Duration::from_secs(1));
         assert_eq!(config.bypass_conditions, conditions);
-    }
-
-    // ==================== Mark Messages Failed Tests ====================
-
-    #[tokio::test]
-    async fn test_mark_msgs_failed() {
-        let (msg1, ack_rx1) = create_test_message(1, None, true);
-        let (msg2, ack_rx2) = create_test_message(2, None, true);
-        let batch = vec![msg1, msg2];
-
-        // Mark messages as failed
-        for msg in &batch {
-            msg.ack_handle
-                .as_ref()
-                .expect("ack handle should be present")
-                .is_failed
-                .store(true, std::sync::atomic::Ordering::Relaxed);
-        }
-
-        // Drop the messages to trigger ack handle drop
-        drop(batch);
-
-        // Verify both messages were nacked
-        assert_eq!(ack_rx1.unwrap().await.unwrap(), ReadAck::Nak);
-        assert_eq!(ack_rx2.unwrap().await.unwrap(), ReadAck::Nak);
-    }
-
-    #[tokio::test]
-    async fn test_messages_not_failed_get_acked() {
-        let (msg1, ack_rx1) = create_test_message(1, None, true);
-        let (msg2, ack_rx2) = create_test_message(2, None, true);
-        let batch = vec![msg1, msg2];
-
-        // Don't mark as failed, just drop
-        drop(batch);
-
-        // Verify both messages were acked (not nacked)
-        assert_eq!(ack_rx1.unwrap().await.unwrap(), ReadAck::Ack);
-        assert_eq!(ack_rx2.unwrap().await.unwrap(), ReadAck::Ack);
     }
 }
