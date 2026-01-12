@@ -87,7 +87,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
             Some(mapper) => {
                 mapper
                     // Performs respective map operation (unary, batch, stream) based on actor_sender
-                    .streaming_map(read_messages_stream, cln_token.clone(), bypass_router.clone())
+                    .streaming_map(
+                        read_messages_stream,
+                        cln_token.clone(),
+                        bypass_router.clone(),
+                    )
                     .await?
             }
             None => (read_messages_stream, tokio::task::spawn(async { Ok(()) })),
