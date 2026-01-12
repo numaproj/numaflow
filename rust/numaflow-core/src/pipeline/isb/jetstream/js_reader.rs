@@ -203,7 +203,11 @@ impl JetStreamReader {
     /// Mark message as in progress by sending work in progress ack.
     pub(crate) async fn mark_wip(&self, offset: &Offset) -> Result<()> {
         if let Some(msg) = self.get_js_message(offset, false) {
-            let _ = msg.ack_with(AckKind::Progress).await;
+            msg.ack_with(AckKind::Progress).await.map_err(|e| {
+                Error::ISB(format!(
+                    "Failed to send work in progress ack to JetStream: {e}"
+                ))
+            })?;
         }
         Ok(())
     }
@@ -211,7 +215,9 @@ impl JetStreamReader {
     /// Acknowledge the offset
     pub(crate) async fn ack(&self, offset: &Offset) -> Result<()> {
         if let Some(msg) = self.get_js_message(offset, true) {
-            let _ = msg.double_ack().await;
+            msg.double_ack()
+                .await
+                .map_err(|e| Error::ISB(format!("Failed to double ack message: {e}")))?;
         }
         Ok(())
     }
@@ -219,7 +225,9 @@ impl JetStreamReader {
     /// Negatively acknowledge the offset
     pub(crate) async fn nack(&self, offset: &Offset) -> Result<()> {
         if let Some(msg) = self.get_js_message(offset, true) {
-            let _ = msg.ack_with(AckKind::Nak(None)).await;
+            msg.ack_with(AckKind::Nak(None))
+                .await
+                .map_err(|e| Error::ISB(format!("Failed to nack message: {e}")))?;
         }
         Ok(())
     }

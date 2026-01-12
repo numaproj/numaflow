@@ -242,37 +242,3 @@ where
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use std::collections::HashMap;
-    use std::ops::Deref;
-    use std::ops::DerefMut;
-    use std::sync::Arc;
-
-    #[derive(Debug, Clone)]
-    struct Inner {
-        value: usize,
-        map: HashMap<String, usize>,
-    }
-
-    #[derive(Debug, Clone)]
-    struct Outer {
-        value: Arc<Inner>,
-    }
-
-    #[test]
-    fn test_metadata_clone() {
-        let inner = Inner {
-            value: 42,
-            map: HashMap::new(),
-        };
-        let mut outer = Outer {
-            value: Arc::new(inner),
-        };
-        let cloned = Inner {
-            value: outer.value.value,
-            map: Arc::make_mut(&mut outer.value).map.clone(),
-        };
-    }
-}

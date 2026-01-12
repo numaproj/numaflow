@@ -137,7 +137,8 @@ impl SinkWriter {
             cancel,
         };
         let _ = self.sink_handle.send(msg).await;
-        rx.await.expect("Error receiving response from sink actor")
+        rx.await
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// Sink the messages to the Fallback Sink.
@@ -160,7 +161,8 @@ impl SinkWriter {
             cancel,
         };
         let _ = self.fb_sink_handle.as_ref().unwrap().send(msg).await;
-        rx.await.unwrap()
+        rx.await
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// Sink the messages to the OnSuccess Sink.
@@ -189,7 +191,8 @@ impl SinkWriter {
             .unwrap()
             .send(msg)
             .await;
-        rx.await.unwrap()
+        rx.await
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// Streaming write the messages to the Sink, it will keep writing messages until the stream is
