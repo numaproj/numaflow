@@ -105,11 +105,6 @@ impl BypassRouterConfig {
 pub(crate) struct BypassRouter {
     bypass_tx: mpsc::Sender<MessageToSink>,
     bypass_conditions: BypassConditions,
-    batch_size: usize,
-    sink_writer: SinkWriter,
-    chunk_timeout: Duration,
-    shutting_down_on_err: bool,
-    final_result: error::Result<()>,
 }
 
 impl BypassRouter {
@@ -129,6 +124,10 @@ impl BypassRouter {
         let bypass_router = BypassRouter {
             bypass_tx: tx,
             bypass_conditions: config.bypass_conditions.clone(),
+        };
+
+        let bypass_receiver = BypassRouterReceiver {
+            bypass_conditions: config.bypass_conditions.clone(),
             batch_size: config.batch_size,
             sink_writer,
             chunk_timeout: config.chunk_timeout,
@@ -136,8 +135,7 @@ impl BypassRouter {
             final_result: Ok(()),
         };
 
-        let router_join_handle = bypass_router
-            .clone()
+        let router_join_handle = bypass_receiver
             .streaming_bypass_write(ReceiverStream::new(rx), cln_token.clone())
             .await;
 
@@ -173,7 +171,18 @@ impl BypassRouter {
             Error::BypassRouter(format!("Failed to send message through bypass router: {e}"))
         })
     }
+}
 
+pub(crate) struct BypassRouterReceiver {
+    bypass_conditions: BypassConditions,
+    batch_size: usize,
+    sink_writer: SinkWriter,
+    chunk_timeout: Duration,
+    shutting_down_on_err: bool,
+    final_result: error::Result<()>,
+}
+
+impl BypassRouterReceiver {
     async fn streaming_bypass_write(
         mut self,
         messages_stream: ReceiverStream<MessageToSink>,

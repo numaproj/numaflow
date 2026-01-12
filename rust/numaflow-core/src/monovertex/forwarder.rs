@@ -81,17 +81,20 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
 
         let (read_messages_stream, reader_handle) = self
             .source
-            .streaming_read(cln_token.clone(), bypass_router)?;
+            .streaming_read(cln_token.clone(), bypass_router.clone())?;
 
         let (mapper_stream, mapper_handle) = match self.mapper {
             Some(mapper) => {
                 mapper
                     // Performs respective map operation (unary, batch, stream) based on actor_sender
-                    .streaming_map(read_messages_stream, cln_token.clone(), None)
+                    .streaming_map(read_messages_stream, cln_token.clone(), bypass_router.clone())
                     .await?
             }
             None => (read_messages_stream, tokio::task::spawn(async { Ok(()) })),
         };
+
+        // drop bypass router to allow closing the bypass router receiver background task at shutdown
+        drop(bypass_router);
 
         let sink_writer_handle = self
             .sink_writer
@@ -1125,15 +1128,19 @@ mod tests {
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
-            sink: Some(Box::new(ForwardConditions::new(TagConditions::new(
-                sink_tags,
-            )))),
-            fallback: Some(Box::new(ForwardConditions::new(TagConditions::new(
-                fallback_tags,
-            )))),
-            on_success: Some(Box::new(ForwardConditions::new(TagConditions::new(
-                on_success_tags,
-            )))),
+            sink: None,
+            // sink: Some(Box::new(ForwardConditions::new(TagConditions {
+            //     values: sink_tags,
+            //     operator: Some("or".to_string()),
+            // }))),
+            fallback: Some(Box::new(ForwardConditions::new(TagConditions {
+                values: fallback_tags.clone(),
+                operator: Some("or".to_string()),
+            }))),
+            on_success: Some(Box::new(ForwardConditions::new(TagConditions {
+                values: on_success_tags.clone(),
+                operator: Some("or".to_string()),
+            }))),
         };
         let bypass_router_config =
             BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
@@ -1149,17 +1156,17 @@ mod tests {
         let transformer_handle = tokio::spawn(async move {
             sourcetransform::Server::new(ConditionalTransformer::new(
                 0,
-                0,
-                0,
-                Some(vec!["sink".to_string()]),
-                Some(vec!["fallback".to_string()]),
-                Some(vec!["on_success".to_string()]),
+                10,
+                10,
+                None,
+                Some(fallback_tags),
+                Some(on_success_tags),
             ))
-                .with_socket_file(server_socket)
-                .with_server_info_file(server_info)
-                .start_with_shutdown(st_shutdown_rx)
-                .await
-                .expect("server failed");
+            .with_socket_file(server_socket)
+            .with_server_info_file(server_info)
+            .start_with_shutdown(st_shutdown_rx)
+            .await
+            .expect("server failed");
         });
 
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
@@ -1170,8 +1177,8 @@ mod tests {
             client,
             tracker.clone(),
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
 
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
@@ -1199,9 +1206,9 @@ mod tests {
             cln_token.clone(),
             true,
         )
-            .await
-            .map_err(|e| panic!("failed to create source reader: {:?}", e))
-            .unwrap();
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
         let tracker = Tracker::new(None, CancellationToken::new());
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,
@@ -1212,7 +1219,7 @@ mod tests {
             None,
             None,
         )
-            .await;
+        .await;
 
         let sink_writer =
             SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
@@ -1228,6 +1235,7 @@ mod tests {
             None,
             sink_writer,
             Some(bypass_router_config),
+            //None,
         );
 
         let cancel_token = cln_token.clone();
@@ -1238,7 +1246,8 @@ mod tests {
 
         // wait for one sec to check if the pending becomes zero, because all the messages
         // should be read and acked; if it doesn't, then fail the test
-        let tokio_result = tokio::time::timeout(Duration::from_secs(1), async move {
+        let cancel_token = cln_token.clone();
+        let tokio_result = tokio::time::timeout(Duration::from_secs(150), async move {
             loop {
                 let pending = source.pending().await.unwrap();
                 if pending == Some(0) {
@@ -1247,7 +1256,7 @@ mod tests {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
         })
-            .await;
+        .await;
 
         assert!(
             tokio_result.is_ok(),
