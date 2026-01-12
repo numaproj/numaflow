@@ -234,7 +234,7 @@ impl MapHandle {
     // Returns true if the mapper is ready to accept messages.
     pub(crate) async fn ready(&mut self) -> bool {
         if let Some(client) = &mut self.health_checker {
-            match client.is_ready(tonic::Request::new(())).await {
+            match client.is_ready(Request::new(())).await {
                 Ok(response) => response.into_inner().ready,
                 Err(e) => {
                     error!(?e, "Map Client is not ready");
@@ -662,15 +662,17 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
+    use crate::message::ReadAck;
     use crate::{
         Result,
         message::{MessageID, Offset, StringOffset},
         shared::grpc::create_rpc_channel,
     };
-    use numaflow::map;
     use numaflow::shared::ServerExtras;
+    use numaflow::{batchmap, map, mapstream};
     use numaflow_pb::clients::map::map_client::MapClient;
     use tempfile::TempDir;
+    use tokio::sync::mpsc::Sender;
     use tokio::sync::oneshot;
 
     struct SimpleMapper;
@@ -771,6 +773,554 @@ mod tests {
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
+        Ok(())
+    }
+
+    struct SimpleBatchMap;
+
+    #[tonic::async_trait]
+    impl batchmap::BatchMapper for SimpleBatchMap {
+        async fn batchmap(
+            &self,
+            mut input: mpsc::Receiver<batchmap::Datum>,
+        ) -> Vec<batchmap::BatchResponse> {
+            let mut responses: Vec<batchmap::BatchResponse> = Vec::new();
+            while let Some(datum) = input.recv().await {
+                let mut response = batchmap::BatchResponse::from_id(datum.id);
+                response.append(batchmap::Message {
+                    keys: Option::from(datum.keys),
+                    value: datum.value,
+                    tags: None,
+                });
+                responses.push(response);
+            }
+            responses
+        }
+    }
+
+    #[tokio::test]
+    async fn batch_mapper_operations() -> Result<()> {
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("batch_map.sock");
+        let server_info_file = tmp_dir.path().join("batch_map-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            batchmap::Server::new(SimpleBatchMap)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let tracker = Tracker::new(None, CancellationToken::new());
+
+        let client = MapClient::new(create_rpc_channel(sock_file).await?);
+        let mapper = MapHandle::new(
+            MapMode::Batch,
+            500,
+            Duration::from_millis(1000),
+            Duration::from_secs(10),
+            10,
+            client,
+            tracker.clone(),
+        )
+        .await?;
+
+        let messages = vec![
+            Message {
+                typ: Default::default(),
+                keys: Arc::from(vec!["first".into()]),
+                tags: None,
+                value: "hello".into(),
+                offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+                event_time: chrono::Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: "0".to_string().into(),
+                    index: 0,
+                },
+                ..Default::default()
+            },
+            Message {
+                typ: Default::default(),
+                keys: Arc::from(vec!["second".into()]),
+                tags: None,
+                value: "world".into(),
+                offset: Offset::String(StringOffset::new("1".to_string(), 1)),
+                event_time: chrono::Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: "1".to_string().into(),
+                    index: 1,
+                },
+                ..Default::default()
+            },
+        ];
+
+        let (input_tx, input_rx) = mpsc::channel(10);
+        let input_stream = ReceiverStream::new(input_rx);
+
+        for message in messages {
+            input_tx.send(message).await.unwrap();
+        }
+        drop(input_tx);
+
+        let (output_stream, map_handle) = mapper
+            .streaming_map(input_stream, CancellationToken::new())
+            .await?;
+        let mut output_rx = output_stream.into_inner();
+
+        let mapped_message1 = output_rx.recv().await.unwrap();
+        assert_eq!(mapped_message1.value, "hello");
+
+        let mapped_message2 = output_rx.recv().await.unwrap();
+        assert_eq!(mapped_message2.value, "world");
+
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
+        assert!(
+            map_handle.is_finished(),
+            "Expected mapper to have shut down"
+        );
+        Ok(())
+    }
+
+    struct FlatmapStream;
+
+    #[tonic::async_trait]
+    impl mapstream::MapStreamer for FlatmapStream {
+        async fn map_stream(
+            &self,
+            input: mapstream::MapStreamRequest,
+            tx: Sender<mapstream::Message>,
+        ) {
+            let payload_str = String::from_utf8(input.value).unwrap_or_default();
+            let splits: Vec<&str> = payload_str.split(',').collect();
+
+            for split in splits {
+                let message = mapstream::Message::new(split.as_bytes().to_vec())
+                    .with_keys(input.keys.clone())
+                    .with_tags(vec![]);
+                if tx.send(message).await.is_err() {
+                    break;
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn map_stream_operations() -> Result<()> {
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("map_stream.sock");
+        let server_info_file = tmp_dir.path().join("map_stream-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let _handle = tokio::spawn(async move {
+            mapstream::Server::new(FlatmapStream)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let tracker = Tracker::new(None, CancellationToken::new());
+
+        let client = MapClient::new(create_rpc_channel(sock_file).await?);
+        let mapper = MapHandle::new(
+            MapMode::Stream,
+            500,
+            Duration::from_millis(1000),
+            Duration::from_secs(10),
+            10,
+            client,
+            tracker.clone(),
+        )
+        .await?;
+
+        let message = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["first".into()]),
+            tags: None,
+            value: "test,map,stream".into(),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+            event_time: chrono::Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "0".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+
+        let (input_tx, input_rx) = mpsc::channel(10);
+        let input_stream = ReceiverStream::new(input_rx);
+
+        input_tx.send(message).await.unwrap();
+        drop(input_tx);
+
+        let (mut output_stream, map_handle) = mapper
+            .streaming_map(input_stream, CancellationToken::new())
+            .await?;
+
+        let mut responses = vec![];
+        while let Some(response) = output_stream.next().await {
+            responses.push(response);
+        }
+
+        assert_eq!(responses.len(), 3);
+        // convert the bytes value to string and compare
+        let values: Vec<String> = responses
+            .iter()
+            .map(|r| String::from_utf8(Vec::from(r.value.clone())).unwrap())
+            .collect();
+        assert_eq!(values, vec!["test", "map", "stream"]);
+
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            map_handle.is_finished(),
+            "Expected mapper to have shut down"
+        );
+        Ok(())
+    }
+
+    struct PanicCat;
+
+    #[tonic::async_trait]
+    impl map::Mapper for PanicCat {
+        async fn map(&self, _input: map::MapRequest) -> Vec<map::Message> {
+            panic!("PanicCat panicked!");
+        }
+    }
+
+    #[cfg(feature = "global-state-tests")]
+    #[tokio::test]
+    async fn test_map_with_panic() -> Result<()> {
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("map.sock");
+        let server_info_file = tmp_dir.path().join("map-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            map::Server::new(PanicCat)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start()
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let tracker = Tracker::new(None, CancellationToken::new());
+        let client = MapClient::new(create_rpc_channel(sock_file).await?);
+        let mapper = MapHandle::new(
+            MapMode::Unary,
+            500,
+            Duration::from_millis(1000),
+            Duration::from_secs(10),
+            10,
+            client,
+            tracker.clone(),
+        )
+        .await?;
+
+        let (input_tx, input_rx) = mpsc::channel(10);
+        let input_stream = ReceiverStream::new(input_rx);
+        let cln_token = CancellationToken::new();
+        let (_output_stream, map_handle) = mapper
+            .streaming_map(input_stream, cln_token.clone())
+            .await?;
+        let mut ack_rxs = vec![];
+        // send 10 requests to the mapper
+        for i in 0..10 {
+            let (ack_tx, ack_rx) = oneshot::channel();
+            let message = Message {
+                typ: Default::default(),
+                keys: Arc::from(vec![format!("key_{}", i)]),
+                tags: None,
+                value: format!("value_{}", i).into(),
+                offset: Offset::String(StringOffset::new(i.to_string(), 0)),
+                event_time: chrono::Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: i.to_string().into(),
+                    index: i,
+                },
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+                ..Default::default()
+            };
+            input_tx.send(message).await.unwrap();
+            ack_rxs.push(ack_rx);
+        }
+
+        cln_token.cancelled().await;
+        drop(input_tx);
+        // Await the join handle and expect an error due to the panic
+        let result = map_handle.await.unwrap();
+        assert!(result.is_err(), "Expected an error due to panic");
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("PanicCat panicked!")
+        );
+
+        for ack_rx in ack_rxs {
+            let ack = ack_rx.await.unwrap();
+            assert_eq!(ack, ReadAck::Nak);
+        }
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
+        Ok(())
+    }
+
+    struct PanicBatchMap;
+
+    #[tonic::async_trait]
+    impl batchmap::BatchMapper for PanicBatchMap {
+        async fn batchmap(
+            &self,
+            _input: mpsc::Receiver<batchmap::Datum>,
+        ) -> Vec<batchmap::BatchResponse> {
+            panic!("PanicBatchMap panicked!");
+        }
+    }
+
+    #[cfg(feature = "global-state-tests")]
+    #[tokio::test]
+    async fn test_batch_map_with_panic() -> Result<()> {
+        let cln_token = CancellationToken::new();
+        let (_shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("batch_map_panic.sock");
+        let server_info_file = tmp_dir.path().join("batch_map_panic-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            batchmap::Server::new(PanicBatchMap)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let tracker = Tracker::new(None, cln_token.clone());
+        let client = MapClient::new(create_rpc_channel(sock_file).await?);
+        let mapper = MapHandle::new(
+            MapMode::Batch,
+            500,
+            Duration::from_millis(1000),
+            Duration::from_secs(10),
+            10,
+            client,
+            tracker.clone(),
+        )
+        .await?;
+
+        let (ack_tx1, ack_rx1) = oneshot::channel();
+        let (ack_tx2, ack_rx2) = oneshot::channel();
+        let messages = vec![
+            Message {
+                typ: Default::default(),
+                keys: Arc::from(vec!["first".into()]),
+                tags: None,
+                value: "hello".into(),
+                offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+                event_time: chrono::Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: "0".to_string().into(),
+                    index: 0,
+                },
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx1))),
+                ..Default::default()
+            },
+            Message {
+                typ: Default::default(),
+                keys: Arc::from(vec!["second".into()]),
+                tags: None,
+                value: "world".into(),
+                offset: Offset::String(StringOffset::new("1".to_string(), 1)),
+                event_time: chrono::Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: "1".to_string().into(),
+                    index: 1,
+                },
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx2))),
+                ..Default::default()
+            },
+        ];
+
+        let (input_tx, input_rx) = mpsc::channel(10);
+        let input_stream = ReceiverStream::new(input_rx);
+
+        for message in messages {
+            input_tx.send(message).await.unwrap();
+        }
+
+        let (_output_stream, map_handle) = mapper
+            .streaming_map(input_stream, cln_token.clone())
+            .await?;
+
+        drop(input_tx);
+
+        let ack1 = ack_rx1.await.unwrap();
+        let ack2 = ack_rx2.await.unwrap();
+        assert_eq!(ack1, ReadAck::Nak);
+        assert_eq!(ack2, ReadAck::Nak);
+
+        // Await the join handle and expect an error due to the panic
+        let result = map_handle.await.unwrap();
+        assert!(result.is_err(), "Expected an error due to panic");
+
+        // FIXME: server should shutdown because of panic
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
+        Ok(())
+    }
+
+    struct PanicFlatmapStream;
+
+    #[tonic::async_trait]
+    impl mapstream::MapStreamer for PanicFlatmapStream {
+        async fn map_stream(
+            &self,
+            _input: mapstream::MapStreamRequest,
+            _tx: Sender<mapstream::Message>,
+        ) {
+            panic!("PanicFlatmapStream panicked!");
+        }
+    }
+
+    #[cfg(feature = "global-state-tests")]
+    #[tokio::test]
+    async fn test_map_stream_with_panic() -> Result<()> {
+        let (_shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("map_stream_panic.sock");
+        let server_info_file = tmp_dir.path().join("map_stream_panic-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            mapstream::Server::new(PanicFlatmapStream)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+        let cln_token = CancellationToken::new();
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = MapClient::new(create_rpc_channel(sock_file).await?);
+        let tracker = Tracker::new(None, cln_token.clone());
+        let mapper = MapHandle::new(
+            MapMode::Stream,
+            500,
+            Duration::from_millis(1000),
+            Duration::from_secs(10),
+            10,
+            client,
+            tracker,
+        )
+        .await?;
+
+        let (input_tx, input_rx) = mpsc::channel(10);
+        let input_stream = ReceiverStream::new(input_rx);
+
+        let (_output_stream, map_handle) = mapper
+            .streaming_map(input_stream, cln_token.clone())
+            .await?;
+
+        let mut ack_rxs = vec![];
+        // send 10 requests to the mapper
+        for i in 0..10 {
+            let (ack_tx, ack_rx) = oneshot::channel();
+            let message = Message {
+                typ: Default::default(),
+                keys: Arc::from(vec![format!("key_{}", i)]),
+                tags: None,
+                value: format!("value_{}", i).into(),
+                offset: Offset::String(StringOffset::new(i.to_string(), 0)),
+                event_time: chrono::Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: i.to_string().into(),
+                    index: i,
+                },
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+                ..Default::default()
+            };
+            ack_rxs.push(ack_rx);
+            input_tx.send(message).await.unwrap();
+        }
+
+        cln_token.cancelled().await;
+        drop(input_tx);
+        // Await the join handle and expect an error due to the panic
+        let result = map_handle.await.unwrap();
+        assert!(result.is_err(), "Expected an error due to panic");
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("PanicFlatmapStream panicked!")
+        );
+        for ack_rx in ack_rxs {
+            let ack = ack_rx.await.unwrap();
+            assert_eq!(ack, ReadAck::Nak);
+        }
+
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(
             handle.is_finished(),

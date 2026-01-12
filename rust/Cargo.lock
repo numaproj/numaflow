@@ -2467,8 +2467,9 @@ dependencies = [
 
 [[package]]
 name = "numaflow"
-version = "0.4.0"
-source = "git+https://github.com/numaproj/numaflow-rs.git?rev=3ab1122c1f0053c75dbdbd8f60ca9816e6144ec3#3ab1122c1f0053c75dbdbd8f60ca9816e6144ec3"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "092a5e4096232ed6471a3f919f573614021b02fad288150688dab96cdd1f4d4c"
 dependencies = [
  "chrono",
  "hyper-util",
@@ -2511,7 +2512,7 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "lz4",
- "numaflow 0.4.0",
+ "numaflow 0.5.0",
  "numaflow-http",
  "numaflow-kafka",
  "numaflow-models",
