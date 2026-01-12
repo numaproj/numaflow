@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::mpsc;
+use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
 use tracing::error;
@@ -14,24 +15,20 @@ use crate::error::{Error, Result};
 use crate::message::Message;
 use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 
-use super::{ParentMessageInfo, StreamResponseSenderMap, create_response_stream};
+use super::{
+    ParentMessageInfo, StreamResponseSenderMap, UserDefinedMessage, create_response_stream,
+};
 
 /// UserDefinedStreamMap is a grpc client that sends stream requests to the map server
 #[derive(Clone)]
 pub(in crate::mapper) struct UserDefinedStreamMap {
     read_tx: mpsc::Sender<MapRequest>,
     senders: StreamResponseSenderMap,
-    handle: Arc<tokio::task::JoinHandle<()>>,
-}
-
-impl Drop for UserDefinedStreamMap {
-    fn drop(&mut self) {
-        self.handle.abort();
-    }
+    _handle: Arc<AbortOnDropHandle<()>>,
 }
 
 impl UserDefinedStreamMap {
-    /// Performs handshake with the server and creates a new UserDefinedStreamMap.
+    /// Performs handshake with the server and creates a new UserDefinedMap.
     pub(in crate::mapper) async fn new(
         batch_size: usize,
         mut client: MapClient<Channel>,
@@ -52,7 +49,7 @@ impl UserDefinedStreamMap {
         let mapper = Self {
             read_tx,
             senders: sender_map,
-            handle: Arc::new(handle),
+            _handle: Arc::new(AbortOnDropHandle::new(handle)),
         };
         Ok(mapper)
     }
@@ -161,7 +158,7 @@ impl UserDefinedStreamMap {
     ) {
         for result in results.into_iter() {
             response_sender
-                .send(Ok(super::UserDefinedMessage(
+                .send(Ok(UserDefinedMessage(
                     result,
                     &message_info,
                     message_info.current_index,
@@ -243,7 +240,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let mut client =
+        let client =
             UserDefinedStreamMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
                 .await?;
 
@@ -265,13 +262,11 @@ mod tests {
 
         let (tx, mut rx) = tokio::sync::mpsc::channel(3);
 
-        tokio::time::timeout(Duration::from_secs(2), client.stream_map(message, tx))
-            .await
-            .unwrap();
+        tokio::time::timeout(Duration::from_secs(2), client.stream_map(message, tx)).await?;
 
         let mut responses = vec![];
         while let Some(response) = rx.recv().await {
-            responses.push(response.unwrap());
+            responses.push(response?);
         }
 
         assert_eq!(responses.len(), 3);

@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
 use tracing::error;
@@ -22,13 +23,7 @@ use super::{ParentMessageInfo, ResponseSenderMap, UserDefinedMessage, create_res
 pub(in crate::mapper) struct UserDefinedBatchMap {
     read_tx: mpsc::Sender<MapRequest>,
     senders: ResponseSenderMap,
-    handle: Arc<tokio::task::JoinHandle<()>>,
-}
-
-impl Drop for UserDefinedBatchMap {
-    fn drop(&mut self) {
-        self.handle.abort();
-    }
+    _handle: Arc<AbortOnDropHandle<()>>,
 }
 
 impl UserDefinedBatchMap {
@@ -53,7 +48,7 @@ impl UserDefinedBatchMap {
         let mapper = Self {
             read_tx,
             senders: sender_map,
-            handle: Arc::new(handle),
+            _handle: Arc::new(AbortOnDropHandle::new(handle)),
         };
         Ok(mapper)
     }

@@ -173,7 +173,7 @@ enum MapperType {
 /// of the tasks, we will go to shut-down mode. We cancel the token to let upstream know that we are
 /// shutting down. We drain the input stream, nack the messages, and exit when the stream is
 /// closed. We will drop the downstream stream so that the downstream components can shut down.
-/// Structured concurrency is honoured here, we wait for all the concurrent tokio tasks to exit.
+/// Structured concurrency is honored here, we wait for all the concurrent tokio tasks to exit.
 /// before shutting down the component.
 #[derive(Clone)]
 pub(crate) struct MapHandle {
@@ -469,7 +469,6 @@ impl MapHandle {
             let offset = read_msg.offset.clone();
             let (sender, receiver) = oneshot::channel();
 
-            // Call the mapper directly instead of sending to an actor
             mapper.unary_map(read_msg.clone(), sender).await;
 
             tokio::select! {
@@ -543,7 +542,6 @@ impl MapHandle {
         let (senders, receivers): (Vec<_>, Vec<_>) =
             batch.iter().map(|_| oneshot::channel()).unzip();
 
-        // Call the mapper directly instead of sending to an actor
         mapper.batch_map(batch, senders).await;
 
         for receiver in receivers {
@@ -607,7 +605,6 @@ impl MapHandle {
 
             let (sender, mut receiver) = mpsc::channel(STREAMING_MAP_RESP_CHANNEL_SIZE);
 
-            // Call the mapper directly instead of sending to an actor
             mapper.stream_map(read_msg.clone(), sender).await;
 
             // we need update the tracker with no responses, because unlike unary and batch, we cannot update the
