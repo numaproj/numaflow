@@ -55,7 +55,6 @@ use tokio::pin;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
-use tokio_stream::adapters::ChunksTimeout;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -145,7 +144,7 @@ impl BypassRouter {
         (bypass_router, router_join_handle)
     }
 
-    pub(crate) fn get_routed_message(&self, msg: Message) -> Option<MessageToSink> {
+    pub(crate) async fn check_and_route(&self, msg: Message) -> error::Result<bool> {
         let sink_condition_exists = self.bypass_conditions.sink.is_some();
         let fallback_condition_exists = self.bypass_conditions.fallback.is_some();
         let on_success_condition_exists = self.bypass_conditions.on_success.is_some();
@@ -153,21 +152,23 @@ impl BypassRouter {
         if sink_condition_exists
             && should_forward(msg.tags.clone(), self.bypass_conditions.sink.clone())
         {
-            Some(MessageToSink::Primary(msg))
+            self.route(MessageToSink::Primary(msg)).await.map(|_| true)
         } else if fallback_condition_exists
             && should_forward(msg.tags.clone(), self.bypass_conditions.fallback.clone())
         {
-            Some(MessageToSink::Fallback(msg))
+            self.route(MessageToSink::Fallback(msg)).await.map(|_| true)
         } else if on_success_condition_exists
             && should_forward(msg.tags.clone(), self.bypass_conditions.on_success.clone())
         {
-            Some(MessageToSink::OnSuccess(msg))
+            self.route(MessageToSink::OnSuccess(msg))
+                .await
+                .map(|_| true)
         } else {
-            None
+            Ok(false)
         }
     }
 
-    pub(crate) async fn route(&self, msg: MessageToSink) -> error::Result<()> {
+    async fn route(&self, msg: MessageToSink) -> error::Result<()> {
         self.bypass_tx.send(msg).await.map_err(|e| {
             Error::BypassRouter(format!("Failed to send message through bypass router: {e}"))
         })
@@ -344,5 +345,140 @@ impl BypassRouter {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::message::{IntOffset, MessageID, Offset, ReadAck};
+    use bytes::Bytes;
+    use chrono::Utc;
+    use numaflow_models::models::{ForwardConditions, TagConditions};
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use tokio::sync::oneshot;
+
+    /// Helper to create a test message with optional tags and ack handle
+    fn create_test_message(
+        id: i32,
+        tags: Option<Vec<String>>,
+        with_ack_handle: bool,
+    ) -> (Message, Option<oneshot::Receiver<ReadAck>>) {
+        let (ack_handle, ack_rx) = if with_ack_handle {
+            let (tx, rx) = oneshot::channel();
+            (Some(Arc::new(AckHandle::new(tx))), Some(rx))
+        } else {
+            (None, None)
+        };
+
+        let msg = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec![format!("key_{}", id)]),
+            tags: tags.map(|t| Arc::from(t)),
+            value: Bytes::from(format!("message {}", id)),
+            offset: Offset::Int(IntOffset::new(id as i64, 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: format!("offset_{}", id).into(),
+                index: id,
+            },
+            headers: Arc::new(HashMap::new()),
+            metadata: None,
+            is_late: false,
+            ack_handle,
+        };
+        (msg, ack_rx)
+    }
+
+    // ==================== MessageToSink Tests ====================
+
+    #[test]
+    fn test_message_to_sink_inner_primary() {
+        let (msg, _) = create_test_message(1, None, false);
+        let msg_to_sink = MessageToSink::Primary(msg.clone());
+        assert_eq!(msg_to_sink.inner().id, msg.id);
+        assert_eq!(msg_to_sink.inner().value, msg.value);
+    }
+
+    #[test]
+    fn test_message_to_sink_inner_fallback() {
+        let (msg, _) = create_test_message(2, None, false);
+        let msg_to_sink = MessageToSink::Fallback(msg.clone());
+        assert_eq!(msg_to_sink.inner().id, msg.id);
+        assert_eq!(msg_to_sink.inner().value, msg.value);
+    }
+
+    #[test]
+    fn test_message_to_sink_inner_on_success() {
+        let (msg, _) = create_test_message(3, None, false);
+        let msg_to_sink = MessageToSink::OnSuccess(msg.clone());
+        assert_eq!(msg_to_sink.inner().id, msg.id);
+        assert_eq!(msg_to_sink.inner().value, msg.value);
+    }
+
+    #[test]
+    fn test_message_to_sink_clone() {
+        let (msg, _) = create_test_message(1, None, false);
+        let msg_to_sink = MessageToSink::Primary(msg);
+        let cloned = msg_to_sink.clone();
+        assert_eq!(msg_to_sink.inner().id, cloned.inner().id);
+    }
+
+    // ==================== BypassRouterConfig Tests ====================
+
+    #[test]
+    fn test_bypass_router_config_new() {
+        let conditions = BypassConditions {
+            sink: None,
+            fallback: None,
+            on_success: None,
+        };
+        let config = BypassRouterConfig::new(conditions.clone(), 100, Duration::from_secs(1));
+
+        assert_eq!(config.batch_size, 100);
+        assert_eq!(config.chunk_timeout, Duration::from_secs(1));
+        assert_eq!(config.bypass_conditions, conditions);
+    }
+
+    // ==================== Mark Messages Failed Tests ====================
+
+    #[tokio::test]
+    async fn test_mark_msgs_failed() {
+        let (msg1, ack_rx1) = create_test_message(1, None, true);
+        let (msg2, ack_rx2) = create_test_message(2, None, true);
+        let batch = vec![msg1, msg2];
+
+        // Mark messages as failed
+        for msg in &batch {
+            msg.ack_handle
+                .as_ref()
+                .expect("ack handle should be present")
+                .is_failed
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+
+        // Drop the messages to trigger ack handle drop
+        drop(batch);
+
+        // Verify both messages were nacked
+        assert_eq!(ack_rx1.unwrap().await.unwrap(), ReadAck::Nak);
+        assert_eq!(ack_rx2.unwrap().await.unwrap(), ReadAck::Nak);
+    }
+
+    #[tokio::test]
+    async fn test_messages_not_failed_get_acked() {
+        let (msg1, ack_rx1) = create_test_message(1, None, true);
+        let (msg2, ack_rx2) = create_test_message(2, None, true);
+        let batch = vec![msg1, msg2];
+
+        // Don't mark as failed, just drop
+        drop(batch);
+
+        // Verify both messages were acked (not nacked)
+        assert_eq!(ack_rx1.unwrap().await.unwrap(), ReadAck::Ack);
+        assert_eq!(ack_rx2.unwrap().await.unwrap(), ReadAck::Ack);
     }
 }
