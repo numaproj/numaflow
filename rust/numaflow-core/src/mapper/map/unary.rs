@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::Instant;
 
 use numaflow_pb::clients::map::{MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{mpsc, oneshot};
@@ -57,31 +56,38 @@ impl UserDefinedUnaryMap {
         Ok(mapper)
     }
 
+    /// Broadcasts a unary gRPC error to all pending senders and records error metrics.
+    fn broadcast_error(sender_map: &ResponseSenderMap, error: tonic::Status) {
+        let senders =
+            std::mem::take(&mut *sender_map.lock().expect("failed to acquire poisoned lock"));
+
+        for (_, (_, sender)) in senders {
+            let _ = sender.send(Err(Error::Grpc(Box::new(error.clone()))));
+            pipeline_metrics()
+                .forwarder
+                .udf_error_total
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                .inc();
+        }
+    }
+
     /// receive responses from the server and gets the corresponding oneshot response sender from the map
     /// and sends the response.
     async fn receive_unary_responses(
         sender_map: ResponseSenderMap,
         mut resp_stream: Streaming<MapResponse>,
     ) {
-        while let Some(resp) = match resp_stream.message().await {
-            Ok(message) => message,
-            Err(e) => {
-                let senders = {
-                    let mut senders = sender_map.lock().expect("failed to acquire poisoned lock");
-                    senders.drain().collect::<Vec<_>>()
-                };
-
-                for (_, (_, sender)) in senders {
-                    let _ = sender.send(Err(Error::Grpc(Box::new(e.clone()))));
-                    pipeline_metrics()
-                        .forwarder
-                        .udf_error_total
-                        .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                        .inc();
+        loop {
+            let resp = match resp_stream.message().await {
+                Ok(Some(message)) => message,
+                Ok(None) => break,
+                Err(e) => {
+                    error!(?e, "Error reading message from unary map gRPC stream");
+                    Self::broadcast_error(&sender_map, e);
+                    break;
                 }
-                None
-            }
-        } {
+            };
+
             Self::process_unary_response(&sender_map, resp).await
         }
     }
@@ -128,7 +134,7 @@ impl UserDefinedUnaryMap {
             .remove(&msg_id);
 
         if let Some((msg_info, sender)) = sender_entry {
-            let mut response_messages = vec![];
+            let mut response_messages = Vec::with_capacity(resp.results.len());
             for (i, result) in resp.results.into_iter().enumerate() {
                 response_messages
                     .push(super::UserDefinedMessage(result, &msg_info, i as i32).into());
