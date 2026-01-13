@@ -41,7 +41,7 @@
 use crate::Error;
 use crate::error;
 use crate::mapper::map::MapHandle;
-use crate::monovertex::bypass_router::{MvtxBypassRouter, BypassRouterConfig};
+use crate::monovertex::bypass_router::{BypassRouterConfig, MvtxBypassRouter};
 use crate::sinker::sink::SinkWriter;
 use crate::source::Source;
 use tokio_util::sync::CancellationToken;
@@ -150,7 +150,7 @@ mod tests {
     use crate::Result;
     use crate::config::monovertex::BypassConditions;
     use crate::mapper::map::MapHandle;
-    use crate::monovertex::bypass_router::{MvtxBypassRouter, BypassRouterConfig};
+    use crate::monovertex::bypass_router::{BypassRouterConfig, MvtxBypassRouter};
     use crate::monovertex::forwarder::Forwarder;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};

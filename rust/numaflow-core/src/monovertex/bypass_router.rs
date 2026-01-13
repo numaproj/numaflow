@@ -160,8 +160,8 @@ impl MvtxBypassRouter {
     /// Checks if the message should be bypassed based on the bypass conditions and routes it to
     /// the appropriate sink.
     /// Returns a boolean wrapped in a Result. Returns Ok(true) if the message was bypassed,
-    /// Ok(false) if the message was not bypassed, and Err if there was an error in sending the
-    /// message to the bypass channel.
+    /// Ok(false) if the message was not bypassed, and Err if the messages supposed to be bypassed
+    /// but there was an error in sending the message to the bypass channel.
     pub(crate) async fn check_and_route(&self, msg: Message) -> error::Result<bool> {
         for bypass_condition in self.bypass_conditions.clone() {
             match bypass_condition {
