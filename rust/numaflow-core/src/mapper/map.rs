@@ -31,23 +31,8 @@ use batch::UserDefinedBatchMap;
 use stream::UserDefinedStreamMap;
 use unary::UserDefinedUnaryMap;
 
-// Type aliases
-type ResponseSenderMap = Arc<
-    Mutex<
-        HashMap<
-            String,
-            (
-                ParentMessageInfo,
-                oneshot::Sender<error::Result<Vec<Message>>>,
-            ),
-        >,
-    >,
->;
-
-type StreamResponseSenderMap =
-    Arc<Mutex<HashMap<String, (ParentMessageInfo, mpsc::Sender<error::Result<Message>>)>>>;
-
-// Shared struct for parent message information
+/// ParentMessageInfo is used to store the information of the parent message. This is propagated to
+/// all the downstream messages.
 pub(crate) struct ParentMessageInfo {
     pub(crate) offset: Offset,
     pub(crate) event_time: DateTime<Utc>,
@@ -61,7 +46,22 @@ pub(crate) struct ParentMessageInfo {
     pub(crate) ack_handle: Option<Arc<AckHandle>>,
 }
 
-// Conversion from Message to MapRequest
+impl From<&Message> for ParentMessageInfo {
+    fn from(message: &Message) -> Self {
+        Self {
+            offset: message.offset.clone(),
+            event_time: message.event_time,
+            headers: Arc::clone(&message.headers),
+            is_late: message.is_late,
+            start_time: Instant::now(),
+            current_index: 0,
+            metadata: message.metadata.clone(),
+            ack_handle: message.ack_handle.clone(),
+        }
+    }
+}
+
+/// Conversion from Message to MapRequest
 impl From<Message> for MapRequest {
     fn from(message: Message) -> Self {
         Self {
@@ -80,7 +80,7 @@ impl From<Message> for MapRequest {
     }
 }
 
-// Helper struct for converting UDF responses to Messages
+/// Helper struct for converting UDF responses to Messages
 struct UserDefinedMessage<'a>(map::map_response::Result, &'a ParentMessageInfo, i32);
 
 impl From<UserDefinedMessage<'_>> for Message {

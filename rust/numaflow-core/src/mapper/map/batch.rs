@@ -15,7 +15,11 @@ use crate::error::{Error, Result};
 use crate::message::Message;
 use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 
-use super::{ParentMessageInfo, ResponseSenderMap, UserDefinedMessage, create_response_stream};
+use super::{ParentMessageInfo, UserDefinedMessage, create_response_stream};
+
+/// Type aliases
+type ResponseSenderMap =
+    Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
 
 /// UserDefinedBatchMap is a grpc client that sends batch requests to the map server
 /// and forwards the responses.
@@ -142,16 +146,7 @@ impl UserDefinedBatchMap {
     ) {
         for (message, respond_to) in messages.into_iter().zip(respond_to) {
             let key = message.offset.clone().to_string();
-            let msg_info = ParentMessageInfo {
-                offset: message.offset.clone(),
-                event_time: message.event_time,
-                headers: Arc::clone(&message.headers),
-                is_late: message.is_late,
-                start_time: Instant::now(),
-                current_index: 0,
-                metadata: message.metadata.clone(),
-                ack_handle: message.ack_handle.clone(),
-            };
+            let msg_info: ParentMessageInfo = (&message).into();
 
             pipeline_metrics()
                 .forwarder

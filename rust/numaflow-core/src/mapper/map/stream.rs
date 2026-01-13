@@ -15,9 +15,10 @@ use crate::error::{Error, Result};
 use crate::message::Message;
 use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 
-use super::{
-    ParentMessageInfo, StreamResponseSenderMap, UserDefinedMessage, create_response_stream,
-};
+use super::{ParentMessageInfo, UserDefinedMessage, create_response_stream};
+
+type StreamResponseSenderMap =
+    Arc<Mutex<HashMap<String, (ParentMessageInfo, mpsc::Sender<Result<Message>>)>>>;
 
 /// UserDefinedStreamMap is a grpc client that sends stream requests to the map server
 #[derive(Clone)]
@@ -114,16 +115,7 @@ impl UserDefinedStreamMap {
         respond_to: mpsc::Sender<Result<Message>>,
     ) {
         let key = message.offset.clone().to_string();
-        let msg_info = ParentMessageInfo {
-            offset: message.offset.clone(),
-            event_time: message.event_time,
-            headers: Arc::clone(&message.headers),
-            start_time: Instant::now(),
-            is_late: message.is_late,
-            current_index: 0,
-            metadata: message.metadata.clone(),
-            ack_handle: message.ack_handle.clone(),
-        };
+        let msg_info = (&message).into();
 
         pipeline_metrics()
             .forwarder

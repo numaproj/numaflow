@@ -15,7 +15,10 @@ use crate::error::{Error, Result};
 use crate::message::Message;
 use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 
-use super::{ParentMessageInfo, ResponseSenderMap, create_response_stream};
+use super::{ParentMessageInfo, create_response_stream};
+
+type ResponseSenderMap =
+    Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
 
 /// UserDefinedUnaryMap is a grpc client that sends unary requests to the map server
 /// and forwards the responses.
@@ -90,16 +93,7 @@ impl UserDefinedUnaryMap {
         respond_to: oneshot::Sender<Result<Vec<Message>>>,
     ) {
         let key = message.offset.clone().to_string();
-        let msg_info = ParentMessageInfo {
-            offset: message.offset.clone(),
-            event_time: message.event_time,
-            headers: Arc::clone(&message.headers),
-            is_late: message.is_late,
-            start_time: Instant::now(),
-            current_index: 0,
-            metadata: message.metadata.clone(),
-            ack_handle: message.ack_handle.clone(),
-        };
+        let msg_info = (&message).into();
 
         pipeline_metrics()
             .forwarder
