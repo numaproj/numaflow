@@ -12,7 +12,7 @@ use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_metric_labels, pipeline_metrics,
 };
-use crate::monovertex::bypass_router::BypassRouter;
+use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::source::http::CoreHttpSource;
 use crate::tracker::Tracker;
 use crate::{
@@ -398,7 +398,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     pub(crate) fn streaming_read(
         mut self,
         cln_token: CancellationToken,
-        bypass_router: Option<BypassRouter>,
+        bypass_router: Option<MvtxBypassRouter>,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.read_batch_size);
 

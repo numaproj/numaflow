@@ -215,7 +215,7 @@ impl SinkWriter {
                 while let Some(batch) = chunk_stream.next().await {
                     // If bypass conditions exist for primary sink, drop the batch
                     let batch = if let Some(conditions) = &self.bypass_conditions
-                        && let Some(_) = conditions.clone().sink
+                        && let Some(ref _sink) = conditions.sink
                     {
                         vec![]
                     } else {

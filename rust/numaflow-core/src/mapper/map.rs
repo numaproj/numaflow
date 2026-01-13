@@ -18,7 +18,7 @@ use crate::mapper::map::user_defined::{
     UserDefinedBatchMap, UserDefinedStreamMap, UserDefinedUnaryMap,
 };
 use crate::message::{AckHandle, Message, Offset};
-use crate::monovertex::bypass_router::BypassRouter;
+use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::tracker::Tracker;
 pub(super) mod user_defined;
 
@@ -214,7 +214,7 @@ impl MapHandle {
         mut self,
         input_stream: ReceiverStream<Message>,
         cln_token: CancellationToken,
-        bypass_router: Option<BypassRouter>,
+        bypass_router: Option<MvtxBypassRouter>,
     ) -> error::Result<(ReceiverStream<Message>, JoinHandle<error::Result<()>>)> {
         let (output_tx, output_rx) = mpsc::channel(self.batch_size);
         let (error_tx, mut error_rx) = mpsc::channel(self.batch_size);
@@ -423,7 +423,7 @@ impl MapHandle {
         tracker: Tracker,
         error_tx: mpsc::Sender<Error>,
         cln_token: CancellationToken,
-        bypass_router: Option<BypassRouter>,
+        bypass_router: Option<MvtxBypassRouter>,
     ) {
         let output_tx = output_tx.clone();
 
@@ -524,7 +524,7 @@ impl MapHandle {
         batch: Vec<Message>,
         output_tx: mpsc::Sender<Message>,
         tracker: Tracker,
-        bypass_router: Option<BypassRouter>,
+        bypass_router: Option<MvtxBypassRouter>,
     ) -> error::Result<()> {
         let (senders, receivers): (Vec<_>, Vec<_>) =
             batch.iter().map(|_| oneshot::channel()).unzip();
@@ -602,7 +602,7 @@ impl MapHandle {
         tracker: Tracker,
         error_tx: mpsc::Sender<Error>,
         cln_token: CancellationToken,
-        bypass_router: Option<BypassRouter>,
+        bypass_router: Option<MvtxBypassRouter>,
     ) {
         let output_tx = output_tx.clone();
         tokio::spawn(async move {

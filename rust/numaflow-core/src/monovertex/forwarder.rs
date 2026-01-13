@@ -41,7 +41,7 @@
 use crate::Error;
 use crate::error;
 use crate::mapper::map::MapHandle;
-use crate::monovertex::bypass_router::{BypassRouter, BypassRouterConfig};
+use crate::monovertex::bypass_router::{MvtxBypassRouter, BypassRouterConfig};
 use crate::sinker::sink::SinkWriter;
 use crate::source::Source;
 use tokio_util::sync::CancellationToken;
@@ -74,7 +74,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
     pub(crate) async fn start(self, cln_token: CancellationToken) -> crate::Result<()> {
         let (bypass_router, router_handle) = match self.bypass_router_config {
             Some(bypass_router_config) => {
-                let (router, handle) = BypassRouter::initialize(
+                let (router, handle) = MvtxBypassRouter::initialize(
                     bypass_router_config,
                     self.sink_writer.clone(),
                     cln_token.clone(),
@@ -150,7 +150,7 @@ mod tests {
     use crate::Result;
     use crate::config::monovertex::BypassConditions;
     use crate::mapper::map::MapHandle;
-    use crate::monovertex::bypass_router::{BypassRouter, BypassRouterConfig};
+    use crate::monovertex::bypass_router::{MvtxBypassRouter, BypassRouterConfig};
     use crate::monovertex::forwarder::Forwarder;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};

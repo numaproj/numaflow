@@ -112,15 +112,15 @@ enum BypassConditionState {
     OnSuccess(Box<ForwardConditions>),
 }
 
-/// [BypassRouter] is used by source and udf components for routing any bypassed messages to
+/// [MvtxBypassRouter] is used by source and udf components for routing any bypassed messages to
 /// different sinks based on bypass conditions.
 #[derive(Clone)]
-pub(crate) struct BypassRouter {
+pub(crate) struct MvtxBypassRouter {
     bypass_tx: mpsc::Sender<MessageToSink>,
     bypass_conditions: Vec<BypassConditionState>,
 }
 
-impl BypassRouter {
+impl MvtxBypassRouter {
     /// Initializes the bypass router as well as starts a tokio task for writing bypassed messages
     /// to different sinks based on bypass conditions.
     /// Returns the initialized bypass router and a join handle for the tokio task started
@@ -134,9 +134,9 @@ impl BypassRouter {
         let (tx, rx) = mpsc::channel(config.batch_size);
 
         // Initialize the bypass router with the created channels
-        let bypass_router = BypassRouter {
+        let bypass_router = MvtxBypassRouter {
             bypass_tx: tx,
-            bypass_conditions: BypassRouter::create_bypass_condition_state(
+            bypass_conditions: MvtxBypassRouter::create_bypass_condition_state(
                 config.bypass_conditions.clone(),
             ),
         };
