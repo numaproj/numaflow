@@ -50,6 +50,7 @@ use crate::error::Error;
 use crate::message::{AckHandle, Message};
 use crate::shared::forward::should_forward;
 use crate::sinker::sink::SinkWriter;
+use numaflow_models::models::ForwardConditions;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -60,7 +61,6 @@ use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use numaflow_models::models::ForwardConditions;
 
 /// Message Wrapper introduced to allow sink component to route the messages to the
 /// appropriate sink based on the bypass condition.
@@ -109,7 +109,7 @@ impl BypassRouterConfig {
 enum BypassConditionState {
     Sink(Box<ForwardConditions>),
     Fallback(Box<ForwardConditions>),
-    OnSuccess(Box<ForwardConditions>)
+    OnSuccess(Box<ForwardConditions>),
 }
 
 /// [BypassRouter] is used by source and udf components for routing any bypassed messages to
@@ -136,7 +136,9 @@ impl BypassRouter {
         // Initialize the bypass router with the created channels
         let bypass_router = BypassRouter {
             bypass_tx: tx,
-            bypass_conditions: BypassRouter::create_bypass_condition_state(config.bypass_conditions.clone()),
+            bypass_conditions: BypassRouter::create_bypass_condition_state(
+                config.bypass_conditions.clone(),
+            ),
         };
 
         let bypass_receiver = BypassRouterReceiver {
@@ -165,17 +167,20 @@ impl BypassRouter {
             match bypass_condition {
                 BypassConditionState::Sink(sink) => {
                     if should_forward(msg.tags.clone(), Some(sink)) {
-                        return self.route(MessageToSink::Primary(msg)).await.map(|_| true)
+                        return self.route(MessageToSink::Primary(msg)).await.map(|_| true);
                     }
-                },
+                }
                 BypassConditionState::Fallback(fallback) => {
                     if should_forward(msg.tags.clone(), Some(fallback)) {
-                        return self.route(MessageToSink::Fallback(msg)).await.map(|_| true)
+                        return self.route(MessageToSink::Fallback(msg)).await.map(|_| true);
                     }
-                },
+                }
                 BypassConditionState::OnSuccess(on_success) => {
                     if should_forward(msg.tags.clone(), Some(on_success)) {
-                        return self.route(MessageToSink::OnSuccess(msg)).await.map(|_| true)
+                        return self
+                            .route(MessageToSink::OnSuccess(msg))
+                            .await
+                            .map(|_| true);
                     }
                 }
             }
@@ -194,7 +199,9 @@ impl BypassRouter {
 
     /// Static helper method to create the bypass condition state vector to be stored in the bypass router.
     /// Returns a vector of [BypassConditionState].
-    fn create_bypass_condition_state(bypass_conditions: BypassConditions) -> Vec<BypassConditionState> {
+    fn create_bypass_condition_state(
+        bypass_conditions: BypassConditions,
+    ) -> Vec<BypassConditionState> {
         let mut bypass_condition_states = vec![];
 
         if let Some(sink) = bypass_conditions.sink {
