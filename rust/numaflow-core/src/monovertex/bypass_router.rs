@@ -60,6 +60,7 @@ use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
+use numaflow_models::models::ForwardConditions;
 
 /// Message Wrapper introduced to allow sink component to route the messages to the
 /// appropriate sink based on the bypass condition.
@@ -101,12 +102,22 @@ impl BypassRouterConfig {
     }
 }
 
+/// Helper Enum to represent the bypass conditions.
+/// This enum is used to store the bypass conditions in a vector
+/// so that it can be easily iterated over only the ones that were set.
+#[derive(Clone)]
+enum BypassConditionState {
+    Sink(Box<ForwardConditions>),
+    Fallback(Box<ForwardConditions>),
+    OnSuccess(Box<ForwardConditions>)
+}
+
 /// [BypassRouter] is used by source and udf components for routing any bypassed messages to
 /// different sinks based on bypass conditions.
 #[derive(Clone)]
 pub(crate) struct BypassRouter {
     bypass_tx: mpsc::Sender<MessageToSink>,
-    bypass_conditions: BypassConditions,
+    bypass_conditions: Vec<BypassConditionState>,
 }
 
 impl BypassRouter {
@@ -125,7 +136,7 @@ impl BypassRouter {
         // Initialize the bypass router with the created channels
         let bypass_router = BypassRouter {
             bypass_tx: tx,
-            bypass_conditions: config.bypass_conditions.clone(),
+            bypass_conditions: BypassRouter::create_bypass_condition_state(config.bypass_conditions.clone()),
         };
 
         let bypass_receiver = BypassRouterReceiver {
@@ -144,38 +155,70 @@ impl BypassRouter {
         (bypass_router, router_join_handle)
     }
 
+    /// Checks if the message should be bypassed based on the bypass conditions and routes it to
+    /// the appropriate sink.
+    /// Returns a boolean wrapped in a Result. Returns Ok(true) if the message was bypassed,
+    /// Ok(false) if the message was not bypassed, and Err if there was an error in sending the
+    /// message to the bypass channel.
     pub(crate) async fn check_and_route(&self, msg: Message) -> error::Result<bool> {
-        let sink_condition_exists = self.bypass_conditions.sink.is_some();
-        let fallback_condition_exists = self.bypass_conditions.fallback.is_some();
-        let on_success_condition_exists = self.bypass_conditions.on_success.is_some();
-
-        if sink_condition_exists
-            && should_forward(msg.tags.clone(), self.bypass_conditions.sink.clone())
-        {
-            self.route(MessageToSink::Primary(msg)).await.map(|_| true)
-        } else if fallback_condition_exists
-            && should_forward(msg.tags.clone(), self.bypass_conditions.fallback.clone())
-        {
-            self.route(MessageToSink::Fallback(msg)).await.map(|_| true)
-        } else if on_success_condition_exists
-            && should_forward(msg.tags.clone(), self.bypass_conditions.on_success.clone())
-        {
-            self.route(MessageToSink::OnSuccess(msg))
-                .await
-                .map(|_| true)
-        } else {
-            Ok(false)
+        for bypass_condition in self.bypass_conditions.clone() {
+            match bypass_condition {
+                BypassConditionState::Sink(sink) => {
+                    if should_forward(msg.tags.clone(), Some(sink)) {
+                        return self.route(MessageToSink::Primary(msg)).await.map(|_| true)
+                    }
+                },
+                BypassConditionState::Fallback(fallback) => {
+                    if should_forward(msg.tags.clone(), Some(fallback)) {
+                        return self.route(MessageToSink::Fallback(msg)).await.map(|_| true)
+                    }
+                },
+                BypassConditionState::OnSuccess(on_success) => {
+                    if should_forward(msg.tags.clone(), Some(on_success)) {
+                        return self.route(MessageToSink::OnSuccess(msg)).await.map(|_| true)
+                    }
+                }
+            }
         }
+        Ok(false)
     }
 
+    /// Helper method to call the bypass_tx send method.
+    /// Returns a Result. Returns Ok(()) if the message was sent successfully,
+    /// and Err if there was an error in sending the message to the bypass channel.
     async fn route(&self, msg: MessageToSink) -> error::Result<()> {
         self.bypass_tx.send(msg).await.map_err(|e| {
             Error::BypassRouter(format!("Failed to send message through bypass router: {e}"))
         })
     }
+
+    /// Static helper method to create the bypass condition state vector to be stored in the bypass router.
+    /// Returns a vector of [BypassConditionState].
+    fn create_bypass_condition_state(bypass_conditions: BypassConditions) -> Vec<BypassConditionState> {
+        let mut bypass_condition_states = vec![];
+
+        if let Some(sink) = bypass_conditions.sink {
+            bypass_condition_states.push(BypassConditionState::Sink(sink));
+        }
+        if let Some(fallback) = bypass_conditions.fallback {
+            bypass_condition_states.push(BypassConditionState::Fallback(fallback));
+        }
+        if let Some(on_success) = bypass_conditions.on_success {
+            bypass_condition_states.push(BypassConditionState::OnSuccess(on_success));
+        }
+
+        bypass_condition_states
+    }
 }
 
-pub(crate) struct BypassRouterReceiver {
+/// [BypassRouterReceiver] starts the background task for receiving the bypassed messages from
+/// the bypass channel and writing them to the different sinks.
+///
+/// [BypassRouterReceiver] allows creating separation of concern between the bypass router, which is
+/// responsible for sending data to bypass channel and the bypass router receiver, which is
+/// responsible for receiving the said data from bypass channel and sending it to the different
+/// sinks in a tokio task.
+struct BypassRouterReceiver {
     bypass_conditions: BypassConditions,
     batch_size: usize,
     sink_writer: SinkWriter,
@@ -184,11 +227,9 @@ pub(crate) struct BypassRouterReceiver {
     final_result: error::Result<()>,
 }
 
-/// BypassRouterReceiver allows creating separation of concern between the bypass router, which is
-/// responsible for sending data to bypass channel and the bypass router receiver, which is
-/// responsible for receiving the said data from bypass channel and sending it to the different
-/// sinks in a tokio task.
 impl BypassRouterReceiver {
+    /// Initializes the bypass router receiver and starts the background task for receiving the
+    /// bypassed messages from the bypass channel and writing them to the different sinks.
     async fn streaming_bypass_write(
         mut self,
         messages_stream: ReceiverStream<MessageToSink>,

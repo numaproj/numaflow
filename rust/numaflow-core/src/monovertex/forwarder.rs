@@ -1541,7 +1541,6 @@ mod tests {
             None,
             sink_writer,
             Some(bypass_router_config),
-            //None,
         );
 
         let cancel_token = cln_token.clone();
