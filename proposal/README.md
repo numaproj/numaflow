@@ -169,7 +169,8 @@ The following behavior occurs after the numaNetwork information has been propaga
 
 1. A DRA driver for NICs is specified via the DeviceClass referenced by the ResourceClaims.
 2. IP addresses are assigned to pods using the IPAM tool specified in the NIC DRA driver.
-3. An external controller registers the pod name and assigned IP address with CoreDNS.
+3. pods creation are completed.
+4. An external controller wateches Pod deployments and checks whether the domain name of the MultiNetwork Service corresponding to each Vertex and the Pod's Second NIC IP are registered in CoreDNS.
 
 > [!IMPORTANT]
 > This external controller does not exist as a component in the current Numaflow architecture.
@@ -177,7 +178,8 @@ It may be newly implemented or an existing controller may be reused; however, th
 
 ### Direct Communication Processing During Application Execution
 - Premise: 
-  - Within a Vertex, the UDF container is aware of the destination Vertex name, which is equivalent to a Service in a typical microservices architecture.
+  - The UDF container in Vertex has the destination Vertex name as a environment varialbe.
+  - We assume that it can also have the domain name of the corresponding MultiNetwork Service.
   - This processing is assumed to be performed using a library provided by the Numaflow SDK.
 
 1. The interface function accepts the data to be sent and the required buffer size as its arguments.
