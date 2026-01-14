@@ -1400,7 +1400,7 @@ mod tests {
     {
         let (sink_client_type, ud_sink_handle) = match sink {
             SinkType::UserDefined(sink) => {
-                let (sink_client_type, sink_handle) = create_ud_sink_helper(sink).await;
+                let (sink_client_type, sink_handle) = create_ud_sink(sink).await;
                 (
                     sink_client_type,
                     Some(UDSinkTypeHandle {
@@ -1414,7 +1414,7 @@ mod tests {
 
         let (fb_client_type, fb_ud_sink_handle) = match fallback {
             Some(SinkType::UserDefined(fb_sink)) => {
-                let (sink_client_type, sink_handle) = create_ud_sink_helper(fb_sink).await;
+                let (sink_client_type, sink_handle) = create_ud_sink(fb_sink).await;
                 (
                     Some(sink_client_type),
                     Some(UDSinkTypeHandle {
@@ -1429,7 +1429,7 @@ mod tests {
 
         let (ons_client_type, ons_ud_sink_handle) = match on_success {
             Some(SinkType::UserDefined(ons_sink)) => {
-                let (sink_client_type, sink_handle) = create_ud_sink_helper(ons_sink).await;
+                let (sink_client_type, sink_handle) = create_ud_sink(ons_sink).await;
                 (
                     Some(sink_client_type),
                     Some(UDSinkTypeHandle {
@@ -1458,7 +1458,7 @@ mod tests {
         }
     }
 
-    async fn create_ud_sink_helper<T>(sink_svc: T) -> (SinkClientType, UDSinkTypeHandle)
+    async fn create_ud_sink<T>(sink_svc: T) -> (SinkClientType, UDSinkTypeHandle)
     where
         T: sink::Sinker + Send + Sync + 'static,
     {

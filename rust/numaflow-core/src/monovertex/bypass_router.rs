@@ -10,7 +10,7 @@
 //! The bypass router wraps the message to be sent to the bypass channel in [MessageToSink] enum
 //! so that the receiver task can determine which sink the message should be sent to.
 //!
-//! The source and mapper handle methods use helper methods for bypass router to determine if a message
+//! The source and mapper handle methods use methods on bypass router to determine if a message
 //! should be bypassed to a sink, and if so, the message is sent to the bypass channel held
 //! by the router accordingly.
 //!
@@ -102,7 +102,6 @@ impl BypassRouterConfig {
     }
 }
 
-/// Helper Enum to represent the bypass conditions.
 /// This enum is used to store the bypass conditions in a vector
 /// so that it can be easily iterated over only the ones that were set.
 #[derive(Clone)]
@@ -162,7 +161,7 @@ impl MvtxBypassRouter {
     /// Returns a boolean wrapped in a Result. Returns Ok(true) if the message was bypassed,
     /// Ok(false) if the message was not bypassed, and Err if the messages supposed to be bypassed
     /// but there was an error in sending the message to the bypass channel.
-    pub(crate) async fn check_and_route(&self, msg: Message) -> error::Result<bool> {
+    pub(crate) async fn try_bypass(&self, msg: Message) -> error::Result<bool> {
         for bypass_condition in self.bypass_conditions.clone() {
             match bypass_condition {
                 BypassConditionState::Sink(sink) => {
@@ -188,7 +187,7 @@ impl MvtxBypassRouter {
         Ok(false)
     }
 
-    /// Helper method to call the bypass_tx send method.
+    /// [route] method calls the bypass_tx send method.
     /// Returns a Result. Returns Ok(()) if the message was sent successfully,
     /// and Err if there was an error in sending the message to the bypass channel.
     async fn route(&self, msg: MessageToSink) -> error::Result<()> {
@@ -197,7 +196,7 @@ impl MvtxBypassRouter {
         })
     }
 
-    /// Static helper method to create the bypass condition state vector to be stored in the bypass router.
+    /// Method to create the bypass condition state vector to be stored in the bypass router.
     /// Returns a vector of [BypassConditionState].
     fn create_bypass_condition_state(
         bypass_conditions: BypassConditions,
@@ -357,8 +356,8 @@ impl BypassRouterReceiver {
         }))
     }
 
-    /// Helper method for marking messages as failed. Used in [SinkWriter::streaming_bypass_write]
-    /// when we are in shutting down mode.
+    /// Used to mark messages as failed. Used in [SinkWriter::streaming_bypass_write]
+    /// when we are in shutting down mode. Added to reduce code redundancy.
     fn mark_msgs_failed(&self, batch: &Vec<Message>) {
         for msg in batch {
             msg.ack_handle
@@ -369,7 +368,7 @@ impl BypassRouterReceiver {
         }
     }
 
-    /// Helper method for writing messages to the appropriate sink based on the enum variant.
+    /// Writes messages to the appropriate sink based on the enum variant.
     /// Used in [SinkWriter::streaming_bypass_write] to remove redundant code.
     async fn selective_write(
         &mut self,
@@ -426,7 +425,7 @@ mod tests {
     use std::sync::Arc;
     use tokio::sync::oneshot;
 
-    /// Helper to create a test message with optional tags and ack handle
+    /// Creates a test message with optional tags and ack handle.
     fn create_test_message(
         id: i32,
         tags: Option<Vec<String>>,

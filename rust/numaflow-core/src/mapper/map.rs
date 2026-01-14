@@ -467,7 +467,7 @@ impl MapHandle {
 
                             // send messages downstream
                             for mapped_message in mapped_messages {
-                                if let Some(ref bypass_router) = bypass_router && bypass_router.check_and_route(mapped_message.clone()).await.expect("failed to send message to bypass channel")
+                                if let Some(ref bypass_router) = bypass_router && bypass_router.try_bypass(mapped_message.clone()).await.expect("failed to send message to bypass channel")
                                 {
                                     continue
                                 } else {
@@ -560,7 +560,7 @@ impl MapHandle {
                     for mapped_message in mapped_messages {
                         if let Some(ref bypass_router) = bypass_router
                             && bypass_router
-                                .check_and_route(mapped_message.clone())
+                                .try_bypass(mapped_message.clone())
                                 .await
                                 .expect("failed to send message to bypass channel")
                         {
@@ -644,7 +644,7 @@ impl MapHandle {
                                     .await
                                     .expect("failed to update tracker");
 
-                                if let Some(ref bypass_router) = bypass_router && bypass_router.check_and_route(mapped_message.clone()).await.expect("failed to send message to bypass channel")
+                                if let Some(ref bypass_router) = bypass_router && bypass_router.try_bypass(mapped_message.clone()).await.expect("failed to send message to bypass channel")
                                 {
                                     continue
                                 } else {

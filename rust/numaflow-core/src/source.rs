@@ -552,7 +552,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 for message in messages {
                     if let Some(ref bypass_router) = bypass_router
                         && bypass_router
-                            .check_and_route(message.clone())
+                            .try_bypass(message.clone())
                             .await
                             .expect("failed to send message to bypass channel")
                     {
