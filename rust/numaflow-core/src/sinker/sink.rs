@@ -347,6 +347,10 @@ impl SinkWriter {
         messages: Vec<Message>,
         cln_token: CancellationToken,
     ) -> Result<()> {
+        if messages.is_empty() {
+            return Ok(());
+        }
+
         // Invoke on_success sink actor (with retry logic inside)
         let on_success_response = self
             .write_to_on_success_sink(messages, cln_token.clone())
@@ -383,6 +387,10 @@ impl SinkWriter {
         messages: Vec<Message>,
         cln_token: CancellationToken,
     ) -> Result<()> {
+        if messages.is_empty() {
+            return Ok(());
+        }
+
         let fallback_sink_start = time::Instant::now();
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();
