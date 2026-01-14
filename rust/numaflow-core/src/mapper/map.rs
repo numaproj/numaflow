@@ -29,6 +29,7 @@ pub(super) mod unary;
 use batch::UserDefinedBatchMap;
 use stream::UserDefinedStreamMap;
 use unary::UserDefinedUnaryMap;
+use crate::monovertex::bypass_router::MvtxBypassRouter;
 
 /// ParentMessageInfo is used to store the information of the parent message. This is propagated to
 /// all the downstream messages.
@@ -1012,7 +1013,7 @@ mod tests {
         drop(input_tx);
 
         let (mut output_stream, map_handle) = mapper
-            .streaming_map(input_stream, CancellationToken::new())
+            .streaming_map(input_stream, CancellationToken::new(), None)
             .await?;
 
         let mut responses = vec![];
