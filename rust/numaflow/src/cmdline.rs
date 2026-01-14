@@ -13,6 +13,7 @@ pub(super) fn root_cli() -> Command {
         .subcommand(add_monitor_subcommand())
         .subcommand(add_serving_subcommand())
         .subcommand(add_processor_subcommand())
+        .subcommand(add_mvtx_daemon_server_subcommand())
         .subcommand(sideinput::add_sideinput_subcommand())
 }
 
@@ -40,6 +41,12 @@ fn add_monitor_subcommand() -> Command {
 
 fn add_serving_subcommand() -> Command {
     Command::new("serving").about("Serving System for Numaflow")
+}
+
+fn add_mvtx_daemon_server_subcommand() -> Command {
+    // the command argument "mvtx-daemon-server" matches the one passed to the daemon server container
+    // at pkg/apis/numaflow/v1alpha1/mono_vertex_type.go GetDaemonDeploymentObj()
+    Command::new("mvtx-daemon-server").about("MonoVertex Daemon Server")
 }
 
 #[cfg(test)]

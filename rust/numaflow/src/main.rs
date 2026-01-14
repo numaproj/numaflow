@@ -104,6 +104,17 @@ async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
             info!("Starting side input");
             sideinput::run_sideinput(args, cln_token).await?;
         }
+        Some(("mvtx-daemon-server", _)) => {
+            info!("Starting the MonoVertex daemon server");
+            // a dummy async task
+            async {
+                use std::time::Duration;
+                // Placeholder for the actual implementation
+                // Sleep for 15 mins
+                tokio::time::sleep(Duration::from_secs(900)).await;
+            }
+            .await;
+        }
         others => {
             return Err(format!("Invalid subcommand {others:?}").into());
         }
