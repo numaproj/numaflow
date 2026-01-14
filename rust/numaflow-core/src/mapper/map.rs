@@ -26,10 +26,10 @@ pub(super) mod batch;
 pub(super) mod stream;
 pub(super) mod unary;
 
+use crate::monovertex::bypass_router::MvtxBypassRouter;
 use batch::UserDefinedBatchMap;
 use stream::UserDefinedStreamMap;
 use unary::UserDefinedUnaryMap;
-use crate::monovertex::bypass_router::MvtxBypassRouter;
 
 /// ParentMessageInfo is used to store the information of the parent message. This is propagated to
 /// all the downstream messages.
