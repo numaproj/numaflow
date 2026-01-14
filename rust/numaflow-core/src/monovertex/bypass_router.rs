@@ -233,6 +233,12 @@ struct BypassRouterReceiver {
     final_result: error::Result<()>,
 }
 
+enum WriteToSink {
+    Primary(Vec<Message>),
+    Fallback(Vec<Message>),
+    OnSuccess(Vec<Message>),
+}
+
 impl BypassRouterReceiver {
     /// Initializes the bypass router receiver and starts the background task for receiving the
     /// bypassed messages from the bypass channel and writing them to the different sinks.
@@ -252,6 +258,10 @@ impl BypassRouterReceiver {
 
                 // Main processing loop
                 while let Some(batch) = chunk_stream.next().await {
+                    // do shut down on error here so that we can drain the channel and shutdown
+                    // cancel the token
+                    // continue;
+
                     // filter out messages that are marked for drop
                     let batch: Vec<_> = batch
                         .into_iter()
@@ -300,15 +310,8 @@ impl BypassRouterReceiver {
                     }
 
                     // perform the primary write operation if sink condition exists
-                    if self.bypass_conditions.sink.is_some() {
-                        self.selective_write(
-                            MessageToSink::Primary(Message::default()),
-                            primary_messages,
-                            primary_ack_handles,
-                            cln_token.clone(),
-                        )
+                    self.selective_write(WriteToSink::Primary(primary_messages), cln_token.clone())
                         .await?;
-                    }
 
                     // we are in shutting down mode, we will not be writing to the sink,
                     // mark the messages as failed, and on Drop they will be nack'ed.
@@ -320,15 +323,11 @@ impl BypassRouterReceiver {
                     }
 
                     // perform the fallback write operation if fallback sink condition exists
-                    if self.bypass_conditions.fallback.is_some() {
-                        self.selective_write(
-                            MessageToSink::Fallback(Message::default()),
-                            fallback_messages,
-                            fallback_ack_handles,
-                            cln_token.clone(),
-                        )
-                        .await?;
-                    }
+                    self.selective_write(
+                        WriteToSink::Fallback(fallback_messages),
+                        cln_token.clone(),
+                    )
+                    .await?;
 
                     // we are in shutting down mode, we will not be writing to the sink,
                     // mark the messages as failed, and on Drop they will be nack'ed.
@@ -339,15 +338,11 @@ impl BypassRouterReceiver {
                     }
 
                     // perform the on_success write operation if on-success condition exists
-                    if self.bypass_conditions.on_success.is_some() {
-                        self.selective_write(
-                            MessageToSink::OnSuccess(Message::default()),
-                            on_success_messages,
-                            on_success_ack_handles,
-                            cln_token.clone(),
-                        )
-                        .await?;
-                    }
+                    self.selective_write(
+                        WriteToSink::OnSuccess(on_success_messages),
+                        cln_token.clone(),
+                    )
+                    .await?;
                 }
 
                 // finalize
@@ -372,44 +367,26 @@ impl BypassRouterReceiver {
     /// Used in [SinkWriter::streaming_bypass_write] to remove redundant code.
     async fn selective_write(
         &mut self,
-        msg_type: MessageToSink,
-        batch: Vec<Message>,
-        ack_handles: Vec<Option<Arc<AckHandle>>>,
+        msg_type: WriteToSink,
         cln_token: CancellationToken,
     ) -> error::Result<()> {
-        if let Err(e) = match msg_type {
-            MessageToSink::Primary(_) => {
+        match msg_type {
+            WriteToSink::Primary(batch) => {
                 self.sink_writer
                     .write_to_sink(batch, cln_token.clone())
-                    .await
+                    .await?
             }
-            MessageToSink::Fallback(_) => {
+            WriteToSink::Fallback(batch) => {
                 self.sink_writer
                     .write_to_fallback(batch, cln_token.clone())
-                    .await
+                    .await?
             }
-            MessageToSink::OnSuccess(_) => {
+            WriteToSink::OnSuccess(batch) => {
                 self.sink_writer
                     .write_to_on_success(batch, cln_token.clone())
-                    .await
+                    .await?
             }
-        } {
-            // critical error, cancel upstream and mark all acks as failed
-            error!(?e, "Error writing to sink, initiating shutdown.");
-            cln_token.cancel();
-
-            for ack_handle in ack_handles {
-                ack_handle
-                    .as_ref()
-                    .expect("ack handle should be present")
-                    .is_failed
-                    .store(true, Ordering::Relaxed);
-            }
-
-            self.final_result = Err(e);
-            self.shutting_down_on_err = true;
         }
-
         Ok(())
     }
 }
