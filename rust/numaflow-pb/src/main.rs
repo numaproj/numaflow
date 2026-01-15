@@ -34,6 +34,7 @@ fn build_client() {
                 "proto/sideinput/v1/sideinput.proto",
                 "proto/serving/v1/store.proto",
                 "proto/accumulator/v1/accumulator.proto",
+                "proto/mvtxdaemon/mvtxdaemon.proto",
             ],
             &["proto"],
         )
