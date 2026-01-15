@@ -1,4 +1,4 @@
-//go:build test
+////go:build test
 
 /*
 Copyright 2022 The Numaproj Authors.
@@ -124,6 +124,51 @@ func (s *MonoVertexSuite) TestMonoVertexUserMetadataPropagation() {
 		MonoVertexPodLogContains("simple-source", PodLogCheckOptionWithContainer("udsink")).
 		MonoVertexPodLogContains("map-group", PodLogCheckOptionWithContainer("udsink")).
 		MonoVertexPodLogContains("txn-id", PodLogCheckOptionWithContainer("udsink"))
+}
+
+func (s *MonoVertexSuite) TestMapBypass() {
+
+	w := s.Given().MonoVertex("@testdata/map-bypass.yaml").
+		When().
+		CreateMonoVertexAndWait()
+	defer w.DeleteMonoVertexAndWait()
+	monoVertexName := "map-bypass"
+
+	// wait for all the pods to come up
+	w.Expect().MonoVertexPodsRunning()
+
+	// send a message that should be routed to the on success sink
+	w.SendMessageTo(monoVertexName, "map-bypass", NewHttpPostRequest().WithBody([]byte("on-success-message")))
+	// send a message that should be routed to the fallback sink
+	w.SendMessageTo(monoVertexName, "map-bypass", NewHttpPostRequest().WithBody([]byte("fallback-message")))
+	// send a message that should be routed to the primary sink
+	w.SendMessageTo(monoVertexName, "map-bypass", NewHttpPostRequest().WithBody([]byte("primary-message")))
+
+	w.Expect().RedisSinkContains("bypass-on-success-output", "on-success-message")
+	w.Expect().RedisSinkContains("bypass-fallback-output", "fallback-message")
+	w.Expect().RedisSinkContains("bypass-sink-output", "primary-message")
+}
+
+func (s *MonoVertexSuite) TestSourceTransformerBypass() {
+	w := s.Given().MonoVertex("@testdata/source-transformer-bypass.yaml").
+		When().
+		CreateMonoVertexAndWait()
+	defer w.DeleteMonoVertexAndWait()
+	monoVertexName := "st-bypass"
+
+	// wait for all the pods to come up
+	w.Expect().MonoVertexPodsRunning()
+
+	// send a message that should be routed to the on success sink
+	w.SendMessageTo(monoVertexName, "st-bypass", NewHttpPostRequest().WithBody([]byte("on-success-message")))
+	// send a message that should be routed to the fallback sink
+	w.SendMessageTo(monoVertexName, "st-bypass", NewHttpPostRequest().WithBody([]byte("fallback-message")))
+	// send a message that should be routed to the primary sink
+	w.SendMessageTo(monoVertexName, "st-bypass", NewHttpPostRequest().WithBody([]byte("primary-message")))
+
+	w.Expect().RedisSinkContains("bypass-on-success-output", "on-success-message")
+	w.Expect().RedisSinkContains("bypass-fallback-output", "fallback-message")
+	w.Expect().RedisSinkContains("bypass-sink-output", "primary-message")
 }
 
 func TestMonoVertexSuite(t *testing.T) {

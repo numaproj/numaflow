@@ -338,52 +338,6 @@ func (s *FunctionalSuite) TestOnSuccessSink() {
 	w.Expect().RedisSinkContains("simple-on-success-output", "on-success-message")
 }
 
-func (s *FunctionalSuite) TestMapBypass() {
-
-	w := s.Given().Pipeline("@testdata/map-bypass.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "map-bypass"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	// send a message that should be routed to the on success sink
-	w.SendMessageTo(pipelineName, "map-bypass", NewHttpPostRequest().WithBody([]byte("on-success-message")))
-	// send a message that should be routed to the fallback sink
-	w.SendMessageTo(pipelineName, "map-bypass", NewHttpPostRequest().WithBody([]byte("fallback-message")))
-	// send a message that should be routed to the primary sink
-	w.SendMessageTo(pipelineName, "map-bypass", NewHttpPostRequest().WithBody([]byte("primary-message")))
-
-	w.Expect().RedisSinkContains("bypass-on-success-output", "on-success-message")
-	w.Expect().RedisSinkContains("bypass-fallback-output", "fallback-message")
-	w.Expect().RedisSinkContains("bypass-sink-output", "primary-message")
-}
-
-func (s *FunctionalSuite) TestSourceTransformerBypass() {
-
-	w := s.Given().Pipeline("@testdata/source-transformer-bypass.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "st-bypass"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	// send a message that should be routed to the on success sink
-	w.SendMessageTo(pipelineName, "st-bypass", NewHttpPostRequest().WithBody([]byte("on-success-message")))
-	// send a message that should be routed to the fallback sink
-	w.SendMessageTo(pipelineName, "st-bypass", NewHttpPostRequest().WithBody([]byte("fallback-message")))
-	// send a message that should be routed to the primary sink
-	w.SendMessageTo(pipelineName, "st-bypass", NewHttpPostRequest().WithBody([]byte("primary-message")))
-
-	w.Expect().RedisSinkContains("bypass-on-success-output", "on-success-message")
-	w.Expect().RedisSinkContains("bypass-fallback-output", "fallback-message")
-	w.Expect().RedisSinkContains("bypass-sink-output", "primary-message")
-}
-
 func (s *FunctionalSuite) TestExponentialBackoffRetryStrategyForPipeline() {
 	w := s.Given().Pipeline("@testdata/simple-pipeline-with-retry-strategy.yaml").
 		When().
