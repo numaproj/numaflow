@@ -315,6 +315,15 @@ func WaitForMonoVertexPodRunning(kubeClient kubernetes.Interface, monoVertexClie
 		if ok {
 			return nil
 		}
+
+		// TODO: REMOVE DEBUGGING LOGS
+		if strings.Contains(monoVertexName, "bypass") {
+			for _, pod := range podList.Items {
+				pLog := kubeClient.CoreV1().Pods(Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Container: "numa"})
+				println("MonoVertex %s, Numa Log: %v", monoVertexName, pLog)
+			}
+		}
+
 		time.Sleep(2 * time.Second)
 	}
 }
