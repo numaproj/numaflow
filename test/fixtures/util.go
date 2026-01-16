@@ -327,7 +327,7 @@ func WaitForMonoVertexPodRunning(kubeClient kubernetes.Interface, monoVertexClie
 				}
 				buf := new(bytes.Buffer)
 				_, err = io.Copy(buf, pLog)
-				
+
 				if err != nil {
 					fmt.Println("error in copy information from podLogs to buf")
 				}
