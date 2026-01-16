@@ -290,6 +290,7 @@ func WaitForMonoVertexRunning(ctx context.Context, monoVertexClient flowpkg.Mono
 	}
 }
 
+// TODO: fix method signature
 func WaitForMonoVertexPodRunning(kubeClient kubernetes.Interface, monoVertexClient flowpkg.MonoVertexInterface, namespace, monoVertexName string, timeout time.Duration, t *testing.T) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -319,8 +320,19 @@ func WaitForMonoVertexPodRunning(kubeClient kubernetes.Interface, monoVertexClie
 		// TODO: REMOVE DEBUGGING LOGS
 		if strings.Contains(monoVertexName, "bypass") {
 			for _, pod := range podList.Items {
-				pLog := kubeClient.CoreV1().Pods(Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Container: "numa"})
-				t.Logf("MonoVertex %s, Numa Log: %v", monoVertexName, pLog)
+				pLog, err := kubeClient.CoreV1().Pods(Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Container: "numa"}).Stream(context.Background())
+
+				if err != nil {
+					fmt.Println("error getting pod logs: %w", err)
+				}
+				buf := new(bytes.Buffer)
+				_, err = io.Copy(buf, pLog)
+				
+				if err != nil {
+					fmt.Println("error in copy information from podLogs to buf")
+				}
+				t.Logf("MonoVertex %s, Numa Log: %s", monoVertexName, buf.String())
+				pLog.Close()
 			}
 		}
 
