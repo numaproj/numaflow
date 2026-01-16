@@ -321,11 +321,11 @@ func WaitForMonoVertexPodRunning(kubeClient kubernetes.Interface, monoVertexClie
 		if strings.Contains(monoVertexName, "bypass") {
 			for _, pod := range podList.Items {
 				pLog, err := kubeClient.CoreV1().Pods(Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Container: "numa"}).Stream(context.Background())
-				defer pLog.Close()
 				if err != nil {
 					fmt.Println("error getting pod logs: %w", err)
 					break
 				}
+				defer pLog.Close()
 				buf := new(bytes.Buffer)
 				_, err = io.Copy(buf, pLog)
 
