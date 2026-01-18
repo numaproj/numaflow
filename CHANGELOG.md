@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.7.1 (2026-01-17)
+
+ * [7c8b4926](https://github.com/numaproj/numaflow/commit/7c8b4926cbd39066136c7d95c9862e21ddaa5095) Update manifests to v1.7.1
+ * [b72b8f4f](https://github.com/numaproj/numaflow/commit/b72b8f4f63b2f546c33efa969bbace8fb60546b0) fix: use std context (#3081)
+ * [f713f246](https://github.com/numaproj/numaflow/commit/f713f246e479a55184afa82b2025492197dab8af) fix: graceful shutdown of sigkills in map udf container (#3096)
+ * [e7b62d2e](https://github.com/numaproj/numaflow/commit/e7b62d2e7ac5788df2e2dbf6b7ce57b0cf7247f7) fix: alignment and text wrapping in Errors tab (#3078)
+ * [b1e59968](https://github.com/numaproj/numaflow/commit/b1e599689b6edc86994e39bec7198cd15169070a) fix: add back drop metrics after sink refactor (#3074)
+
+### Contributors
+
+ * Adarsh Jain
+ * Vigith Maurice
+ * Yashash Lokesh
+
 ## v1.7.0 (2025-11-11)
 
  * [2d68ff45](https://github.com/numaproj/numaflow/commit/2d68ff4536274a659b7282a2a65cac210f64e523) Update manifests to v1.7.0
