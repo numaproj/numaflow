@@ -138,11 +138,11 @@ func (s *MonoVertexSuite) TestMapBypass() {
 	w.Expect().MonoVertexPodsRunning()
 
 	// send a message that should be routed to the on success sink
-	w.SendMessageTo(monoVertexName, "map-bypass", NewHttpPostRequest().WithBody([]byte("on-success-message")))
+	w.SendMessageToMvTx(monoVertexName, NewHttpPostRequest().WithBody([]byte("on-success-message")))
 	// send a message that should be routed to the fallback sink
-	w.SendMessageTo(monoVertexName, "map-bypass", NewHttpPostRequest().WithBody([]byte("fallback-message")))
+	w.SendMessageToMvTx(monoVertexName, NewHttpPostRequest().WithBody([]byte("fallback-message")))
 	// send a message that should be routed to the primary sink
-	w.SendMessageTo(monoVertexName, "map-bypass", NewHttpPostRequest().WithBody([]byte("primary-message")))
+	w.SendMessageToMvTx(monoVertexName, NewHttpPostRequest().WithBody([]byte("primary-message")))
 
 	w.Expect().RedisSinkContains("bypass-on-success-output", "on-success-message")
 	w.Expect().RedisSinkContains("bypass-fallback-output", "fallback-message")
@@ -160,11 +160,11 @@ func (s *MonoVertexSuite) TestSourceTransformerBypass() {
 	w.Expect().MonoVertexPodsRunning()
 
 	// send a message that should be routed to the on success sink
-	w.SendMessageTo(monoVertexName, "st-bypass", NewHttpPostRequest().WithBody([]byte("on-success-message")))
+	w.SendMessageToMvTx(monoVertexName, NewHttpPostRequest().WithBody([]byte("on-success-message")))
 	// send a message that should be routed to the fallback sink
-	w.SendMessageTo(monoVertexName, "st-bypass", NewHttpPostRequest().WithBody([]byte("fallback-message")))
+	w.SendMessageToMvTx(monoVertexName, NewHttpPostRequest().WithBody([]byte("fallback-message")))
 	// send a message that should be routed to the primary sink
-	w.SendMessageTo(monoVertexName, "st-bypass", NewHttpPostRequest().WithBody([]byte("primary-message")))
+	w.SendMessageToMvTx(monoVertexName, NewHttpPostRequest().WithBody([]byte("primary-message")))
 
 	w.Expect().RedisSinkContains("bypass-on-success-output", "on-success-message")
 	w.Expect().RedisSinkContains("bypass-fallback-output", "fallback-message")

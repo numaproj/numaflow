@@ -3,6 +3,8 @@ kind: MonoVertex
 metadata:
   name: map-bypass
 spec:
+  scale:
+    min: 1
   bypass:
     sink:
       tags:
@@ -20,7 +22,8 @@ spec:
         values:
           - onSuccess
   source:
-    http: {}
+    http:
+      service: true
   udf:
     container:
       image: quay.io/numaio/numaflow-rs/map-bypass-cat:stable

@@ -3,6 +3,8 @@ kind: MonoVertex
 metadata:
   name: st-bypass
 spec:
+  scale:
+    min: 1
   bypass:
     sink:
       tags:
@@ -20,7 +22,8 @@ spec:
         values:
           - onSuccess
   source:
-    http: {}
+    http:
+      service: true
     transformer:
       container:
         image: quay.io/numaio/numaflow-rs/source-transformer-bypass:stable
