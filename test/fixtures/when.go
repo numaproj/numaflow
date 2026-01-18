@@ -58,7 +58,7 @@ func (w *When) SendMessageTo(pipelineName string, vertexName string, req HttpPos
 // SendMessageToMvTx sends msg to http source vertex in a MonoVertex.
 func (w *When) SendMessageToMvTx(monoVertex string, req HttpPostRequest) *When {
 	w.t.Helper()
-	SendMessageTo(fmt.Sprintf("%s", monoVertex), monoVertex, req)
+	SendMessageTo(monoVertex, monoVertex, req)
 	return w
 }
 
