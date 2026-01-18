@@ -290,8 +290,7 @@ func WaitForMonoVertexRunning(ctx context.Context, monoVertexClient flowpkg.Mono
 	}
 }
 
-// TODO: fix method signature
-func WaitForMonoVertexPodRunning(kubeClient kubernetes.Interface, monoVertexClient flowpkg.MonoVertexInterface, namespace, monoVertexName string, timeout time.Duration, t *testing.T) error {
+func WaitForMonoVertexPodRunning(kubeClient kubernetes.Interface, monoVertexClient flowpkg.MonoVertexInterface, namespace, monoVertexName string, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, monoVertexName, dfv1.KeyComponent, dfv1.ComponentMonoVertex)
@@ -315,26 +314,6 @@ func WaitForMonoVertexPodRunning(kubeClient kubernetes.Interface, monoVertexClie
 		}
 		if ok {
 			return nil
-		}
-
-		// TODO: REMOVE DEBUGGING LOGS
-		if strings.Contains(monoVertexName, "bypass") {
-			for _, pod := range podList.Items {
-				pLog, err := kubeClient.CoreV1().Pods(Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Container: "numa"}).Stream(context.Background())
-				if err != nil {
-					fmt.Println("error getting pod logs: %w", err)
-					break
-				}
-				defer pLog.Close()
-				buf := new(bytes.Buffer)
-				_, err = io.Copy(buf, pLog)
-
-				if err != nil {
-					fmt.Println("error in copy information from podLogs to buf")
-					break
-				}
-				t.Logf("MonoVertex %s, Numa Log: %s", monoVertexName, buf.String())
-			}
 		}
 
 		time.Sleep(2 * time.Second)
