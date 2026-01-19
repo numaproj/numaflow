@@ -18,6 +18,7 @@ members = [
     # generated
     "numaflow-pb",
     "numaflow-models",
+    "numaflow-mvtx-daemon",
 ]
 
 [workspace.lints.rust]
@@ -66,6 +67,7 @@ numaflow-core = { path = "numaflow-core" }
 numaflow-models = { path = "numaflow-models" }
 numaflow-monitor = { path = "numaflow-monitor" }
 numaflow-sideinput = { path = "numaflow-sideinput" }
+numaflow-mvtx-daemon = { path = "numaflow-mvtx-daemon" }
 numaflow-shared = { path = "numaflow-shared" }
 backoff = { path = "backoff" }
 numaflow-pb = { path = "numaflow-pb" }

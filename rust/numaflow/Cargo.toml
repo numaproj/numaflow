@@ -15,6 +15,7 @@ serving.workspace = true
 numaflow-core.workspace = true
 numaflow-monitor.workspace = true
 numaflow-sideinput.workspace = true
+numaflow-mvtx-daemon.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true

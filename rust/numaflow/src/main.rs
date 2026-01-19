@@ -106,14 +106,7 @@ async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
         }
         Some(("mvtx-daemon-server", _)) => {
             info!("Starting the MonoVertex daemon server");
-            // a dummy async task
-            async {
-                use std::time::Duration;
-                // Placeholder for the actual implementation
-                // Sleep for 15 mins
-                tokio::time::sleep(Duration::from_secs(900)).await;
-            }
-            .await;
+            numaflow_mvtx_daemon::run().await?;
         }
         others => {
             return Err(format!("Invalid subcommand {others:?}").into());
