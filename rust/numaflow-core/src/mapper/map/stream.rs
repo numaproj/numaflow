@@ -2,17 +2,19 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use crate::config::is_mono_vertex;
+use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
+use crate::error::{Error, Result};
+use crate::message::Message;
+use crate::metrics::{
+    monovertex_metrics, mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
+};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::mpsc;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
 use tracing::error;
-
-use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
-use crate::error::{Error, Result};
-use crate::message::Message;
-use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 
 use super::{ParentMessageInfo, UserDefinedMessage, create_response_stream};
 
@@ -61,11 +63,19 @@ impl UserDefinedStreamMap {
 
         for (_, (_, sender)) in senders {
             let _ = sender.send(Err(Error::Grpc(Box::new(error.clone())))).await;
-            pipeline_metrics()
-                .forwarder
-                .udf_error_total
-                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                .inc();
+            if is_mono_vertex() {
+                monovertex_metrics()
+                    .udf
+                    .errors_total
+                    .get_or_create(mvtx_forward_metric_labels())
+                    .inc();
+            } else {
+                pipeline_metrics()
+                    .forwarder
+                    .udf_error_total
+                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                    .inc();
+            }
         }
     }
 
@@ -95,11 +105,19 @@ impl UserDefinedStreamMap {
             // once we get eot, we can drop the sender to let the callee
             // know that we are done sending responses
             if let Some(map::TransmissionStatus { eot: true }) = resp.status {
-                pipeline_metrics()
-                    .forwarder
-                    .udf_processing_time
-                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                    .observe(message_info.start_time.elapsed().as_micros() as f64);
+                if is_mono_vertex() {
+                    monovertex_metrics()
+                        .udf
+                        .time
+                        .get_or_create(mvtx_forward_metric_labels())
+                        .observe(message_info.start_time.elapsed().as_micros() as f64);
+                } else {
+                    pipeline_metrics()
+                        .forwarder
+                        .udf_processing_time
+                        .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                        .observe(message_info.start_time.elapsed().as_micros() as f64);
+                }
                 continue;
             }
 
@@ -123,11 +141,13 @@ impl UserDefinedStreamMap {
         let key = message.offset.clone().to_string();
         let msg_info = (&message).into();
 
-        pipeline_metrics()
-            .forwarder
-            .udf_read_total
-            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-            .inc();
+        if !is_mono_vertex() {
+            pipeline_metrics()
+                .forwarder
+                .udf_read_total
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                .inc();
+        }
 
         // only insert if we are able to send the message to the server
         if let Err(e) = self.read_tx.send(message.into()).await {
@@ -165,11 +185,14 @@ impl UserDefinedStreamMap {
                 .await
                 .expect("failed to send response");
             message_info.current_index += 1;
-            pipeline_metrics()
-                .forwarder
-                .udf_write_total
-                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                .inc();
+
+            if !is_mono_vertex() {
+                pipeline_metrics()
+                    .forwarder
+                    .udf_write_total
+                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                    .inc();
+            }
         }
 
         // Write the sender back to the map, because we need to send
