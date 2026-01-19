@@ -106,7 +106,12 @@ async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
         }
         Some(("mvtx-daemon-server", _)) => {
             info!("Starting the MonoVertex daemon server");
-            numaflow_mvtx_daemon::run().await?;
+            match env::var("NUMAFLOW_MONO_VERTEX_NAME") {
+                Ok(name) => numaflow_mvtx_daemon::run(name).await?,
+                _ => {
+                    return Err("Environment variable NUMAFLOW_MONO_VERTEX_NAME is not set".into());
+                }
+            }
         }
         others => {
             return Err(format!("Invalid subcommand {others:?}").into());
