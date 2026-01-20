@@ -2,7 +2,7 @@ use crate::Result;
 use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
-use crate::message::Message;
+use crate::message::{AckHandle, Message};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
@@ -15,6 +15,7 @@ use numaflow_pb::clients::sink::sink_response;
 use numaflow_pulsar::sink::Sink as PulsarSink;
 use numaflow_sqs::sink::SqsSink;
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
@@ -26,9 +27,10 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{error, info};
 
+use crate::config::monovertex::BypassConditions;
+use crate::monovertex::bypass_router::MessageToSink;
 use crate::sinker::builder::HealthCheckClients;
 use serve::{ServingStore, StoreEntry};
-
 // Re-export SinkWriterBuilder for external use
 pub(crate) use crate::sinker::builder::SinkWriterBuilder;
 
@@ -93,6 +95,7 @@ pub(crate) struct SinkWriter {
     final_result: Result<()>,
     serving_store: Option<ServingStore>,
     health_check_clients: HealthCheckClients,
+    bypass_conditions: Option<BypassConditions>,
 }
 
 impl SinkWriter {
@@ -105,6 +108,7 @@ impl SinkWriter {
         on_success_sink_handle: Option<mpsc::Sender<SinkActorMessage>>,
         serving_store: Option<ServingStore>,
         health_check_clients: HealthCheckClients,
+        bypass_conditions: Option<BypassConditions>,
     ) -> Self {
         Self {
             batch_size,
@@ -116,6 +120,7 @@ impl SinkWriter {
             final_result: Ok(()),
             serving_store,
             health_check_clients,
+            bypass_conditions,
         }
     }
 
@@ -208,6 +213,15 @@ impl SinkWriter {
 
                 // Main processing loop
                 while let Some(batch) = chunk_stream.next().await {
+                    // If bypass conditions exist for primary sink, drop the batch
+                    let batch = if let Some(conditions) = &self.bypass_conditions
+                        && let Some(ref _sink) = conditions.sink
+                    {
+                        vec![]
+                    } else {
+                        batch
+                    };
+
                     // we are in shutting down mode, we will not be writing to the sink,
                     // mark the messages as failed, and on Drop they will be nack'ed.
                     if self.shutting_down_on_err {
@@ -236,7 +250,7 @@ impl SinkWriter {
                     }
 
                     // perform the write operation
-                    if let Err(e) = self.write(batch, cln_token.clone()).await {
+                    if let Err(e) = self.write_to_sink(batch, cln_token.clone()).await {
                         // critical error, cancel upstream and mark all acks as failed
                         error!(?e, "Error writing to sink, initiating shutdown.");
                         cln_token.cancel();
@@ -262,7 +276,11 @@ impl SinkWriter {
 
     /// Write the messages to the Sink.
     /// Invokes the primary sink actor, handles fallback messages, serving messages, and errors.
-    async fn write(&mut self, messages: Vec<Message>, cln_token: CancellationToken) -> Result<()> {
+    pub(crate) async fn write_to_sink(
+        &mut self,
+        messages: Vec<Message>,
+        cln_token: CancellationToken,
+    ) -> Result<()> {
         if messages.is_empty() {
             return Ok(());
         }
@@ -324,11 +342,15 @@ impl SinkWriter {
     }
 
     /// Write messages to the OnSuccess Sink.
-    async fn write_to_on_success(
+    pub(crate) async fn write_to_on_success(
         &mut self,
         messages: Vec<Message>,
         cln_token: CancellationToken,
     ) -> Result<()> {
+        if messages.is_empty() {
+            return Ok(());
+        }
+
         // Invoke on_success sink actor (with retry logic inside)
         let on_success_response = self
             .write_to_on_success_sink(messages, cln_token.clone())
@@ -360,11 +382,15 @@ impl SinkWriter {
     }
 
     /// Write the messages to the Fallback Sink.
-    async fn write_to_fallback(
+    pub(crate) async fn write_to_fallback(
         &mut self,
         messages: Vec<Message>,
         cln_token: CancellationToken,
     ) -> Result<()> {
+        if messages.is_empty() {
+            return Ok(());
+        }
+
         let fallback_sink_start = time::Instant::now();
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();
@@ -693,7 +719,7 @@ mod tests {
             })
             .collect();
 
-        let result = sink_writer.write(messages.clone(), cln_token).await;
+        let result = sink_writer.write_to_sink(messages.clone(), cln_token).await;
         assert!(result.is_ok());
     }
 

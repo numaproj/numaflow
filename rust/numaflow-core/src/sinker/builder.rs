@@ -7,6 +7,7 @@ use tracing::error;
 
 use crate::Result;
 use crate::config::components::sink::RetryConfig;
+use crate::config::monovertex::BypassConditions;
 use crate::sinker::actor::SinkActor;
 use crate::sinker::sink::serve::ServingStore;
 use crate::sinker::sink::user_defined::UserDefinedSink;
@@ -140,6 +141,7 @@ pub(crate) struct SinkWriterBuilder {
     fb_sink_client: Option<SinkClientType>,
     on_success_sink_client: Option<SinkClientType>,
     serving_store: Option<ServingStore>,
+    bypass_conditions: Option<BypassConditions>,
 }
 
 impl SinkWriterBuilder {
@@ -156,6 +158,7 @@ impl SinkWriterBuilder {
             fb_sink_client: None,
             on_success_sink_client: None,
             serving_store: None,
+            bypass_conditions: None,
         }
     }
 
@@ -176,6 +179,11 @@ impl SinkWriterBuilder {
 
     pub(crate) fn on_success_sink_client(mut self, on_success_sink_client: SinkClientType) -> Self {
         self.on_success_sink_client = Some(on_success_sink_client);
+        self
+    }
+
+    pub(crate) fn bypass_conditions(mut self, bypass_conditions: BypassConditions) -> Self {
+        self.bypass_conditions = Some(bypass_conditions);
         self
     }
 
@@ -369,6 +377,7 @@ impl SinkWriterBuilder {
             os_sink_handle,
             self.serving_store,
             health_check_clients,
+            self.bypass_conditions,
         ))
     }
 }

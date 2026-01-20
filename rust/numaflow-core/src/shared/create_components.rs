@@ -6,6 +6,7 @@ use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
 use crate::config::get_vertex_replica;
+use crate::config::monovertex::BypassConditions;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{
@@ -65,6 +66,7 @@ pub(crate) async fn create_sink_writer(
     on_success_sink: Option<SinkConfig>,
     serving_store: Option<ServingStore>,
     cln_token: &CancellationToken,
+    bypass_condition: Option<BypassConditions>,
 ) -> error::Result<SinkWriter> {
     let mut sink_writer_builder =
         append_primary_sink_client(batch_size, read_timeout, primary_sink, cln_token).await?;
@@ -83,6 +85,10 @@ pub(crate) async fn create_sink_writer(
 
     if let Some(serving_store) = serving_store {
         sink_writer_builder = sink_writer_builder.serving_store(serving_store);
+    }
+
+    if let Some(bypass_condition) = bypass_condition {
+        sink_writer_builder = sink_writer_builder.bypass_conditions(bypass_condition);
     }
 
     sink_writer_builder.build().await
