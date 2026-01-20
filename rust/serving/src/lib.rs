@@ -198,6 +198,9 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
+    use crate::Settings;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
