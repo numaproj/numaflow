@@ -2442,6 +2442,47 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#metrics-exposition-format" class="md-nav__link">
+    Metrics Exposition Format
+  </a>
+  
+    <nav class="md-nav" aria-label="Metrics Exposition Format">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#version-differences" class="md-nav__link">
+    Version Differences
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#current-format-by-component-v17" class="md-nav__link">
+    Current Format by Component (v1.7+)
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-differences-between-formats" class="md-nav__link">
+    Key Differences Between Formats
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#collector-configuration" class="md-nav__link">
+    Collector Configuration
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2819,6 +2860,47 @@
           <li class="md-nav__item">
   <a href="#configure-the-below-service-monitor-if-you-use-the-nats-jetstream-isb-for-your-nats-jetstream-metrics" class="md-nav__link">
     Configure the below Service Monitor if you use the NATS Jetstream ISB for your NATS Jetstream metrics:
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#metrics-exposition-format" class="md-nav__link">
+    Metrics Exposition Format
+  </a>
+  
+    <nav class="md-nav" aria-label="Metrics Exposition Format">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#version-differences" class="md-nav__link">
+    Version Differences
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#current-format-by-component-v17" class="md-nav__link">
+    Current Format by Component (v1.7+)
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-differences-between-formats" class="md-nav__link">
+    Key Differences Between Formats
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#collector-configuration" class="md-nav__link">
+    Collector Configuration
   </a>
   
 </li>
@@ -3418,6 +3500,123 @@
 <span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/isbsvc-name</span>
 <span class="w">        </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Exists</span>
 </code></pre></div>
+<h2 id="metrics-exposition-format">Metrics Exposition Format<a class="headerlink" href="#metrics-exposition-format" title="Permanent link">&para;</a></h2>
+<p>Starting with Numaflow <strong>v1.7</strong>, the dataplane (vertex pods, monovertex pods) was rewritten in Rust, which changed the 
+metrics exposition format from Prometheus text format to OpenMetrics text format due to the switch from using 
+<code>client_golang</code> <a href="https://github.com/prometheus/client_golang">prometheus client</a> to 
+<code>client_rust</code> <a href="https://github.com/prometheus/client_rust">prometheus client</a> for exposing metrics.
+As we rewrite other parts (e.g., daemon server), they will also adopt OpenMetrics text format. Controller will be in Prometheus text format for the foreseeable future. </p>
+<h3 id="version-differences">Version Differences<a class="headerlink" href="#version-differences" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Numaflow ≤ v1.5</th>
+<th>Numaflow ≥ v1.7</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Dataplane (vertices)</strong></td>
+<td>Prometheus text format</td>
+<td>OpenMetrics text format</td>
+</tr>
+<tr>
+<td><strong>Controller</strong></td>
+<td>Prometheus text format</td>
+<td>Prometheus text format</td>
+</tr>
+<tr>
+<td><strong>Daemon</strong></td>
+<td>Prometheus text format</td>
+<td>Prometheus text format</td>
+</tr>
+</tbody>
+</table>
+<h3 id="current-format-by-component-v17">Current Format by Component (v1.7+)<a class="headerlink" href="#current-format-by-component-v17" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component / Endpoint</th>
+<th>Exposition Format</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Vertex pods (<code>/metrics</code>)</td>
+<td>OpenMetrics text format</td>
+</tr>
+<tr>
+<td>MonoVertex pods (<code>/metrics</code>)</td>
+<td>OpenMetrics text format</td>
+</tr>
+<tr>
+<td>Serving component (<code>/metrics</code>)</td>
+<td>OpenMetrics text format</td>
+</tr>
+<tr>
+<td>Pipeline Daemon (<code>/metrics</code>)</td>
+<td>Prometheus text format</td>
+</tr>
+<tr>
+<td>MonoVertex Daemon (<code>/metrics</code>)</td>
+<td>Prometheus text format</td>
+</tr>
+<tr>
+<td>Controller Manager (<code>/metrics</code>)</td>
+<td>Prometheus text format</td>
+</tr>
+</tbody>
+</table>
+<h3 id="key-differences-between-formats">Key Differences Between Formats<a class="headerlink" href="#key-differences-between-formats" title="Permanent link">&para;</a></h3>
+<p>The <a href="https://prometheus.io/docs/instrumenting/exposition_formats/#text-based-format">Prometheus text-based exposition format</a> and <a href="https://prometheus.io/docs/instrumenting/exposition_formats/#openmetrics-text-format">OpenMetrics text format</a> are very similar but have subtle differences:</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Prometheus Text Format</th>
+<th>OpenMetrics Text Format</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Counter suffix</td>
+<td><code>_total</code> (optional)</td>
+<td><code>_total</code> <a href="https://github.com/prometheus/OpenMetrics/blob/v1.0.0/specification/OpenMetrics.md#counter-1">required</a></td>
+</tr>
+<tr>
+<td>EOF marker</td>
+<td>Not required</td>
+<td><code># EOF</code> <a href="https://github.com/prometheus/OpenMetrics/blob/v1.0.0/specification/OpenMetrics.md#overall-structure">required</a></td>
+</tr>
+<tr>
+<td>Timestamp format</td>
+<td><a href="https://prometheus.io/docs/instrumenting/exposition_formats/#comments-help-text-and-type-information">Milliseconds</a></td>
+<td><a href="https://github.com/prometheus/OpenMetrics/blob/v1.0.0/specification/OpenMetrics.md#timestamps">Seconds</a></td>
+</tr>
+<tr>
+<td>Info/StateSet types</td>
+<td>Not supported</td>
+<td><a href="https://github.com/prometheus/OpenMetrics/blob/v1.0.0/specification/OpenMetrics.md#stateset">Supported</a></td>
+</tr>
+<tr>
+<td>Exemplars</td>
+<td>Not supported</td>
+<td><a href="https://github.com/prometheus/OpenMetrics/blob/v1.0.0/specification/OpenMetrics.md#exemplars">Supported</a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="collector-configuration">Collector Configuration<a class="headerlink" href="#collector-configuration" title="Permanent link">&para;</a></h3>
+<p>When collecting metrics from Numaflow, ensure you use the appropriate collector for each component:</p>
+<ul>
+<li><strong>For dataplane metrics (vertex/monovertex pods):</strong> Use an OpenMetrics-compatible collector</li>
+<li><strong>For control plane metrics (controller, daemon, ISB):</strong> Use a Prometheus-compatible collector</li>
+</ul>
+<blockquote>
+<p><strong>Note:</strong> Most modern Prometheus-compatible systems (including Prometheus itself) can scrape both formats. 
+The format is auto-detected based on the <code>Content-Type</code> header. However, some collectors may require explicit configuration
+(<a href="https://prometheus.io/docs/instrumenting/content_negotiation/">link</a>)</p>
+</blockquote>
 
               
             </article>
