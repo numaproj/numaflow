@@ -257,14 +257,14 @@ which changed the metrics exposition format from Prometheus text format to OpenM
 
 ### Current Format by Component (v1.7+)
 
-| Component / Endpoint                     | Exposition Format       | Content-Type Header                                        |
-| ---------------------------------------- | ----------------------- | ---------------------------------------------------------- |
-| Vertex pods (`/metrics`)                 | OpenMetrics text format | `application/openmetrics-text; version=1.0.0; charset=utf-8` |
-| MonoVertex pods (`/metrics`)             | OpenMetrics text format | `application/openmetrics-text; version=1.0.0; charset=utf-8` |
-| Serving component (`/metrics`)           | OpenMetrics text format | (default)                                                  |
-| Pipeline Daemon (`/metrics`)             | Prometheus text format  | `text/plain; version=0.0.4; charset=utf-8`                 |
-| MonoVertex Daemon (`/metrics`)           | Prometheus text format  | `text/plain; version=0.0.4; charset=utf-8`                 |
-| Controller Manager (`/metrics`)          | Prometheus text format  | `text/plain; version=0.0.4; charset=utf-8`                 |
+| Component / Endpoint                     | Exposition Format       |
+| ---------------------------------------- | ----------------------- |
+| Vertex pods (`/metrics`)                 | OpenMetrics text format |
+| MonoVertex pods (`/metrics`)             | OpenMetrics text format |
+| Serving component (`/metrics`)           | OpenMetrics text format |
+| Pipeline Daemon (`/metrics`)             | Prometheus text format  |
+| MonoVertex Daemon (`/metrics`)           | Prometheus text format  |
+| Controller Manager (`/metrics`)          | Prometheus text format  |
 
 ### Key Differences Between Formats
 
