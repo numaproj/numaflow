@@ -1,5 +1,5 @@
 [package]
-name = "numaflow-mvtx-daemon"
+name = "numaflow-daemon"
 version = "0.1.0"
 edition = "2024"
 
@@ -8,3 +8,4 @@ tracing.workspace = true
 
 [lints]
 workspace = true
+

@@ -3,6 +3,12 @@ use clap::{Command, arg};
 /// SideInput Command Line Interface
 pub(crate) mod sideinput;
 
+// The command argument "mvtx-daemon-server" matches the one passed to the daemon server container
+// at pkg/apis/numaflow/v1alpha1/mono_vertex_types.go GetDaemonDeploymentObj()
+// It's used to instruct the container to run the MonoVertex Daemon Server.
+// Changing this value without updating the corresponding value in the Go code will result in a mismatch.
+pub(crate) const CMD_ARG_MVTX_DAEMON_SERVER: &str = "mvtx-daemon-server";
+
 pub(super) fn root_cli() -> Command {
     Command::new("numaflow")
         .author("Numaflow Authors")
@@ -44,9 +50,7 @@ fn add_serving_subcommand() -> Command {
 }
 
 fn add_mvtx_daemon_server_subcommand() -> Command {
-    // the command argument "mvtx-daemon-server" matches the one passed to the daemon server container
-    // at pkg/apis/numaflow/v1alpha1/mono_vertex_types.go GetDaemonDeploymentObj()
-    Command::new("mvtx-daemon-server").about("MonoVertex Daemon Server")
+    Command::new(CMD_ARG_MVTX_DAEMON_SERVER).about("MonoVertex Daemon Server")
 }
 
 #[cfg(test)]

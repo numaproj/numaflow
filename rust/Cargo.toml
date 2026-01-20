@@ -7,7 +7,7 @@ members = [
     "numaflow",
     "numaflow-monitor",
     "numaflow-sideinput",
-    "numaflow-mvtx-daemon",
+    "numaflow-daemon",
     "numaflow-shared",
     "numaflow-throttling",
     # extensions
@@ -67,7 +67,7 @@ numaflow-core = { path = "numaflow-core" }
 numaflow-models = { path = "numaflow-models" }
 numaflow-monitor = { path = "numaflow-monitor" }
 numaflow-sideinput = { path = "numaflow-sideinput" }
-numaflow-mvtx-daemon = { path = "numaflow-mvtx-daemon" }
+numaflow-daemon = { path = "numaflow-daemon" }
 numaflow-shared = { path = "numaflow-shared" }
 backoff = { path = "backoff" }
 numaflow-pb = { path = "numaflow-pb" }

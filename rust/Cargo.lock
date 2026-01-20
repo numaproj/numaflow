@@ -2434,8 +2434,8 @@ dependencies = [
  "chrono",
  "clap",
  "numaflow-core",
+ "numaflow-daemon",
  "numaflow-monitor",
- "numaflow-mvtx-daemon",
  "numaflow-sideinput",
  "rustls 0.23.31",
  "serving",
@@ -2549,6 +2549,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "numaflow-daemon"
+version = "0.1.0"
+dependencies = [
+ "tracing",
+]
+
+[[package]]
 name = "numaflow-http"
 version = "0.1.0"
 dependencies = [
@@ -2620,13 +2627,6 @@ dependencies = [
  "tonic 0.14.2",
  "tonic-types",
  "tower",
- "tracing",
-]
-
-[[package]]
-name = "numaflow-mvtx-daemon"
-version = "0.1.0"
-dependencies = [
  "tracing",
 ]
 
