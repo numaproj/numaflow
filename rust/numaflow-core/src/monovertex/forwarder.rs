@@ -1130,6 +1130,137 @@ mod tests {
         .await;
     }
 
+    struct PanickingConditionalTransformer {
+        sink_max_count: usize,
+        fallback_max_count: usize,
+        on_success_max_count: usize,
+        sink_count: AtomicUsize,
+        fallback_count: AtomicUsize,
+        on_success_count: AtomicUsize,
+        sink_tags: Option<Vec<String>>,
+        fallback_tags: Option<Vec<String>>,
+        on_success_tags: Option<Vec<String>>,
+    }
+
+    impl PanickingConditionalTransformer {
+        pub(crate) fn new(
+            sink_count: usize,
+            fallback_count: usize,
+            on_success_count: usize,
+            sink_tags: Option<Vec<String>>,
+            fallback_tags: Option<Vec<String>>,
+            on_success_tags: Option<Vec<String>>,
+        ) -> Self {
+            Self {
+                sink_max_count: sink_count,
+                fallback_max_count: fallback_count,
+                on_success_max_count: on_success_count,
+                sink_count: AtomicUsize::new(0),
+                fallback_count: AtomicUsize::new(0),
+                on_success_count: AtomicUsize::new(0),
+                sink_tags,
+                fallback_tags,
+                on_success_tags,
+            }
+        }
+    }
+
+    #[tonic::async_trait]
+    impl sourcetransform::SourceTransformer for PanickingConditionalTransformer {
+        async fn transform(
+            &self,
+            input: sourcetransform::SourceTransformRequest,
+        ) -> Vec<sourcetransform::Message> {
+            let message =
+                sourcetransform::Message::new(input.value, Utc::now()).with_keys(input.keys);
+
+            let message = if self.sink_count.load(Ordering::SeqCst) < self.sink_max_count {
+                self.sink_count.fetch_add(1, Ordering::SeqCst);
+                message.with_tags(
+                    self.sink_tags
+                        .clone()
+                        .expect("sink_tags is None when sink_max_count > 0"),
+                )
+            } else if self.fallback_count.load(Ordering::SeqCst) < self.fallback_max_count {
+                self.fallback_count.fetch_add(1, Ordering::SeqCst);
+                message.with_tags(
+                    self.fallback_tags
+                        .clone()
+                        .expect("fallback_tags is None when fallback_max_count > 0"),
+                )
+            } else if self.on_success_count.load(Ordering::SeqCst) < self.on_success_max_count {
+                self.on_success_count.fetch_add(1, Ordering::SeqCst);
+                panic!("on_success_count reached max count");
+            } else {
+                message
+            };
+
+            vec![message]
+        }
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn test_source_transformer_with_bypass_panics() {
+        let tracker = Tracker::new(None, CancellationToken::new());
+
+        // create the source which produces x number of messages
+        let cln_token = CancellationToken::new();
+
+        // create the bypass router config to pass to the forwarder
+        let batch_size: usize = 10;
+        let sink_tags = vec!["sink".to_string()];
+        let fallback_tags = vec!["fallback".to_string()];
+        let on_success_tags = vec!["on_success".to_string()];
+        let conditions = BypassConditions {
+            sink: None,
+            fallback: Some(Box::new(ForwardConditions::new(TagConditions {
+                values: fallback_tags.clone(),
+                operator: Some("or".to_string()),
+            }))),
+            on_success: Some(Box::new(ForwardConditions::new(TagConditions {
+                values: on_success_tags.clone(),
+                operator: Some("or".to_string()),
+            }))),
+        };
+        let bypass_router_config =
+            BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
+
+        // Create the source
+        let source_handle = create_ud_source(
+            SimpleSource::new(100),
+            Some(PanickingConditionalTransformer::new(
+                0,
+                10,
+                10,
+                None,
+                Some(fallback_tags),
+                Some(on_success_tags),
+            )),
+            batch_size,
+            cln_token.clone(),
+            tracker.clone(),
+        )
+        .await;
+
+        let sink_handle = create_sink(
+            SinkType::UserDefined(SinkLog::new()),
+            Some(SinkType::BuiltIn(SinkClientType::Log)),
+            Some(SinkType::BuiltIn(SinkClientType::Log)),
+            batch_size,
+        )
+        .await;
+
+        start_forwarder_test(
+            source_handle,
+            None,
+            sink_handle,
+            Some(bypass_router_config),
+            cln_token,
+        )
+        .await;
+    }
+
     struct SourceTransformerTestHandle {
         shutdown_tx: oneshot::Sender<()>,
         transformer: Transformer,
