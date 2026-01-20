@@ -11,7 +11,7 @@ These metrics in combination can be used to determine the overall health of your
 These metrics can be used to determine throughput of your pipeline.
 
 | Metric name                                | Metric type | Labels                                                                                                                                                        | Description                                                                                                     |
-| ------------------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+|--------------------------------------------| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |-----------------------------------------------------------------------------------------------------------------|
 | `forwarder_read_total`                     | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of messages read by a given Vertex from an Inter-Step Buffer Partition or Source      |
 | `forwarder_data_read_total`                | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of data messages read by a given Vertex from an Inter-Step Buffer Partition or Source |
 | `forwarder_read_bytes_total`               | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of bytes read by a given Vertex from an Inter-Step Buffer Partition or Source         |
@@ -22,6 +22,8 @@ These metrics can be used to determine throughput of your pipeline.
 | `source_forwarder_transformer_write_total` | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=Source` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>`        | Provides the total number of messages written by source transformer                                             |
 | `forwarder_fbsink_write_total`             | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of messages written to a fallback sink                                                |
 | `forwarder_fbsink_write_bytes_total`       | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of bytes written to a fallback sink                                                   |
+| `forwarder_onssink_write_total`            | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of messages written to a on-success sink                                              |
+| `forwarder_onssink_write_bytes_total`      | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of bytes written to a on-success sink                                                 |
 | `forwarder_ack_total`                      | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of messages acknowledged by a given Vertex from an Inter-Step Buffer Partition        |
 | `forwarder_drop_total`                     | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of messages dropped by a given Vertex due to a full Inter-Step Buffer Partition       |
 | `forwarder_drop_bytes_total`               | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the total number of bytes dropped by a given Vertex due to a full Inter-Step Buffer Partition          |
@@ -33,13 +35,14 @@ These metrics can be used to determine throughput of your pipeline.
 These metrics can be used to determine the latency of your pipeline.
 
 | Metric name                                    | Metric type | Labels                                                                                                                                                        | Description                                                                                                    |
-| ---------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+|------------------------------------------------| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |----------------------------------------------------------------------------------------------------------------|
 | `pipeline_processing_lag`                      | Gauge       | `pipeline=<pipeline-name>`                                                                                                                                    | Pipeline processing lag in milliseconds (max watermark - min watermark)                                        |
 | `pipeline_watermark_cmp_now`                   | Gauge       | `pipeline=<pipeline-name>`                                                                                                                                    | Max watermark of source compared with current time in milliseconds                                             |
 | `forwarder_read_processing_time`               | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the histogram distribution of the processing times of read operations                                 |
 | `forwarder_write_processing_time`              | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the histogram distribution of the processing times of write operations                                |
 | `forwarder_ack_processing_time`                | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the histogram distribution of the processing times of ack operations                                  |
 | `forwarder_fbsink_write_processing_time`       | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the histogram distribution of the processing times of write operations to a fallback sink             |
+| `forwarder_onssink_write_processing_time`      | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides the histogram distribution of the processing times of write operations to a on-success sink           |
 | `source_forwarder_transformer_processing_time` | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=Source` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>`        | Provides a histogram distribution of the processing times of source transformer                                |
 | `forwarder_udf_processing_time`                | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>`                                        | Provides a histogram distribution of the processing times of User-defined Functions (UDFs) in a map vertex     |
 | `forwarder_forward_chunk_processing_time`      | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>`                                        | Provides a histogram distribution of the processing times of the forwarder function as a whole in a map vertex |
@@ -53,7 +56,7 @@ These metrics can be used to determine the latency of your pipeline.
 These metrics can be used to determine if there are any errors in the pipeline.
 
 | Metric name                                | Metric type | Labels                                                                                                                                                        | Description                                                                                     |
-| ------------------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+|--------------------------------------------| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |-------------------------------------------------------------------------------------------------|
 | `pipeline_data_processing_health`          | Gauge       | `pipeline=<pipeline-name>`                                                                                                                                    | Pipeline data processing health status. 1: Healthy, 0: Unknown, -1: Warning, -2: Critical       |
 | `controller_isbsvc_health`                 | Gauge       | `ns=<namespace>` <br> `isbsvc=<isbsvc-name>`                                                                                                                  | A metric to indicate whether the ISB Service is healthy. '1' means healthy, '0' means unhealthy |
 | `controller_pipeline_health`               | Gauge       | `ns=<namespace>` <br> `pipeline=<pipeline-name>`                                                                                                              | A metric to indicate whether the Pipeline is healthy. '1' means healthy, '0' means unhealthy    |
@@ -63,6 +66,7 @@ These metrics can be used to determine if there are any errors in the pipeline.
 | `source_forwarder_transformer_error_total` | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=Source` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>`        | Indicates source transformer errors                                                             |
 | `forwarder_write_error_total`              | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` `vertex_type=<vertex-type>` <br> <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Indicates any errors while writing messages by the forwarder                                    |
 | `forwarder_fbsink_write_error_total`       | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` `vertex_type=<vertex-type>` <br> <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Indicates any errors while writing to a fallback sink                                           |
+| `forwarder_onssink_write_error_total`      | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` `vertex_type=<vertex-type>` <br> <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Indicates any errors while writing to a on-success sink                                         |
 | `forwarder_ack_error_total`                | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Indicates any errors while acknowledging messages by the forwarder                              |
 | `kafka_sink_write_timeout_total`           | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>`                                                                                                        | Provides the write timeouts while writing to the Kafka sink                                     |
 | `isb_jetstream_read_error_total`           | Counter     | `buffer=<buffer-name>`                                                                                                                                        | Indicates any read errors with NATS Jetstream ISB                                               |
@@ -99,6 +103,57 @@ These metrics can be used to determine if there are any errors in the pipeline.
 | `controller_monovtx_current_replicas` | Gauge       | `ns=<namespace>` <br> `mvtx_name=<mvtx>`                                                                                                          | A metric indicates the current replicas of a MonoVertex                                                                                                                                  |
 | `controller_monovtx_min_replicas`     | Gauge       | `ns=<namespace>` <br> `mvtx_name=<mvtx>`                                                                                                          | A metric indicates the min replicas of a MonoVertex                                                                                                                                      |
 | `controller_monovtx_max_replicas`     | Gauge       | `ns=<namespace>` <br> `mvtx_name=<mvtx>`                                                                                                          | A metric indicates the max replicas of a MonoVertex                                                                                                                                      |
+
+## MonoVertex Metrics
+
+| Metric name                  | Metric type | Labels                                                           | Description                                                              |
+| ---------------------------- | ----------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `monovtx_read_total`         | Counter     | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total number of messages read from the source               |
+| `monovtx_read_bytes_total`   | Counter     | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total number of bytes read from the source                  |
+| `monovtx_ack_total`          | Counter     | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total number of messages acknowledged by the sink           |
+| `monovtx_dropped_total`      | Counter     | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total number of messages dropped by the monovertex          |
+| `monovtx_pending_raw`        | Gauge       | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total number of source pending messages for the monovertex  |
+| `monovtx_read_batch_size`    | Gauge       | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the read batch size for the monovertex                          |
+| `monovtx_processing_time`    | Histogram   | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total time taken to forward a chunk, in microseconds        |
+| `monovtx_read_time`          | Histogram   | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total time taken to read from the source, in microseconds   |
+| `monovtx_ack_time`           | Histogram   | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total time taken to ack to the source, in microseconds      |
+
+### Transformer Metrics
+
+| Metric name                          | Metric type | Labels                                                           | Description                                                         |
+| ------------------------------------ | ----------- | ---------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `monovtx_transformer_time`           | Histogram   | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total time taken to transform, in microseconds         |
+| `monovtx_transformer_dropped_total`  | Counter     | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total number of messages dropped by the transformer    |
+
+### UDF Metrics
+
+| Metric name                 | Metric type | Labels                                                           | Description                                                 |
+| --------------------------- | ----------- | ---------------------------------------------------------------- | ----------------------------------------------------------- |
+| `monovtx_udf_time`          | Histogram   | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total time taken in UDF, in microseconds       |
+| `monovtx_udf_udf_error_total` | Counter   | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total number of UDF errors                     |
+
+### Sink Metrics
+
+| Metric name                     | Metric type | Labels                                                           | Description                                                          |
+| ------------------------------- | ----------- | ---------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `monovtx_sink_write_total`      | Counter     | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total number of messages written to the sink            |
+| `monovtx_sink_time`             | Histogram   | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total time taken to write to the sink, in microseconds  |
+| `monovtx_sink_write_errors_total` | Counter   | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total number of write errors for the sink               |
+| `monovtx_sink_dropped_total`    | Counter     | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total number of messages dropped by sink                |
+
+### Fallback Sink Metrics
+
+| Metric name                        | Metric type | Labels                                                           | Description                                                                    |
+| ---------------------------------- | ----------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `monovtx_fallback_sink_write_total` | Counter    | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total number of messages written to the fallback sink             |
+| `monovtx_fallback_sink_time`       | Histogram   | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total time taken to write to the fallback sink, in microseconds   |
+
+### On-Success Sink Metrics
+
+| Metric name                          | Metric type | Labels                                                           | Description                                                                      |
+| ------------------------------------ | ----------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `monovtx_onsuccess_sink_write_total` | Counter     | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total number of messages written to the on-success sink             |
+| `monovtx_onsuccess_sink_time`        | Histogram   | `mvtx_name=<monovertex-name>` <br> `mvtx_replica=<replica-index>` | Provides the total time taken to write to the on-success sink, in microseconds   |
 
 ## Prometheus Operator for Scraping Metrics:
 
@@ -217,7 +272,7 @@ spec:
       app.kubernetes.io/part-of: numaflow
 ```
 
-### Configure the below Service Monitor if you use the NATS Jetstream ISB for your NATS Jetstream metrics:
+### Configure the below Service Monitor if you use the NATS Jetstream ISB for your NATS Jetstream metrics
 
 ```yaml
 apiVersion: monitoring.coreos.com/v1
