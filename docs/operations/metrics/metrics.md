@@ -248,6 +248,7 @@ Starting with Numaflow **v1.7**, the dataplane (vertex pods, monovertex pods) wa
 metrics exposition format from Prometheus text format to OpenMetrics text format due to the switch from using 
 `client_golang` [prometheus client](https://github.com/prometheus/client_golang) to 
 `client_rust` [prometheus client](https://github.com/prometheus/client_rust) for exposing metrics.
+As we rewrite other parts (e.g., daemon server), they will also adopt OpenMetrics text format. Controller will be in Prometheus text format for the foreseeable future. 
 
 ### Version Differences
 
