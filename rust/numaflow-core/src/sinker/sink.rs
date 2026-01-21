@@ -611,18 +611,18 @@ impl SinkWriter {
             ));
             pipeline_metrics()
                 .sink_forwarder
-                .onssink_write_total
+                .onsuccess_sink_write_total
                 .get_or_create(&labels)
                 .inc_by(messages_count as u64);
             pipeline_metrics()
                 .sink_forwarder
-                .onssink_write_bytes_total
+                .onsuccess_sink_write_bytes_total
                 .get_or_create(&labels)
                 .inc_by(messages_size as u64);
 
             pipeline_metrics()
                 .sink_forwarder
-                .onssink_write_processing_time
+                .onsuccess_sink_write_processing_time
                 .get_or_create(&labels)
                 .observe(ons_sink_start.elapsed().as_micros() as f64);
         }

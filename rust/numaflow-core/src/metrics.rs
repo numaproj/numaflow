@@ -85,7 +85,7 @@ const UDF_ERROR_TOTAL: &str = "udf_error";
 const SINK_WRITE_TOTAL: &str = "write";
 const SINK_WRITE_ERRORS_TOTAL: &str = "write_errors";
 const FALLBACK_SINK_WRITE_ERRORS_TOTAL: &str = "fbsink_write_errors";
-const ON_SUCCESS_SINK_WRITE_ERRORS_TOTAL: &str = "onssink_write_errors";
+const ON_SUCCESS_SINK_WRITE_ERRORS_TOTAL: &str = "onsuccess_sink_write_errors";
 
 const SINK_DROPPED_TOTAL: &str = "dropped";
 const DROPPED_TOTAL: &str = "dropped";
@@ -97,8 +97,8 @@ const FALLBACK_SINK_WRITE_TOTAL: &str = "write";
 const PIPELINE_FALLBACK_SINK_WRITE_TOTAL: &str = "fbsink_write";
 const PIPELINE_FALLBACK_SINK_WRITE_BYTES_TOTAL: &str = "fbsink_write_bytes";
 const ON_SUCCESS_SINK_WRITE_TOTAL: &str = "write";
-const PIPELINE_ON_SUCCESS_SINK_WRITE_TOTAL: &str = "onssink_write";
-const PIPELINE_ON_SUCCESS_SINK_WRITE_BYTES_TOTAL: &str = "onssink_write_bytes";
+const PIPELINE_ON_SUCCESS_SINK_WRITE_TOTAL: &str = "onsuccess_sink_write";
+const PIPELINE_ON_SUCCESS_SINK_WRITE_BYTES_TOTAL: &str = "onsuccess_sink_write_bytes";
 const TRANSFORMER_DROPPED_TOTAL: &str = "dropped";
 const UDF_DROPPED_TOTAL: &str = "dropped";
 const TRANSFORMER_ERROR_TOTAL: &str = "transformer_error";
@@ -136,7 +136,7 @@ const ACK_PROCESSING_TIME: &str = "ack_processing_time";
 const TRANSFORMER_PROCESSING_TIME: &str = "transformer_processing_time";
 const UDF_PROCESSING_TIME: &str = "udf_processing_time";
 const FALLBACK_SINK_WRITE_PROCESSING_TIME: &str = "fbsink_write_processing_time";
-const ON_SUCCESS_SINK_WRITE_PROCESSING_TIME: &str = "onssink_write_processing_time";
+const ON_SUCCESS_SINK_WRITE_PROCESSING_TIME: &str = "onsuccess_sink_write_processing_time";
 const TRANSFORM_TIME: &str = "time";
 const UDF_TIME: &str = "time";
 const ACK_TIME: &str = "ack_time";
@@ -455,12 +455,12 @@ pub(crate) struct SinkForwarderMetrics {
     pub(crate) fbsink_write_processing_time: Family<Vec<(String, String)>, Histogram>,
 
     // on-success sink counters
-    pub(crate) onssink_write_total: Family<Vec<(String, String)>, Counter>,
-    pub(crate) onssink_write_bytes_total: Family<Vec<(String, String)>, Counter>,
-    pub(crate) onssink_write_error_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) onsuccess_sink_write_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) onsuccess_sink_write_bytes_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) onsuccess_sink_write_error_total: Family<Vec<(String, String)>, Counter>,
 
     // on-success sink histograms
-    pub(crate) onssink_write_processing_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) onsuccess_sink_write_processing_time: Family<Vec<(String, String)>, Histogram>,
 }
 
 impl SinkForwarderMetrics {
@@ -473,10 +473,10 @@ impl SinkForwarderMetrics {
                 Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                     Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
                 }),
-            onssink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
-            onssink_write_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
-            onssink_write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
-            onssink_write_processing_time:
+            onsuccess_sink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
+            onsuccess_sink_write_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+            onsuccess_sink_write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            onsuccess_sink_write_processing_time:
                 Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                     Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
                 }),
@@ -925,22 +925,22 @@ impl PipelineMetrics {
         sink_forwarder_registry.register(
             ON_SUCCESS_SINK_WRITE_ERRORS_TOTAL,
             "Total number of Write Errors while writing to a on-success sink",
-            metrics.sink_forwarder.onssink_write_error_total.clone(),
+            metrics.sink_forwarder.onsuccess_sink_write_error_total.clone(),
         );
         sink_forwarder_registry.register(
             PIPELINE_ON_SUCCESS_SINK_WRITE_TOTAL,
             "Total number of Messages written to a on-success sink",
-            metrics.sink_forwarder.onssink_write_total.clone(),
+            metrics.sink_forwarder.onsuccess_sink_write_total.clone(),
         );
         sink_forwarder_registry.register(
             PIPELINE_ON_SUCCESS_SINK_WRITE_BYTES_TOTAL,
             "Total number of bytes written to a on-success sink",
-            metrics.sink_forwarder.onssink_write_bytes_total.clone(),
+            metrics.sink_forwarder.onsuccess_sink_write_bytes_total.clone(),
         );
         sink_forwarder_registry.register(
             ON_SUCCESS_SINK_WRITE_PROCESSING_TIME,
             "Processing times of write operations to a on-success sink (100 microseconds to 20 minutes)",
-            metrics.sink_forwarder.onssink_write_processing_time.clone(),
+            metrics.sink_forwarder.onsuccess_sink_write_processing_time.clone(),
         );
     }
 
