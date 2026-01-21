@@ -1,4 +1,7 @@
-use numaflow_sqs::sink::{SqsSink, SqsSinkMessage};
+use numaflow_sqs::{
+    SQS_METADATA_KEY,
+    sink::{SqsSink, SqsSinkMessage},
+};
 
 use crate::error;
 use crate::error::Error;
@@ -13,10 +16,18 @@ impl TryFrom<Message> for SqsSinkMessage {
         let mut headers = (*msg.headers).clone();
 
         if let Some(metadata) = &msg.metadata {
-            if let Some(sqs_meta) = metadata.user_metadata.get("sqs") {
+            if let Some(sqs_meta) = metadata.user_metadata.get(SQS_METADATA_KEY) {
                 for (k, v) in &sqs_meta.key_value {
-                    if let Ok(val_str) = String::from_utf8(v.to_vec()) {
-                        headers.insert(k.clone(), val_str);
+                    match String::from_utf8(v.to_vec()) {
+                        Ok(val_str) => {
+                            headers.insert(k.clone(), val_str);
+                        }
+                        Err(_) => {
+                            tracing::warn!(
+                                key = %k,
+                                "Skipping SQS metadata key: value is not valid UTF-8"
+                            );
+                        }
                     }
                 }
             }
@@ -149,7 +160,7 @@ mod unit_tests {
 
         let mut user_metadata = HashMap::new();
         user_metadata.insert(
-            "sqs".to_string(),
+            SQS_METADATA_KEY.to_string(),
             KeyValueGroup {
                 key_value: sqs_custom,
             },
@@ -213,7 +224,7 @@ mod unit_tests {
 
         let mut user_metadata = HashMap::new();
         user_metadata.insert(
-            "sqs".to_string(),
+            SQS_METADATA_KEY.to_string(),
             KeyValueGroup {
                 key_value: sqs_custom,
             },

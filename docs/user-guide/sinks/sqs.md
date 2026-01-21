@@ -72,6 +72,120 @@ In this example, `MessageGroupId` and `MessageDeduplicationId` from the source q
 
 User-defined functions can set SQS headers by writing to the `sqs` metadata namespace. These values are merged into the message headers at the sink, allowing UDFs to control FIFO ordering or set delay seconds.
 
+=== "Python"
+
+    ```python
+    from pynumaflow.mapper import Messages, Message, Datum, Mapper
+    
+    def my_handler(keys: list[str], datum: Datum) -> Messages:
+        # Process the message
+        payload = datum.value
+        
+        # Set SQS-specific metadata
+        messages = Messages()
+        messages.append(
+            Message(
+                value=payload,
+                keys=keys,
+                tags=[],
+                metadata={
+                    "sqs": {
+                        "MessageGroupId": "order-processing",
+                        "MessageDeduplicationId": f"dedup-{datum.id}",
+                        "DelaySeconds": "10"
+                    }
+                }
+            )
+        )
+        return messages
+    
+    if __name__ == "__main__":
+        grpc_server = Mapper(handler=my_handler)
+        grpc_server.start()
+    ```
+
+=== "Go"
+
+    ```go
+    package main
+    
+    import (
+        "context"
+        "log"
+    
+        "github.com/numaproj/numaflow-go/pkg/mapper"
+    )
+    
+    func handle(_ context.Context, keys []string, d mapper.Datum) mapper.Messages {
+        // Process the message
+        payload := d.Value()
+        
+        // Set SQS-specific metadata
+        return mapper.MessagesBuilder().
+            Append(
+                mapper.NewMessage(payload).
+                    WithKeys(keys).
+                    WithMetadata(map[string]map[string]string{
+                        "sqs": {
+                            "MessageGroupId":        "order-processing",
+                            "MessageDeduplicationId": "dedup-" + string(d.ID()),
+                            "DelaySeconds":          "10",
+                        },
+                    }),
+            ).
+            Build()
+    }
+    
+    func main() {
+        if err := mapper.NewServer(mapper.MapperFunc(handle)).Start(context.Background()); err != nil {
+            log.Fatal(err)
+        }
+    }
+    ```
+
+=== "Java"
+
+    ```java
+    package io.numaproj.examples;
+    
+    import io.numaproj.numaflow.mapper.*;
+    
+    import java.util.HashMap;
+    import java.util.Map;
+    
+    public class SqsMetadataMapper extends Mapper {
+    
+        @Override
+        public MessageList processMessage(String[] keys, Datum datum) {
+            // Process the message
+            byte[] payload = datum.getValue();
+            
+            // Set SQS-specific metadata
+            Map<String, Map<String, String>> metadata = new HashMap<>();
+            Map<String, String> sqsMetadata = new HashMap<>();
+            sqsMetadata.put("MessageGroupId", "order-processing");
+            sqsMetadata.put("MessageDeduplicationId", "dedup-" + datum.getId());
+            sqsMetadata.put("DelaySeconds", "10");
+            metadata.put("sqs", sqsMetadata);
+            
+            return MessageList.newBuilder()
+                    .addMessage(
+                            Message.newBuilder()
+                                    .value(payload)
+                                    .keys(keys)
+                                    .metadata(metadata)
+                                    .build())
+                    .build();
+        }
+    
+        public static void main(String[] args) throws Exception {
+            Server server = new Server(new SqsMetadataMapper());
+            server.start();
+            server.awaitTermination();
+        }
+    }
+    ```
+
 ## Example Pipeline
 
 ```yaml

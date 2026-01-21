@@ -20,6 +20,9 @@ use tracing;
 pub mod sink;
 pub mod source;
 
+/// Metadata key used for SQS-specific attributes in message metadata
+pub const SQS_METADATA_KEY: &str = "sqs";
+
 /// Simple assume role configuration struct for the SQS client
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssumeRoleConfig {
@@ -64,7 +67,7 @@ pub enum Error {
 
 /// Extracts a user-friendly error message from AWS SDK errors.
 /// Returns format: "ErrorCode: Error message" or falls back to string representation.
-pub fn extract_aws_error<E, R>(err: &aws_sdk_sqs::error::SdkError<E, R>) -> String
+pub(crate) fn extract_aws_error<E, R>(err: &aws_sdk_sqs::error::SdkError<E, R>) -> String
 where
     E: ProvideErrorMetadata,
 {

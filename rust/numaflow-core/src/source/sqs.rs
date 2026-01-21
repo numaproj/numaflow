@@ -149,7 +149,10 @@ pub mod tests {
     use aws_smithy_mocks::{MockResponseInterceptor, Rule, RuleMode, mock};
     use bytes::Bytes;
     use chrono::Utc;
-    use numaflow_sqs::source::{SQS_DEFAULT_REGION, SqsSourceBuilder};
+    use numaflow_sqs::{
+        SQS_METADATA_KEY,
+        source::{SQS_DEFAULT_REGION, SqsSourceBuilder},
+    };
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
 
@@ -197,7 +200,7 @@ pub mod tests {
         sqs_custom_attrs.insert("correlation_id".to_string(), b"xyz789".to_vec());
 
         let mut custom_attributes = HashMap::new();
-        custom_attributes.insert("sqs".to_string(), sqs_custom_attrs);
+        custom_attributes.insert(SQS_METADATA_KEY.to_string(), sqs_custom_attrs);
 
         let sqs_message = SqsMessage {
             key: "key".to_string(),
@@ -221,9 +224,9 @@ pub mod tests {
         );
 
         let metadata = message.metadata.expect("missing metadata");
-        assert!(metadata.user_metadata.contains_key("sqs"));
+        assert!(metadata.user_metadata.contains_key(SQS_METADATA_KEY));
 
-        let sqs_meta = metadata.user_metadata.get("sqs").unwrap();
+        let sqs_meta = metadata.user_metadata.get(SQS_METADATA_KEY).unwrap();
         assert_eq!(
             sqs_meta.key_value.get("trace_id").map(|v| v.as_ref()),
             Some(b"abc123".as_slice())

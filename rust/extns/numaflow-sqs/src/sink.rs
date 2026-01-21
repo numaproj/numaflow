@@ -142,8 +142,22 @@ impl SqsSink {
                 .message_body(String::from_utf8_lossy(&message.message_body).to_string());
 
             if let Some(delay) = message.headers.get("DelaySeconds") {
-                if let Ok(delay_val) = delay.parse::<i32>() {
-                    entry = entry.delay_seconds(delay_val);
+                match delay.parse::<i32>() {
+                    Ok(delay_val) if delay_val >= 0 => {
+                        entry = entry.delay_seconds(delay_val);
+                    }
+                    Ok(delay_val) => {
+                        tracing::warn!(
+                            delay_seconds = delay_val,
+                            "Invalid DelaySeconds: must be non-negative, ignoring"
+                        );
+                    }
+                    Err(_) => {
+                        tracing::warn!(
+                            delay_seconds = %delay,
+                            "Invalid DelaySeconds: failed to parse as integer, ignoring"
+                        );
+                    }
                 }
             }
 
