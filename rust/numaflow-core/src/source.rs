@@ -12,6 +12,7 @@ use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_metric_labels, pipeline_metrics,
 };
+use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::source::http::CoreHttpSource;
 use crate::tracker::Tracker;
 use crate::{
@@ -397,6 +398,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     pub(crate) fn streaming_read(
         mut self,
         cln_token: CancellationToken,
+        bypass_router: Option<MvtxBypassRouter>,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.read_batch_size);
 
@@ -548,10 +550,19 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
                 // write the messages to downstream.
                 for message in messages {
-                    messages_tx
-                        .send(message)
-                        .await
-                        .expect("send should not fail");
+                    if let Some(ref bypass_router) = bypass_router
+                        && bypass_router
+                            .try_bypass(message.clone())
+                            .await
+                            .expect("failed to send message to bypass channel")
+                    {
+                        continue;
+                    } else {
+                        messages_tx
+                            .send(message)
+                            .await
+                            .expect("send should not fail");
+                    }
                 }
             }
             info!(status=?result, "Source stopped, waiting for inflight messages to be acked/nacked");
@@ -968,7 +979,10 @@ mod tests {
 
         let sender = source.sender.clone();
 
-        let (mut stream, handle) = source.clone().streaming_read(cln_token.clone()).unwrap();
+        let (mut stream, handle) = source
+            .clone()
+            .streaming_read(cln_token.clone(), None)
+            .unwrap();
         let mut offsets = vec![];
         let mut messages = Vec::with_capacity(50);
         // we should read all the 100 messages

@@ -7,6 +7,7 @@ members = [
     "numaflow",
     "numaflow-monitor",
     "numaflow-sideinput",
+    "numaflow-daemon",
     "numaflow-shared",
     "numaflow-throttling",
     # extensions
@@ -66,6 +67,7 @@ numaflow-core = { path = "numaflow-core" }
 numaflow-models = { path = "numaflow-models" }
 numaflow-monitor = { path = "numaflow-monitor" }
 numaflow-sideinput = { path = "numaflow-sideinput" }
+numaflow-daemon = { path = "numaflow-daemon" }
 numaflow-shared = { path = "numaflow-shared" }
 backoff = { path = "backoff" }
 numaflow-pb = { path = "numaflow-pb" }
@@ -75,9 +77,9 @@ numaflow-kafka = { path = "extns/numaflow-kafka" }
 numaflow-sqs = { path = "extns/numaflow-sqs" }
 numaflow-http = { path = "extns/numaflow-http" }
 numaflow-throttling = { path = "numaflow-throttling" }
-tokio = { version = "1.46.0", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread", "time"] }
 tokio-stream = "0.1.17"
-tokio-util = "0.7.15"
+tokio-util = { version = "0.7", features = ["rt"] }
 bytes = "1.9.0"
 tracing = "0.1.41"
 async-nats = "0.44.2"
