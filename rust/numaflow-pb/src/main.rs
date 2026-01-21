@@ -48,7 +48,6 @@ fn build_server() {
         .build_client(false)
         .build_server(true)
         .out_dir("src/servers")
-        //.extern_path(".metadata", "crate::common::metadata")
         .compile_protos(
             &[
                 "proto/daemon/daemon.proto",
