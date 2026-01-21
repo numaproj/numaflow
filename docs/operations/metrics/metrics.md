@@ -299,7 +299,7 @@ spec:
 
 ## Metrics Exposition Format
 
-Starting with Numaflow **v1.7**, the dataplane (vertex pods, monovertex pods) was rewritten in Rust, which changed the 
+Starting with Numaflow **v1.6**, the dataplane (vertex pods, monovertex pods) was rewritten in Rust, which changed the 
 metrics exposition format from Prometheus text format to OpenMetrics text format due to the switch from using 
 `client_golang` [prometheus client](https://github.com/prometheus/client_golang) to 
 `client_rust` [prometheus client](https://github.com/prometheus/client_rust) for exposing metrics.
@@ -307,13 +307,19 @@ As we rewrite other parts (e.g., daemon server), they will also adopt OpenMetric
 
 ### Version Differences
 
-| Component                | Numaflow ≤ v1.5        | Numaflow ≥ v1.7         |
+| Component                | Numaflow < v1.6        | Numaflow ≥ v1.6         |
 | ------------------------ |------------------------|-------------------------|
 | **Dataplane (vertices)** | Prometheus text format | OpenMetrics text format |
 | **Controller**           | Prometheus text format | Prometheus text format  |
 | **Daemon**               | Prometheus text format | Prometheus text format  |
 
-### Current Format by Component (v1.7+)
+### Format by Component
+
+#### Numaflow v1.5.x and below
+
+Prometheus text format across all components
+
+#### Numaflow v1.6 and above
 
 | Component / Endpoint                     | Exposition Format       |
 | ---------------------------------------- | ----------------------- |
