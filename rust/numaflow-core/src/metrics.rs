@@ -925,7 +925,10 @@ impl PipelineMetrics {
         sink_forwarder_registry.register(
             ON_SUCCESS_SINK_WRITE_ERRORS_TOTAL,
             "Total number of Write Errors while writing to a on-success sink",
-            metrics.sink_forwarder.onsuccess_sink_write_error_total.clone(),
+            metrics
+                .sink_forwarder
+                .onsuccess_sink_write_error_total
+                .clone(),
         );
         sink_forwarder_registry.register(
             PIPELINE_ON_SUCCESS_SINK_WRITE_TOTAL,
@@ -935,7 +938,10 @@ impl PipelineMetrics {
         sink_forwarder_registry.register(
             PIPELINE_ON_SUCCESS_SINK_WRITE_BYTES_TOTAL,
             "Total number of bytes written to a on-success sink",
-            metrics.sink_forwarder.onsuccess_sink_write_bytes_total.clone(),
+            metrics
+                .sink_forwarder
+                .onsuccess_sink_write_bytes_total
+                .clone(),
         );
         sink_forwarder_registry.register(
             ON_SUCCESS_SINK_WRITE_PROCESSING_TIME,
