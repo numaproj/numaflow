@@ -2434,6 +2434,7 @@ dependencies = [
  "chrono",
  "clap",
  "numaflow-core",
+ "numaflow-daemon",
  "numaflow-monitor",
  "numaflow-sideinput",
  "rustls 0.23.31",
@@ -2545,6 +2546,13 @@ dependencies = [
  "tracing",
  "trait-variant",
  "zstd",
+]
+
+[[package]]
+name = "numaflow-daemon"
+version = "0.1.0"
+dependencies = [
+ "tracing",
 ]
 
 [[package]]
