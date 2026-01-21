@@ -265,7 +265,7 @@ impl SinkWriter {
                         self.final_result = Err(e);
                         self.shutting_down_on_err = true;
                     }
-                    send_drop_metrics(dropped_message_count);
+                    send_drop_metrics(is_mono_vertex(), dropped_message_count);
                 }
 
                 // finalize
@@ -299,7 +299,7 @@ impl SinkWriter {
                 "Failed to write messages after retries: {:?}",
                 response.failed
             );
-            Self::send_error_metrics();
+            Self::send_error_metrics(is_mono_vertex());
             return Err(Error::Sink(
                 "Failed to write messages after retries".to_string(),
             ));
@@ -629,8 +629,8 @@ impl SinkWriter {
     }
 
     /// Send metrics for errors
-    fn send_error_metrics() {
-        if is_mono_vertex() {
+    fn send_error_metrics(is_mono_vertex: bool) {
+        if is_mono_vertex {
             monovertex_metrics()
                 .sink
                 .write_errors_total
@@ -654,9 +654,9 @@ impl SinkWriter {
 /// Sends count of messages marked for explicit drop by the user
 /// Currently pub(crate) to allow usage by the bypass_router.
 /// TODO: Should this be a separate metric? Currently reason is different for pipeline
-pub(crate) fn send_drop_metrics(dropped_messages_count: usize) {
+pub(crate) fn send_drop_metrics(is_mono_vertex: bool, dropped_messages_count: usize) {
     if dropped_messages_count > 0 {
-        if is_mono_vertex() {
+        if is_mono_vertex {
             monovertex_metrics()
                 .sink
                 .dropped_total
@@ -1267,6 +1267,116 @@ mod tests {
         assert_eq!(
             results.first().unwrap().status,
             ResponseStatusFromSink::Success
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_send_error_metrics_mono_vertex() {
+        let before = monovertex_metrics()
+            .sink
+            .write_errors_total
+            .get_or_create(mvtx_forward_metric_labels())
+            .get();
+
+        SinkWriter::send_error_metrics(true);
+
+        let after = monovertex_metrics()
+            .sink
+            .write_errors_total
+            .get_or_create(mvtx_forward_metric_labels())
+            .get();
+
+        assert_eq!(
+            after,
+            before + 1,
+            "monovertex sink write_errors_total should be incremented by 1"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_send_error_metrics_pipeline() {
+        let mut labels = pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
+        labels.push((
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            get_vertex_name().to_string(),
+        ));
+
+        let before = pipeline_metrics()
+            .forwarder
+            .write_error_total
+            .get_or_create(&labels)
+            .get();
+
+        SinkWriter::send_error_metrics(false);
+
+        let after = pipeline_metrics()
+            .forwarder
+            .write_error_total
+            .get_or_create(&labels)
+            .get();
+
+        assert_eq!(
+            after,
+            before + 1,
+            "pipeline write_error_total should be incremented by 1"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_send_drop_metrics_mono_vertex() {
+        let before = monovertex_metrics()
+            .sink
+            .dropped_total
+            .get_or_create(mvtx_forward_metric_labels())
+            .get();
+
+        send_drop_metrics(true, 5);
+
+        let after = monovertex_metrics()
+            .sink
+            .dropped_total
+            .get_or_create(mvtx_forward_metric_labels())
+            .get();
+
+        assert_eq!(
+            after,
+            before + 5,
+            "monovertex sink dropped_total should be incremented by 5"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_send_drop_metrics_pipeline() {
+        let before = pipeline_metrics()
+            .forwarder
+            .drop_total
+            .get_or_create(&pipeline_drop_metric_labels(
+                VERTEX_TYPE_SINK,
+                get_vertex_name(),
+                "Dropped Upstream",
+            ))
+            .get();
+
+        send_drop_metrics(false, 3);
+
+        let after = pipeline_metrics()
+            .forwarder
+            .drop_total
+            .get_or_create(&pipeline_drop_metric_labels(
+                VERTEX_TYPE_SINK,
+                get_vertex_name(),
+                "Dropped Upstream",
+            ))
+            .get();
+
+        assert_eq!(
+            after,
+            before + 3,
+            "pipeline drop_total should be incremented by 3"
         );
     }
 }

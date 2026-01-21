@@ -44,6 +44,7 @@
 //! +==========================================================================+
 //! ```
 
+use crate::config::is_mono_vertex;
 use crate::config::monovertex::BypassConditions;
 use crate::error;
 use crate::error::Error;
@@ -325,7 +326,7 @@ impl BypassRouterReceiver {
                         self.final_result = Err(e);
                         self.shutting_down_on_err = true;
                     }
-                    send_drop_metrics(dropped_message_count);
+                    send_drop_metrics(is_mono_vertex(), dropped_message_count);
                 }
 
                 // finalize

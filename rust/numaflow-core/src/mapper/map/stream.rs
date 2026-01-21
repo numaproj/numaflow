@@ -16,7 +16,10 @@ use tonic::Streaming;
 use tonic::transport::Channel;
 use tracing::error;
 
-use super::{ParentMessageInfo, UserDefinedMessage, create_response_stream};
+use super::{
+    ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_error_metric,
+    update_udf_process_time_metric, update_udf_read_metric, update_udf_write_only_metric,
+};
 
 type StreamResponseSenderMap =
     Arc<Mutex<HashMap<String, (ParentMessageInfo, mpsc::Sender<Result<Message>>)>>>;
@@ -63,19 +66,7 @@ impl UserDefinedStreamMap {
 
         for (_, (_, sender)) in senders {
             let _ = sender.send(Err(Error::Grpc(Box::new(error.clone())))).await;
-            if is_mono_vertex() {
-                monovertex_metrics()
-                    .udf
-                    .errors_total
-                    .get_or_create(mvtx_forward_metric_labels())
-                    .inc();
-            } else {
-                pipeline_metrics()
-                    .forwarder
-                    .udf_error_total
-                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                    .inc();
-            }
+            update_udf_error_metric(is_mono_vertex());
         }
     }
 
@@ -105,19 +96,7 @@ impl UserDefinedStreamMap {
             // once we get eot, we can drop the sender to let the callee
             // know that we are done sending responses
             if let Some(map::TransmissionStatus { eot: true }) = resp.status {
-                if is_mono_vertex() {
-                    monovertex_metrics()
-                        .udf
-                        .time
-                        .get_or_create(mvtx_forward_metric_labels())
-                        .observe(message_info.start_time.elapsed().as_micros() as f64);
-                } else {
-                    pipeline_metrics()
-                        .forwarder
-                        .udf_processing_time
-                        .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                        .observe(message_info.start_time.elapsed().as_micros() as f64);
-                }
+                update_udf_process_time_metric(is_mono_vertex());
                 continue;
             }
 
@@ -141,13 +120,7 @@ impl UserDefinedStreamMap {
         let key = message.offset.clone().to_string();
         let msg_info = (&message).into();
 
-        if !is_mono_vertex() {
-            pipeline_metrics()
-                .forwarder
-                .udf_read_total
-                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                .inc();
-        }
+        update_udf_read_metric(is_mono_vertex());
 
         // only insert if we are able to send the message to the server
         if let Err(e) = self.read_tx.send(message.into()).await {
@@ -186,13 +159,7 @@ impl UserDefinedStreamMap {
                 .expect("failed to send response");
             message_info.current_index += 1;
 
-            if !is_mono_vertex() {
-                pipeline_metrics()
-                    .forwarder
-                    .udf_write_total
-                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                    .inc();
-            }
+            update_udf_write_only_metric(is_mono_vertex());
         }
 
         // Write the sender back to the map, because we need to send

@@ -3,12 +3,9 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use crate::config::is_mono_vertex;
-use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
 use crate::message::Message;
-use crate::metrics::{
-    monovertex_metrics, mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
-};
+use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 use numaflow_pb::clients::map::{MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::task::AbortOnDropHandle;
@@ -16,7 +13,10 @@ use tonic::Streaming;
 use tonic::transport::Channel;
 use tracing::error;
 
-use super::{ParentMessageInfo, create_response_stream};
+use super::{
+    ParentMessageInfo, create_response_stream, update_udf_error_metric, update_udf_read_metric,
+    update_udf_write_metric,
+};
 
 type ResponseSenderMap =
     Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
@@ -65,19 +65,7 @@ impl UserDefinedUnaryMap {
 
         for (_, (_, sender)) in senders {
             let _ = sender.send(Err(Error::Grpc(Box::new(error.clone()))));
-            if is_mono_vertex() {
-                monovertex_metrics()
-                    .udf
-                    .errors_total
-                    .get_or_create(mvtx_forward_metric_labels())
-                    .inc();
-            } else {
-                pipeline_metrics()
-                    .forwarder
-                    .udf_error_total
-                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                    .inc();
-            }
+            update_udf_error_metric(is_mono_vertex());
         }
     }
 
@@ -111,13 +99,7 @@ impl UserDefinedUnaryMap {
         let key = message.offset.clone().to_string();
         let msg_info = (&message).into();
 
-        if !is_mono_vertex() {
-            pipeline_metrics()
-                .forwarder
-                .udf_read_total
-                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                .inc();
-        }
+        update_udf_read_metric(is_mono_vertex());
 
         // only insert if we are able to send the message to the server
         if let Err(e) = self.read_tx.send(message.into()).await {
@@ -152,25 +134,7 @@ impl UserDefinedUnaryMap {
                     .push(super::UserDefinedMessage(result, &msg_info, i as i32).into());
             }
 
-            if is_mono_vertex() {
-                monovertex_metrics()
-                    .udf
-                    .time
-                    .get_or_create(mvtx_forward_metric_labels())
-                    .observe(msg_info.start_time.elapsed().as_micros() as f64);
-            } else {
-                pipeline_metrics()
-                    .forwarder
-                    .udf_write_total
-                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                    .inc_by(response_messages.len() as u64);
-
-                pipeline_metrics()
-                    .forwarder
-                    .udf_processing_time
-                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                    .observe(msg_info.start_time.elapsed().as_micros() as f64);
-            }
+            update_udf_write_metric(is_mono_vertex(), msg_info, response_messages.len() as u64);
 
             sender
                 .send(Ok(response_messages))
