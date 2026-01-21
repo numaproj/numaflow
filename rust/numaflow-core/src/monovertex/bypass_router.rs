@@ -362,20 +362,20 @@ impl BypassRouterReceiver {
 mod tests {
     use super::*;
     use crate::message::{IntOffset, MessageID, Offset, ReadAck};
-    use bytes::Bytes;
-    use chrono::Utc;
-    use numaflow_models::models::{ForwardConditions, TagConditions};
-    use std::collections::HashMap;
-    use std::sync::Arc;
-    use numaflow::shared::{ServerExtras, DROP};
-    use numaflow::sink;
-    use tokio::sync::mpsc::Receiver;
-    use tokio::sync::oneshot;
-    use numaflow_pb::clients::sink::sink_client::SinkClient;
-    use sink::Server;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
     use crate::tracker::Tracker;
+    use bytes::Bytes;
+    use chrono::Utc;
+    use numaflow::shared::{DROP, ServerExtras};
+    use numaflow::sink;
+    use numaflow_models::models::{ForwardConditions, TagConditions};
+    use numaflow_pb::clients::sink::sink_client::SinkClient;
+    use sink::Server;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use tokio::sync::mpsc::Receiver;
+    use tokio::sync::oneshot;
 
     /// Creates a test message with optional tags and ack handle.
     fn create_test_message(
@@ -452,7 +452,7 @@ mod tests {
         assert_eq!(config.chunk_timeout, Duration::from_secs(1));
         assert_eq!(config.bypass_conditions, conditions);
     }
-    
+
     struct PanicSink;
     #[tonic::async_trait]
     impl sink::Sinker for PanicSink {
@@ -513,16 +513,16 @@ mod tests {
                 create_rpc_channel(sock_file).await.unwrap(),
             )),
         )
-            .build()
-            .await
-            .unwrap();
+        .build()
+        .await
+        .unwrap();
 
         let (router, handle) = MvtxBypassRouter::initialize(
             bypass_router_config,
             sink_writer.clone(),
             cln_token.clone(),
         )
-            .await;
+        .await;
 
         let mut ack_rxs = vec![];
         let messages: Vec<Message> = (0..10)
