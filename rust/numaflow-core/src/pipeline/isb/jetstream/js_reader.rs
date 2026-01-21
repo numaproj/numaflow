@@ -54,10 +54,11 @@ impl JSWrappedMessage {
             .message_info
             .ok_or(Error::Proto("Missing message_info".to_string()))?;
 
-        let msg_info = self
-            .message
-            .info()
-            .map_err(|e| Error::ISB(ISBError::Decode(format!("Failed to get message info from JetStream: {e}"))))?;
+        let msg_info = self.message.info().map_err(|e| {
+            Error::ISB(ISBError::Decode(format!(
+                "Failed to get message info from JetStream: {e}"
+            )))
+        })?;
 
         let offset = Offset::Int(IntOffset::new(
             msg_info.stream_sequence as i64,
@@ -120,7 +121,11 @@ impl JetStreamReader {
         let mut consumer: PullConsumer = js_ctx
             .get_consumer_from_stream(&stream.name, &stream.name)
             .await
-            .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to get consumer for stream {e}"))))?;
+            .map_err(|e| {
+                Error::ISB(ISBError::Other(format!(
+                    "Failed to get consumer for stream {e}"
+                )))
+            })?;
 
         let consumer_info = consumer
             .info()
@@ -173,7 +178,9 @@ impl JetStreamReader {
 
         for js_msg in messages {
             let info = js_msg.info().map_err(|e| {
-                Error::ISB(ISBError::Decode(format!("Failed to get message info from JetStream: {e}")))
+                Error::ISB(ISBError::Decode(format!(
+                    "Failed to get message info from JetStream: {e}"
+                )))
             })?;
             let offset = Offset::Int(IntOffset::new(
                 info.stream_sequence as i64,
@@ -206,17 +213,19 @@ impl JetStreamReader {
 
     /// Mark message as in progress by sending work in progress ack.
     pub(crate) async fn mark_wip(&self, offset: &Offset) -> Result<()> {
-        let msg = self.get_js_message(offset, false)
+        let msg = self
+            .get_js_message(offset, false)
             .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))?;
-        msg.ack_with(AckKind::Progress).await.map_err(|e| {
-            Error::ISB(ISBError::WipAck(format!("offset {}: {}", offset, e)))
-        })?;
+        msg.ack_with(AckKind::Progress)
+            .await
+            .map_err(|e| Error::ISB(ISBError::WipAck(format!("offset {}: {}", offset, e))))?;
         Ok(())
     }
 
     /// Acknowledge the offset
     pub(crate) async fn ack(&self, offset: &Offset) -> Result<()> {
-        let msg = self.get_js_message(offset, true)
+        let msg = self
+            .get_js_message(offset, true)
             .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))?;
         msg.double_ack()
             .await
@@ -226,7 +235,8 @@ impl JetStreamReader {
 
     /// Negatively acknowledge the offset
     pub(crate) async fn nack(&self, offset: &Offset) -> Result<()> {
-        let msg = self.get_js_message(offset, true)
+        let msg = self
+            .get_js_message(offset, true)
             .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))?;
         msg.ack_with(AckKind::Nak(None))
             .await
@@ -329,13 +339,23 @@ mod tests {
         let mut compressed = GzEncoder::new(Vec::new(), flate2::Compression::default());
         compressed
             .write_all(Bytes::from("test message for direct fetch").as_ref())
-            .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to compress message (write_all): {}", e))))
+            .map_err(|e| {
+                Error::ISB(ISBError::Other(format!(
+                    "Failed to compress message (write_all): {}",
+                    e
+                )))
+            })
             .unwrap();
 
         let body = Bytes::from(
             compressed
                 .finish()
-                .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to compress message (finish): {}", e))))
+                .map_err(|e| {
+                    Error::ISB(ISBError::Other(format!(
+                        "Failed to compress message (finish): {}",
+                        e
+                    )))
+                })
                 .unwrap(),
         );
 

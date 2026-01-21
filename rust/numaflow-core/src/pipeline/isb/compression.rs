@@ -16,36 +16,51 @@ pub(super) fn compress(compression_type: CompressionType, data: &[u8]) -> Result
             use std::io::Write;
 
             let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-            encoder
-                .write_all(data)
-                .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to compress message with gzip: {e}"))))?;
-            encoder
-                .finish()
-                .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to finish gzip compression: {e}"))))
+            encoder.write_all(data).map_err(|e| {
+                Error::ISB(ISBError::Other(format!(
+                    "Failed to compress message with gzip: {e}"
+                )))
+            })?;
+            encoder.finish().map_err(|e| {
+                Error::ISB(ISBError::Other(format!(
+                    "Failed to finish gzip compression: {e}"
+                )))
+            })
         }
         CompressionType::Zstd => {
             use std::io::Write;
             use zstd::Encoder;
 
-            let mut encoder = Encoder::new(Vec::new(), 3)
-                .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to create zstd encoder: {e:?}"))))?;
-            encoder
-                .write_all(data)
-                .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to compress message with zstd: {e}"))))?;
-            encoder
-                .finish()
-                .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to finish zstd compression: {e}"))))
+            let mut encoder = Encoder::new(Vec::new(), 3).map_err(|e| {
+                Error::ISB(ISBError::Other(format!(
+                    "Failed to create zstd encoder: {e:?}"
+                )))
+            })?;
+            encoder.write_all(data).map_err(|e| {
+                Error::ISB(ISBError::Other(format!(
+                    "Failed to compress message with zstd: {e}"
+                )))
+            })?;
+            encoder.finish().map_err(|e| {
+                Error::ISB(ISBError::Other(format!(
+                    "Failed to finish zstd compression: {e}"
+                )))
+            })
         }
         CompressionType::LZ4 => {
             use lz4::EncoderBuilder;
             use std::io::Write;
 
-            let mut encoder = EncoderBuilder::new()
-                .build(Vec::new())
-                .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to create lz4 encoder: {e:?}"))))?;
-            encoder
-                .write_all(data)
-                .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to compress message with lz4: {e}"))))?;
+            let mut encoder = EncoderBuilder::new().build(Vec::new()).map_err(|e| {
+                Error::ISB(ISBError::Other(format!(
+                    "Failed to create lz4 encoder: {e:?}"
+                )))
+            })?;
+            encoder.write_all(data).map_err(|e| {
+                Error::ISB(ISBError::Other(format!(
+                    "Failed to compress message with lz4: {e}"
+                )))
+            })?;
             let (compressed_data, _) = encoder.finish();
             Ok(compressed_data)
         }
@@ -61,28 +76,40 @@ pub(super) fn decompress(compression_type: CompressionType, data: &[u8]) -> Resu
 
             let mut decoder: GzDecoder<&[u8]> = GzDecoder::new(data);
             let mut decompressed = vec![];
-            decoder
-                .read_to_end(&mut decompressed)
-                .map_err(|e| Error::ISB(ISBError::Decode(format!("Failed to decompress message: {e}"))))?;
+            decoder.read_to_end(&mut decompressed).map_err(|e| {
+                Error::ISB(ISBError::Decode(format!(
+                    "Failed to decompress message: {e}"
+                )))
+            })?;
             Ok(decompressed)
         }
         CompressionType::Zstd => {
             let mut decoder: zstd::Decoder<'static, std::io::BufReader<&[u8]>> =
-                zstd::Decoder::new(data)
-                    .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to create zstd decoder: {e:?}"))))?;
+                zstd::Decoder::new(data).map_err(|e| {
+                    Error::ISB(ISBError::Other(format!(
+                        "Failed to create zstd decoder: {e:?}"
+                    )))
+                })?;
             let mut decompressed = vec![];
-            decoder
-                .read_to_end(&mut decompressed)
-                .map_err(|e| Error::ISB(ISBError::Decode(format!("Failed to decompress message: {e}"))))?;
+            decoder.read_to_end(&mut decompressed).map_err(|e| {
+                Error::ISB(ISBError::Decode(format!(
+                    "Failed to decompress message: {e}"
+                )))
+            })?;
             Ok(decompressed)
         }
         CompressionType::LZ4 => {
-            let mut decoder: lz4::Decoder<&[u8]> = lz4::Decoder::new(data)
-                .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to create lz4 decoder: {e:?}"))))?;
+            let mut decoder: lz4::Decoder<&[u8]> = lz4::Decoder::new(data).map_err(|e| {
+                Error::ISB(ISBError::Other(format!(
+                    "Failed to create lz4 decoder: {e:?}"
+                )))
+            })?;
             let mut decompressed = vec![];
-            decoder
-                .read_to_end(&mut decompressed)
-                .map_err(|e| Error::ISB(ISBError::Decode(format!("Failed to decompress message: {e}"))))?;
+            decoder.read_to_end(&mut decompressed).map_err(|e| {
+                Error::ISB(ISBError::Decode(format!(
+                    "Failed to decompress message: {e}"
+                )))
+            })?;
             Ok(decompressed)
         }
         CompressionType::None => Ok(data.to_vec()),
@@ -164,7 +191,8 @@ mod tests {
         let result = decompress(CompressionType::LZ4, &invalid_data);
         assert!(result.is_err());
 
-        if let Err(Error::ISB(msg)) = result {
+        if let Err(Error::ISB(isb_err)) = result {
+            let msg = isb_err.to_string();
             assert!(
                 msg.contains("Failed to create lz4 decoder")
                     || msg.contains("Failed to decompress message")
@@ -188,7 +216,8 @@ mod tests {
         let result = decompress(CompressionType::Gzip, &truncated_data);
 
         assert!(result.is_err());
-        if let Err(Error::ISB(msg)) = result {
+        if let Err(Error::ISB(isb_err)) = result {
+            let msg = isb_err.to_string();
             assert!(msg.contains("Failed to decompress message"));
         } else {
             panic!("Expected ISB error with decompression message");

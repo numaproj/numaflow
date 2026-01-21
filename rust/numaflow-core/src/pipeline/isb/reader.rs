@@ -108,7 +108,11 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                 let mut permits = Arc::clone(&semaphore)
                     .acquire_many_owned(batch_size as u32)
                     .await
-                    .map_err(|e| Error::ISB(crate::pipeline::isb::error::ISBError::Other(format!("Failed to acquire semaphore permit: {e}"))))?;
+                    .map_err(|e| {
+                        Error::ISB(crate::pipeline::isb::error::ISBError::Other(format!(
+                            "Failed to acquire semaphore permit: {e}"
+                        )))
+                    })?;
 
                 let start = Instant::now();
                 // Apply rate limiting and fetch message batch
@@ -161,17 +165,22 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                     match res.unwrap_or(ReadAck::Nak) {
                         ReadAck::Ack => {
                             let ack_start = Instant::now();
-                            Self::ack_with_retry(&params.jsr, &params.offset, &params.cancel).await;
-                            Self::publish_ack_metrics(
-                                params.stream_name,
-                                &params.labels,
-                                ack_start,
-                                params.message_processing_start,
-                            );
+                            if let Err(e) = Self::ack_with_retry(&params.jsr, &params.offset, &params.cancel).await {
+                                error!(?e, ?params.offset, "Failed to ack message after retries");
+                            } else {
+                                Self::publish_ack_metrics(
+                                    params.stream_name,
+                                    &params.labels,
+                                    ack_start,
+                                    params.message_processing_start,
+                                );
+                            }
                         },
                         ReadAck::Nak => {
                             info!(?params.offset, "Nak received for offset");
-                            Self::nak_with_retry(&params.jsr, &params.offset, &params.cancel).await;
+                            if let Err(e) = Self::nak_with_retry(&params.jsr, &params.offset, &params.cancel).await {
+                                error!(?e, ?params.offset, "Failed to nack message after retries");
+                            }
                         },
                     }
                     params.tracker.delete(&params.offset).await.expect("Failed to remove offset from tracker");
@@ -182,9 +191,13 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
     }
 
     /// invokes the ack with infinite retries until the cancellation token is cancelled.
-    async fn ack_with_retry(jsr: &JetStreamReader, offset: &Offset, cancel: &CancellationToken) {
+    async fn ack_with_retry(
+        jsr: &JetStreamReader,
+        offset: &Offset,
+        cancel: &CancellationToken,
+    ) -> Result<()> {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
-        let _ = Retry::new(
+        Retry::new(
             interval,
             async || jsr.ack(offset).await,
             |e: &Error| {
@@ -200,13 +213,17 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                 true
             },
         )
-        .await;
+        .await
     }
 
     /// invokes the nack with infinite retries until the cancellation token is cancelled.
-    async fn nak_with_retry(jsr: &JetStreamReader, offset: &Offset, cancel: &CancellationToken) {
+    async fn nak_with_retry(
+        jsr: &JetStreamReader,
+        offset: &Offset,
+        cancel: &CancellationToken,
+    ) -> Result<()> {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
-        let _ = Retry::new(
+        let result = Retry::new(
             interval,
             async || jsr.nack(offset).await,
             |e: &Error| {
@@ -223,7 +240,11 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
             },
         )
         .await;
-        info!(?offset, "Nak sent for offset");
+
+        if result.is_ok() {
+            info!(?offset, "Nak sent for offset");
+        }
+        result
     }
 
     /// Creates and writes a WMB message for reduce vertex when it is idle.
@@ -251,9 +272,11 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
             },
             ..Default::default()
         };
-        tx.send(msg)
-            .await
-            .map_err(|_| Error::ISB(crate::pipeline::isb::error::ISBError::Other("Failed to send wmb message to channel".to_string())))
+        tx.send(msg).await.map_err(|_| {
+            Error::ISB(crate::pipeline::isb::error::ISBError::Other(
+                "Failed to send wmb message to channel".to_string(),
+            ))
+        })
     }
 
     fn publish_ack_metrics(
@@ -488,9 +511,11 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         // Shutdown rate limiter if configured
         if let Some(rl) = &self.rate_limiter {
             info!("ISBReader is shutting down, shutting down rate limiter");
-            rl.shutdown()
-                .await
-                .map_err(|e| Error::ISB(crate::pipeline::isb::error::ISBError::Other(format!("Failed to shutdown rate limiter: {e}"))))?;
+            rl.shutdown().await.map_err(|e| {
+                Error::ISB(crate::pipeline::isb::error::ISBError::Other(format!(
+                    "Failed to shutdown rate limiter: {e}"
+                )))
+            })?;
         }
 
         info!("ISBReader cleanup on shutdown completed.");
@@ -557,6 +582,7 @@ mod tests {
     use super::*;
     use crate::config::pipeline::isb::{BufferReaderConfig, CompressionType};
     use crate::message::{Message, MessageID};
+    use crate::pipeline::isb::error::ISBError;
     use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
     use crate::tracker::Tracker;
     use async_nats::jetstream;
@@ -917,13 +943,23 @@ mod tests {
         let mut compressed = GzEncoder::new(Vec::new(), Compression::default());
         compressed
             .write_all(Bytes::new().as_ref())
-            .map_err(|e| Error::ISB(format!("Failed to compress message (write_all): {}", e)))
+            .map_err(|e| {
+                Error::ISB(ISBError::Other(format!(
+                    "Failed to compress message (write_all): {}",
+                    e
+                )))
+            })
             .unwrap();
 
         let body = Bytes::from(
             compressed
                 .finish()
-                .map_err(|e| Error::ISB(format!("Failed to compress message (finish): {}", e)))
+                .map_err(|e| {
+                    Error::ISB(ISBError::Other(format!(
+                        "Failed to compress message (finish): {}",
+                        e
+                    )))
+                })
                 .unwrap(),
         );
 

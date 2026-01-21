@@ -47,10 +47,10 @@ pub enum ISBError {
 
 impl ISBError {
     /// Determines if this error is retryable.
-    /// 
+    ///
     /// Currently, all ISB errors are considered retryable as they are typically
     /// transient (network issues, timeouts, etc.).
-    /// 
+    ///
     /// TODO: As we identify non-retryable errors (e.g., authentication failures,
     /// invalid configuration), we should return false for those cases.
     pub fn is_retryable(&self) -> bool {
@@ -58,4 +58,3 @@ impl ISBError {
         true
     }
 }
-
