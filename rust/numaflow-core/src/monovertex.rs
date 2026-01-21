@@ -6,6 +6,7 @@ use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self};
 use crate::mapper::map::MapHandle;
 use crate::metrics::{LagReader, PendingReaderTasks};
+use crate::monovertex::bypass_router::BypassRouterConfig;
 use crate::shared::create_components;
 use crate::sinker::sink::SinkWriter;
 use crate::source::Source;
@@ -23,7 +24,8 @@ use crate::{metrics, shared};
 /// - Calls the Sinker to write the batch to the Sink
 /// - Send Acknowledgement back to the Source
 pub(crate) mod forwarder;
-mod stream_splitter;
+
+pub(crate) mod bypass_router;
 
 pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
@@ -62,6 +64,26 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
 ) -> error::Result<()> {
     let tracker = Tracker::new(None, cln_token.clone());
 
+    let sink_writer = create_components::create_sink_writer(
+        config.batch_size,
+        config.read_timeout,
+        config.sink_config.clone(),
+        config.fb_sink_config.clone(),
+        config.on_success_sink_config.clone(),
+        None,
+        &cln_token,
+        config.bypass_condition.clone(),
+    )
+    .await?;
+
+    let bypass_router = config.bypass_condition.as_ref().map(|bypass_condition| {
+        BypassRouterConfig::new(
+            bypass_condition.clone(),
+            config.batch_size,
+            config.read_timeout,
+        )
+    });
+
     let transformer = create_components::create_transformer(
         config.batch_size,
         config.graceful_shutdown_time,
@@ -98,17 +120,6 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
         None
     };
 
-    let sink_writer = create_components::create_sink_writer(
-        config.batch_size,
-        config.read_timeout,
-        config.sink_config.clone(),
-        config.fb_sink_config.clone(),
-        config.on_success_sink_config.clone(),
-        None,
-        &cln_token,
-    )
-    .await?;
-
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
     // joined.
@@ -128,7 +139,15 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
         shared::metrics::start_metrics_server::<C>(config.metrics_config.clone(), metrics_state)
             .await;
 
-    start::<C>(config.clone(), source, mapper, sink_writer, cln_token).await?;
+    start::<C>(
+        config.clone(),
+        source,
+        mapper,
+        sink_writer,
+        bypass_router,
+        cln_token,
+    )
+    .await?;
 
     // abort the metrics server
     metrics_server_handle.abort();
@@ -140,6 +159,7 @@ async fn start<C: crate::typ::NumaflowTypeConfig>(
     source: Source<C>,
     mapper: Option<MapHandle>,
     sink: SinkWriter,
+    bypass_router_config: Option<BypassRouterConfig>,
     cln_token: CancellationToken,
 ) -> error::Result<()> {
     // Store the pending reader handle outside, so it doesn't get dropped immediately.
@@ -157,7 +177,7 @@ async fn start<C: crate::typ::NumaflowTypeConfig>(
         None
     };
 
-    let forwarder = forwarder::Forwarder::<C>::new(source, mapper, sink);
+    let forwarder = forwarder::Forwarder::<C>::new(source, mapper, sink, bypass_router_config);
 
     info!("Forwarder is starting...");
     // start the forwarder, it will return only on Signal
