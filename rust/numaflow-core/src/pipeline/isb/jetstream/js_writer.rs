@@ -17,6 +17,7 @@ use crate::Result;
 use crate::config::pipeline::isb::{BufferWriterConfig, CompressionType, Stream};
 use crate::error::Error;
 use crate::message::Message;
+use crate::pipeline::isb::error::ISBError;
 use crate::metrics::{
     jetstream_isb_error_metrics_labels, jetstream_isb_metrics_labels, pipeline_metrics,
 };
@@ -93,13 +94,13 @@ impl JetStreamWriter {
                 .js_ctx
                 .get_stream(js_writer.stream.name)
                 .await
-                .map_err(|_| Error::ISB("Failed to get stream".to_string()))?;
+                .map_err(|_| Error::ISB(ISBError::Other("Failed to get stream".to_string())))?;
 
             let consumer: PullConsumer = js_writer
                 .js_ctx
                 .get_consumer_from_stream(js_writer.stream.name, js_writer.stream.name)
                 .await
-                .map_err(|e| Error::ISB(format!("Failed to get the consumer {e}")))?;
+                .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to get the consumer {e}"))))?;
 
             let is_full = Arc::clone(&js_writer.is_full);
             let writer_config = js_writer.writer_config.clone();
@@ -219,7 +220,7 @@ impl JetStreamWriter {
         message.value = match self.compression_type {
             Some(compression_type) => bytes::Bytes::from(
                 compression::compress(compression_type, &message.value)
-                    .map_err(|e| Error::ISB(format!("Compression failed: {}", e)))?,
+                    .map_err(|e| Error::ISB(ISBError::Other(format!("Compression failed: {}", e))))?,
             ),
             None => message.value,
         };
@@ -344,12 +345,12 @@ impl JetStreamWriter {
         let stream_info = stream
             .info()
             .await
-            .map_err(|e| Error::ISB(format!("Failed to get the stream info {e}")))?;
+            .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to get the stream info {e}"))))?;
 
         let consumer_info = consumer
             .info()
             .await
-            .map_err(|e| Error::ISB(format!("Failed to get the consumer info {e}")))?;
+            .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to get the consumer info {e}"))))?;
 
         let soft_usage = (consumer_info.num_pending as f64 + consumer_info.num_ack_pending as f64)
             / max_length as f64;

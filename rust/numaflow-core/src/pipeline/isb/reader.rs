@@ -108,7 +108,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                 let mut permits = Arc::clone(&semaphore)
                     .acquire_many_owned(batch_size as u32)
                     .await
-                    .map_err(|e| Error::ISB(format!("Failed to acquire semaphore permit: {e}")))?;
+                    .map_err(|e| Error::ISB(crate::pipeline::isb::error::ISBError::Other(format!("Failed to acquire semaphore permit: {e}"))))?;
 
                 let start = Instant::now();
                 // Apply rate limiting and fetch message batch
@@ -253,7 +253,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         };
         tx.send(msg)
             .await
-            .map_err(|_| Error::ISB("Failed to send wmb message to channel".to_string()))
+            .map_err(|_| Error::ISB(crate::pipeline::isb::error::ISBError::Other("Failed to send wmb message to channel".to_string())))
     }
 
     fn publish_ack_metrics(
@@ -490,7 +490,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
             info!("ISBReader is shutting down, shutting down rate limiter");
             rl.shutdown()
                 .await
-                .map_err(|e| Error::ISB(format!("Failed to shutdown rate limiter: {e}")))?;
+                .map_err(|e| Error::ISB(crate::pipeline::isb::error::ISBError::Other(format!("Failed to shutdown rate limiter: {e}"))))?;
         }
 
         info!("ISBReader cleanup on shutdown completed.");
