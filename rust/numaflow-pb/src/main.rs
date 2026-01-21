@@ -5,6 +5,9 @@ fn main() {
     // gRPC clients for UDF
     build_client();
 
+    // gRPC servers for the daemon server
+    build_server();
+
     // protobuf objects for serde
     build_objects();
 }
@@ -34,6 +37,24 @@ fn build_client() {
                 "proto/sideinput/v1/sideinput.proto",
                 "proto/serving/v1/store.proto",
                 "proto/accumulator/v1/accumulator.proto",
+            ],
+            &["proto"],
+        )
+        .expect("failed to compile protos");
+}
+
+fn build_server() {
+    tonic_prost_build::configure()
+        .build_client(false)
+        .build_server(true)
+        .out_dir("src/servers")
+        //.extern_path(".metadata", "crate::common::metadata")
+        .compile_protos(
+            &[
+                "proto/daemon/daemon.proto",
+                "proto/mvtxdaemon/mvtxdaemon.proto",
+                "proto/google/api/annotations.proto",
+                "proto/google/api/http.proto",
             ],
             &["proto"],
         )
