@@ -47,11 +47,10 @@
 use crate::config::monovertex::BypassConditions;
 use crate::error;
 use crate::error::Error;
-use crate::message::{AckHandle, Message};
+use crate::message::Message;
 use crate::shared::forward::should_forward;
 use crate::sinker::sink::SinkWriter;
 use numaflow_models::models::ForwardConditions;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::pin;
@@ -361,10 +360,9 @@ impl BypassRouterReceiver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{IntOffset, MessageID, Offset, ReadAck};
+    use crate::message::{AckHandle, IntOffset, MessageID, Offset, ReadAck};
     use bytes::Bytes;
     use chrono::Utc;
-    use numaflow_models::models::{ForwardConditions, TagConditions};
     use std::collections::HashMap;
     use std::sync::Arc;
     use tokio::sync::oneshot;

@@ -47,9 +47,6 @@ impl From<numaflow_sqs::SqsSinkError> for Error {
             numaflow_sqs::SqsSinkError::Error(numaflow_sqs::Error::Sqs(e)) => {
                 Error::Sink(e.to_string())
             }
-            numaflow_sqs::SqsSinkError::Error(numaflow_sqs::Error::Sts(e)) => {
-                Error::Sink(e.to_string())
-            }
             numaflow_sqs::SqsSinkError::Error(numaflow_sqs::Error::ActorTaskTerminated(_)) => {
                 Error::ActorPatternRecv(value.to_string())
             }
@@ -100,13 +97,12 @@ mod unit_tests {
     use std::collections::HashMap;
     use std::sync::Arc;
 
-    use bytes::Bytes;
-    use chrono::Utc;
-    use numaflow_sqs::sink::SqsSinkMessage;
-    use numaflow_sqs::SQS_METADATA_KEY;
-
     use crate::message::{Message, MessageID, Offset, StringOffset};
     use crate::metadata::{KeyValueGroup, Metadata};
+    use bytes::Bytes;
+    use chrono::Utc;
+    use numaflow_sqs::SQS_METADATA_KEY;
+    use numaflow_sqs::sink::SqsSinkMessage;
 
     #[test]
     fn test_message_to_sqs_sink_message_with_headers_only() {

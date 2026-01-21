@@ -2,7 +2,7 @@ use crate::Result;
 use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
-use crate::message::{AckHandle, Message};
+use crate::message::Message;
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
@@ -15,7 +15,6 @@ use numaflow_pb::clients::sink::sink_response;
 use numaflow_pulsar::sink::Sink as PulsarSink;
 use numaflow_sqs::sink::SqsSink;
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
@@ -28,7 +27,6 @@ use tonic::transport::Channel;
 use tracing::{error, info};
 
 use crate::config::monovertex::BypassConditions;
-use crate::monovertex::bypass_router::MessageToSink;
 use crate::sinker::builder::HealthCheckClients;
 use serve::{ServingStore, StoreEntry};
 // Re-export SinkWriterBuilder for external use

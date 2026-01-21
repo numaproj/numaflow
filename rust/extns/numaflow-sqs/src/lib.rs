@@ -52,9 +52,6 @@ pub enum Error {
     #[error("{0}")]
     Sqs(String),
 
-    #[error("Failed with STS error - {0}")]
-    Sts(#[from] aws_sdk_sts::Error),
-
     #[error("Failed to receive message from channel. Actor task is terminated: {0:?}")]
     ActorTaskTerminated(oneshot::error::RecvError),
 
