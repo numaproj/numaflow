@@ -103,6 +103,7 @@ mod unit_tests {
     use bytes::Bytes;
     use chrono::Utc;
     use numaflow_sqs::sink::SqsSinkMessage;
+    use numaflow_sqs::SQS_METADATA_KEY;
 
     use crate::message::{Message, MessageID, Offset, StringOffset};
     use crate::metadata::{KeyValueGroup, Metadata};
