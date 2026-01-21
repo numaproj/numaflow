@@ -296,3 +296,53 @@ spec:
       - key: numaflow.numaproj.io/isbsvc-name
         operator: Exists
 ```
+
+## Metrics Exposition Format
+
+Starting with Numaflow **v1.7**, the dataplane (vertex pods, monovertex pods) was rewritten in Rust, which changed the 
+metrics exposition format from Prometheus text format to OpenMetrics text format due to the switch from using 
+`client_golang` [prometheus client](https://github.com/prometheus/client_golang) to 
+`client_rust` [prometheus client](https://github.com/prometheus/client_rust) for exposing metrics.
+As we rewrite other parts (e.g., daemon server), they will also adopt OpenMetrics text format. Controller will be in Prometheus text format for the foreseeable future. 
+
+### Version Differences
+
+| Component                | Numaflow ≤ v1.5        | Numaflow ≥ v1.7         |
+| ------------------------ |------------------------|-------------------------|
+| **Dataplane (vertices)** | Prometheus text format | OpenMetrics text format |
+| **Controller**           | Prometheus text format | Prometheus text format  |
+| **Daemon**               | Prometheus text format | Prometheus text format  |
+
+### Current Format by Component (v1.7+)
+
+| Component / Endpoint                     | Exposition Format       |
+| ---------------------------------------- | ----------------------- |
+| Vertex pods (`/metrics`)                 | OpenMetrics text format |
+| MonoVertex pods (`/metrics`)             | OpenMetrics text format |
+| Serving component (`/metrics`)           | OpenMetrics text format |
+| Pipeline Daemon (`/metrics`)             | Prometheus text format  |
+| MonoVertex Daemon (`/metrics`)           | Prometheus text format  |
+| Controller Manager (`/metrics`)          | Prometheus text format  |
+
+### Key Differences Between Formats
+
+The [Prometheus text-based exposition format](https://prometheus.io/docs/instrumenting/exposition_formats/#text-based-format) and [OpenMetrics text format](https://prometheus.io/docs/instrumenting/exposition_formats/#openmetrics-text-format) are very similar but have subtle differences:
+
+| Feature                  | Prometheus Text Format                                                                                               | OpenMetrics Text Format                                                                                                  |
+| ------------------------ |----------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|
+| Counter suffix           | `_total` (optional)                                                                                                  | `_total` [required](https://github.com/prometheus/OpenMetrics/blob/v1.0.0/specification/OpenMetrics.md#counter-1)        |
+| EOF marker               | Not required                                                                                                         | `# EOF` [required](https://github.com/prometheus/OpenMetrics/blob/v1.0.0/specification/OpenMetrics.md#overall-structure) |
+| Timestamp format         | [Milliseconds](https://prometheus.io/docs/instrumenting/exposition_formats/#comments-help-text-and-type-information) | [Seconds](https://github.com/prometheus/OpenMetrics/blob/v1.0.0/specification/OpenMetrics.md#timestamps)                 |
+| Info/StateSet types      | Not supported                                                                                                        | [Supported](https://github.com/prometheus/OpenMetrics/blob/v1.0.0/specification/OpenMetrics.md#stateset)                 |
+| Exemplars                | Not supported                                                                                                        | [Supported](https://github.com/prometheus/OpenMetrics/blob/v1.0.0/specification/OpenMetrics.md#exemplars)                |
+
+### Collector Configuration
+
+When collecting metrics from Numaflow, ensure you use the appropriate collector for each component:
+
+- **For dataplane metrics (vertex/monovertex pods):** Use an OpenMetrics-compatible collector
+- **For control plane metrics (controller, daemon, ISB):** Use a Prometheus-compatible collector
+
+> **Note:** Most modern Prometheus-compatible systems (including Prometheus itself) can scrape both formats. 
+> The format is auto-detected based on the `Content-Type` header. However, some collectors may require explicit configuration
+> ([link](https://prometheus.io/docs/instrumenting/content_negotiation/))
