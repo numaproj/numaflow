@@ -21,6 +21,7 @@ use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
     jetstream_isb_metrics_labels, pipeline_metric_labels, pipeline_metrics,
 };
+use crate::pipeline::isb::error::ISBError;
 use crate::tracker::Tracker;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
@@ -209,6 +210,11 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                     );
                     return false;
                 }
+                // Don't retry on OffsetNotFound - it won't succeed on retry
+                if matches!(e, Error::ISB(ISBError::OffsetNotFound(_))) {
+                    error!(?e, ?offset, "Offset not found, stopping Ack retry loop");
+                    return false;
+                }
                 warn!(?e, ?offset, "Ack to JetStream failed, retrying...");
                 true
             },
@@ -233,6 +239,11 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
                         ?offset,
                         "Cancellation received, stopping Nak retry loop"
                     );
+                    return false;
+                }
+                // Don't retry on OffsetNotFound - it won't succeed on retry
+                if matches!(e, Error::ISB(ISBError::OffsetNotFound(_))) {
+                    error!(?e, ?offset, "Offset not found, stopping Nak retry loop");
                     return false;
                 }
                 warn!(?e, ?offset, "Nak to JetStream failed, retrying...");
