@@ -7,7 +7,10 @@ use aws_sdk_sqs::Client;
 use aws_sdk_sqs::types::SendMessageBatchRequestEntry;
 use bytes::Bytes;
 
-use crate::{AssumeRoleConfig, Error, SqsConfig, SqsSinkError, extract_aws_error};
+use crate::{
+    AssumeRoleConfig, Error, HEADER_DELAY_SECONDS, HEADER_MESSAGE_DEDUPLICATION_ID,
+    HEADER_MESSAGE_GROUP_ID, SqsConfig, SqsSinkError, extract_aws_error,
+};
 
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 
@@ -141,7 +144,7 @@ impl SqsSink {
                 .id(sqs_batch_id)
                 .message_body(String::from_utf8_lossy(&message.message_body).to_string());
 
-            if let Some(delay) = message.headers.get("DelaySeconds") {
+            if let Some(delay) = message.headers.get(HEADER_DELAY_SECONDS) {
                 match delay.parse::<i32>() {
                     Ok(delay_val) if delay_val >= 0 => {
                         entry = entry.delay_seconds(delay_val);
@@ -161,11 +164,11 @@ impl SqsSink {
                 }
             }
 
-            if let Some(group_id) = message.headers.get("MessageGroupId") {
+            if let Some(group_id) = message.headers.get(HEADER_MESSAGE_GROUP_ID) {
                 entry = entry.message_group_id(group_id);
             }
 
-            if let Some(dedup_id) = message.headers.get("MessageDeduplicationId") {
+            if let Some(dedup_id) = message.headers.get(HEADER_MESSAGE_DEDUPLICATION_ID) {
                 entry = entry.message_deduplication_id(dedup_id);
             }
 
@@ -233,7 +236,10 @@ mod tests {
 
     use crate::sink::{SqsSinkBuilder, SqsSinkConfig, SqsSinkMessage};
     use crate::source::SQS_DEFAULT_REGION;
-    use crate::{Error, SqsConfig, SqsSinkError};
+    use crate::{
+        Error, HEADER_DELAY_SECONDS, HEADER_MESSAGE_DEDUPLICATION_ID, HEADER_MESSAGE_GROUP_ID,
+        SqsConfig, SqsSinkError,
+    };
 
     #[test(tokio::test)]
     async fn test_client_creation_with_defaults() {
@@ -479,9 +485,12 @@ mod tests {
             .unwrap();
 
         let mut headers = std::collections::HashMap::new();
-        headers.insert("DelaySeconds".to_string(), "10".to_string());
-        headers.insert("MessageGroupId".to_string(), "group-1".to_string());
-        headers.insert("MessageDeduplicationId".to_string(), "dedup-1".to_string());
+        headers.insert(HEADER_DELAY_SECONDS.to_string(), "10".to_string());
+        headers.insert(HEADER_MESSAGE_GROUP_ID.to_string(), "group-1".to_string());
+        headers.insert(
+            HEADER_MESSAGE_DEDUPLICATION_ID.to_string(),
+            "dedup-1".to_string(),
+        );
 
         let messages = vec![SqsSinkMessage {
             id: "1".to_string(),

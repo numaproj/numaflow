@@ -22,7 +22,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 use crate::Error::ActorTaskTerminated;
-use crate::{AssumeRoleConfig, Error, SqsConfig, SqsSourceError, extract_aws_error};
+use crate::{
+    AssumeRoleConfig, Error, SQS_METADATA_KEY, SqsConfig, SqsSourceError, extract_aws_error,
+};
 
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 
@@ -274,7 +276,7 @@ impl SqsActor {
                             sqs_attrs.insert(k.clone(), val.clone().into_bytes());
                         }
                     }
-                    custom_attributes.insert("sqs".to_string(), sqs_attrs);
+                    custom_attributes.insert(SQS_METADATA_KEY.to_string(), sqs_attrs);
                 }
 
                 SqsMessage {

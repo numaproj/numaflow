@@ -23,6 +23,14 @@ pub mod source;
 /// Metadata key used for SQS-specific attributes in message metadata
 pub const SQS_METADATA_KEY: &str = "sqs";
 
+// SQS message header parameter keys
+/// Header key for message delay in seconds (0-900 seconds)
+pub const HEADER_DELAY_SECONDS: &str = "DelaySeconds";
+/// Header key for FIFO queue message group ID
+pub const HEADER_MESSAGE_GROUP_ID: &str = "MessageGroupId";
+/// Header key for FIFO queue message deduplication ID
+pub const HEADER_MESSAGE_DEDUPLICATION_ID: &str = "MessageDeduplicationId";
+
 /// Simple assume role configuration struct for the SQS client
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssumeRoleConfig {
