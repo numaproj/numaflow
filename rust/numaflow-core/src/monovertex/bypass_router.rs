@@ -140,7 +140,6 @@ impl MvtxBypassRouter {
         };
 
         let bypass_receiver = BypassRouterReceiver {
-            bypass_conditions: config.bypass_conditions.clone(),
             batch_size: config.batch_size,
             sink_writer,
             chunk_timeout: config.chunk_timeout,
@@ -224,7 +223,6 @@ impl MvtxBypassRouter {
 /// responsible for receiving the said data from bypass channel and sending it to the different
 /// sinks in a tokio task.
 struct BypassRouterReceiver {
-    bypass_conditions: BypassConditions,
     batch_size: usize,
     sink_writer: SinkWriter,
     chunk_timeout: Duration,
