@@ -17,12 +17,12 @@ pub(super) fn compress(compression_type: CompressionType, data: &[u8]) -> Result
 
             let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
             encoder.write_all(data).map_err(|e| {
-                Error::ISB(ISBError::Other(format!(
+                Error::ISB(ISBError::Encode(format!(
                     "Failed to compress message with gzip: {e}"
                 )))
             })?;
             encoder.finish().map_err(|e| {
-                Error::ISB(ISBError::Other(format!(
+                Error::ISB(ISBError::Encode(format!(
                     "Failed to finish gzip compression: {e}"
                 )))
             })
@@ -32,17 +32,17 @@ pub(super) fn compress(compression_type: CompressionType, data: &[u8]) -> Result
             use zstd::Encoder;
 
             let mut encoder = Encoder::new(Vec::new(), 3).map_err(|e| {
-                Error::ISB(ISBError::Other(format!(
+                Error::ISB(ISBError::Encode(format!(
                     "Failed to create zstd encoder: {e:?}"
                 )))
             })?;
             encoder.write_all(data).map_err(|e| {
-                Error::ISB(ISBError::Other(format!(
+                Error::ISB(ISBError::Encode(format!(
                     "Failed to compress message with zstd: {e}"
                 )))
             })?;
             encoder.finish().map_err(|e| {
-                Error::ISB(ISBError::Other(format!(
+                Error::ISB(ISBError::Encode(format!(
                     "Failed to finish zstd compression: {e}"
                 )))
             })
@@ -52,12 +52,12 @@ pub(super) fn compress(compression_type: CompressionType, data: &[u8]) -> Result
             use std::io::Write;
 
             let mut encoder = EncoderBuilder::new().build(Vec::new()).map_err(|e| {
-                Error::ISB(ISBError::Other(format!(
+                Error::ISB(ISBError::Encode(format!(
                     "Failed to create lz4 encoder: {e:?}"
                 )))
             })?;
             encoder.write_all(data).map_err(|e| {
-                Error::ISB(ISBError::Other(format!(
+                Error::ISB(ISBError::Encode(format!(
                     "Failed to compress message with lz4: {e}"
                 )))
             })?;
@@ -86,7 +86,7 @@ pub(super) fn decompress(compression_type: CompressionType, data: &[u8]) -> Resu
         CompressionType::Zstd => {
             let mut decoder: zstd::Decoder<'static, std::io::BufReader<&[u8]>> =
                 zstd::Decoder::new(data).map_err(|e| {
-                    Error::ISB(ISBError::Other(format!(
+                    Error::ISB(ISBError::Decode(format!(
                         "Failed to create zstd decoder: {e:?}"
                     )))
                 })?;
@@ -100,7 +100,7 @@ pub(super) fn decompress(compression_type: CompressionType, data: &[u8]) -> Resu
         }
         CompressionType::LZ4 => {
             let mut decoder: lz4::Decoder<&[u8]> = lz4::Decoder::new(data).map_err(|e| {
-                Error::ISB(ISBError::Other(format!(
+                Error::ISB(ISBError::Decode(format!(
                     "Failed to create lz4 decoder: {e:?}"
                 )))
             })?;
