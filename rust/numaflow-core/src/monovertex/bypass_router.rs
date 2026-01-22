@@ -44,14 +44,14 @@
 //! +==========================================================================+
 //! ```
 
+use crate::config::is_mono_vertex;
 use crate::config::monovertex::BypassConditions;
 use crate::error;
 use crate::error::Error;
-use crate::message::{AckHandle, Message};
+use crate::message::Message;
 use crate::shared::forward::should_forward;
-use crate::sinker::sink::SinkWriter;
+use crate::sinker::sink::{SinkWriter, send_drop_metrics};
 use numaflow_models::models::ForwardConditions;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::pin;
@@ -141,7 +141,6 @@ impl MvtxBypassRouter {
         };
 
         let bypass_receiver = BypassRouterReceiver {
-            bypass_conditions: config.bypass_conditions.clone(),
             batch_size: config.batch_size,
             sink_writer,
             chunk_timeout: config.chunk_timeout,
@@ -225,7 +224,6 @@ impl MvtxBypassRouter {
 /// responsible for receiving the said data from bypass channel and sending it to the different
 /// sinks in a tokio task.
 struct BypassRouterReceiver {
-    bypass_conditions: BypassConditions,
     batch_size: usize,
     sink_writer: SinkWriter,
     chunk_timeout: Duration,
@@ -268,12 +266,13 @@ impl BypassRouterReceiver {
                         continue;
                     }
 
-                    // TODO: add a metric for messages being dropped
+                    let mut dropped_message_count = batch.len();
                     // filter out messages that are marked for drop
                     let batch: Vec<_> = batch
                         .into_iter()
                         .filter(|msg| !msg.inner().dropped())
                         .collect();
+                    dropped_message_count -= batch.len();
 
                     // skip if all were dropped
                     if batch.is_empty() {
@@ -327,6 +326,7 @@ impl BypassRouterReceiver {
                         self.final_result = Err(e);
                         self.shutting_down_on_err = true;
                     }
+                    send_drop_metrics(is_mono_vertex(), dropped_message_count);
                 }
 
                 // finalize
@@ -361,7 +361,7 @@ impl BypassRouterReceiver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{IntOffset, MessageID, Offset, ReadAck};
+    use crate::message::{AckHandle, IntOffset, MessageID, Offset, ReadAck};
     use bytes::Bytes;
     use chrono::Utc;
     use numaflow_models::models::{ForwardConditions, TagConditions};
