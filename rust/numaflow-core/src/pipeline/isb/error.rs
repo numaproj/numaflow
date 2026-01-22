@@ -29,8 +29,13 @@ pub enum ISBError {
     #[error("Failed to fetch messages from ISB: {0}")]
     Fetch(String),
 
-    /// Error when decoding/deserializing messages from the ISB.
-    /// This can occur due to protocol buffer errors, compression errors, or data corruption.
+    /// Error when encoding/compressing messages for writing to the ISB.
+    /// This can occur due to compression errors or serialization failures.
+    #[error("Failed to encode message: {0}")]
+    Encode(String),
+
+    /// Error when decoding/decompressing messages from the ISB.
+    /// This can occur due to protocol buffer errors, decompression errors, or data corruption.
     #[error("Failed to decode message: {0}")]
     Decode(String),
 
@@ -38,6 +43,16 @@ pub enum ISBError {
     /// This can occur due to network issues or JetStream API errors.
     #[error("Failed to query pending messages: {0}")]
     Pending(String),
+
+    /// Error when writing/publishing messages to the ISB.
+    /// This can occur due to network issues, JetStream errors, timeout, or buffer full.
+    #[error("Failed to write message to ISB: {0}")]
+    Write(String),
+
+    /// Error when fetching buffer information (stream/consumer info).
+    /// This can occur due to network issues or JetStream API errors.
+    #[error("Failed to fetch buffer information: {0}")]
+    BufferInfo(String),
 
     /// Generic ISB error for cases not covered by specific variants.
     /// TODO: As we identify more specific error cases, we should add dedicated variants.
