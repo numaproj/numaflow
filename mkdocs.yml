@@ -112,6 +112,7 @@ nav:
           - user-guide/reference/mvtx-tuning.md
           - user-guide/reference/mvtx-operations.md
           - user-guide/reference/distributed-throttling.md
+          - user-guide/reference/monovertex-bypass.md
           - Configuration:
               - user-guide/reference/configuration/pod-specifications.md
               - user-guide/reference/configuration/container-resources.md
