@@ -2416,6 +2416,54 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#monovertex-metrics" class="md-nav__link">
+    MonoVertex Metrics
+  </a>
+  
+    <nav class="md-nav" aria-label="MonoVertex Metrics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#transformer-metrics" class="md-nav__link">
+    Transformer Metrics
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#udf-metrics" class="md-nav__link">
+    UDF Metrics
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sink-metrics" class="md-nav__link">
+    Sink Metrics
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fallback-sink-metrics" class="md-nav__link">
+    Fallback Sink Metrics
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on-success-sink-metrics" class="md-nav__link">
+    On-Success Sink Metrics
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#prometheus-operator-for-scraping-metrics" class="md-nav__link">
     Prometheus Operator for Scraping Metrics:
   </a>
@@ -2432,7 +2480,7 @@
         
           <li class="md-nav__item">
   <a href="#configure-the-below-service-monitor-if-you-use-the-nats-jetstream-isb-for-your-nats-jetstream-metrics" class="md-nav__link">
-    Configure the below Service Monitor if you use the NATS Jetstream ISB for your NATS Jetstream metrics:
+    Configure the below Service Monitor if you use the NATS Jetstream ISB for your NATS Jetstream metrics
   </a>
   
 </li>
@@ -2458,9 +2506,29 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#current-format-by-component-v17" class="md-nav__link">
-    Current Format by Component (v1.7+)
+  <a href="#format-by-component" class="md-nav__link">
+    Format by Component
   </a>
+  
+    <nav class="md-nav" aria-label="Format by Component">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#numaflow-v15x-and-below" class="md-nav__link">
+    Numaflow v1.5.x and below
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#numaflow-v16-and-above" class="md-nav__link">
+    Numaflow v1.6 and above
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -2843,6 +2911,54 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#monovertex-metrics" class="md-nav__link">
+    MonoVertex Metrics
+  </a>
+  
+    <nav class="md-nav" aria-label="MonoVertex Metrics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#transformer-metrics" class="md-nav__link">
+    Transformer Metrics
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#udf-metrics" class="md-nav__link">
+    UDF Metrics
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sink-metrics" class="md-nav__link">
+    Sink Metrics
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fallback-sink-metrics" class="md-nav__link">
+    Fallback Sink Metrics
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on-success-sink-metrics" class="md-nav__link">
+    On-Success Sink Metrics
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#prometheus-operator-for-scraping-metrics" class="md-nav__link">
     Prometheus Operator for Scraping Metrics:
   </a>
@@ -2859,7 +2975,7 @@
         
           <li class="md-nav__item">
   <a href="#configure-the-below-service-monitor-if-you-use-the-nats-jetstream-isb-for-your-nats-jetstream-metrics" class="md-nav__link">
-    Configure the below Service Monitor if you use the NATS Jetstream ISB for your NATS Jetstream metrics:
+    Configure the below Service Monitor if you use the NATS Jetstream ISB for your NATS Jetstream metrics
   </a>
   
 </li>
@@ -2885,9 +3001,29 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#current-format-by-component-v17" class="md-nav__link">
-    Current Format by Component (v1.7+)
+  <a href="#format-by-component" class="md-nav__link">
+    Format by Component
   </a>
+  
+    <nav class="md-nav" aria-label="Format by Component">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#numaflow-v15x-and-below" class="md-nav__link">
+    Numaflow v1.5.x and below
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#numaflow-v16-and-above" class="md-nav__link">
+    Numaflow v1.6 and above
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -3005,6 +3141,18 @@
 <td>Provides the total number of bytes written to a fallback sink</td>
 </tr>
 <tr>
+<td><code>forwarder_onsuccess_sink_write_total</code></td>
+<td>Counter</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of messages written to a on-success sink</td>
+</tr>
+<tr>
+<td><code>forwarder_onsuccess_sink_write_bytes_total</code></td>
+<td>Counter</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of bytes written to a on-success sink</td>
+</tr>
+<tr>
 <td><code>forwarder_ack_total</code></td>
 <td>Counter</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
@@ -3083,6 +3231,12 @@
 <td>Histogram</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Provides the histogram distribution of the processing times of write operations to a fallback sink</td>
+</tr>
+<tr>
+<td><code>forwarder_onsuccess_sink_write_processing_time</code></td>
+<td>Histogram</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the histogram distribution of the processing times of write operations to a on-success sink</td>
 </tr>
 <tr>
 <td><code>source_forwarder_transformer_processing_time</code></td>
@@ -3193,6 +3347,12 @@
 <td>Counter</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Indicates any errors while writing to a fallback sink</td>
+</tr>
+<tr>
+<td><code>forwarder_onsuccess_sink_write_error_total</code></td>
+<td>Counter</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Indicates any errors while writing to a on-success sink</td>
 </tr>
 <tr>
 <td><code>forwarder_ack_error_total</code></td>
@@ -3367,6 +3527,210 @@
 </tr>
 </tbody>
 </table>
+<h2 id="monovertex-metrics">MonoVertex Metrics<a class="headerlink" href="#monovertex-metrics" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Metric name</th>
+<th>Metric type</th>
+<th>Labels</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>monovtx_read_total</code></td>
+<td>Counter</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total number of messages read from the source</td>
+</tr>
+<tr>
+<td><code>monovtx_read_bytes_total</code></td>
+<td>Counter</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total number of bytes read from the source</td>
+</tr>
+<tr>
+<td><code>monovtx_ack_total</code></td>
+<td>Counter</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total number of messages acknowledged by the sink</td>
+</tr>
+<tr>
+<td><code>monovtx_dropped_total</code></td>
+<td>Counter</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total number of messages dropped by the monovertex</td>
+</tr>
+<tr>
+<td><code>monovtx_pending_raw</code></td>
+<td>Gauge</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total number of source pending messages for the monovertex</td>
+</tr>
+<tr>
+<td><code>monovtx_read_batch_size</code></td>
+<td>Gauge</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the read batch size for the monovertex</td>
+</tr>
+<tr>
+<td><code>monovtx_processing_time</code></td>
+<td>Histogram</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total time taken to forward a chunk, in microseconds</td>
+</tr>
+<tr>
+<td><code>monovtx_read_time</code></td>
+<td>Histogram</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total time taken to read from the source, in microseconds</td>
+</tr>
+<tr>
+<td><code>monovtx_ack_time</code></td>
+<td>Histogram</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total time taken to ack to the source, in microseconds</td>
+</tr>
+</tbody>
+</table>
+<h3 id="transformer-metrics">Transformer Metrics<a class="headerlink" href="#transformer-metrics" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric name</th>
+<th>Metric type</th>
+<th>Labels</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>monovtx_transformer_time</code></td>
+<td>Histogram</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total time taken to transform, in microseconds</td>
+</tr>
+<tr>
+<td><code>monovtx_transformer_dropped_total</code></td>
+<td>Counter</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total number of messages dropped by the transformer</td>
+</tr>
+</tbody>
+</table>
+<h3 id="udf-metrics">UDF Metrics<a class="headerlink" href="#udf-metrics" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric name</th>
+<th>Metric type</th>
+<th>Labels</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>monovtx_udf_time</code></td>
+<td>Histogram</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total time taken in UDF, in microseconds</td>
+</tr>
+<tr>
+<td><code>monovtx_udf_udf_error_total</code></td>
+<td>Counter</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total number of UDF errors</td>
+</tr>
+</tbody>
+</table>
+<h3 id="sink-metrics">Sink Metrics<a class="headerlink" href="#sink-metrics" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric name</th>
+<th>Metric type</th>
+<th>Labels</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>monovtx_sink_write_total</code></td>
+<td>Counter</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total number of messages written to the sink</td>
+</tr>
+<tr>
+<td><code>monovtx_sink_time</code></td>
+<td>Histogram</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total time taken to write to the sink, in microseconds</td>
+</tr>
+<tr>
+<td><code>monovtx_sink_write_errors_total</code></td>
+<td>Counter</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total number of write errors for the sink</td>
+</tr>
+<tr>
+<td><code>monovtx_sink_dropped_total</code></td>
+<td>Counter</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total number of messages dropped by sink</td>
+</tr>
+</tbody>
+</table>
+<h3 id="fallback-sink-metrics">Fallback Sink Metrics<a class="headerlink" href="#fallback-sink-metrics" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric name</th>
+<th>Metric type</th>
+<th>Labels</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>monovtx_fallback_sink_write_total</code></td>
+<td>Counter</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total number of messages written to the fallback sink</td>
+</tr>
+<tr>
+<td><code>monovtx_fallback_sink_time</code></td>
+<td>Histogram</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total time taken to write to the fallback sink, in microseconds</td>
+</tr>
+</tbody>
+</table>
+<h3 id="on-success-sink-metrics">On-Success Sink Metrics<a class="headerlink" href="#on-success-sink-metrics" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric name</th>
+<th>Metric type</th>
+<th>Labels</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>monovtx_onsuccess_sink_write_total</code></td>
+<td>Counter</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total number of messages written to the on-success sink</td>
+</tr>
+<tr>
+<td><code>monovtx_onsuccess_sink_time</code></td>
+<td>Histogram</td>
+<td><code>mvtx_name=&lt;monovertex-name&gt;</code> <br> <code>mvtx_replica=&lt;replica-index&gt;</code></td>
+<td>Provides the total time taken to write to the on-success sink, in microseconds</td>
+</tr>
+</tbody>
+</table>
 <h2 id="prometheus-operator-for-scraping-metrics">Prometheus Operator for Scraping Metrics:<a class="headerlink" href="#prometheus-operator-for-scraping-metrics" title="Permanent link">&para;</a></h2>
 <p>You can follow the <a href="https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/getting-started/installation.md">prometheus operator</a> setup guide if you would like to use prometheus operator configured in your cluster.</p>
 <p>You can also set up prometheus operator via <a href="https://bitnami.com/stack/prometheus-operator/helm">helm</a>.</p>
@@ -3478,7 +3842,7 @@
 <span class="w">      </span><span class="nt">app.kubernetes.io/name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">controller-manager</span>
 <span class="w">      </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span>
 </code></pre></div>
-<h3 id="configure-the-below-service-monitor-if-you-use-the-nats-jetstream-isb-for-your-nats-jetstream-metrics">Configure the below Service Monitor if you use the NATS Jetstream ISB for your NATS Jetstream metrics:<a class="headerlink" href="#configure-the-below-service-monitor-if-you-use-the-nats-jetstream-isb-for-your-nats-jetstream-metrics" title="Permanent link">&para;</a></h3>
+<h3 id="configure-the-below-service-monitor-if-you-use-the-nats-jetstream-isb-for-your-nats-jetstream-metrics">Configure the below Service Monitor if you use the NATS Jetstream ISB for your NATS Jetstream metrics<a class="headerlink" href="#configure-the-below-service-monitor-if-you-use-the-nats-jetstream-isb-for-your-nats-jetstream-metrics" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">monitoring.coreos.com/v1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ServiceMonitor</span>
 <span class="nt">metadata</span><span class="p">:</span>
@@ -3501,7 +3865,7 @@
 <span class="w">        </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Exists</span>
 </code></pre></div>
 <h2 id="metrics-exposition-format">Metrics Exposition Format<a class="headerlink" href="#metrics-exposition-format" title="Permanent link">&para;</a></h2>
-<p>Starting with Numaflow <strong>v1.7</strong>, the dataplane (vertex pods, monovertex pods) was rewritten in Rust, which changed the 
+<p>Starting with Numaflow <strong>v1.6</strong>, the dataplane (vertex pods, monovertex pods) was rewritten in Rust, which changed the 
 metrics exposition format from Prometheus text format to OpenMetrics text format due to the switch from using 
 <code>client_golang</code> <a href="https://github.com/prometheus/client_golang">prometheus client</a> to 
 <code>client_rust</code> <a href="https://github.com/prometheus/client_rust">prometheus client</a> for exposing metrics.
@@ -3511,8 +3875,8 @@ As we rewrite other parts (e.g., daemon server), they will also adopt OpenMetric
 <thead>
 <tr>
 <th>Component</th>
-<th>Numaflow ≤ v1.5</th>
-<th>Numaflow ≥ v1.7</th>
+<th>Numaflow &lt; v1.6</th>
+<th>Numaflow ≥ v1.6</th>
 </tr>
 </thead>
 <tbody>
@@ -3533,7 +3897,10 @@ As we rewrite other parts (e.g., daemon server), they will also adopt OpenMetric
 </tr>
 </tbody>
 </table>
-<h3 id="current-format-by-component-v17">Current Format by Component (v1.7+)<a class="headerlink" href="#current-format-by-component-v17" title="Permanent link">&para;</a></h3>
+<h3 id="format-by-component">Format by Component<a class="headerlink" href="#format-by-component" title="Permanent link">&para;</a></h3>
+<h4 id="numaflow-v15x-and-below">Numaflow v1.5.x and below<a class="headerlink" href="#numaflow-v15x-and-below" title="Permanent link">&para;</a></h4>
+<p>Prometheus text format across all components</p>
+<h4 id="numaflow-v16-and-above">Numaflow v1.6 and above<a class="headerlink" href="#numaflow-v16-and-above" title="Permanent link">&para;</a></h4>
 <table>
 <thead>
 <tr>
