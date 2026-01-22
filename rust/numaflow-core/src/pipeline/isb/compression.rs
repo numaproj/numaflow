@@ -256,4 +256,101 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_decompress_truncated_zstd_data() {
+        let test_data = b"Hello, World! This is a test message for zstd compression.";
+
+        // First compress the data properly
+        let compressed = compress(CompressionType::Zstd, test_data).unwrap();
+
+        // Then truncate the compressed data to simulate corruption
+        let mut truncated_data = compressed;
+        truncated_data.truncate(truncated_data.len() / 2);
+
+        let result = decompress(CompressionType::Zstd, &truncated_data);
+
+        assert!(result.is_err());
+        if let Err(Error::ISB(isb_err)) = result {
+            let msg = isb_err.to_string();
+            assert!(msg.contains("Failed to decompress message"));
+        } else {
+            panic!("Expected ISB error with decompression message");
+        }
+    }
+
+    #[test]
+    fn test_decompress_invalid_zstd_data() {
+        let invalid_data = b"This is not zstd compressed data".to_vec();
+
+        let result = decompress(CompressionType::Zstd, &invalid_data);
+        assert!(result.is_err());
+
+        if let Err(Error::ISB(isb_err)) = result {
+            let msg = isb_err.to_string();
+            assert!(msg.contains("Failed to decompress message"));
+        } else {
+            panic!("Expected ISB error with zstd message");
+        }
+    }
+
+    #[test]
+    fn test_decompress_invalid_gzip_data() {
+        let invalid_data = b"This is not gzip compressed data".to_vec();
+
+        let result = decompress(CompressionType::Gzip, &invalid_data);
+        assert!(result.is_err());
+
+        if let Err(Error::ISB(isb_err)) = result {
+            let msg = isb_err.to_string();
+            assert!(msg.contains("Failed to decompress message"));
+        } else {
+            panic!("Expected ISB error with gzip message");
+        }
+    }
+
+    #[test]
+    fn test_compress_large_data_gzip() {
+        // Test with larger data to ensure compression actually reduces size
+        let test_data = vec![b'A'; 10000];
+
+        let compressed = compress(CompressionType::Gzip, &test_data).unwrap();
+        assert!(
+            compressed.len() < test_data.len(),
+            "Compressed data should be smaller"
+        );
+
+        let decompressed = decompress(CompressionType::Gzip, &compressed).unwrap();
+        assert_eq!(decompressed, test_data);
+    }
+
+    #[test]
+    fn test_compress_large_data_zstd() {
+        // Test with larger data to ensure compression actually reduces size
+        let test_data = vec![b'B'; 10000];
+
+        let compressed = compress(CompressionType::Zstd, &test_data).unwrap();
+        assert!(
+            compressed.len() < test_data.len(),
+            "Compressed data should be smaller"
+        );
+
+        let decompressed = decompress(CompressionType::Zstd, &compressed).unwrap();
+        assert_eq!(decompressed, test_data);
+    }
+
+    #[test]
+    fn test_compress_large_data_lz4() {
+        // Test with larger data to ensure compression actually reduces size
+        let test_data = vec![b'C'; 10000];
+
+        let compressed = compress(CompressionType::LZ4, &test_data).unwrap();
+        assert!(
+            compressed.len() < test_data.len(),
+            "Compressed data should be smaller"
+        );
+
+        let decompressed = decompress(CompressionType::LZ4, &compressed).unwrap();
+        assert_eq!(decompressed, test_data);
+    }
 }

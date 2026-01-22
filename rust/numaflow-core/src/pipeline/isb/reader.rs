@@ -1006,4 +1006,286 @@ mod tests {
         js_reader_task.await.unwrap().unwrap();
         context.delete_stream(stream.name).await.unwrap();
     }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_nack_with_retry_success() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_nack_retry_success", "test", 0);
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let mut js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+            .await
+            .unwrap();
+
+        // Publish a message
+        let message = Message {
+            keys: Arc::from(vec!["test-key".to_string()]),
+            value: Bytes::from("test message"),
+            offset: Offset::Int(IntOffset::new(1, 0)),
+            event_time: Utc::now(),
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_1".into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+
+        let message_bytes: BytesMut = message.try_into().unwrap();
+        context
+            .publish(stream.name, message_bytes.into())
+            .await
+            .unwrap();
+
+        // Fetch the message to populate offset2jsmsg
+        let messages = js_reader
+            .fetch(1, Duration::from_millis(1000))
+            .await
+            .unwrap();
+        assert_eq!(messages.len(), 1);
+
+        let offset = messages[0].offset.clone();
+        let cancel_token = CancellationToken::new();
+
+        // Test nack_with_retry - should succeed
+        let result = ISBReader::<crate::typ::WithoutRateLimiter>::nak_with_retry(
+            &js_reader,
+            &offset,
+            &cancel_token,
+        )
+        .await;
+        assert!(result.is_ok(), "nack_with_retry should succeed");
+
+        // Verify message is back in pending
+        let pending = js_reader.pending().await.unwrap();
+        assert_eq!(pending, Some(1));
+
+        context.delete_stream(stream.name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_nack_with_retry_missing_offset() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_nack_retry_missing", "test", 0);
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+            .await
+            .unwrap();
+
+        // Try to nack an offset that doesn't exist
+        let missing_offset = Offset::Int(IntOffset::new(999, 0));
+        let cancel_token = CancellationToken::new();
+
+        // Test nack_with_retry - should fail with OffsetNotFound
+        let result = ISBReader::<crate::typ::WithoutRateLimiter>::nak_with_retry(
+            &js_reader,
+            &missing_offset,
+            &cancel_token,
+        )
+        .await;
+        assert!(
+            result.is_err(),
+            "nack_with_retry should fail for missing offset"
+        );
+
+        if let Err(Error::ISB(ISBError::OffsetNotFound(msg))) = result {
+            assert!(msg.contains("999"));
+        } else {
+            panic!("Expected ISBError::OffsetNotFound");
+        }
+
+        context.delete_stream(stream.name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_ack_with_retry_success() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_ack_retry_success", "test", 0);
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let mut js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+            .await
+            .unwrap();
+
+        // Publish a message
+        let message = Message {
+            keys: Arc::from(vec!["test-key".to_string()]),
+            value: Bytes::from("test message"),
+            offset: Offset::Int(IntOffset::new(1, 0)),
+            event_time: Utc::now(),
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_1".into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+
+        let message_bytes: BytesMut = message.try_into().unwrap();
+        context
+            .publish(stream.name, message_bytes.into())
+            .await
+            .unwrap();
+
+        // Fetch the message to populate offset2jsmsg
+        let messages = js_reader
+            .fetch(1, Duration::from_millis(1000))
+            .await
+            .unwrap();
+        assert_eq!(messages.len(), 1);
+
+        let offset = messages[0].offset.clone();
+        let cancel_token = CancellationToken::new();
+
+        // Test ack_with_retry - should succeed
+        let result = ISBReader::<crate::typ::WithoutRateLimiter>::ack_with_retry(
+            &js_reader,
+            &offset,
+            &cancel_token,
+        )
+        .await;
+        assert!(result.is_ok(), "ack_with_retry should succeed");
+
+        // Verify message is acked
+        let pending = js_reader.pending().await.unwrap();
+        assert_eq!(pending, Some(0));
+
+        context.delete_stream(stream.name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_ack_with_retry_missing_offset() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_ack_retry_missing", "test", 0);
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+            .await
+            .unwrap();
+
+        // Try to ack an offset that doesn't exist
+        let missing_offset = Offset::Int(IntOffset::new(999, 0));
+        let cancel_token = CancellationToken::new();
+
+        // Test ack_with_retry - should fail with OffsetNotFound
+        let result = ISBReader::<crate::typ::WithoutRateLimiter>::ack_with_retry(
+            &js_reader,
+            &missing_offset,
+            &cancel_token,
+        )
+        .await;
+        assert!(
+            result.is_err(),
+            "ack_with_retry should fail for missing offset"
+        );
+
+        if let Err(Error::ISB(ISBError::OffsetNotFound(msg))) = result {
+            assert!(msg.contains("999"));
+        } else {
+            panic!("Expected ISBError::OffsetNotFound");
+        }
+
+        context.delete_stream(stream.name).await.unwrap();
+    }
 }

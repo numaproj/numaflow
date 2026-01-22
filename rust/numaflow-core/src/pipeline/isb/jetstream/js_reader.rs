@@ -421,4 +421,151 @@ mod tests {
 
         context.delete_stream(stream.name).await.unwrap();
     }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_ack_missing_offset() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_ack_missing_offset", "test", 0);
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+            .await
+            .unwrap();
+
+        // Try to ack an offset that doesn't exist in the tracker
+        let missing_offset = Offset::Int(IntOffset::new(999, 0));
+        let result = js_reader.ack(&missing_offset).await;
+
+        assert!(result.is_err());
+        if let Err(Error::ISB(ISBError::OffsetNotFound(msg))) = result {
+            assert!(msg.contains("999"));
+        } else {
+            panic!("Expected ISBError::OffsetNotFound");
+        }
+
+        context.delete_stream(stream.name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_nack_missing_offset() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_nack_missing_offset", "test", 0);
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+            .await
+            .unwrap();
+
+        // Try to nack an offset that doesn't exist in the tracker
+        let missing_offset = Offset::Int(IntOffset::new(999, 0));
+        let result = js_reader.nack(&missing_offset).await;
+
+        assert!(result.is_err());
+        if let Err(Error::ISB(ISBError::OffsetNotFound(msg))) = result {
+            assert!(msg.contains("999"));
+        } else {
+            panic!("Expected ISBError::OffsetNotFound");
+        }
+
+        context.delete_stream(stream.name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_mark_wip_missing_offset() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_mark_wip_missing_offset", "test", 0);
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+            .await
+            .unwrap();
+
+        // Try to mark_wip an offset that doesn't exist in the tracker
+        let missing_offset = Offset::Int(IntOffset::new(999, 0));
+        let result = js_reader.mark_wip(&missing_offset).await;
+
+        assert!(result.is_err());
+        if let Err(Error::ISB(ISBError::OffsetNotFound(msg))) = result {
+            assert!(msg.contains("999"));
+        } else {
+            panic!("Expected ISBError::OffsetNotFound");
+        }
+
+        context.delete_stream(stream.name).await.unwrap();
+    }
 }
