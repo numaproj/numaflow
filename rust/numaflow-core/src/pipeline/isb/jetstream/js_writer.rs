@@ -94,14 +94,19 @@ impl JetStreamWriter {
                 .js_ctx
                 .get_stream(js_writer.stream.name)
                 .await
-                .map_err(|e| Error::ISB(ISBError::BufferInfo(format!("Failed to get stream: {}", e))))?;
+                .map_err(|e| {
+                    Error::ISB(ISBError::BufferInfo(format!("Failed to get stream: {}", e)))
+                })?;
 
             let consumer: PullConsumer = js_writer
                 .js_ctx
                 .get_consumer_from_stream(js_writer.stream.name, js_writer.stream.name)
                 .await
                 .map_err(|e| {
-                    Error::ISB(ISBError::BufferInfo(format!("Failed to get the consumer: {}", e)))
+                    Error::ISB(ISBError::BufferInfo(format!(
+                        "Failed to get the consumer: {}",
+                        e
+                    )))
                 })?;
 
             let is_full = Arc::clone(&js_writer.is_full);
@@ -347,13 +352,15 @@ impl JetStreamWriter {
     ) -> Result<BufferInfo> {
         let stream_info = stream.info().await.map_err(|e| {
             Error::ISB(ISBError::BufferInfo(format!(
-                "Failed to get the stream info: {}", e
+                "Failed to get the stream info: {}",
+                e
             )))
         })?;
 
         let consumer_info = consumer.info().await.map_err(|e| {
             Error::ISB(ISBError::BufferInfo(format!(
-                "Failed to get the consumer info: {}", e
+                "Failed to get the consumer info: {}",
+                e
             )))
         })?;
 
@@ -419,7 +426,12 @@ mod tests {
         let mut consumer: PullConsumer = context
             .get_consumer_from_stream(stream.name, stream.name)
             .await
-            .map_err(|e| Error::ISB(ISBError::BufferInfo(format!("Failed to get the consumer: {}", e))))
+            .map_err(|e| {
+                Error::ISB(ISBError::BufferInfo(format!(
+                    "Failed to get the consumer: {}",
+                    e
+                )))
+            })
             .expect("failed to create consumer");
 
         let buffer_info = JetStreamWriter::fetch_buffer_info(&mut js_stream, &mut consumer, 100)
@@ -605,7 +617,10 @@ mod tests {
         };
 
         let result = writer.async_write(message).await;
-        assert!(result.is_ok(), "async_write with compression should succeed");
+        assert!(
+            result.is_ok(),
+            "async_write with compression should succeed"
+        );
 
         context.delete_stream(stream.name).await.unwrap();
     }
@@ -661,7 +676,10 @@ mod tests {
             typ: Default::default(),
             keys: Arc::from(vec!["key_test".to_string()]),
             tags: None,
-            value: "test message with zstd compression".as_bytes().to_vec().into(),
+            value: "test message with zstd compression"
+                .as_bytes()
+                .to_vec()
+                .into(),
             offset: Offset::Int(IntOffset::new(1, 0)),
             event_time: Utc::now(),
             watermark: None,
@@ -674,7 +692,10 @@ mod tests {
         };
 
         let result = writer.blocking_write(message, cln_token).await;
-        assert!(result.is_ok(), "blocking_write with compression should succeed");
+        assert!(
+            result.is_ok(),
+            "blocking_write with compression should succeed"
+        );
 
         context.delete_stream(stream.name).await.unwrap();
     }
