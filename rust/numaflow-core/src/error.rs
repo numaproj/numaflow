@@ -48,7 +48,7 @@ pub enum Error {
 
     #[allow(clippy::upper_case_acronyms)]
     #[error("ISB Error - {0}")]
-    ISB(String),
+    ISB(crate::pipeline::isb::error::ISBError),
 
     #[error("OneShot Receiver Error - {0}")]
     ActorPatternRecv(String),

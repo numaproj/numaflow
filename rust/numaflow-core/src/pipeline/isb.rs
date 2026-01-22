@@ -6,6 +6,7 @@
 // TODO: implement a simple ISB and a trait for ISB
 
 pub(crate) mod compression;
+pub(crate) mod error;
 pub(crate) mod jetstream;
 pub(crate) mod reader;
 pub(crate) mod writer;
