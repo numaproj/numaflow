@@ -361,11 +361,11 @@ impl BypassRouterReceiver {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::message::{AckHandle, IntOffset, MessageID, Offset, ReadAck};
     use crate::message::{IntOffset, MessageID, Offset, ReadAck};
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
     use crate::tracker::Tracker;
-    use crate::message::{AckHandle, IntOffset, MessageID, Offset, ReadAck};
     use bytes::Bytes;
     use chrono::Utc;
     use numaflow::shared::{DROP, ServerExtras};
