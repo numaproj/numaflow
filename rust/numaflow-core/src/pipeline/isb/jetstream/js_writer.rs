@@ -94,14 +94,19 @@ impl JetStreamWriter {
                 .js_ctx
                 .get_stream(js_writer.stream.name)
                 .await
-                .map_err(|_| Error::ISB(ISBError::Other("Failed to get stream".to_string())))?;
+                .map_err(|e| {
+                    Error::ISB(ISBError::BufferInfo(format!("Failed to get stream: {}", e)))
+                })?;
 
             let consumer: PullConsumer = js_writer
                 .js_ctx
                 .get_consumer_from_stream(js_writer.stream.name, js_writer.stream.name)
                 .await
                 .map_err(|e| {
-                    Error::ISB(ISBError::Other(format!("Failed to get the consumer {e}")))
+                    Error::ISB(ISBError::BufferInfo(format!(
+                        "Failed to get the consumer: {}",
+                        e
+                    )))
                 })?;
 
             let is_full = Arc::clone(&js_writer.is_full);
@@ -222,7 +227,7 @@ impl JetStreamWriter {
         message.value = match self.compression_type {
             Some(compression_type) => bytes::Bytes::from(
                 compression::compress(compression_type, &message.value).map_err(|e| {
-                    Error::ISB(ISBError::Other(format!("Compression failed: {}", e)))
+                    Error::ISB(ISBError::Encode(format!("Compression failed: {}", e)))
                 })?,
             ),
             None => message.value,
@@ -346,14 +351,16 @@ impl JetStreamWriter {
         max_length: usize,
     ) -> Result<BufferInfo> {
         let stream_info = stream.info().await.map_err(|e| {
-            Error::ISB(ISBError::Other(format!(
-                "Failed to get the stream info {e}"
+            Error::ISB(ISBError::BufferInfo(format!(
+                "Failed to get the stream info: {}",
+                e
             )))
         })?;
 
         let consumer_info = consumer.info().await.map_err(|e| {
-            Error::ISB(ISBError::Other(format!(
-                "Failed to get the consumer info {e}"
+            Error::ISB(ISBError::BufferInfo(format!(
+                "Failed to get the consumer info: {}",
+                e
             )))
         })?;
 
@@ -419,7 +426,12 @@ mod tests {
         let mut consumer: PullConsumer = context
             .get_consumer_from_stream(stream.name, stream.name)
             .await
-            .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to get the consumer {e}"))))
+            .map_err(|e| {
+                Error::ISB(ISBError::BufferInfo(format!(
+                    "Failed to get the consumer: {}",
+                    e
+                )))
+            })
             .expect("failed to create consumer");
 
         let buffer_info = JetStreamWriter::fetch_buffer_info(&mut js_stream, &mut consumer, 100)
@@ -537,6 +549,153 @@ mod tests {
 
         let result = writer.async_write(message).await;
         assert!(matches!(result, Err(WriteError::BufferFull)));
+
+        context.delete_stream(stream.name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_async_write_with_compression() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let cln_token = CancellationToken::new();
+
+        let stream = Stream::new("test-write-compress", "temp", 0);
+        let _ = context.delete_stream(stream.name).await;
+        let _stream = context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        // Test with gzip compression
+        let writer = JetStreamWriter::new(
+            stream.clone(),
+            context.clone(),
+            writer_config,
+            Some(CompressionType::Gzip),
+            cln_token.clone(),
+        )
+        .await
+        .unwrap();
+
+        let message = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key_test".to_string()]),
+            tags: None,
+            value: "test message with compression".as_bytes().to_vec().into(),
+            offset: Offset::Int(IntOffset::new(1, 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_test".to_string().into(),
+                index: 1,
+            },
+            ..Default::default()
+        };
+
+        let result = writer.async_write(message).await;
+        assert!(
+            result.is_ok(),
+            "async_write with compression should succeed"
+        );
+
+        context.delete_stream(stream.name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_blocking_write_with_compression() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let cln_token = CancellationToken::new();
+
+        let stream = Stream::new("test-blocking-compress", "temp", 0);
+        let _ = context.delete_stream(stream.name).await;
+        let _stream = context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        // Test with zstd compression
+        let writer = JetStreamWriter::new(
+            stream.clone(),
+            context.clone(),
+            writer_config,
+            Some(CompressionType::Zstd),
+            cln_token.clone(),
+        )
+        .await
+        .unwrap();
+
+        let message = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key_test".to_string()]),
+            tags: None,
+            value: "test message with zstd compression"
+                .as_bytes()
+                .to_vec()
+                .into(),
+            offset: Offset::Int(IntOffset::new(1, 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_test".to_string().into(),
+                index: 1,
+            },
+            ..Default::default()
+        };
+
+        let result = writer.blocking_write(message, cln_token).await;
+        assert!(
+            result.is_ok(),
+            "blocking_write with compression should succeed"
+        );
 
         context.delete_stream(stream.name).await.unwrap();
     }
