@@ -653,28 +653,25 @@ impl SinkWriter {
 
 /// Sends count of messages marked for explicit drop by the user
 /// Currently pub(crate) to allow usage by the bypass_router.
-/// TODO: Should this be a separate metric? Currently reason is different for pipeline
 pub(crate) fn send_drop_metrics(is_mono_vertex: bool, dropped_messages_count: usize) {
-    if dropped_messages_count > 0 {
-        if is_mono_vertex {
-            monovertex_metrics()
-                .sink
-                .dropped_total
-                .get_or_create(mvtx_forward_metric_labels())
-                .inc_by(dropped_messages_count as u64);
-        } else {
-            // The reason here is different from the one used when
-            // messages are dropped after 3 failed retries
-            pipeline_metrics()
-                .forwarder
-                .drop_total
-                .get_or_create(&pipeline_drop_metric_labels(
-                    VERTEX_TYPE_SINK,
-                    get_vertex_name(),
-                    "Dropped Upstream",
-                ))
-                .inc_by(dropped_messages_count as u64);
-        }
+    if is_mono_vertex {
+        monovertex_metrics()
+            .sink
+            .dropped_total
+            .get_or_create(mvtx_forward_metric_labels())
+            .inc_by(dropped_messages_count as u64);
+    } else {
+        // The reason here is different from the one used when
+        // messages are dropped after 3 failed retries
+        pipeline_metrics()
+            .forwarder
+            .drop_total
+            .get_or_create(&pipeline_drop_metric_labels(
+                VERTEX_TYPE_SINK,
+                get_vertex_name(),
+                "Dropped Upstream",
+            ))
+            .inc_by(dropped_messages_count as u64);
     }
 }
 
