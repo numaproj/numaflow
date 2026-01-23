@@ -14,11 +14,11 @@ use crate::Error;
 use crate::Result;
 use crate::config::is_mono_vertex;
 use crate::config::pipeline::VERTEX_TYPE_SINK;
+use crate::message::Message;
 use crate::metrics::{
     monovertex_metrics, mvtx_critical_error_metric_labels, pipeline_critical_error_metric_labels,
     pipeline_metrics,
 };
-use crate::message::Message;
 use crate::shared::grpc::prost_timestamp_from_utc;
 use crate::sinker::sink::{ResponseFromSink, Sink};
 
