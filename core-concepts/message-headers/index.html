@@ -960,6 +960,20 @@
   
   
     <li class="md-nav__item">
+      <a href="../../user-guide/sinks/sqs/" class="md-nav__link">
+        SQS Sink
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../user-guide/sinks/user-defined-sinks/" class="md-nav__link">
         User-defined Sinks
       </a>
@@ -2768,6 +2782,10 @@ Message headers are immutable and cannot be manipulated through the SDKs.</p>
 <li>
 <p><strong>HTTP Source Example</strong><br />
   In <code>pkg/sources/http/http.go</code>, HTTP headers from incoming requests are added to the message headers. This means any custom or standard HTTP header is available throughout the pipeline.</p>
+</li>
+<li>
+<p><strong>SQS Source Example</strong><br />
+  When configured with <code>attributeNames</code>, SQS system attributes (e.g., <code>SentTimestamp</code>, <code>MessageGroupId</code>, <code>MessageDeduplicationId</code>) are copied into the Numaflow message headers. User-defined message attributes (configured via <code>messageAttributeNames</code>) are propagated as metadata under the <code>sqs</code> namespace.</p>
 </li>
 <li>
 <p><strong>Accessing Headers in UDFs</strong></p>

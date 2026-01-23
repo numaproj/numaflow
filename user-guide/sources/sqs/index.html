@@ -811,22 +811,50 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#miscellaneous" class="md-nav__link">
-    Miscellaneous
+  <a href="#message-attributes-and-headers" class="md-nav__link">
+    Message Attributes and Headers
   </a>
   
-    <nav class="md-nav" aria-label="Miscellaneous">
+    <nav class="md-nav" aria-label="Message Attributes and Headers">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
-    Troubleshooting
+  <a href="#system-attributes" class="md-nav__link">
+    System Attributes
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-attributes" class="md-nav__link">
+    Custom Attributes
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-accessing-sqs-attributes-in-a-udf" class="md-nav__link">
+    Example: Accessing SQS Attributes in a UDF
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fifo-queue-support" class="md-nav__link">
+    FIFO Queue Support
   </a>
   
 </li>
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    Troubleshooting
+  </a>
   
 </li>
       
@@ -1072,6 +1100,20 @@
     <li class="md-nav__item">
       <a href="../../sinks/blackhole/" class="md-nav__link">
         Blackhole Sink
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sinks/sqs/" class="md-nav__link">
+        SQS Sink
       </a>
     </li>
   
@@ -2809,22 +2851,50 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#miscellaneous" class="md-nav__link">
-    Miscellaneous
+  <a href="#message-attributes-and-headers" class="md-nav__link">
+    Message Attributes and Headers
   </a>
   
-    <nav class="md-nav" aria-label="Miscellaneous">
+    <nav class="md-nav" aria-label="Message Attributes and Headers">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
-    Troubleshooting
+  <a href="#system-attributes" class="md-nav__link">
+    System Attributes
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-attributes" class="md-nav__link">
+    Custom Attributes
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-accessing-sqs-attributes-in-a-udf" class="md-nav__link">
+    Example: Accessing SQS Attributes in a UDF
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fifo-queue-support" class="md-nav__link">
+    FIFO Queue Support
   </a>
   
 </li>
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    Troubleshooting
+  </a>
   
 </li>
       
@@ -2938,8 +3008,37 @@ kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>get<span class="w"> </span>monovertex<span class="w"> </span>sqs-reader
 kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span>numaflow.numaproj.io/vertex-name<span class="o">=</span>sqs-reader
 </code></pre></div>
-<h2 id="miscellaneous">Miscellaneous<a class="headerlink" href="#miscellaneous" title="Permanent link">&para;</a></h2>
-<h3 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h3>
+<h2 id="message-attributes-and-headers">Message Attributes and Headers<a class="headerlink" href="#message-attributes-and-headers" title="Permanent link">&para;</a></h2>
+<p>The SQS source propagates message attributes through the pipeline, making them available to UDFs and downstream sinks.</p>
+<h3 id="system-attributes">System Attributes<a class="headerlink" href="#system-attributes" title="Permanent link">&para;</a></h3>
+<p>When <code>attributeNames</code> is configured, SQS system attributes (e.g., <code>SentTimestamp</code>, <code>ApproximateReceiveCount</code>, <code>MessageGroupId</code>, <code>MessageDeduplicationId</code>) are propagated as <strong>message headers</strong>. These are accessible in UDFs (e.g., <code>datum.Headers()</code> (Go),  <code>datum.headers</code> (Python), etc.).</p>
+<h3 id="custom-attributes">Custom Attributes<a class="headerlink" href="#custom-attributes" title="Permanent link">&para;</a></h3>
+<p>When <code>messageAttributeNames</code> is configured, user-defined message attributes are propagated as <strong>message metadata</strong> under the <code>sqs</code> namespace. These are accessible in UDFs via the metadata API.</p>
+<h3 id="example-accessing-sqs-attributes-in-a-udf">Example: Accessing SQS Attributes in a UDF<a class="headerlink" href="#example-accessing-sqs-attributes-in-a-udf" title="Permanent link">&para;</a></h3>
+<p><strong>Go SDK:</strong>
+<div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="nx">handler</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">keys</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">datum</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// Access system attributes via headers</span>
+<span class="w">    </span><span class="nx">headers</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">datum</span><span class="p">.</span><span class="nx">Headers</span><span class="p">()</span>
+<span class="w">    </span><span class="nx">sentTimestamp</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">headers</span><span class="p">[</span><span class="s">&quot;SentTimestamp&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="nx">messageGroupId</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">headers</span><span class="p">[</span><span class="s">&quot;MessageGroupId&quot;</span><span class="p">]</span>
+
+<span class="w">    </span><span class="c1">// Process message...</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">functionsdk</span><span class="p">.</span><span class="nx">MessagesBuilder</span><span class="p">().</span><span class="nx">Append</span><span class="p">(</span><span class="nx">datum</span><span class="p">.</span><span class="nx">Value</span><span class="p">())</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Python SDK:</strong>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">handler</span><span class="p">(</span><span class="n">keys</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">datum</span><span class="p">:</span> <span class="n">Datum</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Messages</span><span class="p">:</span>
+    <span class="c1"># Access system attributes via headers</span>
+    <span class="n">headers</span> <span class="o">=</span> <span class="n">datum</span><span class="o">.</span><span class="n">headers</span>
+    <span class="n">sent_timestamp</span> <span class="o">=</span> <span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;SentTimestamp&quot;</span><span class="p">)</span>
+    <span class="n">message_group_id</span> <span class="o">=</span> <span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;MessageGroupId&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Process message...</span>
+    <span class="k">return</span> <span class="n">Messages</span><span class="p">(</span><span class="n">Message</span><span class="p">(</span><span class="n">datum</span><span class="o">.</span><span class="n">value</span><span class="p">))</span>
+</code></pre></div></p>
+<h3 id="fifo-queue-support">FIFO Queue Support<a class="headerlink" href="#fifo-queue-support" title="Permanent link">&para;</a></h3>
+<p>For FIFO queues, the <code>MessageGroupId</code> and <code>MessageDeduplicationId</code> attributes are automatically propagated through the pipeline. When using an SQS sink, these values are passed to the destination queue to maintain FIFO ordering and deduplication.</p>
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Check the pods logs for any errors:
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>logs<span class="w"> </span>-l<span class="w"> </span>numaflow.numaproj.io/vertex-name<span class="o">=</span>sqs-reader

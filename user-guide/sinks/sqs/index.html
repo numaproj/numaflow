@@ -13,7 +13,7 @@
     
     
       
-        <title>Log Sink - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>SQS Sink - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#log-sink" class="md-skip">
+        <a href="#sqs-sink" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Log Sink
+              SQS Sink
             
           </span>
         </div>
@@ -932,21 +932,11 @@
               
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../log/" class="md-nav__link">
         Log Sink
       </a>
-      
     </li>
   
 
@@ -970,11 +960,100 @@
               
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../sqs/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          SQS Sink
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         SQS Sink
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    Configuration
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    Authentication
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#message-headers" class="md-nav__link">
+    Message Headers
+  </a>
+  
+    <nav class="md-nav" aria-label="Message Headers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#supported-headers" class="md-nav__link">
+    Supported Headers
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fifo-queue-support" class="md-nav__link">
+    FIFO Queue Support
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setting-headers-via-metadata" class="md-nav__link">
+    Setting Headers via Metadata
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-pipeline" class="md-nav__link">
+    Example Pipeline
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2636,6 +2715,69 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    Configuration
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    Authentication
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#message-headers" class="md-nav__link">
+    Message Headers
+  </a>
+  
+    <nav class="md-nav" aria-label="Message Headers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#supported-headers" class="md-nav__link">
+    Supported Headers
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fifo-queue-support" class="md-nav__link">
+    FIFO Queue Support
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setting-headers-via-metadata" class="md-nav__link">
+    Setting Headers via Metadata
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-pipeline" class="md-nav__link">
+    Example Pipeline
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2646,19 +2788,222 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/sinks/log.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/sinks/sqs.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="log-sink">Log Sink<a class="headerlink" href="#log-sink" title="Permanent link">&para;</a></h1>
-<p>A <code>Log</code> sink is very useful for debugging, it prints all the received messages to <code>stdout</code>.</p>
+<h1 id="sqs-sink">SQS Sink<a class="headerlink" href="#sqs-sink" title="Permanent link">&para;</a></h1>
+<p>A <code>SQS</code> sink is used to forward messages to an AWS SQS queue.</p>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">output</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqs-output</span>
 <span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">        </span><span class="nt">sqs</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;your-queue-name&quot;</span><span class="w">              </span><span class="c1"># Required: Name of your SQS queue</span>
+<span class="w">          </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;us-west-2&quot;</span><span class="w">                    </span><span class="c1"># Required: AWS region</span>
+<span class="w">          </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;123456789012&quot;</span><span class="w">    </span><span class="c1"># Required: AWS account ID</span>
+<span class="w">          </span><span class="nt">assumeRole</span><span class="p">:</span><span class="w">                               </span><span class="c1"># Optional: For cross-account access</span>
+<span class="w">            </span><span class="nt">roleArn</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;arn:aws:iam::123456789012:role/CrossAccount-Role&quot;</span>
+</code></pre></div>
+<h2 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h2>
+<p>See <a href="../../sources/sqs/#configuring-credentials-to-access-aws">SQS Source - Configuring Credentials</a> for authentication options including AWS credentials secrets and IAM roles.</p>
+<h2 id="message-headers">Message Headers<a class="headerlink" href="#message-headers" title="Permanent link">&para;</a></h2>
+<p>The SQS sink uses message headers to control SQS-specific behavior. Headers can originate from:
+1. The source (e.g., SQS system attributes from an SQS source)
+2. User metadata under the <code>sqs</code> namespace (merged into headers at the sink)</p>
+<h3 id="supported-headers">Supported Headers<a class="headerlink" href="#supported-headers" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Header</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MessageGroupId</code></td>
+<td>Required for FIFO queues. Messages with the same group ID are processed in order.</td>
+</tr>
+<tr>
+<td><code>MessageDeduplicationId</code></td>
+<td>Used for FIFO queues to prevent duplicate message delivery.</td>
+</tr>
+<tr>
+<td><code>DelaySeconds</code></td>
+<td>Delays message delivery by the specified number of seconds (0-900).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="fifo-queue-support">FIFO Queue Support<a class="headerlink" href="#fifo-queue-support" title="Permanent link">&para;</a></h3>
+<p>For FIFO queues, the sink automatically extracts <code>MessageGroupId</code> and <code>MessageDeduplicationId</code> from message headers:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqs-to-sqs-fifo</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">sqs</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;source-queue.fifo&quot;</span>
+<span class="w">          </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;us-west-2&quot;</span>
+<span class="w">          </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;123456789012&quot;</span>
+<span class="w">          </span><span class="nt">attributeNames</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MessageGroupId</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MessageDeduplicationId</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+<span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">sqs</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;destination-queue.fifo&quot;</span>
+<span class="w">          </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;us-west-2&quot;</span>
+<span class="w">          </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;123456789012&quot;</span>
+<span class="w">  </span><span class="nt">edges</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+</code></pre></div>
+<p>In this example, <code>MessageGroupId</code> and <code>MessageDeduplicationId</code> from the source queue are automatically propagated to the destination FIFO queue.</p>
+<h3 id="setting-headers-via-metadata">Setting Headers via Metadata<a class="headerlink" href="#setting-headers-via-metadata" title="Permanent link">&para;</a></h3>
+<p>User-defined functions can set SQS headers by writing to the <code>sqs</code> metadata namespace. These values are merged into the message headers at the sink, allowing UDFs to control FIFO ordering or set delay seconds.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Python</label><label for="__tabbed_1_2">Go</label><label for="__tabbed_1_3">Java</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">pynumaflow.mapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">Messages</span><span class="p">,</span> <span class="n">Message</span><span class="p">,</span> <span class="n">Datum</span><span class="p">,</span> <span class="n">Mapper</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">my_handler</span><span class="p">(</span><span class="n">keys</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">datum</span><span class="p">:</span> <span class="n">Datum</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Messages</span><span class="p">:</span>
+    <span class="c1"># Process the message</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="n">datum</span><span class="o">.</span><span class="n">value</span>
+
+    <span class="c1"># Set SQS-specific metadata</span>
+    <span class="n">messages</span> <span class="o">=</span> <span class="n">Messages</span><span class="p">()</span>
+    <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="n">Message</span><span class="p">(</span>
+            <span class="n">value</span><span class="o">=</span><span class="n">payload</span><span class="p">,</span>
+            <span class="n">keys</span><span class="o">=</span><span class="n">keys</span><span class="p">,</span>
+            <span class="n">tags</span><span class="o">=</span><span class="p">[],</span>
+            <span class="n">metadata</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;sqs&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;MessageGroupId&quot;</span><span class="p">:</span> <span class="s2">&quot;order-processing&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;MessageDeduplicationId&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;dedup-</span><span class="si">{</span><span class="n">datum</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;DelaySeconds&quot;</span><span class="p">:</span> <span class="s2">&quot;10&quot;</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">messages</span>
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">grpc_server</span> <span class="o">=</span> <span class="n">Mapper</span><span class="p">(</span><span class="n">handler</span><span class="o">=</span><span class="n">my_handler</span><span class="p">)</span>
+    <span class="n">grpc_server</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="kn">package</span><span class="w"> </span><span class="nx">main</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="s">&quot;context&quot;</span>
+<span class="w">    </span><span class="s">&quot;log&quot;</span>
+
+<span class="w">    </span><span class="s">&quot;github.com/numaproj/numaflow-go/pkg/mapper&quot;</span>
+<span class="p">)</span>
+
+<span class="kd">func</span><span class="w"> </span><span class="nx">handle</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">keys</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="nx">mapper</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">mapper</span><span class="p">.</span><span class="nx">Messages</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// Process the message</span>
+<span class="w">    </span><span class="nx">payload</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">d</span><span class="p">.</span><span class="nx">Value</span><span class="p">()</span>
+
+<span class="w">    </span><span class="c1">// Set SQS-specific metadata</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">mapper</span><span class="p">.</span><span class="nx">MessagesBuilder</span><span class="p">().</span>
+<span class="w">        </span><span class="nx">Append</span><span class="p">(</span>
+<span class="w">            </span><span class="nx">mapper</span><span class="p">.</span><span class="nx">NewMessage</span><span class="p">(</span><span class="nx">payload</span><span class="p">).</span>
+<span class="w">                </span><span class="nx">WithKeys</span><span class="p">(</span><span class="nx">keys</span><span class="p">).</span>
+<span class="w">                </span><span class="nx">WithMetadata</span><span class="p">(</span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">string</span><span class="p">{</span>
+<span class="w">                    </span><span class="s">&quot;sqs&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                        </span><span class="s">&quot;MessageGroupId&quot;</span><span class="p">:</span><span class="w">        </span><span class="s">&quot;order-processing&quot;</span><span class="p">,</span>
+<span class="w">                        </span><span class="s">&quot;MessageDeduplicationId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;dedup-&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">string</span><span class="p">(</span><span class="nx">d</span><span class="p">.</span><span class="nx">ID</span><span class="p">()),</span>
+<span class="w">                        </span><span class="s">&quot;DelaySeconds&quot;</span><span class="p">:</span><span class="w">          </span><span class="s">&quot;10&quot;</span><span class="p">,</span>
+<span class="w">                    </span><span class="p">},</span>
+<span class="w">                </span><span class="p">}),</span>
+<span class="w">        </span><span class="p">).</span>
+<span class="w">        </span><span class="nx">Build</span><span class="p">()</span>
+<span class="p">}</span>
+
+<span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">mapper</span><span class="p">.</span><span class="nx">NewServer</span><span class="p">(</span><span class="nx">mapper</span><span class="p">.</span><span class="nx">MapperFunc</span><span class="p">(</span><span class="nx">handle</span><span class="p">)).</span><span class="nx">Start</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">());</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">log</span><span class="p">.</span><span class="nx">Fatal</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="kn">package</span><span class="w"> </span><span class="nn">io.numaproj.examples</span><span class="p">;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">io.numaproj.numaflow.mapper.*</span><span class="p">;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">java.util.HashMap</span><span class="p">;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">java.util.Map</span><span class="p">;</span>
+
+<span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">SqsMetadataMapper</span><span class="w"> </span><span class="kd">extends</span><span class="w"> </span><span class="n">Mapper</span><span class="w"> </span><span class="p">{</span>
+
+<span class="w">    </span><span class="nd">@Override</span>
+<span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">MessageList</span><span class="w"> </span><span class="nf">processMessage</span><span class="p">(</span><span class="n">String</span><span class="o">[]</span><span class="w"> </span><span class="n">keys</span><span class="p">,</span><span class="w"> </span><span class="n">Datum</span><span class="w"> </span><span class="n">datum</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// Process the message</span>
+<span class="w">        </span><span class="kt">byte</span><span class="o">[]</span><span class="w"> </span><span class="n">payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">datum</span><span class="p">.</span><span class="na">getValue</span><span class="p">();</span>
+
+<span class="w">        </span><span class="c1">// Set SQS-specific metadata</span>
+<span class="w">        </span><span class="n">Map</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">Map</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">String</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">metadata</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">HashMap</span><span class="o">&lt;&gt;</span><span class="p">();</span>
+<span class="w">        </span><span class="n">Map</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">String</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sqsMetadata</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">HashMap</span><span class="o">&lt;&gt;</span><span class="p">();</span>
+<span class="w">        </span><span class="n">sqsMetadata</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="s">&quot;MessageGroupId&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;order-processing&quot;</span><span class="p">);</span>
+<span class="w">        </span><span class="n">sqsMetadata</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="s">&quot;MessageDeduplicationId&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;dedup-&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">datum</span><span class="p">.</span><span class="na">getId</span><span class="p">());</span>
+<span class="w">        </span><span class="n">sqsMetadata</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="s">&quot;DelaySeconds&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;10&quot;</span><span class="p">);</span>
+<span class="w">        </span><span class="n">metadata</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="s">&quot;sqs&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">sqsMetadata</span><span class="p">);</span>
+
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">MessageList</span><span class="p">.</span><span class="na">newBuilder</span><span class="p">()</span>
+<span class="w">                </span><span class="p">.</span><span class="na">addMessage</span><span class="p">(</span>
+<span class="w">                        </span><span class="n">Message</span><span class="p">.</span><span class="na">newBuilder</span><span class="p">()</span>
+<span class="w">                                </span><span class="p">.</span><span class="na">value</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
+<span class="w">                                </span><span class="p">.</span><span class="na">keys</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span>
+<span class="w">                                </span><span class="p">.</span><span class="na">metadata</span><span class="p">(</span><span class="n">metadata</span><span class="p">)</span>
+<span class="w">                                </span><span class="p">.</span><span class="na">build</span><span class="p">())</span>
+<span class="w">                </span><span class="p">.</span><span class="na">build</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="n">String</span><span class="o">[]</span><span class="w"> </span><span class="n">args</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">Exception</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">Server</span><span class="w"> </span><span class="n">server</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Server</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">SqsMetadataMapper</span><span class="p">());</span>
+<span class="w">        </span><span class="n">server</span><span class="p">.</span><span class="na">start</span><span class="p">();</span>
+<span class="w">        </span><span class="n">server</span><span class="p">.</span><span class="na">awaitTermination</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<h2 id="example-pipeline">Example Pipeline<a class="headerlink" href="#example-pipeline" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http-to-sqs</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">http</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">process</span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-processor:latest</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+<span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">sqs</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;output-queue&quot;</span>
+<span class="w">          </span><span class="nt">awsRegion</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;us-west-2&quot;</span>
+<span class="w">          </span><span class="nt">queueOwnerAWSAccountID</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;123456789012&quot;</span>
+<span class="w">  </span><span class="nt">edges</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">process</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">process</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 </code></pre></div>
 
               
@@ -2682,7 +3027,7 @@
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../kafka/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Kafka Sink" rel="prev">
+        <a href="../blackhole/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Blackhole Sink" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -2691,20 +3036,20 @@
               <span class="md-footer__direction">
                 Previous
               </span>
-              Kafka Sink
+              Blackhole Sink
             </div>
           </div>
         </a>
       
       
         
-        <a href="../blackhole/" class="md-footer__link md-footer__link--next" aria-label="Next: Blackhole Sink" rel="next">
+        <a href="../user-defined-sinks/" class="md-footer__link md-footer__link--next" aria-label="Next: User-defined Sinks" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              Blackhole Sink
+              User-defined Sinks
             </div>
           </div>
           <div class="md-footer__button md-icon">
