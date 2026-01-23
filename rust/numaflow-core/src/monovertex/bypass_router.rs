@@ -266,13 +266,13 @@ impl BypassRouterReceiver {
                         continue;
                     }
 
-                    let mut dropped_message_count = batch.len();
                     // filter out messages that are marked for drop
+                    let original_len = batch.len();
                     let batch: Vec<_> = batch
                         .into_iter()
                         .filter(|msg| !msg.inner().dropped())
                         .collect();
-                    dropped_message_count -= batch.len();
+                    let dropped_message_count = original_len - batch.len();
 
                     // skip if all were dropped
                     if batch.is_empty() {
@@ -414,27 +414,18 @@ mod tests {
     // ==================== MessageToSink Tests ====================
 
     #[test]
-    fn test_message_to_sink_inner_primary() {
+    fn test_message_to_sink_inner() {
         let (msg, _) = create_test_message(1, None, false);
-        let msg_to_sink = MessageToSink::Primary(msg.clone());
-        assert_eq!(msg_to_sink.inner().id, msg.id);
-        assert_eq!(msg_to_sink.inner().value, msg.value);
-    }
 
-    #[test]
-    fn test_message_to_sink_inner_fallback() {
-        let (msg, _) = create_test_message(2, None, false);
-        let msg_to_sink = MessageToSink::Fallback(msg.clone());
-        assert_eq!(msg_to_sink.inner().id, msg.id);
-        assert_eq!(msg_to_sink.inner().value, msg.value);
-    }
-
-    #[test]
-    fn test_message_to_sink_inner_on_success() {
-        let (msg, _) = create_test_message(3, None, false);
-        let msg_to_sink = MessageToSink::OnSuccess(msg.clone());
-        assert_eq!(msg_to_sink.inner().id, msg.id);
-        assert_eq!(msg_to_sink.inner().value, msg.value);
+        // Test all variants return the correct inner message
+        for msg_to_sink in [
+            MessageToSink::Primary(msg.clone()),
+            MessageToSink::Fallback(msg.clone()),
+            MessageToSink::OnSuccess(msg.clone()),
+        ] {
+            assert_eq!(msg_to_sink.inner().id, msg.id);
+            assert_eq!(msg_to_sink.inner().value, msg.value);
+        }
     }
 
     // ==================== BypassRouterConfig Tests ====================
