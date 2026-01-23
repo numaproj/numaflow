@@ -9,6 +9,7 @@ use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, MessageType, Offset};
 use crate::metadata::Metadata;
 use crate::pipeline::isb::compression;
+use crate::pipeline::isb::error::ISBError;
 use crate::shared::grpc::utc_from_timestamp;
 use async_nats::jetstream::{
     AckKind, Context, Message as JetstreamMessage, consumer, consumer::PullConsumer,
@@ -53,10 +54,11 @@ impl JSWrappedMessage {
             .message_info
             .ok_or(Error::Proto("Missing message_info".to_string()))?;
 
-        let msg_info = self
-            .message
-            .info()
-            .map_err(|e| Error::ISB(format!("Failed to get message info from JetStream: {e}")))?;
+        let msg_info = self.message.info().map_err(|e| {
+            Error::ISB(ISBError::Decode(format!(
+                "Failed to get message info from JetStream: {e}"
+            )))
+        })?;
 
         let offset = Offset::Int(IntOffset::new(
             msg_info.stream_sequence as i64,
@@ -119,12 +121,16 @@ impl JetStreamReader {
         let mut consumer: PullConsumer = js_ctx
             .get_consumer_from_stream(&stream.name, &stream.name)
             .await
-            .map_err(|e| Error::ISB(format!("Failed to get consumer for stream {e}")))?;
+            .map_err(|e| {
+                Error::ISB(ISBError::Other(format!(
+                    "Failed to get consumer for stream {e}"
+                )))
+            })?;
 
         let consumer_info = consumer
             .info()
             .await
-            .map_err(|e| Error::ISB(format!("Failed to get consumer info {e}")))?;
+            .map_err(|e| Error::ISB(ISBError::Other(format!("Failed to get consumer info {e}"))))?;
 
         let ack_wait_seconds = consumer_info.config.ack_wait.as_secs();
         Ok(Self {
@@ -155,8 +161,11 @@ impl JetStreamReader {
             Ok(mut stream) => {
                 let mut v = Vec::new();
                 while let Some(next) = stream.next().await {
-                    if let Ok(m) = next {
-                        v.push(m);
+                    match next {
+                        Ok(m) => v.push(m),
+                        Err(e) => {
+                            warn!(?e, stream=?self.stream, "Failed to receive individual message from batch stream (skipping)");
+                        }
                     }
                 }
                 v
@@ -169,7 +178,9 @@ impl JetStreamReader {
 
         for js_msg in messages {
             let info = js_msg.info().map_err(|e| {
-                Error::ISB(format!("Failed to get message info from JetStream: {e}"))
+                Error::ISB(ISBError::Decode(format!(
+                    "Failed to get message info from JetStream: {e}"
+                )))
             })?;
             let offset = Offset::Int(IntOffset::new(
                 info.stream_sequence as i64,
@@ -202,33 +213,34 @@ impl JetStreamReader {
 
     /// Mark message as in progress by sending work in progress ack.
     pub(crate) async fn mark_wip(&self, offset: &Offset) -> Result<()> {
-        if let Some(msg) = self.get_js_message(offset, false) {
-            msg.ack_with(AckKind::Progress).await.map_err(|e| {
-                Error::ISB(format!(
-                    "Failed to send work in progress ack to JetStream: {e}"
-                ))
-            })?;
-        }
+        let msg = self
+            .get_js_message(offset, false)
+            .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))?;
+        msg.ack_with(AckKind::Progress)
+            .await
+            .map_err(|e| Error::ISB(ISBError::WipAck(format!("offset {}: {}", offset, e))))?;
         Ok(())
     }
 
     /// Acknowledge the offset
     pub(crate) async fn ack(&self, offset: &Offset) -> Result<()> {
-        if let Some(msg) = self.get_js_message(offset, true) {
-            msg.double_ack()
-                .await
-                .map_err(|e| Error::ISB(format!("Failed to double ack message: {e}")))?;
-        }
+        let msg = self
+            .get_js_message(offset, true)
+            .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))?;
+        msg.double_ack()
+            .await
+            .map_err(|e| Error::ISB(ISBError::Ack(format!("offset {}: {}", offset, e))))?;
         Ok(())
     }
 
     /// Negatively acknowledge the offset
     pub(crate) async fn nack(&self, offset: &Offset) -> Result<()> {
-        if let Some(msg) = self.get_js_message(offset, true) {
-            msg.ack_with(AckKind::Nak(None))
-                .await
-                .map_err(|e| Error::ISB(format!("Failed to nack message: {e}")))?;
-        }
+        let msg = self
+            .get_js_message(offset, true)
+            .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))?;
+        msg.ack_with(AckKind::Nak(None))
+            .await
+            .map_err(|e| Error::ISB(ISBError::Nack(format!("offset {}: {}", offset, e))))?;
         Ok(())
     }
 
@@ -251,10 +263,10 @@ impl JetStreamReader {
                 .request(subject, &json!({}))
                 .await
                 .map_err(|e| {
-                    Error::ISB(format!(
+                    Error::ISB(ISBError::Pending(format!(
                         "Failed to get consumer info for stream {}: {}",
                         self.stream.name, e
-                    ))
+                    )))
                 })?;
 
         Ok(Some(info.num_pending as usize + info.num_ack_pending))
@@ -327,13 +339,23 @@ mod tests {
         let mut compressed = GzEncoder::new(Vec::new(), flate2::Compression::default());
         compressed
             .write_all(Bytes::from("test message for direct fetch").as_ref())
-            .map_err(|e| Error::ISB(format!("Failed to compress message (write_all): {}", e)))
+            .map_err(|e| {
+                Error::ISB(ISBError::Other(format!(
+                    "Failed to compress message (write_all): {}",
+                    e
+                )))
+            })
             .unwrap();
 
         let body = Bytes::from(
             compressed
                 .finish()
-                .map_err(|e| Error::ISB(format!("Failed to compress message (finish): {}", e)))
+                .map_err(|e| {
+                    Error::ISB(ISBError::Other(format!(
+                        "Failed to compress message (finish): {}",
+                        e
+                    )))
+                })
                 .unwrap(),
         );
 
@@ -396,6 +418,153 @@ mod tests {
         // pending should be zero
         let pending = js_reader.pending().await.unwrap();
         assert_eq!(pending, Some(0));
+
+        context.delete_stream(stream.name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_ack_missing_offset() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_ack_missing_offset", "test", 0);
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+            .await
+            .unwrap();
+
+        // Try to ack an offset that doesn't exist in the tracker
+        let missing_offset = Offset::Int(IntOffset::new(999, 0));
+        let result = js_reader.ack(&missing_offset).await;
+
+        assert!(result.is_err());
+        if let Err(Error::ISB(ISBError::OffsetNotFound(msg))) = result {
+            assert!(msg.contains("999"));
+        } else {
+            panic!("Expected ISBError::OffsetNotFound");
+        }
+
+        context.delete_stream(stream.name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_nack_missing_offset() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_nack_missing_offset", "test", 0);
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+            .await
+            .unwrap();
+
+        // Try to nack an offset that doesn't exist in the tracker
+        let missing_offset = Offset::Int(IntOffset::new(999, 0));
+        let result = js_reader.nack(&missing_offset).await;
+
+        assert!(result.is_err());
+        if let Err(Error::ISB(ISBError::OffsetNotFound(msg))) = result {
+            assert!(msg.contains("999"));
+        } else {
+            panic!("Expected ISBError::OffsetNotFound");
+        }
+
+        context.delete_stream(stream.name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_mark_wip_missing_offset() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_mark_wip_missing_offset", "test", 0);
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+            .await
+            .unwrap();
+
+        // Try to mark_wip an offset that doesn't exist in the tracker
+        let missing_offset = Offset::Int(IntOffset::new(999, 0));
+        let result = js_reader.mark_wip(&missing_offset).await;
+
+        assert!(result.is_err());
+        if let Err(Error::ISB(ISBError::OffsetNotFound(msg))) = result {
+            assert!(msg.contains("999"));
+        } else {
+            panic!("Expected ISBError::OffsetNotFound");
+        }
 
         context.delete_stream(stream.name).await.unwrap();
     }

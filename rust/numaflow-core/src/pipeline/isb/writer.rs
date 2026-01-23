@@ -18,6 +18,7 @@ use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_metric_labels,
     pipeline_metrics,
 };
+use crate::pipeline::isb::error::ISBError;
 use crate::pipeline::isb::jetstream::js_writer::{JetStreamWriter, WriteError};
 use crate::shared::forward;
 use crate::watermark::WatermarkHandle;
@@ -349,10 +350,11 @@ impl ISBWriter {
         message: Message,
         cln_token: CancellationToken,
     ) -> Result<()> {
-        let permit = Arc::clone(&self.sem)
-            .acquire_owned()
-            .await
-            .map_err(|_e| Error::ISB("Failed to acquire semaphore permit".to_string()));
+        let permit = Arc::clone(&self.sem).acquire_owned().await.map_err(|_e| {
+            Error::ISB(ISBError::Other(
+                "Failed to acquire semaphore permit".to_string(),
+            ))
+        });
 
         let mut this = self.clone();
         tokio::spawn(async move {

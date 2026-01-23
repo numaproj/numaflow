@@ -315,6 +315,7 @@ func WaitForMonoVertexPodRunning(kubeClient kubernetes.Interface, monoVertexClie
 		if ok {
 			return nil
 		}
+
 		time.Sleep(2 * time.Second)
 	}
 }

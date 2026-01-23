@@ -44,12 +44,13 @@
 //! +==========================================================================+
 //! ```
 
+use crate::config::is_mono_vertex;
 use crate::config::monovertex::BypassConditions;
 use crate::error;
 use crate::error::Error;
 use crate::message::Message;
 use crate::shared::forward::should_forward;
-use crate::sinker::sink::SinkWriter;
+use crate::sinker::sink::{SinkWriter, send_drop_metrics};
 use numaflow_models::models::ForwardConditions;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -265,12 +266,13 @@ impl BypassRouterReceiver {
                         continue;
                     }
 
-                    // TODO: add a metric for messages being dropped
+                    let mut dropped_message_count = batch.len();
                     // filter out messages that are marked for drop
                     let batch: Vec<_> = batch
                         .into_iter()
                         .filter(|msg| !msg.inner().dropped())
                         .collect();
+                    dropped_message_count -= batch.len();
 
                     // skip if all were dropped
                     if batch.is_empty() {
@@ -324,6 +326,7 @@ impl BypassRouterReceiver {
                         self.final_result = Err(e);
                         self.shutting_down_on_err = true;
                     }
+                    send_drop_metrics(is_mono_vertex(), dropped_message_count);
                 }
 
                 // finalize
@@ -359,10 +362,19 @@ impl BypassRouterReceiver {
 mod tests {
     use super::*;
     use crate::message::{AckHandle, IntOffset, MessageID, Offset, ReadAck};
+    use crate::shared::grpc::create_rpc_channel;
+    use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
+    use crate::tracker::Tracker;
     use bytes::Bytes;
     use chrono::Utc;
+    use numaflow::shared::{DROP, ServerExtras};
+    use numaflow::sink;
+    use numaflow_models::models::{ForwardConditions, TagConditions};
+    use numaflow_pb::clients::sink::sink_client::SinkClient;
+    use sink::Server;
     use std::collections::HashMap;
     use std::sync::Arc;
+    use tokio::sync::mpsc::Receiver;
     use tokio::sync::oneshot;
 
     /// Creates a test message with optional tags and ack handle.
@@ -439,5 +451,116 @@ mod tests {
         assert_eq!(config.batch_size, 100);
         assert_eq!(config.chunk_timeout, Duration::from_secs(1));
         assert_eq!(config.bypass_conditions, conditions);
+    }
+
+    struct PanicSink;
+    #[tonic::async_trait]
+    impl sink::Sinker for PanicSink {
+        async fn sink(&self, mut input: Receiver<sink::SinkRequest>) -> Vec<sink::Response> {
+            while let Some(_) = input.recv().await {
+                panic!("This sink can't receive messages, received one, so panicking now");
+            }
+            vec![]
+        }
+    }
+
+    #[tokio::test]
+    /// Tests the streaming bypass write functionality where all the messages are dropped
+    /// Defines a user defined sink that panics on receiving any message.
+    /// All messages are marked to be dropped, hence the sink shouldn't receive any messages.
+    async fn test_dropped_streaming_bypass_write() {
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let batch_size = 10;
+
+        let sink_tags = vec!["sink".to_string()];
+        let fallback_tags = vec!["fallback".to_string()];
+        let on_success_tags = vec!["on_success".to_string()];
+        let conditions = BypassConditions {
+            sink: None,
+            fallback: Some(Box::new(ForwardConditions::new(TagConditions {
+                values: fallback_tags.clone(),
+                operator: Some("or".to_string()),
+            }))),
+            on_success: Some(Box::new(ForwardConditions::new(TagConditions {
+                values: on_success_tags.clone(),
+                operator: Some("or".to_string()),
+            }))),
+        };
+        let bypass_router_config =
+            BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
+
+        // start the server
+        let (_shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sink.sock");
+        let server_info_file = tmp_dir.path().join("sink-server-info");
+
+        let server_socket = sock_file.clone();
+        let _server_handle = tokio::spawn(async move {
+            Server::new(PanicSink)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info_file)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("failed to start sink server");
+        });
+
+        let sink_writer = SinkWriterBuilder::new(
+            batch_size,
+            Duration::from_millis(100),
+            SinkClientType::UserDefined(SinkClient::new(
+                create_rpc_channel(sock_file).await.unwrap(),
+            )),
+        )
+        .build()
+        .await
+        .unwrap();
+
+        let (router, handle) = MvtxBypassRouter::initialize(
+            bypass_router_config,
+            sink_writer.clone(),
+            cln_token.clone(),
+        )
+        .await;
+
+        let mut ack_rxs = vec![];
+        let messages: Vec<Message> = (0..10)
+            .map(|i| {
+                let (ack_tx, ack_rx) = oneshot::channel();
+                ack_rxs.push(ack_rx);
+                Message {
+                    typ: Default::default(),
+                    keys: Arc::from(vec![format!("key_{}", i)]),
+                    tags: Some(Arc::from(vec![DROP.to_string()])),
+                    value: format!("message {}", i).as_bytes().to_vec().into(),
+                    offset: Offset::Int(IntOffset::new(i, 0)),
+                    event_time: Utc::now(),
+                    watermark: None,
+                    id: MessageID {
+                        vertex_name: "vertex".to_string().into(),
+                        offset: format!("offset_{}", i).into(),
+                        index: i as i32,
+                    },
+                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+                    ..Default::default()
+                }
+            })
+            .collect();
+
+        for msg in messages {
+            let _ = router.bypass_tx.send(MessageToSink::Primary(msg)).await;
+        }
+
+        drop(router);
+
+        let _ = handle.unwrap().await;
+        _shutdown_tx.send(()).unwrap();
+
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
+        }
+        // check if the tracker is empty
+        assert!(tracker.is_empty().await.unwrap());
     }
 }
