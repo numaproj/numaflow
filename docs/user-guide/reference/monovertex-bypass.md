@@ -21,6 +21,10 @@ and skip UDF/Primary sink components.
 
 ![Bypass Routing](../../assets/mvtx-bypass-bypass-flow.png)
 
+![Bypass Routing](../../assets/mvtx-bypass-legends.png)
+
+
+
 ## Details
 
 Currently bypassing/routing is supported only to the 3 types of sink paradigms allowed in Numaflow MonoVertex spec, namely:
