@@ -1224,6 +1224,9 @@ func (h *handler) GetMonoVertexMetrics(c *gin.Context) {
 		return
 	}
 
+	println("Keran: successfully used the gPRC daemon client to call the GetMonoVertexMetrics method")
+	println(fmt.Sprintf("mvtx name is %v", metrics.MonoVertex))
+
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, metrics))
 }
 
@@ -1639,7 +1642,6 @@ func (h *handler) getMonoVertexDaemonClient(ns, mvtName string) (mvtdaemonclient
 		if err != nil {
 			return nil, err
 		}
-		println("Keran: successfully get the gPRC daemon client.")
 		h.mvtDaemonClientsCache.Add(monoVertexDaemonSvcAddress(ns, mvtName), c)
 		return c, nil
 	} else {

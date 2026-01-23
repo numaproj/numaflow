@@ -209,7 +209,6 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 		if err != nil {
 			return fmt.Errorf("Keran: failed to get daemon service client for MonoVertex %s, %w", monoVtx.Name, err)
 		}
-		log.Info("Keran: successfully get the daemon client.")
 		s.mvtxDaemonClientsCache.Add(monoVtx.GetDaemonServiceURL(), daemonClient)
 	}
 
@@ -217,6 +216,10 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 	if err != nil {
 		return fmt.Errorf("failed to get metrics of mono vertex key %q, %w", key, err)
 	}
+
+	log.Info("Keran: successfully get the daemon client and called GetMonoVertexMetrics from the controller")
+	log.Info("Mvtx name is %v", vMetrics.MonoVertex)
+
 	totalRate := float64(0)
 	totalPending := int64(0)
 	rate, existing := vMetrics.ProcessingRates["default"]
