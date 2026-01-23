@@ -1,15 +1,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::Instant;
 
 use crate::config::is_mono_vertex;
-use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
 use crate::message::Message;
-use crate::metrics::{
-    monovertex_metrics, mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
-};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::task::AbortOnDropHandle;

@@ -473,7 +473,6 @@ mod tests {
         let tracker = Tracker::new(None, cln_token.clone());
         let batch_size = 10;
 
-        let sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
