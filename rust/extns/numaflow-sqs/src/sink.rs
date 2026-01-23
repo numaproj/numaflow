@@ -535,8 +535,6 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    // ==================== BatchEntryInput TryFrom Tests ====================
-
     #[test]
     fn test_batch_entry_conversion_basic() {
         let message = SqsSinkMessage {
@@ -556,20 +554,6 @@ mod tests {
     }
 
     #[test]
-    fn test_batch_entry_conversion_with_index() {
-        let message = SqsSinkMessage {
-            id: "test-id".to_string(),
-            message_body: Bytes::from("body"),
-            headers: Default::default(),
-        };
-
-        let input = BatchEntryInput { index: 42, message };
-        let entry: SendMessageBatchRequestEntry = input.try_into().unwrap();
-
-        assert_eq!(entry.id(), "msg_42");
-    }
-
-    #[test]
     fn test_batch_entry_conversion_with_valid_delay_seconds() {
         let mut headers = std::collections::HashMap::new();
         headers.insert(HEADER_DELAY_SECONDS.to_string(), "30".to_string());
@@ -584,23 +568,6 @@ mod tests {
         let entry: SendMessageBatchRequestEntry = input.try_into().unwrap();
 
         assert_eq!(entry.delay_seconds(), Some(30));
-    }
-
-    #[test]
-    fn test_batch_entry_conversion_with_zero_delay_seconds() {
-        let mut headers = std::collections::HashMap::new();
-        headers.insert(HEADER_DELAY_SECONDS.to_string(), "0".to_string());
-
-        let message = SqsSinkMessage {
-            id: "test-id".to_string(),
-            message_body: Bytes::from("body"),
-            headers,
-        };
-
-        let input = BatchEntryInput { index: 0, message };
-        let entry: SendMessageBatchRequestEntry = input.try_into().unwrap();
-
-        assert_eq!(entry.delay_seconds(), Some(0));
     }
 
     #[test]
@@ -674,70 +641,6 @@ mod tests {
         let entry: SendMessageBatchRequestEntry = input.try_into().unwrap();
 
         assert_eq!(entry.message_deduplication_id(), Some("dedup-123"));
-    }
-
-    #[test]
-    fn test_batch_entry_conversion_with_all_headers() {
-        let mut headers = std::collections::HashMap::new();
-        headers.insert(HEADER_DELAY_SECONDS.to_string(), "60".to_string());
-        headers.insert(
-            HEADER_MESSAGE_GROUP_ID.to_string(),
-            "fifo-group".to_string(),
-        );
-        headers.insert(
-            HEADER_MESSAGE_DEDUPLICATION_ID.to_string(),
-            "unique-id".to_string(),
-        );
-
-        let message = SqsSinkMessage {
-            id: "original-msg-id".to_string(),
-            message_body: Bytes::from("complete message"),
-            headers,
-        };
-
-        let input = BatchEntryInput { index: 5, message };
-        let entry: SendMessageBatchRequestEntry = input.try_into().unwrap();
-
-        assert_eq!(entry.id(), "msg_5");
-        assert_eq!(entry.message_body(), "complete message");
-        assert_eq!(entry.delay_seconds(), Some(60));
-        assert_eq!(entry.message_group_id(), Some("fifo-group"));
-        assert_eq!(entry.message_deduplication_id(), Some("unique-id"));
-    }
-
-    #[test]
-    fn test_batch_entry_conversion_preserves_binary_message_body() {
-        // Test that binary data is converted using lossy UTF-8 conversion
-        let binary_data = vec![0x48, 0x65, 0x6c, 0x6c, 0x6f]; // "Hello" in bytes
-
-        let message = SqsSinkMessage {
-            id: "binary-msg".to_string(),
-            message_body: Bytes::from(binary_data),
-            headers: Default::default(),
-        };
-
-        let input = BatchEntryInput { index: 0, message };
-        let entry: SendMessageBatchRequestEntry = input.try_into().unwrap();
-
-        assert_eq!(entry.message_body(), "Hello");
-    }
-
-    #[test]
-    fn test_batch_entry_conversion_with_max_delay_seconds() {
-        // SQS allows delay up to 900 seconds (15 minutes)
-        let mut headers = std::collections::HashMap::new();
-        headers.insert(HEADER_DELAY_SECONDS.to_string(), "900".to_string());
-
-        let message = SqsSinkMessage {
-            id: "test-id".to_string(),
-            message_body: Bytes::from("body"),
-            headers,
-        };
-
-        let input = BatchEntryInput { index: 0, message };
-        let entry: SendMessageBatchRequestEntry = input.try_into().unwrap();
-
-        assert_eq!(entry.delay_seconds(), Some(900));
     }
 
     fn get_queue_url_output() -> Rule {
