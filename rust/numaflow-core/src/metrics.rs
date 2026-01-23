@@ -102,7 +102,6 @@ const ON_SUCCESS_SINK_WRITE_TOTAL: &str = "write";
 const PIPELINE_ON_SUCCESS_SINK_WRITE_TOTAL: &str = "onsuccess_sink_write";
 const PIPELINE_ON_SUCCESS_SINK_WRITE_BYTES_TOTAL: &str = "onsuccess_sink_write_bytes";
 const TRANSFORMER_DROPPED_TOTAL: &str = "dropped";
-const UDF_DROPPED_TOTAL: &str = "dropped";
 const TRANSFORMER_ERROR_TOTAL: &str = "transformer_error";
 const TRANSFORMER_READ_TOTAL: &str = "transformer_read";
 const TRANSFORMER_WRITE_TOTAL: &str = "transformer_write";

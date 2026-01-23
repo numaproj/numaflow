@@ -1076,7 +1076,6 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -1139,7 +1138,6 @@ mod tests {
         on_success_count: AtomicUsize,
         sink_tags: Option<Vec<String>>,
         fallback_tags: Option<Vec<String>>,
-        on_success_tags: Option<Vec<String>>,
     }
 
     impl PanickingConditionalTransformer {
@@ -1149,7 +1147,6 @@ mod tests {
             on_success_count: usize,
             sink_tags: Option<Vec<String>>,
             fallback_tags: Option<Vec<String>>,
-            on_success_tags: Option<Vec<String>>,
         ) -> Self {
             Self {
                 sink_max_count: sink_count,
@@ -1160,7 +1157,6 @@ mod tests {
                 on_success_count: AtomicUsize::new(0),
                 sink_tags,
                 fallback_tags,
-                on_success_tags,
             }
         }
     }
@@ -1209,7 +1205,6 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -1235,7 +1230,6 @@ mod tests {
                 10,
                 None,
                 Some(fallback_tags),
-                Some(on_success_tags),
             )),
             batch_size,
             cln_token.clone(),
@@ -1316,10 +1310,7 @@ mod tests {
 
     #[tonic::async_trait]
     impl sink::Sinker for NoOpSink {
-        async fn sink(
-            &self,
-            mut _input: tokio::sync::mpsc::Receiver<SinkRequest>,
-        ) -> Vec<Response> {
+        async fn sink(&self, _input: tokio::sync::mpsc::Receiver<SinkRequest>) -> Vec<Response> {
             vec![]
         }
     }
