@@ -246,10 +246,8 @@ func (mv MonoVertex) GetDaemonDeploymentObj(req GetMonoVertexDaemonDeploymentReq
 
 	c.ReadinessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
-			HTTPGet: &corev1.HTTPGetAction{
-				Path:   "/readyz",
-				Port:   intstr.FromInt32(MonoVertexDaemonServicePort),
-				Scheme: corev1.URISchemeHTTPS,
+			TCPSocket: &corev1.TCPSocketAction{
+				Port: intstr.FromInt32(MonoVertexDaemonServicePort),
 			},
 		},
 		InitialDelaySeconds: 3,
@@ -258,10 +256,8 @@ func (mv MonoVertex) GetDaemonDeploymentObj(req GetMonoVertexDaemonDeploymentReq
 	}
 	c.LivenessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
-			HTTPGet: &corev1.HTTPGetAction{
-				Path:   "/livez",
-				Port:   intstr.FromInt32(MonoVertexDaemonServicePort),
-				Scheme: corev1.URISchemeHTTPS,
+			TCPSocket: &corev1.TCPSocketAction{
+				Port: intstr.FromInt32(MonoVertexDaemonServicePort),
 			},
 		},
 		InitialDelaySeconds: 30,

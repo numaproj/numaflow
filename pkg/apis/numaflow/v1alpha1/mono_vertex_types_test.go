@@ -632,13 +632,11 @@ func TestMonoVertex_GetDaemonDeploymentObj(t *testing.T) {
 		assert.NotNil(t, container.ReadinessProbe)
 		assert.NotNil(t, container.LivenessProbe)
 
-		assert.Equal(t, int32(MonoVertexDaemonServicePort), container.ReadinessProbe.HTTPGet.Port.IntVal)
-		assert.Equal(t, "/readyz", container.ReadinessProbe.HTTPGet.Path)
-		assert.Equal(t, corev1.URISchemeHTTPS, container.ReadinessProbe.HTTPGet.Scheme)
+		assert.NotNil(t, container.ReadinessProbe.TCPSocket)
+		assert.Equal(t, int32(MonoVertexDaemonServicePort), container.ReadinessProbe.TCPSocket.Port.IntVal)
 
-		assert.Equal(t, int32(MonoVertexDaemonServicePort), container.LivenessProbe.HTTPGet.Port.IntVal)
-		assert.Equal(t, "/livez", container.LivenessProbe.HTTPGet.Path)
-		assert.Equal(t, corev1.URISchemeHTTPS, container.LivenessProbe.HTTPGet.Scheme)
+		assert.NotNil(t, container.LivenessProbe.TCPSocket)
+		assert.Equal(t, int32(MonoVertexDaemonServicePort), container.LivenessProbe.TCPSocket.Port.IntVal)
 	})
 
 	t.Run("verify labels and owner references", func(t *testing.T) {
