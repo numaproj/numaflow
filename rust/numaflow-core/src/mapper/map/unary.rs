@@ -5,7 +5,6 @@ use std::sync::Mutex;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::Message;
-use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 use numaflow_pb::clients::map::{MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::task::AbortOnDropHandle;
