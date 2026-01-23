@@ -2552,6 +2552,9 @@ dependencies = [
 name = "numaflow-daemon"
 version = "0.1.0"
 dependencies = [
+ "numaflow-pb",
+ "tokio",
+ "tonic 0.14.2",
  "tracing",
 ]
 

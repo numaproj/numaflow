@@ -1639,6 +1639,7 @@ func (h *handler) getMonoVertexDaemonClient(ns, mvtName string) (mvtdaemonclient
 		if err != nil {
 			return nil, err
 		}
+		println("Keran: successfully get the gPRC daemon client.")
 		h.mvtDaemonClientsCache.Add(monoVertexDaemonSvcAddress(ns, mvtName), c)
 		return c, nil
 	} else {

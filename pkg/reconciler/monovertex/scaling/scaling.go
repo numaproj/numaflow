@@ -207,8 +207,9 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 	if daemonClient == nil {
 		daemonClient, err = mvtxdaemonclient.NewGRPCClient(monoVtx.GetDaemonServiceURL())
 		if err != nil {
-			return fmt.Errorf("failed to get daemon service client for MonoVertex %s, %w", monoVtx.Name, err)
+			return fmt.Errorf("Keran: failed to get daemon service client for MonoVertex %s, %w", monoVtx.Name, err)
 		}
+		log.Info("Keran: successfully get the daemon client.")
 		s.mvtxDaemonClientsCache.Add(monoVtx.GetDaemonServiceURL(), daemonClient)
 	}
 
