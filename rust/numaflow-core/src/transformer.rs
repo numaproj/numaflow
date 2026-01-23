@@ -15,8 +15,9 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
 use crate::message::Message;
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
-    pipeline_metric_labels, pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_critical_error_metric_labels,
+    mvtx_forward_metric_labels, pipeline_critical_error_metric_labels, pipeline_metric_labels,
+    pipeline_metrics,
 };
 use crate::tracker::Tracker;
 use crate::transformer::user_defined::UserDefinedTransformer;
@@ -133,6 +134,23 @@ impl Transformer {
 
         if response.is_empty() {
             error!("received empty response from server (transformer), we will wait indefinitely");
+            if is_mono_vertex() {
+                monovertex_metrics()
+                    .critical_error_total
+                    .get_or_create(&mvtx_critical_error_metric_labels(
+                        "eot_received_from_transformer",
+                    ))
+                    .inc();
+            } else {
+                pipeline_metrics()
+                    .forwarder
+                    .critical_error_total
+                    .get_or_create(&pipeline_critical_error_metric_labels(
+                        VERTEX_TYPE_SOURCE,
+                        "eot_received_from_transformer",
+                    ))
+                    .inc();
+            }
             // persist the error for debugging
             runtime::persist_application_error(Status::with_details(
                 Code::Internal,

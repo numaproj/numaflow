@@ -12,6 +12,12 @@ use tracing::error;
 
 use crate::Error;
 use crate::Result;
+use crate::config::is_mono_vertex;
+use crate::config::pipeline::VERTEX_TYPE_SINK;
+use crate::metrics::{
+    monovertex_metrics, mvtx_critical_error_metric_labels, pipeline_critical_error_metric_labels,
+    pipeline_metrics,
+};
 use crate::message::Message;
 use crate::shared::grpc::prost_timestamp_from_utc;
 use crate::sinker::sink::{ResponseFromSink, Sink};
@@ -128,6 +134,23 @@ impl Sink for UserDefinedSink {
                     error!(
                         "received EOT message before all responses are received, we will wait indefinitely for the remaining responses"
                     );
+                    if is_mono_vertex() {
+                        monovertex_metrics()
+                            .critical_error_total
+                            .get_or_create(&mvtx_critical_error_metric_labels(
+                                "eot_received_from_sink",
+                            ))
+                            .inc();
+                    } else {
+                        pipeline_metrics()
+                            .forwarder
+                            .critical_error_total
+                            .get_or_create(&pipeline_critical_error_metric_labels(
+                                VERTEX_TYPE_SINK,
+                                "eot_received_from_sink",
+                            ))
+                            .inc();
+                    }
                     // persist the error for debugging
                     runtime::persist_application_error(Status::with_details(
                         Code::Internal,
