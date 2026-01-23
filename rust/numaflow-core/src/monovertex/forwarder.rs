@@ -150,7 +150,7 @@ mod tests {
     use crate::Result;
     use crate::config::monovertex::BypassConditions;
     use crate::mapper::map::MapHandle;
-    use crate::monovertex::bypass_router::{BypassRouterConfig, MvtxBypassRouter};
+    use crate::monovertex::bypass_router::BypassRouterConfig;
     use crate::monovertex::forwarder::Forwarder;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
@@ -158,7 +158,7 @@ mod tests {
     use crate::source::{Source, SourceType};
     use crate::tracker::Tracker;
     use crate::transformer::Transformer;
-    use chrono::{DateTime, Utc};
+    use chrono::Utc;
     use numaflow::shared::ServerExtras;
     use numaflow::sink::{Response, SinkRequest};
     use numaflow::source::{Message, Offset, SourceReadRequest};
@@ -669,7 +669,7 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let sink_tags = vec!["sink".to_string()];
+        let _sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -799,7 +799,7 @@ mod tests {
             let mut responses: Vec<batchmap::BatchResponse> = Vec::new();
             while let Some(datum) = input.recv().await {
                 let mut response = batchmap::BatchResponse::from_id(datum.id);
-                let some_val: Option<bool> = None;
+                let _some_val: Option<bool> = None;
 
                 let message = batchmap::Message::new(datum.value).with_keys(datum.keys);
 
@@ -883,7 +883,7 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let sink_tags = vec!["sink".to_string()];
+        let _sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -946,7 +946,7 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let sink_tags = vec!["sink".to_string()];
+        let _sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -1009,7 +1009,7 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let sink_tags = vec!["sink".to_string()];
+        let _sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {

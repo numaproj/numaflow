@@ -34,6 +34,9 @@ Message headers are immutable and cannot be manipulated through the SDKs.
 - **HTTP Source Example**  
   In `pkg/sources/http/http.go`, HTTP headers from incoming requests are added to the message headers. This means any custom or standard HTTP header is available throughout the pipeline.
 
+- **SQS Source Example**  
+  When configured with `attributeNames`, SQS system attributes (e.g., `SentTimestamp`, `MessageGroupId`, `MessageDeduplicationId`) are copied into the Numaflow message headers. User-defined message attributes (configured via `messageAttributeNames`) are propagated as metadata under the `sqs` namespace.
+
 - **Accessing Headers in UDFs**
 
   > ⚠️ Note: Headers are read-only in UDFs. You can access them, but not modify or add new headers.
