@@ -22,7 +22,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 use crate::Error::ActorTaskTerminated;
-use crate::{AssumeRoleConfig, Error, SqsConfig, SqsSourceError};
+use crate::{
+    AssumeRoleConfig, Error, SQS_METADATA_KEY, SqsConfig, SqsSourceError, extract_aws_error,
+};
 
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 
@@ -69,20 +71,17 @@ enum SQSActorMessage {
     },
 }
 
-/// Represents a message received from SQS with metadata.
-///
-/// Design choices:
-/// - Uses Bytes for efficient handling of message payloads
-/// - Includes full message metadata for debugging
-/// - Maintains original SQS attributes and headers
+/// A message received from SQS.
 #[derive(Debug)]
 pub struct SqsMessage {
     pub key: String,
     pub payload: Bytes,
     pub offset: String,
     pub event_time: DateTime<Utc>,
-    pub attributes: Option<HashMap<String, String>>,
-    pub headers: HashMap<String, String>,
+    /// SQS system attributes (SentTimestamp, MessageGroupId, etc.)
+    pub system_attributes: HashMap<String, String>,
+    /// User-defined message attributes from `message_attributes`, keyed by namespace.
+    pub custom_attributes: HashMap<String, HashMap<String, Vec<u8>>>,
 }
 
 /// Internal actor implementation for managing SQS interactions.
@@ -233,7 +232,9 @@ impl SqsActor {
                     queue_url = self.queue_url,
                     "failed to receive messages from SQS"
                 );
-                return Some(Err(SqsSourceError::from(Error::Sqs(err.into()))));
+                return Some(Err(SqsSourceError::from(Error::Sqs(extract_aws_error(
+                    &err,
+                )))));
             }
         };
 
@@ -256,31 +257,35 @@ impl SqsActor {
                     .and_then(|timestamp| Utc.timestamp_millis_opt(timestamp).single())
                     .unwrap_or_else(Utc::now);
 
-                let attributes = msg.message_attributes.as_ref().map(|attrs| {
-                    attrs
-                        .iter()
-                        .map(|(k, v)| (k.clone(), v.string_value.clone().unwrap_or_default()))
-                        .collect()
-                });
-
-                let headers = msg
+                let system_attributes: HashMap<String, String> = msg
                     .attributes
                     .as_ref()
                     .map(|attrs| {
                         attrs
                             .iter()
-                            .map(|(k, v)| (k.to_string(), v.to_string()))
+                            .map(|(k, v)| (k.as_str().to_string(), v.clone()))
                             .collect()
                     })
                     .unwrap_or_default();
+
+                let mut custom_attributes = HashMap::new();
+                if let Some(msg_attrs) = &msg.message_attributes {
+                    let mut sqs_attrs = HashMap::new();
+                    for (k, v) in msg_attrs {
+                        if let Some(val) = &v.string_value {
+                            sqs_attrs.insert(k.clone(), val.clone().into_bytes());
+                        }
+                    }
+                    custom_attributes.insert(SQS_METADATA_KEY.to_string(), sqs_attrs);
+                }
 
                 SqsMessage {
                     key,
                     payload,
                     offset,
                     event_time,
-                    attributes,
-                    headers,
+                    system_attributes,
+                    custom_attributes,
                 }
             })
             .collect();
@@ -315,7 +320,7 @@ impl SqsActor {
                     .build()
                     .map_err(|err| {
                         error!(?err, "Failed to build DeleteMessageBatchRequestEntry",);
-                        Error::Sqs(err.into())
+                        Error::Other(format!("Failed to build delete request: {}", err))
                     })?,
             );
         }
@@ -326,7 +331,7 @@ impl SqsActor {
                 queue_url = self.queue_url,
                 "Failed to delete messages from SQS"
             );
-            return Err(SqsSourceError::from(Error::Sqs(e.into())));
+            return Err(SqsSourceError::from(Error::Sqs(extract_aws_error(&e))));
         }
         Ok(())
     }
@@ -352,7 +357,7 @@ impl SqsActor {
                     queue_url = ?self.queue_url,
                     "failed to get queue attributes from SQS"
                 );
-                return Err(SqsSourceError::from(Error::Sqs(err.into())));
+                return Err(SqsSourceError::from(Error::Sqs(extract_aws_error(&err))));
             }
         };
 
@@ -484,7 +489,7 @@ impl SqsSourceBuilder {
             .queue_owner_aws_account_id(queue_owner_aws_account_id)
             .send()
             .await
-            .map_err(|err| Error::Sqs(err.into()))?;
+            .map_err(|err| Error::Sqs(extract_aws_error(&err)))?;
 
         let queue_url = get_queue_url_output
             .queue_url
@@ -669,7 +674,12 @@ mod tests {
             msg1.offset,
             "AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q"
         );
-        assert_eq!(msg1.attributes.clone().unwrap().len(), 1);
+        assert_eq!(msg1.system_attributes.len(), 1);
+        assert!(msg1.system_attributes.contains_key("SentTimestamp"));
+
+        assert!(msg1.custom_attributes.contains_key("sqs"));
+        let sqs_attrs = msg1.custom_attributes.get("sqs").unwrap();
+        assert!(sqs_attrs.contains_key("AwsTraceHeader"));
 
         // test another config
 
@@ -744,10 +754,8 @@ mod tests {
         match messages {
             Some(Ok(_)) => panic!("Expected an error, but got a successful response"),
             Some(Err(err)) => {
-                assert_eq!(
-                    err.to_string(),
-                    "SQS Source Error: Failed with SQS error - unhandled error (InvalidAddress)"
-                );
+                // Error contains the AWS error code
+                assert!(err.to_string().contains("InvalidAddress"));
             }
             None => panic!("Expected an error, but got None"),
         }

@@ -150,7 +150,7 @@ mod tests {
     use crate::Result;
     use crate::config::monovertex::BypassConditions;
     use crate::mapper::map::MapHandle;
-    use crate::monovertex::bypass_router::{BypassRouterConfig, MvtxBypassRouter};
+    use crate::monovertex::bypass_router::BypassRouterConfig;
     use crate::monovertex::forwarder::Forwarder;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
@@ -158,7 +158,7 @@ mod tests {
     use crate::source::{Source, SourceType};
     use crate::tracker::Tracker;
     use crate::transformer::Transformer;
-    use chrono::{DateTime, Utc};
+    use chrono::Utc;
     use numaflow::shared::ServerExtras;
     use numaflow::sink::{Response, SinkRequest};
     use numaflow::source::{Message, Offset, SourceReadRequest};
@@ -640,7 +640,7 @@ mod tests {
                 // please note that `from_utf8` is working because the input in this
                 // example uses utf-8 data.
                 let response = match std::str::from_utf8(&datum.value) {
-                    Ok(v) => {
+                    Ok(_) => {
                         self.messages_received.fetch_add(1, Ordering::SeqCst);
                         println!(
                             "Message Count: {}",
@@ -669,7 +669,7 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let sink_tags = vec!["sink".to_string()];
+        let _sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -799,7 +799,7 @@ mod tests {
             let mut responses: Vec<batchmap::BatchResponse> = Vec::new();
             while let Some(datum) = input.recv().await {
                 let mut response = batchmap::BatchResponse::from_id(datum.id);
-                let some_val: Option<bool> = None;
+                let _some_val: Option<bool> = None;
 
                 let message = batchmap::Message::new(datum.value).with_keys(datum.keys);
 
@@ -883,7 +883,7 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let sink_tags = vec!["sink".to_string()];
+        let _sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -946,7 +946,7 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let sink_tags = vec!["sink".to_string()];
+        let _sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -1009,7 +1009,7 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let sink_tags = vec!["sink".to_string()];
+        let _sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -1056,6 +1056,198 @@ mod tests {
         start_forwarder_test(
             source_handle,
             Some(mapper_handle),
+            sink_handle,
+            Some(bypass_router_config),
+            cln_token,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    /// The bypass conditions are configured for fallback and on success scenarios but
+    /// the sink doesn't have any fallback or on success sinks configured.
+    /// The test fails because of the timeout in the forwarder.
+    async fn test_source_map_with_bypass_fails() {
+        let tracker = Tracker::new(None, CancellationToken::new());
+
+        // create the source which produces x number of messages
+        let cln_token = CancellationToken::new();
+
+        // create the bypass router config to pass to the forwarder
+        let batch_size: usize = 10;
+        let fallback_tags = vec!["fallback".to_string()];
+        let on_success_tags = vec!["on_success".to_string()];
+        let conditions = BypassConditions {
+            sink: None,
+            fallback: Some(Box::new(ForwardConditions::new(TagConditions {
+                values: fallback_tags.clone(),
+                operator: Some("or".to_string()),
+            }))),
+            on_success: Some(Box::new(ForwardConditions::new(TagConditions {
+                values: on_success_tags.clone(),
+                operator: Some("or".to_string()),
+            }))),
+        };
+        let bypass_router_config =
+            BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
+
+        // Create the source
+        let source_handle = create_ud_source(
+            SimpleSource::new(100),
+            Option::<NoOpTransformer>::None,
+            batch_size,
+            cln_token.clone(),
+            tracker.clone(),
+        )
+        .await;
+
+        // create a mapper
+        let mapper_handle = create_mapper(
+            BypassCat::new(0, 1, 1, None, Some(fallback_tags), Some(on_success_tags)),
+            tracker,
+            MapMode::Unary,
+            batch_size,
+        )
+        .await;
+
+        let sink_handle = create_sink(
+            SinkType::UserDefined(SinkLog::new()),
+            None,
+            None,
+            batch_size,
+        )
+        .await;
+
+        start_forwarder_test(
+            source_handle,
+            Some(mapper_handle),
+            sink_handle,
+            Some(bypass_router_config),
+            cln_token,
+        )
+        .await;
+    }
+
+    struct PanickingConditionalTransformer {
+        sink_max_count: usize,
+        fallback_max_count: usize,
+        on_success_max_count: usize,
+        sink_count: AtomicUsize,
+        fallback_count: AtomicUsize,
+        on_success_count: AtomicUsize,
+        sink_tags: Option<Vec<String>>,
+        fallback_tags: Option<Vec<String>>,
+    }
+
+    impl PanickingConditionalTransformer {
+        pub(crate) fn new(
+            sink_count: usize,
+            fallback_count: usize,
+            on_success_count: usize,
+            sink_tags: Option<Vec<String>>,
+            fallback_tags: Option<Vec<String>>,
+        ) -> Self {
+            Self {
+                sink_max_count: sink_count,
+                fallback_max_count: fallback_count,
+                on_success_max_count: on_success_count,
+                sink_count: AtomicUsize::new(0),
+                fallback_count: AtomicUsize::new(0),
+                on_success_count: AtomicUsize::new(0),
+                sink_tags,
+                fallback_tags,
+            }
+        }
+    }
+
+    #[tonic::async_trait]
+    impl sourcetransform::SourceTransformer for PanickingConditionalTransformer {
+        async fn transform(
+            &self,
+            input: sourcetransform::SourceTransformRequest,
+        ) -> Vec<sourcetransform::Message> {
+            let message =
+                sourcetransform::Message::new(input.value, Utc::now()).with_keys(input.keys);
+
+            let message = if self.sink_count.load(Ordering::SeqCst) < self.sink_max_count {
+                self.sink_count.fetch_add(1, Ordering::SeqCst);
+                message.with_tags(
+                    self.sink_tags
+                        .clone()
+                        .expect("sink_tags is None when sink_max_count > 0"),
+                )
+            } else if self.fallback_count.load(Ordering::SeqCst) < self.fallback_max_count {
+                self.fallback_count.fetch_add(1, Ordering::SeqCst);
+                message.with_tags(
+                    self.fallback_tags
+                        .clone()
+                        .expect("fallback_tags is None when fallback_max_count > 0"),
+                )
+            } else if self.on_success_count.load(Ordering::SeqCst) < self.on_success_max_count {
+                self.on_success_count.fetch_add(1, Ordering::SeqCst);
+                panic!("on_success_count reached max count");
+            } else {
+                message
+            };
+
+            vec![message]
+        }
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn test_source_transformer_with_bypass_panics() {
+        let tracker = Tracker::new(None, CancellationToken::new());
+
+        // create the source which produces x number of messages
+        let cln_token = CancellationToken::new();
+
+        // create the bypass router config to pass to the forwarder
+        let batch_size: usize = 10;
+        let fallback_tags = vec!["fallback".to_string()];
+        let on_success_tags = vec!["on_success".to_string()];
+        let conditions = BypassConditions {
+            sink: None,
+            fallback: Some(Box::new(ForwardConditions::new(TagConditions {
+                values: fallback_tags.clone(),
+                operator: Some("or".to_string()),
+            }))),
+            on_success: Some(Box::new(ForwardConditions::new(TagConditions {
+                values: on_success_tags.clone(),
+                operator: Some("or".to_string()),
+            }))),
+        };
+        let bypass_router_config =
+            BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
+
+        // Create the source
+        let source_handle = create_ud_source(
+            SimpleSource::new(100),
+            Some(PanickingConditionalTransformer::new(
+                0,
+                10,
+                10,
+                None,
+                Some(fallback_tags),
+            )),
+            batch_size,
+            cln_token.clone(),
+            tracker.clone(),
+        )
+        .await;
+
+        let sink_handle = create_sink(
+            SinkType::UserDefined(SinkLog::new()),
+            Some(SinkType::BuiltIn(SinkClientType::Log)),
+            Some(SinkType::BuiltIn(SinkClientType::Log)),
+            batch_size,
+        )
+        .await;
+
+        start_forwarder_test(
+            source_handle,
+            None,
             sink_handle,
             Some(bypass_router_config),
             cln_token,
@@ -1118,10 +1310,7 @@ mod tests {
 
     #[tonic::async_trait]
     impl sink::Sinker for NoOpSink {
-        async fn sink(
-            &self,
-            mut _input: tokio::sync::mpsc::Receiver<SinkRequest>,
-        ) -> Vec<Response> {
+        async fn sink(&self, _input: tokio::sync::mpsc::Receiver<SinkRequest>) -> Vec<Response> {
             vec![]
         }
     }
@@ -1555,7 +1744,7 @@ mod tests {
 
         // wait for one sec to check if the pending becomes zero, because all the messages
         // should be read and acked; if it doesn't, then fail the test
-        let tokio_result = tokio::time::timeout(Duration::from_secs(150), async move {
+        let tokio_result = tokio::time::timeout(Duration::from_secs(1), async move {
             loop {
                 let pending = sourcer.pending().await.unwrap();
                 if pending == Some(0) {
