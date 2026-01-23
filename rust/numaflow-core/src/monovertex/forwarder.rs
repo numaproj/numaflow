@@ -150,7 +150,7 @@ mod tests {
     use crate::Result;
     use crate::config::monovertex::BypassConditions;
     use crate::mapper::map::MapHandle;
-    use crate::monovertex::bypass_router::{BypassRouterConfig, MvtxBypassRouter};
+    use crate::monovertex::bypass_router::BypassRouterConfig;
     use crate::monovertex::forwarder::Forwarder;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
@@ -158,7 +158,7 @@ mod tests {
     use crate::source::{Source, SourceType};
     use crate::tracker::Tracker;
     use crate::transformer::Transformer;
-    use chrono::{DateTime, Utc};
+    use chrono::Utc;
     use numaflow::shared::ServerExtras;
     use numaflow::sink::{Response, SinkRequest};
     use numaflow::source::{Message, Offset, SourceReadRequest};
@@ -669,7 +669,7 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let sink_tags = vec!["sink".to_string()];
+        let _sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -799,7 +799,7 @@ mod tests {
             let mut responses: Vec<batchmap::BatchResponse> = Vec::new();
             while let Some(datum) = input.recv().await {
                 let mut response = batchmap::BatchResponse::from_id(datum.id);
-                let some_val: Option<bool> = None;
+                let _some_val: Option<bool> = None;
 
                 let message = batchmap::Message::new(datum.value).with_keys(datum.keys);
 
@@ -883,7 +883,7 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let sink_tags = vec!["sink".to_string()];
+        let _sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -946,7 +946,7 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let sink_tags = vec!["sink".to_string()];
+        let _sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -1009,7 +1009,7 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let sink_tags = vec!["sink".to_string()];
+        let _sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -1076,7 +1076,6 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -1139,7 +1138,6 @@ mod tests {
         on_success_count: AtomicUsize,
         sink_tags: Option<Vec<String>>,
         fallback_tags: Option<Vec<String>>,
-        on_success_tags: Option<Vec<String>>,
     }
 
     impl PanickingConditionalTransformer {
@@ -1149,7 +1147,6 @@ mod tests {
             on_success_count: usize,
             sink_tags: Option<Vec<String>>,
             fallback_tags: Option<Vec<String>>,
-            on_success_tags: Option<Vec<String>>,
         ) -> Self {
             Self {
                 sink_max_count: sink_count,
@@ -1160,7 +1157,6 @@ mod tests {
                 on_success_count: AtomicUsize::new(0),
                 sink_tags,
                 fallback_tags,
-                on_success_tags,
             }
         }
     }
@@ -1209,7 +1205,6 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -1235,7 +1230,6 @@ mod tests {
                 10,
                 None,
                 Some(fallback_tags),
-                Some(on_success_tags),
             )),
             batch_size,
             cln_token.clone(),
@@ -1316,10 +1310,7 @@ mod tests {
 
     #[tonic::async_trait]
     impl sink::Sinker for NoOpSink {
-        async fn sink(
-            &self,
-            mut _input: tokio::sync::mpsc::Receiver<SinkRequest>,
-        ) -> Vec<Response> {
+        async fn sink(&self, _input: tokio::sync::mpsc::Receiver<SinkRequest>) -> Vec<Response> {
             vec![]
         }
     }

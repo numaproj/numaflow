@@ -13,11 +13,23 @@ use aws_config::meta::region::RegionProviderChain;
 use aws_config::{BehaviorVersion, Region};
 use aws_credential_types::provider::ProvideCredentials;
 use aws_sdk_sqs::Client;
+use aws_smithy_types::error::metadata::ProvideErrorMetadata;
 use tokio::sync::oneshot;
 use tracing;
 
 pub mod sink;
 pub mod source;
+
+/// Metadata key used for SQS-specific attributes in message metadata
+pub const SQS_METADATA_KEY: &str = "sqs";
+
+// SQS message header parameter keys
+/// Header key for message delay in seconds (0-900 seconds)
+pub const HEADER_DELAY_SECONDS: &str = "DelaySeconds";
+/// Header key for FIFO queue message group ID
+pub const HEADER_MESSAGE_GROUP_ID: &str = "MessageGroupId";
+/// Header key for FIFO queue message deduplication ID
+pub const HEADER_MESSAGE_DEDUPLICATION_ID: &str = "MessageDeduplicationId";
 
 /// Simple assume role configuration struct for the SQS client
 #[derive(Debug, Clone, PartialEq)]
@@ -45,11 +57,8 @@ pub enum SqsConfig {
 /// - Explicit handling of actor communication failures
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("Failed with SQS error - {0}")]
-    Sqs(#[from] aws_sdk_sqs::Error),
-
-    #[error("Failed with STS error - {0}")]
-    Sts(#[from] aws_sdk_sts::Error),
+    #[error("{0}")]
+    Sqs(String),
 
     #[error("Failed to receive message from channel. Actor task is terminated: {0:?}")]
     ActorTaskTerminated(oneshot::error::RecvError),
@@ -59,6 +68,22 @@ pub enum Error {
 
     #[error("{0}")]
     Other(String),
+}
+
+/// Extracts a user-friendly error message from AWS SDK errors.
+/// Returns format: "ErrorCode: Error message" or falls back to string representation.
+pub(crate) fn extract_aws_error<E, R>(err: &aws_sdk_sqs::error::SdkError<E, R>) -> String
+where
+    E: ProvideErrorMetadata,
+{
+    if let aws_sdk_sqs::error::SdkError::ServiceError(service_err) = err {
+        let se = service_err.err();
+        let code = se.code().unwrap_or("UnknownError");
+        let message = se.message().unwrap_or("No details available");
+        return format!("{}: {}", code, message);
+    }
+    // For non-service errors (network, timeout, etc.)
+    err.to_string()
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -215,7 +240,10 @@ mod tests {
     async fn test_sqs_error_conversion() {
         let modeled_error = mock!(aws_sdk_sqs::Client::get_queue_url).then_error(|| {
             aws_sdk_sqs::operation::get_queue_url::GetQueueUrlError::generic(
-                ErrorMetadata::builder().code("InvalidAddress").build(),
+                ErrorMetadata::builder()
+                    .code("InvalidAddress")
+                    .message("The queue does not exist")
+                    .build(),
             )
         });
 
@@ -233,13 +261,11 @@ mod tests {
         );
         let err = sqs.get_queue_url().send().await.unwrap_err();
 
-        let converted_error = Error::Sqs(err.into());
+        let err_msg = extract_aws_error(&err);
+        let converted_error = Error::Sqs(err_msg);
         assert!(matches!(converted_error, Error::Sqs(_)));
-        assert!(
-            converted_error
-                .to_string()
-                .contains("Failed with SQS error")
-        );
+        // Error message now contains the actual error details
+        assert!(converted_error.to_string().contains("InvalidAddress"));
     }
 
     #[test]
