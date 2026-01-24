@@ -3,9 +3,10 @@ use numaflow_pb::servers::mvtxdaemon::mono_vertex_daemon_service_server::{
 };
 use numaflow_pb::servers::mvtxdaemon::{
     GetMonoVertexErrorsRequest, GetMonoVertexErrorsResponse, GetMonoVertexMetricsResponse,
-    GetMonoVertexStatusResponse,
+    GetMonoVertexStatusResponse, MonoVertexMetrics, MonoVertexStatus, ReplicaErrors,
 };
 use rcgen::CertifiedKey;
+use std::collections::HashMap;
 use std::error::Error;
 use std::result::Result;
 use tonic::transport::{Identity, Server, ServerTlsConfig};
@@ -23,9 +24,29 @@ impl MonoVertexDaemonService for MvtxDaemonService {
     ) -> Result<Response<GetMonoVertexMetricsResponse>, Status> {
         info!("Received GetMonoVertexMetrics");
 
-        let reply = GetMonoVertexMetricsResponse { metrics: None };
+        let mock_processing_rates = HashMap::from([
+            ("default".to_string(), 67.0),
+            ("1m".to_string(), 10.0),
+            ("5m".to_string(), 50.0),
+            ("15m".to_string(), 150.0),
+        ]);
 
-        Ok(Response::new(reply))
+        let mock_pendings = HashMap::from([
+            ("default".to_string(), 67),
+            ("1m".to_string(), 10),
+            ("5m".to_string(), 50),
+            ("15m".to_string(), 150),
+        ]);
+
+        let mock_resp = GetMonoVertexMetricsResponse {
+            metrics: Some(MonoVertexMetrics {
+                mono_vertex: "mock_mvtx_spec".to_string(),
+                processing_rates: mock_processing_rates,
+                pendings: mock_pendings,
+            }),
+        };
+
+        Ok(Response::new(mock_resp))
     }
 
     async fn get_mono_vertex_status(
@@ -34,9 +55,15 @@ impl MonoVertexDaemonService for MvtxDaemonService {
     ) -> Result<Response<GetMonoVertexStatusResponse>, Status> {
         info!("Received GetMonoVertexStatus");
 
-        let reply = GetMonoVertexStatusResponse { status: None };
+        let mock_resp = GetMonoVertexStatusResponse {
+            status: Some(MonoVertexStatus {
+                status: "mock_status".to_string(),
+                message: "mock_status_message".to_string(),
+                code: "mock_status_code".to_string(),
+            }),
+        };
 
-        Ok(Response::new(reply))
+        Ok(Response::new(mock_resp))
     }
 
     async fn get_mono_vertex_errors(
@@ -45,9 +72,14 @@ impl MonoVertexDaemonService for MvtxDaemonService {
     ) -> Result<Response<GetMonoVertexErrorsResponse>, Status> {
         info!("Received GetMonoVertexErrors");
 
-        let reply = GetMonoVertexErrorsResponse { errors: vec![] };
+        let mock_resp = GetMonoVertexErrorsResponse {
+            errors: vec![ReplicaErrors {
+                replica: "mock_replica".to_string(),
+                container_errors: vec![],
+            }],
+        };
 
-        Ok(Response::new(reply))
+        Ok(Response::new(mock_resp))
     }
 }
 

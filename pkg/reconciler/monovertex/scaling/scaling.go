@@ -217,8 +217,7 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 		return fmt.Errorf("failed to get metrics of mono vertex key %q, %w", key, err)
 	}
 
-	log.Info("Keran: successfully get the daemon client and called GetMonoVertexMetrics from the controller")
-	log.Info("Mvtx name is %v", vMetrics.MonoVertex)
+	log.Infof("KeranTest - Mock MonoVertex spec is %v", vMetrics.MonoVertex)
 
 	totalRate := float64(0)
 	totalPending := int64(0)
