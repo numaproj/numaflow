@@ -15,7 +15,7 @@ and skip UDF/Primary sink components.
 
 ### Normal Flow
 
-![Bypass Routing](../../assets/mvtx-bypass-normal-flow.png)
+![Bypass Routing](../../assets/monovertex.png)
 
 ### With bypass enabled
 
