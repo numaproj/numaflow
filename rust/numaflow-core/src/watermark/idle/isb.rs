@@ -251,7 +251,11 @@ mod tests {
             .last_published_wm_state
             .read()
             .expect("Failed to get read lock");
-        let idle_state = &read_guard["test_vertex"][0];
+        let idle_state = read_guard
+            .get("test_vertex")
+            .expect("Expected test_vertex to exist")
+            .first()
+            .expect("Expected at least one idle state");
         assert_eq!(idle_state.stream, stream);
         assert!(idle_state.wmb_msg_offset.is_none());
     }
@@ -337,7 +341,11 @@ mod tests {
             .last_published_wm_state
             .read()
             .expect("Failed to get read lock");
-        let idle_state = &read_guard["test_vertex"][0];
+        let idle_state = read_guard
+            .get("test_vertex")
+            .expect("Expected test_vertex to exist")
+            .first()
+            .expect("Expected at least one idle state");
         assert_eq!(idle_state.wmb_msg_offset, Some(offset));
     }
 
@@ -370,6 +378,11 @@ mod tests {
 
         let idle_streams = manager.fetch_idle_streams().await;
         assert_eq!(idle_streams.len(), 1);
-        assert_eq!(idle_streams[0], stream);
+        assert_eq!(
+            *idle_streams
+                .first()
+                .expect("Expected at least one idle stream"),
+            stream
+        );
     }
 }
