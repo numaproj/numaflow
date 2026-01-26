@@ -316,8 +316,9 @@ mod tests {
             .await
             .expect("Failed to send message");
         assert_eq!(responses.len(), 1);
+        let first_response = responses.first().expect("Expected at least one response");
         assert!(matches!(
-            responses[0].status,
+            first_response.status,
             ResponseStatusFromSink::Success
         ));
 
@@ -329,7 +330,9 @@ mod tests {
         )
         .await;
 
-        let msg = &consumed_messages[0];
+        let msg = consumed_messages
+            .first()
+            .expect("Expected at least one consumed message");
         assert_eq!(msg.payload, "keyed-payload");
         assert_eq!(msg.properties.get("source"), Some(&"test".to_string()));
         assert_eq!(msg.properties.get("version"), Some(&"1.0".to_string()));
@@ -379,8 +382,9 @@ mod tests {
             .await
             .expect("Failed to send large message");
         assert_eq!(responses.len(), 1);
+        let first_response = responses.first().expect("Expected at least one response");
         assert!(matches!(
-            responses[0].status,
+            first_response.status,
             ResponseStatusFromSink::Success
         ));
 
@@ -392,7 +396,9 @@ mod tests {
         )
         .await;
 
-        let msg = &consumed_messages[0];
+        let msg = consumed_messages
+            .first()
+            .expect("Expected at least one consumed message");
         assert_eq!(msg.payload.as_bytes(), large_payload);
     }
 
@@ -424,8 +430,9 @@ mod tests {
             .await
             .expect("Failed to send message");
         assert_eq!(responses.len(), 1);
+        let first_response = responses.first().expect("Expected at least one response");
         assert!(matches!(
-            responses[0].status,
+            first_response.status,
             ResponseStatusFromSink::Success
         ));
 
@@ -437,7 +444,9 @@ mod tests {
         )
         .await;
 
-        let msg = &consumed_messages[0];
+        let msg = consumed_messages
+            .first()
+            .expect("Expected at least one consumed message");
         assert_eq!(msg.event_time, Some(event_time as u64));
     }
 }
