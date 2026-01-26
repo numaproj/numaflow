@@ -765,15 +765,17 @@ mod tests {
         let time_increment = chrono::Duration::seconds(1);
 
         for i in 1..=1000 {
-            let mut message = Message::default();
-            message.event_time = start_time + (time_increment * i);
-            message.keys = Arc::from(vec!["test-key".to_string()]);
-            message.value = bytes::Bytes::from(vec![1, 2, 3]);
-            message.offset = Offset::Int(IntOffset::new(i as i64, 0));
-            message.id = MessageID {
-                vertex_name: "test-vertex".to_string().into(),
-                offset: i.to_string().into(),
-                index: 0,
+            let message = Message {
+                event_time: start_time + (time_increment * i),
+                keys: Arc::from(vec!["test-key".to_string()]),
+                value: bytes::Bytes::from(vec![1, 2, 3]),
+                offset: Offset::Int(IntOffset::new(i as i64, 0)),
+                id: MessageID {
+                    vertex_name: "test-vertex".to_string().into(),
+                    offset: i.to_string().into(),
+                    index: 0,
+                },
+                ..Default::default()
             };
 
             // Send message - conversion to bytes happens internally
@@ -843,9 +845,15 @@ mod tests {
 
         // Verify that the event times are in increasing order
         for i in 1..replayed_event_times.len() {
+            let prev = replayed_event_times
+                .get(i - 1)
+                .expect("Previous event time should exist");
+            let curr = replayed_event_times
+                .get(i)
+                .expect("Current event time should exist");
             assert_eq!(
-                replayed_event_times[i - 1] + chrono::Duration::seconds(1),
-                replayed_event_times[i],
+                *prev + chrono::Duration::seconds(1),
+                *curr,
                 "Event times are not in increasing order"
             );
         }
@@ -916,28 +924,32 @@ mod tests {
 
         // Message with event time before the GC end time (should be filtered out)
         let before_time = Utc.with_ymd_and_hms(2025, 4, 1, 0, 59, 0).unwrap();
-        let mut before_message = Message::default();
-        before_message.event_time = before_time;
-        before_message.keys = Arc::from(vec!["test-key".to_string()]);
-        before_message.value = bytes::Bytes::from(vec![1, 2, 3]);
-        before_message.offset = Offset::Int(IntOffset::new(1, 0));
-        before_message.id = MessageID {
-            vertex_name: "test-vertex".to_string().into(),
-            offset: "1".to_string().into(),
-            index: 0,
+        let before_message = Message {
+            event_time: before_time,
+            keys: Arc::from(vec!["test-key".to_string()]),
+            value: bytes::Bytes::from(vec![1, 2, 3]),
+            offset: Offset::Int(IntOffset::new(1, 0)),
+            id: MessageID {
+                vertex_name: "test-vertex".to_string().into(),
+                offset: "1".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
         };
 
         // Message with event time after the GC end time (should be retained)
         let after_time = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
-        let mut after_message = Message::default();
-        after_message.event_time = after_time;
-        after_message.keys = Arc::from(vec!["test-key".to_string()]);
-        after_message.value = bytes::Bytes::from(vec![4, 5, 6]);
-        after_message.offset = Offset::Int(IntOffset::new(2, 0));
-        after_message.id = MessageID {
-            vertex_name: "test-vertex".to_string().into(),
-            offset: "2".to_string().into(),
-            index: 0,
+        let after_message = Message {
+            event_time: after_time,
+            keys: Arc::from(vec!["test-key".to_string()]),
+            value: bytes::Bytes::from(vec![4, 5, 6]),
+            offset: Offset::Int(IntOffset::new(2, 0)),
+            id: MessageID {
+                vertex_name: "test-vertex".to_string().into(),
+                offset: "2".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
         };
 
         // Write the messages to the WAL - conversion to bytes happens internally
@@ -1023,15 +1035,24 @@ mod tests {
         );
 
         assert_eq!(
-            replayed_event_times[0], after_time,
+            *replayed_event_times
+                .first()
+                .expect("Expected at least one event time"),
+            after_time,
             "Event time of replayed message does not match the original message"
         );
 
         // check the order of the replayed event by checking if their event time is increasing by 1
         for i in 1..replayed_event_times.len() {
+            let prev = replayed_event_times
+                .get(i - 1)
+                .expect("Previous event time should exist");
+            let curr = replayed_event_times
+                .get(i)
+                .expect("Current event time should exist");
             assert_eq!(
-                replayed_event_times[i - 1] + chrono::Duration::seconds(1),
-                replayed_event_times[i],
+                *prev + chrono::Duration::seconds(1),
+                *curr,
                 "Event times are not in increasing order"
             );
         }
@@ -1116,57 +1137,65 @@ mod tests {
 
         // Message 1: key1:key2 with event time before gc_end_1 (should be filtered out)
         let before_time_1 = Utc.with_ymd_and_hms(2025, 4, 1, 0, 59, 0).unwrap();
-        let mut message_1 = Message::default();
-        message_1.event_time = before_time_1;
-        message_1.keys = Arc::from(vec!["key1".to_string(), "key2".to_string()]);
-        message_1.value = bytes::Bytes::from(vec![1, 2, 3]);
-        message_1.offset = Offset::Int(IntOffset::new(1, 0));
-        message_1.id = MessageID {
-            vertex_name: "test-vertex".to_string().into(),
-            offset: "1".to_string().into(),
-            index: 0,
+        let message_1 = Message {
+            event_time: before_time_1,
+            keys: Arc::from(vec!["key1".to_string(), "key2".to_string()]),
+            value: bytes::Bytes::from(vec![1, 2, 3]),
+            offset: Offset::Int(IntOffset::new(1, 0)),
+            id: MessageID {
+                vertex_name: "test-vertex".to_string().into(),
+                offset: "1".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
         };
         let wal_message_1: WalMessage = message_1.clone().into();
 
         // Message 2: key1:key2 with event time after gc_end_1 (should be retained)
         let after_time_1 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
-        let mut message_2 = Message::default();
-        message_2.event_time = after_time_1;
-        message_2.keys = Arc::from(vec!["key1".to_string(), "key2".to_string()]);
-        message_2.value = bytes::Bytes::from(vec![4, 5, 6]);
-        message_2.offset = Offset::Int(IntOffset::new(2, 0));
-        message_2.id = MessageID {
-            vertex_name: "test-vertex".to_string().into(),
-            offset: "2".to_string().into(),
-            index: 0,
+        let message_2 = Message {
+            event_time: after_time_1,
+            keys: Arc::from(vec!["key1".to_string(), "key2".to_string()]),
+            value: bytes::Bytes::from(vec![4, 5, 6]),
+            offset: Offset::Int(IntOffset::new(2, 0)),
+            id: MessageID {
+                vertex_name: "test-vertex".to_string().into(),
+                offset: "2".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
         };
         let wal_message_2: WalMessage = message_2.clone().into();
 
         // Message 3: key3:key4 with event time before gc_end_2 (should be filtered out)
         let before_time_2 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
-        let mut message_3 = Message::default();
-        message_3.event_time = before_time_2;
-        message_3.keys = Arc::from(vec!["key3".to_string(), "key4".to_string()]);
-        message_3.value = bytes::Bytes::from(vec![7, 8, 9]);
-        message_3.offset = Offset::Int(IntOffset::new(3, 0));
-        message_3.id = MessageID {
-            vertex_name: "test-vertex".to_string().into(),
-            offset: "3".to_string().into(),
-            index: 0,
+        let message_3 = Message {
+            event_time: before_time_2,
+            keys: Arc::from(vec!["key3".to_string(), "key4".to_string()]),
+            value: bytes::Bytes::from(vec![7, 8, 9]),
+            offset: Offset::Int(IntOffset::new(3, 0)),
+            id: MessageID {
+                vertex_name: "test-vertex".to_string().into(),
+                offset: "3".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
         };
         let wal_message_3: WalMessage = message_3.clone().into();
 
         // Message 4: key3:key4 with event time after gc_end_2 (should be retained)
         let after_time_2 = Utc.with_ymd_and_hms(2025, 4, 1, 2, 30, 0).unwrap();
-        let mut message_4 = Message::default();
-        message_4.event_time = after_time_2;
-        message_4.keys = Arc::from(vec!["key3".to_string(), "key4".to_string()]);
-        message_4.value = bytes::Bytes::from(vec![10, 11, 12]);
-        message_4.offset = Offset::Int(IntOffset::new(4, 0));
-        message_4.id = MessageID {
-            vertex_name: "test-vertex".to_string().into(),
-            offset: "4".to_string().into(),
-            index: 0,
+        let message_4 = Message {
+            event_time: after_time_2,
+            keys: Arc::from(vec!["key3".to_string(), "key4".to_string()]),
+            value: bytes::Bytes::from(vec![10, 11, 12]),
+            offset: Offset::Int(IntOffset::new(4, 0)),
+            id: MessageID {
+                vertex_name: "test-vertex".to_string().into(),
+                offset: "4".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
         };
         let wal_message_4: WalMessage = message_4.clone().into();
 
