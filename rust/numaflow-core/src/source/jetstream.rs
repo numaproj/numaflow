@@ -214,8 +214,20 @@ mod tests {
         // Test SourceReader::read
         let messages = source.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 20, "Should read 20 messages in a batch");
-        assert_eq!(messages[0].value, Bytes::from("message 0"));
-        assert_eq!(messages[19].value, Bytes::from("message 19"));
+        assert_eq!(
+            messages
+                .first()
+                .expect("Expected at least one message")
+                .value,
+            Bytes::from("message 0")
+        );
+        assert_eq!(
+            messages
+                .last()
+                .expect("Expected at least one message")
+                .value,
+            Bytes::from("message 19")
+        );
 
         // Verify that event_time is set to the published timestamp, not default
         for message in &messages {

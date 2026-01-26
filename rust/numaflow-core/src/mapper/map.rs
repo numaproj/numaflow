@@ -26,6 +26,10 @@ pub(super) mod batch;
 pub(super) mod stream;
 pub(super) mod unary;
 
+use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
+use crate::metrics::{
+    monovertex_metrics, mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
+};
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use batch::UserDefinedBatchMap;
 use stream::UserDefinedStreamMap;
@@ -682,6 +686,80 @@ impl MapHandle {
                 }
             }
         });
+    }
+}
+
+fn update_udf_error_metric(is_mono_vertex: bool) {
+    if is_mono_vertex {
+        monovertex_metrics()
+            .udf
+            .errors_total
+            .get_or_create(mvtx_forward_metric_labels())
+            .inc();
+    } else {
+        pipeline_metrics()
+            .forwarder
+            .udf_error_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .inc();
+    }
+}
+
+fn update_udf_process_time_metric(is_mono_vertex: bool) {
+    if is_mono_vertex {
+        monovertex_metrics()
+            .udf
+            .time
+            .get_or_create(mvtx_forward_metric_labels())
+            .observe(Instant::now().elapsed().as_micros() as f64);
+    } else {
+        pipeline_metrics()
+            .forwarder
+            .udf_processing_time
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .observe(Instant::now().elapsed().as_micros() as f64);
+    }
+}
+
+fn update_udf_write_only_metric(is_mono_vertex: bool) {
+    if !is_mono_vertex {
+        pipeline_metrics()
+            .forwarder
+            .udf_write_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .inc();
+    }
+}
+
+fn update_udf_write_metric(is_mono_vertex: bool, msg_info: ParentMessageInfo, message_count: u64) {
+    if is_mono_vertex {
+        monovertex_metrics()
+            .udf
+            .time
+            .get_or_create(mvtx_forward_metric_labels())
+            .observe(msg_info.start_time.elapsed().as_micros() as f64);
+    } else {
+        pipeline_metrics()
+            .forwarder
+            .udf_write_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .inc_by(message_count);
+
+        pipeline_metrics()
+            .forwarder
+            .udf_processing_time
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .observe(msg_info.start_time.elapsed().as_micros() as f64);
+    }
+}
+
+fn update_udf_read_metric(is_mono_vertex: bool) {
+    if !is_mono_vertex {
+        pipeline_metrics()
+            .forwarder
+            .udf_read_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .inc();
     }
 }
 
@@ -1356,5 +1434,230 @@ mod tests {
             "Expected gRPC server to have shut down"
         );
         Ok(())
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_update_udf_error_metric_mono_vertex() {
+        let before = monovertex_metrics()
+            .udf
+            .errors_total
+            .get_or_create(mvtx_forward_metric_labels())
+            .get();
+
+        update_udf_error_metric(true);
+
+        let after = monovertex_metrics()
+            .udf
+            .errors_total
+            .get_or_create(mvtx_forward_metric_labels())
+            .get();
+
+        assert_eq!(
+            after,
+            before + 1,
+            "monovertex udf errors_total should be incremented by 1"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_update_udf_error_metric_pipeline() {
+        let before = pipeline_metrics()
+            .forwarder
+            .udf_error_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        update_udf_error_metric(false);
+
+        let after = pipeline_metrics()
+            .forwarder
+            .udf_error_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        assert_eq!(
+            after,
+            before + 1,
+            "pipeline udf_error_total should be incremented by 1"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_update_udf_write_only_metric_mono_vertex() {
+        let before = pipeline_metrics()
+            .forwarder
+            .udf_write_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        update_udf_write_only_metric(true);
+
+        let after = pipeline_metrics()
+            .forwarder
+            .udf_write_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        assert_eq!(
+            after, before,
+            "pipeline udf_write_total should NOT be incremented when is_mono_vertex is true"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_update_udf_write_only_metric_pipeline() {
+        let before = pipeline_metrics()
+            .forwarder
+            .udf_write_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        update_udf_write_only_metric(false);
+
+        let after = pipeline_metrics()
+            .forwarder
+            .udf_write_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        assert_eq!(
+            after,
+            before + 1,
+            "pipeline udf_write_total should be incremented by 1"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_update_udf_read_metric_mono_vertex() {
+        let before = pipeline_metrics()
+            .forwarder
+            .udf_read_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        update_udf_read_metric(true);
+
+        let after = pipeline_metrics()
+            .forwarder
+            .udf_read_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        assert_eq!(
+            after, before,
+            "pipeline udf_read_total should NOT be incremented when is_mono_vertex is true"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_update_udf_read_metric_pipeline() {
+        let before = pipeline_metrics()
+            .forwarder
+            .udf_read_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        update_udf_read_metric(false);
+
+        let after = pipeline_metrics()
+            .forwarder
+            .udf_read_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        assert_eq!(
+            after,
+            before + 1,
+            "pipeline udf_read_total should be incremented by 1"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_update_udf_write_metric_mono_vertex() {
+        let pipeline_write_before = pipeline_metrics()
+            .forwarder
+            .udf_write_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        let msg_info = ParentMessageInfo {
+            offset: Default::default(),
+            event_time: Default::default(),
+            is_late: false,
+            headers: Arc::new(Default::default()),
+            start_time: std::time::Instant::now(),
+            current_index: 0,
+            metadata: None,
+            ack_handle: None,
+        };
+
+        update_udf_write_metric(true, msg_info, 5);
+
+        let pipeline_write_after = pipeline_metrics()
+            .forwarder
+            .udf_write_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        assert_eq!(
+            pipeline_write_after, pipeline_write_before,
+            "pipeline udf_write_total should NOT be incremented when is_mono_vertex is true"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_update_udf_write_metric_pipeline() {
+        let before = pipeline_metrics()
+            .forwarder
+            .udf_write_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        let msg_info = ParentMessageInfo {
+            offset: Default::default(),
+            event_time: Default::default(),
+            is_late: false,
+            headers: Arc::new(Default::default()),
+            start_time: std::time::Instant::now(),
+            current_index: 0,
+            metadata: None,
+            ack_handle: None,
+        };
+
+        update_udf_write_metric(false, msg_info, 5);
+
+        let after = pipeline_metrics()
+            .forwarder
+            .udf_write_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .get();
+
+        assert_eq!(
+            after,
+            before + 5,
+            "pipeline udf_write_total should be incremented by message_count"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_update_udf_process_time_metric_mono_vertex() {
+        // Currently only ensuring that this should not panic
+        update_udf_process_time_metric(true);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_update_udf_process_time_metric_pipeline() {
+        // Currently only ensuring that this should not panic
+        update_udf_process_time_metric(false);
     }
 }

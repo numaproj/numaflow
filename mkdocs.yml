@@ -73,6 +73,7 @@ nav:
           - user-guide/sinks/kafka.md
           - user-guide/sinks/log.md
           - user-guide/sinks/blackhole.md
+          - user-guide/sinks/sqs.md
           - User-defined Sinks: "user-guide/sinks/user-defined-sinks.md"
           - Fallback Sink: "user-guide/sinks/fallback.md"
           - OnSuccess Sink: "user-guide/sinks/on-success.md"
@@ -112,6 +113,7 @@ nav:
           - user-guide/reference/mvtx-tuning.md
           - user-guide/reference/mvtx-operations.md
           - user-guide/reference/distributed-throttling.md
+          - user-guide/reference/monovertex-bypass.md
           - Configuration:
               - user-guide/reference/configuration/pod-specifications.md
               - user-guide/reference/configuration/container-resources.md

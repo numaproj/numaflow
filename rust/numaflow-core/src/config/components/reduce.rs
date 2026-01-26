@@ -315,10 +315,10 @@ mod tests {
                     AlignedWindowType::Fixed(config) => {
                         assert_eq!(config.length, Duration::from_secs(60));
                     }
-                    _ => panic!("Expected fixed window type"),
+                    AlignedWindowType::Sliding(_) => panic!("Expected fixed window type"),
                 }
             }
-            _ => panic!("Expected aligned reducer config"),
+            ReducerConfig::Unaligned(_) => panic!("Expected aligned reducer config"),
         }
     }
 
@@ -356,10 +356,10 @@ mod tests {
                         assert_eq!(config.length, Duration::from_secs(60));
                         assert_eq!(config.slide, Duration::from_secs(30));
                     }
-                    _ => panic!("Expected sliding window type"),
+                    AlignedWindowType::Fixed(_) => panic!("Expected sliding window type"),
                 }
             }
-            _ => panic!("Expected aligned reducer config"),
+            ReducerConfig::Unaligned(_) => panic!("Expected aligned reducer config"),
         }
     }
 
@@ -394,10 +394,10 @@ mod tests {
                     UnalignedWindowType::Session(config) => {
                         assert_eq!(config.timeout, Duration::from_secs(300));
                     }
-                    _ => panic!("Expected session window type"),
+                    UnalignedWindowType::Accumulator(_) => panic!("Expected session window type"),
                 }
             }
-            _ => panic!("Expected unaligned reducer config"),
+            ReducerConfig::Aligned(_) => panic!("Expected unaligned reducer config"),
         }
     }
 
@@ -432,10 +432,10 @@ mod tests {
                     UnalignedWindowType::Accumulator(config) => {
                         assert_eq!(config.timeout, Duration::from_secs(600));
                     }
-                    _ => panic!("Expected accumulator window type"),
+                    UnalignedWindowType::Session(_) => panic!("Expected accumulator window type"),
                 }
             }
-            _ => panic!("Expected unaligned reducer config"),
+            ReducerConfig::Aligned(_) => panic!("Expected unaligned reducer config"),
         }
     }
 
@@ -531,7 +531,7 @@ mod tests {
                         assert_eq!(config.length, Duration::from_secs(42));
                         assert!(config.streaming);
                     }
-                    _ => panic!("Expected fixed window type"),
+                    AlignedWindowType::Sliding(_) => panic!("Expected fixed window type"),
                 }
                 // Should use streamer_config
                 assert_eq!(
@@ -539,7 +539,7 @@ mod tests {
                     "/var/run/numaflow/reducestream.sock"
                 );
             }
-            _ => panic!("Expected aligned reducer config"),
+            ReducerConfig::Unaligned(_) => panic!("Expected aligned reducer config"),
         }
     }
 
@@ -572,7 +572,7 @@ mod tests {
                         assert_eq!(config.length, Duration::from_secs(42));
                         assert!(!config.streaming);
                     }
-                    _ => panic!("Expected fixed window type"),
+                    AlignedWindowType::Sliding(_) => panic!("Expected fixed window type"),
                 }
                 // Should use default config
                 assert_eq!(
@@ -580,7 +580,7 @@ mod tests {
                     "/var/run/numaflow/reduce.sock"
                 );
             }
-            _ => panic!("Expected aligned reducer config"),
+            ReducerConfig::Unaligned(_) => panic!("Expected aligned reducer config"),
         }
     }
 
@@ -626,7 +626,7 @@ mod tests {
                         assert_eq!(config.slide, Duration::from_secs(10));
                         assert!(config.streaming);
                     }
-                    _ => panic!("Expected sliding window type"),
+                    AlignedWindowType::Fixed(_) => panic!("Expected sliding window type"),
                 }
                 // Should use streamer_config
                 assert_eq!(
@@ -634,7 +634,7 @@ mod tests {
                     "/var/run/numaflow/reducestream.sock"
                 );
             }
-            _ => panic!("Expected aligned reducer config"),
+            ReducerConfig::Unaligned(_) => panic!("Expected aligned reducer config"),
         }
     }
 
@@ -669,7 +669,7 @@ mod tests {
                         assert_eq!(config.slide, Duration::from_secs(10));
                         assert!(!config.streaming);
                     }
-                    _ => panic!("Expected sliding window type"),
+                    AlignedWindowType::Fixed(_) => panic!("Expected sliding window type"),
                 }
                 // Should use default config
                 assert_eq!(
@@ -677,7 +677,7 @@ mod tests {
                     "/var/run/numaflow/reduce.sock"
                 );
             }
-            _ => panic!("Expected aligned reducer config"),
+            ReducerConfig::Unaligned(_) => panic!("Expected aligned reducer config"),
         }
     }
 
@@ -830,10 +830,10 @@ mod tests {
                     AlignedWindowType::Fixed(config) => {
                         assert_eq!(config.length, Duration::from_secs(86400));
                     }
-                    _ => panic!("Expected fixed window type"),
+                    AlignedWindowType::Sliding(_) => panic!("Expected fixed window type"),
                 }
             }
-            _ => panic!("Expected aligned reducer config"),
+            ReducerConfig::Unaligned(_) => panic!("Expected aligned reducer config"),
         }
     }
 
@@ -865,10 +865,10 @@ mod tests {
                         assert_eq!(config.length, Duration::from_secs(60));
                         assert_eq!(config.slide, Duration::from_secs(0));
                     }
-                    _ => panic!("Expected sliding window type"),
+                    AlignedWindowType::Fixed(_) => panic!("Expected sliding window type"),
                 }
             }
-            _ => panic!("Expected aligned reducer config"),
+            ReducerConfig::Unaligned(_) => panic!("Expected aligned reducer config"),
         }
     }
 
@@ -903,7 +903,7 @@ mod tests {
                     UnalignedWindowType::Session(config) => {
                         assert_eq!(config.timeout, Duration::from_secs(7200));
                     }
-                    _ => panic!("Expected session window type"),
+                    UnalignedWindowType::Accumulator(_) => panic!("Expected session window type"),
                 }
 
                 // Verify session-specific user defined config
@@ -912,7 +912,7 @@ mod tests {
                     "/var/run/numaflow/sessionreduce.sock"
                 );
             }
-            _ => panic!("Expected unaligned reducer config"),
+            ReducerConfig::Aligned(_) => panic!("Expected unaligned reducer config"),
         }
     }
 
@@ -947,7 +947,7 @@ mod tests {
                     UnalignedWindowType::Accumulator(config) => {
                         assert_eq!(config.timeout, Duration::from_secs(1800));
                     }
-                    _ => panic!("Expected accumulator window type"),
+                    UnalignedWindowType::Session(_) => panic!("Expected accumulator window type"),
                 }
 
                 // Verify accumulator-specific user defined config
@@ -960,7 +960,7 @@ mod tests {
                     "/var/run/numaflow/accumulator-server-info"
                 );
             }
-            _ => panic!("Expected unaligned reducer config"),
+            ReducerConfig::Aligned(_) => panic!("Expected unaligned reducer config"),
         }
     }
 }
