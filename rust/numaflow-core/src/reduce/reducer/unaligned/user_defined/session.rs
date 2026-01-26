@@ -825,18 +825,14 @@ mod tests {
         result_messages.sort_by(|a, b| a.keys.cmp(&b.keys));
 
         // First result should be for key1:subkey1 with count 2
-        assert_eq!(result_messages[0].keys.to_vec(), vec!["key1", "subkey1"]);
-        assert_eq!(
-            String::from_utf8(result_messages[0].value.to_vec()).unwrap(),
-            "2"
-        );
+        let result0 = result_messages.first().expect("Expected first result");
+        assert_eq!(result0.keys.to_vec(), vec!["key1", "subkey1"]);
+        assert_eq!(String::from_utf8(result0.value.to_vec()).unwrap(), "2");
 
         // Second result should be for key2:subkey2 with count 1
-        assert_eq!(result_messages[1].keys.to_vec(), vec!["key2", "subkey2"]);
-        assert_eq!(
-            String::from_utf8(result_messages[1].value.to_vec()).unwrap(),
-            "1"
-        );
+        let result1 = result_messages.get(1).expect("Expected second result");
+        assert_eq!(result1.keys.to_vec(), vec!["key2", "subkey2"]);
+        assert_eq!(String::from_utf8(result1.value.to_vec()).unwrap(), "1");
 
         // Wait for the handle to complete
         session_handle

@@ -457,7 +457,7 @@ mod tests {
         if let UnalignedWindowMessage {
             operation: UnalignedWindowOperation::Open { window, .. },
             ..
-        } = &window_msgs[0]
+        } = window_msgs.first().expect("Expected window message")
         {
             assert_eq!(window.keys, msg.keys);
         } else {
@@ -502,14 +502,15 @@ mod tests {
         // Verify results - should be assigned to exactly 1 window with Expand operation (not Append)
         // because the new window extends the existing window
         assert_eq!(window_msgs.len(), 1);
+        let first_msg = window_msgs.first().expect("Expected window message");
         if let UnalignedWindowMessage {
             operation: UnalignedWindowOperation::Expand { windows, .. },
             ..
-        } = &window_msgs[0]
+        } = first_msg
         {
             assert_eq!(windows.len(), 2); // old window and new expanded window
         } else {
-            panic!("Expected Expand message, got {:?}", window_msgs[0]);
+            panic!("Expected Expand message, got {:?}", first_msg);
         }
     }
 
@@ -549,14 +550,15 @@ mod tests {
 
         // Since [now+10, now+70] extends beyond [now, now+60], this should be an Expand operation
         assert_eq!(window_msgs.len(), 1);
+        let first_msg = window_msgs.first().expect("Expected window message");
         if let UnalignedWindowMessage {
             operation: UnalignedWindowOperation::Expand { windows, .. },
             ..
-        } = &window_msgs[0]
+        } = first_msg
         {
             assert_eq!(windows.len(), 2); // old window and new expanded window
         } else {
-            panic!("Expected Expand message, got {:?}", window_msgs[0]);
+            panic!("Expected Expand message, got {:?}", first_msg);
         }
     }
 
@@ -588,7 +590,7 @@ mod tests {
         if let UnalignedWindowMessage {
             operation: UnalignedWindowOperation::Close { window },
             ..
-        } = &closed[0]
+        } = closed.first().expect("Expected closed window message")
         {
             assert_eq!(window.keys, msg.keys);
         } else {
@@ -630,10 +632,16 @@ mod tests {
         assert_eq!(merged_groups.len(), 2);
 
         // First group should have 2 windows (window2 and window1)
-        assert_eq!(merged_groups[0].len(), 2);
+        assert_eq!(
+            merged_groups.first().expect("Expected first group").len(),
+            2
+        );
 
         // Second group should  have 1 window (window3)
-        assert_eq!(merged_groups[1].len(), 1);
+        assert_eq!(
+            merged_groups.get(1).expect("Expected second group").len(),
+            1
+        );
     }
 
     #[test]
@@ -680,7 +688,7 @@ mod tests {
         let closed_window = if let UnalignedWindowMessage {
             operation: UnalignedWindowOperation::Close { window },
             ..
-        } = &closed[0]
+        } = closed.first().expect("Expected closed window message")
         {
             window.clone()
         } else {
@@ -753,7 +761,7 @@ mod tests {
         if let UnalignedWindowMessage {
             operation: UnalignedWindowOperation::Close { window },
             ..
-        } = &closed[0]
+        } = closed.first().expect("Expected closed window message")
         {
             windower.delete_window(window.clone());
         }
@@ -963,7 +971,7 @@ mod tests {
 
         let result1 = windower.assign_windows(msg1);
         assert_eq!(result1.len(), 1);
-        match &result1[0].operation {
+        match &result1.first().expect("Expected result").operation {
             UnalignedWindowOperation::Open { window, .. } => {
                 assert_eq!(window.start_time.timestamp_millis(), now.timestamp_millis());
                 assert_eq!(
@@ -987,11 +995,12 @@ mod tests {
 
         let result2 = windower.assign_windows(msg2);
         assert_eq!(result2.len(), 1);
-        match &result2[0].operation {
+        let result2_first = result2.first().expect("Expected result");
+        match &result2_first.operation {
             UnalignedWindowOperation::Expand { windows, .. } => {
                 assert_eq!(windows.len(), 2);
-                let old_window = &windows[0];
-                let new_window = &windows[1];
+                let old_window = windows.first().expect("Expected old window");
+                let new_window = windows.get(1).expect("Expected new window");
                 assert_eq!(
                     old_window.start_time.timestamp_millis(),
                     now.timestamp_millis()
@@ -1009,7 +1018,10 @@ mod tests {
                     (now + chrono::Duration::seconds(90)).timestamp_millis()
                 );
             }
-            _ => panic!("Expected Expand operation, got {:?}", result2[0].operation),
+            _ => panic!(
+                "Expected Expand operation, got {:?}",
+                result2_first.operation
+            ),
         }
 
         // Scenario 3: Test expansion in the other direction - message before existing window
@@ -1025,11 +1037,12 @@ mod tests {
 
         let result3 = windower.assign_windows(msg3);
         assert_eq!(result3.len(), 1);
-        match &result3[0].operation {
+        let result3_first = result3.first().expect("Expected result");
+        match &result3_first.operation {
             UnalignedWindowOperation::Expand { windows, .. } => {
                 assert_eq!(windows.len(), 2);
-                let old_window = &windows[0];
-                let new_window = &windows[1];
+                let old_window = windows.first().expect("Expected old window");
+                let new_window = windows.get(1).expect("Expected new window");
                 assert_eq!(
                     old_window.start_time.timestamp_millis(),
                     now.timestamp_millis()
@@ -1047,7 +1060,10 @@ mod tests {
                     (now + chrono::Duration::seconds(90)).timestamp_millis()
                 );
             }
-            _ => panic!("Expected Expand operation, got {:?}", result3[0].operation),
+            _ => panic!(
+                "Expected Expand operation, got {:?}",
+                result3_first.operation
+            ),
         }
 
         // Scenario 4: Test with a new key to create a separate window
@@ -1064,7 +1080,7 @@ mod tests {
 
         let result4 = windower.assign_windows(msg4);
         assert_eq!(result4.len(), 1);
-        match &result4[0].operation {
+        match &result4.first().expect("Expected result").operation {
             UnalignedWindowOperation::Open { window, .. } => {
                 assert_eq!(
                     window.start_time.timestamp_millis(),

@@ -877,7 +877,7 @@ mod tests {
                     + 1;
 
                 // Fire a message every 3 messages with updated key
-                if current_count % 3 == 0 {
+                if current_count.is_multiple_of(3) {
                     let keys = request.keys.clone();
                     let updated_key = format!("{}_{}", keys.join(":"), current_count);
 
@@ -1369,7 +1369,13 @@ mod tests {
             let proto_message = numaflow_pb::objects::isb::Message::decode(&data[..]).unwrap();
 
             // Extract and store the key
-            let key = proto_message.header.unwrap().keys[0].clone();
+            let key = proto_message
+                .header
+                .unwrap()
+                .keys
+                .first()
+                .expect("Expected at least one key")
+                .clone();
             received_keys.insert(key.clone());
 
             // Verify the count based on the key
@@ -1578,7 +1584,7 @@ mod tests {
             .unwrap();
 
         let mut result_count = 0;
-        let expected_counts = vec!["count_3", "count_6"];
+        let expected_counts = ["count_3", "count_6"];
 
         while let Some(msg) = messages.next().await {
             let msg = msg.unwrap();
@@ -1596,7 +1602,11 @@ mod tests {
             assert_eq!(message.header.unwrap().keys.to_vec(), vec![expected_key]);
             assert_eq!(
                 message.body.unwrap().payload.to_vec(),
-                expected_counts[result_count].as_bytes().to_vec()
+                expected_counts
+                    .get(result_count)
+                    .expect("Expected count at index")
+                    .as_bytes()
+                    .to_vec()
             );
 
             result_count += 1;
@@ -1820,7 +1830,13 @@ mod tests {
                 prost::Message::decode(data.as_ref()).unwrap();
 
             // Extract and store the key
-            let key = message.header.unwrap().keys[0].clone();
+            let key = message
+                .header
+                .unwrap()
+                .keys
+                .first()
+                .expect("Expected at least one key")
+                .clone();
             received_keys.insert(key.clone());
 
             // Verify the count based on the key - accumulator fires at count 3 and 6
@@ -2119,7 +2135,13 @@ mod tests {
             let proto_message = numaflow_pb::objects::isb::Message::decode(&data[..]).unwrap();
 
             // Extract and store the key
-            let key = proto_message.header.unwrap().keys[0].clone();
+            let key = proto_message
+                .header
+                .unwrap()
+                .keys
+                .first()
+                .expect("Expected at least one key")
+                .clone();
             received_keys.insert(key.clone());
 
             // Verify the count based on the key
