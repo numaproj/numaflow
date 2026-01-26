@@ -249,7 +249,7 @@ mod tests {
         if let UnalignedWindowMessage {
             operation: UnalignedWindowOperation::Open { window, .. },
             ..
-        } = &window_msgs[0]
+        } = window_msgs.first().expect("Expected window message")
         {
             assert_eq!(window.keys, msg.keys);
         } else {
@@ -284,7 +284,7 @@ mod tests {
         if let UnalignedWindowMessage {
             operation: UnalignedWindowOperation::Append { window, .. },
             ..
-        } = &window_msgs[0]
+        } = window_msgs.first().expect("Expected window message")
         {
             assert_eq!(window.keys, msg.keys);
         } else {
@@ -318,7 +318,7 @@ mod tests {
         if let UnalignedWindowMessage {
             operation: UnalignedWindowOperation::Close { window },
             ..
-        } = &closed[0]
+        } = closed.first().expect("Expected closed window message")
         {
             assert_eq!(window.keys, msg.keys);
         } else {
