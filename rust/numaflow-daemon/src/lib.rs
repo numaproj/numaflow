@@ -5,10 +5,13 @@ use numaflow_pb::servers::mvtxdaemon::{
     GetMonoVertexErrorsRequest, GetMonoVertexErrorsResponse, GetMonoVertexMetricsResponse,
     GetMonoVertexStatusResponse, MonoVertexMetrics, MonoVertexStatus, ReplicaErrors,
 };
-use rcgen::CertifiedKey;
+use rcgen::{
+    CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose,
+};
 use std::collections::HashMap;
 use std::error::Error;
 use std::result::Result;
+use time::{Duration, OffsetDateTime};
 use tonic::transport::{Identity, Server, ServerTlsConfig};
 use tonic::{Request, Response, Status};
 use tracing::info;
@@ -111,10 +114,25 @@ pub async fn run_pipeline(pipeline_name: String) -> Result<(), Box<dyn Error>> {
 }
 
 fn generate_self_signed_identity() -> Result<Identity, Box<dyn Error>> {
-    let CertifiedKey { cert, signing_key } =
-        rcgen::generate_simple_self_signed(vec!["localhost".to_string()])?;
-    let cert_pem = cert.pem();
-    let key_pem = signing_key.serialize_pem();
+    let mut params = CertificateParams::new(vec!["localhost".to_string()])?;
 
-    Ok(Identity::from_pem(cert_pem, key_pem))
+    let mut dn = DistinguishedName::new();
+    dn.push(DnType::OrganizationName, "Numaproj");
+    params.distinguished_name = dn;
+
+    let not_before = OffsetDateTime::now_utc();
+    params.not_before = not_before;
+    params.not_after = not_before + Duration::days(365);
+
+    params.key_usages = vec![
+        KeyUsagePurpose::KeyEncipherment,
+        KeyUsagePurpose::DigitalSignature,
+    ];
+
+    params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
+
+    let signing_key = KeyPair::generate()?;
+    let cert = params.self_signed(&signing_key)?;
+
+    Ok(Identity::from_pem(cert.pem(), signing_key.serialize_pem()))
 }

@@ -2554,6 +2554,7 @@ version = "0.1.0"
 dependencies = [
  "numaflow-pb",
  "rcgen",
+ "time",
  "tokio",
  "tonic 0.14.2",
  "tracing",

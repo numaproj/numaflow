@@ -231,7 +231,7 @@ func (mv MonoVertex) GetDaemonDeploymentObj(req GetMonoVertexDaemonDeploymentReq
 		{Name: EnvMonoVertexObject, Value: encodedMonoVtx},
 		// TODO - uncomment to switch MonoVertex daemon server backend to rust.
 		// DO NOT DO IT unless you are testing. Daemon server in rust is not ready yet.
-		{Name: EnvNumaflowRuntime, Value: "rust"},
+		// {Name: EnvNumaflowRuntime, Value: "rust"},
 	}
 	envVars = append(envVars, req.Env...)
 	c := corev1.Container{
@@ -246,8 +246,10 @@ func (mv MonoVertex) GetDaemonDeploymentObj(req GetMonoVertexDaemonDeploymentReq
 
 	c.ReadinessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
-			TCPSocket: &corev1.TCPSocketAction{
-				Port: intstr.FromInt32(MonoVertexDaemonServicePort),
+			HTTPGet: &corev1.HTTPGetAction{
+				Path:   "/readyz",
+				Port:   intstr.FromInt32(MonoVertexDaemonServicePort),
+				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
 		InitialDelaySeconds: 3,
@@ -256,8 +258,10 @@ func (mv MonoVertex) GetDaemonDeploymentObj(req GetMonoVertexDaemonDeploymentReq
 	}
 	c.LivenessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
-			TCPSocket: &corev1.TCPSocketAction{
-				Port: intstr.FromInt32(MonoVertexDaemonServicePort),
+			HTTPGet: &corev1.HTTPGetAction{
+				Path:   "/livez",
+				Port:   intstr.FromInt32(MonoVertexDaemonServicePort),
+				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
 		InitialDelaySeconds: 30,
