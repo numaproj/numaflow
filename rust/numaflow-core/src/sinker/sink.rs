@@ -98,6 +98,7 @@ pub(crate) struct SinkWriter {
 
 impl SinkWriter {
     /// Create a new SinkWriter instance.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         batch_size: usize,
         chunk_timeout: Duration,

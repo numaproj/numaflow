@@ -393,7 +393,7 @@ mod tests {
         let msg = Message {
             typ: Default::default(),
             keys: Arc::from(vec![format!("key_{}", id)]),
-            tags: tags.map(|t| Arc::from(t)),
+            tags: tags.map(Arc::from),
             value: Bytes::from(format!("message {}", id)),
             offset: Offset::Int(IntOffset::new(id as i64, 0)),
             event_time: Utc::now(),
@@ -448,7 +448,7 @@ mod tests {
     #[tonic::async_trait]
     impl sink::Sinker for PanicSink {
         async fn sink(&self, mut input: Receiver<sink::SinkRequest>) -> Vec<sink::Response> {
-            while let Some(_) = input.recv().await {
+            if input.recv().await.is_some() {
                 panic!("This sink can't receive messages, received one, so panicking now");
             }
             vec![]

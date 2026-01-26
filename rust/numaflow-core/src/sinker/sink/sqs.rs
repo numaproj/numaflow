@@ -15,19 +15,19 @@ impl TryFrom<Message> for SqsSinkMessage {
         let id = msg.id.to_string();
         let mut headers = (*msg.headers).clone();
 
-        if let Some(metadata) = &msg.metadata {
-            if let Some(sqs_meta) = metadata.user_metadata.get(SQS_METADATA_KEY) {
-                for (k, v) in &sqs_meta.key_value {
-                    match String::from_utf8(v.to_vec()) {
-                        Ok(val_str) => {
-                            headers.insert(k.clone(), val_str);
-                        }
-                        Err(_) => {
-                            tracing::warn!(
-                                key = %k,
-                                "Skipping SQS metadata key: value is not valid UTF-8"
-                            );
-                        }
+        if let Some(metadata) = &msg.metadata
+            && let Some(sqs_meta) = metadata.user_metadata.get(SQS_METADATA_KEY)
+        {
+            for (k, v) in &sqs_meta.key_value {
+                match String::from_utf8(v.to_vec()) {
+                    Ok(val_str) => {
+                        headers.insert(k.clone(), val_str);
+                    }
+                    Err(_) => {
+                        tracing::warn!(
+                            key = %k,
+                            "Skipping SQS metadata key: value is not valid UTF-8"
+                        );
                     }
                 }
             }
@@ -504,7 +504,7 @@ pub mod tests {
             successful.push(entry);
         }
 
-        let send_message_output = mock!(aws_sdk_sqs::Client::send_message_batch)
+        mock!(aws_sdk_sqs::Client::send_message_batch)
             .match_requests(|inp| {
                 inp.queue_url().unwrap()
                     == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
@@ -521,19 +521,17 @@ pub mod tests {
                     .set_failed(Some(failed_entries))
                     .build()
                     .unwrap()
-            });
-        send_message_output
+            })
     }
 
     fn get_queue_url_output() -> Rule {
-        let queue_url_output = mock!(aws_sdk_sqs::Client::get_queue_url)
+        mock!(aws_sdk_sqs::Client::get_queue_url)
             .match_requests(|inp| inp.queue_name().unwrap() == "test-q")
             .then_output(|| {
                 aws_sdk_sqs::operation::get_queue_url::GetQueueUrlOutput::builder()
                     .queue_url("https://sqs.us-west-2.amazonaws.com/926113353675/test-q/")
                     .build()
-            });
-        queue_url_output
+            })
     }
 
     fn get_test_config_with_interceptor(interceptor: MockResponseInterceptor) -> Config {

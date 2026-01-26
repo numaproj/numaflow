@@ -9,6 +9,8 @@ together. There is no concept of Edges in MonoVertex since there is only one [Ve
 changing the spec. MonoVertex’s [autoscaling](../specifications/autoscaling.md) is similar to the Source vertex of a [Pipeline](./pipeline.md), 
 where the vertex scales out if the pending at the Source is increasing, and scales down when the pending at the Source drops.
 
+Monovertex also supports message routing by providing ability to [bypass directly to Sink](../user-guide/reference/monovertex-bypass.md).
+
 The major benefits of MonoVertex are as follows:
 
 * Very high TPS can be supported because there are no ISBs (RAFT consensus) in between.
