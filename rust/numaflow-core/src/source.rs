@@ -550,14 +550,16 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
                 // write the messages to downstream.
                 for message in messages {
-                    if let Some(ref bypass_router) = bypass_router
-                        && bypass_router
+                    let bypassed = if let Some(ref bypass_router) = bypass_router {
+                        bypass_router
                             .try_bypass(message.clone())
                             .await
                             .expect("failed to send message to bypass channel")
-                    {
-                        continue;
                     } else {
+                        false
+                    };
+
+                    if !bypassed {
                         messages_tx
                             .send(message)
                             .await
