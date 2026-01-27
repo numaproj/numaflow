@@ -353,7 +353,7 @@ mod tests {
         let window = Window::new(window_start, window_end);
 
         // Create messages
-        let messages = vec![
+        let messages = [
             Message {
                 typ: Default::default(),
                 keys: Arc::from(vec!["key1".into()]),
@@ -406,7 +406,7 @@ mod tests {
             // Open window
             AlignedWindowMessage {
                 operation: AlignedWindowOperation::Open {
-                    message: messages[0].clone(),
+                    message: messages.first().expect("Expected message 0").clone(),
                     window: window.clone(),
                 },
                 pnf_slot: window_pnf_slot(&window),
@@ -414,14 +414,14 @@ mod tests {
             // Append messages
             AlignedWindowMessage {
                 operation: AlignedWindowOperation::Append {
-                    message: messages[1].clone(),
+                    message: messages.get(1).expect("Expected message 1").clone(),
                     window: window.clone(),
                 },
                 pnf_slot: window_pnf_slot(&window),
             },
             AlignedWindowMessage {
                 operation: AlignedWindowOperation::Append {
-                    message: messages[2].clone(),
+                    message: messages.get(2).expect("Expected message 2").clone(),
                     window: window.clone(),
                 },
                 pnf_slot: window_pnf_slot(&window),
@@ -508,7 +508,7 @@ mod tests {
         let window = Window::new(window_start, window_end);
 
         // Create messages for key1
-        let key1_messages = vec![
+        let key1_messages = [
             Message {
                 typ: Default::default(),
                 keys: Arc::from(vec!["key1".into()]),
@@ -542,7 +542,7 @@ mod tests {
         ];
 
         // Create messages for key2
-        let key2_messages = vec![
+        let key2_messages = [
             Message {
                 typ: Default::default(),
                 keys: Arc::from(vec!["key2".into()]),
@@ -595,7 +595,10 @@ mod tests {
             // Open window for key1
             AlignedWindowMessage {
                 operation: AlignedWindowOperation::Open {
-                    message: key1_messages[0].clone(),
+                    message: key1_messages
+                        .first()
+                        .expect("Expected key1 message 0")
+                        .clone(),
                     window: window.clone(),
                 },
                 pnf_slot: window_pnf_slot(&window),
@@ -603,7 +606,10 @@ mod tests {
             // Append message for key1
             AlignedWindowMessage {
                 operation: AlignedWindowOperation::Append {
-                    message: key1_messages[1].clone(),
+                    message: key1_messages
+                        .get(1)
+                        .expect("Expected key1 message 1")
+                        .clone(),
                     window: window.clone(),
                 },
                 pnf_slot: window_pnf_slot(&window),
@@ -611,7 +617,10 @@ mod tests {
             // Open window for key2
             AlignedWindowMessage {
                 operation: AlignedWindowOperation::Open {
-                    message: key2_messages[0].clone(),
+                    message: key2_messages
+                        .first()
+                        .expect("Expected key2 message 0")
+                        .clone(),
                     window: window.clone(),
                 },
                 pnf_slot: window_pnf_slot(&window),
@@ -619,14 +628,20 @@ mod tests {
             // Append messages for key2
             AlignedWindowMessage {
                 operation: AlignedWindowOperation::Append {
-                    message: key2_messages[1].clone(),
+                    message: key2_messages
+                        .get(1)
+                        .expect("Expected key2 message 1")
+                        .clone(),
                     window: window.clone(),
                 },
                 pnf_slot: window_pnf_slot(&window),
             },
             AlignedWindowMessage {
                 operation: AlignedWindowOperation::Append {
-                    message: key2_messages[2].clone(),
+                    message: key2_messages
+                        .get(2)
+                        .expect("Expected key2 message 2")
+                        .clone(),
                     window: window.clone(),
                 },
                 pnf_slot: window_pnf_slot(&window),
@@ -670,12 +685,14 @@ mod tests {
         results.sort_by(|a, b| a.keys.to_vec().cmp(&b.keys.to_vec()));
 
         // Check key1 result
-        assert_eq!(results[0].keys.to_vec(), vec!["key1"]);
-        assert_eq!(String::from_utf8(results[0].value.to_vec()).unwrap(), "2"); // Counter should be 2
+        let result0 = results.first().expect("Expected result for key1");
+        assert_eq!(result0.keys.to_vec(), vec!["key1"]);
+        assert_eq!(String::from_utf8(result0.value.to_vec()).unwrap(), "2"); // Counter should be 2
 
         // Check key2 result
-        assert_eq!(results[1].keys.to_vec(), vec!["key2"]);
-        assert_eq!(String::from_utf8(results[1].value.to_vec()).unwrap(), "3"); // Counter should be 3
+        let result1 = results.get(1).expect("Expected result for key2");
+        assert_eq!(result1.keys.to_vec(), vec!["key2"]);
+        assert_eq!(String::from_utf8(result1.value.to_vec()).unwrap(), "3"); // Counter should be 3
 
         // Shutdown the server
         shutdown_tx
@@ -726,7 +743,7 @@ mod tests {
         let window = Window::new(window_start, window_end);
 
         // Create messages
-        let messages = vec![
+        let messages = [
             Message {
                 typ: Default::default(),
                 keys: Arc::from(vec!["key1".into()]),
@@ -779,7 +796,7 @@ mod tests {
             // Open window
             AlignedWindowMessage {
                 operation: AlignedWindowOperation::Open {
-                    message: messages[0].clone(),
+                    message: messages.first().expect("Expected message 0").clone(),
                     window: window.clone(),
                 },
                 pnf_slot: window_pnf_slot(&window),
@@ -787,14 +804,14 @@ mod tests {
             // Append messages
             AlignedWindowMessage {
                 operation: AlignedWindowOperation::Append {
-                    message: messages[1].clone(),
+                    message: messages.get(1).expect("Expected message 1").clone(),
                     window: window.clone(),
                 },
                 pnf_slot: window_pnf_slot(&window),
             },
             AlignedWindowMessage {
                 operation: AlignedWindowOperation::Append {
-                    message: messages[2].clone(),
+                    message: messages.get(2).expect("Expected message 2").clone(),
                     window: window.clone(),
                 },
                 pnf_slot: window_pnf_slot(&window),

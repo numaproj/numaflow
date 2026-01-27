@@ -188,15 +188,17 @@ mod tests {
         let time_increment = chrono::Duration::seconds(1);
 
         for i in 1..=100 {
-            let mut message = Message::default();
-            message.event_time = start_time + (time_increment * i);
-            message.keys = Arc::from(vec!["test-key".to_string()]);
-            message.value = bytes::Bytes::from(vec![1, 2, 3]);
-            message.offset = Offset::Int(IntOffset::new(i as i64, 0));
-            message.id = MessageID {
-                vertex_name: "test-vertex".to_string().into(),
-                offset: i.to_string().into(),
-                index: 0,
+            let message = Message {
+                event_time: start_time + (time_increment * i),
+                keys: Arc::from(vec!["test-key".to_string()]),
+                value: bytes::Bytes::from(vec![1, 2, 3]),
+                offset: Offset::Int(IntOffset::new(i as i64, 0)),
+                id: MessageID {
+                    vertex_name: "test-vertex".to_string().into(),
+                    offset: i.to_string().into(),
+                    index: 0,
+                },
+                ..Default::default()
             };
 
             // Send message - conversion to bytes happens internally
@@ -333,19 +335,19 @@ mod tests {
 
         // Create 50 messages with key1 and 50 messages with key2
         for i in 1..=100 {
-            let mut message = Message::default();
-            message.event_time = start_time + (time_increment * i);
-
             // Alternate between key1 and key2
             let key = if i % 2 == 0 { "key1" } else { "key2" };
-            message.keys = Arc::from(vec![key.to_string()]);
-
-            message.value = bytes::Bytes::from(vec![1, 2, 3]);
-            message.offset = Offset::Int(IntOffset::new(i as i64, 0));
-            message.id = MessageID {
-                vertex_name: "test-vertex".to_string().into(),
-                offset: i.to_string().into(),
-                index: 0,
+            let message = Message {
+                event_time: start_time + (time_increment * i),
+                keys: Arc::from(vec![key.to_string()]),
+                value: bytes::Bytes::from(vec![1, 2, 3]),
+                offset: Offset::Int(IntOffset::new(i as i64, 0)),
+                id: MessageID {
+                    vertex_name: "test-vertex".to_string().into(),
+                    offset: i.to_string().into(),
+                    index: 0,
+                },
+                ..Default::default()
             };
 
             // Send message - conversion to bytes happens internally
