@@ -15,7 +15,6 @@ use aws_credential_types::provider::ProvideCredentials;
 use aws_sdk_sqs::Client;
 use aws_smithy_types::error::metadata::ProvideErrorMetadata;
 use tokio::sync::oneshot;
-use tracing;
 
 pub mod sink;
 pub mod source;
@@ -201,11 +200,11 @@ pub async fn create_credentials_provider(
     }
 
     // Add managed policy ARNs if provided
-    if let Some(policy_arns) = &assume_role_config.policy_arns {
-        if !policy_arns.is_empty() {
-            // AssumeRoleProvider expects Vec<String> for policy ARNs
-            provider_builder = provider_builder.policy_arns(policy_arns.clone());
-        }
+    if let Some(policy_arns) = &assume_role_config.policy_arns
+        && !policy_arns.is_empty()
+    {
+        // AssumeRoleProvider expects Vec<String> for policy ARNs
+        provider_builder = provider_builder.policy_arns(policy_arns.clone());
     }
 
     // Set region and endpoint if needed

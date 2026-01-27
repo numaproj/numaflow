@@ -237,12 +237,21 @@ impl JetStreamDataStore {
         semaphore: &Arc<Semaphore>,
     ) -> Result<(), String> {
         let parts: Vec<&str> = entry.key.splitn(5, '.').collect();
-        let key_prefix = parts[0];
-        let request_id = parts[2];
-        let key_suffix = format!("{}.{}", parts[3], parts[4]);
 
         // key format is rs.{pod_hash}.{request_id}.{key_suffix}, anything else is not valid
-        if parts.len() != 5 || key_prefix != RESPONSE_KEY_PREFIX || parts[1] != pod_hash {
+        // Validate we have exactly 5 parts before accessing indices
+        if parts.len() != 5 {
+            return Err(format!("Unexpected key format: {}", entry.key));
+        }
+
+        let key_prefix = parts.first().expect("parts has 5 elements");
+        let pod_hash_part = parts.get(1).expect("parts has 5 elements");
+        let request_id = parts.get(2).expect("parts has 5 elements");
+        let part3 = parts.get(3).expect("parts has 5 elements");
+        let part4 = parts.get(4).expect("parts has 5 elements");
+        let key_suffix = format!("{}.{}", part3, part4);
+
+        if *key_prefix != RESPONSE_KEY_PREFIX || *pod_hash_part != pod_hash {
             return Err(format!("Unexpected key format: {}", entry.key));
         }
 
@@ -289,7 +298,7 @@ impl JetStreamDataStore {
             // because during failure of sync request it will be converted as an async request.
             let responses = {
                 let mut response_map = responses_map.lock().await;
-                response_map.remove(request_id)
+                response_map.remove(*request_id)
             };
 
             if let Some(ResponseMode::Unary(responses)) = responses {
@@ -317,7 +326,7 @@ impl JetStreamDataStore {
             // we can append the response for the list for sync and async, for sse we can write the
             // response to the response channel
             let mut response_map = responses_map.lock().await;
-            if let Some(response_mode) = response_map.get_mut(request_id) {
+            if let Some(response_mode) = response_map.get_mut(*request_id) {
                 match response_mode {
                     ResponseMode::Stream { tx, .. } => {
                         tx.send(Arc::new(entry.value.clone()))
