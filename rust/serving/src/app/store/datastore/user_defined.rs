@@ -179,7 +179,8 @@ mod tests {
 
         // Test retrieve_data
         let retrieved_data = store.retrieve_data(&id, None).await.unwrap();
-        assert_eq!(retrieved_data, vec![payload[0].value.clone()]);
+        let payload0 = payload.first().expect("Expected payload[0]");
+        assert_eq!(retrieved_data, vec![payload0.value.clone()]);
 
         drop(store);
         shutdown_tx.send(()).unwrap();

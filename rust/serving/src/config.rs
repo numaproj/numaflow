@@ -350,21 +350,21 @@ mod tests {
             .unwrap();
 
         let expected_config = Settings {
-            tid_header: "X-Numaflow-Id".into(),
-            pod_hash: "kddc".into(),
+            tid_header: "X-Numaflow-Id",
+            pod_hash: "kddc",
             app_listen_https_port: 8443,
             app_listen_http_port: None,
             metrics_server_listen_port: 3001,
-            upstream_addr: "localhost:8888".into(),
+            upstream_addr: "localhost:8888",
             drain_timeout_secs: 120,
             store_type: StoreType::Nats,
             api_auth_token: None,
-            js_callback_store: "test-kv-store".into(),
-            js_status_store: "test-kv-store".into(),
-            js_response_store: "test-kv-store".into(),
+            js_callback_store: "test-kv-store",
+            js_status_store: "test-kv-store",
+            js_response_store: "test-kv-store",
             nats_basic_auth: Some(("testuser".into(), "testpasswd".into())),
-            js_message_stream: "serving-source-simple-pipeline".into(),
-            jetstream_url: "nats://isbsvc-default-js-svc.default.svc:4222".into(),
+            js_message_stream: "serving-source-simple-pipeline",
+            jetstream_url: "nats://isbsvc-default-js-svc.default.svc:4222",
             pipeline_spec: PipelineDCG {
                 vertices: vec![
                     Vertex { name: "in".into() },
@@ -384,7 +384,6 @@ mod tests {
                     },
                 ],
             },
-            ..Default::default()
         };
         assert_eq!(settings, expected_config);
     }

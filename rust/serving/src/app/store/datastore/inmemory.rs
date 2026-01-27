@@ -89,8 +89,8 @@ mod tests {
         let mut store = create_test_store();
         let id = "test_id";
         let result = store.retrieve_data(id, None).await.unwrap();
-        assert!(result.len() > 0);
-        assert_eq!(result[0], b"test_payload");
+        assert!(!result.is_empty());
+        assert_eq!(result.first().expect("Expected result[0]"), b"test_payload");
     }
 
     #[tokio::test]

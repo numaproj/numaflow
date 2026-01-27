@@ -131,16 +131,25 @@ mod tests {
 
         assert_eq!(pipeline.vertices.len(), 8);
         assert_eq!(pipeline.edges.len(), 10);
-        assert_eq!(pipeline.vertices[0].name, "in");
-        assert_eq!(pipeline.edges[0].from, "in");
-        assert_eq!(pipeline.edges[0].to, "planner");
-        assert!(pipeline.edges[0].conditions.is_none());
 
-        assert_eq!(pipeline.vertices[1].name, "planner");
-        assert_eq!(pipeline.edges[1].from, "planner");
-        assert_eq!(pipeline.edges[1].to, "asciiart");
+        let vertex0 = pipeline.vertices.first().expect("Expected vertex[0]");
+        let vertex1 = pipeline.vertices.get(1).expect("Expected vertex[1]");
+        let vertex2 = pipeline.vertices.get(2).expect("Expected vertex[2]");
+        let vertex3 = pipeline.vertices.get(3).expect("Expected vertex[3]");
+
+        let edge0 = pipeline.edges.first().expect("Expected edge[0]");
+        let edge1 = pipeline.edges.get(1).expect("Expected edge[1]");
+
+        assert_eq!(vertex0.name, "in");
+        assert_eq!(edge0.from, "in");
+        assert_eq!(edge0.to, "planner");
+        assert!(edge0.conditions.is_none());
+
+        assert_eq!(vertex1.name, "planner");
+        assert_eq!(edge1.from, "planner");
+        assert_eq!(edge1.to, "asciiart");
         assert_eq!(
-            pipeline.edges[1].conditions,
+            edge1.conditions,
             Some(Conditions {
                 tags: Some(Tag {
                     operator: Some(OperatorType::Or),
@@ -149,7 +158,7 @@ mod tests {
             })
         );
 
-        assert_eq!(pipeline.vertices[2].name, "tiger");
-        assert_eq!(pipeline.vertices[3].name, "dog");
+        assert_eq!(vertex2.name, "tiger");
+        assert_eq!(vertex3.name, "dog");
     }
 }
