@@ -7,5 +7,7 @@ clippy-ci = [
   "--workspace",
   "--exclude", "numaflow-pb",
   "--exclude", "numaflow-models",
-  "--no-deps"
+  "--no-deps",
+  "--all-targets",
+  "--all-features"
 ]
