@@ -28,9 +28,9 @@ Check the links below to see the UDF examples for different languages.
 ## Streaming Mode
 
 In cases the map function generates more than one output (e.g., flat map), the UDF can be
-configured to run in a streaming mode instead of batching, which is the default mode.
-In streaming mode, the messages will be pushed to the downstream vertices once generated
-instead of in a batch at the end.
+configured to run in a streaming mode where the messages will be pushed to the downstream vertices as 
+soon as the output is generated instead of collecting all the responses and then sending them 
+together at the end when the function returns.
 
 Check the links below to see the UDF examples in streaming mode for different languages.
 
