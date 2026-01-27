@@ -421,7 +421,7 @@ mod tests {
                 partitions: 0,
             }],
             vertex_type: VertexType::Sink,
-            vertex_config: VertexConfig::Sink(SinkVtxConfig {
+            vertex_config: VertexConfig::Sink(Box::new(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::Blackhole(BlackholeConfig::default()),
                     retry_config: None,
@@ -429,7 +429,7 @@ mod tests {
                 fb_sink_config: None,
                 on_success_sink_config: None,
                 serving_store_config: None,
-            }),
+            })),
             metrics_config: MetricsConfig {
                 metrics_server_listen_port: 2469,
                 lag_check_interval_in_secs: 5,
@@ -442,7 +442,7 @@ mod tests {
         // Extract the sink config from the pipeline config
         let sink_vtx_config =
             if let VertexConfig::Sink(ref sink_config) = pipeline_config.vertex_config {
-                sink_config.clone()
+                (**sink_config).clone()
             } else {
                 panic!("Expected sink vertex config");
             };

@@ -459,6 +459,7 @@ impl MapHandle {
     /// We use permit to limit the number of concurrent map unary operations, so
     /// that at any point in time we don't have more than `concurrency`
     /// number of map operations running.
+    #[allow(clippy::too_many_arguments)]
     async fn unary(
         mapper: UserDefinedUnaryMap,
         permit: OwnedSemaphorePermit,
@@ -495,14 +496,19 @@ impl MapHandle {
 
                             // send messages downstream
                             for mapped_message in mapped_messages {
-                                if let Some(ref bypass_router) = bypass_router && bypass_router.try_bypass(mapped_message.clone()).await.expect("failed to send message to bypass channel")
-                                {
-                                    continue
+                                let bypassed = if let Some(ref bypass_router) = bypass_router {
+                                    bypass_router
+                                        .try_bypass(mapped_message.clone())
+                                        .await
+                                        .expect("failed to send message to bypass channel")
                                 } else {
+                                    false
+                                };
+                                if !bypassed {
                                     output_tx
-                                    .send(mapped_message)
-                                    .await
-                                    .expect("failed to send response");
+                                        .send(mapped_message)
+                                        .await
+                                        .expect("failed to send response");
                                 }
                             }
                         }
@@ -579,14 +585,15 @@ impl MapHandle {
                     }
 
                     for mapped_message in mapped_messages {
-                        if let Some(ref bypass_router) = bypass_router
-                            && bypass_router
+                        let bypassed = if let Some(ref bypass_router) = bypass_router {
+                            bypass_router
                                 .try_bypass(mapped_message.clone())
                                 .await
                                 .expect("failed to send message to bypass channel")
-                        {
-                            continue;
                         } else {
+                            false
+                        };
+                        if !bypassed {
                             output_tx
                                 .send(mapped_message)
                                 .await
@@ -615,6 +622,7 @@ impl MapHandle {
     /// We use permit to limit the number of concurrent map unary operations, so
     /// that at any point in time we don't have more than `concurrency`
     /// number of map operations running.
+    #[allow(clippy::too_many_arguments)]
     async fn stream(
         mapper: UserDefinedStreamMap,
         permit: OwnedSemaphorePermit,
@@ -649,10 +657,15 @@ impl MapHandle {
                                     .await
                                     .expect("failed to update tracker");
 
-                                if let Some(ref bypass_router) = bypass_router && bypass_router.try_bypass(mapped_message.clone()).await.expect("failed to send message to bypass channel")
-                                {
-                                    continue
+                                let bypassed = if let Some(ref bypass_router) = bypass_router {
+                                    bypass_router
+                                        .try_bypass(mapped_message.clone())
+                                        .await
+                                        .expect("failed to send message to bypass channel")
                                 } else {
+                                    false
+                                };
+                                if !bypassed {
                                     output_tx.send(mapped_message).await.expect("failed to send response");
                                 }
                             }

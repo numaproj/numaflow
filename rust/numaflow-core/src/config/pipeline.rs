@@ -175,7 +175,7 @@ pub(crate) struct SinkVtxConfig {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum VertexConfig {
     Source(SourceVtxConfig),
-    Sink(SinkVtxConfig),
+    Sink(Box<SinkVtxConfig>),
     Map(MapVtxConfig),
     Reduce(ReduceVtxConfig),
 }
@@ -432,7 +432,7 @@ impl PipelineConfig {
             };
 
             (
-                VertexConfig::Sink(SinkVtxConfig {
+                VertexConfig::Sink(Box::new(SinkVtxConfig {
                     sink_config: SinkConfig {
                         sink_type: SinkType::primary_sinktype(&sink)?,
                         retry_config: sink.retry_strategy.clone().map(|retry| retry.into()),
@@ -440,7 +440,7 @@ impl PipelineConfig {
                     fb_sink_config,
                     on_success_sink_config,
                     serving_store_config,
-                }),
+                })),
                 VertexType::Sink,
             )
         } else if let Some(udf) = vertex_obj.spec.udf {
@@ -745,7 +745,7 @@ mod tests {
         });
         assert_eq!(src_type.to_string(), "Source");
 
-        let sink_type = VertexConfig::Sink(SinkVtxConfig {
+        let sink_type = VertexConfig::Sink(Box::new(SinkVtxConfig {
             sink_config: SinkConfig {
                 sink_type: SinkType::Log(LogConfig {}),
                 retry_config: None,
@@ -753,7 +753,7 @@ mod tests {
             fb_sink_config: None,
             on_success_sink_config: None,
             serving_store_config: None,
-        });
+        }));
         assert_eq!(sink_type.to_string(), "Sink");
     }
 
@@ -816,7 +816,7 @@ mod tests {
                 partitions: 1,
             }],
             to_vertex_config: vec![],
-            vertex_config: VertexConfig::Sink(SinkVtxConfig {
+            vertex_config: VertexConfig::Sink(Box::new(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::Blackhole(BlackholeConfig {}),
                     retry_config: Some(RetryConfig::default()),
@@ -826,7 +826,7 @@ mod tests {
                 serving_store_config: Some(ServingStoreType::Nats(NatsStoreConfig {
                     rs_store_name: "test-kv-store".into(),
                 })),
-            }),
+            })),
             vertex_type: VertexType::Sink,
             metrics_config: MetricsConfig {
                 metrics_server_listen_port: 2469,

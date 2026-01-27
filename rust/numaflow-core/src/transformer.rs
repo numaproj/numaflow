@@ -403,7 +403,13 @@ mod tests {
         assert!(transformed_messages.is_ok());
         let transformed_messages = transformed_messages?;
         assert_eq!(transformed_messages.len(), 1);
-        assert_eq!(transformed_messages[0].value, "hello");
+        assert_eq!(
+            transformed_messages
+                .first()
+                .expect("Expected first message")
+                .value,
+            "hello"
+        );
 
         // we need to drop the transformer, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
