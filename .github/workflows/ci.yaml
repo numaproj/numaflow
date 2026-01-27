@@ -122,6 +122,11 @@ jobs:
         run: |
           cargo fmt -- --check
 
+      - name: Check Clippy
+        working-directory: ./rust
+        run: |
+          cargo clippy-ci
+
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
         with:
