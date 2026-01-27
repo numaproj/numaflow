@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
-use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc};
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
@@ -14,7 +14,7 @@ use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 use tracing::{error, info, warn};
 
-use crate::config::get_vertex_name;
+use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::config::pipeline::map::MapMode;
 use crate::error::{self, Error};
 use crate::message::{AckHandle, Message, MessageID, Offset};
@@ -329,6 +329,7 @@ impl MapHandle {
                                     error_tx.clone(),
                                     hard_shutdown_token.clone(),
                                     bypass_router.clone(),
+                                    is_mono_vertex(),
                                 ).await;
                             }
                         },
@@ -366,6 +367,7 @@ impl MapHandle {
                                 output_tx.clone(),
                                 self.tracker.clone(),
                                 bypass_router.clone(),
+                                is_mono_vertex(),
                             )
                             .await
                         {
@@ -424,6 +426,7 @@ impl MapHandle {
                                     error_tx,
                                     cln_token.clone(),
                                     bypass_router.clone(),
+                                    is_mono_vertex(),
                                 ).await;
                             }
                         },
@@ -466,8 +469,9 @@ impl MapHandle {
         output_tx: mpsc::Sender<Message>,
         tracker: Tracker,
         error_tx: mpsc::Sender<Error>,
-        cln_token: CancellationToken,
+        _cln_token: CancellationToken,
         bypass_router: Option<MvtxBypassRouter>,
+        is_mono_vertex: bool,
     ) {
         let output_tx = output_tx.clone();
 
@@ -475,70 +479,63 @@ impl MapHandle {
         tokio::spawn(async move {
             let _permit = permit;
 
+            // Store parent message info before sending to UDF
+            let parent_info: ParentMessageInfo = (&read_msg).into();
             let offset = read_msg.offset.clone();
-            let (sender, receiver) = oneshot::channel();
 
-            mapper.unary_map(read_msg.clone(), sender).await;
+            // Convert Message to MapRequest
+            let request: MapRequest = read_msg.clone().into();
 
-            tokio::select! {
-                result = receiver => {
-                    match result {
-                        Ok( Ok(mapped_messages)) => {
-                            // update the tracker with the number of messages sent and send the mapped messages
-                            tracker
-                                .serving_update(
-                                    &offset,
-                                    mapped_messages.iter().map(|m| m.tags.clone()).collect(),
-                                )
-                                .await
-                                .expect("failed to update tracker");
+            update_udf_read_metric(is_mono_vertex);
 
-                            // send messages downstream
-                            for mapped_message in mapped_messages {
-                                if let Some(ref bypass_router) = bypass_router && bypass_router.try_bypass(mapped_message.clone()).await.expect("failed to send message to bypass channel")
-                                {
-                                    continue
-                                } else {
-                                    output_tx
-                                    .send(mapped_message)
-                                    .await
-                                    .expect("failed to send response");
-                                }
-                            }
-                        }
-                        Ok(Err(map_err)) => {
-                            error!(err=?map_err, ?offset, "failed to map message");
-                            read_msg
-                                .ack_handle
-                                .as_ref()
-                                .expect("ack handle should be present")
-                                .is_failed
-                                .store(true, Ordering::Relaxed);
-                            info!("writing error to error channel");
-                            let _ = error_tx.send(map_err).await;
-                        }
-                        Err(err) => {
-                            error!(?err, ?offset, "failed to receive message");
-                            read_msg
-                                .ack_handle
-                                .as_ref()
-                                .expect("ack handle should be present")
-                                .is_failed
-                                .store(true, Ordering::Relaxed);
-                            let _ = error_tx
-                                .send(Error::Mapper(format!("failed to receive message: {err}")))
-                                .await;
-                        }
-                    }
-                },
-                _ = cln_token.cancelled() => {
-                    error!(?offset, "Cancellation token received, discarding message");
+            // Call the UDF and get raw results
+            let results = match mapper.unary(request).await {
+                Ok(results) => results,
+                Err(e) => {
+                    error!(?e, ?offset, "failed to map message");
                     read_msg
                         .ack_handle
                         .as_ref()
                         .expect("ack handle should be present")
                         .is_failed
                         .store(true, Ordering::Relaxed);
+                    let _ = error_tx.send(e).await;
+                    return;
+                }
+            };
+
+            // Convert raw results to Messages using parent info
+            let mapped_messages: Vec<Message> = results
+                .into_iter()
+                .enumerate()
+                .map(|(i, result)| UserDefinedMessage(result, &parent_info, i as i32).into())
+                .collect();
+
+            update_udf_write_metric(is_mono_vertex, parent_info, mapped_messages.len() as u64);
+
+            // update the tracker with the number of messages sent and send the mapped messages
+            tracker
+                .serving_update(
+                    &offset,
+                    mapped_messages.iter().map(|m| m.tags.clone()).collect(),
+                )
+                .await
+                .expect("failed to update tracker");
+
+            // send messages downstream
+            for mapped_message in mapped_messages {
+                if let Some(ref bypass_router) = bypass_router
+                    && bypass_router
+                        .try_bypass(mapped_message.clone())
+                        .await
+                        .expect("failed to send message to bypass channel")
+                {
+                    continue;
+                } else {
+                    output_tx
+                        .send(mapped_message)
+                        .await
+                        .expect("failed to send response");
                 }
             }
         });
@@ -553,30 +550,48 @@ impl MapHandle {
         output_tx: mpsc::Sender<Message>,
         tracker: Tracker,
         bypass_router: Option<MvtxBypassRouter>,
+        is_mono_vertex: bool,
     ) -> error::Result<()> {
-        let (senders, receivers): (Vec<_>, Vec<_>) =
-            batch.iter().map(|_| oneshot::channel()).unzip();
+        // Store parent message info for each message before sending to UDF
+        let parent_infos: Vec<ParentMessageInfo> = batch.iter().map(|m| m.into()).collect();
 
-        mapper.batch_map(batch, senders).await;
+        // Convert Messages to MapRequests
+        let requests: Vec<MapRequest> = batch.into_iter().map(|m| m.into()).collect();
 
-        for receiver in receivers {
-            match receiver.await {
-                Ok(Ok(mapped_messages)) => {
-                    let mut offset: Option<Offset> = None;
-                    for message in mapped_messages.iter() {
-                        if offset.is_none() {
-                            offset = Some(message.offset.clone());
-                        }
-                    }
+        // Update read metrics for each request
+        for _ in &requests {
+            update_udf_read_metric(is_mono_vertex);
+        }
 
-                    if let Some(offset) = offset {
-                        tracker
-                            .serving_update(
-                                &offset,
-                                mapped_messages.iter().map(|m| m.tags.clone()).collect(),
-                            )
-                            .await?;
-                    }
+        // Call the UDF and get results directly
+        let results = mapper.batch(requests).await;
+
+        for (result, parent_info) in results.into_iter().zip(parent_infos.into_iter()) {
+            match result {
+                Ok(results) => {
+                    // Convert raw results to Messages using parent info
+                    let mapped_messages: Vec<Message> = results
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, result)| {
+                            UserDefinedMessage(result, &parent_info, i as i32).into()
+                        })
+                        .collect();
+
+                    let offset = parent_info.offset.clone();
+
+                    update_udf_write_metric(
+                        is_mono_vertex,
+                        parent_info,
+                        mapped_messages.len() as u64,
+                    );
+
+                    tracker
+                        .serving_update(
+                            &offset,
+                            mapped_messages.iter().map(|m| m.tags.clone()).collect(),
+                        )
+                        .await?;
 
                     for mapped_message in mapped_messages {
                         if let Some(ref bypass_router) = bypass_router
@@ -594,13 +609,9 @@ impl MapHandle {
                         }
                     }
                 }
-                Ok(Err(_map_err)) => {
-                    error!(err=?_map_err, "failed to map message");
-                    return Err(_map_err);
-                }
                 Err(e) => {
-                    error!(?e, "failed to receive message");
-                    return Err(Error::Mapper(format!("failed to receive message: {e}")));
+                    error!(err=?e, "failed to map message");
+                    return Err(e);
                 }
             }
         }
@@ -622,67 +633,84 @@ impl MapHandle {
         output_tx: mpsc::Sender<Message>,
         tracker: Tracker,
         error_tx: mpsc::Sender<Error>,
-        cln_token: CancellationToken,
+        _cln_token: CancellationToken,
         bypass_router: Option<MvtxBypassRouter>,
+        is_mono_vertex: bool,
     ) {
         let output_tx = output_tx.clone();
         tokio::spawn(async move {
             let _permit = permit;
 
-            let (sender, mut receiver) = mpsc::channel(STREAMING_MAP_RESP_CHANNEL_SIZE);
+            // Store parent message info before sending to UDF
+            let mut parent_info: ParentMessageInfo = (&read_msg).into();
+            let offset = read_msg.offset.clone();
 
-            mapper.stream_map(read_msg.clone(), sender).await;
+            // Convert Message to MapRequest
+            let request: MapRequest = read_msg.clone().into();
+
+            update_udf_read_metric(is_mono_vertex);
+
+            // Call the UDF and get receiver for raw results
+            let mut receiver = mapper.stream(request).await;
 
             // we need update the tracker with no responses, because unlike unary and batch, we cannot update the
             // responses here we will have to append the responses.
             tracker
-                .serving_refresh(read_msg.offset.clone())
+                .serving_refresh(offset.clone())
                 .await
                 .expect("failed to reset tracker");
-            loop {
-                tokio::select! {
-                    result = receiver.recv() => {
-                        match result {
-                            Some(Ok(mapped_message)) => {
-                                tracker
-                                    .serving_append(mapped_message.offset.clone(), mapped_message.tags.clone())
-                                    .await
-                                    .expect("failed to update tracker");
 
-                                if let Some(ref bypass_router) = bypass_router && bypass_router.try_bypass(mapped_message.clone()).await.expect("failed to send message to bypass channel")
-                                {
-                                    continue
-                                } else {
-                                    output_tx.send(mapped_message).await.expect("failed to send response");
-                                }
+            loop {
+                let result = receiver.recv().await;
+                match result {
+                    Some(Ok(results)) => {
+                        // Convert raw results to Messages using parent info
+                        for result in results {
+                            let mapped_message: Message = UserDefinedMessage(
+                                result,
+                                &parent_info,
+                                parent_info.current_index,
+                            )
+                            .into();
+                            parent_info.current_index += 1;
+
+                            update_udf_write_only_metric(is_mono_vertex);
+
+                            tracker
+                                .serving_append(
+                                    mapped_message.offset.clone(),
+                                    mapped_message.tags.clone(),
+                                )
+                                .await
+                                .expect("failed to update tracker");
+
+                            if let Some(ref bypass_router) = bypass_router
+                                && bypass_router
+                                    .try_bypass(mapped_message.clone())
+                                    .await
+                                    .expect("failed to send message to bypass channel")
+                            {
+                                continue;
+                            } else {
+                                output_tx
+                                    .send(mapped_message)
+                                    .await
+                                    .expect("failed to send response");
                             }
-                            Some(Err(e)) => {
-                                error!(?e, "failed to map message");
-                                read_msg
-                                    .ack_handle
-                                    .as_ref()
-                                    .expect("ack handle should be present")
-                                    .is_failed
-                                    .store(true, Ordering::Relaxed);
-                                let _ = error_tx.send(e).await;
-                                return;
-                            }
-                            None => break,
                         }
-                    },
-                    _ = cln_token.cancelled() => {
-                        error!(?read_msg.offset, "Cancellation token received, will not wait for the response");
+                    }
+                    Some(Err(e)) => {
+                        error!(?e, "failed to map message");
                         read_msg
                             .ack_handle
                             .as_ref()
                             .expect("ack handle should be present")
                             .is_failed
                             .store(true, Ordering::Relaxed);
-                        let _ = error_tx
-                            .send(Error::Mapper("Operation cancelled".to_string()))
-                            .await;
+                        let _ = error_tx.send(e).await;
                         return;
                     }
+                    None => break,
                 }
             }
         });
@@ -864,6 +892,7 @@ mod tests {
             error_tx,
             CancellationToken::new(),
             None,
+            false,
         )
         .await;
 

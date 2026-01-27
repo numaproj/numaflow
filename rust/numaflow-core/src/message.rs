@@ -81,11 +81,13 @@ impl AckHandle {
 /// ReadMessage is the message read from the ISB/Source. ReadMessage should be explicitly marked as
 /// success after processing, so that it can be acked/nacked. By default, it will be nacked if not
 /// marked as success.
+#[allow(dead_code)]
 pub(crate) struct ReadMessage {
     pub(crate) message: Message,
     pub(crate) ack_handle: Arc<AckHandle>,
 }
 
+#[allow(dead_code)]
 impl ReadMessage {
     /// creates a new ReadMessage.
     pub(crate) fn new(message: Message, ack_handle: AckHandle) -> Self {

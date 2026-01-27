@@ -4,7 +4,6 @@ use std::sync::Mutex;
 
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
-use crate::message::Message;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::task::AbortOnDropHandle;
@@ -12,14 +11,13 @@ use tonic::Streaming;
 use tonic::transport::Channel;
 use tracing::error;
 
-use super::{
-    ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_error_metric,
-    update_udf_process_time_metric, update_udf_read_metric, update_udf_write_metric,
-};
+use super::{create_response_stream, update_udf_error_metric, update_udf_process_time_metric};
+
+/// Type alias for the batch response - raw results from the UDF
+pub(in crate::mapper) type BatchMapResponse = Vec<map::map_response::Result>;
 
 /// Type aliases
-type ResponseSenderMap =
-    Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
+type ResponseSenderMap = Arc<Mutex<HashMap<String, oneshot::Sender<Result<BatchMapResponse>>>>>;
 
 /// UserDefinedBatchMap is a grpc client that sends batch requests to the map server
 /// and forwards the responses.
@@ -39,7 +37,7 @@ impl UserDefinedBatchMap {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
-        // map to track the oneshot response sender for each request along with the message info
+        // map to track the oneshot response sender for each request
         let sender_map = Arc::new(Mutex::new(HashMap::new()));
 
         // background task to receive responses from the server and send them to the appropriate
@@ -62,7 +60,7 @@ impl UserDefinedBatchMap {
         let senders =
             std::mem::take(&mut *sender_map.lock().expect("failed to acquire poisoned lock"));
 
-        for (_, (_, sender)) in senders {
+        for (_, sender) in senders {
             let _ = sender.send(Err(Error::Grpc(Box::new(error.clone()))));
             update_udf_error_metric(is_mono_vertex())
         }
@@ -111,34 +109,46 @@ impl UserDefinedBatchMap {
             .expect("failed to acquire poisoned lock")
             .remove(&msg_id);
 
-        if let Some((msg_info, sender)) = sender_entry {
-            let mut response_messages = Vec::with_capacity(resp.results.len());
-            for (i, result) in resp.results.into_iter().enumerate() {
-                response_messages.push(UserDefinedMessage(result, &msg_info, i as i32).into());
-            }
-
-            update_udf_write_metric(is_mono_vertex(), msg_info, response_messages.len() as u64);
-
+        if let Some(sender) = sender_entry {
             sender
-                .send(Ok(response_messages))
+                .send(Ok(resp.results))
                 .expect("failed to send response");
         }
     }
 
-    /// Handles the incoming message and sends it to the server for mapping.
-    pub(in crate::mapper) async fn batch_map(
+    /// Sends a batch of messages to the UDF and returns the raw response results.
+    /// This method handles oneshot channel creation internally.
+    pub(in crate::mapper) async fn batch(
         &self,
-        messages: Vec<Message>,
-        respond_to: Vec<oneshot::Sender<Result<Vec<Message>>>>,
-    ) {
-        for (message, respond_to) in messages.into_iter().zip(respond_to) {
-            let key = message.offset.clone().to_string();
-            let msg_info: ParentMessageInfo = (&message).into();
+        requests: Vec<MapRequest>,
+    ) -> Vec<Result<BatchMapResponse>> {
+        let (senders, receivers): (Vec<_>, Vec<_>) =
+            requests.iter().map(|_| oneshot::channel()).unzip();
 
-            update_udf_read_metric(is_mono_vertex());
+        self.batch_map(requests, senders).await;
+
+        let mut results = Vec::with_capacity(receivers.len());
+        for receiver in receivers {
+            let result = match receiver.await {
+                Ok(result) => result,
+                Err(e) => Err(Error::ActorPatternRecv(e.to_string())),
+            };
+            results.push(result);
+        }
+        results
+    }
+
+    /// Handles the incoming message and sends it to the server for mapping.
+    async fn batch_map(
+        &self,
+        requests: Vec<MapRequest>,
+        respond_to: Vec<oneshot::Sender<Result<BatchMapResponse>>>,
+    ) {
+        for (request, respond_to) in requests.into_iter().zip(respond_to) {
+            let key = request.id.clone();
 
             // only insert if we are able to send the message to the server
-            if let Err(e) = self.read_tx.send(message.into()).await {
+            if let Err(e) = self.read_tx.send(request).await {
                 error!(?e, "Failed to send message to server");
                 let _ = respond_to.send(Err(Error::Mapper(format!(
                     "failed to send message to batch map server: {e}"
@@ -149,7 +159,7 @@ impl UserDefinedBatchMap {
             self.senders
                 .lock()
                 .expect("failed to acquire poisoned lock")
-                .insert(key.clone(), (msg_info, respond_to));
+                .insert(key, respond_to);
         }
 
         // send eot request
@@ -168,14 +178,12 @@ impl UserDefinedBatchMap {
 #[cfg(test)]
 mod tests {
     use crate::mapper::map::batch::UserDefinedBatchMap;
-    use crate::message::{MessageID, StringOffset};
     use crate::shared::grpc::create_rpc_channel;
     use numaflow::batchmap;
     use numaflow::batchmap::Server;
     use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::map::map_client::MapClient;
     use std::error::Error;
-    use std::sync::Arc;
     use std::time::Duration;
     use tempfile::TempDir;
 
@@ -226,55 +234,44 @@ mod tests {
             UserDefinedBatchMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
                 .await?;
 
-        let messages = vec![
-            crate::message::Message {
-                typ: Default::default(),
-                keys: Arc::from(vec!["first".into()]),
-                tags: None,
-                value: "hello".into(),
-                offset: crate::message::Offset::String(StringOffset::new("0".to_string(), 0)),
-                event_time: chrono::Utc::now(),
-                watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: "0".to_string().into(),
-                    index: 0,
-                },
-                ..Default::default()
+        // Create MapRequests directly instead of Messages
+        let requests = vec![
+            numaflow_pb::clients::map::MapRequest {
+                request: Some(numaflow_pb::clients::map::map_request::Request {
+                    keys: vec!["first".into()],
+                    value: "hello".into(),
+                    event_time: None,
+                    watermark: None,
+                    headers: Default::default(),
+                    metadata: None,
+                }),
+                id: "0".to_string(),
+                handshake: None,
+                status: None,
             },
-            crate::message::Message {
-                typ: Default::default(),
-                keys: Arc::from(vec!["second".into()]),
-                tags: None,
-                value: "world".into(),
-                offset: crate::message::Offset::String(StringOffset::new("1".to_string(), 1)),
-                event_time: chrono::Utc::now(),
-                watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: "1".to_string().into(),
-                    index: 1,
-                },
-                ..Default::default()
+            numaflow_pb::clients::map::MapRequest {
+                request: Some(numaflow_pb::clients::map::map_request::Request {
+                    keys: vec!["second".into()],
+                    value: "world".into(),
+                    event_time: None,
+                    watermark: None,
+                    headers: Default::default(),
+                    metadata: None,
+                }),
+                id: "1".to_string(),
+                handshake: None,
+                status: None,
             },
         ];
 
-        let (tx1, rx1) = tokio::sync::oneshot::channel();
-        let (tx2, rx2) = tokio::sync::oneshot::channel();
+        let results =
+            tokio::time::timeout(Duration::from_secs(2), client.batch(requests)).await?;
 
-        tokio::time::timeout(
-            Duration::from_secs(2),
-            client.batch_map(messages, vec![tx1, tx2]),
-        )
-        .await?;
-
-        let messages1 = rx1.await?;
-        let messages2 = rx2.await?;
-
-        assert!(messages1.is_ok());
-        assert!(messages2.is_ok());
-        assert_eq!(messages1?.len(), 1);
-        assert_eq!(messages2?.len(), 1);
+        assert_eq!(results.len(), 2);
+        assert!(results[0].is_ok());
+        assert!(results[1].is_ok());
+        assert_eq!(results[0].as_ref().unwrap().len(), 1);
+        assert_eq!(results[1].as_ref().unwrap().len(), 1);
 
         // we need to drop the client, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85

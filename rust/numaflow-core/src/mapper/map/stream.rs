@@ -4,7 +4,6 @@ use std::sync::Mutex;
 
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
-use crate::message::Message;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::mpsc;
 use tokio_util::task::AbortOnDropHandle;
@@ -13,12 +12,14 @@ use tonic::transport::Channel;
 use tracing::error;
 
 use super::{
-    ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_error_metric,
-    update_udf_process_time_metric, update_udf_read_metric, update_udf_write_only_metric,
+    STREAMING_MAP_RESP_CHANNEL_SIZE, create_response_stream, update_udf_error_metric,
+    update_udf_process_time_metric,
 };
 
-type StreamResponseSenderMap =
-    Arc<Mutex<HashMap<String, (ParentMessageInfo, mpsc::Sender<Result<Message>>)>>>;
+/// Type alias for the stream response - raw results from the UDF
+pub(in crate::mapper) type StreamMapResponse = Vec<map::map_response::Result>;
+
+type StreamResponseSenderMap = Arc<Mutex<HashMap<String, mpsc::Sender<Result<StreamMapResponse>>>>>;
 
 /// UserDefinedStreamMap is a grpc client that sends stream requests to the map server
 #[derive(Clone)]
@@ -37,7 +38,7 @@ impl UserDefinedStreamMap {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
-        // map to track the oneshot response sender for each request along with the message info
+        // map to track the mpsc response sender for each request
         let sender_map = Arc::new(Mutex::new(HashMap::new()));
 
         // background task to receive responses from the server and send them to the appropriate
@@ -60,13 +61,15 @@ impl UserDefinedStreamMap {
         let senders =
             std::mem::take(&mut *sender_map.lock().expect("failed to acquire poisoned lock"));
 
-        for (_, (_, sender)) in senders {
-            let _ = sender.send(Err(Error::Grpc(Box::new(error.clone())))).await;
+        for (_, sender) in senders {
+            let _ = sender
+                .send(Err(Error::Grpc(Box::new(error.clone()))))
+                .await;
             update_udf_error_metric(is_mono_vertex());
         }
     }
 
-    /// receive responses from the server and gets the corresponding oneshot sender from the map
+    /// receive responses from the server and gets the corresponding mpsc sender from the map
     /// and sends the response.
     async fn receive_stream_responses(
         sender_map: StreamResponseSenderMap,
@@ -83,7 +86,7 @@ impl UserDefinedStreamMap {
                 }
             };
 
-            let (message_info, response_sender) = sender_map
+            let response_sender = sender_map
                 .lock()
                 .expect("failed to acquire poisoned lock")
                 .remove(&resp.id)
@@ -96,30 +99,31 @@ impl UserDefinedStreamMap {
                 continue;
             }
 
-            Self::process_stream_response(
-                &sender_map,
-                resp.id,
-                message_info,
-                response_sender,
-                resp.results,
-            )
-            .await;
+            Self::process_stream_response(&sender_map, resp.id, response_sender, resp.results)
+                .await;
         }
     }
 
-    /// Handles the incoming message and sends it to the server for mapping.
+    /// Sends a request to the UDF and returns a receiver for raw response results.
+    pub(in crate::mapper) async fn stream(
+        &self,
+        request: MapRequest,
+    ) -> mpsc::Receiver<Result<StreamMapResponse>> {
+        let (tx, rx) = mpsc::channel(STREAMING_MAP_RESP_CHANNEL_SIZE);
+        self.stream_map(request, tx).await;
+        rx
+    }
+
+    /// Handles the incoming request and sends it to the server for mapping.
     pub(in crate::mapper) async fn stream_map(
         &self,
-        message: Message,
-        respond_to: mpsc::Sender<Result<Message>>,
+        request: MapRequest,
+        respond_to: mpsc::Sender<Result<StreamMapResponse>>,
     ) {
-        let key = message.offset.clone().to_string();
-        let msg_info = (&message).into();
-
-        update_udf_read_metric(is_mono_vertex());
+        let key = request.id.clone();
 
         // only insert if we are able to send the message to the server
-        if let Err(e) = self.read_tx.send(message.into()).await {
+        if let Err(e) = self.read_tx.send(request).await {
             error!(?e, "Failed to send message to server");
             let _ = respond_to
                 .send(Err(Error::Mapper(format!(
@@ -132,51 +136,38 @@ impl UserDefinedStreamMap {
         self.senders
             .lock()
             .expect("failed to acquire poisoned lock")
-            .insert(key.clone(), (msg_info, respond_to));
+            .insert(key, respond_to);
     }
 
     /// Processes stream responses and sends them to the appropriate mpsc sender
     async fn process_stream_response(
         sender_map: &StreamResponseSenderMap,
         msg_id: String,
-        mut message_info: ParentMessageInfo,
-        response_sender: mpsc::Sender<Result<Message>>,
+        response_sender: mpsc::Sender<Result<StreamMapResponse>>,
         results: Vec<map::map_response::Result>,
     ) {
-        for result in results.into_iter() {
-            response_sender
-                .send(Ok(UserDefinedMessage(
-                    result,
-                    &message_info,
-                    message_info.current_index,
-                )
-                .into()))
-                .await
-                .expect("failed to send response");
-            message_info.current_index += 1;
-
-            update_udf_write_only_metric(is_mono_vertex());
-        }
+        response_sender
+            .send(Ok(results))
+            .await
+            .expect("failed to send response");
 
         // Write the sender back to the map, because we need to send
         // more responses for the same request
         sender_map
             .lock()
             .expect("failed to acquire poisoned lock")
-            .insert(msg_id, (message_info, response_sender));
+            .insert(msg_id, response_sender);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::mapper::map::stream::UserDefinedStreamMap;
-    use crate::message::{MessageID, StringOffset};
     use crate::shared::grpc::create_rpc_channel;
     use numaflow::mapstream;
     use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::map::map_client::MapClient;
     use std::error::Error;
-    use std::sync::Arc;
     use std::time::Duration;
     use tempfile::TempDir;
 
@@ -228,42 +219,39 @@ mod tests {
             UserDefinedStreamMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
                 .await?;
 
-        let message = crate::message::Message {
-            typ: Default::default(),
-            keys: Arc::from(vec!["first".into()]),
-            tags: None,
-            value: "test,map,stream".into(),
-            offset: crate::message::Offset::String(StringOffset::new("0".to_string(), 0)),
-            event_time: chrono::Utc::now(),
-            watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "0".to_string().into(),
-                index: 0,
-            },
-            ..Default::default()
+        // Create a MapRequest directly instead of a Message
+        let request = numaflow_pb::clients::map::MapRequest {
+            request: Some(numaflow_pb::clients::map::map_request::Request {
+                keys: vec!["first".into()],
+                value: "test,map,stream".into(),
+                event_time: None,
+                watermark: None,
+                headers: Default::default(),
+                metadata: None,
+            }),
+            id: "0".to_string(),
+            handshake: None,
+            status: None,
         };
 
         let (tx, mut rx) = tokio::sync::mpsc::channel(3);
 
-        tokio::time::timeout(Duration::from_secs(2), client.stream_map(message, tx)).await?;
+        tokio::time::timeout(Duration::from_secs(2), client.stream_map(request, tx)).await?;
 
-        let mut responses = vec![];
+        // Collect all response batches
+        let mut all_results = vec![];
         while let Some(response) = rx.recv().await {
-            responses.push(response?);
+            let results = response?;
+            all_results.extend(results);
         }
 
-        assert_eq!(responses.len(), 3);
+        assert_eq!(all_results.len(), 3);
         // convert the bytes value to string and compare
-        let values: Vec<String> = responses
+        let values: Vec<String> = all_results
             .iter()
-            .map(|r| String::from_utf8(Vec::from(r.value.clone())).unwrap())
+            .map(|r| String::from_utf8(r.value.clone()).unwrap())
             .collect();
         assert_eq!(values, vec!["test", "map", "stream"]);
-
-        // Verify that message indices are properly incremented
-        let indices: Vec<i32> = responses.iter().map(|r| r.id.index).collect();
-        assert_eq!(indices, vec![0, 1, 2]);
 
         // we need to drop the client, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
