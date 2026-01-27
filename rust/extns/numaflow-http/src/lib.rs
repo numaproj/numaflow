@@ -1423,8 +1423,14 @@ mod tests {
 
         // Parse JSON response
         let json_response: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-        assert_eq!(json_response["error"], "Duplicate request ID");
-        assert_eq!(json_response["id"], duplicate_id);
+        assert_eq!(
+            json_response.get("error").expect("Expected error field"),
+            "Duplicate request ID"
+        );
+        assert_eq!(
+            json_response.get("id").expect("Expected id field"),
+            duplicate_id
+        );
     }
 
     #[test]

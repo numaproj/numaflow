@@ -271,11 +271,11 @@ mod tests {
             .await
             .expect("Failed to send messages");
         assert_eq!(responses.len(), 1);
-        assert!(responses[0].status.is_ok());
+        assert!(responses.first().expect("Expected response").status.is_ok());
 
         // Now consume the message from Kafka to verify
         let messages = test_utils::consume_messages_from_topic(&topic_name, 1).await;
-        let msg = &messages[0];
+        let msg = messages.first().expect("Expected message");
         assert_eq!(msg.payload, b"test-payload");
         assert_eq!(msg.headers.get("header1"), Some(&"value1".to_string()));
         assert_eq!(msg.headers.get("header2"), Some(&"value2".to_string()));
