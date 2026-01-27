@@ -353,17 +353,14 @@ fn extract_error_details(details_bytes: &[u8]) -> Option<String> {
     if let Ok(status) = RpcStatus::decode(details_bytes) {
         // Look for known error detail types in the status details
         for detail in &status.details {
-            match detail.type_url.as_str() {
-                "type.googleapis.com/google.rpc.DebugInfo" => {
-                    if let Ok(debug_info) = DebugInfo::decode(&detail.value[..]) {
-                        return Some(debug_info.detail);
-                    }
-                }
-                // Future error types can be added here:
-                // "type.googleapis.com/google.rpc.QuotaFailure" => { ... }
-                // "type.googleapis.com/google.rpc.BadRequest" => { ... }
-                // "type.googleapis.com/google.rpc.PreconditionFailure" => { ... }
-                _ => {}
+            // Future error types can be added here:
+            // "type.googleapis.com/google.rpc.QuotaFailure" => { ... }
+            // "type.googleapis.com/google.rpc.BadRequest" => { ... }
+            // "type.googleapis.com/google.rpc.PreconditionFailure" => { ... }
+            if detail.type_url.as_str() == "type.googleapis.com/google.rpc.DebugInfo"
+                && let Ok(debug_info) = DebugInfo::decode(&detail.value[..])
+            {
+                return Some(debug_info.detail);
             }
         }
     }

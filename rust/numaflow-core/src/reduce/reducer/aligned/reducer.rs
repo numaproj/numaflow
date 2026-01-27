@@ -1469,7 +1469,13 @@ mod tests {
             let proto_message = numaflow_pb::objects::isb::Message::decode(&data[..]).unwrap();
 
             // Extract and store the key
-            let key = proto_message.header.unwrap().keys[0].clone();
+            let key = proto_message
+                .header
+                .unwrap()
+                .keys
+                .first()
+                .expect("Expected at least one key")
+                .clone();
             received_keys.insert(key);
 
             result_count += 1;

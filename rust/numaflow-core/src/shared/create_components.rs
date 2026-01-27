@@ -58,6 +58,7 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 
 /// Creates a sink writer based on the configuration
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn create_sink_writer(
     batch_size: usize,
     read_timeout: Duration,

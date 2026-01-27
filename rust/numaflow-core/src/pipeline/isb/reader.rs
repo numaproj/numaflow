@@ -1080,7 +1080,11 @@ mod tests {
             .unwrap();
         assert_eq!(messages.len(), 1);
 
-        let offset = messages[0].offset.clone();
+        let offset = messages
+            .first()
+            .expect("Expected at least one message")
+            .offset
+            .clone();
         let cancel_token = CancellationToken::new();
 
         // Test nack_with_retry - should succeed
@@ -1221,7 +1225,11 @@ mod tests {
             .unwrap();
         assert_eq!(messages.len(), 1);
 
-        let offset = messages[0].offset.clone();
+        let offset = messages
+            .first()
+            .expect("Expected at least one message")
+            .offset
+            .clone();
         let cancel_token = CancellationToken::new();
 
         // Test ack_with_retry - should succeed

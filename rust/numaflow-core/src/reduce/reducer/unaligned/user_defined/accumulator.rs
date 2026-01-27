@@ -242,7 +242,7 @@ mod tests {
                     + 1;
 
                 // Fire a message every 3 messages with updated key
-                if current_count % 3 == 0 {
+                if current_count.is_multiple_of(3) {
                     let keys = request.keys.clone();
                     let updated_key = format!("{}_{}", keys.join(":"), current_count);
 
@@ -448,7 +448,7 @@ mod tests {
         .await;
 
         // Create test messages with different keys
-        let messages = vec![
+        let messages = [
             Message {
                 typ: Default::default(),
                 keys: Arc::from(vec!["keyA".into()]),
@@ -556,7 +556,7 @@ mod tests {
             .send(
                 UnalignedWindowMessage {
                     operation: UnalignedWindowOperation::Open {
-                        message: messages[0].clone(),
+                        message: messages.first().expect("Expected first message").clone(),
                         window: window.clone(),
                     },
                     pnf_slot: "GLOBAL_SLOT",
@@ -567,7 +567,7 @@ mod tests {
             .unwrap();
 
         // Send append messages for the rest
-        for msg in &messages[1..] {
+        for msg in messages.get(1..).unwrap_or_default() {
             window_tx
                 .send(
                     UnalignedWindowMessage {
@@ -628,16 +628,18 @@ mod tests {
         let result_messages: Vec<Message> = results.into_iter().map(Into::into).collect();
 
         // First result should be at count 3
-        assert_eq!(result_messages[0].keys.to_vec(), vec!["keyA_3"]);
+        let result0 = result_messages.first().expect("Expected first result");
+        assert_eq!(result0.keys.to_vec(), vec!["keyA_3"]);
         assert_eq!(
-            String::from_utf8(result_messages[0].value.to_vec()).unwrap(),
+            String::from_utf8(result0.value.to_vec()).unwrap(),
             "count_3"
         );
 
         // Second result should be at count 6
-        assert_eq!(result_messages[1].keys.to_vec(), vec!["keyB_6"]);
+        let result1 = result_messages.get(1).expect("Expected second result");
+        assert_eq!(result1.keys.to_vec(), vec!["keyB_6"]);
         assert_eq!(
-            String::from_utf8(result_messages[1].value.to_vec()).unwrap(),
+            String::from_utf8(result1.value.to_vec()).unwrap(),
             "count_6"
         );
 

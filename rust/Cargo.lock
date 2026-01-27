@@ -2553,6 +2553,11 @@ dependencies = [
 name = "numaflow-daemon"
 version = "0.1.0"
 dependencies = [
+ "numaflow-pb",
+ "rcgen",
+ "time",
+ "tokio",
+ "tonic 0.14.2",
  "tracing",
 ]
 
@@ -4642,6 +4647,7 @@ dependencies = [
  "socket2 0.6.0",
  "sync_wrapper 1.0.2",
  "tokio",
+ "tokio-rustls 0.26.2",
  "tokio-stream",
  "tower",
  "tower-layer",

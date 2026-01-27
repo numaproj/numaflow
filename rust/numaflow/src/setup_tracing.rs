@@ -57,7 +57,7 @@ pub fn register() {
     // Set up the tracing subscriber. RUST_LOG can be used to set the log level.
     // The default log level is `info`. The `axum::rejection=trace` enables showing
     // rejections from built-in extractors at `TRACE` level.
-    let debug_mode = std::env::var("NUMAFLOW_DEBUG").map_or(false, |v| v.to_lowercase() == "true");
+    let debug_mode = std::env::var("NUMAFLOW_DEBUG").is_ok_and(|v| v.to_lowercase() == "true");
     let default_log_level = if debug_mode {
         "debug,h2::codec=info" // "h2::codec" is too noisy
     } else {

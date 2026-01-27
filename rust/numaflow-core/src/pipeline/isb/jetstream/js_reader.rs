@@ -391,7 +391,7 @@ mod tests {
             .unwrap();
         assert_eq!(messages.len(), 1);
 
-        let message = &messages[0];
+        let message = messages.first().expect("Expected at least one message");
         assert_eq!(
             message.value.as_ref(),
             "test message for direct fetch".as_bytes()
@@ -414,7 +414,15 @@ mod tests {
         assert_eq!(messages.len(), 1);
 
         // ack the message and check pending again
-        js_reader.ack(&messages[0].offset).await.unwrap();
+        js_reader
+            .ack(
+                &messages
+                    .first()
+                    .expect("Expected at least one message")
+                    .offset,
+            )
+            .await
+            .unwrap();
         // pending should be zero
         let pending = js_reader.pending().await.unwrap();
         assert_eq!(pending, Some(0));

@@ -489,7 +489,6 @@ mod tests {
             usage_limit: 0.5,
             buffer_full_strategy:
                 crate::config::pipeline::isb::BufferFullStrategy::RetryUntilSuccess,
-            ..Default::default()
         };
 
         let writer = JetStreamWriter::new(
