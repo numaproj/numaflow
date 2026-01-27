@@ -630,8 +630,8 @@ mod tests {
         store.kv_store.put(done_key, Bytes::new()).await.unwrap();
 
         let result = store.retrieve_data(id, None).await.unwrap();
-        assert!(result.len() > 0);
-        assert_eq!(result[0], b"test_payload");
+        assert!(!result.is_empty());
+        assert_eq!(result.first().expect("Expected result[0]"), b"test_payload");
 
         // delete store
         context.delete_key_value(datum_store_name).await.unwrap();
@@ -742,8 +742,8 @@ mod tests {
             .retrieve_data(id, Some(other_pod_hash.to_string()))
             .await
             .unwrap();
-        assert!(result.len() > 0);
-        assert_eq!(result[0], b"test_payload");
+        assert!(!result.is_empty());
+        assert_eq!(result.first().expect("Expected result[0]"), b"test_payload");
 
         // delete store
         context.delete_key_value(datum_store_name).await.unwrap();

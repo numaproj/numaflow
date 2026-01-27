@@ -546,7 +546,7 @@ mod tests {
             .unwrap();
 
         let settings = Settings {
-            tid_header: ID_HEADER.into(),
+            tid_header: ID_HEADER,
             js_callback_store: store_name,
             js_message_stream: message_stream_name,
             ..Default::default()
@@ -689,8 +689,8 @@ mod tests {
             .unwrap();
 
         let settings = Settings {
-            tid_header: ID_HEADER.into(),
-            pod_hash: POD_HASH.into(),
+            tid_header: ID_HEADER,
+            pod_hash: POD_HASH,
             js_callback_store: store_name,
             js_status_store: store_name,
             js_response_store: store_name,
@@ -742,7 +742,7 @@ mod tests {
             let rs_key = format!("rs.{POD_HASH}.{ID_VALUE}.start.processing");
             let start_time = Instant::now();
             loop {
-                if let Some(_) = kv_store.get(&rs_key).await.unwrap() {
+                if kv_store.get(&rs_key).await.unwrap().is_some() {
                     break;
                 }
 
@@ -817,7 +817,7 @@ mod tests {
             js_status_store: store_name,
             js_response_store: store_name,
             js_message_stream: messages_stream_name,
-            pod_hash: POD_HASH.into(),
+            pod_hash: POD_HASH,
             ..Default::default()
         };
 
@@ -867,7 +867,7 @@ mod tests {
             let rs_key = format!("rs.{POD_HASH}.{ID_VALUE}.start.processing");
             let start_time = Instant::now();
             loop {
-                if let Some(_) = kv_store.get(&rs_key).await.unwrap() {
+                if kv_store.get(&rs_key).await.unwrap().is_some() {
                     break;
                 }
 
@@ -1043,7 +1043,7 @@ mod tests {
             let rs_key = format!("rs.{POD_HASH}.{ID_VALUE}.start.processing");
             let start_time = Instant::now();
             loop {
-                if let Some(_) = kv_store.get(&rs_key).await.unwrap() {
+                if kv_store.get(&rs_key).await.unwrap().is_some() {
                     break;
                 }
 
@@ -1083,10 +1083,13 @@ mod tests {
         }
 
         assert_eq!(event_data.len(), 2);
-        assert_eq!(event_data[0], Bytes::from("data: Test Message 1\n\n"));
         assert_eq!(
-            event_data[1],
-            Bytes::from("data: Another Test Message 2\n\n")
+            event_data.first().expect("Expected event_data[0]"),
+            &Bytes::from("data: Test Message 1\n\n")
+        );
+        assert_eq!(
+            event_data.get(1).expect("Expected event_data[1]"),
+            &Bytes::from("data: Another Test Message 2\n\n")
         );
 
         Ok(())

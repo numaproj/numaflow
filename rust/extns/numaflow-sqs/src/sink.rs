@@ -361,10 +361,11 @@ mod tests {
 
         let responses = result.unwrap();
         assert_eq!(responses.len(), 1);
-        assert_eq!(responses[0].id, "1");
-        assert!(responses[0].status.is_ok());
-        assert_eq!(responses[0].code, None);
-        assert_eq!(responses[0].sender_fault, None);
+        let resp0 = responses.first().expect("Expected response 0");
+        assert_eq!(resp0.id, "1");
+        assert!(resp0.status.is_ok());
+        assert_eq!(resp0.code, None);
+        assert_eq!(resp0.sender_fault, None);
     }
 
     #[test(tokio::test)]
@@ -412,14 +413,16 @@ mod tests {
 
         let responses = result.unwrap();
         assert_eq!(responses.len(), 2);
-        assert_eq!(responses[0].id, "1");
-        assert!(responses[0].status.is_ok());
-        assert_eq!(responses[0].code, None);
-        assert_eq!(responses[0].sender_fault, None);
-        assert_eq!(responses[1].id, "2");
-        assert!(responses[1].status.is_err());
-        assert_eq!(responses[1].code, Some("InvalidParameterValue".to_string()));
-        assert_eq!(responses[1].sender_fault, Some(true));
+        let resp0 = responses.first().expect("Expected response 0");
+        assert_eq!(resp0.id, "1");
+        assert!(resp0.status.is_ok());
+        assert_eq!(resp0.code, None);
+        assert_eq!(resp0.sender_fault, None);
+        let resp1 = responses.get(1).expect("Expected response 1");
+        assert_eq!(resp1.id, "2");
+        assert!(resp1.status.is_err());
+        assert_eq!(resp1.code, Some("InvalidParameterValue".to_string()));
+        assert_eq!(resp1.sender_fault, Some(true));
     }
     #[test(tokio::test)]
     async fn test_sqs_sink_send_messages_all_fail() {
@@ -474,7 +477,7 @@ mod tests {
                 if entries.len() != 1 {
                     return false;
                 }
-                let entry = &entries[0];
+                let entry = entries.first().expect("entries has 1 element");
 
                 // Verify all our headers were mapped correctly
                 entry.delay_seconds() == Some(10)
@@ -644,14 +647,13 @@ mod tests {
     }
 
     fn get_queue_url_output() -> Rule {
-        let queue_url_output = mock!(aws_sdk_sqs::Client::get_queue_url)
+        mock!(aws_sdk_sqs::Client::get_queue_url)
             .match_requests(|inp| inp.queue_name().unwrap() == "test-q")
             .then_output(|| {
                 aws_sdk_sqs::operation::get_queue_url::GetQueueUrlOutput::builder()
                     .queue_url("https://sqs.us-west-2.amazonaws.com/926113353675/test-q/")
                     .build()
-            });
-        queue_url_output
+            })
     }
 
     fn get_send_message_output() -> Rule {
@@ -662,7 +664,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let send_message_output = mock!(aws_sdk_sqs::Client::send_message_batch)
+        mock!(aws_sdk_sqs::Client::send_message_batch)
             .match_requests(|inp| {
                 inp.queue_url().unwrap()
                     == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
@@ -679,8 +681,7 @@ mod tests {
                     .set_failed(Some(failed_entries))
                     .build()
                     .unwrap()
-            });
-        send_message_output
+            })
     }
 
     fn get_send_message_output_with_failed() -> Rule {
@@ -699,7 +700,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let send_message_output = mock!(aws_sdk_sqs::Client::send_message_batch)
+        mock!(aws_sdk_sqs::Client::send_message_batch)
             .match_requests(|inp| {
                 inp.queue_url().unwrap()
                     == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
@@ -716,12 +717,11 @@ mod tests {
                     .set_failed(Some(failed_entries))
                     .build()
                     .unwrap()
-            });
-        send_message_output
+            })
     }
 
     fn get_send_message_output_all_fail() -> Rule {
-        let send_message_output = mock!(aws_sdk_sqs::Client::send_message_batch)
+        mock!(aws_sdk_sqs::Client::send_message_batch)
             .match_requests(|inp| {
                 inp.queue_url().unwrap()
                     == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
@@ -733,8 +733,7 @@ mod tests {
                         .code("InvalidParameterValue")
                         .build(),
                 )
-            });
-        send_message_output
+            })
     }
 
     fn get_test_config_with_interceptor(interceptor: MockResponseInterceptor) -> Config {

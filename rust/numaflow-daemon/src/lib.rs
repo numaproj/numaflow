@@ -94,7 +94,7 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
 
     let addr = format!("[::]:{}", DAEMON_SERVICE_PORT).parse()?;
 
-    let service = MvtxDaemonService::default();
+    let service = MvtxDaemonService;
     let identity = generate_self_signed_identity()?;
     let tls = ServerTlsConfig::new().identity(identity);
 
