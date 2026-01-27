@@ -653,7 +653,7 @@ mod tests {
             let redis_url = "redis://127.0.0.1:6379";
 
             // Check if Redis is available
-            if let Err(_) = redis::Client::open(redis_url) {
+            if redis::Client::open(redis_url).is_err() {
                 println!(
                     "Skipping Redis test - Redis server not available at {}",
                     redis_url
@@ -710,7 +710,7 @@ mod tests {
                 assert_eq!(url, "redis://localhost:6379");
                 assert_eq!(db, None);
             }
-            _ => panic!("Expected SingleUrl mode"),
+            RedisMode::Sentinel { .. } => panic!("Expected SingleUrl mode"),
         }
 
         // Test 2: Single mode with database specified
@@ -727,7 +727,7 @@ mod tests {
                 assert_eq!(url, "redis://localhost:6379");
                 assert_eq!(db, Some(5));
             }
-            _ => panic!("Expected SingleUrl mode"),
+            RedisMode::Sentinel { .. } => panic!("Expected SingleUrl mode"),
         }
 
         // Test 3: Single mode missing URL (should fail)
@@ -782,7 +782,7 @@ mod tests {
                 assert!(redis_tls.is_none());
                 assert_eq!(db, None);
             }
-            _ => panic!("Expected Sentinel mode"),
+            RedisMode::SingleUrl { .. } => panic!("Expected Sentinel mode"),
         }
 
         // Test 5: Sentinel mode with database specified
@@ -805,7 +805,7 @@ mod tests {
             RedisMode::Sentinel { db, .. } => {
                 assert_eq!(db, Some(3));
             }
-            _ => panic!("Expected Sentinel mode"),
+            RedisMode::SingleUrl { .. } => panic!("Expected Sentinel mode"),
         }
 
         // Test 6: Sentinel mode with TLS configurations
@@ -843,7 +843,7 @@ mod tests {
                 assert!(sentinel_tls.is_some());
                 assert!(redis_tls.is_some());
             }
-            _ => panic!("Expected Sentinel mode"),
+            RedisMode::SingleUrl { .. } => panic!("Expected Sentinel mode"),
         }
 
         // Test 7: Sentinel mode missing sentinel config (should fail)
@@ -893,7 +893,7 @@ mod tests {
                 assert_eq!(url, "redis://localhost:6379");
                 assert_eq!(db, Some(1));
             }
-            _ => panic!("Expected SingleUrl mode"),
+            RedisMode::Sentinel { .. } => panic!("Expected SingleUrl mode"),
         }
     }
 
@@ -918,7 +918,7 @@ mod tests {
                 assert_eq!(endpoints, vec!["sentinel1:26379", "sentinel2:26379"]);
                 assert_eq!(db, Some(2));
             }
-            _ => panic!("Expected Sentinel mode"),
+            RedisMode::SingleUrl { .. } => panic!("Expected Sentinel mode"),
         }
     }
 
@@ -963,7 +963,7 @@ mod tests {
                 assert_eq!(r_auth.unwrap().username, Some("redis_user".to_string()));
                 assert!(sentinel_tls.is_some()); // Just check that TLS is configured
             }
-            _ => panic!("Expected Sentinel mode"),
+            RedisMode::SingleUrl { .. } => panic!("Expected Sentinel mode"),
         }
     }
 
