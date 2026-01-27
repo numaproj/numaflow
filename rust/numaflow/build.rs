@@ -116,7 +116,7 @@ fn get_git_tag() -> Result<String, Box<dyn std::error::Error>> {
         return Ok(git_tag);
     }
     let output = Command::new("git")
-        .args(&["describe", "--exact-match", "--tags", "HEAD"])
+        .args(["describe", "--exact-match", "--tags", "HEAD"])
         .output()?;
     if output.status.success() {
         let git_tag = String::from_utf8(output.stdout)?.trim().to_string();
