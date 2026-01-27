@@ -1,3 +1,11 @@
 [build]
 rustflags = ["-Dwarnings"]
 
+[alias]
+clippy-ci = [
+  "clippy",
+  "--workspace",
+  "--exclude", "numaflow-pb",
+  "--exclude", "numaflow-models",
+  "--no-deps"
+]
