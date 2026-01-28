@@ -3,7 +3,10 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use crate::config::is_mono_vertex;
-use crate::error::{Error, Result};
+use crate::error::{self, Error, Result};
+use crate::message::Message;
+use crate::monovertex::bypass_router::MvtxBypassRouter;
+use crate::tracker::Tracker;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -12,13 +15,101 @@ use tonic::Streaming;
 use tonic::transport::Channel;
 use tracing::error;
 
-use super::{create_response_stream, update_udf_error_metric, update_udf_process_time_metric};
+use super::{
+    ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_error_metric,
+    update_udf_process_time_metric, update_udf_read_metric, update_udf_write_metric,
+};
 
 /// Type alias for the batch response - raw results from the UDF
 pub(in crate::mapper) type BatchMapResponse = Vec<map::map_response::Result>;
 
 /// Type aliases
 type ResponseSenderMap = Arc<Mutex<HashMap<String, oneshot::Sender<Result<BatchMapResponse>>>>>;
+
+/// MapBatchTask encapsulates all the context needed to execute a batch map operation.
+/// This reduces the number of arguments passed around and makes the code more readable.
+pub(in crate::mapper) struct MapBatchTask {
+    pub mapper: UserDefinedBatchMap,
+    pub batch: Vec<Message>,
+    pub output_tx: mpsc::Sender<Message>,
+    pub tracker: Tracker,
+    pub bypass_router: Option<MvtxBypassRouter>,
+    pub is_mono_vertex: bool,
+    pub cln_token: CancellationToken,
+}
+
+impl MapBatchTask {
+    /// Executes the batch map operation.
+    /// Returns an error if any message in the batch fails to be processed.
+    pub async fn execute(self) -> error::Result<()> {
+        // Store parent message info for each message before sending to UDF
+        let parent_infos: Vec<ParentMessageInfo> = self.batch.iter().map(|m| m.into()).collect();
+
+        // Convert Messages to MapRequests
+        let requests: Vec<MapRequest> = self.batch.into_iter().map(|m| m.into()).collect();
+
+        // Update read metrics for each request
+        for _ in &requests {
+            update_udf_read_metric(self.is_mono_vertex);
+        }
+
+        // Call the UDF and get results directly
+        let results = self.mapper.batch(requests, self.cln_token).await;
+
+        for (result, parent_info) in results.into_iter().zip(parent_infos.into_iter()) {
+            match result {
+                Ok(results) => {
+                    // Convert raw results to Messages using parent info
+                    let mapped_messages: Vec<Message> = results
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, result)| {
+                            UserDefinedMessage(result, &parent_info, i as i32).into()
+                        })
+                        .collect();
+
+                    let offset = parent_info.offset.clone();
+
+                    update_udf_write_metric(
+                        self.is_mono_vertex,
+                        parent_info,
+                        mapped_messages.len() as u64,
+                    );
+
+                    self.tracker
+                        .serving_update(
+                            &offset,
+                            mapped_messages.iter().map(|m| m.tags.clone()).collect(),
+                        )
+                        .await?;
+
+                    for mapped_message in mapped_messages {
+                        let bypassed = if let Some(ref bypass_router) = self.bypass_router {
+                            bypass_router
+                                .try_bypass(mapped_message.clone())
+                                .await
+                                .expect("failed to send message to bypass channel")
+                        } else {
+                            false
+                        };
+
+                        if !bypassed {
+                            self.output_tx
+                                .send(mapped_message)
+                                .await
+                                .expect("failed to send response");
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!(err=?e, "failed to map message");
+                    return Err(e);
+                }
+            }
+        }
+        Ok(())
+    }
+}
 
 /// UserDefinedBatchMap is a grpc client that sends batch requests to the map server
 /// and forwards the responses.

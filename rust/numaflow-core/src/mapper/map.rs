@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
-use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc};
+use tokio::sync::{Semaphore, mpsc};
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
@@ -31,9 +31,9 @@ use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::monovertex::bypass_router::MvtxBypassRouter;
-use batch::UserDefinedBatchMap;
-use stream::UserDefinedStreamMap;
-use unary::UserDefinedUnaryMap;
+use batch::{MapBatchTask, UserDefinedBatchMap};
+use stream::{MapStreamTask, UserDefinedStreamMap};
+use unary::{MapUnaryTask, UserDefinedUnaryMap};
 
 /// ParentMessageInfo is used to store the information of the parent message. This is propagated to
 /// all the downstream messages.
@@ -320,17 +320,18 @@ impl MapHandle {
                             } else {
                                 let permit = Arc::clone(&semaphore).acquire_owned()
                                     .await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}" )))?;
-                                Self::unary(
-                                    mapper.clone(),
+                                MapUnaryTask {
+                                    mapper: mapper.clone(),
                                     permit,
-                                    read_msg,
-                                    output_tx.clone(),
-                                    self.tracker.clone(),
-                                    error_tx.clone(),
-                                    hard_shutdown_token.clone(),
-                                    bypass_router.clone(),
-                                    is_mono_vertex(),
-                                ).await;
+                                    message: read_msg,
+                                    output_tx: output_tx.clone(),
+                                    tracker: self.tracker.clone(),
+                                    error_tx: error_tx.clone(),
+                                    cln_token: hard_shutdown_token.clone(),
+                                    bypass_router: bypass_router.clone(),
+                                    is_mono_vertex: is_mono_vertex(),
+                                }
+                                .spawn();
                             }
                         },
                     }
@@ -361,15 +362,16 @@ impl MapHandle {
                             batch.iter().map(|msg| msg.ack_handle.clone()).collect();
 
                         if !batch.is_empty()
-                            && let Err(e) = Self::batch(
-                                mapper.clone(),
+                            && let Err(e) = (MapBatchTask {
+                                mapper: mapper.clone(),
                                 batch,
-                                output_tx.clone(),
-                                self.tracker.clone(),
-                                bypass_router.clone(),
-                                is_mono_vertex(),
-                                cln_token.clone(),
-                            )
+                                output_tx: output_tx.clone(),
+                                tracker: self.tracker.clone(),
+                                bypass_router: bypass_router.clone(),
+                                is_mono_vertex: is_mono_vertex(),
+                                cln_token: cln_token.clone(),
+                            })
+                            .execute()
                             .await
                         {
                             error!(?e, "error received while performing batch map operation");
@@ -417,18 +419,18 @@ impl MapHandle {
                                 read_msg.ack_handle.as_ref().expect("ack handle should be present").is_failed.store(true, Ordering::Relaxed);
                             } else {
                                 let permit = Arc::clone(&semaphore).acquire_owned().await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}")))?;
-                                let error_tx = error_tx.clone();
-                                Self::stream(
-                                    mapper.clone(),
+                                MapStreamTask {
+                                    mapper: mapper.clone(),
                                     permit,
-                                    read_msg,
-                                    output_tx.clone(),
-                                    self.tracker.clone(),
-                                    error_tx,
-                                    cln_token.clone(),
-                                    bypass_router.clone(),
-                                    is_mono_vertex(),
-                                ).await;
+                                    message: read_msg,
+                                    output_tx: output_tx.clone(),
+                                    tracker: self.tracker.clone(),
+                                    error_tx: error_tx.clone(),
+                                    cln_token: cln_token.clone(),
+                                    bypass_router: bypass_router.clone(),
+                                    is_mono_vertex: is_mono_vertex(),
+                                }
+                                .spawn();
                             }
                         },
                     }
@@ -453,272 +455,6 @@ impl MapHandle {
         });
 
         Ok((ReceiverStream::new(output_rx), handle))
-    }
-
-    /// performs unary map operation on the given message and sends the mapped
-    /// messages to the output stream. It updates the tracker with the
-    /// number of messages sent. If there are any errors, it sends the error
-    /// to the error channel.
-    ///
-    /// We use permit to limit the number of concurrent map unary operations, so
-    /// that at any point in time we don't have more than `concurrency`
-    /// number of map operations running.
-    #[allow(clippy::too_many_arguments)]
-    async fn unary(
-        mapper: UserDefinedUnaryMap,
-        permit: OwnedSemaphorePermit,
-        read_msg: Message,
-        output_tx: mpsc::Sender<Message>,
-        tracker: Tracker,
-        error_tx: mpsc::Sender<Error>,
-        _cln_token: CancellationToken,
-        bypass_router: Option<MvtxBypassRouter>,
-        is_mono_vertex: bool,
-    ) {
-        let output_tx = output_tx.clone();
-
-        // short-lived tokio spawns we don't need structured concurrency here
-        tokio::spawn(async move {
-            let _permit = permit;
-
-            // Store parent message info before sending to UDF
-            let parent_info: ParentMessageInfo = (&read_msg).into();
-            let offset = read_msg.offset.clone();
-
-            // Convert Message to MapRequest
-            let request: MapRequest = read_msg.clone().into();
-
-            update_udf_read_metric(is_mono_vertex);
-
-            // Call the UDF and get raw results
-            let results = match mapper.unary(request, _cln_token).await {
-                Ok(results) => results,
-                Err(e) => {
-                    error!(?e, ?offset, "failed to map message");
-                    read_msg
-                        .ack_handle
-                        .as_ref()
-                        .expect("ack handle should be present")
-                        .is_failed
-                        .store(true, Ordering::Relaxed);
-                    let _ = error_tx.send(e).await;
-                    return;
-                }
-            };
-
-            // Convert raw results to Messages using parent info
-            let mapped_messages: Vec<Message> = results
-                .into_iter()
-                .enumerate()
-                .map(|(i, result)| UserDefinedMessage(result, &parent_info, i as i32).into())
-                .collect();
-
-            update_udf_write_metric(is_mono_vertex, parent_info, mapped_messages.len() as u64);
-
-            // update the tracker with the number of messages sent and send the mapped messages
-            tracker
-                .serving_update(
-                    &offset,
-                    mapped_messages.iter().map(|m| m.tags.clone()).collect(),
-                )
-                .await
-                .expect("failed to update tracker");
-
-            // send messages downstream
-            for mapped_message in mapped_messages {
-                let bypassed = if let Some(ref bypass_router) = bypass_router {
-                    bypass_router
-                        .try_bypass(mapped_message.clone())
-                        .await
-                        .expect("failed to send message to bypass channel")
-                } else {
-                    false
-                };
-
-                if !bypassed {
-                    output_tx
-                        .send(mapped_message)
-                        .await
-                        .expect("failed to send response");
-                }
-            }
-        });
-    }
-
-    /// performs batch map operation on the given batch of messages and sends
-    /// the mapped messages to the output stream. It updates the tracker
-    /// with the number of messages sent.
-    async fn batch(
-        mapper: UserDefinedBatchMap,
-        batch: Vec<Message>,
-        output_tx: mpsc::Sender<Message>,
-        tracker: Tracker,
-        bypass_router: Option<MvtxBypassRouter>,
-        is_mono_vertex: bool,
-        cln_token: CancellationToken,
-    ) -> error::Result<()> {
-        // Store parent message info for each message before sending to UDF
-        let parent_infos: Vec<ParentMessageInfo> = batch.iter().map(|m| m.into()).collect();
-
-        // Convert Messages to MapRequests
-        let requests: Vec<MapRequest> = batch.into_iter().map(|m| m.into()).collect();
-
-        // Update read metrics for each request
-        for _ in &requests {
-            update_udf_read_metric(is_mono_vertex);
-        }
-
-        // Call the UDF and get results directly
-        let results = mapper.batch(requests, cln_token).await;
-
-        for (result, parent_info) in results.into_iter().zip(parent_infos.into_iter()) {
-            match result {
-                Ok(results) => {
-                    // Convert raw results to Messages using parent info
-                    let mapped_messages: Vec<Message> = results
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, result)| {
-                            UserDefinedMessage(result, &parent_info, i as i32).into()
-                        })
-                        .collect();
-
-                    let offset = parent_info.offset.clone();
-
-                    update_udf_write_metric(
-                        is_mono_vertex,
-                        parent_info,
-                        mapped_messages.len() as u64,
-                    );
-
-                    tracker
-                        .serving_update(
-                            &offset,
-                            mapped_messages.iter().map(|m| m.tags.clone()).collect(),
-                        )
-                        .await?;
-
-                    for mapped_message in mapped_messages {
-                        let bypassed = if let Some(ref bypass_router) = bypass_router {
-                            bypass_router
-                                .try_bypass(mapped_message.clone())
-                                .await
-                                .expect("failed to send message to bypass channel")
-                        } else {
-                            false
-                        };
-                        if !bypassed {
-                            output_tx
-                                .send(mapped_message)
-                                .await
-                                .expect("failed to send response");
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!(err=?e, "failed to map message");
-                    return Err(e);
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// performs stream map operation on the given message and sends the mapped
-    /// messages to the output stream. It updates the tracker with the
-    /// number of messages sent. If there are any errors, it sends the error
-    /// to the error channel.
-    ///
-    /// We use permit to limit the number of concurrent map unary operations, so
-    /// that at any point in time we don't have more than `concurrency`
-    /// number of map operations running.
-    #[allow(clippy::too_many_arguments)]
-    async fn stream(
-        mapper: UserDefinedStreamMap,
-        permit: OwnedSemaphorePermit,
-        read_msg: Message,
-        output_tx: mpsc::Sender<Message>,
-        tracker: Tracker,
-        error_tx: mpsc::Sender<Error>,
-        _cln_token: CancellationToken,
-        bypass_router: Option<MvtxBypassRouter>,
-        is_mono_vertex: bool,
-    ) {
-        let output_tx = output_tx.clone();
-        tokio::spawn(async move {
-            let _permit = permit;
-
-            // Store parent message info before sending to UDF
-            let mut parent_info: ParentMessageInfo = (&read_msg).into();
-            let offset = read_msg.offset.clone();
-
-            // Convert Message to MapRequest
-            let request: MapRequest = read_msg.clone().into();
-
-            update_udf_read_metric(is_mono_vertex);
-
-            // Call the UDF and get receiver for raw results
-            let mut receiver = mapper.stream(request, _cln_token).await;
-
-            // we need update the tracker with no responses, because unlike unary and batch, we cannot update the
-            // responses here we will have to append the responses.
-            tracker
-                .serving_refresh(offset.clone())
-                .await
-                .expect("failed to reset tracker");
-
-            loop {
-                let result = receiver.recv().await;
-                match result {
-                    Some(Ok(results)) => {
-                        // Convert raw results to Messages using parent info
-                        for result in results {
-                            let mapped_message: Message =
-                                UserDefinedMessage(result, &parent_info, parent_info.current_index)
-                                    .into();
-                            parent_info.current_index += 1;
-
-                            update_udf_write_only_metric(is_mono_vertex);
-
-                            tracker
-                                .serving_append(
-                                    mapped_message.offset.clone(),
-                                    mapped_message.tags.clone(),
-                                )
-                                .await
-                                .expect("failed to update tracker");
-
-                            let bypassed = if let Some(ref bypass_router) = bypass_router {
-                                bypass_router
-                                    .try_bypass(mapped_message.clone())
-                                    .await
-                                    .expect("failed to send message to bypass channel")
-                            } else {
-                                false
-                            };
-                            if !bypassed {
-                                output_tx
-                                    .send(mapped_message)
-                                    .await
-                                    .expect("failed to send response");
-                            }
-                        }
-                    }
-                    Some(Err(e)) => {
-                        error!(?e, "failed to map message");
-                        read_msg
-                            .ack_handle
-                            .as_ref()
-                            .expect("ack handle should be present")
-                            .is_failed
-                            .store(true, Ordering::Relaxed);
-                        let _ = error_tx.send(e).await;
-                        return;
-                    }
-                    None => break,
-                }
-            }
-        });
     }
 }
 
@@ -888,18 +624,18 @@ mod tests {
             _ => panic!("Expected Unary mapper"),
         };
 
-        MapHandle::unary(
-            unary_mapper,
+        MapUnaryTask {
+            mapper: unary_mapper,
             permit,
             message,
             output_tx,
             tracker,
             error_tx,
-            CancellationToken::new(),
-            None,
-            false,
-        )
-        .await;
+            cln_token: CancellationToken::new(),
+            bypass_router: None,
+            is_mono_vertex: false,
+        }
+        .spawn();
 
         // check for errors
         assert!(error_rx.recv().await.is_none());

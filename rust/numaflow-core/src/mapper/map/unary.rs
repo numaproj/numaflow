@@ -1,23 +1,126 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::Ordering;
 
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
+use crate::message::Message;
+use crate::monovertex::bypass_router::MvtxBypassRouter;
+use crate::tracker::Tracker;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
 use tracing::error;
 
-use super::{create_response_stream, update_udf_error_metric};
+use super::{
+    ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_error_metric,
+    update_udf_read_metric, update_udf_write_metric,
+};
 
 /// Type alias for the response - raw results from the UDF
 pub(in crate::mapper) type UnaryMapResponse = Vec<map::map_response::Result>;
 
 type ResponseSenderMap = Arc<Mutex<HashMap<String, oneshot::Sender<Result<UnaryMapResponse>>>>>;
+
+/// MapUnaryTask encapsulates all the context needed to execute a unary map operation.
+/// This reduces the number of arguments passed around and makes the code more readable.
+pub(in crate::mapper) struct MapUnaryTask {
+    pub mapper: UserDefinedUnaryMap,
+    pub permit: OwnedSemaphorePermit,
+    pub message: Message,
+    pub output_tx: mpsc::Sender<Message>,
+    pub tracker: Tracker,
+    pub error_tx: mpsc::Sender<Error>,
+    pub cln_token: CancellationToken,
+    pub bypass_router: Option<MvtxBypassRouter>,
+    pub is_mono_vertex: bool,
+}
+
+impl MapUnaryTask {
+    /// Spawns the unary map task as a tokio task.
+    /// The task will process the message through the UDF and send results downstream.
+    pub fn spawn(self) {
+        tokio::spawn(async move {
+            self.execute().await;
+        });
+    }
+
+    /// Executes the unary map operation.
+    async fn execute(self) {
+        // Hold the permit until the task completes
+        let _permit = self.permit;
+
+        // Store parent message info before sending to UDF
+        let parent_info: ParentMessageInfo = (&self.message).into();
+        let offset = self.message.offset.clone();
+
+        // Convert Message to MapRequest
+        let request: MapRequest = self.message.clone().into();
+
+        update_udf_read_metric(self.is_mono_vertex);
+
+        // Call the UDF and get raw results
+        let results = match self.mapper.unary(request, self.cln_token).await {
+            Ok(results) => results,
+            Err(e) => {
+                error!(?e, ?offset, "failed to map message");
+                self.message
+                    .ack_handle
+                    .as_ref()
+                    .expect("ack handle should be present")
+                    .is_failed
+                    .store(true, Ordering::Relaxed);
+                let _ = self.error_tx.send(e).await;
+                return;
+            }
+        };
+
+        // Convert raw results to Messages using parent info
+        let mapped_messages: Vec<Message> = results
+            .into_iter()
+            .enumerate()
+            .map(|(i, result)| UserDefinedMessage(result, &parent_info, i as i32).into())
+            .collect();
+
+        update_udf_write_metric(
+            self.is_mono_vertex,
+            parent_info,
+            mapped_messages.len() as u64,
+        );
+
+        // Update the tracker with the number of messages sent
+        self.tracker
+            .serving_update(
+                &offset,
+                mapped_messages.iter().map(|m| m.tags.clone()).collect(),
+            )
+            .await
+            .expect("failed to update tracker");
+
+        // Send messages downstream
+        for mapped_message in mapped_messages {
+            let bypassed = if let Some(ref bypass_router) = self.bypass_router {
+                bypass_router
+                    .try_bypass(mapped_message.clone())
+                    .await
+                    .expect("failed to send message to bypass channel")
+            } else {
+                false
+            };
+
+            if !bypassed {
+                self.output_tx
+                    .send(mapped_message)
+                    .await
+                    .expect("failed to send response");
+            }
+        }
+    }
+}
 
 /// UserDefinedUnaryMap is a grpc client that sends unary requests to the map server
 /// and forwards the responses.

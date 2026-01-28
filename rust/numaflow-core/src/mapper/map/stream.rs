@@ -1,11 +1,15 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::Ordering;
 
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
+use crate::message::Message;
+use crate::monovertex::bypass_router::MvtxBypassRouter;
+use crate::tracker::Tracker;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
-use tokio::sync::mpsc;
+use tokio::sync::{OwnedSemaphorePermit, mpsc};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
@@ -13,14 +17,117 @@ use tonic::transport::Channel;
 use tracing::error;
 
 use super::{
-    STREAMING_MAP_RESP_CHANNEL_SIZE, create_response_stream, update_udf_error_metric,
-    update_udf_process_time_metric,
+    ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, UserDefinedMessage, create_response_stream,
+    update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
+    update_udf_write_only_metric,
 };
 
 /// Type alias for the stream response - raw results from the UDF
 pub(in crate::mapper) type StreamMapResponse = Vec<map::map_response::Result>;
 
 type StreamResponseSenderMap = Arc<Mutex<HashMap<String, mpsc::Sender<Result<StreamMapResponse>>>>>;
+
+/// MapStreamTask encapsulates all the context needed to execute a stream map operation.
+/// This reduces the number of arguments passed around and makes the code more readable.
+pub(in crate::mapper) struct MapStreamTask {
+    pub mapper: UserDefinedStreamMap,
+    pub permit: OwnedSemaphorePermit,
+    pub message: Message,
+    pub output_tx: mpsc::Sender<Message>,
+    pub tracker: Tracker,
+    pub error_tx: mpsc::Sender<Error>,
+    pub cln_token: CancellationToken,
+    pub bypass_router: Option<MvtxBypassRouter>,
+    pub is_mono_vertex: bool,
+}
+
+impl MapStreamTask {
+    /// Spawns the stream map task as a tokio task.
+    /// The task will process the message through the UDF and send results downstream.
+    pub fn spawn(self) {
+        tokio::spawn(async move {
+            self.execute().await;
+        });
+    }
+
+    /// Executes the stream map operation.
+    async fn execute(self) {
+        // Hold the permit until the task completes
+        let _permit = self.permit;
+
+        // Store parent message info before sending to UDF
+        let mut parent_info: ParentMessageInfo = (&self.message).into();
+        let offset = self.message.offset.clone();
+
+        // Convert Message to MapRequest
+        let request: MapRequest = self.message.clone().into();
+
+        update_udf_read_metric(self.is_mono_vertex);
+
+        // Call the UDF and get receiver for raw results
+        let mut receiver = self.mapper.stream(request, self.cln_token).await;
+
+        // We need to update the tracker with no responses, because unlike unary and batch,
+        // we cannot update the responses here - we will have to append the responses.
+        self.tracker
+            .serving_refresh(offset.clone())
+            .await
+            .expect("failed to reset tracker");
+
+        loop {
+            let result = receiver.recv().await;
+            match result {
+                Some(Ok(results)) => {
+                    // Convert raw results to Messages using parent info
+                    for result in results {
+                        let mapped_message: Message =
+                            UserDefinedMessage(result, &parent_info, parent_info.current_index)
+                                .into();
+                        parent_info.current_index += 1;
+
+                        update_udf_write_only_metric(self.is_mono_vertex);
+
+                        self.tracker
+                            .serving_append(
+                                mapped_message.offset.clone(),
+                                mapped_message.tags.clone(),
+                            )
+                            .await
+                            .expect("failed to update tracker");
+
+                        let bypassed = if let Some(ref bypass_router) = self.bypass_router {
+                            bypass_router
+                                .try_bypass(mapped_message.clone())
+                                .await
+                                .expect("failed to send message to bypass channel")
+                        } else {
+                            false
+                        };
+
+                        if !bypassed {
+                            self.output_tx
+                                .send(mapped_message)
+                                .await
+                                .expect("failed to send response");
+                        }
+                    }
+                }
+                Some(Err(e)) => {
+                    error!(?e, "failed to map message");
+                    self.message
+                        .ack_handle
+                        .as_ref()
+                        .expect("ack handle should be present")
+                        .is_failed
+                        .store(true, Ordering::Relaxed);
+                    let _ = self.error_tx.send(e).await;
+                    return;
+                }
+                None => break,
+            }
+        }
+    }
+}
 
 /// UserDefinedStreamMap is a grpc client that sends stream requests to the map server
 #[derive(Clone)]
