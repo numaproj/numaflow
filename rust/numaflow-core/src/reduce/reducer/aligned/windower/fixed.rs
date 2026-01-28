@@ -189,7 +189,11 @@ mod tests {
         assert_eq!(window_msgs.len(), 1);
 
         // Check operation type and extract window
-        let window = match &window_msgs[0].operation {
+        let window = match &window_msgs
+            .first()
+            .expect("Expected at least one window message")
+            .operation
+        {
             AlignedWindowOperation::Open { window, .. } => window,
             _ => panic!("Expected Open operation"),
         };
@@ -207,7 +211,11 @@ mod tests {
         let window_msgs2 = windower.assign_windows(msg2.clone());
 
         // Check operation type and extract window and message
-        match &window_msgs2[0].operation {
+        match &window_msgs2
+            .first()
+            .expect("Expected at least one window message")
+            .operation
+        {
             AlignedWindowOperation::Append {
                 message: append_msg,
                 window,
@@ -305,7 +313,11 @@ mod tests {
         // Should close 2 windows (window1 and window2)
         assert_eq!(closed_msgs.len(), 2);
 
-        match &closed_msgs[0].operation {
+        match &closed_msgs
+            .first()
+            .expect("Expected at least one closed message")
+            .operation
+        {
             AlignedWindowOperation::Close { window } => {
                 assert_eq!(window.start_time, base_time);
                 assert_eq!(window.end_time, base_time + chrono::Duration::seconds(60));
@@ -313,7 +325,11 @@ mod tests {
             _ => panic!("Expected Close operation"),
         }
 
-        match &closed_msgs[1].operation {
+        match &closed_msgs
+            .get(1)
+            .expect("Expected at least two closed messages")
+            .operation
+        {
             AlignedWindowOperation::Close { window } => {
                 assert_eq!(window.start_time, base_time + chrono::Duration::seconds(60));
                 assert_eq!(window.end_time, base_time + chrono::Duration::seconds(120));

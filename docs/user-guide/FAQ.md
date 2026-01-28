@@ -29,6 +29,8 @@ This message indicates that the server has not started yet. Common reasons inclu
 
 -   The server was not started correctly in the `udcontainer`.
 -   The server is still initializing (for example, the application code is downloading cache files or performing setup tasks).
+-   Numa container is waiting for the server on a different endpoint than the one server is listening on. Example: 
+    -   If the udf implements reduce streaming, while the vertex spec is not configured with `streaming: true`
 
 ### 5. What is `partitions` in Numaflow?
 

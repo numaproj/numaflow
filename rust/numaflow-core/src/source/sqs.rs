@@ -174,7 +174,10 @@ pub mod tests {
         let message: Message = sqs_message.try_into().unwrap();
 
         assert_eq!(message.keys.len(), 1);
-        assert_eq!(message.keys[0], "key");
+        assert_eq!(
+            message.keys.first().expect("Expected at least one key"),
+            "key"
+        );
         assert_eq!(message.value, "value");
         assert_eq!(
             message.offset,
@@ -385,7 +388,7 @@ pub mod tests {
     }
 
     fn get_receive_message_output() -> Rule {
-        let receive_message_output = mock!(aws_sdk_sqs::Client::receive_message)
+        mock!(aws_sdk_sqs::Client::receive_message)
             .match_requests(|inp| {
                 inp.queue_url().unwrap() == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
             })
@@ -400,8 +403,7 @@ pub mod tests {
                             .build()
                     )
                     .build()
-            });
-        receive_message_output
+            })
     }
 
     fn get_queue_url_output() -> Rule {

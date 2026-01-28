@@ -1767,7 +1767,7 @@ mod tests {
             8.999_999_999_999_983e8,
         ];
         for (i, bucket) in buckets.iter().enumerate() {
-            assert!((bucket - expected[i]).abs() < 1e-2);
+            assert!((bucket - expected.get(i).expect("Expected bucket value")).abs() < 1e-2);
         }
     }
     #[test]

@@ -407,7 +407,11 @@ mod tests {
         assert_eq!(window_msgs.len(), 3);
 
         // Check first window: [60000, 120000)
-        match &window_msgs[0].operation {
+        match &window_msgs
+            .first()
+            .expect("Expected at least one window message")
+            .operation
+        {
             AlignedWindowOperation::Open { window, .. } => {
                 assert_eq!(window.start_time.timestamp_millis(), 60000);
                 assert_eq!(window.end_time.timestamp_millis(), 120000);
@@ -463,7 +467,11 @@ mod tests {
         // Verify results - should be assigned to exactly 2 windows
         assert_eq!(window_msgs.len(), 2);
 
-        match &window_msgs[0].operation {
+        match &window_msgs
+            .first()
+            .expect("Expected at least one window message")
+            .operation
+        {
             AlignedWindowOperation::Open { window, .. } => {
                 assert_eq!(window.start_time.timestamp(), 600);
                 assert_eq!(window.end_time.timestamp(), 660);
@@ -472,7 +480,11 @@ mod tests {
         }
 
         // Check second window: [560, 620)
-        match &window_msgs[1].operation {
+        match &window_msgs
+            .get(1)
+            .expect("Expected at least two window messages")
+            .operation
+        {
             AlignedWindowOperation::Open { window, .. } => {
                 assert_eq!(window.start_time.timestamp(), 560);
                 assert_eq!(window.end_time.timestamp(), 620);
@@ -547,7 +559,11 @@ mod tests {
         assert_eq!(closed.len(), 3);
 
         // Check that all windows are closed in order of end time
-        match &closed[0].operation {
+        match &closed
+            .first()
+            .expect("Expected at least one closed message")
+            .operation
+        {
             AlignedWindowOperation::Close { window } => {
                 assert_eq!(window.start_time, base_time - chrono::Duration::seconds(20));
                 assert_eq!(window.end_time, base_time + chrono::Duration::seconds(40));
@@ -555,7 +571,11 @@ mod tests {
             _ => panic!("Expected Close operation"),
         }
 
-        match &closed[1].operation {
+        match &closed
+            .get(1)
+            .expect("Expected at least two closed messages")
+            .operation
+        {
             AlignedWindowOperation::Close { window } => {
                 assert_eq!(window.start_time, base_time - chrono::Duration::seconds(10));
                 assert_eq!(window.end_time, base_time + chrono::Duration::seconds(50));
@@ -563,7 +583,11 @@ mod tests {
             _ => panic!("Expected Close operation"),
         }
 
-        match &closed[2].operation {
+        match &closed
+            .get(2)
+            .expect("Expected at least three closed messages")
+            .operation
+        {
             AlignedWindowOperation::Close { window } => {
                 assert_eq!(window.start_time, base_time);
                 assert_eq!(window.end_time, base_time + chrono::Duration::seconds(60));
@@ -844,8 +868,11 @@ mod tests {
             };
 
             // Verify window matches expected window
-            assert_eq!(window.start_time, expected_windows[i].start_time);
-            assert_eq!(window.end_time, expected_windows[i].end_time);
+            let expected = expected_windows
+                .get(i)
+                .expect("Expected window should exist at index");
+            assert_eq!(window.start_time, expected.start_time);
+            assert_eq!(window.end_time, expected.end_time);
         }
 
         // Assign another message to the same window

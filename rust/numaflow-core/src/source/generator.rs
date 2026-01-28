@@ -482,7 +482,7 @@ mod tests {
         let messages = generator.read().await.unwrap().unwrap();
         let keys = messages
             .iter()
-            .map(|m| m.keys[0].clone())
+            .map(|m| m.keys.first().expect("Expected at least one key").clone())
             .collect::<Vec<_>>();
 
         let expected_keys = vec![

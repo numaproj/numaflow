@@ -667,7 +667,7 @@ mod tests {
         assert_eq!(messages.len(), 1, "Should receive exactly 1 message");
 
         // Verify first message
-        let msg1 = &messages[0];
+        let msg1 = messages.first().expect("Expected message 1");
         assert_eq!(msg1.key, "219f8380-5770-4cc2-8c3e-5c715e145f5e");
         assert_eq!(msg1.payload, "This is a test message");
         assert_eq!(
@@ -984,7 +984,7 @@ mod tests {
     }
 
     fn get_queue_attributes_output() -> Rule {
-        let queue_attributes_output = mock!(aws_sdk_sqs::Client::get_queue_attributes)
+        mock!(aws_sdk_sqs::Client::get_queue_attributes)
             .match_requests(|inp| {
                 inp.queue_url().unwrap()
                     == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
@@ -996,12 +996,11 @@ mod tests {
                         "0",
                     )
                     .build()
-            });
-        queue_attributes_output
+            })
     }
 
     fn get_queue_attributes_error() -> Rule {
-        let queue_attributes_output = mock!(aws_sdk_sqs::Client::get_queue_attributes)
+        mock!(aws_sdk_sqs::Client::get_queue_attributes)
             .match_requests(|inp| {
                 inp.queue_url().unwrap()
                     == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
@@ -1013,12 +1012,11 @@ mod tests {
                         .message("The specified queue does not exist for this wsdl version.")
                         .build(),
                 )
-            });
-        queue_attributes_output
+            })
     }
 
     fn get_delete_message_output() -> Rule {
-        let delete_message_output = mock!(aws_sdk_sqs::Client::delete_message_batch)
+        mock!(aws_sdk_sqs::Client::delete_message_batch)
             .match_requests(|inp| {
                 inp.queue_url().unwrap()
                     == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
@@ -1041,12 +1039,11 @@ mod tests {
                     )
                     .build()
                     .unwrap()
-            });
-        delete_message_output
+            })
     }
 
     fn get_delete_message_error() -> Rule {
-        let delete_message_output = mock!(aws_sdk_sqs::Client::delete_message)
+        mock!(aws_sdk_sqs::Client::delete_message)
             .match_requests(|inp| {
                 inp.queue_url().unwrap() == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
                     && inp.receipt_handle().unwrap() == "AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q"
@@ -1055,12 +1052,11 @@ mod tests {
                 aws_sdk_sqs::operation::delete_message::DeleteMessageError::generic(
                     ErrorMetadata::builder().code("ReceiptHandleIsInvalid").build(),
                 )
-            });
-        delete_message_output
+            })
     }
 
     fn get_receive_message_output() -> Rule {
-        let receive_message_output = mock!(aws_sdk_sqs::Client::receive_message)
+        mock!(aws_sdk_sqs::Client::receive_message)
             .match_requests(|inp| {
                 inp.queue_url().unwrap() == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
             })
@@ -1082,12 +1078,11 @@ mod tests {
                             .build()
                     )
                     .build()
-            });
-        receive_message_output
+            })
     }
 
     fn get_receive_message_error() -> Rule {
-        let receive_message_output = mock!(aws_sdk_sqs::Client::receive_message)
+        mock!(aws_sdk_sqs::Client::receive_message)
             .match_requests(|inp| {
                 inp.queue_url().unwrap()
                     == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
@@ -1096,19 +1091,17 @@ mod tests {
                 aws_sdk_sqs::operation::receive_message::ReceiveMessageError::generic(
                     ErrorMetadata::builder().code("InvalidAddress").build(),
                 )
-            });
-        receive_message_output
+            })
     }
 
     fn get_queue_url_output() -> Rule {
-        let queue_url_output = mock!(aws_sdk_sqs::Client::get_queue_url)
+        mock!(aws_sdk_sqs::Client::get_queue_url)
             .match_requests(|inp| inp.queue_name().unwrap() == "test-q")
             .then_output(|| {
                 aws_sdk_sqs::operation::get_queue_url::GetQueueUrlOutput::builder()
                     .queue_url("https://sqs.us-west-2.amazonaws.com/926113353675/test-q/")
                     .build()
-            });
-        queue_url_output
+            })
     }
 
     fn get_queue_url_output_err() -> Rule {

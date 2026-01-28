@@ -5,7 +5,11 @@ edition = "2024"
 
 [dependencies]
 tracing.workspace = true
+tonic.workspace = true
+tokio.workspace = true
+numaflow-pb.workspace = true
+rcgen.workspace = true
+time.workspace = true
 
 [lints]
 workspace = true
-
