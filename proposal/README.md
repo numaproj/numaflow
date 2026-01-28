@@ -103,10 +103,9 @@ The figure illustrates a newly proposed network type and a direct communication 
 2. Cluster administrator deploy [DeviceClass](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/#deviceclass)
 3. Users create [ResourceClaims or ResourceClaimTemplates](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/#resourceclaims-templates) to request PCIe devices other than NICs, such as GPUs
 
-## Deployment Sequence of Pipeline resources
+## Deployment Sequence of Pods resources
 
-![Deployment Sequence](./assets/deployment_seqence.drawio.png)
-This figure will be updated.
+![Deployment Sequence](./assets/pod_deployment_sequence.drawio.png)
 
 The following workflow represents our current understanding.
 
@@ -114,23 +113,26 @@ The following workflow represents our current understanding.
 2. Deploy a Pipeline, and the Pipeline controller parses the edge information
    1. If a numaNetwork is referenced, the controller accesses the API Server to retrieve the numaNetwork information
    2. Add a field to the Vertex to reference the ResourceClaimTemplate associated with the numaNetwork
+   3. Creates a domain name for each destination Vertex on a per-network basis in the toEdges field
+       - The domain name is called vertexDomain and is defined as <numaNetwork metadata.name>-<vertex metadata.name>
 3. The Vertex controller creates Pod resources and registers them in etcd via the API Server
-   - The Vertex controller creates a domain name for each destination Vertex on a per-network basis
-   - The domain name is called vertexDomain and is defined as <numaNetwork metadata.name>-<vertex metadata.name>
 4. The ResourceClaimTemplate controller detects that pod.spec.resourceClaims[].resourceClaimTemplateName is specified and creates the corresponding ResourceClaim
 5. The kube-scheduler schedules the Pod
    - The mapping between the ResourceClaim and the ResourceSlice is evaluated
-6. On the Node to which the Pod is bound, the kubelet interprets the Pod specification and instructs the DRA driver to allocate the actual device
-7. DRA driver for NIC performs device setup. As part of this process, it assigns an IP address to the secondary NIC (VF) using an IPAM tool
-   - In the case of [dranet](https://github.com/kubernetes-sigs/dranet?tab=readme-ov-file), this would be an internal IPAM tool (not supported in the current specification. We are planning to propose a new feature.)
-8. The NIC DRA driver assigns the secondary NIC (VF) to the container
-9. Pod creation is completed (the Vertex controller continues running and proceeds to the next phase)
 
-## Regisration of DNS resource record
+
+## Second NIC IP Configuration and Assignment
 - Precondition:
 	- A component that watches Vertex creation and registers DNS resource records in CoreDNS is running
 	- Each DNS resource record maps a Vertex domain to the second NIC IP address assigned to the container
-1. Clients verify whether a DNS record has been registered for a newly created Vertex. If no record exists, the client registers the record in etcd
+
+1. Once the kube-scheduler assigns a Pod to a Node, the kubelet on that Node starts operating
+2. Based on the ResourceClaims associated with the Pod assigned to the Node, the kubelet instructs the DRA driver to allocate the actual device.
+3. DRA driver for NIC performs device setup. As part of this process, it assigns an IP address to the second NIC (VF) using an IPAM tool
+   - In the case of [dranet](https://github.com/kubernetes-sigs/dranet?tab=readme-ov-file), this would be an internal IPAM tool (not supported in the current specification. We are planning to propose a new feature.)
+4. The NIC DRA driver assigns the second NIC (VF) to the container
+5. Pod creation is completed (the Vertex controller continues running and proceeds to the next phase)
+6. Clients verify whether a DNS record has been registered for a newly created Vertex. If no record exists, the client registers the record in etcd
 	- "The Vertex domain" is defined by introducing a new vertexDomain field in the Vertex resource and is referenced from there.
 	- "The secondary NIC IP address assigned to the container" is planned to be obtained by referencing the ResourceClaimStatus.
 
