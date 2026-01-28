@@ -12,7 +12,7 @@ use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize};
+use std::sync::atomic::AtomicBool;
 
 use crate::metadata::Metadata;
 use crate::shared::grpc::prost_timestamp_from_utc;
@@ -64,7 +64,6 @@ pub(crate) struct Message {
 pub(crate) struct AckHandle {
     pub(crate) ack_handle: Option<oneshot::Sender<ReadAck>>,
     pub(crate) is_failed: AtomicBool,
-    pub(crate) ref_count: Arc<AtomicUsize>,
 }
 
 impl AckHandle {
@@ -73,47 +72,6 @@ impl AckHandle {
         Self {
             ack_handle: Some(ack_handle),
             is_failed: AtomicBool::new(false),
-            ref_count: Arc::new(AtomicUsize::new(1)),
-        }
-    }
-}
-
-/// ReadMessage is the message read from the ISB/Source. ReadMessage should be explicitly marked as
-/// success after processing, so that it can be acked/nacked. By default, it will be nacked if not
-/// marked as success.
-#[allow(dead_code)]
-pub(crate) struct ReadMessage {
-    pub(crate) message: Message,
-    pub(crate) ack_handle: Arc<AckHandle>,
-}
-
-#[allow(dead_code)]
-impl ReadMessage {
-    /// creates a new ReadMessage.
-    pub(crate) fn new(message: Message, ack_handle: AckHandle) -> Self {
-        Self {
-            message,
-            ack_handle: Arc::new(ack_handle),
-        }
-    }
-
-    /// mark the message as successfully processed.
-    pub(crate) fn mark_success(&self) {
-        // Decrement when processing is explicitly finished
-        self.ack_handle
-            .ref_count
-            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
-    }
-}
-
-impl Clone for ReadMessage {
-    fn clone(&self) -> Self {
-        self.ack_handle
-            .ref_count
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        Self {
-            message: self.message.clone(),
-            ack_handle: self.ack_handle.clone(),
         }
     }
 }
@@ -121,7 +79,7 @@ impl Clone for ReadMessage {
 impl Drop for AckHandle {
     fn drop(&mut self) {
         if let Some(ack_handle) = self.ack_handle.take() {
-            if self.ref_count.load(std::sync::atomic::Ordering::SeqCst) != 0 {
+            if self.is_failed.load(std::sync::atomic::Ordering::Relaxed) {
                 ack_handle.send(ReadAck::Nak).expect("Failed to send nak");
             } else {
                 ack_handle.send(ReadAck::Ack).expect("Failed to send ack");

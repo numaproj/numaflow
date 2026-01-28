@@ -6,6 +6,7 @@ use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
@@ -88,35 +89,43 @@ impl UserDefinedUnaryMap {
     }
 
     /// Sends a message to the UDF and returns the raw response results.
-    pub(in crate::mapper) async fn unary(&self, request: MapRequest) -> Result<UnaryMapResponse> {
-        let (tx, rx) = oneshot::channel();
-        self.unary_map(request, tx).await;
-        rx.await
-            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
-    }
-
-    /// Handles the incoming request and sends it to the server for mapping.
-    pub(in crate::mapper) async fn unary_map(
+    /// If the cancellation token is cancelled while waiting for the response,
+    /// returns an error indicating the operation was cancelled.
+    pub(in crate::mapper) async fn unary(
         &self,
         request: MapRequest,
-        respond_to: oneshot::Sender<Result<UnaryMapResponse>>,
-    ) {
+        cln_token: CancellationToken,
+    ) -> Result<UnaryMapResponse> {
+        let (tx, rx) = oneshot::channel();
         let key = request.id.clone();
 
         // only insert if we are able to send the message to the server
         if let Err(e) = self.read_tx.send(request).await {
             error!(?e, "Failed to send message to server");
-            let _ = respond_to.send(Err(Error::Mapper(format!(
+            return Err(Error::Mapper(format!(
                 "failed to send message to unary map server: {e}"
-            ))));
-            return;
+            )));
         }
 
         // insert the sender into the map
         self.senders
             .lock()
             .expect("failed to acquire poisoned lock")
-            .insert(key, respond_to);
+            .insert(key.clone(), tx);
+
+        tokio::select! {
+            result = rx => {
+                result.map_err(|e| Error::ActorPatternRecv(e.to_string()))?
+            }
+            _ = cln_token.cancelled() => {
+                // Remove the sender from the map since we're cancelling
+                self.senders
+                    .lock()
+                    .expect("failed to acquire poisoned lock")
+                    .remove(&key);
+                Err(Error::Mapper("unary map operation cancelled".to_string()))
+            }
+        }
     }
 
     /// Processes the response from the server and sends it to the appropriate oneshot sender
@@ -147,6 +156,7 @@ mod tests {
     use std::error::Error;
     use std::time::Duration;
     use tempfile::TempDir;
+    use tokio_util::sync::CancellationToken;
 
     struct Cat;
 
@@ -200,13 +210,12 @@ mod tests {
             status: None,
         };
 
-        let (tx, rx) = tokio::sync::oneshot::channel();
+        let cln_token = CancellationToken::new();
+        let results =
+            tokio::time::timeout(Duration::from_secs(2), client.unary(request, cln_token))
+                .await
+                .unwrap();
 
-        tokio::time::timeout(Duration::from_secs(2), client.unary_map(request, tx))
-            .await
-            .unwrap();
-
-        let results = rx.await.unwrap();
         assert!(results.is_ok());
         assert_eq!(results?.len(), 1);
 

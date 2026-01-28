@@ -14,8 +14,8 @@ use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 use tracing::{error, info, warn};
 
-use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::config::pipeline::map::MapMode;
+use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{self, Error};
 use crate::message::{AckHandle, Message, MessageID, Offset};
 use crate::metadata::Metadata;
@@ -275,7 +275,7 @@ impl MapHandle {
             let hard_shutdown_token_owner = hard_shutdown_token.clone();
             let graceful_timeout = self.graceful_shutdown_time;
 
-            // spawn a task to cancel the token after graceful timeout when the main token is cancelled
+            // spawn a task to cancel the token after graceful timeout when the main token is canceled
             let shutdown_handle = tokio::spawn(async move {
                 // initiate graceful shutdown
                 parent_cln_token.cancelled().await;
@@ -368,6 +368,7 @@ impl MapHandle {
                                 self.tracker.clone(),
                                 bypass_router.clone(),
                                 is_mono_vertex(),
+                                cln_token.clone(),
                             )
                             .await
                         {
@@ -490,7 +491,7 @@ impl MapHandle {
             update_udf_read_metric(is_mono_vertex);
 
             // Call the UDF and get raw results
-            let results = match mapper.unary(request).await {
+            let results = match mapper.unary(request, _cln_token).await {
                 Ok(results) => results,
                 Err(e) => {
                     error!(?e, ?offset, "failed to map message");
@@ -525,14 +526,16 @@ impl MapHandle {
 
             // send messages downstream
             for mapped_message in mapped_messages {
-                if let Some(ref bypass_router) = bypass_router
-                    && bypass_router
+                let bypassed = if let Some(ref bypass_router) = bypass_router {
+                    bypass_router
                         .try_bypass(mapped_message.clone())
                         .await
                         .expect("failed to send message to bypass channel")
-                {
-                    continue;
                 } else {
+                    false
+                };
+
+                if !bypassed {
                     output_tx
                         .send(mapped_message)
                         .await
@@ -552,6 +555,7 @@ impl MapHandle {
         tracker: Tracker,
         bypass_router: Option<MvtxBypassRouter>,
         is_mono_vertex: bool,
+        cln_token: CancellationToken,
     ) -> error::Result<()> {
         // Store parent message info for each message before sending to UDF
         let parent_infos: Vec<ParentMessageInfo> = batch.iter().map(|m| m.into()).collect();
@@ -565,7 +569,7 @@ impl MapHandle {
         }
 
         // Call the UDF and get results directly
-        let results = mapper.batch(requests).await;
+        let results = mapper.batch(requests, cln_token).await;
 
         for (result, parent_info) in results.into_iter().zip(parent_infos.into_iter()) {
             match result {
@@ -654,7 +658,7 @@ impl MapHandle {
             update_udf_read_metric(is_mono_vertex);
 
             // Call the UDF and get receiver for raw results
-            let mut receiver = mapper.stream(request).await;
+            let mut receiver = mapper.stream(request, _cln_token).await;
 
             // we need update the tracker with no responses, because unlike unary and batch, we cannot update the
             // responses here we will have to append the responses.
@@ -669,12 +673,9 @@ impl MapHandle {
                     Some(Ok(results)) => {
                         // Convert raw results to Messages using parent info
                         for result in results {
-                            let mapped_message: Message = UserDefinedMessage(
-                                result,
-                                &parent_info,
-                                parent_info.current_index,
-                            )
-                            .into();
+                            let mapped_message: Message =
+                                UserDefinedMessage(result, &parent_info, parent_info.current_index)
+                                    .into();
                             parent_info.current_index += 1;
 
                             update_udf_write_only_metric(is_mono_vertex);
@@ -687,14 +688,15 @@ impl MapHandle {
                                 .await
                                 .expect("failed to update tracker");
 
-                            if let Some(ref bypass_router) = bypass_router
-                                && bypass_router
+                            let bypassed = if let Some(ref bypass_router) = bypass_router {
+                                bypass_router
                                     .try_bypass(mapped_message.clone())
                                     .await
                                     .expect("failed to send message to bypass channel")
-                            {
-                                continue;
                             } else {
+                                false
+                            };
+                            if !bypassed {
                                 output_tx
                                     .send(mapped_message)
                                     .await

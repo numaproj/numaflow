@@ -6,6 +6,7 @@ use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
@@ -62,9 +63,7 @@ impl UserDefinedStreamMap {
             std::mem::take(&mut *sender_map.lock().expect("failed to acquire poisoned lock"));
 
         for (_, sender) in senders {
-            let _ = sender
-                .send(Err(Error::Grpc(Box::new(error.clone()))))
-                .await;
+            let _ = sender.send(Err(Error::Grpc(Box::new(error.clone())))).await;
             update_udf_error_metric(is_mono_vertex());
         }
     }
@@ -105,38 +104,44 @@ impl UserDefinedStreamMap {
     }
 
     /// Sends a request to the UDF and returns a receiver for raw response results.
+    /// If the cancellation token is already cancelled, returns a receiver that
+    /// immediately yields an error indicating the operation was cancelled.
     pub(in crate::mapper) async fn stream(
         &self,
         request: MapRequest,
+        cln_token: CancellationToken,
     ) -> mpsc::Receiver<Result<StreamMapResponse>> {
         let (tx, rx) = mpsc::channel(STREAMING_MAP_RESP_CHANNEL_SIZE);
-        self.stream_map(request, tx).await;
-        rx
-    }
 
-    /// Handles the incoming request and sends it to the server for mapping.
-    pub(in crate::mapper) async fn stream_map(
-        &self,
-        request: MapRequest,
-        respond_to: mpsc::Sender<Result<StreamMapResponse>>,
-    ) {
+        // Check if already canceled before sending
+        if cln_token.is_cancelled() {
+            let _ = tx
+                .send(Err(Error::Mapper(
+                    "stream map operation cancelled".to_string(),
+                )))
+                .await;
+            return rx;
+        }
+
         let key = request.id.clone();
 
         // only insert if we are able to send the message to the server
         if let Err(e) = self.read_tx.send(request).await {
             error!(?e, "Failed to send message to server");
-            let _ = respond_to
+            let _ = tx
                 .send(Err(Error::Mapper(format!(
                     "failed to send message to stream map server: {e}"
                 ))))
                 .await;
-            return;
+            return rx;
         }
 
         self.senders
             .lock()
             .expect("failed to acquire poisoned lock")
-            .insert(key, respond_to);
+            .insert(key, tx);
+
+        rx
     }
 
     /// Processes stream responses and sends them to the appropriate mpsc sender
@@ -234,9 +239,8 @@ mod tests {
             status: None,
         };
 
-        let (tx, mut rx) = tokio::sync::mpsc::channel(3);
-
-        tokio::time::timeout(Duration::from_secs(2), client.stream_map(request, tx)).await?;
+        let cln_token = tokio_util::sync::CancellationToken::new();
+        let mut rx = client.stream(request, cln_token).await;
 
         // Collect all response batches
         let mut all_results = vec![];

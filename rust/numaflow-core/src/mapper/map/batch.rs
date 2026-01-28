@@ -6,6 +6,7 @@ use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
@@ -117,49 +118,33 @@ impl UserDefinedBatchMap {
     }
 
     /// Sends a batch of messages to the UDF and returns the raw response results.
-    /// This method handles oneshot channel creation internally.
+    /// If the cancellation token is cancelled while waiting for responses,
+    /// remaining messages will return an error indicating the operation was cancelled.
     pub(in crate::mapper) async fn batch(
         &self,
         requests: Vec<MapRequest>,
+        cln_token: CancellationToken,
     ) -> Vec<Result<BatchMapResponse>> {
         let (senders, receivers): (Vec<_>, Vec<_>) =
             requests.iter().map(|_| oneshot::channel()).unzip();
 
-        self.batch_map(requests, senders).await;
-
-        let mut results = Vec::with_capacity(receivers.len());
-        for receiver in receivers {
-            let result = match receiver.await {
-                Ok(result) => result,
-                Err(e) => Err(Error::ActorPatternRecv(e.to_string())),
-            };
-            results.push(result);
-        }
-        results
-    }
-
-    /// Handles the incoming message and sends it to the server for mapping.
-    async fn batch_map(
-        &self,
-        requests: Vec<MapRequest>,
-        respond_to: Vec<oneshot::Sender<Result<BatchMapResponse>>>,
-    ) {
-        for (request, respond_to) in requests.into_iter().zip(respond_to) {
+        for (request, sender) in requests.into_iter().zip(senders) {
             let key = request.id.clone();
 
             // only insert if we are able to send the message to the server
             if let Err(e) = self.read_tx.send(request).await {
                 error!(?e, "Failed to send message to server");
-                let _ = respond_to.send(Err(Error::Mapper(format!(
+                let _ = sender.send(Err(Error::Mapper(format!(
                     "failed to send message to batch map server: {e}"
                 ))));
-                return;
+                // Continue collecting results for remaining receivers
+                break;
             }
 
             self.senders
                 .lock()
                 .expect("failed to acquire poisoned lock")
-                .insert(key, respond_to);
+                .insert(key, sender);
         }
 
         // send eot request
@@ -172,6 +157,34 @@ impl UserDefinedBatchMap {
             })
             .await
             .expect("failed to send eot request");
+
+        let total_receivers = receivers.len();
+        let mut results = Vec::with_capacity(total_receivers);
+        for receiver in receivers {
+            let result = tokio::select! {
+                recv_result = receiver => {
+                    recv_result.unwrap_or_else(|e| Err(Error::ActorPatternRecv(e.to_string())))
+                }
+                _ = cln_token.cancelled() => {
+                    Err(Error::Mapper("batch map operation cancelled".to_string()))
+                }
+            };
+            results.push(result);
+
+            // If cancelled, fill remaining results with cancellation errors
+            if cln_token.is_cancelled() {
+                break;
+            }
+        }
+
+        // Fill any remaining slots with cancellation errors if we broke early
+        while results.len() < total_receivers {
+            results.push(Err(Error::Mapper(
+                "batch map operation cancelled".to_string(),
+            )));
+        }
+
+        results
     }
 }
 
@@ -264,14 +277,36 @@ mod tests {
             },
         ];
 
+        let cln_token = tokio_util::sync::CancellationToken::new();
         let results =
-            tokio::time::timeout(Duration::from_secs(2), client.batch(requests)).await?;
+            tokio::time::timeout(Duration::from_secs(2), client.batch(requests, cln_token)).await?;
 
         assert_eq!(results.len(), 2);
-        assert!(results[0].is_ok());
-        assert!(results[1].is_ok());
-        assert_eq!(results[0].as_ref().unwrap().len(), 1);
-        assert_eq!(results[1].as_ref().unwrap().len(), 1);
+        assert!(
+            results
+                .first()
+                .expect("Expected at least one result")
+                .is_ok()
+        );
+        assert!(results.get(1).expect("Expected second result").is_ok());
+        assert_eq!(
+            results
+                .first()
+                .expect("Expected at least one result")
+                .as_ref()
+                .expect("Expected Ok result")
+                .len(),
+            1
+        );
+        assert_eq!(
+            results
+                .get(1)
+                .expect("Expected second result")
+                .as_ref()
+                .expect("Expected Ok result")
+                .len(),
+            1
+        );
 
         // we need to drop the client, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
