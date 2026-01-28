@@ -1141,25 +1141,26 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#unary-mode" class="md-nav__link">
-    Unary Mode
+  <a href="#build-your-own-udf" class="md-nav__link">
+    Build Your Own UDF
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
+    <nav class="md-nav" aria-label="Build Your Own UDF">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#streaming-mode" class="md-nav__link">
     Streaming Mode
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#batch-mode" class="md-nav__link">
-    Batch Mode
+        
+          <li class="md-nav__item">
+  <a href="#batch-map-mode" class="md-nav__link">
+    Batch Map Mode
   </a>
   
-    <nav class="md-nav" aria-label="Batch Mode">
+    <nav class="md-nav" aria-label="Batch Map Mode">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1173,18 +1174,23 @@
     </nav>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#available-environment-variables" class="md-nav__link">
     Available Environment Variables
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#configuration" class="md-nav__link">
     Configuration
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2731,25 +2737,26 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#unary-mode" class="md-nav__link">
-    Unary Mode
+  <a href="#build-your-own-udf" class="md-nav__link">
+    Build Your Own UDF
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
+    <nav class="md-nav" aria-label="Build Your Own UDF">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#streaming-mode" class="md-nav__link">
     Streaming Mode
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#batch-mode" class="md-nav__link">
-    Batch Mode
+        
+          <li class="md-nav__item">
+  <a href="#batch-map-mode" class="md-nav__link">
+    Batch Map Mode
   </a>
   
-    <nav class="md-nav" aria-label="Batch Mode">
+    <nav class="md-nav" aria-label="Batch Map Mode">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2763,18 +2770,23 @@
     </nav>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#available-environment-variables" class="md-nav__link">
     Available Environment Variables
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#configuration" class="md-nav__link">
     Configuration
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2798,6 +2810,14 @@
 
 <h1 id="map-udf">Map UDF<a class="headerlink" href="#map-udf" title="Permanent link">&para;</a></h1>
 <p>Map in a Map vertex takes an input and returns 0, 1, or more outputs (also known as flat-map operation). Map is an element wise operator.</p>
+<h2 id="build-your-own-udf">Build Your Own UDF<a class="headerlink" href="#build-your-own-udf" title="Permanent link">&para;</a></h2>
+<p>You can build your own UDF in multiple languages.</p>
+<p>Check the links below to see the UDF examples for different languages.</p>
+<ul>
+<li><a href="https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/map/">Python</a></li>
+<li><a href="https://github.com/numaproj/numaflow-go/tree/main/examples/mapper/">Golang</a></li>
+<li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/map/">Java</a></li>
+</ul>
 <p>After building a docker image for the written UDF, specify the image as below in the vertex spec.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
@@ -2806,36 +2826,35 @@
 <span class="w">        </span><span class="nt">container</span><span class="p">:</span>
 <span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-python-udf-example:latest</span>
 </code></pre></div>
-<p>Map supports three modes: <a href="#unary-mode">Unary</a>, <a href="#streaming-mode">Streaming</a>, and <a href="#batch-mode">Batch</a>.</p>
-<h2 id="unary-mode">Unary Mode<a class="headerlink" href="#unary-mode" title="Permanent link">&para;</a></h2>
-<p>Unary Map is the default mode where each input message is processed individually and returns 0, 1, or more outputs.</p>
-<p>Check the links below to see the UDF examples for different languages.</p>
-<ul>
-<li><a href="https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/map/">Python</a></li>
-<li><a href="https://github.com/numaproj/numaflow-go/tree/main/examples/mapper/">Golang</a></li>
-<li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/map/">Java</a></li>
-</ul>
-<h2 id="streaming-mode">Streaming Mode<a class="headerlink" href="#streaming-mode" title="Permanent link">&para;</a></h2>
+<h3 id="streaming-mode">Streaming Mode<a class="headerlink" href="#streaming-mode" title="Permanent link">&para;</a></h3>
 <p>In cases the map function generates more than one output (e.g., flat map), the UDF can be
-configured to run in a streaming mode where the messages will be pushed to the downstream vertices as 
-soon as the output is generated instead of collecting all the responses and then sending them 
-together at the end when the function returns.</p>
+configured to run in a streaming mode instead of batching, which is the default mode.
+In streaming mode, the messages will be pushed to the downstream vertices once generated
+instead of in a batch at the end.</p>
+<p>Note that to maintain data orderliness, we restrict the read batch size to be <code>1</code>.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-vertex</span>
+<span class="w">      </span><span class="nt">limits</span><span class="p">:</span>
+<span class="w">        </span><span class="c1"># mapstreaming won&#39;t work if readBatchSize is != 1      </span>
+<span class="w">        </span><span class="nt">readBatchSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+</code></pre></div>
 <p>Check the links below to see the UDF examples in streaming mode for different languages.</p>
 <ul>
 <li><a href="https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/mapstream/flatmap_stream/">Python</a></li>
 <li><a href="https://github.com/numaproj/numaflow-go/tree/main/examples/mapstreamer/flatmap_stream/">Golang</a></li>
 <li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/mapstream/flatmapstream/">Java</a></li>
 </ul>
-<h2 id="batch-mode">Batch Mode<a class="headerlink" href="#batch-mode" title="Permanent link">&para;</a></h2>
+<h3 id="batch-map-mode">Batch Map Mode<a class="headerlink" href="#batch-map-mode" title="Permanent link">&para;</a></h3>
 <p>BatchMap is an interface that allows developers to process multiple data items in a UDF single call,
 rather than each item in separate calls.</p>
 <p>The BatchMap interface can be helpful in scenarios where performing operations on a group of data can be more efficient.</p>
-<h3 id="important-considerations">Important Considerations<a class="headerlink" href="#important-considerations" title="Permanent link">&para;</a></h3>
+<h4 id="important-considerations">Important Considerations<a class="headerlink" href="#important-considerations" title="Permanent link">&para;</a></h4>
 <p>When using BatchMap, there are a few important considerations to keep in mind:</p>
 <ul>
-<li>Ensure that the BatchResponses object is tagged with the correct request ID.
+<li>Ensure that the BatchResponses object is tagged with the correct request ID. 
 Each Datum has a unique ID tag, which will be used by Numaflow to ensure correctness.</li>
-<li>Ensure that the length of the BatchResponses list is equal to the number of requests received. This means that for
+<li>Ensure that the length of the BatchResponses list is equal to the number of requests received. This means that for 
 every input data item, there should be a corresponding response in the BatchResponses list.</li>
 <li>The total batch size can be up to <code>readBatchSize</code> long.</li>
 </ul>
@@ -2846,7 +2865,7 @@ every input data item, there should be a corresponding response in the BatchResp
 <li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/batchmap/">Java</a></li>
 <li><a href="https://github.com/numaproj/numaflow-rs/tree/main/examples/batchmap-cat/">Rust</a></li>
 </ul>
-<h2 id="available-environment-variables">Available Environment Variables<a class="headerlink" href="#available-environment-variables" title="Permanent link">&para;</a></h2>
+<h3 id="available-environment-variables">Available Environment Variables<a class="headerlink" href="#available-environment-variables" title="Permanent link">&para;</a></h3>
 <p>Some environment variables are available in the user-defined function container, they might be useful in your own UDF implementation.</p>
 <ul>
 <li><code>NUMAFLOW_NAMESPACE</code> - Namespace.</li>
@@ -2855,8 +2874,7 @@ every input data item, there should be a corresponding response in the BatchResp
 <li><code>NUMAFLOW_PIPELINE_NAME</code> - Name of the pipeline.</li>
 <li><code>NUMAFLOW_VERTEX_NAME</code> - Name of the vertex.</li>
 </ul>
-<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
-<p>To achieve ordering, please set <code>readBatchSize</code> to 1.</p>
+<h3 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h3>
 <p>Configuration data can be provided to the UDF container at runtime multiple ways.</p>
 <ul>
 <li><a href="../../../reference/configuration/environment-variables/"><code>environment variables</code></a></li>
