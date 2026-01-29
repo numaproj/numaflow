@@ -15,8 +15,8 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
 use crate::message::Message;
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_critical_error_metric_labels,
-    mvtx_forward_metric_labels, pipeline_critical_error_metric_labels, pipeline_metric_labels,
+    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics,
+    mvtx_forward_metric_labels, pipeline_metric_labels,
     pipeline_metrics,
 };
 use crate::tracker::Tracker;

@@ -18,7 +18,7 @@ use tracing::{error, info};
 ///
 /// # Arguments
 /// * `$vertex_type` - The vertex type (e.g., `VERTEX_TYPE_SINK`, `VERTEX_TYPE_SOURCE`).
-///                    This is only used for Pipeline metrics.
+///   This is only used for Pipeline metrics.
 /// * `$reason` - The reason for the critical error (e.g., `"eot_received_from_sink"`).
 ///
 /// # Example
