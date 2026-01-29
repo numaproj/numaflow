@@ -217,6 +217,8 @@ impl UserDefinedUnaryMap {
 
         tokio::select! {
             result = rx => {
+                // we don't have to remove the sender from the map, because the response handler
+                // will do it.
                 result.map_err(|e| Error::ActorPatternRecv(e.to_string()))?
             }
             _ = cln_token.cancelled() => {
