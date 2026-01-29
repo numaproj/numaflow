@@ -2786,6 +2786,10 @@
 <ul>
 <li>The server was not started correctly in the <code>udcontainer</code>.</li>
 <li>The server is still initializing (for example, the application code is downloading cache files or performing setup tasks).</li>
+<li>Numa container is waiting for the server on a different endpoint than the one server is listening on. Example: <ul>
+<li>If the udf implements reduce streaming, while the vertex spec is not configured with <code>streaming: true</code></li>
+</ul>
+</li>
 </ul>
 <h3 id="5-what-is-partitions-in-numaflow">5. What is <code>partitions</code> in Numaflow?<a class="headerlink" href="#5-what-is-partitions-in-numaflow" title="Permanent link">&para;</a></h3>
 <p>The field <code>partitions</code> is the number of streams between the vertices. Larger the parition number, higher the TPS that vertex can take. Note that partitions are owned by the vertex reading the data, to create a
