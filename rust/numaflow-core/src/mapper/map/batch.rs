@@ -1,24 +1,27 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::Mutex;
-
+use super::{
+    ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_error_metric,
+    update_udf_process_time_metric, update_udf_read_metric, update_udf_write_metric,
+};
 use crate::config::is_mono_vertex;
+use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
 use crate::message::Message;
+use crate::metrics::{
+    monovertex_metrics, mvtx_critical_error_metric_labels, pipeline_critical_error_metric_labels,
+    pipeline_metrics,
+};
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::tracker::Tracker;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::Mutex;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
 use tracing::error;
-
-use super::{
-    ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_error_metric,
-    update_udf_process_time_metric, update_udf_read_metric, update_udf_write_metric,
-};
 
 /// Type alias for the batch response - raw results from the UDF
 pub(in crate::mapper) type BatchMapResponse = Vec<map::map_response::Result>;
@@ -181,6 +184,23 @@ impl UserDefinedBatchMap {
                     .is_empty()
                 {
                     error!("received EOT but not all responses have been received");
+                    if is_mono_vertex() {
+                        monovertex_metrics()
+                            .critical_error_total
+                            .get_or_create(&mvtx_critical_error_metric_labels(
+                                "eot_received_from_map",
+                            ))
+                            .inc();
+                    } else {
+                        pipeline_metrics()
+                            .forwarder
+                            .critical_error_total
+                            .get_or_create(&pipeline_critical_error_metric_labels(
+                                VERTEX_TYPE_MAP_UDF,
+                                "eot_received_from_map",
+                            ))
+                            .inc();
+                    }
                 }
                 update_udf_process_time_metric(is_mono_vertex());
                 continue;

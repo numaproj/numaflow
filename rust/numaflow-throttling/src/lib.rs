@@ -935,13 +935,20 @@ mod tests {
             for i in 0..iterations {
                 let mut total_got_tokens = 0;
                 let mut total_expected_tokens = 0;
+                let asked = asked_tokens
+                    .get(i)
+                    .expect("asked_tokens has iterations elements");
+                let expected = *expected_tokens
+                    .get(i)
+                    .expect("expected_tokens has iterations elements");
+                let deposited = *deposited_tokens
+                    .get(i)
+                    .expect("deposited_tokens has iterations elements");
                 for rate_limiter in rate_limiters.iter() {
-                    let tokens = rate_limiter
-                        .attempt_acquire_n(asked_tokens[i].0, cur_epoch)
-                        .await;
+                    let tokens = rate_limiter.attempt_acquire_n(asked.0, cur_epoch).await;
                     assert_eq!(
                         tokens,
-                        expected_tokens[i],
+                        expected,
                         "Test Name: {}, Iteration: {}\n\
                         Number of tokens fetched in each iteration \
                 should increase by slope/pod_count until ramp up",
@@ -949,20 +956,20 @@ mod tests {
                         i + 1
                     );
                     total_got_tokens += tokens;
-                    total_expected_tokens += expected_tokens[i];
+                    total_expected_tokens += expected;
 
                     assert!(
-                        deposited_tokens[i] <= tokens,
+                        deposited <= tokens,
                         "Test Name: {}, Iteration: {}\n\
                         Invalid test case. Number of tokens deposited back ({}) can't \
                         be greater that tokens given by the rate limiter ({})",
                         test_name,
                         i + 1,
-                        deposited_tokens[i],
+                        deposited,
                         tokens
                     );
                     rate_limiter
-                        .attempt_deposit_unused(deposited_tokens[i], cur_epoch)
+                        .attempt_deposit_unused(deposited, cur_epoch)
                         .await;
                 }
 
@@ -977,7 +984,7 @@ mod tests {
                 );
 
                 // Determines after how many epochs next pull is going to be made.
-                cur_epoch += asked_tokens[i].1 as u64;
+                cur_epoch += asked.1 as u64;
             }
 
             for rate_limiter in rate_limiters.iter() {

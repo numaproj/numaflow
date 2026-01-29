@@ -854,7 +854,7 @@ mod tests {
 
         assert_eq!(messages.len(), 1);
 
-        let message = &messages[0];
+        let message = messages.first().expect("Expected message");
         assert_eq!(message.headers.get("header1"), Some(&"value1".to_string()));
         assert_eq!(message.headers.get("header2"), Some(&"value2".to_string()));
         // Verify that timestamp is present (should be Some since Kafka sets timestamps)
