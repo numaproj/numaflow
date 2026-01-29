@@ -102,7 +102,9 @@ pub async fn run() -> Result<()> {
                 // increment the critical error metric
                 metrics::monovertex_metrics()
                     .critical_error_total
-                    .get_or_create(&metrics::mvtx_critical_error_metric_labels("mvtx_runtime_error"))
+                    .get_or_create(&metrics::mvtx_critical_error_metric_labels(
+                        "mvtx_runtime_error",
+                    ))
                     .inc();
 
                 if let Error::Grpc(e) = e {
