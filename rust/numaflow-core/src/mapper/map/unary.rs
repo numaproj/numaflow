@@ -27,7 +27,6 @@ pub(in crate::mapper) type UnaryMapResponse = Vec<map::map_response::Result>;
 type ResponseSenderMap = Arc<Mutex<HashMap<String, oneshot::Sender<Result<UnaryMapResponse>>>>>;
 
 /// MapUnaryTask encapsulates all the context needed to execute a unary map operation.
-/// This reduces the number of arguments passed around and makes the code more readable.
 pub(in crate::mapper) struct MapUnaryTask {
     pub mapper: UserDefinedUnaryMap,
     pub permit: OwnedSemaphorePermit,

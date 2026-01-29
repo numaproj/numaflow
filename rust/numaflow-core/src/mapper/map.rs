@@ -35,132 +35,6 @@ use batch::{MapBatchTask, UserDefinedBatchMap};
 use stream::{MapStreamTask, UserDefinedStreamMap};
 use unary::{MapUnaryTask, UserDefinedUnaryMap};
 
-/// ParentMessageInfo is used to store the information of the parent message. This is propagated to
-/// all the downstream messages.
-pub(crate) struct ParentMessageInfo {
-    pub(crate) offset: Offset,
-    pub(crate) event_time: DateTime<Utc>,
-    pub(crate) is_late: bool,
-    pub(crate) headers: Arc<HashMap<String, String>>,
-    pub(crate) start_time: Instant,
-    /// this remains 0 for all except map-streaming because in map-streaming there could be more than
-    /// one response for a single request.
-    pub(crate) current_index: i32,
-    pub(crate) metadata: Option<Arc<Metadata>>,
-    pub(crate) ack_handle: Option<Arc<AckHandle>>,
-}
-
-impl From<&Message> for ParentMessageInfo {
-    fn from(message: &Message) -> Self {
-        Self {
-            offset: message.offset.clone(),
-            event_time: message.event_time,
-            headers: Arc::clone(&message.headers),
-            is_late: message.is_late,
-            start_time: Instant::now(),
-            current_index: 0,
-            metadata: message.metadata.clone(),
-            ack_handle: message.ack_handle.clone(),
-        }
-    }
-}
-
-/// Conversion from Message to MapRequest
-impl From<Message> for MapRequest {
-    fn from(message: Message) -> Self {
-        Self {
-            request: Some(map::map_request::Request {
-                keys: message.keys.to_vec(),
-                value: message.value.to_vec(),
-                event_time: Some(prost_timestamp_from_utc(message.event_time)),
-                watermark: message.watermark.map(prost_timestamp_from_utc),
-                headers: Arc::unwrap_or_clone(message.headers),
-                metadata: message.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
-            }),
-            id: message.offset.to_string(),
-            handshake: None,
-            status: None,
-        }
-    }
-}
-
-/// Helper struct for converting UDF responses to Messages
-struct UserDefinedMessage<'a>(map::map_response::Result, &'a ParentMessageInfo, i32);
-
-impl From<UserDefinedMessage<'_>> for Message {
-    fn from(value: UserDefinedMessage<'_>) -> Self {
-        Message {
-            typ: Default::default(),
-            id: MessageID {
-                vertex_name: get_vertex_name().to_string().into(),
-                index: value.2,
-                offset: value.1.offset.to_string().into(),
-            },
-            keys: Arc::from(value.0.keys),
-            tags: Some(Arc::from(value.0.tags)),
-            value: value.0.value.into(),
-            offset: value.1.offset.clone(),
-            event_time: value.1.event_time,
-            headers: Arc::clone(&value.1.headers),
-            watermark: None,
-            is_late: value.1.is_late,
-            metadata: {
-                let mut metadata = Metadata::default();
-                // Get SystemMetadata from parent message info
-                if let Some(parent_metadata) = &value.1.metadata {
-                    metadata.sys_metadata = parent_metadata.sys_metadata.clone();
-                }
-                // Get UserMetadata from the response if present
-                if let Some(response_metadata) = &value.0.metadata {
-                    let response_meta: Metadata = response_metadata.clone().into();
-                    metadata.user_metadata = response_meta.user_metadata;
-                }
-                Some(Arc::new(metadata))
-            },
-            ack_handle: value.1.ack_handle.clone(),
-        }
-    }
-}
-
-/// Performs handshake with the server and returns the response stream to receive responses.
-async fn create_response_stream(
-    read_tx: mpsc::Sender<MapRequest>,
-    read_rx: mpsc::Receiver<MapRequest>,
-    client: &mut MapClient<Channel>,
-) -> error::Result<Streaming<MapResponse>> {
-    let handshake_request = MapRequest {
-        request: None,
-        id: "".to_string(),
-        handshake: Some(map::Handshake { sot: true }),
-        status: None,
-    };
-
-    read_tx
-        .send(handshake_request)
-        .await
-        .map_err(|e| Error::Mapper(format!("failed to send handshake request: {e}")))?;
-
-    let mut resp_stream = client
-        .map_fn(Request::new(ReceiverStream::new(read_rx)))
-        .await
-        .map_err(|e| Error::Grpc(Box::new(e)))?
-        .into_inner();
-
-    let handshake_response = resp_stream
-        .message()
-        .await
-        .map_err(|e| Error::Grpc(Box::new(e)))?
-        .ok_or(Error::Mapper(
-            "failed to receive handshake response".to_string(),
-        ))?;
-
-    if handshake_response.handshake.is_none_or(|h| !h.sot) {
-        return Err(Error::Mapper("invalid handshake response".to_string()));
-    }
-
-    Ok(resp_stream)
-}
-
 /// MapperType is an enum to store the different types of mappers.
 #[derive(Clone)]
 enum MapperType {
@@ -530,6 +404,132 @@ fn update_udf_read_metric(is_mono_vertex: bool) {
             .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
             .inc();
     }
+}
+
+/// ParentMessageInfo is used to store the information of the parent message. This is propagated to
+/// all the downstream messages.
+pub(crate) struct ParentMessageInfo {
+    pub(crate) offset: Offset,
+    pub(crate) event_time: DateTime<Utc>,
+    pub(crate) is_late: bool,
+    pub(crate) headers: Arc<HashMap<String, String>>,
+    pub(crate) start_time: Instant,
+    /// this remains 0 for all except map-streaming because in map-streaming there could be more than
+    /// one response for a single request.
+    pub(crate) current_index: i32,
+    pub(crate) metadata: Option<Arc<Metadata>>,
+    pub(crate) ack_handle: Option<Arc<AckHandle>>,
+}
+
+impl From<&Message> for ParentMessageInfo {
+    fn from(message: &Message) -> Self {
+        Self {
+            offset: message.offset.clone(),
+            event_time: message.event_time,
+            headers: Arc::clone(&message.headers),
+            is_late: message.is_late,
+            start_time: Instant::now(),
+            current_index: 0,
+            metadata: message.metadata.clone(),
+            ack_handle: message.ack_handle.clone(),
+        }
+    }
+}
+
+/// Conversion from Message to MapRequest
+impl From<Message> for MapRequest {
+    fn from(message: Message) -> Self {
+        Self {
+            request: Some(map::map_request::Request {
+                keys: message.keys.to_vec(),
+                value: message.value.to_vec(),
+                event_time: Some(prost_timestamp_from_utc(message.event_time)),
+                watermark: message.watermark.map(prost_timestamp_from_utc),
+                headers: Arc::unwrap_or_clone(message.headers),
+                metadata: message.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
+            }),
+            id: message.offset.to_string(),
+            handshake: None,
+            status: None,
+        }
+    }
+}
+
+/// Helper struct for converting UDF responses to Messages
+struct UserDefinedMessage<'a>(map::map_response::Result, &'a ParentMessageInfo, i32);
+
+impl From<UserDefinedMessage<'_>> for Message {
+    fn from(value: UserDefinedMessage<'_>) -> Self {
+        Message {
+            typ: Default::default(),
+            id: MessageID {
+                vertex_name: get_vertex_name().to_string().into(),
+                index: value.2,
+                offset: value.1.offset.to_string().into(),
+            },
+            keys: Arc::from(value.0.keys),
+            tags: Some(Arc::from(value.0.tags)),
+            value: value.0.value.into(),
+            offset: value.1.offset.clone(),
+            event_time: value.1.event_time,
+            headers: Arc::clone(&value.1.headers),
+            watermark: None,
+            is_late: value.1.is_late,
+            metadata: {
+                let mut metadata = Metadata::default();
+                // Get SystemMetadata from parent message info
+                if let Some(parent_metadata) = &value.1.metadata {
+                    metadata.sys_metadata = parent_metadata.sys_metadata.clone();
+                }
+                // Get UserMetadata from the response if present
+                if let Some(response_metadata) = &value.0.metadata {
+                    let response_meta: Metadata = response_metadata.clone().into();
+                    metadata.user_metadata = response_meta.user_metadata;
+                }
+                Some(Arc::new(metadata))
+            },
+            ack_handle: value.1.ack_handle.clone(),
+        }
+    }
+}
+
+/// Performs handshake with the server and returns the response stream to receive responses.
+async fn create_response_stream(
+    read_tx: mpsc::Sender<MapRequest>,
+    read_rx: mpsc::Receiver<MapRequest>,
+    client: &mut MapClient<Channel>,
+) -> error::Result<Streaming<MapResponse>> {
+    let handshake_request = MapRequest {
+        request: None,
+        id: "".to_string(),
+        handshake: Some(map::Handshake { sot: true }),
+        status: None,
+    };
+
+    read_tx
+        .send(handshake_request)
+        .await
+        .map_err(|e| Error::Mapper(format!("failed to send handshake request: {e}")))?;
+
+    let mut resp_stream = client
+        .map_fn(Request::new(ReceiverStream::new(read_rx)))
+        .await
+        .map_err(|e| Error::Grpc(Box::new(e)))?
+        .into_inner();
+
+    let handshake_response = resp_stream
+        .message()
+        .await
+        .map_err(|e| Error::Grpc(Box::new(e)))?
+        .ok_or(Error::Mapper(
+            "failed to receive handshake response".to_string(),
+        ))?;
+
+    if handshake_response.handshake.is_none_or(|h| !h.sot) {
+        return Err(Error::Mapper("invalid handshake response".to_string()));
+    }
+
+    Ok(resp_stream)
 }
 
 #[cfg(test)]

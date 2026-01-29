@@ -28,7 +28,6 @@ pub(in crate::mapper) type StreamMapResponse = Vec<map::map_response::Result>;
 type StreamResponseSenderMap = Arc<Mutex<HashMap<String, mpsc::Sender<Result<StreamMapResponse>>>>>;
 
 /// MapStreamTask encapsulates all the context needed to execute a stream map operation.
-/// This reduces the number of arguments passed around and makes the code more readable.
 pub(in crate::mapper) struct MapStreamTask {
     pub mapper: UserDefinedStreamMap,
     pub permit: OwnedSemaphorePermit,

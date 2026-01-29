@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use crate::config::is_mono_vertex;
-use crate::error::{self, Error, Result};
+use crate::error::{Error, Result};
 use crate::message::Message;
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::tracker::Tracker;
@@ -27,7 +27,6 @@ pub(in crate::mapper) type BatchMapResponse = Vec<map::map_response::Result>;
 type ResponseSenderMap = Arc<Mutex<HashMap<String, oneshot::Sender<Result<BatchMapResponse>>>>>;
 
 /// MapBatchTask encapsulates all the context needed to execute a batch map operation.
-/// This reduces the number of arguments passed around and makes the code more readable.
 pub(in crate::mapper) struct MapBatchTask {
     pub mapper: UserDefinedBatchMap,
     pub batch: Vec<Message>,
@@ -41,7 +40,7 @@ pub(in crate::mapper) struct MapBatchTask {
 impl MapBatchTask {
     /// Executes the batch map operation.
     /// Returns an error if any message in the batch fails to be processed.
-    pub async fn execute(self) -> error::Result<()> {
+    pub async fn execute(self) -> Result<()> {
         // Store parent message info for each message before sending to UDF
         let parent_infos: Vec<ParentMessageInfo> = self.batch.iter().map(|m| m.into()).collect();
 
