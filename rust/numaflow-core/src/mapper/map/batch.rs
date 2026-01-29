@@ -96,23 +96,7 @@ impl UserDefinedBatchMap {
                     .is_empty()
                 {
                     error!("received EOT but not all responses have been received");
-                    if is_mono_vertex() {
-                        monovertex_metrics()
-                            .critical_error_total
-                            .get_or_create(&mvtx_critical_error_metric_labels(
-                                "eot_received_from_map",
-                            ))
-                            .inc();
-                    } else {
-                        pipeline_metrics()
-                            .forwarder
-                            .critical_error_total
-                            .get_or_create(&pipeline_critical_error_metric_labels(
-                                VERTEX_TYPE_MAP_UDF,
-                                "eot_received_from_map",
-                            ))
-                            .inc();
-                    }
+                    critical_error!(VERTEX_TYPE_MAP_UDF, "eot_received_from_map");
                 }
                 update_udf_process_time_metric(is_mono_vertex());
                 continue;

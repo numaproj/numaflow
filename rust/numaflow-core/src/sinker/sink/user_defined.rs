@@ -134,23 +134,7 @@ impl Sink for UserDefinedSink {
                     error!(
                         "received EOT message before all responses are received, we will wait indefinitely for the remaining responses"
                     );
-                    if is_mono_vertex() {
-                        monovertex_metrics()
-                            .critical_error_total
-                            .get_or_create(&mvtx_critical_error_metric_labels(
-                                "eot_received_from_sink",
-                            ))
-                            .inc();
-                    } else {
-                        pipeline_metrics()
-                            .forwarder
-                            .critical_error_total
-                            .get_or_create(&pipeline_critical_error_metric_labels(
-                                VERTEX_TYPE_SINK,
-                                "eot_received_from_sink",
-                            ))
-                            .inc();
-                    }
+                    critical_error!(VERTEX_TYPE_SINK, "eot_received_from_sink");
                     // persist the error for debugging
                     runtime::persist_application_error(Status::with_details(
                         Code::Internal,

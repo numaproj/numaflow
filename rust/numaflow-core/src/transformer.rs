@@ -134,23 +134,7 @@ impl Transformer {
 
         if response.is_empty() {
             error!("received empty response from server (transformer), we will wait indefinitely");
-            if is_mono_vertex() {
-                monovertex_metrics()
-                    .critical_error_total
-                    .get_or_create(&mvtx_critical_error_metric_labels(
-                        "eot_received_from_transformer",
-                    ))
-                    .inc();
-            } else {
-                pipeline_metrics()
-                    .forwarder
-                    .critical_error_total
-                    .get_or_create(&pipeline_critical_error_metric_labels(
-                        VERTEX_TYPE_SOURCE,
-                        "eot_received_from_transformer",
-                    ))
-                    .inc();
-            }
+            critical_error!(VERTEX_TYPE_SOURCE, "eot_received_from_transformer");
             // persist the error for debugging
             runtime::persist_application_error(Status::with_details(
                 Code::Internal,
