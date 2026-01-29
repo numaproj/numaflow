@@ -305,6 +305,7 @@ impl MapHandle {
                             } else {
                                 // store the error so that latest error will be propagated
                                 // to the UI.
+                                error!(?error, "debug -- final result already set with error: {error:?}");
                                 self.final_result = Err(error);
                             }
                         },
@@ -521,7 +522,8 @@ impl MapHandle {
                                 .is_failed
                                 .store(true, Ordering::Relaxed);
                             info!("writing error to error channel");
-                            let _ = error_tx.send(map_err).await;
+                            let _ = error_tx.send(map_err.clone()).await;
+                            info!("debug -- sent map error to error channel");
                         }
                         Err(err) => {
                             error!(?err, ?offset, "failed to receive message");
