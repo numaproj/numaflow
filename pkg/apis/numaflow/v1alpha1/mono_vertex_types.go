@@ -231,7 +231,7 @@ func (mv MonoVertex) GetDaemonDeploymentObj(req GetMonoVertexDaemonDeploymentReq
 		{Name: EnvMonoVertexObject, Value: encodedMonoVtx},
 		// TODO - uncomment to switch MonoVertex daemon server backend to rust.
 		// DO NOT DO IT unless you are testing. Daemon server in rust is not ready yet.
-		// {Name: EnvNumaflowRuntime, Value: "rust"},
+		{Name: EnvNumaflowRuntime, Value: "rust"},
 	}
 	envVars = append(envVars, req.Env...)
 	c := corev1.Container{

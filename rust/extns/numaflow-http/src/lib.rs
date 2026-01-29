@@ -201,7 +201,7 @@ impl HttpSourceActor {
     async fn new(http_source_config: HttpSourceConfig, cancel_token: CancellationToken) -> Self {
         let (tx, rx) = mpsc::channel(http_source_config.buffer_size); // Increased buffer size for better throughput
         let inflight_requests = Arc::new(Mutex::new(HashMap::new()));
-        let axum_handle = AxumHandle::new();
+        let axum_handle: AxumHandle<SocketAddr> = AxumHandle::new();
 
         let server_handle = tokio::spawn(start_server(
             http_source_config.vertex_name,
@@ -528,7 +528,7 @@ pub async fn start_server(
     addr: SocketAddr,
     token: Option<&'static str>,
     inflight_requests: InflightRequestsMap,
-    axum_handle: AxumHandle,
+    axum_handle: AxumHandle<SocketAddr>,
 ) -> Result<()> {
     let router = create_router(vertex_name, token, tx, inflight_requests);
 

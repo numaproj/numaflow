@@ -1221,6 +1221,7 @@ func (h *handler) GetMonoVertexMetrics(c *gin.Context) {
 	metrics, err := client.GetMonoVertexMetrics(c)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get the mono vertex metrics: namespace %q mono vertex %q: %s", ns, monoVertex, err.Error()))
+		println(fmt.Sprintf("Keran: mvtx name is %v", metrics.MonoVertex))
 		return
 	}
 

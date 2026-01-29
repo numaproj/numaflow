@@ -10,6 +10,18 @@ tokio.workspace = true
 numaflow-pb.workspace = true
 rcgen.workspace = true
 time.workspace = true
+bytes.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
+http.workspace = true
+http-body-util.workspace = true
+rustls.workspace = true
+tokio-rustls.workspace = true
+tokio-stream.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+prometheus-client.workspace = true
+prost-types.workspace = true
 
 [lints]
 workspace = true

@@ -57,7 +57,7 @@ where
         .parse()
         .map_err(|e| InitError(format!("{e:?}")))?;
 
-    let handle = Handle::new();
+    let handle: Handle<SocketAddr> = Handle::new();
     // Spawn a task to gracefully shutdown server.
     tokio::spawn(graceful_shutdown(
         handle.clone(),
@@ -100,7 +100,7 @@ where
         .parse()
         .map_err(|e| InitError(format!("{e:?}")))?;
 
-    let handle = Handle::new();
+    let handle: Handle<SocketAddr> = Handle::new();
     // Spawn a task to gracefully shutdown server.
     tokio::spawn(graceful_shutdown(
         handle.clone(),
@@ -218,7 +218,7 @@ where
 
 /// Gracefully shutdown the server on receiving SIGINT or SIGTERM
 /// by sending a shutdown signal to the server using the handle.
-async fn graceful_shutdown(handle: Handle, duration_secs: u64) {
+async fn graceful_shutdown(handle: Handle<SocketAddr>, duration_secs: u64) {
     let ctrl_c = async {
         signal::ctrl_c()
             .await

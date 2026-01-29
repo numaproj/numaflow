@@ -26,7 +26,7 @@ pub(crate) async fn start_main_server(
     tls_config: RustlsConfig,
     server_config: MonitorServerConfig,
 ) -> crate::Result<()> {
-    let handle = Handle::new();
+    let handle: Handle<SocketAddr> = Handle::new();
     // Spawn a task to gracefully shutdown server.
     tokio::spawn(graceful_shutdown(handle.clone(), server_config.clone()));
 
@@ -85,7 +85,7 @@ async fn handle_runtime_app_errors(State(state): State<Arc<AppState>>) -> impl I
 }
 
 /// Gracefully shutdown the server when a termination signal is received.
-async fn graceful_shutdown(handle: Handle, server_config: MonitorServerConfig) {
+async fn graceful_shutdown(handle: Handle<SocketAddr>, server_config: MonitorServerConfig) {
     let ctrl_c = async {
         signal::ctrl_c()
             .await

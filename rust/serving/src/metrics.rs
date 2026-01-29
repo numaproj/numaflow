@@ -169,7 +169,7 @@ pub(crate) async fn start_https_metrics_server(
 ) -> crate::Result<()> {
     let metrics_app = Router::new().route("/metrics", get(metrics_handler));
 
-    let handle = Handle::new();
+    let handle: Handle<SocketAddr> = Handle::new();
     let shutdown_handle = handle.clone();
     tokio::spawn(async move {
         cln_token.cancelled().await;
