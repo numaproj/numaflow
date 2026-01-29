@@ -169,26 +169,26 @@ impl MapHandle {
             });
 
             // based on the map mode, send the message to the appropriate mapper.
-            match self.mapper.clone() {
+            match &self.mapper {
                 MapperType::Concurrent(concurrent_mapper) => {
                     let ctx = ConcurrentMapContext {
                         error_rx,
                         output_tx,
                         error_tx,
                         semaphore: Arc::clone(&semaphore),
-                        cln_token: cln_token.clone(),
+                        cln_token,
                         hard_shutdown_token,
                         bypass_router,
-                        concurrent_mapper,
+                        concurrent_mapper: concurrent_mapper.clone(),
                     };
                     self.process_concurrent_messages(input_stream, ctx).await?;
                 }
                 MapperType::Batch(batch_mapper) => {
                     let ctx = BatchMapContext {
                         output_tx,
-                        cln_token: cln_token.clone(),
+                        cln_token,
                         bypass_router,
-                        batch_mapper,
+                        batch_mapper: batch_mapper.clone(),
                     };
                     self.process_batch_messages(input_stream, ctx).await;
                 }
@@ -196,7 +196,7 @@ impl MapHandle {
 
             // wait for all the spawned tasks to finish before returning the final result
             info!("Map input stream ended, waiting for inflight messages to finish");
-            let _permit = Arc::clone(&semaphore)
+            let _permit = semaphore
                 .acquire_many_owned(self.concurrency as u32)
                 .await
                 .map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}")))?;
@@ -222,6 +222,7 @@ impl MapHandle {
         mut ctx: ConcurrentMapContext,
     ) -> error::Result<()> {
         let mut input_stream = input_stream;
+        let is_mono_vertex = is_mono_vertex();
         loop {
             // we need tokio select here because we have to listen to both the input stream
             // and the error channel. If there is an error, we need to discard all the
@@ -267,7 +268,7 @@ impl MapHandle {
                                     error_tx: ctx.error_tx.clone(),
                                     cln_token: ctx.hard_shutdown_token.clone(),
                                     bypass_router: ctx.bypass_router.clone(),
-                                    is_mono_vertex: is_mono_vertex(),
+                                    is_mono_vertex,
                                 }
                                 .spawn();
                             }
@@ -281,7 +282,7 @@ impl MapHandle {
                                     error_tx: ctx.error_tx.clone(),
                                     cln_token: ctx.hard_shutdown_token.clone(),
                                     bypass_router: ctx.bypass_router.clone(),
-                                    is_mono_vertex: is_mono_vertex(),
+                                    is_mono_vertex,
                                 }
                                 .spawn();
                             }
@@ -304,6 +305,7 @@ impl MapHandle {
         let chunked_stream = input_stream.chunks_timeout(self.batch_size, timeout_duration);
         tokio::pin!(chunked_stream);
 
+        let is_mono_vertex = is_mono_vertex();
         // we don't need to tokio spawn here because, unlike unary and stream, batch is
         // a blocking operation, and we process one batch at a time.
         while let Some(batch) = chunked_stream.next().await {
@@ -330,7 +332,7 @@ impl MapHandle {
                     output_tx: ctx.output_tx.clone(),
                     tracker: self.tracker.clone(),
                     bypass_router: ctx.bypass_router.clone(),
-                    is_mono_vertex: is_mono_vertex(),
+                    is_mono_vertex,
                     cln_token: ctx.cln_token.clone(),
                 })
                 .execute()
