@@ -328,7 +328,7 @@ impl MapHandle {
                                     output_tx.clone(),
                                     self.tracker.clone(),
                                     error_tx.clone(),
-                                    hard_shutdown_token.clone(),
+                                    cln_token.clone(),
                                     bypass_router.clone(),
                                 ).await;
                             }

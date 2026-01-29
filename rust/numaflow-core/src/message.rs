@@ -21,6 +21,7 @@ use chrono::{DateTime, Utc};
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
+use tracing::info;
 
 const DROP: &str = "U+005C__DROP__";
 
@@ -80,6 +81,7 @@ impl Drop for AckHandle {
     fn drop(&mut self) {
         if let Some(ack_handle) = self.ack_handle.take() {
             if self.is_failed.load(std::sync::atomic::Ordering::Relaxed) {
+                info!("debug -- sending nak to source");
                 ack_handle.send(ReadAck::Nak).expect("Failed to send nak");
             } else {
                 ack_handle.send(ReadAck::Ack).expect("Failed to send ack");
