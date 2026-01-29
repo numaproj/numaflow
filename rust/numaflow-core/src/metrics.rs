@@ -51,6 +51,7 @@ pub(crate) const PIPELINE_PARTITION_NAME_LABEL: &str = "partition_name";
 const PIPELINE_VERTEX_LABEL: &str = "vertex";
 const PIPELINE_VERTEX_TYPE_LABEL: &str = "vertex_type";
 const PIPELINE_DROP_REASON_LABEL: &str = "reason";
+const CRITICAL_ERROR_REASON: &str = "reason";
 
 // The top-level metric registry is created with the GLOBAL_PREFIX
 const MVTX_REGISTRY_GLOBAL_PREFIX: &str = "monovtx";
@@ -79,6 +80,7 @@ const WRITE_BYTES_TOTAL: &str = "write_bytes";
 const WRITE_ERROR_TOTAL: &str = "write_error";
 const ACK_TOTAL: &str = "ack";
 const UDF_ERROR_TOTAL: &str = "udf_error";
+const CRITICAL_ERROR_TOTAL: &str = "critical_error";
 
 const SINK_WRITE_TOTAL: &str = "write";
 const SINK_WRITE_ERRORS_TOTAL: &str = "write_errors";
@@ -263,6 +265,7 @@ pub(crate) struct MonoVtxMetrics {
     pub(crate) read_bytes_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) ack_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) critical_error_total: Family<Vec<(String, String)>, Counter>,
 
     // gauge
     pub(crate) pending_raw: Family<Vec<(String, String)>, Gauge>,
@@ -337,6 +340,7 @@ pub(crate) struct PipelineForwarderMetrics {
     pub(crate) udf_write_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) udf_drop_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) udf_error_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) critical_error_total: Family<Vec<(String, String)>, Counter>,
 
     // read histograms
     pub(crate) read_processing_time: Family<Vec<(String, String)>, Histogram>,
@@ -374,6 +378,7 @@ impl PipelineForwarderMetrics {
             udf_read_total: Family::<Vec<(String, String)>, Counter>::default(),
             udf_drop_total: Family::<Vec<(String, String)>, Counter>::default(),
             udf_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            critical_error_total: Family::<Vec<(String, String)>, Counter>::default(),
             udf_write_total: Family::<Vec<(String, String)>, Counter>::default(),
             read_batch_size: Family::<Vec<(String, String)>, Gauge>::default(),
             read_processing_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
@@ -518,6 +523,7 @@ impl MonoVtxMetrics {
             read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
             ack_total: Family::<Vec<(String, String)>, Counter>::default(),
             dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
+            critical_error_total: Family::<Vec<(String, String)>, Counter>::default(),
             // gauge
             pending_raw: Family::<Vec<(String, String)>, Gauge>::default(),
             read_batch_size: Family::<Vec<(String, String)>, Gauge>::default(),
@@ -580,6 +586,12 @@ impl MonoVtxMetrics {
             DROPPED_TOTAL,
             "A Counter to keep track of the total number of messages dropped by the monovtx",
             metrics.dropped_total.clone(),
+        );
+
+        registry.register(
+            CRITICAL_ERROR_TOTAL,
+            "A Counter to keep track of the total number of critical errors (e.g., EOT, UDF crashes)",
+            metrics.critical_error_total.clone(),
         );
 
         // gauges
@@ -755,6 +767,11 @@ impl PipelineMetrics {
             UDF_ERROR_TOTAL,
             "Total number of UDF Errors",
             metrics.forwarder.udf_error_total.clone(),
+        );
+        forwarder_registry.register(
+            CRITICAL_ERROR_TOTAL,
+            "Total number of critical errors (e.g., EOT, UDF crashes)",
+            metrics.forwarder.critical_error_total.clone(),
         );
         forwarder_registry.register(
             E2E_TIME,
@@ -974,6 +991,12 @@ pub(crate) fn mvtx_forward_metric_labels() -> &'static Vec<(String, String)> {
     })
 }
 
+pub(crate) fn mvtx_critical_error_metric_labels(reason: &str) -> Vec<(String, String)> {
+    let mut labels = mvtx_forward_metric_labels().clone();
+    labels.push((CRITICAL_ERROR_REASON.to_string(), reason.to_string()));
+    labels
+}
+
 static PIPELINE_METRIC_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
 
 pub(crate) fn pipeline_metric_labels(vertex_type: &str) -> &'static Vec<(String, String)> {
@@ -1029,6 +1052,15 @@ pub(crate) fn pipeline_drop_metric_labels(
         ),
         (PIPELINE_DROP_REASON_LABEL.to_string(), reason.to_string()),
     ]
+}
+
+pub(crate) fn pipeline_critical_error_metric_labels(
+    vertex_type: &str,
+    reason: &str,
+) -> Vec<(String, String)> {
+    let mut labels = pipeline_metric_labels(vertex_type).clone();
+    labels.push((CRITICAL_ERROR_REASON.to_string(), reason.to_string()));
+    labels
 }
 
 pub(crate) fn jetstream_isb_metrics_labels(buffer_name: &str) -> Vec<(String, String)> {
@@ -1696,6 +1728,10 @@ mod tests {
         metrics.read_bytes_total.get_or_create(&common_labels).inc();
         metrics.ack_total.get_or_create(&common_labels).inc();
         metrics.dropped_total.get_or_create(&common_labels).inc();
+        metrics
+            .critical_error_total
+            .get_or_create(&common_labels)
+            .inc();
         metrics.e2e_time.get_or_create(&common_labels).observe(10.0);
         metrics.read_time.get_or_create(&common_labels).observe(3.0);
         metrics.ack_time.get_or_create(&common_labels).observe(2.0);
@@ -1744,6 +1780,12 @@ mod tests {
 
         pipeline_metrics
             .forwarder
+            .critical_error_total
+            .get_or_create(&common_pipeline_labels)
+            .inc();
+
+        pipeline_metrics
+            .forwarder
             .ack_processing_time
             .get_or_create(&common_pipeline_labels)
             .observe(5.0);
@@ -1776,6 +1818,7 @@ mod tests {
             r#"monovtx_ack_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_read_bytes_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_dropped_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_critical_error_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_processing_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 10.0"#,
             r#"monovtx_processing_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_processing_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
@@ -1800,6 +1843,7 @@ mod tests {
             r#"monovtx_fallback_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_fallback_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"forwarder_read_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 10"#,
+            r#"forwarder_critical_error_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
             r#"forwarder_ack_processing_time_sum{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 5.0"#,
             r#"forwarder_ack_processing_time_count{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
             r#"forwarder_ack_processing_time_bucket{le="100.0",pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,

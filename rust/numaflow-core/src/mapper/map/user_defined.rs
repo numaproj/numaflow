@@ -10,12 +10,15 @@ use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 use tracing::error;
 
-use crate::config::get_vertex_name;
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
+use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
 use crate::message::{AckHandle, Message, MessageID, Offset};
 use crate::metadata::Metadata;
-use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
+use crate::metrics::{
+    monovertex_metrics, mvtx_critical_error_metric_labels, pipeline_critical_error_metric_labels,
+    pipeline_metric_labels, pipeline_metrics,
+};
 use crate::shared::grpc::prost_timestamp_from_utc;
 
 type ResponseSenderMap =
@@ -244,6 +247,23 @@ impl UserDefinedBatchMap {
                     .is_empty()
                 {
                     error!("received EOT but not all responses have been received");
+                    if is_mono_vertex() {
+                        monovertex_metrics()
+                            .critical_error_total
+                            .get_or_create(&mvtx_critical_error_metric_labels(
+                                "eot_received_from_map",
+                            ))
+                            .inc();
+                    } else {
+                        pipeline_metrics()
+                            .forwarder
+                            .critical_error_total
+                            .get_or_create(&pipeline_critical_error_metric_labels(
+                                VERTEX_TYPE_MAP_UDF,
+                                "eot_received_from_map",
+                            ))
+                            .inc();
+                    }
                 }
                 pipeline_metrics()
                     .forwarder

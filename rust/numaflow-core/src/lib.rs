@@ -99,6 +99,14 @@ pub async fn run() -> Result<()> {
             info!("Starting monovertex forwarder with config: {:#?}", config);
             // Run the forwarder with cancellation token.
             if let Err(e) = monovertex::start_forwarder(cln_token, &config).await {
+                // increment the critical error metric
+                metrics::monovertex_metrics()
+                    .critical_error_total
+                    .get_or_create(&metrics::mvtx_critical_error_metric_labels(
+                        "mvtx_runtime_error",
+                    ))
+                    .inc();
+
                 if let Error::Grpc(e) = e {
                     error!(error=?e, "Monovertex failed because of UDF failure");
                     runtime::persist_application_error(*e);
@@ -118,7 +126,18 @@ pub async fn run() -> Result<()> {
         }
         CustomResourceType::Pipeline(config) => {
             info!("Starting pipeline forwarder with config: {:#?}", config);
+            let vertex_type = config.vertex_type.as_str();
             if let Err(e) = forwarder::start_forwarder(cln_token, config).await {
+                // increment the critical error metric
+                metrics::pipeline_metrics()
+                    .forwarder
+                    .critical_error_total
+                    .get_or_create(&metrics::pipeline_critical_error_metric_labels(
+                        vertex_type,
+                        "pipeline_runtime_error",
+                    ))
+                    .inc();
+
                 if let Error::Grpc(e) = e {
                     error!(error=?e, "Pipeline failed because of UDF failure");
                     runtime::persist_application_error(*e);
