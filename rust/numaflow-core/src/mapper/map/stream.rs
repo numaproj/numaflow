@@ -58,9 +58,7 @@ impl MapStreamTask {
         let mut parent_info: ParentMessageInfo = (&self.message).into();
         let offset = self.message.offset.clone();
 
-        // Convert Message to MapRequest
-        let request: MapRequest = self.message.clone().into();
-
+        let request: MapRequest = self.message.into();
         update_udf_read_metric(self.is_mono_vertex);
 
         // Call the UDF and get receiver for raw results
@@ -113,7 +111,7 @@ impl MapStreamTask {
                 }
                 Some(Err(e)) => {
                     error!(?e, "failed to map message");
-                    self.message
+                    parent_info
                         .ack_handle
                         .as_ref()
                         .expect("ack handle should be present")
