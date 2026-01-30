@@ -9,7 +9,7 @@ use crate::metrics::{
 };
 use crate::pipeline::PipelineContext;
 use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
-use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
+use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};
 use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
 use crate::reduce::pbq::{PBQ, PBQBuilder, WAL};
 use crate::reduce::reducer::aligned::reducer::AlignedReducer;
@@ -392,7 +392,8 @@ async fn run_reduce_forwarder<C: NumaflowTypeConfig>(
     )
     .await?;
 
-    let isb_reader = ISBReader::<C>::new(reader_components, js_reader, rate_limiter).await?;
+    let isb_reader =
+        ISBReaderOrchestrator::<C>::new(reader_components, js_reader, rate_limiter).await?;
 
     // Create lag reader with the single buffer reader (reduce only reads from one stream)
     let pending_reader = shared::metrics::create_pending_reader(

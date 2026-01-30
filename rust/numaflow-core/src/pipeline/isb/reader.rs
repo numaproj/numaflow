@@ -1,4 +1,4 @@
-//! ISBReader is responsible for reading messages from ISB, assigning watermark to the messages and
+//! ISBReaderOrchestrator is responsible for reading messages from ISB, assigning watermark to the messages and
 //! starts tracking them using the tracker and also listens for ack/nack from the tracker and performs
 //! the ack/nack to the ISB.
 
@@ -40,11 +40,11 @@ const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 /// Type alias for metric labels
 type MetricLabels = Arc<Vec<(String, String)>>;
 
-/// ISBReader component which reads messages from ISB, assigns watermark to the messages and starts
+/// ISBReaderOrchestrator component which reads messages from ISB, assigns watermark to the messages and starts
 /// tracking them using the tracker and also listens for ack/nack from the tracker and performs the
 /// ack/nack to the ISB.
 #[derive(Clone)]
-pub(crate) struct ISBReader<C: NumaflowTypeConfig> {
+pub(crate) struct ISBReaderOrchestrator<C: NumaflowTypeConfig> {
     vertex_type: String,
     stream: Stream,
     cfg: BufferReaderConfig,
@@ -58,7 +58,7 @@ pub(crate) struct ISBReader<C: NumaflowTypeConfig> {
     metric_labels: MetricLabels,
 }
 
-impl<C: NumaflowTypeConfig> ISBReader<C> {
+impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
     pub(crate) async fn new(
         components: ISBReaderComponents,
         js_reader: JetStreamReader,
@@ -513,7 +513,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
         max_ack_pending: usize,
     ) -> Result<()> {
         info!(
-            "ISBReader is shutting down (pending={}), waiting for inflight messages to be acked/nacked",
+            "ISBReaderOrchestrator is shutting down (pending={}), waiting for inflight messages to be acked/nacked",
             max_ack_pending - semaphore.available_permits()
         );
         // Wait for inflight messages to finish
@@ -521,7 +521,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
 
         // Shutdown rate limiter if configured
         if let Some(rl) = &self.rate_limiter {
-            info!("ISBReader is shutting down, shutting down rate limiter");
+            info!("ISBReaderOrchestrator is shutting down, shutting down rate limiter");
             rl.shutdown().await.map_err(|e| {
                 Error::ISB(crate::pipeline::isb::error::ISBError::Other(format!(
                     "Failed to shutdown rate limiter: {e}"
@@ -529,7 +529,7 @@ impl<C: NumaflowTypeConfig> ISBReader<C> {
             })?;
         }
 
-        info!("ISBReader cleanup on shutdown completed.");
+        info!("ISBReaderOrchestrator cleanup on shutdown completed.");
 
         Ok(())
     }
@@ -594,7 +594,7 @@ mod tests {
     use crate::config::pipeline::isb::{BufferReaderConfig, CompressionType};
     use crate::message::{Message, MessageID};
     use crate::pipeline::isb::error::ISBError;
-    use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
+    use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};
     use crate::tracker::Tracker;
     use async_nats::jetstream;
     use async_nats::jetstream::consumer::PullConsumer;
@@ -693,8 +693,8 @@ mod tests {
             cln_token: CancellationToken::new(),
         };
 
-        let isb_reader: ISBReader<crate::typ::WithoutRateLimiter> =
-            ISBReader::new(isb_reader_components, js_reader, None)
+        let isb_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
+            ISBReaderOrchestrator::new(isb_reader_components, js_reader, None)
                 .await
                 .unwrap();
 
@@ -807,8 +807,8 @@ mod tests {
             cln_token: CancellationToken::new(),
         };
 
-        let isb_reader: ISBReader<crate::typ::WithoutRateLimiter> =
-            ISBReader::new(isb_reader_components, js_reader, None)
+        let isb_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
+            ISBReaderOrchestrator::new(isb_reader_components, js_reader, None)
                 .await
                 .unwrap();
 
@@ -940,8 +940,8 @@ mod tests {
             cln_token: CancellationToken::new(),
         };
 
-        let isb_reader: ISBReader<crate::typ::WithoutRateLimiter> =
-            ISBReader::new(isb_reader_components, js_reader, None)
+        let isb_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
+            ISBReaderOrchestrator::new(isb_reader_components, js_reader, None)
                 .await
                 .unwrap();
 
@@ -1088,7 +1088,7 @@ mod tests {
         let cancel_token = CancellationToken::new();
 
         // Test nack_with_retry - should succeed
-        let result = ISBReader::<crate::typ::WithoutRateLimiter>::nak_with_retry(
+        let result = ISBReaderOrchestrator::<crate::typ::WithoutRateLimiter>::nak_with_retry(
             &js_reader,
             &offset,
             &cancel_token,
@@ -1143,7 +1143,7 @@ mod tests {
         let cancel_token = CancellationToken::new();
 
         // Test nack_with_retry - should fail with OffsetNotFound
-        let result = ISBReader::<crate::typ::WithoutRateLimiter>::nak_with_retry(
+        let result = ISBReaderOrchestrator::<crate::typ::WithoutRateLimiter>::nak_with_retry(
             &js_reader,
             &missing_offset,
             &cancel_token,
@@ -1233,7 +1233,7 @@ mod tests {
         let cancel_token = CancellationToken::new();
 
         // Test ack_with_retry - should succeed
-        let result = ISBReader::<crate::typ::WithoutRateLimiter>::ack_with_retry(
+        let result = ISBReaderOrchestrator::<crate::typ::WithoutRateLimiter>::ack_with_retry(
             &js_reader,
             &offset,
             &cancel_token,
@@ -1288,7 +1288,7 @@ mod tests {
         let cancel_token = CancellationToken::new();
 
         // Test ack_with_retry - should fail with OffsetNotFound
-        let result = ISBReader::<crate::typ::WithoutRateLimiter>::ack_with_retry(
+        let result = ISBReaderOrchestrator::<crate::typ::WithoutRateLimiter>::ack_with_retry(
             &js_reader,
             &missing_offset,
             &cancel_token,

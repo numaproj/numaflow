@@ -1,6 +1,6 @@
 use crate::error::Result;
 use crate::message::Message;
-use crate::pipeline::isb::reader::ISBReader;
+use crate::pipeline::isb::reader::ISBReaderOrchestrator;
 use crate::reduce::wal::WalMessage;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::reduce::wal::segment::compactor::Compactor;
@@ -23,13 +23,13 @@ pub(crate) struct WAL {
 
 /// PBQBuilder is a builder for PBQ.
 pub(crate) struct PBQBuilder<C: crate::typ::NumaflowTypeConfig> {
-    isb_reader: ISBReader<C>,
+    isb_reader: ISBReaderOrchestrator<C>,
     wal: Option<WAL>,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> PBQBuilder<C> {
     /// Creates a new PBQBuilder.
-    pub(crate) fn new(isb_reader: ISBReader<C>) -> Self {
+    pub(crate) fn new(isb_reader: ISBReaderOrchestrator<C>) -> Self {
         Self {
             isb_reader,
             wal: None,
@@ -52,7 +52,7 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQBuilder<C> {
 /// PBQ is a persistent buffer queue.
 #[allow(clippy::upper_case_acronyms)]
 pub(crate) struct PBQ<C: crate::typ::NumaflowTypeConfig> {
-    isb_reader: ISBReader<C>,
+    isb_reader: ISBReaderOrchestrator<C>,
     wal: Option<WAL>,
 }
 
@@ -80,7 +80,7 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
     /// Replays any persisted data from WAL and then starts reading new messages from the ISB and
     /// keeps persisting them to WAL and acknowledges the messages from ISB after writing to WAL.
     async fn read_isb_with_wal(
-        isb_reader: ISBReader<C>,
+        isb_reader: ISBReaderOrchestrator<C>,
         wal: WAL,
         tx: Sender<Message>,
         cancellation_token: CancellationToken,
@@ -162,7 +162,7 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
 
     /// Reads messages from ISB and immediately acks it by invoking the tracker delete.
     async fn read_isb_without_wal(
-        isb_reader: ISBReader<C>,
+        isb_reader: ISBReaderOrchestrator<C>,
         tx: Sender<Message>,
         cancellation_token: CancellationToken,
     ) -> Result<()> {
@@ -187,7 +187,7 @@ mod tests {
     use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
     use crate::message::{IntOffset, MessageID, Offset};
     use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
-    use crate::pipeline::isb::reader::ISBReader;
+    use crate::pipeline::isb::reader::ISBReaderOrchestrator;
     use crate::reduce::wal::segment::WalType;
     use crate::reduce::wal::segment::compactor::WindowKind;
     use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
@@ -260,8 +260,8 @@ mod tests {
         .await
         .unwrap();
 
-        let js_reader: ISBReader<crate::typ::WithoutRateLimiter> =
-            ISBReader::new(reader_components, js_reader, None)
+        let js_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
+            ISBReaderOrchestrator::new(reader_components, js_reader, None)
                 .await
                 .unwrap();
 
@@ -393,8 +393,8 @@ mod tests {
         .await
         .unwrap();
 
-        let js_reader: ISBReader<crate::typ::WithoutRateLimiter> =
-            ISBReader::new(reader_components, js_reader, None)
+        let js_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
+            ISBReaderOrchestrator::new(reader_components, js_reader, None)
                 .await
                 .unwrap();
 
@@ -627,8 +627,8 @@ mod tests {
         .await
         .unwrap();
 
-        let js_reader: ISBReader<crate::typ::WithoutRateLimiter> =
-            ISBReader::new(reader_components, js_reader, None)
+        let js_reader: ISBReaderOrchestrator<crate::typ::WithoutRateLimiter> =
+            ISBReaderOrchestrator::new(reader_components, js_reader, None)
                 .await
                 .unwrap();
 
