@@ -247,6 +247,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 tokio::spawn(async move {
                     let actor = SourceActor::new(receiver, reader, acker, lag_reader);
                     actor.run().await;
+                    info!("debug -- generator actor completed");
                 });
             }
             SourceType::Pulsar(pulsar_source) => {
@@ -627,9 +628,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             Self::ack_with_retry(source_handle.clone(), offsets_to_ack, &cancel_token).await;
         }
         if !offsets_to_nack.is_empty() {
+            info!("debug -- going to nack with retry pending offsets: {}", offsets_to_nack.len());
             Self::nack_with_retry(source_handle, offsets_to_nack, &cancel_token).await;
         }
         Self::send_ack_metrics(e2e_start_time, n, start);
+
+        info!("debug -- invoke_ack completed");
 
         Ok(())
     }
@@ -685,9 +689,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 }
                 result
             },
+            // TODO: pending offsets are not nacked if cancel token is cancelled
             |_: &Error| !cancel_token.is_cancelled(),
         )
         .await;
+        info!("debug -- nack retry loop completed with {} offsets pending nack", offsets.len());
     }
 
     fn send_read_metrics(
