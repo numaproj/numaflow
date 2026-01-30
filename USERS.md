@@ -11,3 +11,4 @@ Please add your company name and initial use case (optional) below.
 7. [BEUMER Group](https://www.beumergroup.com/) - Signal processing for IoT-sensors, providing predictive maintenance solutions for the Intra-logistics sector.
 8. [NTT](https://www.rd.ntt/) - AI/ML pipeline for realizing Accelerator Chaining. Presented at KubeCon EU 25.
 9. [QualiBooth](https://www.qualibooth.com/) - Accessibility-focused software. It leverages Numaflow pipelines to aggregate real-time data related to web accessibility issues.
+10. [Starboard Maritime Intelligence](https://www.starboardintelligence.com/) - High-throughput data pipelines for processing live telemetry and sensor data with real-time enrichment and validation.
