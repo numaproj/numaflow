@@ -721,6 +721,13 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#x-numaflow-keys" class="md-nav__link">
+    x-numaflow-keys
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#auth" class="md-nav__link">
     Auth
   </a>
@@ -2791,6 +2798,13 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#x-numaflow-keys" class="md-nav__link">
+    x-numaflow-keys
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#auth" class="md-nav__link">
     Auth
   </a>
@@ -2886,6 +2900,14 @@ curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span
 <p>By default, the time of the date coming to the HTTP source is used as the event time, it could be set by putting an HTTP header <code>x-numaflow-event-time</code> with value of the number of milliseconds elapsed since January 1, 1970 UTC.</p>
 <div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-event-time: 1663006726000&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;hello world&quot;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
 </code></pre></div>
+<h2 id="x-numaflow-keys">x-numaflow-keys<a class="headerlink" href="#x-numaflow-keys" title="Permanent link">&para;</a></h2>
+<p>The HTTP Source supports message keys for aggregation purposes. Keys can be specified using the <code>x-numaflow-keys</code> HTTP header with a comma-separated string of key values.</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-keys: key1,key2,key3&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;hello world&quot;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
+</code></pre></div>
+<p>For example, to send a message with keys "user123" and "region-us-west":</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-numaflow-keys: user123,region-us-west&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;data&quot;: &quot;sample&quot;}&#39;</span><span class="w"> </span><span class="si">${</span><span class="nv">http</span><span class="p">-source-url</span><span class="si">}</span>
+</code></pre></div>
+<p>If the <code>x-numaflow-keys</code> header is not provided, the message will be processed without any keys.</p>
 <h2 id="auth">Auth<a class="headerlink" href="#auth" title="Permanent link">&para;</a></h2>
 <p>A <code>Bearer</code> token can be configured to prevent the HTTP Source from being accessed by unexpected clients. To do so, a Kubernetes Secret needs to be created to store the token, and the valid clients also need to include the token in its HTTP request header.</p>
 <p>Firstly, create a k8s secret containing your token.</p>
