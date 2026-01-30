@@ -319,11 +319,8 @@ impl MapHandle {
                                 warn!(offset = ?read_msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
                                 read_msg.ack_handle.as_ref().expect("ack handle should be present").is_failed.store(true, Ordering::Relaxed);
                             } else {
-                                info!("debug -- going to acquire unary semaphore permit");
                                 let permit = Arc::clone(&semaphore).acquire_owned()
                                     .await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}" )))?;
-                                info!("debug -- acquired unary semaphore permit");
-                                info!("debug -- going to call Self::unary");
                                 Self::unary(
                                     mapper.clone(),
                                     permit,
@@ -334,7 +331,6 @@ impl MapHandle {
                                     cln_token.clone(),
                                     bypass_router.clone(),
                                 ).await;
-                                info!("debug -- completed call to Self::unary");
                             }
                         },
                     }
