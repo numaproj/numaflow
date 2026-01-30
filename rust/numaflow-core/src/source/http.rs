@@ -26,7 +26,7 @@ impl From<HttpMessage> for Message {
     fn from(value: HttpMessage) -> Self {
         Message {
             typ: Default::default(),
-            keys: Arc::from(vec![]),
+            keys: Arc::from(value.keys),
             tags: None,
             value: value.body,
             offset: Offset::String(StringOffset::new(value.id.clone(), *get_vertex_replica())),
