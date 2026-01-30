@@ -277,6 +277,37 @@ impl JetStreamReader {
     }
 }
 
+#[async_trait::async_trait]
+impl crate::pipeline::isb::ISBReader for JetStreamReader {
+    async fn fetch(&mut self, max: usize, timeout: Duration) -> Result<Vec<Message>> {
+        JetStreamReader::fetch(self, max, timeout).await
+    }
+
+    async fn ack(&self, offset: &Offset) -> Result<()> {
+        JetStreamReader::ack(self, offset).await
+    }
+
+    async fn nack(&self, offset: &Offset) -> Result<()> {
+        JetStreamReader::nack(self, offset).await
+    }
+
+    async fn pending(&mut self) -> Result<Option<usize>> {
+        JetStreamReader::pending(self).await
+    }
+
+    fn name(&self) -> &'static str {
+        JetStreamReader::name(self)
+    }
+
+    async fn mark_wip(&self, offset: &Offset) -> Result<()> {
+        JetStreamReader::mark_wip(self, offset).await
+    }
+
+    fn wip_ack_interval(&self) -> Option<Duration> {
+        Some(self.wip_ack_interval)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Write;
