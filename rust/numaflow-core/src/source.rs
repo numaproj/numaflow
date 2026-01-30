@@ -632,9 +632,6 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             Self::nack_with_retry(source_handle, offsets_to_nack, &cancel_token).await;
         }
         Self::send_ack_metrics(e2e_start_time, n, start);
-
-        info!("debug -- invoke_ack completed");
-
         Ok(())
     }
 
