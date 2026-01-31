@@ -17,7 +17,7 @@ use std::sync::mpsc;
 use time::{Duration, OffsetDateTime};
 use tokio::net::TcpListener;
 use tonic::{Request, Response, Status};
-use tracing::info;
+use tracing::{info, warn};
 
 use rustls::ServerConfig;
 use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
@@ -120,6 +120,50 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
     //  if HTTP, send it to HTTP channel.
     //  if gRPC, send it to gRPC channel.
     //  others, TODO
+    let _ = tokio::spawn(async move {
+        loop {
+            let (tcp, peer_addr) = match tcp_listener.accept().await {
+                Ok(v) => v,
+                Err(e) => {
+                    // TODO - what's numaflow rust's standard way of printing a warn?
+                    warn!("ERROR: Failed to accept a TCP connection");
+                    continue;
+                }
+            };
+            // Handle the new connection.
+            // Start a new thread so that we don't block on receiving other connections.
+            tokio::spawn(async move {
+                let stream = match tls_acceptor.accept(tcp).await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        warn!(peer_addr = %peer_addr, error = %e, "TLS handshake failed.");
+                        // TLS handshake failed, skip handling this connection.
+                        return;
+                    }
+                };
+
+                let alpn = stream
+                    .get_ref()
+                    .1
+                    .alpn_protocol()
+                    .map(|p| String::from_utf8_lossy(p).into_owned());
+
+                match alpn.as_deref() {
+                    Some("http/1.1") => {
+                        // Send to the HTTP channel.
+                        todo!()
+                    }
+                    Some("h2") => {
+                        // Send to the gRPC channel.
+                        todo!()
+                    }
+                    _ => {
+                        // Send to the gRPC channel by default
+                    }
+                }
+            });
+        }
+    });
 
     // 4. Start a thread to serve gRPC requests.
 
