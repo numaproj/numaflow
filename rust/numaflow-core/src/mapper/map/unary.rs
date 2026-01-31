@@ -1,24 +1,127 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::Ordering;
 
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::Message;
-use numaflow_pb::clients::map::{MapRequest, MapResponse, map_client::MapClient};
-use tokio::sync::{mpsc, oneshot};
+use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
+use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
 use tracing::error;
 
 use super::{
-    ParentMessageInfo, create_response_stream, update_udf_error_metric, update_udf_read_metric,
-    update_udf_write_metric,
+    ParentMessageInfo, SharedMapTaskContext, UserDefinedMessage, create_response_stream,
+    update_udf_error_metric, update_udf_read_metric, update_udf_write_metric,
 };
 
-type ResponseSenderMap =
-    Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
+/// Type alias for the response - raw results from the UDF
+pub(in crate::mapper) type UnaryMapResponse = Vec<map::map_response::Result>;
+
+type ResponseSenderMap = Arc<Mutex<HashMap<String, oneshot::Sender<Result<UnaryMapResponse>>>>>;
+
+/// MapUnaryTask encapsulates all the context needed to execute a unary map operation.
+/// Uses Arc<SharedMapTaskContext> to share common fields across tasks without cloning.
+pub(in crate::mapper) struct MapUnaryTask {
+    pub mapper: UserDefinedUnaryMap,
+    pub permit: OwnedSemaphorePermit,
+    pub message: Message,
+    /// Shared context containing output_tx, error_tx, tracker, bypass_router, etc.
+    /// Wrapped in Arc to avoid cloning these fields for every task.
+    pub shared_ctx: Arc<SharedMapTaskContext>,
+}
+
+impl MapUnaryTask {
+    /// Spawns the unary map task as a tokio task.
+    /// The task will process the message through the UDF and send results downstream.
+    pub fn spawn(self) {
+        tokio::spawn(async move {
+            self.execute().await;
+        });
+    }
+
+    /// Executes the unary map operation.
+    async fn execute(self) {
+        // Hold the permit until the task completes
+        let _permit = self.permit;
+
+        // Store parent message info before sending to UDF
+        // parent_info contains offset, so we don't need to clone it separately
+        let parent_info: ParentMessageInfo = (&self.message).into();
+
+        let request: MapRequest = self.message.into();
+        update_udf_read_metric(self.shared_ctx.is_mono_vertex);
+
+        // Call the UDF and get raw results
+        let results = match self
+            .mapper
+            .unary(request, self.shared_ctx.hard_shutdown_token.clone())
+            .await
+        {
+            Ok(results) => results,
+            Err(e) => {
+                error!(?e, offset = ?parent_info.offset, "failed to map message");
+                parent_info
+                    .ack_handle
+                    .as_ref()
+                    .expect("ack handle should be present")
+                    .is_failed
+                    .store(true, Ordering::Relaxed);
+                let _ = self.shared_ctx.error_tx.send(e).await;
+                return;
+            }
+        };
+
+        // Convert raw results to Messages using parent info
+        // Pre-allocate with exact capacity to avoid reallocations
+        let results_len = results.len();
+        let mut mapped_messages: Vec<Message> = Vec::with_capacity(results_len);
+        for (i, result) in results.into_iter().enumerate() {
+            mapped_messages.push(UserDefinedMessage(result, &parent_info, i as i32).into());
+        }
+
+        update_udf_write_metric(
+            self.shared_ctx.is_mono_vertex,
+            parent_info.clone(),
+            mapped_messages.len() as u64,
+        );
+
+        // Update the tracker with the number of messages sent
+        // Use parent_info.offset instead of cloning offset separately
+        self.shared_ctx
+            .tracker
+            .serving_update(
+                &parent_info.offset,
+                mapped_messages.iter().map(|m| m.tags.clone()).collect(),
+            )
+            .await
+            .expect("failed to update tracker");
+
+        // Send messages downstream
+        for mapped_message in mapped_messages {
+            let bypassed = if let Some(ref bypass_router) = self.shared_ctx.bypass_router {
+                bypass_router
+                    .try_bypass(mapped_message.clone())
+                    .await
+                    .expect("failed to send message to bypass channel")
+            } else {
+                false
+            };
+
+            if !bypassed {
+                self.shared_ctx
+                    .output_tx
+                    .send(mapped_message)
+                    .await
+                    .expect("failed to send response");
+            }
+        }
+    }
+}
 
 /// UserDefinedUnaryMap is a grpc client that sends unary requests to the map server
 /// and forwards the responses.
@@ -38,7 +141,7 @@ impl UserDefinedUnaryMap {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
-        // map to track the oneshot sender for each request along with the message info
+        // map to track the oneshot sender for each request
         let sender_map = Arc::new(Mutex::new(HashMap::new()));
 
         // background task to receive responses from the server and send them to the appropriate
@@ -62,7 +165,7 @@ impl UserDefinedUnaryMap {
         let senders =
             std::mem::take(&mut *sender_map.lock().expect("failed to acquire poisoned lock"));
 
-        for (_, (_, sender)) in senders {
+        for (_, sender) in senders {
             let _ = sender.send(Err(Error::Grpc(Box::new(error.clone()))));
             update_udf_error_metric(is_mono_vertex());
         }
@@ -89,31 +192,46 @@ impl UserDefinedUnaryMap {
         }
     }
 
-    /// Handles the incoming message and sends it to the server for mapping.
-    pub(in crate::mapper) async fn unary_map(
+    /// Sends a message to the UDF and returns the raw response results.
+    /// If the cancellation token is cancelled while waiting for the response,
+    /// returns an error indicating the operation was cancelled.
+    pub(in crate::mapper) async fn unary(
         &self,
-        message: Message,
-        respond_to: oneshot::Sender<Result<Vec<Message>>>,
-    ) {
-        let key = message.offset.clone().to_string();
-        let msg_info = (&message).into();
-
-        update_udf_read_metric(is_mono_vertex());
+        request: MapRequest,
+        cln_token: CancellationToken,
+    ) -> Result<UnaryMapResponse> {
+        let (tx, rx) = oneshot::channel();
+        let key = request.id.clone();
 
         // only insert if we are able to send the message to the server
-        if let Err(e) = self.read_tx.send(message.into()).await {
+        if let Err(e) = self.read_tx.send(request).await {
             error!(?e, "Failed to send message to server");
-            let _ = respond_to.send(Err(Error::Mapper(format!(
+            return Err(Error::Mapper(format!(
                 "failed to send message to unary map server: {e}"
-            ))));
-            return;
+            )));
         }
 
         // insert the sender into the map
         self.senders
             .lock()
             .expect("failed to acquire poisoned lock")
-            .insert(key.clone(), (msg_info, respond_to));
+            .insert(key.clone(), tx);
+
+        tokio::select! {
+            result = rx => {
+                // we don't have to remove the sender from the map, because the response handler
+                // will do it.
+                result.map_err(|e: oneshot::error::RecvError| Error::ActorPatternRecv(e.to_string()))?
+            }
+            _ = cln_token.cancelled() => {
+                // Remove the sender from the map since we're cancelling
+                self.senders
+                    .lock()
+                    .expect("failed to acquire poisoned lock")
+                    .remove(&key);
+                Err(Error::Mapper("unary map operation cancelled".to_string()))
+            }
+        }
     }
 
     /// Processes the response from the server and sends it to the appropriate oneshot sender
@@ -126,17 +244,9 @@ impl UserDefinedUnaryMap {
             .expect("failed to acquire poisoned lock")
             .remove(&msg_id);
 
-        if let Some((msg_info, sender)) = sender_entry {
-            let mut response_messages = Vec::with_capacity(resp.results.len());
-            for (i, result) in resp.results.into_iter().enumerate() {
-                response_messages
-                    .push(super::UserDefinedMessage(result, &msg_info, i as i32).into());
-            }
-
-            update_udf_write_metric(is_mono_vertex(), msg_info, response_messages.len() as u64);
-
+        if let Some(sender) = sender_entry {
             sender
-                .send(Ok(response_messages))
+                .send(Ok(resp.results))
                 .expect("failed to send response");
         }
     }
@@ -145,15 +255,14 @@ impl UserDefinedUnaryMap {
 #[cfg(test)]
 mod tests {
     use crate::mapper::map::unary::UserDefinedUnaryMap;
-    use crate::message::{MessageID, StringOffset};
     use crate::shared::grpc::create_rpc_channel;
     use numaflow::map;
     use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::map::map_client::MapClient;
     use std::error::Error;
-    use std::sync::Arc;
     use std::time::Duration;
     use tempfile::TempDir;
+    use tokio_util::sync::CancellationToken;
 
     struct Cat;
 
@@ -192,31 +301,29 @@ mod tests {
             UserDefinedUnaryMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
                 .await?;
 
-        let message = crate::message::Message {
-            typ: Default::default(),
-            keys: Arc::from(vec!["first".into()]),
-            tags: None,
-            value: "hello".into(),
-            offset: crate::message::Offset::String(StringOffset::new("0".to_string(), 0)),
-            event_time: chrono::Utc::now(),
-            watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "0".to_string().into(),
-                index: 0,
-            },
-            ..Default::default()
+        // Create a MapRequest directly instead of a Message
+        let request = numaflow_pb::clients::map::MapRequest {
+            request: Some(numaflow_pb::clients::map::map_request::Request {
+                keys: vec!["first".into()],
+                value: "hello".into(),
+                event_time: None,
+                watermark: None,
+                headers: Default::default(),
+                metadata: None,
+            }),
+            id: "0".to_string(),
+            handshake: None,
+            status: None,
         };
 
-        let (tx, rx) = tokio::sync::oneshot::channel();
+        let cln_token = CancellationToken::new();
+        let results =
+            tokio::time::timeout(Duration::from_secs(2), client.unary(request, cln_token))
+                .await
+                .unwrap();
 
-        tokio::time::timeout(Duration::from_secs(2), client.unary_map(message, tx))
-            .await
-            .unwrap();
-
-        let messages = rx.await.unwrap();
-        assert!(messages.is_ok());
-        assert_eq!(messages?.len(), 1);
+        assert!(results.is_ok());
+        assert_eq!(results?.len(), 1);
 
         // we need to drop the client, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
