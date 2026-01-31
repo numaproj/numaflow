@@ -212,7 +212,7 @@ pub async fn start_sink_forwarder(
 }
 
 /// Starts sink forwarder for all the streams.
-async fn run_all_sink_forwarders<C: NumaflowTypeConfig>(
+async fn run_all_sink_forwarders<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
     context: &PipelineContext<'_>,
     sink: &SinkVtxConfig,
     reader_config: &BufferReaderConfig,
@@ -283,7 +283,7 @@ async fn run_all_sink_forwarders<C: NumaflowTypeConfig>(
 }
 
 /// Starts sink forwarder for a single stream.
-async fn run_sink_forwarder_for_stream<C: NumaflowTypeConfig>(
+async fn run_sink_forwarder_for_stream<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
     reader_components: ISBReaderComponents,
     sink_writer: SinkWriter,
     rate_limiter: Option<C::RateLimiter>,

@@ -226,7 +226,7 @@ pub async fn start_map_forwarder(
 }
 
 /// Starts map forwarder for all the streams.
-async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
+async fn run_all_map_forwarders<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
     context: &PipelineContext<'_>,
     map_vtx_config: &MapVtxConfig,
     reader_config: &BufferReaderConfig,
@@ -291,7 +291,7 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
 
 /// Start a map forwarder for a single stream, returns the task handle and the ISB reader
 /// (returned so that we can create a pending reader for metrics).
-async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig>(
+async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
     reader_components: ISBReaderComponents,
     mapper: MapHandle,
     buffer_writer: ISBWriter,

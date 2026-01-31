@@ -12,7 +12,7 @@ use crate::message::{Message, Offset};
 
 pub(crate) mod compression;
 pub(crate) mod error;
-pub(crate) mod jetstream;
+pub mod jetstream;
 pub(crate) mod reader;
 pub(crate) mod writer;
 
@@ -26,7 +26,6 @@ pub(crate) mod writer;
 ///
 /// Implementations must be cheaply cloneable (e.g., using Arc internally).
 #[async_trait]
-#[allow(dead_code)] // Will be used when ISBReaderOrchestrator is made generic over this trait
 pub(crate) trait ISBReader: Send + Sync + Clone {
     /// Fetches a batch of messages from the ISB.
     ///

@@ -378,7 +378,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
 }
 
 /// Starts reduce forwarder.
-async fn run_reduce_forwarder<C: NumaflowTypeConfig>(
+async fn run_reduce_forwarder<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
     context: &PipelineContext<'_>,
     reader_components: ISBReaderComponents,
     reducer: Reducer,

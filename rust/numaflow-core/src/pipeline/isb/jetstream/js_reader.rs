@@ -96,7 +96,7 @@ impl JSWrappedMessage {
 
 /// JetStreamReader, exposes methods to read, ack, and nack messages from JetStream ISB.
 #[derive(Clone)]
-pub(crate) struct JetStreamReader {
+pub struct JetStreamReader {
     /// jetstream stream from which we are reading
     stream: Stream,
     /// jetstream consumer used to read messages
@@ -270,10 +270,6 @@ impl JetStreamReader {
                 })?;
 
         Ok(Some(info.num_pending as usize + info.num_ack_pending))
-    }
-
-    pub(crate) fn get_wip_ack_interval(&self) -> Duration {
-        self.wip_ack_interval
     }
 }
 

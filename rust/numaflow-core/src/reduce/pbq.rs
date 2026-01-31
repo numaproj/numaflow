@@ -4,6 +4,7 @@ use crate::pipeline::isb::reader::ISBReaderOrchestrator;
 use crate::reduce::wal::WalMessage;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::reduce::wal::segment::compactor::Compactor;
+use crate::typ::NumaflowTypeConfig;
 use std::time::Duration;
 use tokio::sync::mpsc::{self, Sender};
 use tokio::task::JoinHandle;
@@ -22,12 +23,12 @@ pub(crate) struct WAL {
 }
 
 /// PBQBuilder is a builder for PBQ.
-pub(crate) struct PBQBuilder<C: crate::typ::NumaflowTypeConfig> {
+pub(crate) struct PBQBuilder<C: NumaflowTypeConfig> {
     isb_reader: ISBReaderOrchestrator<C>,
     wal: Option<WAL>,
 }
 
-impl<C: crate::typ::NumaflowTypeConfig> PBQBuilder<C> {
+impl<C: NumaflowTypeConfig> PBQBuilder<C> {
     /// Creates a new PBQBuilder.
     pub(crate) fn new(isb_reader: ISBReaderOrchestrator<C>) -> Self {
         Self {
@@ -51,12 +52,12 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQBuilder<C> {
 
 /// PBQ is a persistent buffer queue.
 #[allow(clippy::upper_case_acronyms)]
-pub(crate) struct PBQ<C: crate::typ::NumaflowTypeConfig> {
+pub(crate) struct PBQ<C: NumaflowTypeConfig> {
     isb_reader: ISBReaderOrchestrator<C>,
     wal: Option<WAL>,
 }
 
-impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
+impl<C: NumaflowTypeConfig> PBQ<C> {
     /// Streaming read from PBQ, returns a ReceiverStream and a JoinHandle for monitoring errors.
     pub(crate) async fn streaming_read(
         self,

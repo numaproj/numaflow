@@ -92,7 +92,7 @@ pub(crate) mod metrics;
 /// [Pipeline]
 ///
 /// [Pipeline]: https://numaflow.numaproj.io/core-concepts/pipeline/
-mod pipeline;
+pub mod pipeline;
 
 /// Tracker to track the completeness of message processing.
 mod tracker;
