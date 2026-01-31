@@ -12,11 +12,11 @@ use crate::message::{Message, Offset};
 
 pub(crate) mod compression;
 pub(crate) mod error;
-pub mod jetstream;
+pub(crate) mod jetstream;
 pub(crate) mod reader;
 pub(crate) mod writer;
 
-/// Trait for reading messages from an Inter-Stage Buffer (ISB).
+/// Trait for reading messages from an Inter Step Buffer (ISB).
 ///
 /// Implementations handle the low-level details of fetching messages,
 /// acknowledging them, and tracking pending counts. The ack/nack operations

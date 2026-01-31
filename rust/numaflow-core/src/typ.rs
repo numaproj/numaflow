@@ -14,7 +14,7 @@ use numaflow_throttling::{
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
-pub trait NumaflowTypeConfig: Send + Sync + Clone + 'static {
+pub(crate) trait NumaflowTypeConfig: Send + Sync + Clone + 'static {
     type RateLimiter: RateLimiter + Clone + Sync + 'static;
     type ISBReader: ISBReader + 'static;
 }

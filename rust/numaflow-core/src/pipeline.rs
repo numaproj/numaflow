@@ -9,7 +9,7 @@ use async_nats::{ConnectOptions, jetstream};
 use tokio_util::sync::CancellationToken;
 
 pub(crate) mod forwarder;
-pub mod isb;
+pub(crate) mod isb;
 
 /// PipelineContext contains the common context for all the forwarders.
 pub(crate) struct PipelineContext<'a> {

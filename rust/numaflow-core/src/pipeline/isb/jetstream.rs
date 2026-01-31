@@ -6,4 +6,4 @@ pub(crate) mod js_writer;
 /// JetStream Reader is responsible for reading messages from JetStream ISB.
 /// It exposes method to read messages in the form of batches and also ack/nack
 /// the messages.
-pub mod js_reader;
+pub(crate) mod js_reader;

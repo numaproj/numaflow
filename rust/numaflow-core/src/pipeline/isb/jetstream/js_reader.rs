@@ -96,7 +96,7 @@ impl JSWrappedMessage {
 
 /// JetStreamReader, exposes methods to read, ack, and nack messages from JetStream ISB.
 #[derive(Clone)]
-pub struct JetStreamReader {
+pub(crate) struct JetStreamReader {
     /// jetstream stream from which we are reading
     stream: Stream,
     /// jetstream consumer used to read messages

@@ -170,6 +170,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                         std::future::pending::<tokio::time::Instant>().await
                     }
                 } => {
+                    // mark_wip will be called only if interval returns
                     let _ = params.reader.mark_wip(&params.offset).await;
                 },
                 res = &mut params.ack_rx => {
