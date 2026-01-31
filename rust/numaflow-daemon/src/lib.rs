@@ -8,20 +8,22 @@ use numaflow_pb::servers::mvtxdaemon::{
 use rcgen::{
     CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose,
 };
+use rustls::ServerConfig;
+use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
 use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::result::Result;
 use std::sync::Arc;
-use std::sync::mpsc;
 use time::{Duration, OffsetDateTime};
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
+use tokio_rustls::TlsAcceptor;
+use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 use tracing::{info, warn};
-
-use rustls::ServerConfig;
-use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
-use tokio_rustls::TlsAcceptor;
 
 #[derive(Debug, Default)]
 pub struct MvtxDaemonService;
@@ -110,21 +112,16 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
     let daemon_service = MonoVertexDaemonServiceServer::new(MvtxDaemonService);
 
     // 2. Create two channels, one serving gRPC requests, the other HTTP.
-    let (g_sender, g_receiver) = mpsc::channel();
-    let (h_sender, h_receiver) = mpsc::channel();
+    // Give a buffer size of 1000, should be sufficent.
+    let (grpc_tx, grpc_rx) = mpsc::channel(1000);
+    let (http_tx, _http_rx) = mpsc::channel(1000);
 
     // 3. Start a thread to accept requests.
-    // Create a TLS acceptor.
-    // Loop:
-    //  receive a request.
-    //  if HTTP, send it to HTTP channel.
-    //  if gRPC, send it to gRPC channel.
-    //  others, TODO
-    let _ = tokio::spawn(async move {
+    let _accept_req_task = tokio::spawn(async move {
         loop {
             let (tcp, peer_addr) = match tcp_listener.accept().await {
                 Ok(v) => v,
-                Err(e) => {
+                Err(_) => {
                     // TODO - what's numaflow rust's standard way of printing a warn?
                     warn!("ERROR: Failed to accept a TCP connection");
                     continue;
@@ -132,10 +129,16 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
             };
             // Handle the new connection.
             // Start a new thread so that we don't block on receiving other connections.
+
+            let grpc_sender = grpc_tx.clone();
+            let http_sender = http_tx.clone();
+            let acceptor = tls_acceptor.clone();
+
             tokio::spawn(async move {
-                let stream = match tls_acceptor.accept(tcp).await {
+                let stream = match acceptor.accept(tcp).await {
                     Ok(s) => s,
                     Err(e) => {
+                        // TODO - what's numaflow rust's standard way of printing a warn?
                         warn!(peer_addr = %peer_addr, error = %e, "TLS handshake failed.");
                         // TLS handshake failed, skip handling this connection.
                         return;
@@ -151,14 +154,15 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
                 match alpn.as_deref() {
                     Some("http/1.1") => {
                         // Send to the HTTP channel.
-                        todo!()
+                        let _ = http_sender.send(stream).await;
                     }
                     Some("h2") => {
                         // Send to the gRPC channel.
-                        todo!()
+                        let _ = grpc_sender.send(stream).await;
                     }
                     _ => {
                         // Send to the gRPC channel by default
+                        let _ = grpc_sender.send(stream).await;
                     }
                 }
             });
@@ -166,8 +170,16 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
     });
 
     // 4. Start a thread to serve gRPC requests.
+    let _grpc_server_task = tokio::spawn(async move {
+        let incoming_stream = ReceiverStream::new(grpc_rx).map(Ok::<_, std::io::Error>);
+        Server::builder()
+            .add_service(daemon_service)
+            .serve_with_incoming(incoming_stream)
+            .await
+    });
 
     // 5. Start a thread to serve HTTP requests.
+    let _http_server_task = tokio::spawn(async move {});
 
     // 6. Gracefully shutdown.
     Ok(())
