@@ -10,16 +10,18 @@ use rcgen::{
 };
 use std::collections::HashMap;
 use std::error::Error;
-use std::net::{TcpListener, TcpStream};
+use std::net::SocketAddr;
 use std::result::Result;
+use std::sync::Arc;
 use std::sync::mpsc;
 use time::{Duration, OffsetDateTime};
-use tonic::transport::{Identity, Server, ServerTlsConfig};
+use tokio::net::TcpListener;
 use tonic::{Request, Response, Status};
 use tracing::info;
 
-use rusttls::ServerConfig;
-use tokio_rusttls::TlsAcceptor;
+use rustls::ServerConfig;
+use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
+use tokio_rustls::TlsAcceptor;
 
 #[derive(Debug, Default)]
 pub struct MvtxDaemonService;
@@ -98,20 +100,10 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
     info!("MonoVertex name is {}", mvtx_name);
 
     // 0. Create a TCP listener that can listen to both h2 and http 1.1.
-    let addr = format!("[::]:{}", DAEMON_SERVICE_PORT).parse()?;
-    let tcp_listener = TcpListener::bind(addr)?;
+    let addr: SocketAddr = format!("[::]:{}", DAEMON_SERVICE_PORT).parse()?;
+    let tcp_listener = TcpListener::bind(addr).await?;
     let tls_config = generate_self_signed_tls_config()?;
     let tls_acceptor = TlsAcceptor::from(tls_config);
-
-    let service = MvtxDaemonService;
-    let identity = generate_self_signed_identity()?;
-    let tls = ServerTlsConfig::new().identity(identity);
-
-    Server::builder()
-        .tls_config(tls)?
-        .add_service(MonoVertexDaemonServiceServer::new(service))
-        .serve(addr)
-        .await?;
 
     // 1. Create the gRPC service.
     // The service is shared by both gRPC and HTTP server.
@@ -143,7 +135,7 @@ pub async fn run_pipeline(pipeline_name: String) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn generate_self_signed_tls_config() -> Result<ServerConfig, Box<dyn Error>> {
+fn generate_self_signed_tls_config() -> Result<Arc<ServerConfig>, Box<dyn Error>> {
     let mut params = CertificateParams::new(vec!["localhost".to_string()])?;
 
     let mut dn = DistinguishedName::new();
@@ -165,10 +157,15 @@ fn generate_self_signed_tls_config() -> Result<ServerConfig, Box<dyn Error>> {
     let cert = params.self_signed(&signing_key)?;
 
     let cert_der = cert.der().clone();
-    let key_der = PrivatePks8KeyDer::from();
+    let key_der = PrivatePkcs8KeyDer::from(signing_key.serialize_der());
     let key_der = PrivateKeyDer::from(key_der);
 
-    let mut cfg = ServerConfig::builder
+    let mut cfg = ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(vec![cert_der], key_der)?;
 
-    Ok(Identity::from_pem(cert.pem(), signing_key.serialize_pem()))
+    // Serve both gRPC and HTTP/1.1
+    cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+
+    Ok(Arc::new(cfg))
 }

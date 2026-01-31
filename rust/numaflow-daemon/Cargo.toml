@@ -10,6 +10,10 @@ tokio.workspace = true
 numaflow-pb.workspace = true
 rcgen.workspace = true
 time.workspace = true
+rustls.workspace = true
+
+tokio-rustls = { version = "0.26.4", default-features = false, features = ["logging", "tls12"] }
+
 
 [lints]
 workspace = true
