@@ -9,7 +9,7 @@ use crate::reduce::wal::segment::WalType;
 use crate::reduce::wal::segment::append::AppendOnlyWal;
 use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use std::sync::Arc;
 
 /// A WAL Segment.
@@ -56,11 +56,7 @@ impl TryFrom<WalMessage> for Bytes {
             metadata: None,
         };
 
-        let mut buf = BytesMut::new();
-        prost::Message::encode(&proto_message, &mut buf)
-            .map_err(|e| Error::Other(e.to_string()))?;
-
-        Ok(buf.freeze())
+        Ok(Bytes::from(prost::Message::encode_to_vec(&proto_message)))
     }
 }
 

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 use std::time::{Instant, UNIX_EPOCH};
 
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use prost::Message;
 use tracing::{debug, error, info, warn};
 
@@ -128,6 +128,7 @@ impl ISBWatermarkPublisher {
         let mut interval =
             tokio::time::interval(Duration::from_secs(DEFAULT_POD_HEARTBEAT_INTERVAL as u64));
         info!(processor = ?processor_name, "Started publishing heartbeat");
+
         loop {
             interval.tick().await;
             let heartbeat = numaflow_pb::objects::watermark::Heartbeat {
@@ -137,17 +138,14 @@ impl ISBWatermarkPublisher {
                     .as_secs() as i64,
             };
 
-            let mut bytes = BytesMut::new();
-            heartbeat
-                .encode(&mut bytes)
-                .expect("Failed to encode heartbeat");
+            let bytes = Bytes::from(heartbeat.encode_to_vec());
 
             for hb_bucket in hb_buckets.iter() {
                 debug!(heartbeat = ?heartbeat.heartbeat, processor = ?processor_name,
                     "Publishing heartbeat",
                 );
                 hb_bucket
-                    .put(processor_name.clone(), bytes.clone().freeze())
+                    .put(processor_name.clone(), bytes.clone())
                     .await
                     .map_err(|e| error!(?e, "Failed to write heartbeat to hb bucket"))
                     .ok();
