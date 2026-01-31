@@ -12,7 +12,7 @@ use crate::pipeline::PipelineContext;
 
 use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
 use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};
-use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
+use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::Tracker;
@@ -34,14 +34,14 @@ use tracing::{error, info};
 pub(crate) struct MapForwarder<C: crate::typ::NumaflowTypeConfig> {
     jetstream_reader: ISBReaderOrchestrator<C>,
     mapper: MapHandle,
-    jetstream_writer: ISBWriter,
+    jetstream_writer: ISBWriterOrchestrator,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
     pub(crate) async fn new(
         jetstream_reader: ISBReaderOrchestrator<C>,
         mapper: MapHandle,
-        jetstream_writer: ISBWriter,
+        jetstream_writer: ISBWriterOrchestrator,
     ) -> Self {
         Self {
             jetstream_reader,
@@ -147,7 +147,7 @@ pub async fn start_map_forwarder(
     )
     .await?;
 
-    let writer_components = ISBWriterComponents {
+    let writer_components = ISBWriterOrchestratorComponents {
         config: config.to_vertex_config.clone(),
         writers,
         paf_concurrency: config.writer_concurrency,
@@ -155,7 +155,7 @@ pub async fn start_map_forwarder(
         vertex_type: config.vertex_type,
     };
 
-    let buffer_writer = ISBWriter::new(writer_components);
+    let buffer_writer = ISBWriterOrchestrator::new(writer_components);
     let (forwarder_tasks, mapper_handle, _pending_reader_task) = if let Some(rate_limit_config) =
         &config.rate_limit
     {
@@ -230,7 +230,7 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig<ISBReader = JetStreamReade
     context: &PipelineContext<'_>,
     map_vtx_config: &MapVtxConfig,
     reader_config: &BufferReaderConfig,
-    buffer_writer: ISBWriter,
+    buffer_writer: ISBWriterOrchestrator,
     watermark_handle: Option<crate::watermark::isb::ISBWatermarkHandle>,
     rate_limiter: Option<C::RateLimiter>,
 ) -> Result<(
@@ -294,7 +294,7 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig<ISBReader = JetStreamReade
 async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
     reader_components: ISBReaderComponents,
     mapper: MapHandle,
-    buffer_writer: ISBWriter,
+    buffer_writer: ISBWriterOrchestrator,
     rate_limiter: Option<C::RateLimiter>,
 ) -> Result<(
     tokio::task::JoinHandle<Result<()>>,

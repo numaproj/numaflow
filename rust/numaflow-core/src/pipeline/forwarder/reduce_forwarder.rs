@@ -10,7 +10,7 @@ use crate::metrics::{
 use crate::pipeline::PipelineContext;
 use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
 use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};
-use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
+use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
 use crate::reduce::pbq::{PBQ, PBQBuilder, WAL};
 use crate::reduce::reducer::aligned::reducer::AlignedReducer;
 use crate::reduce::reducer::aligned::windower::AlignedWindowManager;
@@ -173,7 +173,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     )
     .await?;
 
-    let writer_components = ISBWriterComponents {
+    let writer_components = ISBWriterOrchestratorComponents {
         config: config.to_vertex_config.clone(),
         writers,
         paf_concurrency: config.writer_concurrency,
@@ -181,7 +181,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         vertex_type: config.vertex_type,
     };
 
-    let buffer_writer = ISBWriter::new(writer_components);
+    let buffer_writer = ISBWriterOrchestrator::new(writer_components);
 
     // Create WAL if configured
     let (wal, gc_wal) = create_wal_components(
@@ -311,7 +311,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     )
     .await?;
 
-    let writer_components = ISBWriterComponents {
+    let writer_components = ISBWriterOrchestratorComponents {
         config: config.to_vertex_config.clone(),
         writers,
         paf_concurrency: config.writer_concurrency,
@@ -319,7 +319,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         vertex_type: config.vertex_type,
     };
 
-    let buffer_writer = ISBWriter::new(writer_components);
+    let buffer_writer = ISBWriterOrchestrator::new(writer_components);
 
     // Create WAL if configured (use Unaligned WindowKind for unaligned reducers)
     let (wal, gc_wal) = create_wal_components(

@@ -37,9 +37,9 @@ struct WriteResult {
     write_start: Instant,
 }
 
-/// Components needed to create an ISBWriter.
+/// Components needed to create an ISBWriterOrchestrator.
 #[derive(Clone)]
-pub(crate) struct ISBWriterComponents {
+pub(crate) struct ISBWriterOrchestratorComponents {
     pub config: Vec<ToVertexConfig>,
     pub writers: HashMap<&'static str, JetStreamWriter>,
     pub paf_concurrency: usize,
@@ -47,11 +47,11 @@ pub(crate) struct ISBWriterComponents {
     pub vertex_type: VertexType,
 }
 
-/// ISBWriter orchestrates writing to multiple JetStream streams.
+/// ISBWriterOrchestrator orchestrates writing to multiple JetStream streams.
 /// It manages multiple JetStreamWriters (one per stream), handles message routing,
 /// PAF resolution, watermark publishing, and tracker operations.
 #[derive(Clone)]
-pub(crate) struct ISBWriter {
+pub(crate) struct ISBWriterOrchestrator {
     config: Arc<Vec<ToVertexConfig>>,
     /// HashMap: stream_name -> JetStreamWriter
     writers: Arc<HashMap<&'static str, JetStreamWriter>>,
@@ -64,11 +64,11 @@ pub(crate) struct ISBWriter {
     stream_metric_labels: StreamMetricLabelsMap,
 }
 
-impl ISBWriter {
-    /// Creates a new ISBWriter from pre-created JetStreamWriters.
+impl ISBWriterOrchestrator {
+    /// Creates a new ISBWriterOrchestrator from pre-created JetStreamWriters.
     /// The JetStreamWriters are created upstream and passed in, making this more testable
     /// and decoupled from JetStream implementation details.
-    pub(crate) fn new(components: ISBWriterComponents) -> Self {
+    pub(crate) fn new(components: ISBWriterOrchestratorComponents) -> Self {
         // Build metric labels for each stream once during initialization
         let mut stream_metric_labels = HashMap::new();
         for stream_name in components.writers.keys() {
@@ -586,7 +586,7 @@ mod tests {
             .unwrap(),
         );
 
-        let writer_components = ISBWriterComponents {
+        let writer_components = ISBWriterOrchestratorComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
@@ -599,7 +599,7 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::Source,
         };
-        let writer = ISBWriter::new(writer_components);
+        let writer = ISBWriterOrchestrator::new(writer_components);
 
         let (tx, rx) = mpsc::channel(10);
         let messages_stream = ReceiverStream::new(rx);
@@ -695,7 +695,7 @@ mod tests {
             .unwrap(),
         );
 
-        let writer_components = ISBWriterComponents {
+        let writer_components = ISBWriterOrchestratorComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
@@ -708,7 +708,7 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::Source,
         };
-        let writer = ISBWriter::new(writer_components);
+        let writer = ISBWriterOrchestrator::new(writer_components);
 
         let (tx, rx) = mpsc::channel(10);
         let messages_stream = ReceiverStream::new(rx);
@@ -832,7 +832,7 @@ mod tests {
             );
         }
 
-        let writer_components = ISBWriterComponents {
+        let writer_components = ISBWriterOrchestratorComponents {
             config: vec![
                 ToVertexConfig {
                     name: "vertex1",
@@ -871,7 +871,7 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::Source,
         };
-        let writer = ISBWriter::new(writer_components);
+        let writer = ISBWriterOrchestrator::new(writer_components);
 
         let (tx, rx) = mpsc::channel(10);
         let messages_stream = ReceiverStream::new(rx);

@@ -2,7 +2,7 @@ use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::message::{Message, MessageType};
 use crate::metrics::{pipeline_drop_metric_labels, pipeline_metrics};
-use crate::pipeline::isb::writer::ISBWriter;
+use crate::pipeline::isb::writer::ISBWriterOrchestrator;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::reduce::reducer::aligned::windower::{
     AlignedWindowManager, AlignedWindowMessage, AlignedWindowOperation, Window,
@@ -38,7 +38,7 @@ struct ActiveStream {
 /// Also writes the GC events to the WAL if configured.
 struct ReduceTask {
     client: UserDefinedAlignedReduce,
-    isb_writer: ISBWriter,
+    isb_writer: ISBWriterOrchestrator,
     gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
     error_tx: mpsc::Sender<Error>,
     window: Window,
@@ -49,7 +49,7 @@ impl ReduceTask {
     /// Creates a new ReduceTask with the given configuration
     fn new(
         client: UserDefinedAlignedReduce,
-        isb_writer: ISBWriter,
+        isb_writer: ISBWriterOrchestrator,
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
         error_tx: mpsc::Sender<Error>,
         window: Window,
@@ -172,7 +172,7 @@ struct AlignedReduceActor {
     /// Map of [ActiveStream]s keyed by window ID (pnf_slot).
     active_streams: HashMap<Bytes, ActiveStream>,
     /// ISB writer for writing results of reduce operation.
-    isb_writer: ISBWriter,
+    isb_writer: ISBWriterOrchestrator,
     /// Sender for error messages.
     error_tx: mpsc::Sender<Error>,
     /// Sender for GC WAL messages. It is optional since users can specify not to use WAL.
@@ -208,7 +208,7 @@ impl AlignedReduceActor {
     pub(crate) async fn new(
         client: UserDefinedAlignedReduce,
         receiver: mpsc::Receiver<AlignedWindowMessage>,
-        isb_writer: ISBWriter,
+        isb_writer: ISBWriterOrchestrator,
         error_tx: mpsc::Sender<Error>,
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
         window_manager: AlignedWindowManager,
@@ -357,7 +357,7 @@ pub(crate) struct AlignedReducer {
     /// Window manager for assigning windows to messages and closing windows.
     window_manager: AlignedWindowManager,
     /// Writer for writing results to JetStream
-    isb_writer: ISBWriter,
+    isb_writer: ISBWriterOrchestrator,
     /// Final state of the component (any error will set this as Err).
     final_result: crate::Result<()>,
     /// Set to true when shutting down due to an error.
@@ -379,7 +379,7 @@ impl AlignedReducer {
     pub(crate) async fn new(
         client: UserDefinedAlignedReduce,
         window_manager: AlignedWindowManager,
-        isb_writer: ISBWriter,
+        isb_writer: ISBWriterOrchestrator,
         gc_wal: Option<AppendOnlyWal>,
         allowed_lateness: Duration,
         graceful_timeout: Duration,
@@ -636,7 +636,7 @@ mod tests {
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::config::pipeline::{ToVertexConfig, VertexType};
     use crate::message::{Message, MessageID, Offset, StringOffset};
-    use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
+    use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
     use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
     use crate::reduce::reducer::aligned::windower::fixed::FixedWindowManager;
     use crate::reduce::reducer::aligned::windower::sliding::SlidingWindowManager;
@@ -772,7 +772,7 @@ mod tests {
             .unwrap(),
         );
 
-        let writer_components = ISBWriterComponents {
+        let writer_components = ISBWriterOrchestratorComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
@@ -785,7 +785,7 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
         };
-        let isb_writer = ISBWriter::new(writer_components);
+        let isb_writer = ISBWriterOrchestrator::new(writer_components);
 
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
@@ -1030,7 +1030,7 @@ mod tests {
             .await?,
         );
 
-        let writer_components = ISBWriterComponents {
+        let writer_components = ISBWriterOrchestratorComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
@@ -1043,7 +1043,7 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
         };
-        let isb_writer = ISBWriter::new(writer_components);
+        let isb_writer = ISBWriterOrchestrator::new(writer_components);
 
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
@@ -1292,7 +1292,7 @@ mod tests {
             .unwrap(),
         );
 
-        let writer_components = ISBWriterComponents {
+        let writer_components = ISBWriterOrchestratorComponents {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
@@ -1305,7 +1305,7 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::ReduceUDF,
         };
-        let isb_writer = ISBWriter::new(writer_components);
+        let isb_writer = ISBWriterOrchestrator::new(writer_components);
 
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
