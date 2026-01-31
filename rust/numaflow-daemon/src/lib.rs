@@ -10,11 +10,16 @@ use rcgen::{
 };
 use std::collections::HashMap;
 use std::error::Error;
+use std::net::{TcpListener, TcpStream};
 use std::result::Result;
+use std::sync::mpsc;
 use time::{Duration, OffsetDateTime};
 use tonic::transport::{Identity, Server, ServerTlsConfig};
 use tonic::{Request, Response, Status};
 use tracing::info;
+
+use rusttls::ServerConfig;
+use tokio_rusttls::TlsAcceptor;
 
 #[derive(Debug, Default)]
 pub struct MvtxDaemonService;
@@ -92,7 +97,11 @@ const DAEMON_SERVICE_PORT: u16 = 4327;
 pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
     info!("MonoVertex name is {}", mvtx_name);
 
+    // 0. Create a TCP listener that can listen to both h2 and http 1.1.
     let addr = format!("[::]:{}", DAEMON_SERVICE_PORT).parse()?;
+    let tcp_listener = TcpListener::bind(addr)?;
+    let tls_config = generate_self_signed_tls_config()?;
+    let tls_acceptor = TlsAcceptor::from(tls_config);
 
     let service = MvtxDaemonService;
     let identity = generate_self_signed_identity()?;
@@ -104,6 +113,27 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
         .serve(addr)
         .await?;
 
+    // 1. Create the gRPC service.
+    // The service is shared by both gRPC and HTTP server.
+    let daemon_service = MonoVertexDaemonServiceServer::new(MvtxDaemonService);
+
+    // 2. Create two channels, one serving gRPC requests, the other HTTP.
+    let (g_sender, g_receiver) = mpsc::channel();
+    let (h_sender, h_receiver) = mpsc::channel();
+
+    // 3. Start a thread to accept requests.
+    // Create a TLS acceptor.
+    // Loop:
+    //  receive a request.
+    //  if HTTP, send it to HTTP channel.
+    //  if gRPC, send it to gRPC channel.
+    //  others, TODO
+
+    // 4. Start a thread to serve gRPC requests.
+
+    // 5. Start a thread to serve HTTP requests.
+
+    // 6. Gracefully shutdown.
     Ok(())
 }
 
@@ -113,7 +143,7 @@ pub async fn run_pipeline(pipeline_name: String) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn generate_self_signed_identity() -> Result<Identity, Box<dyn Error>> {
+fn generate_self_signed_tls_config() -> Result<ServerConfig, Box<dyn Error>> {
     let mut params = CertificateParams::new(vec!["localhost".to_string()])?;
 
     let mut dn = DistinguishedName::new();
@@ -133,6 +163,12 @@ fn generate_self_signed_identity() -> Result<Identity, Box<dyn Error>> {
 
     let signing_key = KeyPair::generate()?;
     let cert = params.self_signed(&signing_key)?;
+
+    let cert_der = cert.der().clone();
+    let key_der = PrivatePks8KeyDer::from();
+    let key_der = PrivateKeyDer::from(key_der);
+
+    let mut cfg = ServerConfig::builder
 
     Ok(Identity::from_pem(cert.pem(), signing_key.serialize_pem()))
 }
