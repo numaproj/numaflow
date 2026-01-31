@@ -26,7 +26,7 @@ use crate::Error;
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
 use crate::mapper::map::MapHandle;
-use crate::pipeline::isb::reader::{ISBReader as JetStreamReader, ISBReader};
+use crate::pipeline::isb::reader::ISBReaderOrchestrator;
 use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
 use crate::reduce::reducer::user_defined::UserDefinedReduce;
 use crate::sinker::sink::SinkWriter;
@@ -1366,7 +1366,7 @@ async fn sidecar_livez<C: crate::typ::NumaflowTypeConfig>(
 pub(crate) enum LagReader<C: crate::typ::NumaflowTypeConfig> {
     Source(Box<Source<C>>),
     #[allow(clippy::upper_case_acronyms)]
-    ISB(Vec<ISBReader<C>>), // multiple partitions
+    ISB(Vec<ISBReaderOrchestrator<C>>), // multiple partitions
 }
 
 /// PendingReader is responsible for periodically checking the lag of the reader
@@ -1526,7 +1526,7 @@ async fn fetch_source_pending<C: crate::typ::NumaflowTypeConfig>(
 }
 
 async fn fetch_isb_pending<C: crate::typ::NumaflowTypeConfig>(
-    reader: &mut JetStreamReader<C>,
+    reader: &mut ISBReaderOrchestrator<C>,
 ) -> crate::error::Result<i64> {
     let response: i64 = reader.pending().await?.map_or(-1, |p| p as i64); // default to -1(unavailable)
     Ok(response)

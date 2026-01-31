@@ -50,13 +50,14 @@ impl TryFrom<WMB> for BytesMut {
     type Error = Error;
 
     fn try_from(wmb: WMB) -> Result<Self, Self::Error> {
-        let mut bytes = BytesMut::new();
         let proto_wmb = numaflow_pb::objects::watermark::Wmb {
             idle: wmb.idle,
             offset: wmb.offset,
             watermark: wmb.watermark,
             partition: wmb.partition as i32,
         };
+
+        let mut bytes = BytesMut::with_capacity(proto_wmb.encoded_len());
 
         proto_wmb
             .encode(&mut bytes)
