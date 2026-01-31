@@ -6,8 +6,6 @@ use std::sync::atomic::Ordering;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::Message;
-use crate::monovertex::bypass_router::MvtxBypassRouter;
-use crate::tracker::Tracker;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -17,8 +15,8 @@ use tonic::transport::Channel;
 use tracing::error;
 
 use super::{
-    ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_error_metric,
-    update_udf_read_metric, update_udf_write_metric,
+    ParentMessageInfo, SharedMapTaskContext, UserDefinedMessage, create_response_stream,
+    update_udf_error_metric, update_udf_read_metric, update_udf_write_metric,
 };
 
 /// Type alias for the response - raw results from the UDF
@@ -27,16 +25,14 @@ pub(in crate::mapper) type UnaryMapResponse = Vec<map::map_response::Result>;
 type ResponseSenderMap = Arc<Mutex<HashMap<String, oneshot::Sender<Result<UnaryMapResponse>>>>>;
 
 /// MapUnaryTask encapsulates all the context needed to execute a unary map operation.
+/// Uses Arc<SharedMapTaskContext> to share common fields across tasks without cloning.
 pub(in crate::mapper) struct MapUnaryTask {
     pub mapper: UserDefinedUnaryMap,
     pub permit: OwnedSemaphorePermit,
     pub message: Message,
-    pub output_tx: mpsc::Sender<Message>,
-    pub tracker: Tracker,
-    pub error_tx: mpsc::Sender<Error>,
-    pub cln_token: CancellationToken,
-    pub bypass_router: Option<MvtxBypassRouter>,
-    pub is_mono_vertex: bool,
+    /// Shared context containing output_tx, error_tx, tracker, bypass_router, etc.
+    /// Wrapped in Arc to avoid cloning these fields for every task.
+    pub shared_ctx: Arc<SharedMapTaskContext>,
 }
 
 impl MapUnaryTask {
@@ -54,45 +50,52 @@ impl MapUnaryTask {
         let _permit = self.permit;
 
         // Store parent message info before sending to UDF
+        // parent_info contains offset, so we don't need to clone it separately
         let parent_info: ParentMessageInfo = (&self.message).into();
-        let offset = self.message.offset.clone();
 
         let request: MapRequest = self.message.into();
-        update_udf_read_metric(self.is_mono_vertex);
+        update_udf_read_metric(self.shared_ctx.is_mono_vertex);
 
         // Call the UDF and get raw results
-        let results = match self.mapper.unary(request, self.cln_token).await {
+        let results = match self
+            .mapper
+            .unary(request, self.shared_ctx.hard_shutdown_token.clone())
+            .await
+        {
             Ok(results) => results,
             Err(e) => {
-                error!(?e, ?offset, "failed to map message");
+                error!(?e, offset = ?parent_info.offset, "failed to map message");
                 parent_info
                     .ack_handle
                     .as_ref()
                     .expect("ack handle should be present")
                     .is_failed
                     .store(true, Ordering::Relaxed);
-                let _ = self.error_tx.send(e).await;
+                let _ = self.shared_ctx.error_tx.send(e).await;
                 return;
             }
         };
 
         // Convert raw results to Messages using parent info
-        let mapped_messages: Vec<Message> = results
-            .into_iter()
-            .enumerate()
-            .map(|(i, result)| UserDefinedMessage(result, &parent_info, i as i32).into())
-            .collect();
+        // Pre-allocate with exact capacity to avoid reallocations
+        let results_len = results.len();
+        let mut mapped_messages: Vec<Message> = Vec::with_capacity(results_len);
+        for (i, result) in results.into_iter().enumerate() {
+            mapped_messages.push(UserDefinedMessage(result, &parent_info, i as i32).into());
+        }
 
         update_udf_write_metric(
-            self.is_mono_vertex,
-            parent_info,
+            self.shared_ctx.is_mono_vertex,
+            parent_info.clone(),
             mapped_messages.len() as u64,
         );
 
         // Update the tracker with the number of messages sent
-        self.tracker
+        // Use parent_info.offset instead of cloning offset separately
+        self.shared_ctx
+            .tracker
             .serving_update(
-                &offset,
+                &parent_info.offset,
                 mapped_messages.iter().map(|m| m.tags.clone()).collect(),
             )
             .await
@@ -100,7 +103,7 @@ impl MapUnaryTask {
 
         // Send messages downstream
         for mapped_message in mapped_messages {
-            let bypassed = if let Some(ref bypass_router) = self.bypass_router {
+            let bypassed = if let Some(ref bypass_router) = self.shared_ctx.bypass_router {
                 bypass_router
                     .try_bypass(mapped_message.clone())
                     .await
@@ -110,7 +113,8 @@ impl MapUnaryTask {
             };
 
             if !bypassed {
-                self.output_tx
+                self.shared_ctx
+                    .output_tx
                     .send(mapped_message)
                     .await
                     .expect("failed to send response");
@@ -217,7 +221,7 @@ impl UserDefinedUnaryMap {
             result = rx => {
                 // we don't have to remove the sender from the map, because the response handler
                 // will do it.
-                result.map_err(|e| Error::ActorPatternRecv(e.to_string()))?
+                result.map_err(|e: oneshot::error::RecvError| Error::ActorPatternRecv(e.to_string()))?
             }
             _ = cln_token.cancelled() => {
                 // Remove the sender from the map since we're cancelling

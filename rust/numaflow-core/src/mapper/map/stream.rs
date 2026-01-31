@@ -6,8 +6,6 @@ use std::sync::atomic::Ordering;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::Message;
-use crate::monovertex::bypass_router::MvtxBypassRouter;
-use crate::tracker::Tracker;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{OwnedSemaphorePermit, mpsc};
 use tokio_util::sync::CancellationToken;
@@ -17,9 +15,9 @@ use tonic::transport::Channel;
 use tracing::error;
 
 use super::{
-    ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, UserDefinedMessage, create_response_stream,
-    update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
-    update_udf_write_only_metric,
+    ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
+    create_response_stream, update_udf_error_metric, update_udf_process_time_metric,
+    update_udf_read_metric, update_udf_write_only_metric,
 };
 
 /// Type alias for the stream response - raw results from the UDF
@@ -28,16 +26,14 @@ pub(in crate::mapper) type StreamMapResponse = Vec<map::map_response::Result>;
 type StreamResponseSenderMap = Arc<Mutex<HashMap<String, mpsc::Sender<Result<StreamMapResponse>>>>>;
 
 /// MapStreamTask encapsulates all the context needed to execute a stream map operation.
+/// Uses Arc<SharedMapTaskContext> to share common fields across tasks without cloning.
 pub(in crate::mapper) struct MapStreamTask {
     pub mapper: UserDefinedStreamMap,
     pub permit: OwnedSemaphorePermit,
     pub message: Message,
-    pub output_tx: mpsc::Sender<Message>,
-    pub tracker: Tracker,
-    pub error_tx: mpsc::Sender<Error>,
-    pub cln_token: CancellationToken,
-    pub bypass_router: Option<MvtxBypassRouter>,
-    pub is_mono_vertex: bool,
+    /// Shared context containing output_tx, error_tx, tracker, bypass_router, etc.
+    /// Wrapped in Arc to avoid cloning these fields for every task.
+    pub shared_ctx: Arc<SharedMapTaskContext>,
 }
 
 impl MapStreamTask {
@@ -55,19 +51,24 @@ impl MapStreamTask {
         let _permit = self.permit;
 
         // Store parent message info before sending to UDF
+        // parent_info contains offset, so we don't need to clone it separately
         let mut parent_info: ParentMessageInfo = (&self.message).into();
-        let offset = self.message.offset.clone();
 
         let request: MapRequest = self.message.into();
-        update_udf_read_metric(self.is_mono_vertex);
+        update_udf_read_metric(self.shared_ctx.is_mono_vertex);
 
         // Call the UDF and get receiver for raw results
-        let mut receiver = self.mapper.stream(request, self.cln_token).await;
+        let mut receiver = self
+            .mapper
+            .stream(request, self.shared_ctx.hard_shutdown_token.clone())
+            .await;
 
         // We need to update the tracker with no responses, because unlike unary and batch,
         // we cannot update the responses here - we will have to append the responses.
-        self.tracker
-            .serving_refresh(offset.clone())
+        // Use parent_info.offset instead of cloning offset separately
+        self.shared_ctx
+            .tracker
+            .serving_refresh(parent_info.offset.clone())
             .await
             .expect("failed to reset tracker");
 
@@ -82,9 +83,10 @@ impl MapStreamTask {
                                 .into();
                         parent_info.current_index += 1;
 
-                        update_udf_write_only_metric(self.is_mono_vertex);
+                        update_udf_write_only_metric(self.shared_ctx.is_mono_vertex);
 
-                        self.tracker
+                        self.shared_ctx
+                            .tracker
                             .serving_append(
                                 mapped_message.offset.clone(),
                                 mapped_message.tags.clone(),
@@ -92,17 +94,19 @@ impl MapStreamTask {
                             .await
                             .expect("failed to update tracker");
 
-                        let bypassed = if let Some(ref bypass_router) = self.bypass_router {
-                            bypass_router
-                                .try_bypass(mapped_message.clone())
-                                .await
-                                .expect("failed to send message to bypass channel")
-                        } else {
-                            false
-                        };
+                        let bypassed =
+                            if let Some(ref bypass_router) = self.shared_ctx.bypass_router {
+                                bypass_router
+                                    .try_bypass(mapped_message.clone())
+                                    .await
+                                    .expect("failed to send message to bypass channel")
+                            } else {
+                                false
+                            };
 
                         if !bypassed {
-                            self.output_tx
+                            self.shared_ctx
+                                .output_tx
                                 .send(mapped_message)
                                 .await
                                 .expect("failed to send response");
@@ -117,7 +121,7 @@ impl MapStreamTask {
                         .expect("ack handle should be present")
                         .is_failed
                         .store(true, Ordering::Relaxed);
-                    let _ = self.error_tx.send(e).await;
+                    let _ = self.shared_ctx.error_tx.send(e).await;
                     return;
                 }
                 None => break,

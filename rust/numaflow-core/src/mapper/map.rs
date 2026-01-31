@@ -171,15 +171,20 @@ impl MapHandle {
             // based on the map mode, send the message to the appropriate mapper.
             match &self.mapper {
                 MapperType::Concurrent(concurrent_mapper) => {
-                    let ctx = ConcurrentMapContext {
-                        error_rx,
+                    let shared_ctx = Arc::new(SharedMapTaskContext {
                         output_tx,
                         error_tx,
+                        tracker: self.tracker.clone(),
+                        bypass_router,
+                        hard_shutdown_token,
+                        is_mono_vertex: is_mono_vertex(),
+                    });
+                    let ctx = ConcurrentMapContext {
+                        error_rx,
                         semaphore: Arc::clone(&semaphore),
                         cln_token,
-                        hard_shutdown_token,
-                        bypass_router,
                         concurrent_mapper: concurrent_mapper.clone(),
+                        shared_ctx,
                     };
                     self.process_concurrent_messages(input_stream, ctx).await?;
                 }
@@ -222,7 +227,6 @@ impl MapHandle {
         mut ctx: ConcurrentMapContext,
     ) -> error::Result<()> {
         let mut input_stream = input_stream;
-        let is_mono_vertex = is_mono_vertex();
         loop {
             // we need tokio select here because we have to listen to both the input stream
             // and the error channel. If there is an error, we need to discard all the
@@ -263,12 +267,7 @@ impl MapHandle {
                                     mapper: mapper.clone(),
                                     permit,
                                     message: read_msg,
-                                    output_tx: ctx.output_tx.clone(),
-                                    tracker: self.tracker.clone(),
-                                    error_tx: ctx.error_tx.clone(),
-                                    cln_token: ctx.hard_shutdown_token.clone(),
-                                    bypass_router: ctx.bypass_router.clone(),
-                                    is_mono_vertex,
+                                    shared_ctx: Arc::clone(&ctx.shared_ctx),
                                 }
                                 .spawn();
                             }
@@ -277,12 +276,7 @@ impl MapHandle {
                                     mapper: mapper.clone(),
                                     permit,
                                     message: read_msg,
-                                    output_tx: ctx.output_tx.clone(),
-                                    tracker: self.tracker.clone(),
-                                    error_tx: ctx.error_tx.clone(),
-                                    cln_token: ctx.hard_shutdown_token.clone(),
-                                    bypass_router: ctx.bypass_router.clone(),
-                                    is_mono_vertex,
+                                    shared_ctx: Arc::clone(&ctx.shared_ctx),
                                 }
                                 .spawn();
                             }
@@ -356,16 +350,23 @@ impl MapHandle {
     }
 }
 
+/// Shared context for concurrent map tasks.
+pub(in crate::mapper) struct SharedMapTaskContext {
+    pub output_tx: mpsc::Sender<Message>,
+    pub error_tx: mpsc::Sender<Error>,
+    pub tracker: Tracker,
+    pub bypass_router: Option<MvtxBypassRouter>,
+    pub hard_shutdown_token: CancellationToken,
+    pub is_mono_vertex: bool,
+}
+
 /// Context for concurrent (unary/stream) map processing.
 struct ConcurrentMapContext {
     error_rx: mpsc::Receiver<Error>,
-    output_tx: mpsc::Sender<Message>,
-    error_tx: mpsc::Sender<Error>,
     semaphore: Arc<Semaphore>,
     cln_token: CancellationToken,
-    hard_shutdown_token: CancellationToken,
-    bypass_router: Option<MvtxBypassRouter>,
     concurrent_mapper: ConcurrentMapper,
+    shared_ctx: Arc<SharedMapTaskContext>,
 }
 
 /// Context for batch map processing.
@@ -452,6 +453,7 @@ fn update_udf_read_metric(is_mono_vertex: bool) {
 
 /// ParentMessageInfo is used to store the information of the parent message. This is propagated to
 /// all the downstream messages.
+#[derive(Clone)]
 pub(crate) struct ParentMessageInfo {
     pub(crate) offset: Offset,
     pub(crate) event_time: DateTime<Utc>,
@@ -668,16 +670,20 @@ mod tests {
             _ => panic!("Expected Unary mapper"),
         };
 
+        let shared_ctx = Arc::new(SharedMapTaskContext {
+            output_tx,
+            error_tx,
+            tracker,
+            bypass_router: None,
+            hard_shutdown_token: CancellationToken::new(),
+            is_mono_vertex: false,
+        });
+
         MapUnaryTask {
             mapper: unary_mapper,
             permit,
             message,
-            output_tx,
-            tracker,
-            error_tx,
-            cln_token: CancellationToken::new(),
-            bypass_router: None,
-            is_mono_vertex: false,
+            shared_ctx,
         }
         .spawn();
 
