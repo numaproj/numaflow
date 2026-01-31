@@ -8,7 +8,7 @@ use async_nats::jetstream::context::{PublishAckFuture, PublishErrorKind};
 use async_nats::jetstream::message::PublishMessage;
 use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use tokio::time::{Instant, sleep};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
@@ -233,16 +233,12 @@ impl JetStreamWriter {
             None => message.value,
         };
 
-        let payload: BytesMut = message
+        let payload: Bytes = message
             .try_into()
             .expect("message serialization should not fail");
 
         loop {
-            match self
-                .js_ctx
-                .publish(self.stream.name, payload.clone().freeze())
-                .await
-            {
+            match self.js_ctx.publish(self.stream.name, payload.clone()).await {
                 Ok(paf) => match paf.await {
                     Ok(ack) => {
                         debug!(

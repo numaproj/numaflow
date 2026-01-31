@@ -370,7 +370,7 @@ impl TryFrom<Message> for BytesMut {
             }),
         };
 
-        let mut buf = BytesMut::new();
+        let mut buf = BytesMut::with_capacity(proto_message.encoded_len());
         proto_message
             .encode(&mut buf)
             .map_err(|e| Error::Proto(e.to_string()))?;
