@@ -42,11 +42,11 @@ use tracing::{error, info, warn};
 /// and manages the lifecycle of these components.
 pub(crate) struct ReduceForwarder<C: NumaflowTypeConfig> {
     pbq: PBQ<C>,
-    reducer: Reducer,
+    reducer: Reducer<C>,
 }
 
 impl<C: NumaflowTypeConfig> ReduceForwarder<C> {
-    pub(crate) fn new(pbq: PBQ<C>, reducer: Reducer) -> Self {
+    pub(crate) fn new(pbq: PBQ<C>, reducer: Reducer<C>) -> Self {
         Self { pbq, reducer }
     }
 
@@ -173,15 +173,16 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     )
     .await?;
 
-    let writer_components = ISBWriterOrchestratorComponents {
-        config: config.to_vertex_config.clone(),
-        writers,
-        paf_concurrency: config.writer_concurrency,
-        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
-        vertex_type: config.vertex_type,
-    };
+    let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
+        ISBWriterOrchestratorComponents {
+            config: config.to_vertex_config.clone(),
+            writers,
+            paf_concurrency: config.writer_concurrency,
+            watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
+            vertex_type: config.vertex_type,
+        };
 
-    let buffer_writer = ISBWriterOrchestrator::new(writer_components);
+    let buffer_writer = ISBWriterOrchestrator::<WithoutRateLimiter>::new(writer_components);
 
     // Create WAL if configured
     let (wal, gc_wal) = create_wal_components(
@@ -311,15 +312,16 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     )
     .await?;
 
-    let writer_components = ISBWriterOrchestratorComponents {
-        config: config.to_vertex_config.clone(),
-        writers,
-        paf_concurrency: config.writer_concurrency,
-        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
-        vertex_type: config.vertex_type,
-    };
+    let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
+        ISBWriterOrchestratorComponents {
+            config: config.to_vertex_config.clone(),
+            writers,
+            paf_concurrency: config.writer_concurrency,
+            watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
+            vertex_type: config.vertex_type,
+        };
 
-    let buffer_writer = ISBWriterOrchestrator::new(writer_components);
+    let buffer_writer = ISBWriterOrchestrator::<WithoutRateLimiter>::new(writer_components);
 
     // Create WAL if configured (use Unaligned WindowKind for unaligned reducers)
     let (wal, gc_wal) = create_wal_components(
@@ -381,7 +383,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
 async fn run_reduce_forwarder<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
     context: &PipelineContext<'_>,
     reader_components: ISBReaderComponents,
-    reducer: Reducer,
+    reducer: Reducer<C>,
     wal: Option<WAL>,
     rate_limiter: Option<C::RateLimiter>,
 ) -> Result<()> {

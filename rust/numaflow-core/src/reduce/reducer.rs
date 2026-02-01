@@ -68,8 +68,10 @@ pub(crate) enum WindowManager {
     Unaligned(unaligned::windower::UnalignedWindowManager),
 }
 
+use crate::typ::NumaflowTypeConfig;
+
 /// Reducer for Aligned and Unaligned Windows.
-pub(crate) enum Reducer {
-    Aligned(aligned::reducer::AlignedReducer),
-    Unaligned(unaligned::reducer::UnalignedReducer),
+pub(crate) enum Reducer<C: NumaflowTypeConfig> {
+    Aligned(aligned::reducer::AlignedReducer<C>),
+    Unaligned(unaligned::reducer::UnalignedReducer<C>),
 }

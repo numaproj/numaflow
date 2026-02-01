@@ -74,9 +74,9 @@ pub(crate) trait ISBReader: Send + Sync + Clone {
 
 /// Error types for ISB write operations.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum WriteError {
     /// Buffer is full, cannot write (retryable)
+    #[allow(dead_code)]
     BufferFull,
     /// Write operation failed (retryable)
     WriteFailed(String),
@@ -101,7 +101,6 @@ impl std::error::Error for WriteError {}
 ///
 /// Implementations must be cheaply cloneable (e.g., using Arc internally).
 #[async_trait]
-#[allow(dead_code)]
 pub(crate) trait ISBWriter: Send + Sync + Clone {
     /// Writes a message to the ISB and blocks until confirmed.
     ///
@@ -119,6 +118,7 @@ pub(crate) trait ISBWriter: Send + Sync + Clone {
     ) -> std::result::Result<(), WriteError>;
 
     /// Returns the name/identifier of this writer (e.g., stream name).
+    #[allow(dead_code)]
     fn name(&self) -> &'static str;
 
     /// Returns whether the buffer is full.

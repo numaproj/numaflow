@@ -28,6 +28,7 @@ type MetricLabels = Arc<Vec<(String, String)>>;
 
 /// Error types specific to JetStreamWriter operations
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub(crate) enum WriteError {
     /// Buffer is full, cannot write (retryable)
     BufferFull,
@@ -138,6 +139,7 @@ impl JetStreamWriter {
     }
 
     /// Returns whether this stream is full.
+    #[allow(dead_code)]
     pub(crate) fn is_full(&self) -> bool {
         self.is_full.load(Ordering::Relaxed)
     }
@@ -145,6 +147,7 @@ impl JetStreamWriter {
     /// Writes the message to the JetStream ISB and returns a PublishAckFuture.
     /// Returns an error if the buffer is full or if the operation is cancelled.
     /// The orchestrator is responsible for retry logic and handling buffer full strategies.
+    #[allow(dead_code)]
     pub(crate) async fn async_write(
         &self,
         message: Message,

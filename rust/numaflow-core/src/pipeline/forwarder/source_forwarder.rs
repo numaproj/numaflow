@@ -30,11 +30,11 @@ use tracing::info;
 /// and manages the lifecycle of these components.
 pub(crate) struct SourceForwarder<C: crate::typ::NumaflowTypeConfig> {
     source: Source<C>,
-    writer: ISBWriterOrchestrator,
+    writer: ISBWriterOrchestrator<C>,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> SourceForwarder<C> {
-    pub(crate) fn new(source: Source<C>, writer: ISBWriterOrchestrator) -> Self {
+    pub(crate) fn new(source: Source<C>, writer: ISBWriterOrchestrator<C>) -> Self {
         Self { source, writer }
     }
 
@@ -104,15 +104,21 @@ pub(crate) async fn start_source_forwarder(
     )
     .await?;
 
-    let writer_components = ISBWriterOrchestratorComponents {
-        config: config.to_vertex_config.clone(),
-        writers,
-        paf_concurrency: config.writer_concurrency,
-        watermark_handle: source_watermark_handle.clone().map(WatermarkHandle::Source),
-        vertex_type: config.vertex_type,
-    };
+    // Helper macro to create writer components with specific type
+    macro_rules! create_writer {
+        ($type:ty) => {{
+            let writer_components: ISBWriterOrchestratorComponents<$type> =
+                ISBWriterOrchestratorComponents {
+                    config: config.to_vertex_config.clone(),
+                    writers: writers.clone(),
+                    paf_concurrency: config.writer_concurrency,
+                    watermark_handle: source_watermark_handle.clone().map(WatermarkHandle::Source),
+                    vertex_type: config.vertex_type,
+                };
+            ISBWriterOrchestrator::<$type>::new(writer_components)
+        }};
+    }
 
-    let buffer_writer = ISBWriterOrchestrator::new(writer_components);
     let transformer = create_components::create_transformer(
         config.batch_size,
         config.graceful_shutdown_time,
@@ -127,6 +133,7 @@ pub(crate) async fn start_source_forwarder(
         if should_use_redis_rate_limiter(rate_limit_config) {
             let redis_config =
                 build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
+            let buffer_writer = create_writer!(WithRedisRateLimiter);
 
             run_source_forwarder::<WithRedisRateLimiter>(
                 &context,
@@ -140,6 +147,7 @@ pub(crate) async fn start_source_forwarder(
         } else {
             let in_mem_config =
                 build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
+            let buffer_writer = create_writer!(WithInMemoryRateLimiter);
 
             run_source_forwarder::<WithInMemoryRateLimiter>(
                 &context,
@@ -152,6 +160,7 @@ pub(crate) async fn start_source_forwarder(
             .await?
         }
     } else {
+        let buffer_writer = create_writer!(WithoutRateLimiter);
         run_source_forwarder::<WithoutRateLimiter>(
             &context,
             &source_config,
@@ -172,7 +181,7 @@ async fn run_source_forwarder<C: NumaflowTypeConfig>(
     source_config: &SourceVtxConfig,
     transformer: Option<Transformer>,
     source_watermark_handle: Option<SourceWatermarkHandle>,
-    buffer_writer: ISBWriterOrchestrator,
+    buffer_writer: ISBWriterOrchestrator<C>,
     rate_limiter: Option<C::RateLimiter>,
 ) -> error::Result<()> {
     let source = create_components::create_source::<C>(

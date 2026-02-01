@@ -8,10 +8,12 @@ use crate::reduce::reducer::aligned::windower::{
     AlignedWindowManager, AlignedWindowMessage, AlignedWindowOperation, Window,
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
+use crate::typ::NumaflowTypeConfig;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::wal::GcEvent;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::ops::Sub;
 use std::sync::Arc;
 use std::time::Duration;
@@ -36,20 +38,21 @@ struct ActiveStream {
 /// Represents a reduce task for a window. It is responsible for calling the user-defined reduce
 /// function for the given window and writing the output to JetStream and publishing the watermark.
 /// Also writes the GC events to the WAL if configured.
-struct ReduceTask {
+struct ReduceTask<C: NumaflowTypeConfig> {
     client: UserDefinedAlignedReduce,
-    isb_writer: ISBWriterOrchestrator,
+    isb_writer: ISBWriterOrchestrator<C>,
     gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
     error_tx: mpsc::Sender<Error>,
     window: Window,
     window_manager: AlignedWindowManager,
+    _marker: PhantomData<C>,
 }
 
-impl ReduceTask {
+impl<C: NumaflowTypeConfig> ReduceTask<C> {
     /// Creates a new ReduceTask with the given configuration
     fn new(
         client: UserDefinedAlignedReduce,
-        isb_writer: ISBWriterOrchestrator,
+        isb_writer: ISBWriterOrchestrator<C>,
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
         error_tx: mpsc::Sender<Error>,
         window: Window,
@@ -62,6 +65,7 @@ impl ReduceTask {
             error_tx,
             window,
             window_manager,
+            _marker: PhantomData,
         }
     }
 
@@ -163,7 +167,7 @@ impl ReduceTask {
 
 /// Actor that manages multiple window reduction streams. It manages [ActiveStream]s and manages the
 /// lifecycle of the reduce tasks.
-struct AlignedReduceActor {
+struct AlignedReduceActor<C: NumaflowTypeConfig> {
     /// It multiplexes the messages to the receiver to the reduce tasks through the corresponding
     /// tx in [ActiveStream].
     receiver: mpsc::Receiver<AlignedWindowMessage>,
@@ -172,7 +176,7 @@ struct AlignedReduceActor {
     /// Map of [ActiveStream]s keyed by window ID (pnf_slot).
     active_streams: HashMap<Bytes, ActiveStream>,
     /// ISB writer for writing results of reduce operation.
-    isb_writer: ISBWriterOrchestrator,
+    isb_writer: ISBWriterOrchestrator<C>,
     /// Sender for error messages.
     error_tx: mpsc::Sender<Error>,
     /// Sender for GC WAL messages. It is optional since users can specify not to use WAL.
@@ -181,9 +185,10 @@ struct AlignedReduceActor {
     window_manager: AlignedWindowManager,
     /// Cancellation token to signal tasks to stop
     cln_token: CancellationToken,
+    _marker: PhantomData<C>,
 }
 
-impl AlignedReduceActor {
+impl<C: NumaflowTypeConfig> AlignedReduceActor<C> {
     /// Waits for all active tasks to complete
     async fn wait_for_all_tasks(&mut self) {
         info!(
@@ -208,7 +213,7 @@ impl AlignedReduceActor {
     pub(crate) async fn new(
         client: UserDefinedAlignedReduce,
         receiver: mpsc::Receiver<AlignedWindowMessage>,
-        isb_writer: ISBWriterOrchestrator,
+        isb_writer: ISBWriterOrchestrator<C>,
         error_tx: mpsc::Sender<Error>,
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
         window_manager: AlignedWindowManager,
@@ -223,6 +228,7 @@ impl AlignedReduceActor {
             gc_wal_tx,
             window_manager,
             cln_token,
+            _marker: PhantomData,
         }
     }
 
@@ -352,12 +358,12 @@ impl AlignedReduceActor {
 }
 
 /// Processes messages and forwards results to the next stage.
-pub(crate) struct AlignedReducer {
+pub(crate) struct AlignedReducer<C: NumaflowTypeConfig> {
     client: UserDefinedAlignedReduce,
     /// Window manager for assigning windows to messages and closing windows.
     window_manager: AlignedWindowManager,
     /// Writer for writing results to JetStream
-    isb_writer: ISBWriterOrchestrator,
+    isb_writer: ISBWriterOrchestrator<C>,
     /// Final state of the component (any error will set this as Err).
     final_result: crate::Result<()>,
     /// Set to true when shutting down due to an error.
@@ -372,14 +378,15 @@ pub(crate) struct AlignedReducer {
     keyed: bool,
     /// Graceful shutdown timeout duration.
     graceful_timeout: Duration,
+    _marker: PhantomData<C>,
 }
 
-impl AlignedReducer {
+impl<C: NumaflowTypeConfig> AlignedReducer<C> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn new(
         client: UserDefinedAlignedReduce,
         window_manager: AlignedWindowManager,
-        isb_writer: ISBWriterOrchestrator,
+        isb_writer: ISBWriterOrchestrator<C>,
         gc_wal: Option<AppendOnlyWal>,
         allowed_lateness: Duration,
         graceful_timeout: Duration,
@@ -396,6 +403,7 @@ impl AlignedReducer {
             graceful_timeout,
             shutting_down_on_err: false,
             final_result: Ok(()),
+            _marker: PhantomData,
         }
     }
 
@@ -641,6 +649,7 @@ mod tests {
     use crate::reduce::reducer::aligned::windower::fixed::FixedWindowManager;
     use crate::reduce::reducer::aligned::windower::sliding::SlidingWindowManager;
     use crate::shared::grpc::create_rpc_channel;
+    use crate::typ::WithoutRateLimiter;
     use async_nats::jetstream::consumer::PullConsumer;
     use async_nats::jetstream::{self, consumer, stream};
     use chrono::{TimeZone, Utc};
@@ -772,20 +781,21 @@ mod tests {
             .unwrap(),
         );
 
-        let writer_components = ISBWriterOrchestratorComponents {
-            config: vec![ToVertexConfig {
-                name: "test-vertex",
-                partitions: 1,
-                writer_config,
-                conditions: None,
-                to_vertex_type: VertexType::Sink,
-            }],
-            writers,
-            paf_concurrency: 100,
-            watermark_handle: None,
-            vertex_type: VertexType::ReduceUDF,
-        };
-        let isb_writer = ISBWriterOrchestrator::new(writer_components);
+        let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
+            ISBWriterOrchestratorComponents {
+                config: vec![ToVertexConfig {
+                    name: "test-vertex",
+                    partitions: 1,
+                    writer_config,
+                    conditions: None,
+                    to_vertex_type: VertexType::Sink,
+                }],
+                writers,
+                paf_concurrency: 100,
+                watermark_handle: None,
+                vertex_type: VertexType::ReduceUDF,
+            };
+        let isb_writer = ISBWriterOrchestrator::<WithoutRateLimiter>::new(writer_components);
 
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
@@ -1030,20 +1040,21 @@ mod tests {
             .await?,
         );
 
-        let writer_components = ISBWriterOrchestratorComponents {
-            config: vec![ToVertexConfig {
-                name: "test-vertex",
-                partitions: 1,
-                writer_config,
-                conditions: None,
-                to_vertex_type: VertexType::Sink,
-            }],
-            writers,
-            paf_concurrency: 100,
-            watermark_handle: None,
-            vertex_type: VertexType::ReduceUDF,
-        };
-        let isb_writer = ISBWriterOrchestrator::new(writer_components);
+        let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
+            ISBWriterOrchestratorComponents {
+                config: vec![ToVertexConfig {
+                    name: "test-vertex",
+                    partitions: 1,
+                    writer_config,
+                    conditions: None,
+                    to_vertex_type: VertexType::Sink,
+                }],
+                writers,
+                paf_concurrency: 100,
+                watermark_handle: None,
+                vertex_type: VertexType::ReduceUDF,
+            };
+        let isb_writer = ISBWriterOrchestrator::<WithoutRateLimiter>::new(writer_components);
 
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
@@ -1292,20 +1303,21 @@ mod tests {
             .unwrap(),
         );
 
-        let writer_components = ISBWriterOrchestratorComponents {
-            config: vec![ToVertexConfig {
-                name: "test-vertex",
-                partitions: 1,
-                writer_config,
-                conditions: None,
-                to_vertex_type: VertexType::Sink,
-            }],
-            writers,
-            paf_concurrency: 100,
-            watermark_handle: None,
-            vertex_type: VertexType::ReduceUDF,
-        };
-        let isb_writer = ISBWriterOrchestrator::new(writer_components);
+        let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
+            ISBWriterOrchestratorComponents {
+                config: vec![ToVertexConfig {
+                    name: "test-vertex",
+                    partitions: 1,
+                    writer_config,
+                    conditions: None,
+                    to_vertex_type: VertexType::Sink,
+                }],
+                writers,
+                paf_concurrency: 100,
+                watermark_handle: None,
+                vertex_type: VertexType::ReduceUDF,
+            };
+        let isb_writer = ISBWriterOrchestrator::<WithoutRateLimiter>::new(writer_components);
 
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
