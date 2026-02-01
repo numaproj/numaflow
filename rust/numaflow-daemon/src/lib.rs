@@ -117,7 +117,6 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
     // Create two channels, one serving gRPC requests, the other HTTP.
     // Given the request rate a daemon server expect to receive, a buffer size of 1000 should be sufficent.
     let (grpc_tx, grpc_rx) = mpsc::channel(1000);
-    // TODO - why mut while cursor doesn't need it?
     let (http_tx, mut http_rx) = mpsc::channel(1000);
 
     // Start a thread to accept requests.
@@ -174,10 +173,9 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
         }
     });
 
-    let grpc_service = MonoVertexDaemonServiceServer::new(MvtxDaemonService::default());
-    // let svc_for_grpc = grpc_service.clone();
     // Start a thread to serve gRPC requests.
     let _grpc_server_task = tokio::spawn(async move {
+        let grpc_service = MonoVertexDaemonServiceServer::new(MvtxDaemonService::default());
         let incoming_stream = ReceiverStream::new(grpc_rx).map(Ok::<_, std::io::Error>);
         Server::builder()
             .add_service(grpc_service)
@@ -185,10 +183,10 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
             .await
     });
 
-    // TODO - _svc_for_http will be used for HTTP requests.
-    let _svc_for_http = MvtxDaemonService::default();
     // Start a thread to serve HTTP requests.
     let _http_server_task = tokio::spawn(async move {
+        // TODO - _svc_for_http will be used for HTTP requests.
+        let _svc_for_http = MvtxDaemonService::default();
         while let Some(stream) = http_rx.recv().await {
             tokio::spawn(async move {
                 let io = TokioIo::new(stream);
