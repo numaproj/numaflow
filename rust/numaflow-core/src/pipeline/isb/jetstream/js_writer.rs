@@ -377,6 +377,29 @@ impl JetStreamWriter {
     }
 }
 
+#[async_trait::async_trait]
+impl crate::pipeline::isb::ISBWriter for JetStreamWriter {
+    async fn write(
+        &self,
+        message: Message,
+        cln_token: CancellationToken,
+    ) -> std::result::Result<(), crate::pipeline::isb::WriteError> {
+        // Use blocking_write which handles retries internally and returns when confirmed
+        self.blocking_write(message, cln_token)
+            .await
+            .map(|_| ()) // Discard the PublishAck, we only care about success
+            .map_err(|e| crate::pipeline::isb::WriteError::WriteFailed(e.to_string()))
+    }
+
+    fn name(&self) -> &'static str {
+        self.stream.name
+    }
+
+    fn is_full(&self) -> bool {
+        self.is_full.load(Ordering::Relaxed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
