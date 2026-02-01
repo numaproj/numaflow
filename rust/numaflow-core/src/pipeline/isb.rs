@@ -76,7 +76,6 @@ pub(crate) trait ISBReader: Send + Sync + Clone {
 #[derive(Debug, Clone)]
 pub enum WriteError {
     /// Buffer is full, cannot write (retryable)
-    #[allow(dead_code)]
     BufferFull,
     /// Write operation failed (retryable)
     WriteFailed(String),
@@ -95,27 +94,58 @@ impl std::error::Error for WriteError {}
 
 /// Trait for writing messages to an Inter Step Buffer (ISB).
 ///
-/// Implementations handle the low-level details of writing messages
-/// and waiting for confirmation. The write operation blocks until
-/// the message is confirmed written (or an error occurs).
+/// This trait supports two write patterns:
+/// 1. **High-performance async pattern**: Use `async_write()` to get a `PendingWrite` handle
+///    immediately, then resolve it later with `resolve()`. This allows batching acknowledgments
+///    for higher throughput.
+/// 2. **Simple blocking pattern**: Use `blocking_write()` which blocks until the write is confirmed.
 ///
 /// Implementations must be cheaply cloneable (e.g., using Arc internally).
 #[async_trait]
 pub(crate) trait ISBWriter: Send + Sync + Clone {
-    /// Writes a message to the ISB and blocks until confirmed.
+    /// The pending write handle returned by `async_write()`.
+    /// For JetStream, this is `PublishAckFuture`. For simple implementations,
+    /// this can be `()` if acknowledgments are immediate.
+    type PendingWrite: Send + 'static;
+
+    /// Writes a message and returns immediately with a pending write handle.
     ///
-    /// Returns `Ok(())` on successful write, or an error if the write fails.
-    /// `WriteError::BufferFull` indicates the buffer is full (retryable).
-    /// `WriteError::WriteFailed` indicates a write failure (retryable).
+    /// This is the high-performance write method. The returned `PendingWrite` can be
+    /// resolved later using `resolve()` to get the offset. This allows batching
+    /// multiple writes and resolving them in parallel.
+    ///
+    /// Returns `Err(WriteError::BufferFull)` if the buffer is full.
+    /// Returns `Err(WriteError::WriteFailed)` if the publish operation fails.
+    ///
+    /// # Arguments
+    /// * `message` - The message to write
+    async fn async_write(
+        &self,
+        message: Message,
+    ) -> std::result::Result<Self::PendingWrite, WriteError>;
+
+    /// Resolves a pending write to get the offset.
+    ///
+    /// This waits for the write acknowledgment and returns the offset of the written message.
+    ///
+    /// # Arguments
+    /// * `pending` - The pending write handle from `async_write()`
+    async fn resolve(&self, pending: Self::PendingWrite)
+    -> std::result::Result<Offset, WriteError>;
+
+    /// Writes a message and blocks until confirmed, returning the offset.
+    ///
+    /// This is the simple blocking write method with infinite retries until success
+    /// or cancellation. Use this when you don't need the high-performance async pattern.
     ///
     /// # Arguments
     /// * `message` - The message to write
     /// * `cln_token` - Cancellation token for graceful shutdown
-    async fn write(
+    async fn blocking_write(
         &self,
         message: Message,
         cln_token: CancellationToken,
-    ) -> std::result::Result<(), WriteError>;
+    ) -> std::result::Result<Offset, WriteError>;
 
     /// Returns the name/identifier of this writer (e.g., stream name).
     #[allow(dead_code)]
@@ -125,6 +155,7 @@ pub(crate) trait ISBWriter: Send + Sync + Clone {
     ///
     /// This is useful for proactive checking before attempting writes.
     /// Default implementation returns `false`.
+    #[allow(dead_code)]
     fn is_full(&self) -> bool {
         false
     }

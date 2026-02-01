@@ -28,7 +28,6 @@ type MetricLabels = Arc<Vec<(String, String)>>;
 
 /// Error types specific to JetStreamWriter operations
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub(crate) enum WriteError {
     /// Buffer is full, cannot write (retryable)
     BufferFull,
@@ -139,7 +138,6 @@ impl JetStreamWriter {
     }
 
     /// Returns whether this stream is full.
-    #[allow(dead_code)]
     pub(crate) fn is_full(&self) -> bool {
         self.is_full.load(Ordering::Relaxed)
     }
@@ -147,7 +145,6 @@ impl JetStreamWriter {
     /// Writes the message to the JetStream ISB and returns a PublishAckFuture.
     /// Returns an error if the buffer is full or if the operation is cancelled.
     /// The orchestrator is responsible for retry logic and handling buffer full strategies.
-    #[allow(dead_code)]
     pub(crate) async fn async_write(
         &self,
         message: Message,
@@ -382,16 +379,52 @@ impl JetStreamWriter {
 
 #[async_trait::async_trait]
 impl crate::pipeline::isb::ISBWriter for JetStreamWriter {
-    async fn write(
+    type PendingWrite = PublishAckFuture;
+
+    async fn async_write(
+        &self,
+        message: Message,
+    ) -> std::result::Result<Self::PendingWrite, crate::pipeline::isb::WriteError> {
+        // Delegate to the existing async_write method
+        self.async_write(message).await.map_err(|e| match e {
+            WriteError::BufferFull => crate::pipeline::isb::WriteError::BufferFull,
+            WriteError::PublishFailed(msg) => crate::pipeline::isb::WriteError::WriteFailed(msg),
+        })
+    }
+
+    async fn resolve(
+        &self,
+        pending: Self::PendingWrite,
+    ) -> std::result::Result<crate::message::Offset, crate::pipeline::isb::WriteError> {
+        // Await the PAF to get the PublishAck
+        let ack = pending
+            .await
+            .map_err(|e| crate::pipeline::isb::WriteError::WriteFailed(e.to_string()))?;
+
+        // Convert sequence number to Offset
+        // Use IntOffset since sequence is a u64
+        Ok(crate::message::Offset::Int(crate::message::IntOffset::new(
+            ack.sequence as i64,
+            0, // partition_idx - single partition per stream
+        )))
+    }
+
+    async fn blocking_write(
         &self,
         message: Message,
         cln_token: CancellationToken,
-    ) -> std::result::Result<(), crate::pipeline::isb::WriteError> {
-        // Use blocking_write which handles retries internally and returns when confirmed
-        self.blocking_write(message, cln_token)
+    ) -> std::result::Result<crate::message::Offset, crate::pipeline::isb::WriteError> {
+        // Use the existing blocking_write which handles retries internally
+        let ack = self
+            .blocking_write(message, cln_token)
             .await
-            .map(|_| ()) // Discard the PublishAck, we only care about success
-            .map_err(|e| crate::pipeline::isb::WriteError::WriteFailed(e.to_string()))
+            .map_err(|e| crate::pipeline::isb::WriteError::WriteFailed(e.to_string()))?;
+
+        // Convert sequence number to Offset
+        Ok(crate::message::Offset::Int(crate::message::IntOffset::new(
+            ack.sequence as i64,
+            0, // partition_idx - single partition per stream
+        )))
     }
 
     fn name(&self) -> &'static str {

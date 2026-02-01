@@ -17,8 +17,8 @@ use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_metric_labels,
     pipeline_metrics,
 };
-use crate::pipeline::isb::ISBWriter;
 use crate::pipeline::isb::error::ISBError;
+use crate::pipeline::isb::{ISBWriter, WriteError};
 use crate::shared::forward;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::WatermarkHandle;
@@ -31,8 +31,10 @@ type MetricLabels = Arc<Vec<(String, String)>>;
 type StreamMetricLabelsMap = Arc<HashMap<&'static str, MetricLabels>>;
 
 /// Result of a successful write operation to a stream.
-struct WriteResult {
+/// Contains the pending write (PAF) that needs to be resolved.
+struct WriteResult<C: NumaflowTypeConfig> {
     stream: Stream,
+    paf: <C::ISBWriter as ISBWriter>::PendingWrite,
     write_start: Instant,
 }
 
@@ -143,12 +145,12 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
     }
 
     /// Routes a message to appropriate streams and writes to each.
-    /// Returns a list of WriteResults (one per successful write).
+    /// Returns a list of WriteResults (one per successful write) with PAFs to be resolved.
     async fn route_and_write_message(
         &self,
         message: &Message,
         cln_token: CancellationToken,
-    ) -> Vec<WriteResult> {
+    ) -> Vec<WriteResult<C>> {
         let mut results = vec![];
 
         for vertex in &*self.config {
@@ -210,13 +212,14 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
 
     /// Writes a message to a single stream with retry logic.
     /// Returns None if the message should be dropped (DiscardLatest + buffer full or cancelled).
+    /// On success, returns a WriteResult containing the PAF that needs to be resolved.
     async fn write_to_stream(
         &self,
         message: &Message,
         stream: &Stream,
         buffer_full_strategy: BufferFullStrategy,
         cln_token: CancellationToken,
-    ) -> Option<WriteResult> {
+    ) -> Option<WriteResult<C>> {
         let writer = self
             .writers
             .get(stream.name)
@@ -225,53 +228,24 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
         let mut log_counter = 500u16;
 
         loop {
-            // Check if buffer is full before attempting write
-            if writer.is_full() {
-                // Throttled logging for buffer full
-                if log_counter >= 500 {
-                    warn!(stream = ?stream, "stream is full (throttled logging)");
-                    log_counter = 0;
-                }
-                log_counter += 1;
-
-                // Handle buffer full based on strategy
-                match buffer_full_strategy {
-                    BufferFullStrategy::DiscardLatest => {
-                        self.publish_stream_drop_metric(
-                            stream.name,
-                            "buffer-full",
-                            message.value.len(),
-                        );
-                        return None; // Don't retry
-                    }
-                    BufferFullStrategy::RetryUntilSuccess => {
-                        // Continue retrying after sleep
-                        if cln_token.is_cancelled() {
-                            error!("Shutdown signal received, exiting write loop");
-                            return None;
-                        }
-                        sleep(Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS)).await;
-                        continue;
-                    }
-                }
-            }
-
-            // Use the trait's write method which blocks until confirmed
-            match writer.write(message.clone(), cln_token.clone()).await {
-                Ok(()) => {
+            // Use the trait's async_write method which returns immediately with a PAF
+            match writer.async_write(message.clone()).await {
+                Ok(paf) => {
                     return Some(WriteResult {
                         stream: stream.clone(),
+                        paf,
                         write_start,
                     });
                 }
-                Err(crate::pipeline::isb::WriteError::BufferFull) => {
-                    // Buffer became full during write, handle based on strategy
+                Err(WriteError::BufferFull) => {
+                    // Throttled logging for buffer full
                     if log_counter >= 500 {
                         warn!(stream = ?stream, "stream is full (throttled logging)");
                         log_counter = 0;
                     }
                     log_counter += 1;
 
+                    // Handle buffer full based on strategy
                     match buffer_full_strategy {
                         BufferFullStrategy::DiscardLatest => {
                             self.publish_stream_drop_metric(
@@ -286,9 +260,9 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
                         }
                     }
                 }
-                Err(crate::pipeline::isb::WriteError::WriteFailed(e)) => {
+                Err(WriteError::WriteFailed(e)) => {
                     // Write failed, continue retrying
-                    error!(?e, "Write failed, retrying");
+                    error!(?e, "Publishing failed, retrying");
                 }
             }
 
@@ -371,13 +345,13 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
             .observe(write_processing_start.elapsed().as_micros() as f64);
     }
 
-    /// Finalizes the message processing after all writes are confirmed.
-    /// Spawns a background task to publish metrics and watermarks.
+    /// Resolves PAFs and finalizes the message processing.
+    /// Spawns a background task to resolve all PAFs, publish watermarks, and update tracker.
     async fn resolve_and_finalize(
         &self,
-        write_results: Vec<WriteResult>,
+        write_results: Vec<WriteResult<C>>,
         message: Message,
-        _cln_token: CancellationToken,
+        cln_token: CancellationToken,
     ) -> Result<()> {
         let permit = Arc::clone(&self.sem).acquire_owned().await.map_err(|_e| {
             Error::ISB(ISBError::Other(
@@ -385,32 +359,118 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
             ))
         });
 
-        let this = self.clone();
+        let mut this = self.clone();
         tokio::spawn(async move {
             let _permit = permit;
 
-            // All writes are already confirmed (blocking writes), so just publish metrics
-            for write_result in &write_results {
-                this.publish_write_metrics(
-                    write_result.stream.name,
-                    &message,
-                    write_result.write_start,
+            let n = write_results.len();
+            // Resolve all PAFs
+            let resolved_offsets = this
+                .resolve_all_pafs(write_results, &message, cln_token)
+                .await;
+
+            // If any of the writes failed, log warning but continue
+            // (tracking/ack is handled at higher level)
+            if resolved_offsets.len() != n {
+                warn!(
+                    expected = n,
+                    actual = resolved_offsets.len(),
+                    "Some writes failed during PAF resolution"
                 );
+                return;
             }
 
-            // TODO: Watermark publishing will be handled by injecting watermark publish
-            // into the ISBWriter trait in a future change. For now, we skip watermark
-            // publishing since the trait's write() method doesn't return offsets.
-            // See: https://github.com/numaproj/numaflow/issues/XXXX
-            let _ = &message; // Suppress unused variable warning
+            // Publish watermarks for successful writes
+            this.publish_watermarks_for_offsets(resolved_offsets, &message)
+                .await;
         });
 
         Ok(())
     }
 
+    /// Resolves all PAFs and returns the offsets for successful writes.
+    async fn resolve_all_pafs(
+        &self,
+        write_results: Vec<WriteResult<C>>,
+        message: &Message,
+        cln_token: CancellationToken,
+    ) -> Vec<(Stream, Offset)> {
+        let mut offsets = Vec::new();
+
+        for write_result in write_results {
+            let writer = self
+                .writers
+                .get(write_result.stream.name)
+                .expect("writer should exist for stream");
+
+            // Try to resolve the PAF using the trait's resolve method
+            let resolve_result = match writer.resolve(write_result.paf).await {
+                Ok(offset) => Ok(offset),
+                Err(e) => {
+                    error!(
+                        ?e, stream = ?write_result.stream,
+                        "Failed to resolve the future, trying blocking write",
+                    );
+                    Self::publish_paf_error_metrics(write_result.stream.name, &e);
+                    // Fallback to blocking write
+                    writer
+                        .blocking_write(message.clone(), cln_token.clone())
+                        .await
+                }
+            };
+
+            // Handle the resolve result
+            if let Some(offset) =
+                self.handle_paf_result(resolve_result, &write_result.stream, message)
+            {
+                // Publish write metrics for successful write
+                self.publish_write_metrics(
+                    write_result.stream.name,
+                    message,
+                    write_result.write_start,
+                );
+                offsets.push((write_result.stream.clone(), offset));
+            }
+        }
+
+        offsets
+    }
+
+    /// Handles the result of a PAF resolution or blocking write.
+    /// Returns Some(offset) if successful, None if failed.
+    fn handle_paf_result(
+        &self,
+        result: std::result::Result<Offset, WriteError>,
+        stream: &Stream,
+        message: &Message,
+    ) -> Option<Offset> {
+        match result {
+            Ok(offset) => Some(offset),
+            Err(e) => {
+                error!(?e, stream = ?stream, "Write/resolve failed");
+                self.publish_stream_drop_metric(stream.name, "write-failed", message.value.len());
+                None
+            }
+        }
+    }
+
+    /// Publishes error metrics for PAF resolution failures.
+    fn publish_paf_error_metrics(stream_name: &str, e: &WriteError) {
+        let error_kind = match e {
+            WriteError::BufferFull => "buffer_full",
+            WriteError::WriteFailed(_) => "write_failed",
+        };
+        pipeline_metrics()
+            .jetstream_isb
+            .write_error_total
+            .get_or_create(&crate::metrics::jetstream_isb_error_metrics_labels(
+                stream_name,
+                error_kind.to_string(),
+            ))
+            .inc();
+    }
+
     /// Publishes watermarks for all resolved offsets.
-    /// TODO: This method will be used once watermark publishing is injected into the ISBWriter trait.
-    #[allow(dead_code)]
     async fn publish_watermarks_for_offsets(
         &mut self,
         offsets: Vec<(Stream, Offset)>,
