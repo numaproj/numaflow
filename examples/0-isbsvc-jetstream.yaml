@@ -6,6 +6,14 @@ apiVersion: numaflow.numaproj.io/v1alpha1
 kind: InterStepBufferService
 metadata:
   name: default
+  namespace: dev-devx-osamonnumaflow-usw2-e2e
+  labels:
+    app.kubernetes.io/component: isbsvc
+    app.kubernetes.io/managed-by: isbsvc-controller
+    app.kubernetes.io/part-of: numaflow
+    assetId: "1876892737929321115"
+    numaflow.numaproj.io/isbsvc-name: default
+    numaflow.numaproj.io/isbsvc-type: jetstream
 spec:
   jetstream:
     version: latest # Do NOT use "latest" in real deployment, check "numaflow-controller-config" ConfigMap to get available versions.

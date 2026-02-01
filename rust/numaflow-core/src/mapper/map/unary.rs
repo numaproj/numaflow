@@ -10,7 +10,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
-use tracing::error;
+use tracing::{error, info};
 
 use super::{
     ParentMessageInfo, create_response_stream, update_udf_error_metric, update_udf_read_metric,
@@ -66,6 +66,8 @@ impl UserDefinedUnaryMap {
             let _ = sender.send(Err(Error::Grpc(Box::new(error.clone()))));
             update_udf_error_metric(is_mono_vertex());
         }
+
+        info!("Broadcasting error to all pending senders");
     }
 
     /// receive responses from the server and gets the corresponding oneshot response sender from the map
@@ -110,10 +112,13 @@ impl UserDefinedUnaryMap {
         }
 
         // insert the sender into the map
-        self.senders
+        let mut guard = self.senders
             .lock()
-            .expect("failed to acquire poisoned lock")
-            .insert(key.clone(), (msg_info, respond_to));
+            .expect("failed to acquire poisoned lock");
+        if guard.is_empty() {
+            info!("Inserting into empty sender map");
+        }
+        guard.insert(key.clone(), (msg_info, respond_to));
     }
 
     /// Processes the response from the server and sends it to the appropriate oneshot sender

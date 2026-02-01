@@ -268,22 +268,22 @@ impl MapHandle {
         let handle = tokio::spawn(async move {
             let parent_cln_token = cln_token.clone();
 
-            // // create a new cancellation token for the map component, this token is used for hard
-            // // shutdown, the parent token is used for graceful shutdown.
-            // let hard_shutdown_token = CancellationToken::new();
-            // // the one that calls shutdown
-            // let hard_shutdown_token_owner = hard_shutdown_token.clone();
-            // let graceful_timeout = self.graceful_shutdown_time;
-            //
-            // // spawn a task to cancel the token after graceful timeout when the main token is cancelled
-            // let shutdown_handle = tokio::spawn(async move {
-            //     // initiate graceful shutdown
-            //     parent_cln_token.cancelled().await;
-            //     // wait for graceful timeout
-            //     tokio::time::sleep(graceful_timeout).await;
-            //     // cancel the token to hard shutdown
-            //     hard_shutdown_token_owner.cancel();
-            // });
+            // create a new cancellation token for the map component, this token is used for hard
+            // shutdown, the parent token is used for graceful shutdown.
+            let hard_shutdown_token = CancellationToken::new();
+            // the one that calls shutdown
+            let hard_shutdown_token_owner = hard_shutdown_token.clone();
+            let graceful_timeout = self.graceful_shutdown_time;
+
+            // spawn a task to cancel the token after graceful timeout when the main token is cancelled
+            let shutdown_handle = tokio::spawn(async move {
+                // initiate graceful shutdown
+                parent_cln_token.cancelled().await;
+                // wait for graceful timeout
+                tokio::time::sleep(graceful_timeout).await;
+                // cancel the token to hard shutdown
+                hard_shutdown_token_owner.cancel();
+            });
 
             let mut input_stream = input_stream;
             // we capture the first error that triggered the map component shutdown
@@ -328,7 +328,7 @@ impl MapHandle {
                                     output_tx.clone(),
                                     self.tracker.clone(),
                                     error_tx.clone(),
-                                    cln_token.clone(),
+                                    hard_shutdown_token.clone(),
                                     bypass_router.clone(),
                                 ).await;
                             }
@@ -442,9 +442,9 @@ impl MapHandle {
 
             // abort the shutdown handle since we are done processing, no need to wait for the
             // hard shutdown
-            // if !shutdown_handle.is_finished() {
-            //     shutdown_handle.abort();
-            // }
+            if !shutdown_handle.is_finished() {
+                shutdown_handle.abort();
+            }
 
             self.final_result
         });

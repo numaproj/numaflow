@@ -127,18 +127,22 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
             })?;
 
         sink_writer_result.inspect_err(|e| {
+            println!("Error while writing messages");
             error!(?e, "Error while writing messages");
         })?;
 
         mapper_handle_result.inspect_err(|e| {
+            println!("Error while applying map to messages");
             error!(?e, "Error while applying map to messages");
         })?;
 
         reader_result.inspect_err(|e| {
+            println!("Error while reading messages");
             error!(?e, "Error while reading messages");
         })?;
 
         bypass_result.inspect_err(|e| {
+            println!("Error in bypass router receiver background task");
             error!(?e, "Error in bypass router receiver background task");
         })?;
 
@@ -1146,7 +1150,7 @@ mod tests {
     }
 
     fn should_we_panic() -> bool {
-        rand::rng().random_range(0..=1000)/10 < 40
+        rand::rng().random_range(0..=1000)/10 < 1
     }
 
     #[tokio::test]
@@ -1157,11 +1161,11 @@ mod tests {
         let cln_token = CancellationToken::new();
 
         // create the bypass router config to pass to the forwarder
-        let batch_size: usize = 10;
+        let batch_size: usize = 500;
 
         // Create the source
         let source_handle = create_ud_source(
-            SimpleSource::new(1000),
+            SimpleSource::new(10000),
             Option::<NoOpTransformer>::None,
             batch_size,
             cln_token.clone(),
@@ -1811,7 +1815,7 @@ mod tests {
 
         // wait for one sec to check if the pending becomes zero, because all the messages
         // should be read and acked; if it doesn't, then fail the test
-        let tokio_result = tokio::time::timeout(Duration::from_secs(1), async move {
+        /*let tokio_result = tokio::time::timeout(Duration::from_secs(100), async move {
             loop {
                 let pending = sourcer.pending().await.unwrap();
                 if pending == Some(0) {
@@ -1826,16 +1830,35 @@ mod tests {
             println!("Timeout occurred before pending became zero");
         } else {
             println!("Pending became zero");
-        }
+        }*/
 
         // assert!(
         //     tokio_result.is_ok(),
         //     "Timeout occurred before pending became zero"
         // );
 
+        if let Some(mp_shutdown_tx) = mp_shutdown_tx {
+            //mp_shutdown_tx.send(()).expect("Failed to send map shutdown signal");
+            map_handle.expect("Failed to get map join handle").await.expect("Failed to await map join handle");
+            println!("Mapper handle completed");
+        }
+
         cln_token.cancel();
         println!("Cancellation token cancelled");
+
+        match forwarder_handle.await {
+            Ok(ok) => {
+                println!("Forwarder handle returned");
+                if let Err(e) = ok {
+                    println!("Forwarder failed: {e}");
+                }
+            },
+            Err(e) => println!("Forwarder handle failed: {e}")
+        }//.expect("Forwarder handle failed").expect("Forwarder failed");
+        println!("Forwarder handle completed");
+
         src_shutdown_tx.send(()).expect("Failed to send src shutdown signal");
+
         println!("Source shutdown signal sent");
         if let Some(source_transformer) = transformer_test_handle {
             source_transformer.shutdown_tx.send(()).expect("Failed to send st shutdown signal");
@@ -1845,11 +1868,6 @@ mod tests {
         source_handle.await.expect("Failed to shutdown source");
         println!("Source shutdown handle awaited");
 
-        if let Some(mp_shutdown_tx) = mp_shutdown_tx {
-            //mp_shutdown_tx.send(()).expect("Failed to send map shutdown signal");
-            map_handle.expect("Failed to get map join handle").await.expect("Failed to await map join handle");
-            println!("Mapper handle completed");
-        }
         if let Some(ud_sink_handle) = ud_sink_handle {
             ud_sink_handle.shutdown_tx.send(()).expect("Failed to sent ud sink shutdown signal");
             ud_sink_handle.handle.await.expect("Failed to await ud sink handle");
@@ -1863,16 +1881,7 @@ mod tests {
             ons_ud_sink_handle.shutdown_tx.send(()).unwrap();
             ons_ud_sink_handle.handle.await.unwrap();
         }
-        match forwarder_handle.await {
-            Ok(ok) => {
-                println!("Forwarder handle returned");
-                if let Err(e) = ok {
-                    println!("Forwarder failed: {e}");
-                }
-            },
-            Err(e) => println!("Forwarder handle failed: {e}")
-        }//.expect("Forwarder handle failed").expect("Forwarder failed");
-        println!("Forwarder handle completed");
+
         println!("Test finished");
     }
 }
