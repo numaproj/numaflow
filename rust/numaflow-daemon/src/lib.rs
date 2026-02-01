@@ -41,8 +41,6 @@ impl MonoVertexDaemonService for MvtxDaemonService {
         &self,
         _: Request<()>,
     ) -> Result<Response<GetMonoVertexMetricsResponse>, Status> {
-        info!("Received GetMonoVertexMetrics");
-
         let mock_processing_rates = HashMap::from([
             ("default".to_string(), 67.0),
             ("1m".to_string(), 10.0),
@@ -72,8 +70,6 @@ impl MonoVertexDaemonService for MvtxDaemonService {
         &self,
         _: Request<()>,
     ) -> Result<Response<GetMonoVertexStatusResponse>, Status> {
-        info!("Received GetMonoVertexStatus");
-
         let mock_resp = GetMonoVertexStatusResponse {
             status: Some(MonoVertexStatus {
                 status: "mock_status".to_string(),
@@ -89,8 +85,6 @@ impl MonoVertexDaemonService for MvtxDaemonService {
         &self,
         _: Request<GetMonoVertexErrorsRequest>,
     ) -> Result<Response<GetMonoVertexErrorsResponse>, Status> {
-        info!("Received GetMonoVertexErrors");
-
         let mock_resp = GetMonoVertexErrorsResponse {
             errors: vec![ReplicaErrors {
                 replica: "mock_replica".to_string(),
@@ -125,9 +119,8 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
             // Accept a connection.
             let (tcp, peer_addr) = match tcp_listener.accept().await {
                 Ok(v) => v,
-                Err(_) => {
-                    // TODO - what's numaflow rust's standard way of printing a warn?
-                    warn!("ERROR: Failed to accept a TCP connection");
+                Err(e) => {
+                    warn!(error = %e, "Failed to accept a TCP connection");
                     continue;
                 }
             };
@@ -142,7 +135,6 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
                 let stream = match acceptor.accept(tcp).await {
                     Ok(s) => s,
                     Err(e) => {
-                        // TODO - what's numaflow rust's standard way of printing a warn?
                         warn!(peer_addr = %peer_addr, error = %e, "TLS handshake failed.");
                         // TLS handshake failed, skip handling this connection.
                         return;
