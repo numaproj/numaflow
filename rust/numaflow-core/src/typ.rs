@@ -3,9 +3,9 @@
 use crate::Result;
 use crate::config::components::ratelimit::RateLimitConfig;
 use crate::error::Error;
-use crate::pipeline::isb::{ISBReader, ISBWriter};
 use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
+use crate::pipeline::isb::{ISBReader, ISBWriter};
 use numaflow_throttling::state::OptimisticValidityUpdateSecs;
 use numaflow_throttling::state::store::in_memory_store::InMemoryStore;
 use numaflow_throttling::state::store::redis_store::{RedisMode, RedisStore};
