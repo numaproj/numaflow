@@ -11,10 +11,13 @@ numaflow-pb.workspace = true
 rcgen.workspace = true
 time.workspace = true
 rustls.workspace = true
+http.workspace = true
+axum.workspace = true
 
 tokio-rustls = { version = "0.26.4", default-features = false, features = ["logging", "tls12"] }
 tokio-stream = "0.1.18"
-
+hyper-util = "0.1.19"
+hyper = "1.8.1"
 
 [lints]
 workspace = true

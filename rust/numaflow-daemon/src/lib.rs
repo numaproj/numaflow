@@ -1,3 +1,9 @@
+use axum::body::Body;
+use http::{Request as HttpRequest, Response as HttpResponse, StatusCode};
+use hyper::body::Incoming;
+use hyper::server::conn::http1;
+use hyper::service::service_fn;
+use hyper_util::rt::TokioIo;
 use numaflow_pb::servers::mvtxdaemon::mono_vertex_daemon_service_server::{
     MonoVertexDaemonService, MonoVertexDaemonServiceServer,
 };
@@ -11,6 +17,7 @@ use rcgen::{
 use rustls::ServerConfig;
 use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::result::Result;
@@ -101,24 +108,22 @@ const DAEMON_SERVICE_PORT: u16 = 4327;
 pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
     info!("MonoVertex name is {}", mvtx_name);
 
-    // 0. Create a TCP listener that can listen to both h2 and http 1.1.
+    // Create a TCP listener that can listen to both h2 and http 1.1.
     let addr: SocketAddr = format!("[::]:{}", DAEMON_SERVICE_PORT).parse()?;
     let tcp_listener = TcpListener::bind(addr).await?;
     let tls_config = generate_self_signed_tls_config()?;
     let tls_acceptor = TlsAcceptor::from(tls_config);
 
-    // 1. Create the gRPC service.
-    // The service is shared by both gRPC and HTTP server.
-    let daemon_service = MonoVertexDaemonServiceServer::new(MvtxDaemonService);
-
-    // 2. Create two channels, one serving gRPC requests, the other HTTP.
-    // Give a buffer size of 1000, should be sufficent.
+    // Create two channels, one serving gRPC requests, the other HTTP.
+    // Given the request rate a daemon server expect to receive, a buffer size of 1000 should be sufficent.
     let (grpc_tx, grpc_rx) = mpsc::channel(1000);
-    let (http_tx, _http_rx) = mpsc::channel(1000);
+    // TODO - why mut while cursor doesn't need it?
+    let (http_tx, mut http_rx) = mpsc::channel(1000);
 
-    // 3. Start a thread to accept requests.
+    // Start a thread to accept requests.
     let _accept_req_task = tokio::spawn(async move {
         loop {
+            // Accept a connection.
             let (tcp, peer_addr) = match tcp_listener.accept().await {
                 Ok(v) => v,
                 Err(_) => {
@@ -128,7 +133,7 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
                 }
             };
             // Handle the new connection.
-            // Start a new thread so that we don't block on receiving other connections.
+            // Start a new thread so that we don't block accepting other connections.
 
             let grpc_sender = grpc_tx.clone();
             let http_sender = http_tx.clone();
@@ -169,17 +174,47 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
         }
     });
 
-    // 4. Start a thread to serve gRPC requests.
+    let grpc_service = MonoVertexDaemonServiceServer::new(MvtxDaemonService::default());
+    // let svc_for_grpc = grpc_service.clone();
+    // Start a thread to serve gRPC requests.
     let _grpc_server_task = tokio::spawn(async move {
         let incoming_stream = ReceiverStream::new(grpc_rx).map(Ok::<_, std::io::Error>);
         Server::builder()
-            .add_service(daemon_service)
+            .add_service(grpc_service)
             .serve_with_incoming(incoming_stream)
             .await
     });
 
-    // 5. Start a thread to serve HTTP requests.
-    let _http_server_task = tokio::spawn(async move {});
+    // TODO - _svc_for_http will be used for HTTP requests.
+    let _svc_for_http = MvtxDaemonService::default();
+    // Start a thread to serve HTTP requests.
+    let _http_server_task = tokio::spawn(async move {
+        while let Some(stream) = http_rx.recv().await {
+            tokio::spawn(async move {
+                let io = TokioIo::new(stream);
+                let svc = service_fn(|req: HttpRequest<Incoming>| async move {
+                    let method = req.method().clone();
+                    let path = req.uri().path().to_string();
+
+                    let resp = match (method.as_str(), path.as_str()) {
+                        ("GET", "/readyz") | ("GET", "/livez") => HttpResponse::builder()
+                            .status(StatusCode::NO_CONTENT)
+                            .body(Body::empty())
+                            .unwrap(),
+                        // TODO - add remaining endpoints.
+                        _ => HttpResponse::builder()
+                            .status(StatusCode::NOT_FOUND)
+                            .body(Body::empty())
+                            .unwrap(),
+                    };
+
+                    // TODO - should we use Infallible?
+                    Ok::<http::Response<Body>, Infallible>(resp)
+                });
+                let _ = http1::Builder::new().serve_connection(io, svc).await;
+            });
+        }
+    });
 
     // 6. Gracefully shutdown.
     Ok(())
