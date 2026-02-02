@@ -10,10 +10,6 @@ use crate::config::is_mono_vertex;
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
 use crate::message::Message;
-use crate::metrics::{
-    monovertex_metrics, mvtx_critical_error_metric_labels, pipeline_critical_error_metric_labels,
-    pipeline_metrics,
-};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::task::AbortOnDropHandle;
@@ -96,23 +92,7 @@ impl UserDefinedBatchMap {
                     .is_empty()
                 {
                     error!("received EOT but not all responses have been received");
-                    if is_mono_vertex() {
-                        monovertex_metrics()
-                            .critical_error_total
-                            .get_or_create(&mvtx_critical_error_metric_labels(
-                                "eot_received_from_map",
-                            ))
-                            .inc();
-                    } else {
-                        pipeline_metrics()
-                            .forwarder
-                            .critical_error_total
-                            .get_or_create(&pipeline_critical_error_metric_labels(
-                                VERTEX_TYPE_MAP_UDF,
-                                "eot_received_from_map",
-                            ))
-                            .inc();
-                    }
+                    critical_error!(VERTEX_TYPE_MAP_UDF, "eot_received_from_map");
                 }
                 update_udf_process_time_metric(is_mono_vertex());
                 continue;

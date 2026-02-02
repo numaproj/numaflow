@@ -11,7 +11,7 @@ use crate::metrics::{
 use crate::pipeline::PipelineContext;
 
 use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
-use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
+use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};
 use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
@@ -32,14 +32,14 @@ use tracing::{error, info};
 /// Map forwarder is a component which starts a streaming reader, a mapper, and a writer
 /// and manages the lifecycle of these components.
 pub(crate) struct MapForwarder<C: crate::typ::NumaflowTypeConfig> {
-    jetstream_reader: ISBReader<C>,
+    jetstream_reader: ISBReaderOrchestrator<C>,
     mapper: MapHandle,
     jetstream_writer: ISBWriter,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
     pub(crate) async fn new(
-        jetstream_reader: ISBReader<C>,
+        jetstream_reader: ISBReaderOrchestrator<C>,
         mapper: MapHandle,
         jetstream_writer: ISBWriter,
     ) -> Self {
@@ -226,7 +226,7 @@ pub async fn start_map_forwarder(
 }
 
 /// Starts map forwarder for all the streams.
-async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
+async fn run_all_map_forwarders<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
     context: &PipelineContext<'_>,
     map_vtx_config: &MapVtxConfig,
     reader_config: &BufferReaderConfig,
@@ -239,7 +239,7 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
     PendingReaderTasks,
 )> {
     let mut forwarder_tasks = vec![];
-    let mut isb_lag_readers: Vec<ISBReader<C>> = vec![];
+    let mut isb_lag_readers: Vec<ISBReaderOrchestrator<C>> = vec![];
     let mut mapper_handle = None;
 
     for stream in reader_config.streams.clone() {
@@ -291,12 +291,15 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
 
 /// Start a map forwarder for a single stream, returns the task handle and the ISB reader
 /// (returned so that we can create a pending reader for metrics).
-async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig>(
+async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
     reader_components: ISBReaderComponents,
     mapper: MapHandle,
     buffer_writer: ISBWriter,
     rate_limiter: Option<C::RateLimiter>,
-) -> Result<(tokio::task::JoinHandle<Result<()>>, ISBReader<C>)> {
+) -> Result<(
+    tokio::task::JoinHandle<Result<()>>,
+    ISBReaderOrchestrator<C>,
+)> {
     let cln_token = reader_components.cln_token.clone();
 
     let js_reader = JetStreamReader::new(
@@ -306,7 +309,8 @@ async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig>(
     )
     .await?;
 
-    let isb_reader = ISBReader::<C>::new(reader_components, js_reader, rate_limiter).await?;
+    let isb_reader =
+        ISBReaderOrchestrator::<C>::new(reader_components, js_reader, rate_limiter).await?;
 
     let forwarder = MapForwarder::<C>::new(isb_reader.clone(), mapper, buffer_writer).await;
 
