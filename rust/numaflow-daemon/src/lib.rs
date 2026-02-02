@@ -158,8 +158,10 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
                         let _ = grpc_sender.send(stream).await;
                     }
                     _ => {
-                        // Send to the gRPC channel by default
-                        let _ = grpc_sender.send(stream).await;
+                        // Send to the HTTP channel by default.
+                        // This is because most of the time, HTTP is used for communication.
+                        // On Numaflow, if a client is sending a gRPC request, the h2 protocol is explicitly used.
+                        let _ = http_sender.send(stream).await;
                     }
                 }
             });
@@ -167,7 +169,7 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
     });
 
     // Start a thread to serve gRPC requests.
-    let _grpc_server_task = tokio::spawn(async move {
+    let grpc_server_task = tokio::spawn(async move {
         let grpc_service = MonoVertexDaemonServiceServer::new(MvtxDaemonService::default());
         let incoming_stream = ReceiverStream::new(grpc_rx).map(Ok::<_, std::io::Error>);
         Server::builder()
@@ -206,6 +208,10 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
             });
         }
     });
+
+    // Wait for the gRPC server to finish.
+    let grpc_res = grpc_server_task.await?;
+    grpc_res?;
 
     // TODO - Gracefully shutdown.
     Ok(())
