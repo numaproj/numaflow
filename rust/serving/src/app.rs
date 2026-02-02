@@ -204,7 +204,10 @@ where
         .layer(
             // Graceful shutdown will wait for outstanding requests to complete. Add a timeout so
             // requests don't hang forever.
-            TimeoutLayer::new(Duration::from_secs(app.settings.drain_timeout_secs)),
+            TimeoutLayer::with_status_code(
+                StatusCode::REQUEST_TIMEOUT,
+                Duration::from_secs(app.settings.drain_timeout_secs),
+            ),
         )
         // add early validations
         .layer(middleware::from_fn(validate_request))

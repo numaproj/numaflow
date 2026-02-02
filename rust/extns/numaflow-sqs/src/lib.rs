@@ -120,7 +120,7 @@ impl From<SqsSinkError> for Error {
 
 /// AWS SDK behavior version to use across the library
 pub fn aws_behavior_version() -> BehaviorVersion {
-    BehaviorVersion::v2025_08_07()
+    BehaviorVersion::v2026_01_12()
 }
 
 /// Creates and configures an SQS client based on the provided configuration.

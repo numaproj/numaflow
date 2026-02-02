@@ -16,8 +16,8 @@ bytes.workspace = true
 
 # Daemon-specific dependencies
 http-body-util = "0.1.2"
-hyper = "1.8.1"
-hyper-util = "0.1.19"
+hyper = "1.6.0"
+hyper-util = "0.1.10"
 tokio-stream = "0.1.18"
 tokio-rustls = { version = "0.26.4", default-features = false, features = ["logging", "tls12"] }
 
