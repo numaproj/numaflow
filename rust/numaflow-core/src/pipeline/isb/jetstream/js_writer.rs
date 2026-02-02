@@ -402,10 +402,10 @@ impl crate::pipeline::isb::ISBWriter for JetStreamWriter {
             .await
             .map_err(|e| crate::pipeline::isb::WriteError::WriteFailed(e.to_string()))?;
 
-        // Convert sequence number to Offset
+        // Convert sequence number to Offset using the stream's partition
         let offset = crate::message::Offset::Int(crate::message::IntOffset::new(
             ack.sequence as i64,
-            0, // partition_idx - single partition per stream
+            self.stream.partition,
         ));
 
         // Check if this was a duplicate message
@@ -427,10 +427,10 @@ impl crate::pipeline::isb::ISBWriter for JetStreamWriter {
             .await
             .map_err(|e| crate::pipeline::isb::WriteError::WriteFailed(e.to_string()))?;
 
-        // Convert sequence number to Offset
+        // Convert sequence number to Offset using the stream's partition
         Ok(crate::message::Offset::Int(crate::message::IntOffset::new(
             ack.sequence as i64,
-            0, // partition_idx - single partition per stream
+            self.stream.partition,
         )))
     }
 
