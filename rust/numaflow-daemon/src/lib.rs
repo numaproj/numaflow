@@ -33,7 +33,7 @@ use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 use tracing::{info, warn};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct MvtxDaemonService;
 
 #[tonic::async_trait]
@@ -170,7 +170,7 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
 
     // Start a thread to serve gRPC requests.
     let grpc_server_task = tokio::spawn(async move {
-        let grpc_service = MonoVertexDaemonServiceServer::new(MvtxDaemonService::default());
+        let grpc_service = MonoVertexDaemonServiceServer::new(MvtxDaemonService);
         let incoming_stream = ReceiverStream::new(grpc_rx).map(Ok::<_, std::io::Error>);
         Server::builder()
             .add_service(grpc_service)
@@ -181,7 +181,7 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
     // Start a thread to serve HTTP requests.
     let _http_server_task = tokio::spawn(async move {
         // TODO - _svc_for_http will be used for HTTP requests.
-        let _svc_for_http = MvtxDaemonService::default();
+        let _svc_for_http = MvtxDaemonService;
         while let Some(stream) = http_rx.recv().await {
             tokio::spawn(async move {
                 let io = TokioIo::new(stream);
@@ -190,7 +190,7 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
                     let path = req.uri().path().to_string();
 
                     let resp = match (method.as_str(), path.as_str()) {
-                        ("GET", "/readyz") | ("GET", "/livez") => HttpResponse::builder()
+                        ("GET", "/readyz" | "/livez") => HttpResponse::builder()
                             .status(StatusCode::NO_CONTENT)
                             .body(Full::new(Bytes::new()))
                             .unwrap(),
