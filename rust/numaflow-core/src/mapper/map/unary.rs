@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::Message;
@@ -16,6 +15,8 @@ use super::{
     ParentMessageInfo, create_response_stream, update_udf_error_metric, update_udf_read_metric,
     update_udf_write_metric,
 };
+
+const DROP: &str = "U+005C__DROP__";
 
 type ResponseSenderMap =
     Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
@@ -59,10 +60,14 @@ impl UserDefinedUnaryMap {
 
     /// Broadcasts a unary gRPC error to all pending senders and records error metrics.
     fn broadcast_error(sender_map: &ResponseSenderMap, error: tonic::Status) {
-        let senders =
-            std::mem::take(&mut *sender_map.lock().expect("failed to acquire poisoned lock"));
+        let mut drop_map: HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)> = HashMap::new();
+        let message = Message::default();
+        let (sender, receiver) = oneshot::channel();
+        drop_map.insert(DROP.to_string(), ((&message).into(), sender));
 
-        for (_, (_, sender)) in senders {
+        std::mem::swap(&mut *sender_map.lock().expect("failed to acquire poisoned lock"), &mut drop_map);
+
+        for (_, (_, sender)) in drop_map {
             let _ = sender.send(Err(Error::Grpc(Box::new(error.clone()))));
             update_udf_error_metric(is_mono_vertex());
         }
@@ -115,8 +120,10 @@ impl UserDefinedUnaryMap {
         let mut guard = self.senders
             .lock()
             .expect("failed to acquire poisoned lock");
-        if guard.is_empty() {
-            info!("Inserting into empty sender map");
+        if guard.contains_key(DROP) {
+            info!("Map received a message after error");
+            let _ = respond_to.send(Err(Error::Mapper("Map received a message after error".to_string())));
+            return;
         }
         guard.insert(key.clone(), (msg_info, respond_to));
     }
