@@ -252,8 +252,9 @@ fn generate_self_signed_tls_config() -> Result<Arc<ServerConfig>, Box<dyn Error>
         .with_no_client_auth()
         .with_single_cert(vec![cert_der], key_der)?;
 
-    // Serve both gRPC and HTTP/1.1
-    cfg.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+    // Serve both HTTP/1.1 and gRPC
+    // Note: order matters, we choose HTTP/1.1 first because it's more widely supported.
+    cfg.alpn_protocols = vec![b"http/1.1".to_vec(), b"h2".to_vec()];
 
     Ok(Arc::new(cfg))
 }
