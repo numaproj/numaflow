@@ -70,7 +70,7 @@ impl MapBatchTask {
 
                     update_udf_write_metric(
                         self.is_mono_vertex,
-                        parent_info,
+                        &parent_info,
                         mapped_messages.len() as u64,
                     );
 

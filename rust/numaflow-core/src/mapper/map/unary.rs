@@ -86,7 +86,7 @@ impl MapUnaryTask {
 
         update_udf_write_metric(
             self.shared_ctx.is_mono_vertex,
-            parent_info.clone(),
+            &parent_info,
             mapped_messages.len() as u64,
         );
 

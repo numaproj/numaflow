@@ -419,7 +419,7 @@ fn update_udf_write_only_metric(is_mono_vertex: bool) {
     }
 }
 
-fn update_udf_write_metric(is_mono_vertex: bool, msg_info: ParentMessageInfo, message_count: u64) {
+fn update_udf_write_metric(is_mono_vertex: bool, msg_info: &ParentMessageInfo, message_count: u64) {
     if is_mono_vertex {
         monovertex_metrics()
             .udf
@@ -1418,7 +1418,7 @@ mod tests {
             ack_handle: None,
         };
 
-        update_udf_write_metric(true, msg_info, 5);
+        update_udf_write_metric(true, &msg_info, 5);
 
         let pipeline_write_after = pipeline_metrics()
             .forwarder
@@ -1452,7 +1452,7 @@ mod tests {
             ack_handle: None,
         };
 
-        update_udf_write_metric(false, msg_info, 5);
+        update_udf_write_metric(false, &msg_info, 5);
 
         let after = pipeline_metrics()
             .forwarder
