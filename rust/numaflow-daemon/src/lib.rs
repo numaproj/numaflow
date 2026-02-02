@@ -198,7 +198,7 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
                             .unwrap(),
                     };
 
-                    // TODO - should we use Infallible?
+                    // Every error case is translated to a corresponding Response, hence infallible.
                     Ok::<http::Response<Body>, Infallible>(resp)
                 });
                 let _ = http1::Builder::new().serve_connection(io, svc).await;
@@ -206,7 +206,7 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
         }
     });
 
-    // 6. Gracefully shutdown.
+    // TODO - Gracefully shutdown.
     Ok(())
 }
 
