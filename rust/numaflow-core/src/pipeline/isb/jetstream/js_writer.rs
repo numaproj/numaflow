@@ -31,8 +31,8 @@ type MetricLabels = Arc<Vec<(String, String)>>;
 pub(crate) enum WriteError {
     /// Buffer is full, cannot write (retryable)
     BufferFull,
-    /// Publish operation failed (retryable)
-    PublishFailed(String),
+    /// Write operation failed (retryable)
+    WriteFailed(String),
 }
 
 /// Buffer information for a JetStream stream.
@@ -167,7 +167,7 @@ impl JetStreamWriter {
         if let Some(compression_type) = self.compression_type {
             message.value = bytes::Bytes::from(
                 compression::compress(compression_type, &message.value)
-                    .map_err(|e| WriteError::PublishFailed(format!("Compression failed: {}", e)))?,
+                    .map_err(|e| WriteError::WriteFailed(format!("Compression failed: {}", e)))?,
             );
         }
 
@@ -206,8 +206,8 @@ impl JetStreamWriter {
                         ))
                         .inc();
                 }
-                // Return publish error - orchestrator will decide whether to retry
-                Err(WriteError::PublishFailed(e.to_string()))
+                // Return write error - orchestrator will decide whether to retry
+                Err(WriteError::WriteFailed(e.to_string()))
             }
         }
     }
@@ -388,7 +388,7 @@ impl crate::pipeline::isb::ISBWriter for JetStreamWriter {
         // Delegate to the existing async_write method
         self.async_write(message).await.map_err(|e| match e {
             WriteError::BufferFull => crate::pipeline::isb::WriteError::BufferFull,
-            WriteError::PublishFailed(msg) => crate::pipeline::isb::WriteError::WriteFailed(msg),
+            WriteError::WriteFailed(msg) => crate::pipeline::isb::WriteError::WriteFailed(msg),
         })
     }
 
