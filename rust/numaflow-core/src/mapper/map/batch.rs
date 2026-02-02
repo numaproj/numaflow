@@ -2,7 +2,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use super::{
+    ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_error_metric,
+    update_udf_process_time_metric, update_udf_read_metric, update_udf_write_metric, DROP
+};
 use crate::config::is_mono_vertex;
+use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
 use crate::message::Message;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
@@ -12,7 +17,6 @@ use tonic::Streaming;
 use tonic::transport::Channel;
 use tracing::error;
 
-use super::{ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric, update_udf_write_metric, DROP};
 
 /// Type aliases
 type ResponseSenderMap =
@@ -102,6 +106,7 @@ impl UserDefinedBatchMap {
                     .is_empty()
                 {
                     error!("received EOT but not all responses have been received");
+                    critical_error!(VERTEX_TYPE_MAP_UDF, "eot_received_from_map");
                 }
                 update_udf_process_time_metric(is_mono_vertex());
                 continue;

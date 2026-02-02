@@ -12,6 +12,7 @@ use tracing::error;
 
 use crate::Error;
 use crate::Result;
+use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::message::Message;
 use crate::shared::grpc::prost_timestamp_from_utc;
 use crate::sinker::sink::{ResponseFromSink, Sink};
@@ -128,6 +129,7 @@ impl Sink for UserDefinedSink {
                     error!(
                         "received EOT message before all responses are received, we will wait indefinitely for the remaining responses"
                     );
+                    critical_error!(VERTEX_TYPE_SINK, "eot_received_from_sink");
                     // persist the error for debugging
                     runtime::persist_application_error(Status::with_details(
                         Code::Internal,

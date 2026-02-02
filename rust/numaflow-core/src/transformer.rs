@@ -133,6 +133,7 @@ impl Transformer {
 
         if response.is_empty() {
             error!("received empty response from server (transformer), we will wait indefinitely");
+            critical_error!(VERTEX_TYPE_SOURCE, "eot_received_from_transformer");
             // persist the error for debugging
             runtime::persist_application_error(Status::with_details(
                 Code::Internal,

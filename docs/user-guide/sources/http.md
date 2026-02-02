@@ -88,6 +88,22 @@ By default, the time of the date coming to the HTTP source is used as the event 
 curl -kq -X POST -H "x-numaflow-event-time: 1663006726000" -d "hello world" ${http-source-url}
 ```
 
+## x-numaflow-keys
+
+The HTTP Source supports message keys for aggregation purposes. Keys can be specified using the `x-numaflow-keys` HTTP header with a comma-separated string of key values.
+
+```sh
+curl -kq -X POST -H "x-numaflow-keys: key1,key2,key3" -d "hello world" ${http-source-url}
+```
+
+For example, to send a message with keys "user123" and "region-us-west":
+
+```sh
+curl -kq -X POST -H "x-numaflow-keys: user123,region-us-west" -d '{"data": "sample"}' ${http-source-url}
+```
+
+If the `x-numaflow-keys` header is not provided, the message will be processed without any keys.
+
 ## Auth
 
 A `Bearer` token can be configured to prevent the HTTP Source from being accessed by unexpected clients. To do so, a Kubernetes Secret needs to be created to store the token, and the valid clients also need to include the token in its HTTP request header.

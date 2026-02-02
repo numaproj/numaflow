@@ -11,6 +11,44 @@ use tokio_util::sync::CancellationToken;
 use tonic::{Code, Status};
 use tracing::{error, info};
 
+/// Macro to emit critical error metrics for both MonoVertex and Pipeline.
+///
+/// This macro checks whether the current runtime is a MonoVertex or a Pipeline
+/// and emits the appropriate critical error metric.
+///
+/// # Arguments
+/// * `$vertex_type` - The vertex type (e.g., `VERTEX_TYPE_SINK`, `VERTEX_TYPE_SOURCE`).
+///   This is only used for Pipeline metrics.
+/// * `$reason` - The reason for the critical error (e.g., `"eot_received_from_sink"`).
+///
+/// # Example
+/// ```ignore
+/// use crate::critical_error;
+/// use crate::config::pipeline::VERTEX_TYPE_SINK;
+///
+/// critical_error!(VERTEX_TYPE_SINK, "eot_received_from_sink");
+/// ```
+#[macro_export]
+macro_rules! critical_error {
+    ($vertex_type:expr, $reason:expr) => {
+        if $crate::config::is_mono_vertex() {
+            $crate::metrics::monovertex_metrics()
+                .critical_error_total
+                .get_or_create(&$crate::metrics::mvtx_critical_error_metric_labels($reason))
+                .inc();
+        } else {
+            $crate::metrics::pipeline_metrics()
+                .forwarder
+                .critical_error_total
+                .get_or_create(&$crate::metrics::pipeline_critical_error_metric_labels(
+                    $vertex_type,
+                    $reason,
+                ))
+                .inc();
+        }
+    };
+}
+
 /// Custom Error handling.
 mod error;
 pub(crate) use crate::error::{Error, Result};
@@ -54,7 +92,7 @@ pub(crate) mod metrics;
 /// [Pipeline]
 ///
 /// [Pipeline]: https://numaflow.numaproj.io/core-concepts/pipeline/
-mod pipeline;
+pub(crate) mod pipeline;
 
 /// Tracker to track the completeness of message processing.
 mod tracker;
@@ -99,6 +137,9 @@ pub async fn run() -> Result<()> {
             info!("Starting monovertex forwarder with config: {:#?}", config);
             // Run the forwarder with cancellation token.
             if let Err(e) = monovertex::start_forwarder(cln_token, &config).await {
+                // increment the critical error metric
+                critical_error!("", "mvtx_runtime_error");
+
                 if let Error::Grpc(e) = e {
                     error!(error=?e, "Monovertex failed because of UDF failure");
                     runtime::persist_application_error(*e);
@@ -118,7 +159,10 @@ pub async fn run() -> Result<()> {
         }
         CustomResourceType::Pipeline(config) => {
             info!("Starting pipeline forwarder with config: {:#?}", config);
+            let vertex_type = config.vertex_type.as_str();
             if let Err(e) = forwarder::start_forwarder(cln_token, *config).await {
+                critical_error!(vertex_type, "pipeline_runtime_error");
+
                 if let Error::Grpc(e) = e {
                     error!(error=?e, "Pipeline failed because of UDF failure");
                     runtime::persist_application_error(*e);
