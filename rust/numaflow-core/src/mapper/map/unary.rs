@@ -80,7 +80,7 @@ impl UserDefinedUnaryMap {
                 Ok(None) => break,
                 Err(e) => {
                     error!(?e, "Error reading message from unary map gRPC stream");
-                    Self::broadcast_error(&sender_map, tonic::Status::internal("Error reading message from unary map gRPC stream"));
+                    Self::broadcast_error(&sender_map, e);
                     continue;
                 }
             };
