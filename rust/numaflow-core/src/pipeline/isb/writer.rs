@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant, sleep};
@@ -369,13 +370,18 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
                 .resolve_all_pafs(write_results, &message, cln_token)
                 .await;
 
-            // If any of the writes failed, log warning but continue
-            // (tracking/ack is handled at higher level)
+            // If any of the writes failed, NAK the message so it can be retried
             if resolved_offsets.len() != n {
+                message
+                    .ack_handle
+                    .as_ref()
+                    .expect("ack handle should be present")
+                    .is_failed
+                    .store(true, Ordering::Relaxed);
                 warn!(
                     expected = n,
                     actual = resolved_offsets.len(),
-                    "Some writes failed during PAF resolution"
+                    "Some writes failed during PAF resolution, message will be NAK'd"
                 );
                 return;
             }
