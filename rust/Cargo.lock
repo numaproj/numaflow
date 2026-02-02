@@ -2555,8 +2555,9 @@ dependencies = [
 name = "numaflow-daemon"
 version = "0.1.0"
 dependencies = [
- "axum",
+ "bytes",
  "http 1.3.1",
+ "http-body-util",
  "hyper 1.8.1",
  "hyper-util",
  "numaflow-pb",

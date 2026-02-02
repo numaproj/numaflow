@@ -1,5 +1,6 @@
-use axum::body::Body;
+use bytes::Bytes;
 use http::{Request as HttpRequest, Response as HttpResponse, StatusCode};
+use http_body_util::Full;
 use hyper::body::Incoming;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
@@ -189,17 +190,17 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
                     let resp = match (method.as_str(), path.as_str()) {
                         ("GET", "/readyz") | ("GET", "/livez") => HttpResponse::builder()
                             .status(StatusCode::NO_CONTENT)
-                            .body(Body::empty())
+                            .body(Full::new(Bytes::new()))
                             .unwrap(),
                         // TODO - add remaining endpoints.
                         _ => HttpResponse::builder()
                             .status(StatusCode::NOT_FOUND)
-                            .body(Body::empty())
+                            .body(Full::new(Bytes::new()))
                             .unwrap(),
                     };
 
                     // Every error case is translated to a corresponding Response, hence infallible.
-                    Ok::<http::Response<Body>, Infallible>(resp)
+                    Ok::<HttpResponse<Full<Bytes>>, Infallible>(resp)
                 });
                 let _ = http1::Builder::new().serve_connection(io, svc).await;
             });
