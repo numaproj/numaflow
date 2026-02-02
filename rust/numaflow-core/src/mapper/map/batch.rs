@@ -12,10 +12,7 @@ use tonic::Streaming;
 use tonic::transport::Channel;
 use tracing::error;
 
-use super::{
-    ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_error_metric,
-    update_udf_process_time_metric, update_udf_read_metric, update_udf_write_metric,
-};
+use super::{ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric, update_udf_write_metric, DROP};
 
 /// Type aliases
 type ResponseSenderMap =
@@ -59,12 +56,25 @@ impl UserDefinedBatchMap {
 
     /// Broadcasts a batch map gRPC error to all pending senders and records error metrics.
     fn broadcast_error(sender_map: &ResponseSenderMap, error: tonic::Status) {
-        let senders =
-            std::mem::take(&mut *sender_map.lock().expect("failed to acquire poisoned lock"));
+        let (_sender, _) = oneshot::channel();
+        let mut drop_map =
+            HashMap::from([(DROP.to_string(), ((&Message::default()).into(), _sender))]);
 
-        for (_, (_, sender)) in senders {
+        // swap the sender map with the drop map
+        // Any new messages that need to be added to the [ResponseSenderMap] will be skipped when
+        // the DROP key is found.
+        // This is to prevent any new messages from being added to the
+        // ResponseSenderMap after the error has been broadcasted.
+        std::mem::swap(
+            &mut *sender_map.lock().expect("failed to acquire poisoned lock"),
+            &mut drop_map,
+        );
+
+        // live messages are now in the drop_map
+        // send error to all the senders
+        for (_, (_, sender)) in drop_map {
             let _ = sender.send(Err(Error::Grpc(Box::new(error.clone()))));
-            update_udf_error_metric(is_mono_vertex())
+            update_udf_error_metric(is_mono_vertex());
         }
     }
 
@@ -146,10 +156,22 @@ impl UserDefinedBatchMap {
                 return;
             }
 
-            self.senders
+            let mut senders_guard = self
+                .senders
                 .lock()
-                .expect("failed to acquire poisoned lock")
-                .insert(key.clone(), (msg_info, respond_to));
+                .expect("failed to acquire poisoned lock");
+
+            // if the DROP key is found, it means that an error has been broadcasted by
+            // receive_batch_responses, and we should not add any new messages to the map
+            if senders_guard.contains_key(DROP) {
+                // FIXME: Use better aborted tonic status
+                let _ = respond_to.send(Err(Error::Grpc(Box::new(tonic::Status::aborted(
+                    "DROPPED",
+                )))));
+                return;
+            }
+
+            senders_guard.insert(key.clone(), (msg_info, respond_to));
         }
 
         // send eot request

@@ -35,6 +35,8 @@ use batch::UserDefinedBatchMap;
 use stream::UserDefinedStreamMap;
 use unary::UserDefinedUnaryMap;
 
+const DROP: &str = "U+005C__DROP__";
+
 /// ParentMessageInfo is used to store the information of the parent message. This is propagated to
 /// all the downstream messages.
 pub(crate) struct ParentMessageInfo {
