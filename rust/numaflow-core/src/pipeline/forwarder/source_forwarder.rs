@@ -110,7 +110,7 @@ pub(crate) async fn start_source_forwarder(
             let writer_components: ISBWriterOrchestratorComponents<$type> =
                 ISBWriterOrchestratorComponents {
                     config: config.to_vertex_config.clone(),
-                    writers: writers.clone(),
+                    writers,
                     paf_concurrency: config.writer_concurrency,
                     watermark_handle: source_watermark_handle.clone().map(WatermarkHandle::Source),
                     vertex_type: config.vertex_type,
