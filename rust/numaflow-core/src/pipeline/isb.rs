@@ -92,6 +92,36 @@ impl std::fmt::Display for WriteError {
 
 impl std::error::Error for WriteError {}
 
+/// Result of resolving a pending write operation.
+///
+/// Contains the offset of the written message along with additional metadata
+/// that may be useful for logging, metrics, or debugging.
+#[derive(Debug, Clone)]
+pub struct ResolveResult {
+    /// The offset of the written message
+    pub offset: Offset,
+    /// Whether this was a duplicate message (already existed in the buffer)
+    pub is_duplicate: bool,
+}
+
+impl ResolveResult {
+    /// Creates a new ResolveResult with the given offset and no duplicate flag.
+    pub fn new(offset: Offset) -> Self {
+        Self {
+            offset,
+            is_duplicate: false,
+        }
+    }
+
+    /// Creates a new ResolveResult marked as a duplicate.
+    pub fn duplicate(offset: Offset) -> Self {
+        Self {
+            offset,
+            is_duplicate: true,
+        }
+    }
+}
+
 /// Trait for writing messages to an Inter Step Buffer (ISB).
 ///
 /// This trait supports two write patterns:
@@ -124,14 +154,18 @@ pub(crate) trait ISBWriter: Send + Sync + Clone {
         message: Message,
     ) -> std::result::Result<Self::PendingWrite, WriteError>;
 
-    /// Resolves a pending write to get the offset.
+    /// Resolves a pending write to get the result.
     ///
-    /// This waits for the write acknowledgment and returns the offset of the written message.
+    /// This waits for the write acknowledgment and returns a `ResolveResult` containing
+    /// the offset of the written message along with additional metadata (e.g., whether
+    /// the message was a duplicate).
     ///
     /// # Arguments
     /// * `pending` - The pending write handle from `async_write()`
-    async fn resolve(&self, pending: Self::PendingWrite)
-    -> std::result::Result<Offset, WriteError>;
+    async fn resolve(
+        &self,
+        pending: Self::PendingWrite,
+    ) -> std::result::Result<ResolveResult, WriteError>;
 
     /// Writes a message and blocks until confirmed, returning the offset.
     ///

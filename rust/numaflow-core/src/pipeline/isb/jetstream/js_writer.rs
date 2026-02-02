@@ -395,18 +395,25 @@ impl crate::pipeline::isb::ISBWriter for JetStreamWriter {
     async fn resolve(
         &self,
         pending: Self::PendingWrite,
-    ) -> std::result::Result<crate::message::Offset, crate::pipeline::isb::WriteError> {
+    ) -> std::result::Result<crate::pipeline::isb::ResolveResult, crate::pipeline::isb::WriteError>
+    {
         // Await the PAF to get the PublishAck
         let ack = pending
             .await
             .map_err(|e| crate::pipeline::isb::WriteError::WriteFailed(e.to_string()))?;
 
         // Convert sequence number to Offset
-        // Use IntOffset since sequence is a u64
-        Ok(crate::message::Offset::Int(crate::message::IntOffset::new(
+        let offset = crate::message::Offset::Int(crate::message::IntOffset::new(
             ack.sequence as i64,
             0, // partition_idx - single partition per stream
-        )))
+        ));
+
+        // Check if this was a duplicate message
+        if ack.duplicate {
+            Ok(crate::pipeline::isb::ResolveResult::duplicate(offset))
+        } else {
+            Ok(crate::pipeline::isb::ResolveResult::new(offset))
+        }
     }
 
     async fn blocking_write(

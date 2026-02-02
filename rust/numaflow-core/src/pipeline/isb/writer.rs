@@ -19,7 +19,7 @@ use crate::metrics::{
     pipeline_metrics,
 };
 use crate::pipeline::isb::error::ISBError;
-use crate::pipeline::isb::{ISBWriter, WriteError};
+use crate::pipeline::isb::{ISBWriter, ResolveResult, WriteError};
 use crate::shared::forward;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::WatermarkHandle;
@@ -411,17 +411,18 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
 
             // Try to resolve the PAF using the trait's resolve method
             let resolve_result = match writer.resolve(write_result.paf).await {
-                Ok(offset) => Ok(offset),
+                Ok(result) => Ok(result),
                 Err(e) => {
                     error!(
                         ?e, stream = ?write_result.stream,
                         "Failed to resolve the future, trying blocking write",
                     );
                     Self::publish_paf_error_metrics(write_result.stream.name, &e);
-                    // Fallback to blocking write
+                    // Fallback to blocking write - wrap offset in ResolveResult
                     writer
                         .blocking_write(message.clone(), cln_token.clone())
                         .await
+                        .map(ResolveResult::new)
                 }
             };
 
@@ -444,14 +445,29 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
 
     /// Handles the result of a PAF resolution or blocking write.
     /// Returns Some(offset) if successful, None if failed.
+    /// Also handles duplicate detection and publishes appropriate metrics.
     fn handle_paf_result(
         &self,
-        result: std::result::Result<Offset, WriteError>,
+        result: std::result::Result<ResolveResult, WriteError>,
         stream: &Stream,
         message: &Message,
     ) -> Option<Offset> {
         match result {
-            Ok(offset) => Some(offset),
+            Ok(resolve_result) => {
+                if resolve_result.is_duplicate {
+                    warn!(
+                        message_id = ?message.id,
+                        stream = ?stream,
+                        "Duplicate message detected"
+                    );
+                    self.publish_stream_drop_metric(
+                        stream.name,
+                        "duplicate-id",
+                        message.value.len(),
+                    );
+                }
+                Some(resolve_result.offset)
+            }
             Err(e) => {
                 error!(?e, stream = ?stream, "Write/resolve failed");
                 self.publish_stream_drop_metric(stream.name, "write-failed", message.value.len());
