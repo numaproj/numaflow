@@ -1,4 +1,4 @@
-# OpenTelemetry Tracing Design for Numaflow
+# OpenTelemetry Tracing Design for Numaflow [Proposal]
 
 ## 1. Objective
 The goal is to enable distributed tracing in Numaflow to track message propagation from Source to Sink. This will provide visibility into:
@@ -145,7 +145,25 @@ pub fn init_tracing(service_name: &str) -> Result<sdktrace::Tracer, Box<dyn std:
      - Inject the current context into the outgoing message's `sys_metadata`.
      - Write to next ISB.
 
-### 4. Implementation Plan: Numaflow SDKs (e.g., Go/Rust)
+### 3.5 Handling Aggregation (Reduce Vertex)
+Reduce vertices ingest multiple messages (Fan-In) and produce a single result. This requires a strategy for linking multiple parent contexts to a single resulting span.
+
+#### Option 1: Trace Links
+OpenTelemetry supports "Links" to associate a Span with multiple other Spans that are not its direct parent.
+- **Ingest**: Store the trace context of incoming messages in the window state.
+- **Aggregate**: When creating the `UDF Call` span:
+  - Set the **Parent** to the context of the *first* message in the window (or a representative message).
+  - Add **Links** for the contexts of all other messages in the window.
+- **Limit**: To prevent span bloat, limit the number of links (e.g., max 50). If more, sample (e.g., first 10, last 10, random 30).
+
+#### Option 2: First-Wins (Simplified)
+- **Ingest**: Keep the trace context of only the *first* message that opened the window.
+- **Aggregate**: Use that single context as the Parent for the `UDF Call` span.
+- **Pros**: Zero storage overhead, simple.
+- **Cons**: Loss of lineage for other messages.
+
+
+## 4. Implementation Plan: Numaflow SDKs (e.g., Go/Rust/Python)
 
 The SDKs run user code (UDFs) in a separate container. They **MUST** also initialize a tracer to participate in the distributed trace.
 
