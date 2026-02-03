@@ -75,21 +75,14 @@ impl UserDefinedUnaryMap {
         sender_map: ResponseSenderMap,
         mut resp_stream: Streaming<MapResponse>,
     ) {
-        loop {
-            let resp = match resp_stream.message().await {
-                Ok(Some(message)) => message,
-                Ok(None) => break,
+        while let Some(resp) = resp_stream.next().await {
+            match resp {
+                Ok(message) => Self::process_unary_response(&sender_map, message).await,
                 Err(e) => {
                     error!(?e, "Error reading message from unary map gRPC stream");
                     Self::broadcast_error(&sender_map, e);
-                    while let Some(_) = resp_stream.next().await {
-                        // drain the rest of the stream
-                    }
-                    break;
                 }
             };
-
-            Self::process_unary_response(&sender_map, resp).await
         }
 
         // broadcast error for all pending senders that might've gotten added while the stream was draining
