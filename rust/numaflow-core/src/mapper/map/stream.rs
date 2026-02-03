@@ -7,6 +7,7 @@ use crate::error::{Error, Result};
 use crate::message::Message;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::mpsc;
+use tokio_stream::StreamExt;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
@@ -79,6 +80,9 @@ impl UserDefinedStreamMap {
                 Err(e) => {
                     error!(?e, "Error reading message from stream map gRPC stream");
                     Self::broadcast_error(&sender_map, e).await;
+                    while let Some(_) = resp_stream.next().await {
+                        // drain the rest of the stream
+                    }
                     break;
                 }
             };
@@ -105,6 +109,13 @@ impl UserDefinedStreamMap {
             )
             .await;
         }
+
+        // broadcast error for all pending senders that might've gotten added while the stream was draining
+        Self::broadcast_error(
+            &sender_map,
+            tonic::Status::aborted("receiver stream dropped"),
+        )
+        .await;
     }
 
     /// Handles the incoming message and sends it to the server for mapping.
