@@ -13,7 +13,7 @@ We will use the **W3C Trace Context** standard (`traceparent`, `tracestate`) for
 - **Rationale**: It is the industry standard, natively supported by OpenTelemetry, compact (1-2 headers), and vendor-neutral.
 
 ### 2.2 Carrier: System Metadata (`sys_metadata`)
-To maintain the immutability of user headers, trace context will be stored in the `sys_metadata` field of the Numaflow `Message` protobuf.
+Trace context will be stored in the `sys_metadata` field of the Numaflow `Message` protobuf.
 
 - **Location**: `message.metadata.sys_metadata`
 - **Key**: `"tracing"`
@@ -41,14 +41,14 @@ message Metadata {
     "tracing": {
       "key_value": {
         "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
-        "tracestate": "rojo=00f067aa0ba902b7,congo=t61rcWkgMzE"
+        "tracestate": "pqrs=00f067aa0ba902b7,congo=t61rcWkgMzE"
       }
     }
   }
 }
 ```
 
-## 3. Implementation Plan: Numaflow Core (Rust)
+## 3. Implementation Plan: Numaflow Core
 
 The Rust data plane (`rust/numaflow-core`) handles the heavy lifting of reading/writing to ISB and invoking UDFs.
 
@@ -60,7 +60,7 @@ Update `Cargo.toml` with:
 - `tracing-opentelemetry`
 
 ### 3.2 Context Propagation Helper
-We need a helper module (`src/shared/otel.rs`) that implements `opentelemetry::propagation::Extractor` and `Injector` for the `KeyValueGroup` struct.
+We need a helper module (`numaflow-core/src/shared/otel.rs`) that implements `opentelemetry::propagation::Extractor` and `Injector` for the `KeyValueGroup` struct.
 
 ```rust
 pub const TRACING_METADATA_KEY: &str = "tracing";
@@ -82,29 +82,29 @@ use opentelemetry::KeyValue;
 use opentelemetry_otlp::WithExportConfig;
 
 pub fn init_tracing(service_name: &str) -> Result<sdktrace::Tracer, Box<dyn std::error::Error + Send + Sync + 'static>> {
-    // 1. Check if tracing is enabled via custom env var
+    // Check if tracing is enabled via custom env var
     let enabled = std::env::var("NUMAFLOW_TRACING_ENABLED")
         .map(|v| v.to_lowercase() == "true")
         .unwrap_or(false);
 
     if !enabled {
-        // Return a no-op tracer or handle gracefully
+        // Return a no-op tracer
         return Ok(sdktrace::TracerProvider::default().tracer("noop"));
     }
 
-    // 2. Configure Resource (Service Name is critical for filtering in UI)
+    //  Configure Resource (Service Name is critical for filtering in UI)
     let resource = Resource::new(vec![
         KeyValue::new("service.name", service_name.to_string()),
         KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
     ]);
 
-    // 3. Configure OTLP Exporter
+    //  Configure OTLP Exporter
     // - Automatically reads OTEL_EXPORTER_OTLP_ENDPOINT from env
     // - Defaults to http://localhost:4317 if not set
     let exporter = opentelemetry_otlp::new_exporter()
         .tonic(); // Uses gRPC
 
-    // 4. Build Pipeline
+    // Build Pipeline
     let tracer = opentelemetry_otlp::new_pipeline()
         .tracing()
         .with_exporter(exporter)
@@ -216,17 +216,13 @@ In the gRPC handler (e.g., `MapFn`):
 
 ## 6. Configuration & Deployment
 
-### 6.1 Pipeline Spec
-Users enable tracing by adding environment variables to the vertex container spec.
+### 6.1 Pipeline Spec [TBD]
+Users enable tracing by adding environment variables to the pipeline spec.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
-metadata:
-  name: my-pipeline
-spec:
-  vertices:
-    - name: my-map-vertex
+
       container:
         env:
           - name: NUMAFLOW_TRACING_ENABLED
@@ -238,8 +234,5 @@ spec:
 ### 6.2 Infrastructure
 The user is responsible for deploying the observability stack:
 1. **OTEL Collector**: Receives traces from Numaflow.
-2. **Backend**: Jaeger, Tempo, Datadog, etc.
+2. **Backend**: Jaeger, Datadog, etc.
 
-## 7. Future Considerations
-- **Sampling**: Configurable sampling rates (e.g., `OTEL_TRACES_SAMPLER=parentbased_traceidratio`, `OTEL_TRACES_SAMPLER_ARG=0.1` for 10%) to manage cost.
-- **B3 Support**: If legacy support is needed, we simply swap the Global Propagator in Rust/Go initialization; the `sys_metadata` storage mechanism remains identical.
