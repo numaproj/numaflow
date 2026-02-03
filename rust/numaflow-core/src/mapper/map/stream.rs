@@ -26,13 +26,10 @@ pub(in crate::mapper) type StreamMapResponse = Vec<map::map_response::Result>;
 type StreamResponseSenderMap = Arc<Mutex<HashMap<String, mpsc::Sender<Result<StreamMapResponse>>>>>;
 
 /// MapStreamTask encapsulates all the context needed to execute a stream map operation.
-/// Uses Arc<SharedMapTaskContext> to share common fields across tasks without cloning.
 pub(in crate::mapper) struct MapStreamTask {
     pub mapper: UserDefinedStreamMap,
     pub permit: OwnedSemaphorePermit,
     pub message: Message,
-    /// Shared context containing output_tx, error_tx, tracker, bypass_router, etc.
-    /// Wrapped in Arc to avoid cloning these fields for every task.
     pub shared_ctx: Arc<SharedMapTaskContext>,
 }
 
