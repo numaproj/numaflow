@@ -80,8 +80,16 @@ impl UserDefinedUnaryMap {
                 Ok(None) => break,
                 Err(e) => {
                     error!(?e, "Error reading message from unary map gRPC stream");
-                    Self::broadcast_error(&sender_map, e);
-                    continue;
+                    Self::broadcast_error(&sender_map, e.clone());
+                    loop {
+                        match resp_stream.message().await {
+                            Ok(None) => break,
+                            Ok(Some(_)) | Err(_) => {
+                                Self::broadcast_error(&sender_map, e.clone());
+                            }
+                        }
+                    }
+                    break;
                 }
             };
 
