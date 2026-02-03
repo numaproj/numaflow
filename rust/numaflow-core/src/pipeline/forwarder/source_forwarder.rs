@@ -7,7 +7,7 @@ use crate::metrics::{
 };
 use crate::pipeline::PipelineContext;
 
-use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
+use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::source::Source;
@@ -30,11 +30,11 @@ use tracing::info;
 /// and manages the lifecycle of these components.
 pub(crate) struct SourceForwarder<C: crate::typ::NumaflowTypeConfig> {
     source: Source<C>,
-    writer: ISBWriter,
+    writer: ISBWriterOrchestrator<C>,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> SourceForwarder<C> {
-    pub(crate) fn new(source: Source<C>, writer: ISBWriter) -> Self {
+    pub(crate) fn new(source: Source<C>, writer: ISBWriterOrchestrator<C>) -> Self {
         Self { source, writer }
     }
 
@@ -104,15 +104,21 @@ pub(crate) async fn start_source_forwarder(
     )
     .await?;
 
-    let writer_components = ISBWriterComponents {
-        config: config.to_vertex_config.clone(),
-        writers,
-        paf_concurrency: config.writer_concurrency,
-        watermark_handle: source_watermark_handle.clone().map(WatermarkHandle::Source),
-        vertex_type: config.vertex_type,
-    };
+    // Helper macro to create writer components with specific type
+    macro_rules! create_writer {
+        ($type:ty) => {{
+            let writer_components: ISBWriterOrchestratorComponents<$type> =
+                ISBWriterOrchestratorComponents {
+                    config: config.to_vertex_config.clone(),
+                    writers,
+                    paf_concurrency: config.writer_concurrency,
+                    watermark_handle: source_watermark_handle.clone().map(WatermarkHandle::Source),
+                    vertex_type: config.vertex_type,
+                };
+            ISBWriterOrchestrator::<$type>::new(writer_components)
+        }};
+    }
 
-    let buffer_writer = ISBWriter::new(writer_components);
     let transformer = create_components::create_transformer(
         config.batch_size,
         config.graceful_shutdown_time,
@@ -127,6 +133,7 @@ pub(crate) async fn start_source_forwarder(
         if should_use_redis_rate_limiter(rate_limit_config) {
             let redis_config =
                 build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
+            let buffer_writer = create_writer!(WithRedisRateLimiter);
 
             run_source_forwarder::<WithRedisRateLimiter>(
                 &context,
@@ -140,6 +147,7 @@ pub(crate) async fn start_source_forwarder(
         } else {
             let in_mem_config =
                 build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
+            let buffer_writer = create_writer!(WithInMemoryRateLimiter);
 
             run_source_forwarder::<WithInMemoryRateLimiter>(
                 &context,
@@ -152,6 +160,7 @@ pub(crate) async fn start_source_forwarder(
             .await?
         }
     } else {
+        let buffer_writer = create_writer!(WithoutRateLimiter);
         run_source_forwarder::<WithoutRateLimiter>(
             &context,
             &source_config,
@@ -172,7 +181,7 @@ async fn run_source_forwarder<C: NumaflowTypeConfig>(
     source_config: &SourceVtxConfig,
     transformer: Option<Transformer>,
     source_watermark_handle: Option<SourceWatermarkHandle>,
-    buffer_writer: ISBWriter,
+    buffer_writer: ISBWriterOrchestrator<C>,
     rate_limiter: Option<C::RateLimiter>,
 ) -> error::Result<()> {
     let source = create_components::create_source::<C>(
@@ -234,7 +243,7 @@ mod tests {
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::config::pipeline::{ToVertexConfig, VertexConfig, VertexType, isb};
     use crate::pipeline::forwarder::source_forwarder::SourceForwarder;
-    use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
+    use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
     use crate::shared::grpc::create_rpc_channel;
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
@@ -467,7 +476,7 @@ mod tests {
             .unwrap(),
         );
 
-        let writer_components = ISBWriterComponents {
+        let writer_components = ISBWriterOrchestratorComponents {
             config: vec![ToVertexConfig {
                 partitions: 1,
                 writer_config,
@@ -480,7 +489,7 @@ mod tests {
             watermark_handle: None,
             vertex_type: VertexType::Source,
         };
-        let writer = ISBWriter::new(writer_components);
+        let writer = ISBWriterOrchestrator::new(writer_components);
 
         // create the forwarder with the source, transformer, and writer
         let forwarder = SourceForwarder::new(source.clone(), writer);

@@ -6,6 +6,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
+use tokio_util::sync::CancellationToken;
 
 use crate::error::Result;
 use crate::message::{Message, Offset};
@@ -68,5 +69,128 @@ pub(crate) trait ISBReader: Send + Sync + Clone {
     /// Default implementation returns `None`.
     fn wip_ack_interval(&self) -> Option<Duration> {
         None
+    }
+}
+
+/// Error types for ISB write operations.
+#[derive(Debug, Clone)]
+pub enum WriteError {
+    /// Buffer is full, cannot write (retryable)
+    BufferFull,
+    /// Write operation failed (retryable)
+    WriteFailed(String),
+}
+
+impl std::fmt::Display for WriteError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WriteError::BufferFull => write!(f, "buffer is full"),
+            WriteError::WriteFailed(msg) => write!(f, "write failed: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for WriteError {}
+
+/// Result of resolving a pending write operation.
+///
+/// Contains the offset of the written message along with additional metadata
+/// that may be useful for logging, metrics, or debugging.
+#[derive(Debug, Clone)]
+pub struct ResolveResult {
+    /// The offset of the written message
+    pub offset: Offset,
+    /// Whether this was a duplicate message (already existed in the buffer)
+    pub is_duplicate: bool,
+}
+
+impl ResolveResult {
+    /// Creates a new ResolveResult with the given offset and no duplicate flag.
+    pub fn new(offset: Offset) -> Self {
+        Self {
+            offset,
+            is_duplicate: false,
+        }
+    }
+
+    /// Creates a new ResolveResult marked as a duplicate.
+    pub fn duplicate(offset: Offset) -> Self {
+        Self {
+            offset,
+            is_duplicate: true,
+        }
+    }
+}
+
+/// Trait for writing messages to an Inter Step Buffer (ISB).
+///
+/// This trait supports two write patterns:
+/// 1. **High-performance async pattern**: Use `async_write()` to get a `PendingWrite` handle
+///    immediately, then resolve it later with `resolve()`. This allows batching acknowledgments
+///    for higher throughput.
+/// 2. **Simple blocking pattern**: Use `blocking_write()` which blocks until the write is confirmed.
+///
+/// Implementations must be cheaply cloneable (e.g., using Arc internally).
+#[async_trait]
+pub(crate) trait ISBWriter: Send + Sync + Clone {
+    /// The pending write handle returned by `async_write()`.
+    /// For JetStream, this is `PublishAckFuture`. For simple implementations,
+    /// this can be `()` if acknowledgments are immediate.
+    type PendingWrite: Send + 'static;
+
+    /// Writes a message and returns immediately with a pending write handle.
+    ///
+    /// This is the high-performance write method. The returned `PendingWrite` can be
+    /// resolved later using `resolve()` to get the offset. This allows batching
+    /// multiple writes and resolving them in parallel.
+    ///
+    /// Returns `Err(WriteError::BufferFull)` if the buffer is full.
+    /// Returns `Err(WriteError::WriteFailed)` if the publish operation fails.
+    ///
+    /// # Arguments
+    /// * `message` - The message to write
+    async fn async_write(
+        &self,
+        message: Message,
+    ) -> std::result::Result<Self::PendingWrite, WriteError>;
+
+    /// Resolves a pending write to get the result.
+    ///
+    /// This waits for the write acknowledgment and returns a `ResolveResult` containing
+    /// the offset of the written message along with additional metadata (e.g., whether
+    /// the message was a duplicate).
+    ///
+    /// # Arguments
+    /// * `pending` - The pending write handle from `async_write()`
+    async fn resolve(
+        &self,
+        pending: Self::PendingWrite,
+    ) -> std::result::Result<ResolveResult, WriteError>;
+
+    /// Writes a message and blocks until confirmed, returning the offset.
+    ///
+    /// This is the simple blocking write method with infinite retries until success
+    /// or cancellation. Use this when you don't need the high-performance async pattern.
+    ///
+    /// # Arguments
+    /// * `message` - The message to write
+    /// * `cln_token` - Cancellation token for graceful shutdown
+    async fn blocking_write(
+        &self,
+        message: Message,
+        cln_token: CancellationToken,
+    ) -> std::result::Result<Offset, WriteError>;
+
+    /// Returns the name/identifier of this writer (e.g., stream name).
+    #[allow(dead_code)]
+    fn name(&self) -> &'static str;
+
+    /// Returns whether the buffer is full.
+    ///
+    /// This is useful for proactive checking before attempting writes.
+    /// Default implementation returns `false`.
+    #[allow(dead_code)]
+    fn is_full(&self) -> bool {
+        false
     }
 }
