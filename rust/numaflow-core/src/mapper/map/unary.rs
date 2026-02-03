@@ -7,6 +7,7 @@ use crate::error::{Error, Result};
 use crate::message::Message;
 use numaflow_pb::clients::map::{MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{mpsc, oneshot};
+use tokio_stream::StreamExt;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
@@ -81,12 +82,18 @@ impl UserDefinedUnaryMap {
                 Err(e) => {
                     error!(?e, "Error reading message from unary map gRPC stream");
                     Self::broadcast_error(&sender_map, e);
+                    while let Some(_) = resp_stream.next().await {
+                        // consume the rest of the stream
+                    }
                     break;
                 }
             };
 
             Self::process_unary_response(&sender_map, resp).await
         }
+
+        // consume the rest of the stream
+        Self::broadcast_error(&sender_map, tonic::Status::aborted("receiver stream dropped"));
     }
 
     /// Handles the incoming message and sends it to the server for mapping.
