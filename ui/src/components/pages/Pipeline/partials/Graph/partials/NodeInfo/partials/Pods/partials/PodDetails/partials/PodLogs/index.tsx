@@ -356,7 +356,7 @@ export function PodLogs({
   const logsBtnStyle = {
     height: "2.4rem",
     width: "2.4rem",
-    color: "rgba(0, 0, 0, 0.54)",
+    color: "var(--text-secondary)",
   };
 
   return (

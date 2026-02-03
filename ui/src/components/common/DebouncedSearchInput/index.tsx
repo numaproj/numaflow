@@ -47,11 +47,11 @@ export function DebouncedSearchInput({
   return (
     <TextField
       sx={{
-        background: "#FFFFFF",
+        background: "var(--bg-primary)",
         flexGrow: "2",
         maxWidth: "63rem",
         minWidth: "25rem",
-        border: "1px solid #6B6C72",
+        border: "1px solid var(--border-primary)",
         borderRadius: "0.4rem",
       }}
       variant="outlined"
@@ -61,7 +61,7 @@ export function DebouncedSearchInput({
         startAdornment: (
           <InputAdornment position="start">
             <SearchIcon
-              sx={{ color: "#241C15", height: "2.4rem", width: "2.4rem" }}
+              sx={{ color: "var(--text-primary)", height: "2.4rem", width: "2.4rem" }}
             />
           </InputAdornment>
         ),

@@ -3,8 +3,8 @@
   min-width: 9rem;
   height: 2.2rem;
   border-radius: 2rem;
-  background: #d1dee9;
-  color: #274c77;
+  background: var(--node-bg);
+  color: var(--node-text);
   font-family: "IBM Plex Sans", sans-serif;
   font-size: 1.2rem;
   font-style: normal;
@@ -22,8 +22,8 @@
   min-width: 9rem;
   height: 1.8rem;
   border-radius: 2rem;
-  background: #d1dee9;
-  color: #274c77;
+  background: var(--node-bg);
+  color: var(--node-text);
   font-family: "IBM Plex Sans", sans-serif;
   font-size: 1.2rem;
   font-style: normal;
@@ -41,8 +41,8 @@
   width: 10rem;
   height: 2.2rem;
   border-radius: 2rem;
-  background: #d1dee9;
-  color: #274c77;
+  background: var(--node-bg);
+  color: var(--node-text);
   font-family: "IBM Plex Sans", sans-serif;
   font-size: 1.2rem;
   font-style: normal;
@@ -64,7 +64,7 @@
   width: 2.2rem;
   height: 2.2rem;
   border-radius: 2rem;
-  background: #d1dee9;
+  background: var(--node-bg);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -85,7 +85,7 @@
   height: 7.8rem;
   border-radius: 2rem;
   border: 0.01rem solid #009eac;
-  background: var(--boxes, #f8f8fb);
+  background: var(--bg-secondary);
   box-shadow: 0 2.4rem 4.8rem -0.8rem rgba(39, 76, 119, 0.16);
   cursor: pointer;
 }
@@ -96,7 +96,7 @@
   height: 100%;
   flex-direction: column;
   justify-content: center;
-  color: #274c77;
+  color: var(--node-text);
   text-align: center;
   font-family: "IBM Plex Sans", sans-serif;
   font-size: 1.4rem;
@@ -114,7 +114,7 @@
   height: 50%;
   flex-direction: column;
   justify-content: center;
-  color: #274c77;
+  color: var(--node-text);
   text-align: center;
   font-family: "IBM Plex Sans", sans-serif;
   font-size: 1.4rem;
@@ -130,7 +130,7 @@
   height: 2rem;
   width: 2rem;
   border-radius: 50%;
-  border: 1px solid #d1dee9;
+  border: 1px solid var(--node-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -145,7 +145,7 @@
   height: 1.6rem;
   width: 1.6rem;
   border-radius: 50%;
-  border: 1px solid #d1dee9;
+  border: 1px solid var(--node-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -187,7 +187,7 @@
 .sideInput_node_ele {
   width: 3.6rem;
   height: 3rem;
-  background: #e0e0e0;
+  background: var(--border-primary);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -201,12 +201,12 @@
 
 .generator_node {
   font-size: 1.6rem;
-  background: #f8f8fb;
+  background: var(--bg-secondary);
   padding: 1.6rem 2.4rem 1.6rem 2.4rem;
   margin-left: -2.4rem;
   border-radius: 2rem;
-  border: 0.1rem solid #dae3e8;
-  color: #6b6c72;
+  border: 0.1rem solid var(--border-secondary);
+  color: var(--text-tertiary);
 }
 
 .react-flow__handle-bottom {

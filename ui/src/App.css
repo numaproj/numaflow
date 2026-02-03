@@ -33,7 +33,7 @@ body,
 
 .MuiAppBar-root {
   height: 6rem;
-  background: linear-gradient(90deg, #00254A 2.77%, #3492EF 105.54%) !important;
+  background: var(--appbar-gradient) !important;
 }
 
 .MuiToolbar-root {

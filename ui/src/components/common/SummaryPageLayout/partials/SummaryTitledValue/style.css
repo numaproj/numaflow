@@ -1,12 +1,12 @@
 .summary-titled-value-title {
-  color: #393A3D;
+  color: var(--text-primary);
   font-size: 1.3rem;
   font-style: normal;
   font-weight: 600;
 }
 
 .summary-titled-value-value {
-  color: #3C4348;
+  color: var(--text-secondary);
   font-size: 3.6rem;
   font-style: normal;
   font-weight: 600;

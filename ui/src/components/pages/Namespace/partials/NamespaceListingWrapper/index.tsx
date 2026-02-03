@@ -254,7 +254,7 @@ export function NamespaceListingWrapper({
               marginLeft: "1.6rem",
             }}
           >
-            <label style={{ color: "#6B6C72", fontSize: "1.6rem" }}>
+            <label style={{ color: "var(--text-tertiary)", fontSize: "1.6rem" }}>
               Health
             </label>
             <Select
@@ -266,10 +266,11 @@ export function NamespaceListingWrapper({
               }}
               style={{
                 width: "22.4rem",
-                background: "#fff",
-                border: "1px solid #6B6C72",
+                background: "var(--bg-primary)",
+                border: "1px solid var(--border-primary)",
                 height: "3.4rem",
                 fontSize: "1.6rem",
+                color: "var(--text-primary)",
               }}
               onChange={handleHealthFilterChange}
             >
@@ -292,7 +293,7 @@ export function NamespaceListingWrapper({
               marginRight: "32rem",
             }}
           >
-            <label style={{ color: "#6B6C72", fontSize: "1.6rem" }}>
+            <label style={{ color: "var(--text-tertiary)", fontSize: "1.6rem" }}>
               Status
             </label>
             <Select
@@ -304,10 +305,11 @@ export function NamespaceListingWrapper({
               }}
               style={{
                 width: "22.4rem",
-                background: "#fff",
-                border: "1px solid #6B6C72",
+                background: "var(--bg-primary)",
+                border: "1px solid var(--border-primary)",
                 height: "3.4rem",
                 fontSize: "1.6rem",
+                color: "var(--text-primary)",
               }}
               onChange={handleStatusFilterChange}
             >
@@ -335,7 +337,7 @@ export function NamespaceListingWrapper({
           display: "flex",
           flexDirection: "row",
           marginTop: "3.2rem",
-          borderBottom: "1px solid #DBD9D2",
+          borderBottom: "1px solid var(--border-primary)",
         }}
       >
         <Box
@@ -411,7 +413,7 @@ export function NamespaceListingWrapper({
         {sortOptions.map((option) => {
           return (
             <Button
-              sx={{ color: "#393A3D", fontSize: "1.4rem" }}
+              sx={{ color: "var(--text-primary)", fontSize: "1.4rem" }}
               onClick={(e) => {
                 handleSortChange(e, option.value);
               }}

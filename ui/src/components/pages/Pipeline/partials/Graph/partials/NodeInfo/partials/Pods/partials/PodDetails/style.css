@@ -6,7 +6,7 @@
     font-size: 1.4rem !important;
     font-style: normal !important;
     font-weight: 600 !important;
-    color: #6B6C72 !important;
+    color: var(--text-tertiary) !important;
     text-transform: none !important;
 }
 
@@ -14,7 +14,7 @@
     font-size: 1.4rem !important;
     font-style: normal !important;
     font-weight: 600 !important;
-    color: #393A3D !important;
+    color: var(--text-primary) !important;
     text-transform: none !important;
 }
 
