@@ -18,7 +18,7 @@ all-tests:
 	cargo test --features nats-tests,pulsar-tests,sqs-tests,kafka-tests,redis-tests --workspace --all
 	cargo test --features global-state-tests test_map_with_panic
 	cargo test --features global-state-tests test_batch_map_with_panic
-	cargo test --features global-state-tests test_map_stream_with_panic
+	RUST_LOG=debug cargo test --features global-state-tests test_map_stream_with_panic -- --nocapture
 	cargo test --features global-state-tests test_transform_stream_with_panic
 
 .PHONY: clean
