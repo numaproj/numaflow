@@ -33,7 +33,6 @@ use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 use tracing::{info, warn};
 
-#[derive(Debug)]
 pub struct MvtxDaemonService;
 
 #[tonic::async_trait]
@@ -180,11 +179,10 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
 
     // Start a thread to serve HTTP requests.
     let _http_server_task = tokio::spawn(async move {
-        // TODO - _svc_for_http will be used for HTTP requests.
+        // TODO - _svc_for_http will be used for serving HTTP requests.
         let _svc_for_http = MvtxDaemonService;
         while let Some(stream) = http_rx.recv().await {
             tokio::spawn(async move {
-                let io = TokioIo::new(stream);
                 let svc = service_fn(|req: HttpRequest<Incoming>| async move {
                     let method = req.method().clone();
                     let path = req.uri().path().to_string();
@@ -204,6 +202,7 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
                     // Every error case is translated to a corresponding Response, hence infallible.
                     Ok::<HttpResponse<Full<Bytes>>, Infallible>(resp)
                 });
+                let io = TokioIo::new(stream);
                 let _ = http1::Builder::new().serve_connection(io, svc).await;
             });
         }
@@ -252,8 +251,9 @@ fn generate_self_signed_tls_config() -> Result<Arc<ServerConfig>, Box<dyn Error>
         .with_no_client_auth()
         .with_single_cert(vec![cert_der], key_der)?;
 
-    // Serve both HTTP/1.1 and gRPC
-    // Note: order matters, we choose HTTP/1.1 first because it's more widely supported.
+    // Serve both http and gRPC.
+    // Note: order matters, most preferred first.
+    // We choose http/1.1 first because it's more widely supported.
     cfg.alpn_protocols = vec![b"http/1.1".to_vec(), b"h2".to_vec()];
 
     Ok(Arc::new(cfg))
