@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::Message;

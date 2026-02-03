@@ -1,17 +1,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-
+use futures::StreamExt;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::Message;
 use numaflow_pb::clients::map::{MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{mpsc, oneshot};
-use tokio_stream::StreamExt;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
-use tracing::error;
+use tracing::{error, info};
 
 use super::{
     ParentMessageInfo, create_response_stream, update_udf_error_metric, update_udf_read_metric,
@@ -85,6 +84,7 @@ impl UserDefinedUnaryMap {
                     while let Some(_) = resp_stream.next().await {
                         // drain the rest of the stream
                     }
+                    info!("debug -- drained the response stream");
                     break;
                 }
             };
@@ -97,6 +97,8 @@ impl UserDefinedUnaryMap {
             &sender_map,
             tonic::Status::aborted("receiver stream dropped"),
         );
+
+        info!("debug -- broadcasted error to all pending senders");
     }
 
     /// Handles the incoming message and sends it to the server for mapping.
@@ -120,9 +122,13 @@ impl UserDefinedUnaryMap {
         }
 
         // insert the sender into the map
-        self.senders
+        let mut sender_guard = self.senders
             .lock()
-            .expect("failed to acquire poisoned lock")
+            .expect("failed to acquire poisoned lock");
+        if sender_guard.is_empty() {
+            info!("debug -- Inserting sender into an empty sender map");
+        }
+        sender_guard
             .insert(key.clone(), (msg_info, respond_to));
     }
 
