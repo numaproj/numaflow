@@ -11,7 +11,7 @@ use tokio_stream::StreamExt;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
-use tracing::error;
+use tracing::{error, info};
 
 use super::{
     ParentMessageInfo, create_response_stream, update_udf_error_metric, update_udf_read_metric,
@@ -81,15 +81,20 @@ impl UserDefinedUnaryMap {
                 Err(e) => {
                     error!(?e, "Error reading message from unary map gRPC stream");
                     Self::broadcast_error(&sender_map, e);
+                    info!("debug -- error broadcasted");
                 }
             };
         }
+
+        info!("debug -- receiver stream dropped");
 
         // broadcast error for all pending senders that might've gotten added while the stream was draining
         Self::broadcast_error(
             &sender_map,
             tonic::Status::aborted("receiver stream dropped"),
         );
+
+        info!("debug -- final broadcast error");
     }
 
     /// Handles the incoming message and sends it to the server for mapping.
@@ -113,9 +118,13 @@ impl UserDefinedUnaryMap {
         }
 
         // insert the sender into the map
-        self.senders
+        let mut sender_guard = self.senders
             .lock()
-            .expect("failed to acquire poisoned lock")
+            .expect("failed to acquire poisoned lock");
+        if sender_guard.is_empty() {
+            info!("debug -- inserting in empty sender map");
+        }
+        sender_guard
             .insert(key.clone(), (msg_info, respond_to));
     }
 
