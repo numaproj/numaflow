@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
-use tracing::error;
+use tracing::{error, warn};
 
 use super::{
     ParentMessageInfo, SharedMapTaskContext, UserDefinedMessage, create_response_stream,
@@ -23,24 +23,34 @@ use super::{
 /// Type alias for the response - raw results from the UDF
 pub(in crate::mapper) type UnaryMapResponse = Vec<map::map_response::Result>;
 
+/// Type aliases for HashMap used to track the oneshot response sender for each request keyed by
+/// message id.
 type ResponseSenderMap = HashMap<String, oneshot::Sender<Result<UnaryMapResponse>>>;
 
+/// Shared state for tracking batch map senders between the sender and the receiver tasks.
+/// We have BiDi gRPC stream so we have 2 different set of tasks for sending and receiving.
 #[derive(Default)]
 pub(in crate::mapper) struct UnarySenderMapState {
+    /// Map of oneshot response senders keyed by message id.
     map: ResponseSenderMap,
+    /// Flag to indicate whether the rx task has closed the stream and cleared the `map`.
+    /// This is because `tx.send()` could return `Ok()` even after the receiver task has closed the
+    /// stream.
     closed: bool,
 }
 
-/// MapUnaryTask encapsulates all the context needed to execute a unary map operation.
+/// MapUnaryTask encapsulates all the context needed to execute a unary map operation per message.
 pub(in crate::mapper) struct MapUnaryTask {
     pub mapper: UserDefinedUnaryMap,
+    /// Permit to achieve structured concurrency by ensuring we do not exceed the concurrency limit
+    /// and all the tasks are cleaned up when the component is shutting down.
     pub permit: OwnedSemaphorePermit,
     pub message: Message,
     pub shared_ctx: Arc<SharedMapTaskContext>,
 }
 
 impl MapUnaryTask {
-    /// Spawns the unary map task as a tokio task.
+    /// Spawns the unary map task as a tokio task per [MapUnaryTask].
     /// The task will process the message through the UDF and send results downstream.
     pub fn spawn(self) {
         tokio::spawn(async move {
@@ -229,7 +239,9 @@ impl UserDefinedUnaryMap {
             if !senders_guard.closed {
                 senders_guard.map.insert(key.clone(), tx);
             } else {
-                let _ = tx.send(Err(Error::Mapper("mapper closed".to_string())));
+                let _ = tx
+                    .send(Err(Error::Mapper("mapper closed".to_string())))
+                    .inspect(|_| warn!("failed to send error to oneshot receiver"));
             }
         };
 

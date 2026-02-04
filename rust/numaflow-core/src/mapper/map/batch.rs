@@ -23,12 +23,19 @@ use tracing::error;
 /// Type alias for the batch response - raw results from the UDF
 pub(in crate::mapper) type BatchMapResponse = Vec<map::map_response::Result>;
 
-/// Type aliases
+/// Type aliases for HashMap used to track the oneshot response sender for each request keyed by
+/// message id.
 type ResponseSenderMap = HashMap<String, oneshot::Sender<Result<BatchMapResponse>>>;
 
+/// Shared state for tracking batch map senders between the sender and the receiver tasks.
+/// We have BiDi gRPC stream so we have 2 different set of tasks for sending and receiving.
 #[derive(Default)]
 pub(in crate::mapper) struct BatchSenderMapState {
+    /// Map of oneshot response senders keyed by message id.
     map: ResponseSenderMap,
+    /// Flag to indicate whether the rx task has closed the stream and cleared the `map`.
+    /// This is because `tx.send()` could return `Ok()` even after the receiver task has closed the
+    /// stream.
     closed: bool,
 }
 

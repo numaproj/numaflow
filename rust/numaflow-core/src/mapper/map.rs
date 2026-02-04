@@ -44,11 +44,11 @@ enum ConcurrentMapper {
 }
 
 /// MapperType is an enum to store the different types of mappers.
-/// Concurrent mappers (Unary/Stream) process messages individually with concurrency control.
-/// Batch mapper processes messages in batches sequentially.
 #[derive(Clone)]
 enum MapperType {
+    /// Concurrent mappers (Unary/Stream) process messages individually with concurrency control.
     Concurrent(ConcurrentMapper),
+    /// Batch mapper processes messages in batches sequentially.
     Batch(UserDefinedBatchMap),
 }
 
@@ -205,7 +205,7 @@ impl MapHandle {
                 .acquire_many_owned(self.concurrency as u32)
                 .await
                 .map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}")))?;
-            info!(status=?self.final_result, "Map component is completed with status");
+            info!(status=?self.final_result, "Map component is completed");
 
             // abort the shutdown handle since we are done processing, no need to wait for the
             // hard shutdown
@@ -408,13 +408,6 @@ fn update_udf_process_time_metric(is_mono_vertex: bool) {
             .observe(Instant::now().elapsed().as_micros() as f64);
     }
 }
-
-/*
- t1 -> receiver dropped
- t2 -> map drained
- t3 -> written to the tx
- t4 -> hung
-*/
 
 fn update_udf_write_only_metric(is_mono_vertex: bool) {
     if !is_mono_vertex {
@@ -1055,10 +1048,9 @@ mod tests {
         }
     }
 
-    // #[cfg(feature = "global-state-tests")]
+    #[cfg(feature = "global-state-tests")]
     #[tokio::test]
     async fn test_batch_map_with_panic() -> Result<()> {
-        tracing_subscriber::fmt::init();
         let cln_token = CancellationToken::new();
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
