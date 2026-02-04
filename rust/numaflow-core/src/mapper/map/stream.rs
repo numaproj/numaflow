@@ -220,7 +220,6 @@ impl UserDefinedStreamMap {
                 Err(e) => {
                     error!(?e, "Error reading message from stream map gRPC stream");
                     Self::broadcast_error(&sender_map, e).await;
-                    break;
                 }
             }
         }

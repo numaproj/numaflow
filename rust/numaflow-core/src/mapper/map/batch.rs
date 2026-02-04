@@ -154,12 +154,11 @@ impl UserDefinedBatchMap {
 
     /// Broadcasts a batch map gRPC error to all pending senders and records error metrics.
     fn broadcast_error(sender_map: &Arc<Mutex<BatchSenderMapState>>, error: tonic::Status) {
-        let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
-        sender_guard.closed = true;
-        let senders = std::mem::take(&mut sender_guard.map);
-
-        // avoid holding the lock while sending errors
-        drop(sender_guard);
+        let senders = {
+            let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
+            sender_guard.closed = true;
+            std::mem::take(&mut sender_guard.map)
+        };
 
         for (_, sender) in senders {
             let _ = sender.send(Err(Error::Grpc(Box::new(error.clone()))));

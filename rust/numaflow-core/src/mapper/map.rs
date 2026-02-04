@@ -409,6 +409,13 @@ fn update_udf_process_time_metric(is_mono_vertex: bool) {
     }
 }
 
+/*
+ t1 -> receiver dropped
+ t2 -> map drained
+ t3 -> written to the tx
+ t4 -> hung
+*/
+
 fn update_udf_write_only_metric(is_mono_vertex: bool) {
     if !is_mono_vertex {
         pipeline_metrics()

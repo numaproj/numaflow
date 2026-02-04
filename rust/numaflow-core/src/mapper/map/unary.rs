@@ -166,12 +166,11 @@ impl UserDefinedUnaryMap {
 
     /// Broadcasts a unary gRPC error to all pending senders and records error metrics.
     fn broadcast_error(sender_map: &Arc<Mutex<UnarySenderMapState>>, error: tonic::Status) {
-        let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
-        sender_guard.closed = true;
-        let senders = std::mem::take(&mut sender_guard.map);
-
-        // avoid holding the lock while sending the error
-        drop(sender_guard);
+        let senders = {
+            let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
+            sender_guard.closed = true;
+            std::mem::take(&mut sender_guard.map)
+        };
 
         for (_, sender) in senders {
             let _ = sender.send(Err(Error::Grpc(Box::new(error.clone()))));
@@ -191,7 +190,6 @@ impl UserDefinedUnaryMap {
                 Err(e) => {
                     error!(?e, "Error reading message from unary map gRPC stream");
                     Self::broadcast_error(&sender_map, e);
-                    break;
                 }
             };
         }
