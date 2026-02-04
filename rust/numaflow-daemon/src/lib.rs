@@ -26,9 +26,11 @@ use std::sync::Arc;
 use time::{Duration, OffsetDateTime};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
+use tokio::task::JoinSet;
 use tokio_rustls::TlsAcceptor;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 use tracing::{info, warn};
@@ -99,7 +101,10 @@ impl MonoVertexDaemonService for MvtxDaemonService {
 /// Matches the DaemonServicePort in pkg/apis/numaflow/v1alpha1/const.go
 const DAEMON_SERVICE_PORT: u16 = 4327;
 
-pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
+pub async fn run_monovertex(
+    mvtx_name: String,
+    cln_token: CancellationToken,
+) -> Result<(), Box<dyn Error>> {
     info!("MonoVertex name is {}", mvtx_name);
 
     // Create a TCP listener that can listen to both h2 and http 1.1.
@@ -113,76 +118,100 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
     let (grpc_tx, grpc_rx) = mpsc::channel(1000);
     let (http_tx, mut http_rx) = mpsc::channel(1000);
 
-    // Start a thread to accept requests.
-    let _accept_req_task = tokio::spawn(async move {
+    // Use a join set to manage spawned tasks.
+    let mut join_set = JoinSet::new();
+
+    // Start a tokio task to accept tcp connections.
+    let cln_token_copy_1 = cln_token.clone();
+    join_set.spawn(async move {
+        let mut conn_set = JoinSet::new();
         loop {
-            // Accept a connection.
-            let (tcp, peer_addr) = match tcp_listener.accept().await {
-                Ok(v) => v,
-                Err(e) => {
-                    warn!(error = %e, "Failed to accept a TCP connection");
-                    continue;
+            tokio::select! {
+                _ = cln_token_copy_1.cancelled() => {
+                    info!("Cancellation token triggered. Stopping accepting new connections.");
+                    // Close both gRPC and HTTP channels.
+                    drop(grpc_tx);
+                    drop(http_tx);
+                    break;
                 }
-            };
-            // Handle the new connection.
-            // Start a new thread so that we don't block accepting other connections.
+                accept_res = tcp_listener.accept() => {
+                    // Accept a connection.
+                    let (tcp, peer_addr) = match accept_res {
+                        Ok(v) => v,
+                        Err(e) => {
+                            warn!(error = %e, "Failed to accept a TCP connection");
+                            continue;
+                        }
+                    };
 
-            let grpc_sender = grpc_tx.clone();
-            let http_sender = http_tx.clone();
-            let acceptor = tls_acceptor.clone();
+                    // Handle the new connection.
+                    // Start a new tokio task so that we don't block accepting other connections.
+                    let grpc_sender = grpc_tx.clone();
+                    let http_sender = http_tx.clone();
+                    let acceptor = tls_acceptor.clone();
 
-            tokio::spawn(async move {
-                let stream = match acceptor.accept(tcp).await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        warn!(peer_addr = %peer_addr, error = %e, "TLS handshake failed.");
-                        // TLS handshake failed, skip handling this connection.
-                        return;
-                    }
-                };
+                    conn_set.spawn(async move {
+                        let stream = match acceptor.accept(tcp).await {
+                            Ok(s) => s,
+                            Err(e) => {
+                                warn!(peer_addr = %peer_addr, error = %e, "TLS handshake failed.");
+                                // TLS handshake failed, skip handling this connection.
+                                return;
+                            }
+                        };
 
-                let alpn = stream
-                    .get_ref()
-                    .1
-                    .alpn_protocol()
-                    .map(|p| String::from_utf8_lossy(p).into_owned());
+                        let alpn = stream
+                            .get_ref()
+                            .1
+                            .alpn_protocol()
+                            .map(|p| String::from_utf8_lossy(p).into_owned());
 
-                match alpn.as_deref() {
-                    Some("http/1.1") => {
-                        // Send to the HTTP channel.
-                        let _ = http_sender.send(stream).await;
-                    }
-                    Some("h2") => {
-                        // Send to the gRPC channel.
-                        let _ = grpc_sender.send(stream).await;
-                    }
-                    _ => {
-                        // Send to the HTTP channel by default.
-                        // This is because most of the time, HTTP is used for communication.
-                        // On Numaflow, if a client is sending a gRPC request, the h2 protocol is explicitly used.
-                        let _ = http_sender.send(stream).await;
-                    }
+                        match alpn.as_deref() {
+                            Some("http/1.1") => {
+                                // Send to the HTTP channel.
+                                let _ = http_sender.send(stream).await;
+                            }
+                            Some("h2") => {
+                                // Send to the gRPC channel.
+                                let _ = grpc_sender.send(stream).await;
+                            }
+                            _ => {
+                                // Send to the HTTP channel by default.
+                                // This is because most of the time, HTTP is used for communication.
+                                // On Numaflow, if a client is sending a gRPC request, the h2 protocol is explicitly used.
+                                let _ = http_sender.send(stream).await;
+                            }
+                        }
+                    });
                 }
-            });
+            }
+        }
+
+        while let Some(res) = conn_set.join_next().await {
+            if let Err(join_err) = res {
+                warn!(error = %join_err, "TCP connection task failed");
+            }
         }
     });
 
-    // Start a thread to serve gRPC requests.
-    let grpc_server_task = tokio::spawn(async move {
+    // Start a tokio task to serve gRPC requests.
+    let cln_token_copy_2 = cln_token.clone();
+    join_set.spawn(async move {
         let grpc_service = MonoVertexDaemonServiceServer::new(MvtxDaemonService);
         let incoming_stream = ReceiverStream::new(grpc_rx).map(Ok::<_, std::io::Error>);
-        Server::builder()
+        let _ = Server::builder()
             .add_service(grpc_service)
-            .serve_with_incoming(incoming_stream)
-            .await
+            .serve_with_incoming_shutdown(incoming_stream, cln_token_copy_2.cancelled())
+            .await;
     });
 
-    // Start a thread to serve HTTP requests.
-    let _http_server_task = tokio::spawn(async move {
+    // Start a tokio task to serve HTTP requests.
+    join_set.spawn(async move {
         // TODO - _svc_for_http will be used for serving HTTP requests.
         let _svc_for_http = MvtxDaemonService;
+        let mut conn_set = JoinSet::new();
         while let Some(stream) = http_rx.recv().await {
-            tokio::spawn(async move {
+            conn_set.spawn(async move {
                 let svc = service_fn(|req: HttpRequest<Incoming>| async move {
                     let method = req.method().clone();
                     let path = req.uri().path().to_string();
@@ -206,18 +235,19 @@ pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
                 let _ = http1::Builder::new().serve_connection(io, svc).await;
             });
         }
+
+        while let Some(res) = conn_set.join_next().await {
+            if let Err(join_err) = res {
+                warn!(error = %join_err, "HTTP connection task failed");
+            }
+        }
     });
 
-    // Wait for the gRPC server to finish.
-    let grpc_res = grpc_server_task.await?;
-    grpc_res?;
-
-    // TODO - Gracefully shutdown.
-    Ok(())
-}
-
-pub async fn run_pipeline(pipeline_name: String) -> Result<(), Box<dyn Error>> {
-    info!("Pipeline name is {}", pipeline_name);
+    while let Some(res) = join_set.join_next().await {
+        if let Err(join_err) = res {
+            warn!(error = %join_err, "Daemon task failed waiting for completion");
+        }
+    }
 
     Ok(())
 }
