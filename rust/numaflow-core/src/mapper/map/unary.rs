@@ -23,7 +23,13 @@ use super::{
 /// Type alias for the response - raw results from the UDF
 pub(in crate::mapper) type UnaryMapResponse = Vec<map::map_response::Result>;
 
-type ResponseSenderMap = Arc<Mutex<HashMap<String, oneshot::Sender<Result<UnaryMapResponse>>>>>;
+type ResponseSenderMap = HashMap<String, oneshot::Sender<Result<UnaryMapResponse>>>;
+
+#[derive(Default)]
+pub(in crate::mapper) struct UnarySenderMapState {
+    map: ResponseSenderMap,
+    closed: bool,
+}
 
 /// MapUnaryTask encapsulates all the context needed to execute a unary map operation.
 pub(in crate::mapper) struct MapUnaryTask {
@@ -126,7 +132,7 @@ impl MapUnaryTask {
 #[derive(Clone)]
 pub(in crate::mapper) struct UserDefinedUnaryMap {
     read_tx: mpsc::Sender<MapRequest>,
-    senders: ResponseSenderMap,
+    senders: Arc<Mutex<UnarySenderMapState>>,
     _handle: Arc<AbortOnDropHandle<()>>,
 }
 
@@ -140,7 +146,7 @@ impl UserDefinedUnaryMap {
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
         // map to track the oneshot sender for each request
-        let sender_map = Arc::new(Mutex::new(HashMap::new()));
+        let sender_map = Arc::new(Mutex::new(UnarySenderMapState::default()));
 
         // background task to receive responses from the server and send them to the appropriate
         // oneshot sender based on the message id
@@ -159,9 +165,13 @@ impl UserDefinedUnaryMap {
     }
 
     /// Broadcasts a unary gRPC error to all pending senders and records error metrics.
-    fn broadcast_error(sender_map: &ResponseSenderMap, error: tonic::Status) {
-        let senders =
-            std::mem::take(&mut *sender_map.lock().expect("failed to acquire poisoned lock"));
+    fn broadcast_error(sender_map: &Arc<Mutex<UnarySenderMapState>>, error: tonic::Status) {
+        let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
+        sender_guard.closed = true;
+        let senders = std::mem::take(&mut sender_guard.map);
+
+        // avoid holding the lock while sending the error
+        drop(sender_guard);
 
         for (_, sender) in senders {
             let _ = sender.send(Err(Error::Grpc(Box::new(error.clone()))));
@@ -172,7 +182,7 @@ impl UserDefinedUnaryMap {
     /// receive responses from the server and gets the corresponding oneshot response sender from the map
     /// and sends the response.
     async fn receive_unary_responses(
-        sender_map: ResponseSenderMap,
+        sender_map: Arc<Mutex<UnarySenderMapState>>,
         mut resp_stream: Streaming<MapResponse>,
     ) {
         while let Some(resp) = resp_stream.next().await {
@@ -212,11 +222,18 @@ impl UserDefinedUnaryMap {
             )));
         }
 
-        // insert the sender into the map
-        self.senders
-            .lock()
-            .expect("failed to acquire poisoned lock")
-            .insert(key.clone(), tx);
+        // move the senders_guard out of the scope to drop the guard when done
+        {
+            let mut senders_guard = self
+                .senders
+                .lock()
+                .expect("failed to acquire poisoned lock");
+            if !senders_guard.closed {
+                senders_guard.map.insert(key.clone(), tx);
+            } else {
+                let _ = tx.send(Err(Error::Mapper("mapper closed".to_string())));
+            }
+        };
 
         tokio::select! {
             result = rx => {
@@ -229,6 +246,7 @@ impl UserDefinedUnaryMap {
                 self.senders
                     .lock()
                     .expect("failed to acquire poisoned lock")
+                    .map
                     .remove(&key);
                 Err(Error::Mapper("unary map operation cancelled".to_string()))
             }
@@ -237,12 +255,16 @@ impl UserDefinedUnaryMap {
 
     /// Processes the response from the server and sends it to the appropriate oneshot sender
     /// based on the message id entry in the map.
-    pub(super) async fn process_unary_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
+    pub(super) async fn process_unary_response(
+        sender_map: &Arc<Mutex<UnarySenderMapState>>,
+        resp: MapResponse,
+    ) {
         let msg_id = resp.id;
 
         let sender_entry = sender_map
             .lock()
             .expect("failed to acquire poisoned lock")
+            .map
             .remove(&msg_id);
 
         if let Some(sender) = sender_entry {

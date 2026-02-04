@@ -24,7 +24,13 @@ use tracing::error;
 pub(in crate::mapper) type BatchMapResponse = Vec<map::map_response::Result>;
 
 /// Type aliases
-type ResponseSenderMap = Arc<Mutex<HashMap<String, oneshot::Sender<Result<BatchMapResponse>>>>>;
+type ResponseSenderMap = HashMap<String, oneshot::Sender<Result<BatchMapResponse>>>;
+
+#[derive(Default)]
+pub(in crate::mapper) struct BatchSenderMapState {
+    map: ResponseSenderMap,
+    closed: bool,
+}
 
 /// MapBatchTask encapsulates all the context needed to execute a batch map operation.
 pub(in crate::mapper) struct MapBatchTask {
@@ -115,7 +121,7 @@ impl MapBatchTask {
 #[derive(Clone)]
 pub(in crate::mapper) struct UserDefinedBatchMap {
     read_tx: mpsc::Sender<MapRequest>,
-    senders: ResponseSenderMap,
+    senders: Arc<Mutex<BatchSenderMapState>>,
     _handle: Arc<AbortOnDropHandle<()>>,
 }
 
@@ -129,7 +135,7 @@ impl UserDefinedBatchMap {
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
         // map to track the oneshot response sender for each request
-        let sender_map = Arc::new(Mutex::new(HashMap::new()));
+        let sender_map = Arc::new(Mutex::new(BatchSenderMapState::default()));
 
         // background task to receive responses from the server and send them to the appropriate
         // oneshot response sender based on the id
@@ -147,9 +153,13 @@ impl UserDefinedBatchMap {
     }
 
     /// Broadcasts a batch map gRPC error to all pending senders and records error metrics.
-    fn broadcast_error(sender_map: &ResponseSenderMap, error: tonic::Status) {
-        let senders =
-            std::mem::take(&mut *sender_map.lock().expect("failed to acquire poisoned lock"));
+    fn broadcast_error(sender_map: &Arc<Mutex<BatchSenderMapState>>, error: tonic::Status) {
+        let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
+        sender_guard.closed = true;
+        let senders = std::mem::take(&mut sender_guard.map);
+
+        // avoid holding the lock while sending errors
+        drop(sender_guard);
 
         for (_, sender) in senders {
             let _ = sender.send(Err(Error::Grpc(Box::new(error.clone()))));
@@ -160,7 +170,7 @@ impl UserDefinedBatchMap {
     /// receive responses from the server and gets the corresponding oneshot response sender from the map
     /// and sends the response.
     async fn receive_batch_responses(
-        sender_map: ResponseSenderMap,
+        sender_map: Arc<Mutex<BatchSenderMapState>>,
         mut resp_stream: Streaming<MapResponse>,
     ) {
         while let Some(resp) = resp_stream.next().await {
@@ -170,6 +180,7 @@ impl UserDefinedBatchMap {
                         if !sender_map
                             .lock()
                             .expect("failed to acquire poisoned lock")
+                            .map
                             .is_empty()
                         {
                             error!("received EOT but not all responses have been received");
@@ -184,26 +195,20 @@ impl UserDefinedBatchMap {
                 Err(e) => {
                     error!(?e, "Error reading message from batch map gRPC stream");
                     Self::broadcast_error(&sender_map, e);
-                    break;
                 }
             }
         }
-
-        // broadcast error for all pending senders that might've gotten added while the stream was draining
-        Self::broadcast_error(
-            &sender_map,
-            tonic::Status::aborted("receiver stream dropped"),
-        );
     }
 
     /// Processes the response from the server and sends it to the appropriate oneshot sender
     /// based on the message id entry in the map.
-    async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
+    async fn process_response(sender_map: &Arc<Mutex<BatchSenderMapState>>, resp: MapResponse) {
         let msg_id = resp.id;
 
         let sender_entry = sender_map
             .lock()
             .expect("failed to acquire poisoned lock")
+            .map
             .remove(&msg_id);
 
         if let Some(sender) = sender_entry {
@@ -236,10 +241,17 @@ impl UserDefinedBatchMap {
                 break;
             }
 
-            self.senders
+            let mut senders_guard = self
+                .senders
                 .lock()
-                .expect("failed to acquire poisoned lock")
-                .insert(key, sender);
+                .expect("failed to acquire poisoned lock");
+
+            if senders_guard.closed {
+                let _ = sender.send(Err(Error::Mapper("mapper closed".to_string())));
+                continue;
+            }
+
+            senders_guard.map.insert(key, sender);
         }
 
         // send eot request
