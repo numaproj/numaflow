@@ -454,9 +454,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
                 Ok(result) => return Ok(result),
                 Err(WriteError::BufferFull) => {
                     // Buffer is full, wait and retry
-                    debug!(
-                        "Buffer full during write retry, waiting before next attempt"
-                    );
+                    debug!("Buffer full during write retry, waiting before next attempt");
                 }
                 Err(WriteError::WriteFailed(ref e)) => {
                     error!(?e, "Write failed during retry, will retry");
