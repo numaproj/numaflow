@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use crate::Result;
 use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::config::{get_vertex_name, is_mono_vertex};
@@ -9,6 +8,7 @@ use crate::metrics::{
     pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::sinker::actor::{SinkActorMessage, SinkActorResponse};
+use bytes::Bytes;
 use numaflow_kafka::sink::KafkaSink;
 use numaflow_pb::clients::sink::Status::{Failure, Fallback, OnSuccess, Serve, Success};
 use numaflow_pb::clients::sink::sink_client::SinkClient;
