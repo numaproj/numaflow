@@ -11,17 +11,18 @@ use tokio_stream::StreamExt;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
-use tracing::{error};
+use tracing::error;
 
 use super::{
     ParentMessageInfo, create_response_stream, update_udf_error_metric, update_udf_read_metric,
     update_udf_write_metric,
 };
 
-type ResponseSenderMap = HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>;
+type ResponseSenderMap =
+    HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>;
 
 #[derive(Default)]
-struct ResponseSenderMapState {
+pub(in crate::mapper) struct ResponseSenderMapState {
     map: ResponseSenderMap,
     closed: bool,
 }
@@ -67,8 +68,7 @@ impl UserDefinedUnaryMap {
     fn broadcast_error(sender_map: &Arc<Mutex<ResponseSenderMapState>>, error: tonic::Status) {
         let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
         sender_guard.closed = true;
-        let senders =
-            std::mem::take(&mut sender_guard.map);
+        let senders = std::mem::take(&mut sender_guard.map);
 
         // avoid holding the lock while sending the error
         drop(sender_guard);
@@ -116,20 +116,25 @@ impl UserDefinedUnaryMap {
         }
 
         // insert the sender into the map
-        let mut senders_guard = self.senders
+        let mut senders_guard = self
+            .senders
             .lock()
             .expect("failed to acquire poisoned lock");
         if senders_guard.closed {
             let _ = respond_to.send(Err(Error::Mapper("mapper closed".to_string())));
             return;
         }
-        senders_guard.map
+        senders_guard
+            .map
             .insert(key.clone(), (msg_info, respond_to));
     }
 
     /// Processes the response from the server and sends it to the appropriate oneshot sender
     /// based on the message id entry in the map.
-    pub(super) async fn process_unary_response(sender_map: &Arc<Mutex<ResponseSenderMapState>>, resp: MapResponse) {
+    pub(super) async fn process_unary_response(
+        sender_map: &Arc<Mutex<ResponseSenderMapState>>,
+        resp: MapResponse,
+    ) {
         let msg_id = resp.id;
 
         let sender_entry = sender_map
