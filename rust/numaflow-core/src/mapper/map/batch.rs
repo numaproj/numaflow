@@ -82,9 +82,6 @@ impl UserDefinedBatchMap {
                 Err(e) => {
                     error!(?e, "Error reading message from batch map gRPC stream");
                     Self::broadcast_error(&sender_map, e);
-                    while let Some(_) = resp_stream.next().await {
-                        // drain the rest of the stream
-                    }
                     break;
                 }
             };
@@ -104,12 +101,6 @@ impl UserDefinedBatchMap {
 
             Self::process_response(&sender_map, resp).await
         }
-
-        // broadcast error for all pending senders that might've gotten added while the stream was draining
-        Self::broadcast_error(
-            &sender_map,
-            tonic::Status::aborted("receiver stream dropped"),
-        );
     }
 
     /// Processes the response from the server and sends it to the appropriate oneshot sender

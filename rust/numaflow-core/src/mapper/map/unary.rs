@@ -11,22 +11,27 @@ use tokio_stream::StreamExt;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
-use tracing::{error, info};
+use tracing::{error};
 
 use super::{
     ParentMessageInfo, create_response_stream, update_udf_error_metric, update_udf_read_metric,
     update_udf_write_metric,
 };
 
-type ResponseSenderMap =
-    Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
+type ResponseSenderMap = HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>;
+
+#[derive(Default)]
+struct ResponseSenderMapState {
+    map: ResponseSenderMap,
+    closed: bool,
+}
 
 /// UserDefinedUnaryMap is a grpc client that sends unary requests to the map server
 /// and forwards the responses.
 #[derive(Clone)]
 pub(in crate::mapper) struct UserDefinedUnaryMap {
     read_tx: mpsc::Sender<MapRequest>,
-    senders: ResponseSenderMap,
+    senders: Arc<Mutex<ResponseSenderMapState>>,
     _handle: Arc<AbortOnDropHandle<()>>,
 }
 
@@ -40,7 +45,7 @@ impl UserDefinedUnaryMap {
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
         // map to track the oneshot sender for each request along with the message info
-        let sender_map = Arc::new(Mutex::new(HashMap::new()));
+        let sender_map = Arc::new(Mutex::new(ResponseSenderMapState::default()));
 
         // background task to receive responses from the server and send them to the appropriate
         // oneshot sender based on the message id
@@ -59,9 +64,14 @@ impl UserDefinedUnaryMap {
     }
 
     /// Broadcasts a unary gRPC error to all pending senders and records error metrics.
-    fn broadcast_error(sender_map: &ResponseSenderMap, error: tonic::Status) {
+    fn broadcast_error(sender_map: &Arc<Mutex<ResponseSenderMapState>>, error: tonic::Status) {
+        let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
+        sender_guard.closed = true;
         let senders =
-            std::mem::take(&mut *sender_map.lock().expect("failed to acquire poisoned lock"));
+            std::mem::take(&mut sender_guard.map);
+
+        // avoid holding the lock while sending the error
+        drop(sender_guard);
 
         for (_, (_, sender)) in senders {
             let _ = sender.send(Err(Error::Grpc(Box::new(error.clone()))));
@@ -72,27 +82,17 @@ impl UserDefinedUnaryMap {
     /// receive responses from the server and gets the corresponding oneshot response sender from the map
     /// and sends the response.
     async fn receive_unary_responses(
-        sender_map: ResponseSenderMap,
+        sender_map: Arc<Mutex<ResponseSenderMapState>>,
         mut resp_stream: Streaming<MapResponse>,
     ) {
         while let Some(resp) = resp_stream.next().await {
             match resp {
                 Ok(message) => Self::process_unary_response(&sender_map, message).await,
                 Err(e) => {
-                    error!(?e, "Error reading message from unary map gRPC stream");
                     Self::broadcast_error(&sender_map, e);
-                    info!("debug -- error broadcasted");
                 }
             };
         }
-
-        // broadcast error for all pending senders that might've gotten added while the stream was draining
-        Self::broadcast_error(
-            &sender_map,
-            tonic::Status::aborted("receiver stream dropped"),
-        );
-
-        info!("debug -- final broadcast error");
     }
 
     /// Handles the incoming message and sends it to the server for mapping.
@@ -106,13 +106,9 @@ impl UserDefinedUnaryMap {
 
         update_udf_read_metric(is_mono_vertex());
 
-        let msg_id = message.id.clone();
-        let msg_offset = message.offset.clone();
-
-        info!("debug -- sending message to server. id: {}, offset: {}", msg_id.clone(), msg_offset.clone());
         // only insert if we are able to send the message to the server
         if let Err(e) = self.read_tx.send(message.into()).await {
-            error!(?e, "Failed to send message to server. id: {}, offset: {}", msg_id.clone(), msg_offset.clone());
+            error!(?e, "Failed to send message to server");
             let _ = respond_to.send(Err(Error::Mapper(format!(
                 "failed to send message to unary map server: {e}"
             ))));
@@ -120,21 +116,26 @@ impl UserDefinedUnaryMap {
         }
 
         // insert the sender into the map
-        self.senders
+        let mut senders_guard = self.senders
             .lock()
-            .expect("failed to acquire poisoned lock")
+            .expect("failed to acquire poisoned lock");
+        if senders_guard.closed {
+            let _ = respond_to.send(Err(Error::Mapper("mapper closed".to_string())));
+            return;
+        }
+        senders_guard.map
             .insert(key.clone(), (msg_info, respond_to));
-        info!("debug -- inserted message in sender map. id: {}, offset: {}", msg_id, msg_offset);
     }
 
     /// Processes the response from the server and sends it to the appropriate oneshot sender
     /// based on the message id entry in the map.
-    pub(super) async fn process_unary_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
+    pub(super) async fn process_unary_response(sender_map: &Arc<Mutex<ResponseSenderMapState>>, resp: MapResponse) {
         let msg_id = resp.id;
 
         let sender_entry = sender_map
             .lock()
             .expect("failed to acquire poisoned lock")
+            .map
             .remove(&msg_id);
 
         if let Some((msg_info, sender)) = sender_entry {
@@ -149,8 +150,6 @@ impl UserDefinedUnaryMap {
             sender
                 .send(Ok(response_messages))
                 .expect("failed to send response");
-        } else {
-            error!("debug -- Failed to find sender for message id: {}", msg_id);
         }
     }
 }
