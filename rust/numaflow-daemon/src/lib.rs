@@ -1,13 +1,4 @@
-use bytes::Bytes;
-use http::{Request as HttpRequest, Response as HttpResponse, StatusCode};
-use http_body_util::Full;
-use hyper::body::Incoming;
-use hyper::server::conn::http1;
-use hyper::service::service_fn;
-use hyper_util::rt::TokioIo;
-use numaflow_pb::servers::mvtxdaemon::mono_vertex_daemon_service_server::{
-    MonoVertexDaemonService, MonoVertexDaemonServiceServer,
-};
+use numaflow_pb::servers::mvtxdaemon::mono_vertex_daemon_service_server::MonoVertexDaemonService;
 use numaflow_pb::servers::mvtxdaemon::{
     GetMonoVertexErrorsRequest, GetMonoVertexErrorsResponse, GetMonoVertexMetricsResponse,
     GetMonoVertexStatusResponse, MonoVertexMetrics, MonoVertexStatus, ReplicaErrors,
@@ -18,7 +9,6 @@ use rcgen::{
 use rustls::ServerConfig;
 use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
 use std::collections::HashMap;
-use std::convert::Infallible;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::result::Result;
@@ -28,14 +18,19 @@ use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tokio_rustls::TlsAcceptor;
-use tokio_stream::StreamExt;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 use tracing::{info, warn};
 
-pub struct MvtxDaemonService;
+mod connection_acceptor;
+mod grpc_server;
+mod http_server;
+
+use connection_acceptor::run_connection_acceptor;
+use grpc_server::run_grpc_server;
+use http_server::run_http_server;
+
+pub(crate) struct MvtxDaemonService;
 
 #[tonic::async_trait]
 impl MonoVertexDaemonService for MvtxDaemonService {
@@ -115,8 +110,9 @@ pub async fn run_monovertex(
 
     // Create two channels, one serving gRPC requests, the other HTTP.
     // Given the request rate a daemon server expect to receive, a buffer size of 1000 should be sufficent.
+    // Buffer size 1000 is sufficient for the expected request rate.
     let (grpc_tx, grpc_rx) = mpsc::channel(1000);
-    let (http_tx, mut http_rx) = mpsc::channel(1000);
+    let (http_tx, http_rx) = mpsc::channel(1000);
 
     // Use a join set to manage spawned tasks.
     let mut join_set = JoinSet::new();
@@ -124,122 +120,31 @@ pub async fn run_monovertex(
     // Start a tokio task to accept tcp connections.
     let cln_token_copy_1 = cln_token.clone();
     join_set.spawn(async move {
-        let mut conn_set = JoinSet::new();
-        loop {
-            tokio::select! {
-                _ = cln_token_copy_1.cancelled() => {
-                    info!("Cancellation token triggered. Stopping accepting new connections.");
-                    // Close both gRPC and HTTP channels.
-                    drop(grpc_tx);
-                    drop(http_tx);
-                    break;
-                }
-                accept_res = tcp_listener.accept() => {
-                    // Accept a connection.
-                    let (tcp, peer_addr) = match accept_res {
-                        Ok(v) => v,
-                        Err(e) => {
-                            warn!(error = %e, "Failed to accept a TCP connection");
-                            continue;
-                        }
-                    };
-
-                    // Handle the new connection.
-                    // Start a new tokio task so that we don't block accepting other connections.
-                    let grpc_sender = grpc_tx.clone();
-                    let http_sender = http_tx.clone();
-                    let acceptor = tls_acceptor.clone();
-
-                    conn_set.spawn(async move {
-                        let stream = match acceptor.accept(tcp).await {
-                            Ok(s) => s,
-                            Err(e) => {
-                                warn!(peer_addr = %peer_addr, error = %e, "TLS handshake failed.");
-                                // TLS handshake failed, skip handling this connection.
-                                return;
-                            }
-                        };
-
-                        let alpn = stream
-                            .get_ref()
-                            .1
-                            .alpn_protocol()
-                            .map(|p| String::from_utf8_lossy(p).into_owned());
-
-                        match alpn.as_deref() {
-                            Some("http/1.1") => {
-                                // Send to the HTTP channel.
-                                let _ = http_sender.send(stream).await;
-                            }
-                            Some("h2") => {
-                                // Send to the gRPC channel.
-                                let _ = grpc_sender.send(stream).await;
-                            }
-                            _ => {
-                                // Send to the HTTP channel by default.
-                                // This is because most of the time, HTTP is used for communication.
-                                // On Numaflow, if a client is sending a gRPC request, the h2 protocol is explicitly used.
-                                let _ = http_sender.send(stream).await;
-                            }
-                        }
-                    });
-                }
-            }
-        }
-
-        while let Some(res) = conn_set.join_next().await {
-            if let Err(join_err) = res {
-                warn!(error = %join_err, "TCP connection task failed");
-            }
+        if let Err(error) = run_connection_acceptor(
+            tcp_listener,
+            tls_acceptor,
+            grpc_tx,
+            http_tx,
+            cln_token_copy_1,
+        )
+        .await
+        {
+            warn!(error = %error, "Connection acceptor failed");
         }
     });
 
     // Start a tokio task to serve gRPC requests.
     let cln_token_copy_2 = cln_token.clone();
     join_set.spawn(async move {
-        let grpc_service = MonoVertexDaemonServiceServer::new(MvtxDaemonService);
-        let incoming_stream = ReceiverStream::new(grpc_rx).map(Ok::<_, std::io::Error>);
-        let _ = Server::builder()
-            .add_service(grpc_service)
-            .serve_with_incoming_shutdown(incoming_stream, cln_token_copy_2.cancelled())
-            .await;
+        if let Err(error) = run_grpc_server(grpc_rx, cln_token_copy_2).await {
+            warn!(error = %error, "gRPC server failed");
+        }
     });
 
     // Start a tokio task to serve HTTP requests.
     join_set.spawn(async move {
-        // TODO - _svc_for_http will be used for serving HTTP requests.
-        let _svc_for_http = MvtxDaemonService;
-        let mut conn_set = JoinSet::new();
-        while let Some(stream) = http_rx.recv().await {
-            conn_set.spawn(async move {
-                let svc = service_fn(|req: HttpRequest<Incoming>| async move {
-                    let method = req.method().clone();
-                    let path = req.uri().path().to_string();
-
-                    let resp = match (method.as_str(), path.as_str()) {
-                        ("GET", "/readyz" | "/livez") => HttpResponse::builder()
-                            .status(StatusCode::NO_CONTENT)
-                            .body(Full::new(Bytes::new()))
-                            .unwrap(),
-                        // TODO - add remaining endpoints.
-                        _ => HttpResponse::builder()
-                            .status(StatusCode::NOT_FOUND)
-                            .body(Full::new(Bytes::new()))
-                            .unwrap(),
-                    };
-
-                    // Every error case is translated to a corresponding Response, hence infallible.
-                    Ok::<HttpResponse<Full<Bytes>>, Infallible>(resp)
-                });
-                let io = TokioIo::new(stream);
-                let _ = http1::Builder::new().serve_connection(io, svc).await;
-            });
-        }
-
-        while let Some(res) = conn_set.join_next().await {
-            if let Err(join_err) = res {
-                warn!(error = %join_err, "HTTP connection task failed");
-            }
+        if let Err(error) = run_http_server(http_rx).await {
+            warn!(error = %error, "HTTP server failed");
         }
     });
 
