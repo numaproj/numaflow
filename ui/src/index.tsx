@@ -1,44 +1,42 @@
-import React from "react";
+import React, { useMemo } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import App from "./App";
 import reportWebVitals from "./reportWebVitals";
-import { createTheme } from "@material-ui/core/styles";
 import { ThemeProvider } from "@mui/material";
 import { getBaseHref } from "./utils";
+import {
+  ThemeContextProvider,
+  useThemeContext,
+} from "./contexts/ThemeContext";
+import { createLightTheme, createDarkTheme } from "./themes";
 
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement
 );
 
-const theme = createTheme({
-  breakpoints: {
-    values: {
-      xs: 0,
-      sm: 600,
-      md: 960,
-      lg: 1400,
-      xl: 1840,
-    },
-  },
-  typography: {
-    fontFamily: ["IBM Plex Sans"].join(","),
-  },
-  palette: {
-    primary: {
-      main: "#0077C5",
-    },
-  },
-});
+function ThemedApp() {
+  const { resolvedTheme } = useThemeContext();
+
+  const theme = useMemo(() => {
+    return resolvedTheme === "dark" ? createDarkTheme() : createLightTheme();
+  }, [resolvedTheme]);
+
+  return (
+    <ThemeProvider theme={theme}>
+      <App />
+    </ThemeProvider>
+  );
+}
 
 root.render(
   <React.StrictMode>
-    <BrowserRouter basename={getBaseHref()}>
-      <ThemeProvider theme={theme}>
-        <App />
-      </ThemeProvider>
-    </BrowserRouter>
+    <ThemeContextProvider>
+      <BrowserRouter basename={getBaseHref()}>
+        <ThemedApp />
+      </BrowserRouter>
+    </ThemeContextProvider>
   </React.StrictMode>
 );
 

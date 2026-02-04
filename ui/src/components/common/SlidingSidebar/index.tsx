@@ -278,7 +278,7 @@ export function SlidingSidebar({
       sx={{
         display: "flex",
         flexDirection: "row",
-        backgroundColor: "#F8F8FB",
+        backgroundColor: "var(--bg-secondary)",
         width: width,
         minWidth: minWidth,
         height: "100%",
