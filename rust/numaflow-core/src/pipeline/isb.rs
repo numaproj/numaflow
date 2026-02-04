@@ -6,7 +6,6 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use tokio_util::sync::CancellationToken;
 
 use crate::error::Result;
 use crate::message::{Message, Offset};
@@ -92,20 +91,20 @@ impl std::fmt::Display for WriteError {
 
 impl std::error::Error for WriteError {}
 
-/// Result of resolving a pending write operation.
+/// Result of a write operation.
 ///
 /// Contains the offset of the written message along with additional metadata
 /// that may be useful for logging, metrics, or debugging.
 #[derive(Debug, Clone)]
-pub struct ResolveResult {
+pub struct WriteResult {
     /// The offset of the written message
     pub offset: Offset,
     /// Whether this was a duplicate message (already existed in the buffer)
     pub is_duplicate: bool,
 }
 
-impl ResolveResult {
-    /// Creates a new ResolveResult with the given offset and no duplicate flag.
+impl WriteResult {
+    /// Creates a new WriteResult with the given offset and no duplicate flag.
     pub fn new(offset: Offset) -> Self {
         Self {
             offset,
@@ -113,7 +112,7 @@ impl ResolveResult {
         }
     }
 
-    /// Creates a new ResolveResult marked as a duplicate.
+    /// Creates a new WriteResult marked as a duplicate.
     pub fn duplicate(offset: Offset) -> Self {
         Self {
             offset,
@@ -128,7 +127,11 @@ impl ResolveResult {
 /// 1. **High-performance async pattern**: Use `async_write()` to get a `PendingWrite` handle
 ///    immediately, then resolve it later with `resolve()`. This allows batching acknowledgments
 ///    for higher throughput.
-/// 2. **Simple blocking pattern**: Use `blocking_write()` which blocks until the write is confirmed.
+/// 2. **Simple synchronous pattern**: Use `write()` which writes and waits for confirmation
+///    in a single call. This is useful as a fallback when async writes fail.
+///
+/// Both `resolve()` and `write()` return `Result<WriteResult, WriteError>` for consistency.
+/// The orchestrator is responsible for retry logic and handling cancellation.
 ///
 /// Implementations must be cheaply cloneable (e.g., using Arc internally).
 #[async_trait]
@@ -156,7 +159,7 @@ pub(crate) trait ISBWriter: Send + Sync + Clone {
 
     /// Resolves a pending write to get the result.
     ///
-    /// This waits for the write acknowledgment and returns a `ResolveResult` containing
+    /// This waits for the write acknowledgment and returns a `WriteResult` containing
     /// the offset of the written message along with additional metadata (e.g., whether
     /// the message was a duplicate).
     ///
@@ -165,21 +168,19 @@ pub(crate) trait ISBWriter: Send + Sync + Clone {
     async fn resolve(
         &self,
         pending: Self::PendingWrite,
-    ) -> std::result::Result<ResolveResult, WriteError>;
+    ) -> std::result::Result<WriteResult, WriteError>;
 
-    /// Writes a message and blocks until confirmed, returning the offset.
+    /// Writes a message and waits for confirmation, returning the result.
     ///
-    /// This is the simple blocking write method with infinite retries until success
-    /// or cancellation. Use this when you don't need the high-performance async pattern.
+    /// This is a single-attempt write that returns immediately after the write
+    /// completes or fails. The orchestrator is responsible for retry logic.
+    ///
+    /// Returns `Err(WriteError::BufferFull)` if the buffer is full.
+    /// Returns `Err(WriteError::WriteFailed)` if the write operation fails.
     ///
     /// # Arguments
     /// * `message` - The message to write
-    /// * `cln_token` - Cancellation token for graceful shutdown
-    async fn blocking_write(
-        &self,
-        message: Message,
-        cln_token: CancellationToken,
-    ) -> std::result::Result<Offset, WriteError>;
+    async fn write(&self, message: Message) -> std::result::Result<WriteResult, WriteError>;
 
     /// Returns the name/identifier of this writer (e.g., stream name).
     #[allow(dead_code)]

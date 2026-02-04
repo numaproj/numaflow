@@ -375,7 +375,7 @@ export function PipelineCard({
                     padding: "0.8rem",
                     height: "6.4rem",
                     width: "22.8rem",
-                    background: "#F0F0F0",
+                    background: "var(--bg-tertiary)",
                     display: "flex",
                     flexDirection: "column",
                     fontSize: "1.6rem",
@@ -385,6 +385,7 @@ export function PipelineCard({
                     wordWrap: "break-word",
                     scrollbarWidth: "none",
                     msOverflowStyle: "none",
+                    color: "var(--text-primary)",
                   }}
                 >
                   {error}
@@ -399,12 +400,12 @@ export function PipelineCard({
                   style={{
                     borderRadius: "1.3rem",
                     width: "22.8rem",
-                    background: "#F0F0F0",
+                    background: "var(--bg-tertiary)",
                     display: "flex",
                     flexDirection: "row",
                     marginLeft: "1.6rem",
                     padding: "0.8rem",
-                    color: "#516F91",
+                    color: "var(--text-secondary)",
                     alignItems: "center",
                   }}
                 >
@@ -483,7 +484,7 @@ export function PipelineCard({
                   width: "2.4rem",
                   ...(pipelineStatus === DELETING
                     ? { color: "#D52B1E" }
-                    : { color: "#0077C5" }),
+                    : { color: "var(--accent-primary)" }),
                 }}
               />
             ) : (
@@ -495,7 +496,7 @@ export function PipelineCard({
         <Box
           sx={{
             display: "flex",
-            background: "#F9F9F9",
+            background: "var(--bg-tertiary)",
             flexDirection: "row",
             flexGrow: 1,
             padding: "1.6rem",
@@ -509,7 +510,7 @@ export function PipelineCard({
             container
             spacing={2}
             sx={{
-              background: "#F9F9F9",
+              background: "var(--bg-tertiary)",
               marginTop: "1rem",
               marginLeft: "0",
               flexWrap: "no-wrap",
@@ -574,7 +575,7 @@ export function PipelineCard({
             container
             spacing={2}
             sx={{
-              background: "#F9F9F9",
+              background: "var(--bg-tertiary)",
               marginTop: "1rem",
               flexWrap: "no-wrap",
             }}
@@ -636,7 +637,7 @@ export function PipelineCard({
             container
             spacing={2}
             sx={{
-              background: "#F9F9F9",
+              background: "var(--bg-tertiary)",
               marginTop: "1rem",
               flexWrap: "no-wrap",
             }}
@@ -672,7 +673,7 @@ export function PipelineCard({
             container
             spacing={0.5}
             sx={{
-              background: "#F9F9F9",
+              background: "var(--bg-tertiary)",
               marginTop: "1rem",
               alignItems: "center",
               justifyContent: "end",
@@ -689,9 +690,9 @@ export function PipelineCard({
                   data-testid="pipeline-card-view-select"
                   disabled={pipelineStatus === DELETING}
                   sx={{
-                    color: "#0077C5",
+                    color: "var(--accent-primary)",
                     height: "3.4rem",
-                    background: "#fff",
+                    background: "var(--bg-primary)",
                     marginRight: "2rem",
                     fontSize: "1.6rem",
                   }}
@@ -718,9 +719,9 @@ export function PipelineCard({
                   data-testid="pipeline-card-edit-select"
                   disabled={pipelineStatus === DELETING}
                   sx={{
-                    color: "#0077C5",
+                    color: "var(--accent-primary)",
                     height: "3.4rem",
-                    background: "#fff",
+                    background: "var(--bg-primary)",
                     marginRight: "2rem",
                     fontSize: "1.6rem",
                   }}
@@ -745,10 +746,10 @@ export function PipelineCard({
                   value={deleteOption}
                   disabled={pipelineStatus === DELETING}
                   sx={{
-                    color: "#0077C5",
+                    color: "var(--accent-primary)",
                     height: "3.4rem",
                     marginRight: "6.4rem",
-                    background: "#fff",
+                    background: "var(--bg-primary)",
                     fontSize: "1.6rem",
                   }}
                 >

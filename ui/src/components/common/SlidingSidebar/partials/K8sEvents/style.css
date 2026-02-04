@@ -31,8 +31,8 @@
 }
 
 .MuiTableCell-root {
-  background-color: #FFF !important;
-  border-bottom: 1px solid #DCDCDC !important;
+  background-color: var(--bg-primary) !important;
+  border-bottom: 1px solid var(--border-primary) !important;
   padding: 1.6rem 0.8rem !important;
   font-size: 1.4rem !important;
 }

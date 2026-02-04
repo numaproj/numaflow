@@ -8,6 +8,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import Button from "@mui/material/Button";
 import SuccessIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "../../../images/warning-triangle.png";
+import { useThemeContext } from "../../../contexts/ThemeContext";
 
 import "./style.css";
 
@@ -71,6 +72,7 @@ export function SpecEditor({
   mutationKey,
   editResetKey,
 }: SpecEditorProps) {
+  const { resolvedTheme } = useThemeContext();
   const [editable, setEditable] = useState(viewType === ViewType.EDIT);
   const [mutated, setMutated] = useState(false);
   const [value, setValue] = useState<string>(
@@ -436,7 +438,7 @@ export function SpecEditor({
           value={value}
           onMount={handleEditorDidMount}
           onChange={handleValueChange}
-          theme="github"
+          theme={resolvedTheme === "dark" ? "vs-dark" : "github"}
           options={
             !loading && editable
               ? { domReadOnly: false, readOnly: false }
@@ -468,6 +470,7 @@ export function SpecEditor({
           flexDirection: "column",
           height: "100%",
           padding: "2.4rem 2.4rem 2.4rem 0",
+          backgroundColor: "var(--bg-secondary)",
         }}
       >
         {spinner}

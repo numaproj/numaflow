@@ -1,5 +1,5 @@
 .namespace-k8s-events {
-  color: #393A3D;
+  color: var(--accent-primary);
   font-size: 1.4rem;
   font-style: normal;
   font-weight: 600;
