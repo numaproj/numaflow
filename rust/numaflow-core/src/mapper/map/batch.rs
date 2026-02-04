@@ -214,8 +214,7 @@ impl UserDefinedBatchMap {
     }
 
     /// Sends a batch of messages to the UDF and returns the raw response results.
-    /// If the cancellation token is cancelled while waiting for responses,
-    /// remaining messages will return an error indicating the operation was cancelled.
+    /// Returns early with an error if any request fails or if the cancellation token is cancelled.
     pub(in crate::mapper) async fn batch(
         &self,
         requests: Vec<MapRequest>,
@@ -244,7 +243,8 @@ impl UserDefinedBatchMap {
         }
 
         // send eot request
-        self.read_tx
+        if let Err(e) = self
+            .read_tx
             .send(MapRequest {
                 request: None,
                 id: "".to_string(),
@@ -252,32 +252,29 @@ impl UserDefinedBatchMap {
                 status: Some(map::TransmissionStatus { eot: true }),
             })
             .await
-            .expect("failed to send eot request");
+        {
+            error!(
+                ?e,
+                "Failed to send eot request to server, batch map operation should have failed"
+            );
+        }
 
-        let total_receivers = receivers.len();
-        let mut results = Vec::with_capacity(total_receivers);
+        let mut results = Vec::with_capacity(receivers.len());
         for receiver in receivers {
             let result = tokio::select! {
                 recv_result = receiver => {
                     recv_result.unwrap_or_else(|e| Err(Error::ActorPatternRecv(e.to_string())))
                 }
                 _ = cln_token.cancelled() => {
-                    Err(Error::Mapper("batch map operation cancelled".to_string()))
+                    return vec![Err(Error::Mapper("batch map operation cancelled".to_string()))];
                 }
             };
-            results.push(result);
 
-            // If cancelled, fill remaining results with cancellation errors
-            if cln_token.is_cancelled() {
-                break;
+            // Return early on first error
+            if result.is_err() {
+                return vec![result];
             }
-        }
-
-        // Fill any remaining slots with cancellation errors if we broke early
-        while results.len() < total_receivers {
-            results.push(Err(Error::Mapper(
-                "batch map operation cancelled".to_string(),
-            )));
+            results.push(result);
         }
 
         results

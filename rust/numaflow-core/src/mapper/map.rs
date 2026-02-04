@@ -595,7 +595,6 @@ mod tests {
     use tempfile::TempDir;
     use tokio::sync::mpsc::Sender;
     use tokio::sync::oneshot;
-    use tokio::time::sleep;
 
     struct SimpleMapper;
 
@@ -1049,7 +1048,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "global-state-tests")]
+    // #[cfg(feature = "global-state-tests")]
     #[tokio::test]
     async fn test_batch_map_with_panic() -> Result<()> {
         tracing_subscriber::fmt::init();
