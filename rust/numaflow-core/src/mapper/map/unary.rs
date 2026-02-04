@@ -86,8 +86,6 @@ impl UserDefinedUnaryMap {
             };
         }
 
-        info!("debug -- receiver stream dropped");
-
         // broadcast error for all pending senders that might've gotten added while the stream was draining
         Self::broadcast_error(
             &sender_map,
@@ -108,9 +106,13 @@ impl UserDefinedUnaryMap {
 
         update_udf_read_metric(is_mono_vertex());
 
+        let msg_id = message.id.clone();
+        let msg_offset = message.offset.clone();
+
+        info!("debug -- sending message to server. id: {}, offset: {}", msg_id.clone(), msg_offset.clone());
         // only insert if we are able to send the message to the server
         if let Err(e) = self.read_tx.send(message.into()).await {
-            error!(?e, "Failed to send message to server");
+            error!(?e, "Failed to send message to server. id: {}, offset: {}", msg_id.clone(), msg_offset.clone());
             let _ = respond_to.send(Err(Error::Mapper(format!(
                 "failed to send message to unary map server: {e}"
             ))));
@@ -118,14 +120,11 @@ impl UserDefinedUnaryMap {
         }
 
         // insert the sender into the map
-        let mut sender_guard = self.senders
+        self.senders
             .lock()
-            .expect("failed to acquire poisoned lock");
-        if sender_guard.is_empty() {
-            info!("debug -- inserting in empty sender map");
-        }
-        sender_guard
+            .expect("failed to acquire poisoned lock")
             .insert(key.clone(), (msg_info, respond_to));
+        info!("debug -- inserted message in sender map. id: {}, offset: {}", msg_id, msg_offset);
     }
 
     /// Processes the response from the server and sends it to the appropriate oneshot sender
@@ -150,6 +149,8 @@ impl UserDefinedUnaryMap {
             sender
                 .send(Ok(response_messages))
                 .expect("failed to send response");
+        } else {
+            error!("debug -- Failed to find sender for message id: {}", msg_id);
         }
     }
 }
