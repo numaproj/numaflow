@@ -7,6 +7,7 @@ use crate::error::{Error, Result};
 use crate::message::Message;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::mpsc;
+use tokio_stream::StreamExt;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
@@ -17,14 +18,19 @@ use super::{
     update_udf_process_time_metric, update_udf_read_metric, update_udf_write_only_metric,
 };
 
-type StreamResponseSenderMap =
-    Arc<Mutex<HashMap<String, (ParentMessageInfo, mpsc::Sender<Result<Message>>)>>>;
+type StreamResponseSenderMap = HashMap<String, (ParentMessageInfo, mpsc::Sender<Result<Message>>)>;
+
+#[derive(Default)]
+pub(in crate::mapper) struct StreamSenderMapState {
+    map: StreamResponseSenderMap,
+    closed: bool,
+}
 
 /// UserDefinedStreamMap is a grpc client that sends stream requests to the map server
 #[derive(Clone)]
 pub(in crate::mapper) struct UserDefinedStreamMap {
     read_tx: mpsc::Sender<MapRequest>,
-    senders: StreamResponseSenderMap,
+    senders: Arc<Mutex<StreamSenderMapState>>,
     _handle: Arc<AbortOnDropHandle<()>>,
 }
 
@@ -38,7 +44,7 @@ impl UserDefinedStreamMap {
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
         // map to track the oneshot response sender for each request along with the message info
-        let sender_map = Arc::new(Mutex::new(HashMap::new()));
+        let sender_map = Arc::new(Mutex::new(StreamSenderMapState::default()));
 
         // background task to receive responses from the server and send them to the appropriate
         // mpsc sender based on the id
@@ -56,9 +62,15 @@ impl UserDefinedStreamMap {
     }
 
     /// Broadcasts a gRPC error to all pending senders and records error metrics.
-    async fn broadcast_error(sender_map: &StreamResponseSenderMap, error: tonic::Status) {
-        let senders =
-            std::mem::take(&mut *sender_map.lock().expect("failed to acquire poisoned lock"));
+    async fn broadcast_error(sender_map: &Arc<Mutex<StreamSenderMapState>>, error: tonic::Status) {
+        // Force dropping the sender_guard by moving it out of the scope
+        // Using `drop(sender_guard)` here doesn't satisfy the borrow checker since it assumes it is
+        // still in use across await calls for some reason.
+        let senders = {
+            let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
+            sender_guard.closed = true;
+            std::mem::take(&mut sender_guard.map)
+        };
 
         for (_, (_, sender)) in senders {
             let _ = sender.send(Err(Error::Grpc(Box::new(error.clone())))).await;
@@ -69,41 +81,40 @@ impl UserDefinedStreamMap {
     /// receive responses from the server and gets the corresponding oneshot sender from the map
     /// and sends the response.
     async fn receive_stream_responses(
-        sender_map: StreamResponseSenderMap,
+        sender_map: Arc<Mutex<StreamSenderMapState>>,
         mut resp_stream: Streaming<MapResponse>,
     ) {
-        loop {
-            let resp = match resp_stream.message().await {
-                Ok(Some(message)) => message,
-                Ok(None) => break,
+        while let Some(resp) = resp_stream.next().await {
+            match resp {
+                Ok(message) => {
+                    let (message_info, response_sender) = sender_map
+                        .lock()
+                        .expect("failed to acquire poisoned lock")
+                        .map
+                        .remove(&message.id)
+                        .expect("map entry should always be present");
+
+                    // once we get eot, we can drop the sender to let the callee
+                    // know that we are done sending responses
+                    if let Some(map::TransmissionStatus { eot: true }) = message.status {
+                        update_udf_process_time_metric(is_mono_vertex());
+                        continue;
+                    }
+
+                    Self::process_stream_response(
+                        &sender_map,
+                        message.id,
+                        message_info,
+                        response_sender,
+                        message.results,
+                    )
+                    .await;
+                }
                 Err(e) => {
                     error!(?e, "Error reading message from stream map gRPC stream");
                     Self::broadcast_error(&sender_map, e).await;
-                    break;
                 }
-            };
-
-            let (message_info, response_sender) = sender_map
-                .lock()
-                .expect("failed to acquire poisoned lock")
-                .remove(&resp.id)
-                .expect("map entry should always be present");
-
-            // once we get eot, we can drop the sender to let the callee
-            // know that we are done sending responses
-            if let Some(map::TransmissionStatus { eot: true }) = resp.status {
-                update_udf_process_time_metric(is_mono_vertex());
-                continue;
             }
-
-            Self::process_stream_response(
-                &sender_map,
-                resp.id,
-                message_info,
-                response_sender,
-                resp.results,
-            )
-            .await;
         }
     }
 
@@ -129,15 +140,32 @@ impl UserDefinedStreamMap {
             return;
         }
 
-        self.senders
-            .lock()
-            .expect("failed to acquire poisoned lock")
-            .insert(key.clone(), (msg_info, respond_to));
+        // move the senders_guard out of the scope to drop the guard before sending the response
+        let mapper_closed = {
+            let mut senders_guard = self
+                .senders
+                .lock()
+                .expect("failed to acquire poisoned lock");
+            if !senders_guard.closed {
+                // Write the sender back to the map, because we need to send
+                // more responses for the same request
+                senders_guard
+                    .map
+                    .insert(key.clone(), (msg_info, respond_to.clone()));
+            }
+            senders_guard.closed
+        };
+
+        if mapper_closed {
+            let _ = respond_to
+                .send(Err(Error::Mapper("mapper closed".to_string())))
+                .await;
+        }
     }
 
     /// Processes stream responses and sends them to the appropriate mpsc sender
     async fn process_stream_response(
-        sender_map: &StreamResponseSenderMap,
+        sender_map: &Arc<Mutex<StreamSenderMapState>>,
         msg_id: String,
         mut message_info: ParentMessageInfo,
         response_sender: mpsc::Sender<Result<Message>>,
@@ -158,12 +186,24 @@ impl UserDefinedStreamMap {
             update_udf_write_only_metric(is_mono_vertex());
         }
 
-        // Write the sender back to the map, because we need to send
-        // more responses for the same request
-        sender_map
-            .lock()
-            .expect("failed to acquire poisoned lock")
-            .insert(msg_id, (message_info, response_sender));
+        // move the senders_guard out of the scope to drop the guard before sending the response
+        let mapper_closed = {
+            let mut senders_guard = sender_map.lock().expect("failed to acquire poisoned lock");
+            if !senders_guard.closed {
+                // Write the sender back to the map, because we need to send
+                // more responses for the same request
+                senders_guard
+                    .map
+                    .insert(msg_id, (message_info, response_sender.clone()));
+            }
+            senders_guard.closed
+        };
+
+        if mapper_closed {
+            let _ = response_sender
+                .send(Err(Error::Mapper("mapper closed".to_string())))
+                .await;
+        }
     }
 }
 

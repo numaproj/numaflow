@@ -22,7 +22,7 @@ type ResponseSenderMap =
     HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>;
 
 #[derive(Default)]
-pub(in crate::mapper) struct ResponseSenderMapState {
+pub(in crate::mapper) struct UnarySenderMapState {
     map: ResponseSenderMap,
     closed: bool,
 }
@@ -32,7 +32,7 @@ pub(in crate::mapper) struct ResponseSenderMapState {
 #[derive(Clone)]
 pub(in crate::mapper) struct UserDefinedUnaryMap {
     read_tx: mpsc::Sender<MapRequest>,
-    senders: Arc<Mutex<ResponseSenderMapState>>,
+    senders: Arc<Mutex<UnarySenderMapState>>,
     _handle: Arc<AbortOnDropHandle<()>>,
 }
 
@@ -46,7 +46,7 @@ impl UserDefinedUnaryMap {
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
         // map to track the oneshot sender for each request along with the message info
-        let sender_map = Arc::new(Mutex::new(ResponseSenderMapState::default()));
+        let sender_map = Arc::new(Mutex::new(UnarySenderMapState::default()));
 
         // background task to receive responses from the server and send them to the appropriate
         // oneshot sender based on the message id
@@ -65,7 +65,7 @@ impl UserDefinedUnaryMap {
     }
 
     /// Broadcasts a unary gRPC error to all pending senders and records error metrics.
-    fn broadcast_error(sender_map: &Arc<Mutex<ResponseSenderMapState>>, error: tonic::Status) {
+    fn broadcast_error(sender_map: &Arc<Mutex<UnarySenderMapState>>, error: tonic::Status) {
         let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
         sender_guard.closed = true;
         let senders = std::mem::take(&mut sender_guard.map);
@@ -82,7 +82,7 @@ impl UserDefinedUnaryMap {
     /// receive responses from the server and gets the corresponding oneshot response sender from the map
     /// and sends the response.
     async fn receive_unary_responses(
-        sender_map: Arc<Mutex<ResponseSenderMapState>>,
+        sender_map: Arc<Mutex<UnarySenderMapState>>,
         mut resp_stream: Streaming<MapResponse>,
     ) {
         while let Some(resp) = resp_stream.next().await {
@@ -132,7 +132,7 @@ impl UserDefinedUnaryMap {
     /// Processes the response from the server and sends it to the appropriate oneshot sender
     /// based on the message id entry in the map.
     pub(super) async fn process_unary_response(
-        sender_map: &Arc<Mutex<ResponseSenderMapState>>,
+        sender_map: &Arc<Mutex<UnarySenderMapState>>,
         resp: MapResponse,
     ) {
         let msg_id = resp.id;
