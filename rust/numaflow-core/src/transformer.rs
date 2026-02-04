@@ -195,6 +195,8 @@ impl Transformer {
                 .inc_by(messages.len() as u64);
         }
 
+        let message_count = messages.len();
+
         let tasks: Vec<_> = messages
             .into_iter()
             .map(|read_msg| {
@@ -209,9 +211,10 @@ impl Transformer {
                     })?;
                     let _permit = permit;
 
+                    let offset = read_msg.offset.clone();
                     let transformed_messages = Transformer::transform(
                         transform_handle,
-                        read_msg.clone(),
+                        read_msg,
                         hard_shutdown_token.clone(),
                     )
                     .await?;
@@ -219,7 +222,7 @@ impl Transformer {
                     // update the tracker with the number of responses for each message
                     tracker
                         .serving_update(
-                            &read_msg.offset,
+                            &offset,
                             transformed_messages
                                 .iter()
                                 .map(|m| m.tags.clone())
@@ -232,7 +235,7 @@ impl Transformer {
             })
             .collect();
 
-        let mut transformed_messages = Vec::new();
+        let mut transformed_messages = Vec::with_capacity(message_count);
         for task in tasks {
             match task.await {
                 Ok(Ok(mut msgs)) => transformed_messages.append(&mut msgs),

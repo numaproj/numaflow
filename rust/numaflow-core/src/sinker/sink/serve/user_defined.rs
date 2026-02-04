@@ -38,7 +38,7 @@ impl UserDefinedStore {
                     id: payload.id,
                     payloads: vec![Payload {
                         origin: origin.clone(),
-                        value: payload.value.to_vec(),
+                        value: payload.value.clone(),
                     }],
                 };
                 client.put(request).await.map_err(|e| {

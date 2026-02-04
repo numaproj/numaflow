@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use crate::Result;
 use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::config::{get_vertex_name, is_mono_vertex};
@@ -686,7 +687,7 @@ pub(crate) enum ResponseStatusFromSink {
     /// Write to FallBack Sink.
     Fallback,
     /// Write to serving store.
-    Serve(Option<Vec<u8>>),
+    Serve(Option<Bytes>),
     OnSuccess(Option<sink_response::result::Message>),
 }
 

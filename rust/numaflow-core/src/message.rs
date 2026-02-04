@@ -366,7 +366,7 @@ impl TryFrom<Message> for BytesMut {
                 }),
             }),
             body: Some(numaflow_pb::objects::isb::Body {
-                payload: message.value.to_vec(),
+                payload: message.value.clone(),
             }),
         };
 

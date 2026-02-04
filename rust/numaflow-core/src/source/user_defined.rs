@@ -195,7 +195,8 @@ impl TryFrom<Offset> for source::Offset {
             }) => Ok(source::Offset {
                 offset: BASE64_STANDARD
                     .decode(offset)
-                    .expect("we control the encoding, so this should never fail"),
+                    .expect("we control the encoding, so this should never fail")
+                    .into(),
                 partition_id: partition_idx as i32,
             }),
             Offset::Int(_) => Err(Error::Source("IntOffset not supported".to_string())),

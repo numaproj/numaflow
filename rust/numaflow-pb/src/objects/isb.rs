@@ -58,8 +58,8 @@ pub struct MessageId {
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Body {
     /// Payload is the actual data of the message
-    #[prost(bytes = "vec", tag = "1")]
-    pub payload: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "1")]
+    pub payload: ::prost::bytes::Bytes,
 }
 /// Message is inter step message
 #[derive(Clone, PartialEq, ::prost::Message)]

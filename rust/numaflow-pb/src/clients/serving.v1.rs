@@ -6,8 +6,8 @@ pub struct Payload {
     #[prost(string, tag = "1")]
     pub origin: ::prost::alloc::string::String,
     /// Value is the result of the computation.
-    #[prost(bytes = "vec", tag = "2")]
-    pub value: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "2")]
+    pub value: ::prost::bytes::Bytes,
 }
 /// PutRequest is the request sent to the Store.
 #[derive(Clone, PartialEq, ::prost::Message)]

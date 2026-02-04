@@ -20,7 +20,7 @@ impl From<Message> for accumulator::Payload {
     fn from(msg: Message) -> Self {
         Self {
             keys: msg.keys.to_vec(),
-            value: msg.value.to_vec(),
+            value: msg.value.clone(),
             event_time: Some(prost_timestamp_from_utc(msg.event_time)),
             watermark: msg.watermark.map(prost_timestamp_from_utc),
             id: msg.id.to_string(),

@@ -19,5 +19,5 @@ pub struct Metadata {
 pub struct KeyValueGroup {
     #[prost(map = "string, bytes", tag = "1")]
     pub key_value:
-        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::vec::Vec<u8>>,
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::bytes::Bytes>,
 }

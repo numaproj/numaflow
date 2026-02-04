@@ -5,8 +5,8 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SideInputResponse {
     /// value represents the latest value of the side input payload
-    #[prost(bytes = "vec", tag = "1")]
-    pub value: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "1")]
+    pub value: ::prost::bytes::Bytes,
     /// noBroadcast indicates whether the side input value should be broadcasted to all
     /// True if value should not be broadcasted
     /// False if value should be broadcasted

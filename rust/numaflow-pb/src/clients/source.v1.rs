@@ -47,8 +47,8 @@ pub mod read_response {
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Result {
         /// Required field holding the payload of the datum.
-        #[prost(bytes = "vec", tag = "1")]
-        pub payload: ::prost::alloc::vec::Vec<u8>,
+        #[prost(bytes = "bytes", tag = "1")]
+        pub payload: ::prost::bytes::Bytes,
         /// Required field indicating the offset information of the datum.
         #[prost(message, optional, tag = "2")]
         pub offset: ::core::option::Option<super::Offset>,
@@ -285,8 +285,8 @@ pub struct Offset {
     /// We define Offset as a byte array because different input data sources can have different representations for Offset.
     /// The only way to generalize it is to define it as a byte array,
     /// Such that we can let the UDSource to de-serialize the offset using its own interpretation logics.
-    #[prost(bytes = "vec", tag = "1")]
-    pub offset: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "1")]
+    pub offset: ::prost::bytes::Bytes,
     /// Optional partition_id indicates which partition of the source the datum belongs to.
     /// It is useful for sources that have multiple partitions. e.g. Kafka.
     /// If the partition_id is not specified, it is assumed that the source has a single partition.

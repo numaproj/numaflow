@@ -4,8 +4,8 @@
 pub struct Payload {
     #[prost(string, repeated, tag = "1")]
     pub keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    #[prost(bytes = "vec", tag = "2")]
-    pub value: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "2")]
+    pub value: ::prost::bytes::Bytes,
     #[prost(message, optional, tag = "3")]
     pub event_time: ::core::option::Option<::prost_types::Timestamp>,
     #[prost(message, optional, tag = "4")]

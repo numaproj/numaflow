@@ -96,7 +96,7 @@ impl From<Message> for SourceTransformRequest {
             request: Some(sourcetransformer::source_transform_request::Request {
                 id: message.offset.to_string(),
                 keys: message.keys.to_vec(),
-                value: message.value.to_vec(),
+                value: message.value.clone(),
                 event_time: Some(prost_timestamp_from_utc(message.event_time)),
                 watermark: message.watermark.map(prost_timestamp_from_utc),
                 headers: Arc::unwrap_or_clone(message.headers),
