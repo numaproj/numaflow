@@ -8,6 +8,7 @@ use crate::error::{Error, Result};
 use crate::message::Message;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{OwnedSemaphorePermit, mpsc};
+use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
@@ -179,33 +180,44 @@ impl UserDefinedStreamMap {
         sender_map: StreamResponseSenderMap,
         mut resp_stream: Streaming<MapResponse>,
     ) {
-        loop {
-            let resp = match resp_stream.message().await {
-                Ok(Some(message)) => message,
-                Ok(None) => break,
+        while let Some(resp) = resp_stream.next().await {
+            match resp {
+                Ok(resp) => {
+                    let response_sender = sender_map
+                        .lock()
+                        .expect("failed to acquire poisoned lock")
+                        .remove(&resp.id)
+                        .expect("map entry should always be present");
+
+                    // once we get eot, we can drop the sender to let the callee
+                    // know that we are done sending responses
+                    if let Some(map::TransmissionStatus { eot: true }) = resp.status {
+                        update_udf_process_time_metric(is_mono_vertex());
+                        continue;
+                    }
+
+                    Self::process_stream_response(
+                        &sender_map,
+                        resp.id,
+                        response_sender,
+                        resp.results,
+                    )
+                    .await
+                }
                 Err(e) => {
                     error!(?e, "Error reading message from stream map gRPC stream");
                     Self::broadcast_error(&sender_map, e).await;
                     break;
                 }
-            };
-
-            let response_sender = sender_map
-                .lock()
-                .expect("failed to acquire poisoned lock")
-                .remove(&resp.id)
-                .expect("map entry should always be present");
-
-            // once we get eot, we can drop the sender to let the callee
-            // know that we are done sending responses
-            if let Some(map::TransmissionStatus { eot: true }) = resp.status {
-                update_udf_process_time_metric(is_mono_vertex());
-                continue;
             }
-
-            Self::process_stream_response(&sender_map, resp.id, response_sender, resp.results)
-                .await;
         }
+
+        // broadcast error for all pending senders that might've gotten added while the stream was draining
+        Self::broadcast_error(
+            &sender_map,
+            tonic::Status::aborted("receiver stream dropped"),
+        )
+        .await;
     }
 
     /// Sends a request to the UDF and returns a receiver for raw response results.

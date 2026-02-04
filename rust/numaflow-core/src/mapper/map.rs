@@ -595,6 +595,7 @@ mod tests {
     use tempfile::TempDir;
     use tokio::sync::mpsc::Sender;
     use tokio::sync::oneshot;
+    use tokio::time::sleep;
 
     struct SimpleMapper;
 
@@ -648,7 +649,7 @@ mod tests {
             tags: None,
             value: "hello".into(),
             offset: Offset::String(StringOffset::new("0".to_string(), 0)),
-            event_time: chrono::Utc::now(),
+            event_time: Utc::now(),
             watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
@@ -1051,6 +1052,7 @@ mod tests {
     #[cfg(feature = "global-state-tests")]
     #[tokio::test]
     async fn test_batch_map_with_panic() -> Result<()> {
+        tracing_subscriber::fmt::init();
         let cln_token = CancellationToken::new();
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();

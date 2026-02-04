@@ -8,6 +8,7 @@ use crate::error::{Error, Result};
 use crate::message::Message;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
+use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
@@ -174,19 +175,22 @@ impl UserDefinedUnaryMap {
         sender_map: ResponseSenderMap,
         mut resp_stream: Streaming<MapResponse>,
     ) {
-        loop {
-            let resp = match resp_stream.message().await {
-                Ok(Some(message)) => message,
-                Ok(None) => break,
+        while let Some(resp) = resp_stream.next().await {
+            match resp {
+                Ok(resp) => Self::process_unary_response(&sender_map, resp).await,
                 Err(e) => {
                     error!(?e, "Error reading message from unary map gRPC stream");
                     Self::broadcast_error(&sender_map, e);
                     break;
                 }
             };
-
-            Self::process_unary_response(&sender_map, resp).await
         }
+
+        // broadcast error for all pending senders that might've gotten added while the stream was draining
+        Self::broadcast_error(
+            &sender_map,
+            tonic::Status::aborted("receiver stream dropped"),
+        );
     }
 
     /// Sends a message to the UDF and returns the raw response results.

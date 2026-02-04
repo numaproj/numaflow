@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 use tokio::sync::{mpsc, oneshot};
+use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
@@ -162,32 +163,37 @@ impl UserDefinedBatchMap {
         sender_map: ResponseSenderMap,
         mut resp_stream: Streaming<MapResponse>,
     ) {
-        loop {
-            let resp = match resp_stream.message().await {
-                Ok(Some(message)) => message,
-                Ok(None) => break,
+        while let Some(resp) = resp_stream.next().await {
+            match resp {
+                Ok(resp) => {
+                    if let Some(map::TransmissionStatus { eot: true }) = resp.status {
+                        if !sender_map
+                            .lock()
+                            .expect("failed to acquire poisoned lock")
+                            .is_empty()
+                        {
+                            error!("received EOT but not all responses have been received");
+                            critical_error!(VERTEX_TYPE_MAP_UDF, "eot_received_from_map");
+                        }
+                        update_udf_process_time_metric(is_mono_vertex());
+                        continue;
+                    }
+
+                    Self::process_response(&sender_map, resp).await
+                }
                 Err(e) => {
                     error!(?e, "Error reading message from batch map gRPC stream");
                     Self::broadcast_error(&sender_map, e);
                     break;
                 }
-            };
-
-            if let Some(map::TransmissionStatus { eot: true }) = resp.status {
-                if !sender_map
-                    .lock()
-                    .expect("failed to acquire poisoned lock")
-                    .is_empty()
-                {
-                    error!("received EOT but not all responses have been received");
-                    critical_error!(VERTEX_TYPE_MAP_UDF, "eot_received_from_map");
-                }
-                update_udf_process_time_metric(is_mono_vertex());
-                continue;
             }
-
-            Self::process_response(&sender_map, resp).await
         }
+
+        // broadcast error for all pending senders that might've gotten added while the stream was draining
+        Self::broadcast_error(
+            &sender_map,
+            tonic::Status::aborted("receiver stream dropped"),
+        );
     }
 
     /// Processes the response from the server and sends it to the appropriate oneshot sender
