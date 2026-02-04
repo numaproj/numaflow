@@ -353,8 +353,6 @@ const Flow = (props: FlowProps) => {
                 <Alert
                   severity="error"
                   sx={{
-                    backgroundColor: "#FDEDED",
-                    color: "#5F2120",
                     fontSize: "1.6rem",
                   }}
                 >
@@ -370,11 +368,11 @@ const Flow = (props: FlowProps) => {
                   style={{
                     borderRadius: "1.3rem",
                     width: "22.8rem",
-                    background: "#F0F0F0",
+                    background: "var(--bg-tertiary)",
                     display: "flex",
                     flexDirection: "row",
                     padding: "0.8rem",
-                    color: "#516F91",
+                    color: "var(--text-secondary)",
                     alignItems: "center",
                   }}
                   data-testid="pipeline-status"
@@ -490,8 +488,8 @@ const Flow = (props: FlowProps) => {
               width="53"
               height="29"
               rx="3.5"
-              fill="white"
-              stroke="#D4D7DC"
+              fill="var(--bg-primary)"
+              stroke="var(--border-primary)"
             />
             <text x="50%" y="50%" className={"zoom-percent-text"}>
               {(((zoomLevel - 0.1) / 2) * 100).toFixed(0)}%
