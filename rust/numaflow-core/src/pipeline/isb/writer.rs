@@ -19,7 +19,7 @@ use crate::metrics::{
     pipeline_metrics,
 };
 use crate::pipeline::isb::error::ISBError;
-use crate::pipeline::isb::{ISBWriter, ResolveResult, WriteError};
+use crate::pipeline::isb::{ISBWriter, WriteError, WriteResult};
 use crate::shared::forward;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::WatermarkHandle;
@@ -31,9 +31,9 @@ type MetricLabels = Arc<Vec<(String, String)>>;
 /// Type alias for stream metric labels map
 type StreamMetricLabelsMap = Arc<HashMap<&'static str, MetricLabels>>;
 
-/// Result of a successful write operation to a stream.
+/// Result of a successful async write operation to a stream.
 /// Contains the pending write (PAF) that needs to be resolved.
-struct WriteResult<C: NumaflowTypeConfig> {
+struct PendingWriteResult<C: NumaflowTypeConfig> {
     stream: Stream,
     paf: <C::ISBWriter as ISBWriter>::PendingWrite,
     write_start: Instant,
@@ -146,12 +146,12 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
     }
 
     /// Routes a message to appropriate streams and writes to each.
-    /// Returns a list of WriteResults (one per successful write) with PAFs to be resolved.
+    /// Returns a list of PendingWriteResults (one per successful write) with PAFs to be resolved.
     async fn route_and_write_message(
         &self,
         message: &Message,
         cln_token: CancellationToken,
-    ) -> Vec<WriteResult<C>> {
+    ) -> Vec<PendingWriteResult<C>> {
         let mut results = vec![];
 
         for vertex in &*self.config {
@@ -213,14 +213,14 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
 
     /// Writes a message to a single stream with retry logic.
     /// Returns None if the message should be dropped (DiscardLatest + buffer full or cancelled).
-    /// On success, returns a WriteResult containing the PAF that needs to be resolved.
+    /// On success, returns a PendingWriteResult containing the PAF that needs to be resolved.
     async fn write_to_stream(
         &self,
         message: &Message,
         stream: &Stream,
         buffer_full_strategy: BufferFullStrategy,
         cln_token: CancellationToken,
-    ) -> Option<WriteResult<C>> {
+    ) -> Option<PendingWriteResult<C>> {
         let writer = self
             .writers
             .get(stream.name)
@@ -232,7 +232,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
             // Use the trait's async_write method which returns immediately with a PAF
             match writer.async_write(message.clone()).await {
                 Ok(paf) => {
-                    return Some(WriteResult {
+                    return Some(PendingWriteResult {
                         stream: stream.clone(),
                         paf,
                         write_start,
@@ -350,7 +350,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
     /// Spawns a background task to resolve all PAFs, publish watermarks, and update tracker.
     async fn resolve_and_finalize(
         &self,
-        write_results: Vec<WriteResult<C>>,
+        write_results: Vec<PendingWriteResult<C>>,
         message: Message,
         cln_token: CancellationToken,
     ) -> Result<()> {
@@ -397,7 +397,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
     /// Resolves all PAFs and returns the offsets for successful writes.
     async fn resolve_all_pafs(
         &self,
-        write_results: Vec<WriteResult<C>>,
+        write_results: Vec<PendingWriteResult<C>>,
         message: &Message,
         cln_token: CancellationToken,
     ) -> Vec<(Stream, Offset)> {
@@ -415,14 +415,12 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
                 Err(e) => {
                     error!(
                         ?e, stream = ?write_result.stream,
-                        "Failed to resolve the future, trying blocking write",
+                        "Failed to resolve the future, trying write with retry",
                     );
                     Self::publish_paf_error_metrics(write_result.stream.name, &e);
-                    // Fallback to blocking write - wrap offset in ResolveResult
-                    writer
-                        .blocking_write(message.clone(), cln_token.clone())
+                    // Fallback to write with retry loop
+                    self.write_with_retry(writer, message.clone(), cln_token.clone())
                         .await
-                        .map(ResolveResult::new)
                 }
             };
 
@@ -443,18 +441,49 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
         offsets
     }
 
-    /// Handles the result of a PAF resolution or blocking write.
+    /// Writes a message using the write method with retry logic.
+    /// Retries until success or cancellation.
+    async fn write_with_retry(
+        &self,
+        writer: &C::ISBWriter,
+        message: Message,
+        cln_token: CancellationToken,
+    ) -> std::result::Result<WriteResult, WriteError> {
+        loop {
+            match writer.write(message.clone()).await {
+                Ok(result) => return Ok(result),
+                Err(WriteError::BufferFull) => {
+                    // Buffer is full, wait and retry
+                    debug!(
+                        "Buffer full during write retry, waiting before next attempt"
+                    );
+                }
+                Err(WriteError::WriteFailed(ref e)) => {
+                    error!(?e, "Write failed during retry, will retry");
+                }
+            }
+
+            if cln_token.is_cancelled() {
+                return Err(WriteError::WriteFailed("Cancelled".to_string()));
+            }
+
+            // Sleep to avoid busy looping
+            sleep(Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS)).await;
+        }
+    }
+
+    /// Handles the result of a PAF resolution or write.
     /// Returns Some(offset) if successful, None if failed.
     /// Also handles duplicate detection and publishes appropriate metrics.
     fn handle_paf_result(
         &self,
-        result: std::result::Result<ResolveResult, WriteError>,
+        result: std::result::Result<WriteResult, WriteError>,
         stream: &Stream,
         message: &Message,
     ) -> Option<Offset> {
         match result {
-            Ok(resolve_result) => {
-                if resolve_result.is_duplicate {
+            Ok(write_result) => {
+                if write_result.is_duplicate {
                     warn!(
                         message_id = ?message.id,
                         stream = ?stream,
@@ -466,7 +495,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
                         message.value.len(),
                     );
                 }
-                Some(resolve_result.offset)
+                Some(write_result.offset)
             }
             Err(e) => {
                 error!(?e, stream = ?stream, "Write/resolve failed");
