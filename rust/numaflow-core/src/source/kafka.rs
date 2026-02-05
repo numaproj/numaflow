@@ -65,7 +65,7 @@ impl From<numaflow_kafka::Error> for Error {
             numaflow_kafka::Error::Connection { server, error } => Error::Source(format!(
                 "Failed to connect to Kafka server: {server} - {error}"
             )),
-            numaflow_kafka::Error::UnknownMemberId(e) => Error::NonRetryable(e.to_string()),
+            numaflow_kafka::Error::NonRetryable(e) => Error::NonRetryable(e.to_string()),
             numaflow_kafka::Error::Other(e) => Error::Source(e),
         }
     }

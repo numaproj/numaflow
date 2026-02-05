@@ -379,10 +379,25 @@ impl KafkaActor {
                 let Err(commit_error) = consumer.commit(&tpl, CommitMode::Sync) else {
                     return Ok(());
                 };
-                if commit_error.rdkafka_error_code()
-                    == Some(rdkafka::types::RDKafkaErrorCode::UnknownMemberId)
-                {
-                    return Err(Error::UnknownMemberId(commit_error.to_string()));
+                if let Some(code) = commit_error.rdkafka_error_code() {
+                    use rdkafka::types::RDKafkaErrorCode::*;
+                    // Potential non-retryable errors that can happen in ACK https://kafka.apache.org/41/design/protocol/#error-codes
+                    if matches!(
+                        code,
+                        // Consumer group membership errors
+                        UnknownMemberId
+                            | IllegalGeneration
+                            | RebalanceInProgress
+                            | FencedInstanceId
+                            | FencedMemberEpoch
+                            | StaleMemberEpoch
+                            | GroupAuthorizationFailed
+                    ) {
+                        return Err(Error::NonRetryable(format!(
+                            "Non-retryable commit error ({:?}): {}",
+                            code, commit_error
+                        )));
+                    }
                 }
                 Err(Error::Kafka(format!(
                     "Failed to commit offsets: {commit_error}"

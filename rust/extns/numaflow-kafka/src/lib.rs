@@ -16,8 +16,8 @@ pub enum Error {
     #[error("Kafka - {0}")]
     Kafka(String),
 
-    #[error("Kafka broker is not aware of this member - {0}")]
-    UnknownMemberId(String),
+    #[error("{0}")]
+    NonRetryable(String),
 
     #[error("{0}")]
     Other(String),
