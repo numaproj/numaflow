@@ -124,7 +124,8 @@ impl KafkaActor {
         // https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html
         client_config
             .set("enable.partition.eof", "false")
-            .set("session.timeout.ms", "6000")
+            .set("session.timeout.ms", "45000")
+            .set("heartbeat.interval.ms", "15000")
             .set("auto.offset.reset", "earliest");
         if !config.kafka_raw_config.is_empty() {
             info!(
@@ -375,9 +376,17 @@ impl KafkaActor {
             // This may be a blocking call, so we spawn a new task to run it.
             let consumer = Arc::clone(&self.consumer);
             let task = tokio::task::spawn_blocking(move || {
-                consumer
-                    .commit(&tpl, CommitMode::Sync)
-                    .map_err(|e| Error::Kafka(format!("Failed to commit offsets: {e}")))
+                let Err(commit_error) = consumer.commit(&tpl, CommitMode::Sync) else {
+                    return Ok(());
+                };
+                if commit_error.rdkafka_error_code()
+                    == Some(rdkafka::types::RDKafkaErrorCode::UnknownMemberId)
+                {
+                    return Err(Error::UnknownMemberId(commit_error.to_string()));
+                }
+                Err(Error::Kafka(format!(
+                    "Failed to commit offsets: {commit_error}"
+                )))
             });
             ack_tasks.push(task);
         }
