@@ -51,8 +51,24 @@ func CheckPodsStatus(pods *corev1.PodList) (healthy bool, reason string, message
 // which would not end up with another reconciliation when it reaches the time limit,
 // but we have to trigger it explicitly.
 func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string, isTransientUnhealthy bool) {
+
+	// check both container and initContainer statuses
+	healthy, reason, isTransientUnhealthy = checkContainerStatuses(pod.Status.ContainerStatuses)
+	if !healthy {
+		return healthy, reason, isTransientUnhealthy
+	}
+	healthy, reason, isTransientUnhealthy = checkContainerStatuses(pod.Status.InitContainerStatuses)
+	if !healthy {
+		return healthy, reason, isTransientUnhealthy
+	}
+
+	return true, "", false
+
+}
+
+func checkContainerStatuses(containers []corev1.ContainerStatus) (bool, string, bool) {
 	var lastRestartTime time.Time
-	for _, c := range pod.Status.ContainerStatuses {
+	for _, c := range containers {
 		if c.State.Waiting != nil && slices.Contains(unhealthyWaitingStatus, c.State.Waiting.Reason) {
 			return false, c.State.Waiting.Reason, false
 		}
@@ -91,6 +107,11 @@ func IsPodReady(pod corev1.Pod) bool {
 		return false
 	}
 	for _, c := range pod.Status.ContainerStatuses {
+		if !c.Ready {
+			return false
+		}
+	}
+	for _, c := range pod.Status.InitContainerStatuses {
 		if !c.Ready {
 			return false
 		}
