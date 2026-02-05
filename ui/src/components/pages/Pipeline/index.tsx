@@ -208,10 +208,8 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
   // Force Graph remount when pipeline structure changes.
   const graphKey = useMemo(() => {
     const generation = pipeline?.metadata?.generation ?? "gen";
-    const vertexCount = vertices?.length ?? 0;
-    const edgeCount = edges?.length ?? 0;
-    return `${generation}-${vertexCount}-${edgeCount}`;
-  }, [pipeline?.metadata?.generation, vertices?.length, edges?.length]);
+    return `${generation}`;
+  }, [pipeline?.metadata?.generation]);
 
   const content = useMemo(() => {
     if (pipelineErr || buffersErr) {
