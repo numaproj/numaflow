@@ -3,7 +3,7 @@
 }
 
 .close-modal-message {
-  color: #000;
+  color: var(--text-primary);
   font-size: 2rem;
   font-style: normal;
   font-weight: 400;

@@ -3,12 +3,12 @@
 }
 
 .react-flow__edge-textbg {
-    fill: #fafafa;
+    fill: var(--bg-tertiary);
 }
 
 .pipeline-status-title {
     font-weight: 600;
-    color: #393A3D;
+    color: var(--text-primary);
     font-size: 1.3rem;
     font-style: normal;
 }

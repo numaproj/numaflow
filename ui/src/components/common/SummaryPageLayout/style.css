@@ -12,7 +12,7 @@
 }
 
 .summary-page-layout-collapsed-text {
-  color: #393a3d;
+  color: var(--text-primary);
   font-size: 1.3rem;
   font-style: normal;
   font-weight: 600;
@@ -20,5 +20,5 @@
 
 .summary-page-layout-separator {
   width: 0.1rem;
-  background: #dae3e8;
+  background: var(--border-secondary);
 }
