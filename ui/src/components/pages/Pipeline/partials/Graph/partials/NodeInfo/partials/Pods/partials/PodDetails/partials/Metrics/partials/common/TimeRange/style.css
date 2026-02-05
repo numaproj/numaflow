@@ -10,7 +10,7 @@
   left: 1rem;
   color: var(--text-tertiary);
   transition: 0.2s ease all;
-  background-color: var(--bg-primary);
+  background-color: var(--bg-secondary);
   padding: 0 5px;
   z-index: 1;
 }
@@ -32,13 +32,13 @@
   cursor: pointer;
   outline: none;
   border: 1px solid rgba(255, 255, 255, 0);
-  background-color: var(--bg-primary);
+  background-color: transparent;
   transition: border-color 0.3s;
   padding: 1.65rem 3.2rem 1.65rem 1.4rem;
 }
 
 .date-input:hover {
-  border-color: var(--border-primary);
+  border-color: var(--text-primary);
 }
 
 .date-input:focus {
@@ -70,6 +70,7 @@
   border-radius: 0.4rem !important;
   box-shadow: 0 5px 5px -3px rgba(0, 0, 0, 0.2),
     0 8px 10px 1px rgba(0, 0, 0, 0.14), 0 3px 14px 2px rgba(0, 0, 0, 0.12) !important;
+  background-color: var(--bg-primary) !important;
 }
 
 .daterangepicker:before {
@@ -101,6 +102,10 @@
 
 .active:hover {
   background-color: var(--bg-tertiary) !important;
+}
+
+.daterangepicker .ranges li:hover {
+  background-color: var(--bg-secondary) !important;
 }
 
 .daterangepicker.show-ranges.ltr .drp-calendar.left {

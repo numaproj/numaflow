@@ -75,7 +75,7 @@
   top: -1rem;
   left: 1rem;
   transition: 0.2s ease all;
-  background-color: white;
+  background-color: var(--bg-secondary);
   padding: 0 0.5rem;
   z-index: 1;
 }

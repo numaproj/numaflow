@@ -26,6 +26,12 @@
     height: 5rem;
     padding: 1rem;
     gap: 1rem;
+    background-color: transparent;
+    transition: border-color 0.2s ease;
+}
+
+.filters-dropdown-container:hover {
+    border-color: var(--text-primary) !important;
 }
 
 .filters-dropdown-selected-filters-container {
@@ -57,6 +63,7 @@
     font-weight: bold !important;
     text-transform: capitalize !important;
     align-items: end !important;
+    background-color: transparent !important;
 }
 
 .filters-dropdown-active-filters-options {
