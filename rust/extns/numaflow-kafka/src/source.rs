@@ -277,10 +277,10 @@ impl KafkaActor {
 
                 _ = &mut timeout => {
                     // If we timed out with errors and no successful reads, surface the error
-                    if messages.is_empty() {
-                        if let Some(err) = last_error {
-                            return Some(Err(err));
-                        }
+                    if messages.is_empty()
+                        && let Some(err) = last_error
+                    {
+                        return Some(Err(err));
                     }
                     break;
                 }
@@ -392,7 +392,10 @@ impl KafkaActor {
                     return Ok(());
                 };
                 if let Some(code) = commit_error.rdkafka_error_code() {
-                    use rdkafka::types::RDKafkaErrorCode::*;
+                    use rdkafka::types::RDKafkaErrorCode::{
+                        FencedInstanceId, FencedMemberEpoch, GroupAuthorizationFailed,
+                        IllegalGeneration, RebalanceInProgress, StaleMemberEpoch, UnknownMemberId,
+                    };
                     // Potential non-retryable errors that can happen in ACK https://kafka.apache.org/41/design/protocol/#error-codes
                     if matches!(
                         code,
