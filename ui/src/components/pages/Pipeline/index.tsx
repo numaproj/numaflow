@@ -205,6 +205,12 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
     healthError,
   ]);
 
+  // Force Graph remount when pipeline structure changes.
+  const graphKey = useMemo(() => {
+    const generation = pipeline?.metadata?.generation ?? "gen";
+    return `${generation}`;
+  }, [pipeline?.metadata?.generation]);
+
   const content = useMemo(() => {
     if (pipelineErr || buffersErr) {
       return (
@@ -251,6 +257,7 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
     return (
       <GeneratorColorContext.Provider value={generatorToColorIdxMap}>
         <Graph
+          key={graphKey}
           data={{
             edges: edges,
             vertices: vertices,
@@ -265,6 +272,7 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
     );
   }, [
     generatorToColorIdxMap,
+    graphKey,
     pipelineErr,
     buffersErr,
     loading,
