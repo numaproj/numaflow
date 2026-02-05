@@ -266,6 +266,8 @@ impl KafkaActor {
         // A successful read will reset the failure count
         const MAX_FAILURE_COUNT: usize = 10;
         let mut continuous_failure_count = 0;
+        let mut last_error: Option<Error> = None;
+        let retry_sleep = self.read_timeout / 3;
         loop {
             if messages.len() >= self.batch_size {
                 break;
@@ -274,6 +276,12 @@ impl KafkaActor {
                 biased;
 
                 _ = &mut timeout => {
+                    // If we timed out with errors and no successful reads, surface the error
+                    if messages.is_empty() {
+                        if let Some(err) = last_error {
+                            return Some(Err(err));
+                        }
+                    }
                     break;
                 }
 
@@ -281,6 +289,7 @@ impl KafkaActor {
                     let message = match message {
                         Ok(msg) => {
                             continuous_failure_count = 0;
+                            last_error = None;
                             msg
                         }
                         Err(e) => {
@@ -291,8 +300,11 @@ impl KafkaActor {
                                     "Failed to read messages after {MAX_FAILURE_COUNT} retries: {e:?}"
                                 ))));
                             }
-                            error!(?e, "Failed to read messages, will retry after 100 milliseconds");
-                            tokio::time::sleep(Duration::from_millis(100)).await;
+                            error!(?e, ?retry_sleep, "Failed to read messages, will retry");
+                            last_error = Some(Error::Kafka(format!(
+                                "Failed to read messages: {e:?}"
+                            )));
+                            tokio::time::sleep(retry_sleep).await;
                             continue;
                         }
                     };
