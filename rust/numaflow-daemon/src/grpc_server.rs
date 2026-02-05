@@ -8,9 +8,10 @@ use tonic::transport::Server;
 use numaflow_pb::servers::mvtxdaemon::mono_vertex_daemon_service_server::MonoVertexDaemonServiceServer;
 
 use crate::MvtxDaemonService;
+use crate::TlsStreamReceiver;
 
 pub(crate) async fn run_grpc_server(
-    grpc_rx: tokio::sync::mpsc::Receiver<tokio_rustls::server::TlsStream<tokio::net::TcpStream>>,
+    grpc_rx: TlsStreamReceiver,
     cln_token: CancellationToken,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     let grpc_service = MonoVertexDaemonServiceServer::new(MvtxDaemonService);

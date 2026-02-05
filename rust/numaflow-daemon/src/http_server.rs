@@ -12,11 +12,10 @@ use tokio::task::JoinSet;
 use tracing::warn;
 
 use crate::MvtxDaemonService;
+use crate::TlsStreamReceiver;
 
 pub(crate) async fn run_http_server(
-    mut http_rx: tokio::sync::mpsc::Receiver<
-        tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
-    >,
+    mut http_rx: TlsStreamReceiver,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     let _svc_for_http = MvtxDaemonService;
     let mut conn_set = JoinSet::new();

@@ -22,11 +22,14 @@ use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
 use tracing::{info, warn};
 
+type TlsStreamSender = mpsc::Sender<tokio_rustls::server::TlsStream<tokio::net::TcpStream>>;
+type TlsStreamReceiver = mpsc::Receiver<tokio_rustls::server::TlsStream<tokio::net::TcpStream>>;
+
 mod connection_acceptor;
 mod grpc_server;
 mod http_server;
 
-use connection_acceptor::run_connection_acceptor;
+use connection_acceptor::ConnectionAcceptor;
 use grpc_server::run_grpc_server;
 use http_server::run_http_server;
 
@@ -111,8 +114,8 @@ pub async fn run_monovertex(
     // Create two channels, one serving gRPC requests, the other HTTP.
     // Given the request rate a daemon server expect to receive, a buffer size of 1000 should be sufficent.
     // Buffer size 1000 is sufficient for the expected request rate.
-    let (grpc_tx, grpc_rx) = mpsc::channel(1000);
-    let (http_tx, http_rx) = mpsc::channel(1000);
+    let (grpc_tx, grpc_rx): (TlsStreamSender, TlsStreamReceiver) = mpsc::channel(1000);
+    let (http_tx, http_rx): (TlsStreamSender, TlsStreamReceiver) = mpsc::channel(1000);
 
     // Use a join set to manage spawned tasks.
     let mut join_set = JoinSet::new();
@@ -120,15 +123,14 @@ pub async fn run_monovertex(
     // Start a tokio task to accept tcp connections.
     let cln_token_copy_1 = cln_token.clone();
     join_set.spawn(async move {
-        if let Err(error) = run_connection_acceptor(
+        let acceptor = ConnectionAcceptor::new(
             tcp_listener,
             tls_acceptor,
             grpc_tx,
             http_tx,
             cln_token_copy_1,
-        )
-        .await
-        {
+        );
+        if let Err(error) = acceptor.run().await {
             warn!(error = %error, "Connection acceptor failed");
         }
     });
