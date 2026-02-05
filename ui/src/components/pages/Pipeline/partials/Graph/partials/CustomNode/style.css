@@ -90,6 +90,15 @@
   cursor: pointer;
 }
 
+.react-flow__node-input--sink-with-containers {
+  min-height: 11.2rem;
+  height: auto;
+}
+
+.pipeline-sink-container-row {
+  padding: 0.2rem 0;
+}
+
 .node-info {
   display: flex;
   width: 100%;
@@ -154,6 +163,44 @@
 .mono-vertex-img-small {
   height: 0.9rem;
   width: 0.9rem;
+}
+
+/* Pipeline sink container icons - slightly larger for visibility */
+.pipeline-sink-container-wrapper,
+.pipeline-sink-container-wrapper-small {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid #d1dee9;
+  background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pipeline-sink-container-wrapper:hover,
+.pipeline-sink-container-wrapper-small:hover {
+  border-color: #009eac;
+  box-shadow: 0 0 0 1px rgba(0, 158, 172, 0.2);
+}
+
+.pipeline-sink-container-wrapper {
+  height: 3.4rem;
+  width: 3.4rem;
+}
+
+.pipeline-sink-container-img {
+  height: 1.9rem;
+  width: 1.9rem;
+}
+
+.pipeline-sink-container-wrapper-small {
+  height: 3rem;
+  width: 3rem;
+}
+
+.pipeline-sink-container-img-small {
+  height: 1.6rem;
+  width: 1.6rem;
 }
 
 .node-icon {
