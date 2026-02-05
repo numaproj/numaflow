@@ -24,3 +24,35 @@ pub(crate) async fn run_grpc_server(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use tokio::sync::mpsc;
+    use tokio::time::{Duration, timeout};
+
+    #[tokio::test]
+    async fn stops_on_cancellation() -> Result<(), Box<dyn Error + Send + Sync>> {
+        let (_, rx) = mpsc::channel::<tokio_rustls::server::TlsStream<tokio::net::TcpStream>>(1);
+        let cln_token = CancellationToken::new();
+        let cln_token_copy = cln_token.clone();
+
+        let handle = tokio::spawn(async move { run_grpc_server(rx, cln_token_copy).await });
+
+        cln_token.cancel();
+
+        match timeout(Duration::from_secs(2), handle).await {
+            Ok(res) => res??,
+            Err(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "Timed out waiting for gRPC server to stop",
+                )
+                .into());
+            }
+        }
+
+        Ok(())
+    }
+}
