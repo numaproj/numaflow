@@ -63,7 +63,8 @@ where
         }
 
         // State to accumulate outcomes across retries
-        let mut messages_to_retry = messages.clone();
+        // Take ownership directly instead of cloning
+        let mut messages_to_retry = messages;
         let mut fallback_messages = Vec::new();
         let mut serving_messages = Vec::new();
         let mut dropped_messages = Vec::new();
@@ -84,7 +85,7 @@ where
         let mut error_map = HashMap::new();
 
         loop {
-            // send batch to sink
+            // send batch to sink (clone needed since we need messages for classification)
             let responses = self.sink.sink(messages_to_retry.clone()).await?;
 
             // Create a map of id to result
@@ -93,35 +94,40 @@ where
                 .map(|resp| (resp.id, resp.status))
                 .collect::<HashMap<_, _>>();
 
-            // Classify messages based on responses
-            let mut failed_ids = Vec::new();
-
-            messages_to_retry.retain_mut(|msg| {
-                match result_map.remove(&msg.id.to_string()) {
+            // Classify messages based on responses using index-based iteration
+            // with swap_remove to avoid cloning when moving messages to result vectors
+            let mut i = 0;
+            while i < messages_to_retry.len() {
+                let msg_id = messages_to_retry[i].id.to_string();
+                match result_map.remove(&msg_id) {
                     Some(ResponseStatusFromSink::Success) => {
-                        false // remove from retry list
+                        // Remove from retry list, don't need the message anymore
+                        messages_to_retry.swap_remove(i);
+                        // Don't increment i, the swapped element needs to be checked
                     }
                     Some(ResponseStatusFromSink::Failed(err_msg)) => {
-                        failed_ids.push(msg.id.to_string());
-                        *error_map.entry(err_msg.clone()).or_insert(0) += 1;
-                        true // keep for retry
+                        *error_map.entry(err_msg).or_insert(0) += 1;
+                        i += 1; // keep for retry
                     }
                     Some(ResponseStatusFromSink::Fallback) => {
-                        fallback_messages.push(msg.clone());
-                        false // remove from retry list
+                        // Move message to fallback without cloning
+                        fallback_messages.push(messages_to_retry.swap_remove(i));
                     }
                     Some(ResponseStatusFromSink::Serve(serve_response)) => {
+                        // Move message to serving without cloning
+                        let mut msg = messages_to_retry.swap_remove(i);
                         if let Some(serve_response) = serve_response {
                             msg.value = serve_response.into();
                         }
-                        serving_messages.push(msg.clone());
-                        false // remove from retry list
+                        serving_messages.push(msg);
                     }
                     Some(ResponseStatusFromSink::OnSuccess(on_success_msg)) => {
+                        // Move message to on_success without cloning
+                        let msg = messages_to_retry.swap_remove(i);
                         if let Some(on_success_msg) = on_success_msg {
                             let on_success_md: Option<Metadata> =
                                 on_success_msg.metadata.map(|md| md.into());
-                            let new_md = match &mut msg.metadata {
+                            let new_md = match &msg.metadata {
                                 // Following clones are required explicitly since Arc doesn't allow
                                 // interior mutability, so we cannot move the required fields out of Arc
                                 // without cloning, unless we can guarantee there is only a single reference to Arc
@@ -144,18 +150,17 @@ where
                                 value: on_success_msg.value.into(),
                                 keys: on_success_msg.keys.into(),
                                 metadata: Some(Arc::new(new_md)),
-                                ..msg.clone()
+                                ..msg
                             };
-                            on_success_messages.push(new_msg.clone());
+                            on_success_messages.push(new_msg);
                         } else {
                             // Send the original message if no payload was provided to the onSuccess sink
-                            on_success_messages.push(msg.clone());
+                            on_success_messages.push(msg);
                         }
-                        false // remove from retry list
                     }
-                    None => unreachable!("should have response for all messages"), // remove if no response
+                    None => unreachable!("should have response for all messages"),
                 }
-            });
+            }
 
             if messages_to_retry.is_empty() {
                 // success path, all messages processed

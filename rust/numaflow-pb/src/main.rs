@@ -13,8 +13,12 @@ fn main() {
 }
 
 fn build_common() {
-    prost_build::Config::new()
+    let mut config = prost_build::Config::new();
+    config
         .out_dir("src/common")
+        // Use bytes::Bytes instead of Vec<u8> for bytes fields to avoid copying
+        .bytes(&[".metadata"]);
+    config
         .compile_protos(&["proto/metadata.proto"], &["proto"])
         .expect("failed to compile common protos");
 }
@@ -25,6 +29,17 @@ fn build_client() {
         .build_server(false)
         .out_dir("src/clients")
         .extern_path(".metadata", "crate::common::metadata")
+        // Use bytes::Bytes instead of Vec<u8> for bytes fields to avoid copying
+        .bytes(".sink.v1")
+        .bytes(".source.v1")
+        .bytes(".sourcetransformer.v1")
+        .bytes(".map.v1")
+        .bytes(".mapstream.v1")
+        .bytes(".reduce.v1")
+        .bytes(".sessionreduce.v1")
+        .bytes(".sideinput.v1")
+        .bytes(".serving.v1")
+        .bytes(".accumulator.v1")
         .compile_protos(
             &[
                 "proto/source/v1/source.proto",
@@ -61,9 +76,13 @@ fn build_server() {
 }
 
 fn build_objects() {
-    prost_build::Config::new()
+    let mut config = prost_build::Config::new();
+    config
         .out_dir("src/objects")
         .extern_path(".metadata", "crate::common::metadata")
+        // Use bytes::Bytes instead of Vec<u8> for bytes fields to avoid copying
+        .bytes(&[".isb", ".wal"]);
+    config
         .compile_protos(
             &[
                 "proto/isb/message.proto",

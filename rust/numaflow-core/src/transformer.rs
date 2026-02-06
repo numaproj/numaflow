@@ -1,9 +1,9 @@
 use bytes::Bytes;
+use futures::stream::{self, StreamExt};
 use numaflow_monitor::runtime;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{Semaphore, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::{Code, Status};
@@ -159,7 +159,7 @@ impl Transformer {
         let batch_start_time = tokio::time::Instant::now();
         let transform_handle = self.sender.clone();
         let tracker = self.tracker.clone();
-        let semaphore = Arc::new(Semaphore::new(self.concurrency));
+        let concurrency = self.concurrency;
         let mut labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
         labels.push((
             PIPELINE_PARTITION_NAME_LABEL.to_string(),
@@ -195,48 +195,45 @@ impl Transformer {
                 .inc_by(messages.len() as u64);
         }
 
-        let tasks: Vec<_> = messages
-            .into_iter()
-            .map(|read_msg| {
-                let permit_fut = Arc::clone(&semaphore).acquire_owned();
-                let transform_handle = transform_handle.clone();
-                let tracker = tracker.clone();
-                let hard_shutdown_token = hard_shutdown_token.clone();
+        let message_count = messages.len();
 
-                tokio::spawn(async move {
-                    let permit = permit_fut.await.map_err(|e| {
-                        Error::Transformer(format!("failed to acquire semaphore: {e}"))
-                    })?;
-                    let _permit = permit;
+        // Create futures for each message transformation (not spawned, just lazy futures)
+        let transform_futs = messages.into_iter().map(|read_msg| {
+            let transform_handle = transform_handle.clone();
+            let tracker = tracker.clone();
+            let hard_shutdown_token = hard_shutdown_token.clone();
 
-                    let transformed_messages = Transformer::transform(
-                        transform_handle,
-                        read_msg.clone(),
-                        hard_shutdown_token.clone(),
+            async move {
+                let offset = read_msg.offset.clone();
+                let transformed_messages =
+                    Transformer::transform(transform_handle, read_msg, hard_shutdown_token).await?;
+
+                // update the tracker with the number of responses for each message
+                tracker
+                    .serving_update(
+                        &offset,
+                        transformed_messages
+                            .iter()
+                            .map(|m| m.tags.clone())
+                            .collect(),
                     )
                     .await?;
 
-                    // update the tracker with the number of responses for each message
-                    tracker
-                        .serving_update(
-                            &read_msg.offset,
-                            transformed_messages
-                                .iter()
-                                .map(|m| m.tags.clone())
-                                .collect(),
-                        )
-                        .await?;
+                Ok::<Vec<Message>, Error>(transformed_messages)
+            }
+        });
 
-                    Ok::<Vec<Message>, Error>(transformed_messages)
-                })
-            })
-            .collect();
+        // Use buffer_unordered to limit concurrency without spawning tasks.
+        // This polls up to `concurrency` futures at a time, reducing scheduling overhead.
+        let mut stream = stream::iter(transform_futs).buffer_unordered(concurrency);
 
-        let mut transformed_messages = Vec::new();
-        for task in tasks {
-            match task.await {
-                Ok(Ok(mut msgs)) => transformed_messages.append(&mut msgs),
-                Ok(Err(e)) => {
+        // Pre-size with 2x capacity to reduce reallocation for transformer fan-out
+        let mut transformed_messages = Vec::with_capacity(message_count * 2);
+
+        while let Some(result) = stream.next().await {
+            match result {
+                Ok(mut msgs) => transformed_messages.append(&mut msgs),
+                Err(e) => {
                     // increment transform error metric for pipeline
                     // error here indicates that there was some problem in transformation
                     if !is_mono_vertex() {
@@ -246,9 +243,9 @@ impl Transformer {
                             .get_or_create(&labels)
                             .inc();
                     }
+                    // Early exit - remaining futures are dropped when stream goes out of scope
                     return Err(e);
                 }
-                Err(e) => return Err(Error::Transformer(format!("task join failed: {e}"))),
             }
         }
         // batch transformation was successful
@@ -329,6 +326,7 @@ mod tests {
     use numaflow::shared::ServerExtras;
     use numaflow::sourcetransform;
     use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+    use std::sync::Arc;
     use std::time::Duration;
     use tempfile::TempDir;
     use tokio::sync::oneshot;

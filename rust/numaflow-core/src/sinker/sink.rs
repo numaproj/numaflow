@@ -8,6 +8,7 @@ use crate::metrics::{
     pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::sinker::actor::{SinkActorMessage, SinkActorResponse};
+use bytes::Bytes;
 use numaflow_kafka::sink::KafkaSink;
 use numaflow_pb::clients::sink::Status::{Failure, Fallback, OnSuccess, Serve, Success};
 use numaflow_pb::clients::sink::sink_client::SinkClient;
@@ -686,7 +687,7 @@ pub(crate) enum ResponseStatusFromSink {
     /// Write to FallBack Sink.
     Fallback,
     /// Write to serving store.
-    Serve(Option<Vec<u8>>),
+    Serve(Option<Bytes>),
     OnSuccess(Option<sink_response::result::Message>),
 }
 

@@ -46,7 +46,7 @@ impl DataStore for UserDefinedStore {
             .await
             .map_err(|e| StoreError::StoreRead(format!("gRPC Get request failed: {e:?}")))?;
         let payloads = response.into_inner().payloads;
-        Ok(payloads.iter().map(|p| p.value.clone()).collect())
+        Ok(payloads.iter().map(|p| p.value.to_vec()).collect())
     }
 
     async fn stream_data(

@@ -21,8 +21,8 @@ pub mod sink_request {
     pub struct Request {
         #[prost(string, repeated, tag = "1")]
         pub keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-        #[prost(bytes = "vec", tag = "2")]
-        pub value: ::prost::alloc::vec::Vec<u8>,
+        #[prost(bytes = "bytes", tag = "2")]
+        pub value: ::prost::bytes::Bytes,
         #[prost(message, optional, tag = "3")]
         pub event_time: ::core::option::Option<::prost_types::Timestamp>,
         #[prost(message, optional, tag = "4")]
@@ -87,8 +87,8 @@ pub mod sink_response {
         /// err_msg is the error message, set it if success is set to false.
         #[prost(string, tag = "3")]
         pub err_msg: ::prost::alloc::string::String,
-        #[prost(bytes = "vec", optional, tag = "4")]
-        pub serve_response: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+        #[prost(bytes = "bytes", optional, tag = "4")]
+        pub serve_response: ::core::option::Option<::prost::bytes::Bytes>,
         #[prost(message, optional, tag = "5")]
         pub on_success_msg: ::core::option::Option<result::Message>,
     }
@@ -96,8 +96,8 @@ pub mod sink_response {
     pub mod result {
         #[derive(Clone, PartialEq, ::prost::Message)]
         pub struct Message {
-            #[prost(bytes = "vec", tag = "1")]
-            pub value: ::prost::alloc::vec::Vec<u8>,
+            #[prost(bytes = "bytes", tag = "1")]
+            pub value: ::prost::bytes::Bytes,
             #[prost(string, repeated, tag = "2")]
             pub keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
             #[prost(message, optional, tag = "3")]

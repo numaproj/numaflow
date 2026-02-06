@@ -18,7 +18,7 @@ impl From<Message> for reduce_request::Payload {
     fn from(msg: Message) -> Self {
         Self {
             keys: msg.keys.to_vec(),
-            value: msg.value.to_vec(),
+            value: msg.value.clone(),
             event_time: Some(prost_timestamp_from_utc(msg.event_time)),
             watermark: msg.watermark.map(prost_timestamp_from_utc),
             headers: Arc::unwrap_or_clone(msg.headers),
@@ -31,7 +31,7 @@ impl From<&Message> for reduce_request::Payload {
     fn from(msg: &Message) -> Self {
         Self {
             keys: msg.keys.to_vec(),
-            value: msg.value.to_vec(),
+            value: msg.value.clone(),
             event_time: Some(prost_timestamp_from_utc(msg.event_time)),
             watermark: msg.watermark.map(prost_timestamp_from_utc),
             headers: (*msg.headers).clone(),
@@ -78,7 +78,7 @@ impl From<AlignedWindowMessage> for ReduceRequest {
                 ReduceRequest {
                     payload: Some(reduce_request::Payload {
                         keys: vec![],
-                        value: vec![],
+                        value: bytes::Bytes::new(),
                         event_time: None,
                         watermark: None,
                         headers: Default::default(),

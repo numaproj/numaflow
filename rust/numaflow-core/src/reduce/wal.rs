@@ -48,7 +48,7 @@ impl TryFrom<WalMessage> for Bytes {
                     metadata: message.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
                 }),
                 body: Some(numaflow_pb::objects::isb::Body {
-                    payload: message.value.to_vec(),
+                    payload: message.value.clone(),
                 }),
             }),
             read_offset: int_offset.offset,
