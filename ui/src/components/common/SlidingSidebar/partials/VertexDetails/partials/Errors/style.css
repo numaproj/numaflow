@@ -37,6 +37,6 @@
 
 .vertex-error-common-title-text {
   font-weight: 600;
-  color: #878789;
+  color: var(--text-secondary);
   font-size: 1.6rem;
 }

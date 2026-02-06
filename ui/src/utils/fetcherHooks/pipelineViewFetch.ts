@@ -113,7 +113,7 @@ export const usePipelineViewFetch = (
     };
 
     fetchPipeline();
-  }, [requestKey, addError]);
+  }, [requestKey, addError, namespaceId, pipelineId]);
 
   // Call to get buffers
   useEffect(() => {
