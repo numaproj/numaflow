@@ -1468,7 +1468,7 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
                         let mut metric_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
                         metric_labels.push((
                             PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                            "Source".to_string(),
+                            get_vertex_name().to_string(),
                         ));
                         pipeline_metrics()
                             .pending_raw
