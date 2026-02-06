@@ -164,9 +164,20 @@ Check the links below to see the examples for different languages.
     Response::failure(id, err_msg)
     Response::fallback(id)
     Response::serve(id, serve_response)
-    Response::on_success(id, message)
+    Response::on_success(id, payload)
     ```
     [Rust SDK Examples](https://github.com/numaproj/numaflow-rs/tree/main/examples)
+
+=== "JS/TS"
+
+    ```typescript
+    Response.ok(id)
+    Response.failure(id, err_msg)
+    Response.fallback(id)
+    Response.serve(id, serve_response)
+    Response.onSuccess(id, payload)
+    ```
+    [Javascript SDK Examples](https://github.com/numaproj/numaflow-js/tree/main/examples/sinker)
 
 ###  Explore SDK Examples
 
@@ -176,6 +187,7 @@ For more detailed examples and implementation patterns, check out the official S
 - **[Java SDK Examples](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple/)**
 - **[Python SDK Examples](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/sink/)**
 - **[Rust SDK Examples](https://github.com/numaproj/numaflow-rs/tree/main/examples)**
+- **[Javascript SDK Examples](https://github.com/numaproj/numaflow-js/tree/main/examples/sinker)**
 
 These repositories contain complete working examples of user-defined sinks with various response types and error handling patterns.
 
