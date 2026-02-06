@@ -194,7 +194,7 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 			Code:    "V6",
 		}, err
 	}
-	// Iterate over all the pods, and verify if all the containers and initContainers in the pod are in running state
+	// Iterate over all the pods, and verify if all the containers and initContainers in the pod are in a healthy state
 	for _, pod := range pods.Items {
 		// Iterate over all the containers in the pod
 		for _, containerStatus := range pod.Status.ContainerStatuses {
@@ -207,13 +207,13 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 				}, nil
 			}
 		}
-		// Also iterate over all the initContainers in the pod
+		// Iterate over all the initContainers in the pod
 		for _, containerStatus := range pod.Status.InitContainerStatuses {
-			if containerStatus.State.Running == nil {
+			// check that the container terminated successfully
+			if containerStatus.State.Terminated != nil && containerStatus.State.Terminated.Reason == "Error" {
 				return false, &resourceHealthResponse{
-					Message: fmt.Sprintf("Container %q in pod %q is not running",
-						containerStatus.Name, pod.Name),
-					Code: "V3",
+					Message: fmt.Sprintf("Init container %q in pod %q is not healthy", containerStatus.Name, pod.Name),
+					Code:    "V3",
 				}, nil
 			}
 		}
