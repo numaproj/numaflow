@@ -2561,6 +2561,7 @@ dependencies = [
  "numaflow-pb",
  "rcgen",
  "rustls 0.23.31",
+ "thiserror 2.0.17",
  "time",
  "tokio",
  "tokio-rustls 0.26.2",

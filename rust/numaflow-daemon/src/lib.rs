@@ -1,14 +1,8 @@
-use numaflow_pb::servers::mvtxdaemon::mono_vertex_daemon_service_server::MonoVertexDaemonService;
-use numaflow_pb::servers::mvtxdaemon::{
-    GetMonoVertexErrorsRequest, GetMonoVertexErrorsResponse, GetMonoVertexMetricsResponse,
-    GetMonoVertexStatusResponse, MonoVertexMetrics, MonoVertexStatus, ReplicaErrors,
-};
 use rcgen::{
     CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose,
 };
 use rustls::ServerConfig;
 use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::result::Result;
 use std::sync::Arc;
@@ -18,7 +12,6 @@ use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tokio_rustls::TlsAcceptor;
 use tokio_util::sync::CancellationToken;
-use tonic::{Request, Response, Status};
 use tracing::{info, warn};
 
 type TlsStreamSender = mpsc::Sender<tokio_rustls::server::TlsStream<tokio::net::TcpStream>>;
@@ -28,78 +21,52 @@ mod connection_acceptor;
 mod error;
 mod grpc_server;
 mod http_server;
+mod service;
 
 use connection_acceptor::ConnectionAcceptor;
 use error::Error;
 use grpc_server::run_grpc_server;
 use http_server::run_http_server;
-
-pub(crate) struct MvtxDaemonService;
-
-#[tonic::async_trait]
-impl MonoVertexDaemonService for MvtxDaemonService {
-    async fn get_mono_vertex_metrics(
-        &self,
-        _: Request<()>,
-    ) -> Result<Response<GetMonoVertexMetricsResponse>, Status> {
-        let mock_processing_rates = HashMap::from([
-            ("default".to_string(), 67.0),
-            ("1m".to_string(), 10.0),
-            ("5m".to_string(), 50.0),
-            ("15m".to_string(), 150.0),
-        ]);
-
-        let mock_pendings = HashMap::from([
-            ("default".to_string(), 67),
-            ("1m".to_string(), 10),
-            ("5m".to_string(), 50),
-            ("15m".to_string(), 150),
-        ]);
-
-        let mock_resp = GetMonoVertexMetricsResponse {
-            metrics: Some(MonoVertexMetrics {
-                mono_vertex: "mock_mvtx_spec".to_string(),
-                processing_rates: mock_processing_rates,
-                pendings: mock_pendings,
-            }),
-        };
-
-        Ok(Response::new(mock_resp))
-    }
-
-    async fn get_mono_vertex_status(
-        &self,
-        _: Request<()>,
-    ) -> Result<Response<GetMonoVertexStatusResponse>, Status> {
-        let mock_resp = GetMonoVertexStatusResponse {
-            status: Some(MonoVertexStatus {
-                status: "mock_status".to_string(),
-                message: "mock_status_message".to_string(),
-                code: "mock_status_code".to_string(),
-            }),
-        };
-
-        Ok(Response::new(mock_resp))
-    }
-
-    async fn get_mono_vertex_errors(
-        &self,
-        _: Request<GetMonoVertexErrorsRequest>,
-    ) -> Result<Response<GetMonoVertexErrorsResponse>, Status> {
-        let mock_resp = GetMonoVertexErrorsResponse {
-            errors: vec![ReplicaErrors {
-                replica: "mock_replica".to_string(),
-                container_errors: vec![],
-            }],
-        };
-
-        Ok(Response::new(mock_resp))
-    }
-}
+pub(crate) use service::MvtxDaemonService;
 
 /// Matches the DaemonServicePort in pkg/apis/numaflow/v1alpha1/const.go
 const DAEMON_SERVICE_PORT: u16 = 4327;
 
+/// MonoVertex Daemon Service
+/// ========================
+///
+/// ```text
+///        ┌──────────────────────────────────────────────┐
+///        │                main async task               │
+///        └───────────────────────┬──────────────────────┘
+///                                │
+///        ┌───────────────────────┼───────────────────────┐
+///        │                       │                       │
+///        ▼                       ▼                       ▼
+/// ┌──────────────────────┐ ┌──────────────────────┐ ┌──────────────────────┐
+/// │       Acceptor       │ │         gRPC         │ │         HTTP         │
+/// │         Task         │ │        Worker        │ │        Worker        │
+/// └───────────┬──────────┘ └───────────▲──────────┘ └───────────▲──────────┘
+///             │ new connection         │                        │
+///             ▼                        │                        │
+/// ┌──────────────────────┐             │                        │
+/// │    Connection Task   │             │                        │
+/// └───────────┬──────────┘             │                        │
+///             │                        │                        │
+///             ▼                        │                        │
+/// ┌──────────────────────┐             │                        │
+/// │        Route         │             │                        │
+/// └───────────┬──────────┘             │                        │
+///             │                        │                        │
+///      ┌──────┴──────┐                 │                        │
+///      ▼             ▼                 │                        │
+/// [ gRPC channel ] [ HTTP channel ]────┴────────────-───────────┘
+/// ```
+///
+/// Shutdown:
+/// - Acceptor listens for cancellation
+/// - Stops accepting new connections
+/// - Channels close, workers drain and exit
 pub async fn run_monovertex(
     mvtx_name: String,
     cln_token: CancellationToken,
