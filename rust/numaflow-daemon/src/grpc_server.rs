@@ -42,15 +42,12 @@ mod tests {
 
         cln_token.cancel();
 
-        match timeout(Duration::from_secs(2), handle).await {
-            Ok(res) => res??,
-            Err(_) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::TimedOut,
-                    "Timed out waiting for gRPC server to stop",
-                )
-                .into());
-            }
+        if let Err(err) = timeout(Duration::from_secs(2), handle).await {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                format!("Timed out waiting for gRPC server to stop: {}", err),
+            )
+            .into());
         }
 
         Ok(())

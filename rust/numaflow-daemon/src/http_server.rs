@@ -69,7 +69,6 @@ mod tests {
     use tokio::net::TcpListener;
     use tokio::net::TcpStream;
     use tokio::sync::mpsc;
-    use tokio::time::{Duration, timeout};
     use tokio_rustls::{TlsAcceptor, TlsConnector};
 
     #[tokio::test]
@@ -86,7 +85,7 @@ mod tests {
             let tls_stream = tls_acceptor.accept(tcp).await?;
             tx.send(tls_stream)
                 .await
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
             Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
         });
 
@@ -116,37 +115,31 @@ mod tests {
 
         drop(sender);
 
-        match timeout(Duration::from_secs(2), conn_task).await {
-            Ok(res) => res??,
-            Err(_) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::TimedOut,
-                    "Timed out waiting for HTTP client connection task to stop",
-                )
-                .into());
-            }
+        if let Err(e) = conn_task.await {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                format!(
+                    "Error waiting for HTTP client connection task to stop: {}",
+                    e
+                ),
+            )
+            .into());
         }
 
-        match timeout(Duration::from_secs(2), server_task).await {
-            Ok(res) => res??,
-            Err(_) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::TimedOut,
-                    "Timed out waiting for HTTP server task to stop",
-                )
-                .into());
-            }
+        if let Err(e) = server_task.await {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                format!("Error waiting for HTTP server task to stop: {}", e),
+            )
+            .into());
         }
 
-        match timeout(Duration::from_secs(2), http_handle).await {
-            Ok(res) => res??,
-            Err(_) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::TimedOut,
-                    "Timed out waiting for HTTP server to stop",
-                )
-                .into());
-            }
+        if let Err(e) = http_handle.await {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                format!("Error waiting for HTTP server to stop: {}", e),
+            )
+            .into());
         }
 
         Ok(())

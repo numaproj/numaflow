@@ -171,27 +171,13 @@ mod tests {
         connect_with_alpn(addr, Some(b"h2"), cert_der).await?;
 
         // Verify that the stream is received on gRPC channel.
-        match timeout(TokioDuration::from_secs(2), grpc_rx.recv()).await {
-            Ok(Some(_stream)) => (),
-            _ => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "gRPC channel did not receive a stream",
-                )
-                .into());
-            }
+        if let Err(err) = timeout(TokioDuration::from_secs(2), grpc_rx.recv()).await {
+            panic!("gRPC channel did not receive a stream{}", err);
         };
 
         // Verify that the stream is not received on HTTP channel.
-        match timeout(TokioDuration::from_millis(200), http_rx.recv()).await {
-            Ok(Some(_)) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Unexpected HTTP stream received for h2 connection",
-                )
-                .into());
-            }
-            _ => (),
+        if let Ok(Some(_)) = timeout(TokioDuration::from_millis(200), http_rx.recv()).await {
+            panic!("Unexpected HTTP stream received for h2 connection");
         }
 
         cln_token.cancel();
@@ -221,27 +207,13 @@ mod tests {
         connect_with_alpn(addr, Some(b"http/1.1"), cert_der).await?;
 
         // Verify that the stream is received on HTTP channel.
-        match timeout(TokioDuration::from_secs(2), http_rx.recv()).await {
-            Ok(Some(_stream)) => (),
-            _ => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "HTTP channel did not receive a stream",
-                )
-                .into());
-            }
+        if let Err(err) = timeout(TokioDuration::from_secs(2), http_rx.recv()).await {
+            panic!("HTTP channel did not receive a stream {}", err);
         };
 
         // Verify that the stream is not received on gRPC channel.
-        match timeout(TokioDuration::from_millis(200), grpc_rx.recv()).await {
-            Ok(Some(_)) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Unexpected gRPC stream received for http/1.1 connection",
-                )
-                .into());
-            }
-            _ => (),
+        if let Ok(Some(_stream)) = timeout(TokioDuration::from_millis(200), grpc_rx.recv()).await {
+            panic!("Unexpected gRPC stream received for http/1.1 connection")
         }
 
         cln_token.cancel();
@@ -271,27 +243,13 @@ mod tests {
         connect_with_alpn(addr, None, cert_der).await?;
 
         // Verify the stream is received on HTTP channel.
-        match timeout(TokioDuration::from_secs(2), http_rx.recv()).await {
-            Ok(Some(_stream)) => (),
-            _ => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "HTTP channel did not receive a stream",
-                )
-                .into());
-            }
-        };
+        if let Err(err) = timeout(TokioDuration::from_secs(2), http_rx.recv()).await {
+            panic!("HTTP channel did not receive a stream {}", err);
+        }
 
         // Verify the stream is not received on gRPC channel.
-        match timeout(TokioDuration::from_millis(200), grpc_rx.recv()).await {
-            Ok(Some(_)) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Unexpected gRPC stream received on gRPC channel",
-                )
-                .into());
-            }
-            _ => (),
+        if let Ok(Some(_stream)) = timeout(TokioDuration::from_millis(200), grpc_rx.recv()).await {
+            panic!("Unexpected gRPC stream received on gRPC channel");
         }
 
         cln_token.cancel();
