@@ -65,7 +65,7 @@ When developing a user-defined sink in Numaflow, your sink container communicate
 - **Action:** Message is immediately sent to the configured on-success sink without retry.
 - **Requirements:**
     - An on-success sink must be configured in the pipeline spec.
-    - OnSuccess responses **must not** return further fallback, on-success or serve statuses.
+    - OnSuccess responses **must not** return further fallback, on-success, or serve statuses.
 - **Use Case:** Notify downstream through on-success sink of the successful processing of a message.
 - **Related:** See [OnSuccess Sink](./on-success.md) for detailed configuration.
 
