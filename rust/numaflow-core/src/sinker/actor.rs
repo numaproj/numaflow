@@ -96,8 +96,10 @@ where
             // Classify messages based on responses
             let mut i = 0;
             while i < messages_to_retry.len() {
-                #[allow(clippy::indexing_slicing)]
-                let msg_id = messages_to_retry[i].id.to_string();
+                let Some(msg) = messages_to_retry.get(i) else {
+                    break;
+                };
+                let msg_id = msg.id.to_string();
                 match result_map.remove(&msg_id) {
                     Some(ResponseStatusFromSink::Success) => {
                         // Remove from retry list, don't need the message anymore
