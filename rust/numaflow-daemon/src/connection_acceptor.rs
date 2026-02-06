@@ -1,11 +1,11 @@
+use crate::TlsStreamSender;
+use crate::error::{Error, Result};
+
 use tokio::net::TcpListener;
 use tokio::task::JoinSet;
 use tokio_rustls::TlsAcceptor;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
-
-use crate::TlsStreamSender;
-use crate::error::{Error, Result};
 
 /// ConnectionAcceptor accepts incoming connections and
 /// dispatches them to the either gRPC or HTTP channels based on the connection type.
@@ -152,11 +152,10 @@ mod tests {
     use tokio_rustls::TlsConnector;
 
     #[tokio::test]
-    async fn routes_h2_to_grpc_channel() -> std::result::Result<(), String> {
+    async fn routes_h2_to_grpc_channel()
+    -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let (tls_acceptor, cert_der) = build_test_tls_acceptor()?;
-        let listener = TcpListener::bind("127.0.0.1:0")
-            .await
-            .map_err(|e| "Failed creating TCP listener".to_string())?;
+        let listener = TcpListener::bind("127.0.0.1:0").await?;
         let addr = listener.local_addr()?;
 
         let (grpc_tx, mut grpc_rx) = mpsc::channel(1);
@@ -203,7 +202,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn routes_http11_to_http_channel() -> std::result::Result<(), String> {
+    async fn routes_http11_to_http_channel()
+    -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let (tls_acceptor, cert_der) = build_test_tls_acceptor()?;
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let addr = listener.local_addr()?;
@@ -246,15 +246,14 @@ mod tests {
 
         cln_token.cancel();
         // Verify the graceful shutdown.
-        acceptor_handle
-            .await
-            .map_err(|err| Box::new(err) as Box<dyn Error + Send + Sync>)??;
+        acceptor_handle.await??;
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn routes_no_alpn_to_http_channel() -> std::result::Result<(), String> {
+    async fn routes_no_alpn_to_http_channel()
+    -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let (tls_acceptor, cert_der) = build_test_tls_acceptor()?;
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let addr = listener.local_addr()?;
@@ -275,13 +274,11 @@ mod tests {
         match timeout(TokioDuration::from_secs(2), http_rx.recv()).await {
             Ok(Some(_stream)) => (),
             _ => {
-                return std::result::Err(
-                    std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "HTTP channel did not receive a stream",
-                    )
-                    .into(),
-                );
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "HTTP channel did not receive a stream",
+                )
+                .into());
             }
         };
 
@@ -299,27 +296,25 @@ mod tests {
 
         cln_token.cancel();
         // Verify the graceful shutdown.
-        acceptor_handle.await.map_err(|err| err.to_string())??;
+        acceptor_handle.await??;
 
         Ok(())
     }
 
-    fn build_test_tls_acceptor()
-    -> std::result::Result<(TlsAcceptor, CertificateDer<'static>), String> {
-        let params =
-            CertificateParams::new(vec!["localhost".to_string()]).map_err(|e| String::new())?;
-        let signing_key = KeyPair::generate().map_err(|e| String::new())?;
-        let cert = params
-            .self_signed(&signing_key)
-            .map_err(|e| String::new())?;
+    fn build_test_tls_acceptor() -> std::result::Result<
+        (TlsAcceptor, CertificateDer<'static>),
+        Box<dyn std::error::Error + Send + Sync>,
+    > {
+        let params = CertificateParams::new(vec!["localhost".to_string()])?;
+        let signing_key = KeyPair::generate()?;
+        let cert = params.self_signed(&signing_key)?;
         let cert_der = cert.der().clone();
         let key_der = PrivatePkcs8KeyDer::from(signing_key.serialize_der());
         let key_der = PrivateKeyDer::from(key_der);
 
         let mut cfg = ServerConfig::builder()
             .with_no_client_auth()
-            .with_single_cert(vec![cert_der.clone()], key_der)
-            .map_err(|e| String::new())?;
+            .with_single_cert(vec![cert_der.clone()], key_der)?;
         cfg.alpn_protocols = vec![b"http/1.1".to_vec(), b"h2".to_vec()];
 
         Ok((TlsAcceptor::from(Arc::new(cfg)), cert_der))
@@ -329,9 +324,9 @@ mod tests {
         addr: std::net::SocketAddr,
         alpn: Option<&[u8]>,
         cert_der: CertificateDer<'static>,
-    ) -> std::result::Result<(), String> {
+    ) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut root_store = RootCertStore::empty();
-        root_store.add(cert_der).map_err(|e| String::new())?;
+        root_store.add(cert_der)?;
 
         let mut cfg = ClientConfig::builder()
             .with_root_certificates(root_store)
@@ -342,12 +337,9 @@ mod tests {
         }
 
         let connector = TlsConnector::from(Arc::new(cfg));
-        let tcp = TcpStream::connect(addr).await.map_err(|e| String::new())?;
-        let server_name = ServerName::try_from("localhost").map_err(|e| String::new())?;
-        let _tls = connector
-            .connect(server_name, tcp)
-            .await
-            .map_err(|e| String::new())?;
+        let tcp = TcpStream::connect(addr).await?;
+        let server_name = ServerName::try_from("localhost")?;
+        let _tls = connector.connect(server_name, tcp).await?;
         Ok(())
     }
 }

@@ -1,5 +1,6 @@
-use std::convert::Infallible;
-use std::error::Error;
+use crate::MvtxDaemonService;
+use crate::TlsStreamReceiver;
+use crate::error::{Error, Result};
 
 use bytes::Bytes;
 use http::{Request as HttpRequest, Response as HttpResponse, StatusCode};
@@ -8,15 +9,10 @@ use hyper::body::Incoming;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
+use std::convert::Infallible;
 use tokio::task::JoinSet;
-use tracing::warn;
 
-use crate::MvtxDaemonService;
-use crate::TlsStreamReceiver;
-
-pub(crate) async fn run_http_server(
-    mut http_rx: TlsStreamReceiver,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+pub(crate) async fn run_http_server(mut http_rx: TlsStreamReceiver) -> Result<()> {
     let _svc_for_http = MvtxDaemonService;
     let mut conn_set = JoinSet::new();
 
@@ -47,9 +43,12 @@ pub(crate) async fn run_http_server(
     }
 
     while let Some(res) = conn_set.join_next().await {
-        if let Err(join_err) = res {
-            warn!(error = %join_err, "HTTP connection task failed");
-        }
+        res.map_err(|join_error| {
+            Error::Completion(format!(
+                "Failed to complete one of the HTTP stream connections: {}",
+                join_error
+            ))
+        })?;
     }
 
     Ok(())
@@ -74,7 +73,7 @@ mod tests {
     use tokio_rustls::{TlsAcceptor, TlsConnector};
 
     #[tokio::test]
-    async fn serves_readyz() -> Result<(), Box<dyn Error + Send + Sync>> {
+    async fn serves_readyz() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let (tls_acceptor, cert_der) = build_test_tls_acceptor()?;
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let addr = listener.local_addr()?;
@@ -88,7 +87,7 @@ mod tests {
             tx.send(tls_stream)
                 .await
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-            Ok::<_, Box<dyn Error + Send + Sync>>(())
+            Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
         });
 
         let connector = build_test_tls_connector(cert_der)?;
@@ -153,8 +152,10 @@ mod tests {
         Ok(())
     }
 
-    fn build_test_tls_acceptor()
-    -> Result<(TlsAcceptor, CertificateDer<'static>), Box<dyn Error + Send + Sync>> {
+    fn build_test_tls_acceptor() -> std::result::Result<
+        (TlsAcceptor, CertificateDer<'static>),
+        Box<dyn std::error::Error + Send + Sync>,
+    > {
         let params = CertificateParams::new(vec!["localhost".to_string()])?;
         let signing_key = KeyPair::generate()?;
         let cert = params.self_signed(&signing_key)?;
@@ -171,7 +172,7 @@ mod tests {
 
     fn build_test_tls_connector(
         cert_der: CertificateDer<'static>,
-    ) -> Result<TlsConnector, Box<dyn Error + Send + Sync>> {
+    ) -> std::result::Result<TlsConnector, Box<dyn std::error::Error + Send + Sync>> {
         let mut root_store = RootCertStore::empty();
         root_store.add(cert_der)?;
 

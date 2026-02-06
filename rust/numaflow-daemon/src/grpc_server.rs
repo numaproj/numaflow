@@ -1,26 +1,25 @@
-use std::error::Error;
+use crate::MvtxDaemonService;
+use crate::TlsStreamReceiver;
+use crate::error::{Error, Result};
 
+use numaflow_pb::servers::mvtxdaemon::mono_vertex_daemon_service_server::MonoVertexDaemonServiceServer;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Server;
 
-use numaflow_pb::servers::mvtxdaemon::mono_vertex_daemon_service_server::MonoVertexDaemonServiceServer;
-
-use crate::MvtxDaemonService;
-use crate::TlsStreamReceiver;
-
 pub(crate) async fn run_grpc_server(
     grpc_rx: TlsStreamReceiver,
     cln_token: CancellationToken,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+) -> Result<()> {
     let grpc_service = MonoVertexDaemonServiceServer::new(MvtxDaemonService);
     let incoming_stream = ReceiverStream::new(grpc_rx).map(Ok::<_, std::io::Error>);
 
     Server::builder()
         .add_service(grpc_service)
         .serve_with_incoming_shutdown(incoming_stream, cln_token.cancelled())
-        .await?;
+        .await
+        .map_err(|e| Error::Completion(format!("Failed to terminate the gRPC server: {}", e)))?;
 
     Ok(())
 }
@@ -33,7 +32,8 @@ mod tests {
     use tokio::time::{Duration, timeout};
 
     #[tokio::test]
-    async fn stops_on_cancellation() -> Result<(), Box<dyn Error + Send + Sync>> {
+    async fn stops_on_cancellation()
+    -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let (_, rx) = mpsc::channel::<tokio_rustls::server::TlsStream<tokio::net::TcpStream>>(1);
         let cln_token = CancellationToken::new();
         let cln_token_copy = cln_token.clone();

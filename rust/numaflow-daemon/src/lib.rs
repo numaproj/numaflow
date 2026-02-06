@@ -122,24 +122,19 @@ pub async fn run_monovertex(
     let mut join_set = JoinSet::new();
 
     // Start a tokio task to accept tcp connections.
-    let cln_token_copy_1 = cln_token.clone();
+    let cln_token_conn = cln_token.clone();
     join_set.spawn(async move {
-        let acceptor = ConnectionAcceptor::new(
-            tcp_listener,
-            tls_acceptor,
-            grpc_tx,
-            http_tx,
-            cln_token_copy_1,
-        );
+        let acceptor =
+            ConnectionAcceptor::new(tcp_listener, tls_acceptor, grpc_tx, http_tx, cln_token_conn);
         if let Err(error) = acceptor.run().await {
             warn!(error = %error, "Connection acceptor failed");
         }
     });
 
     // Start a tokio task to serve gRPC requests.
-    let cln_token_copy_2 = cln_token.clone();
+    let cln_token_grpc = cln_token.clone();
     join_set.spawn(async move {
-        if let Err(error) = run_grpc_server(grpc_rx, cln_token_copy_2).await {
+        if let Err(error) = run_grpc_server(grpc_rx, cln_token_grpc).await {
             warn!(error = %error, "gRPC server failed");
         }
     });
