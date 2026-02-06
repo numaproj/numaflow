@@ -305,6 +305,7 @@ mod tests {
         (TlsAcceptor, CertificateDer<'static>),
         Box<dyn std::error::Error + Send + Sync>,
     > {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
         let params = CertificateParams::new(vec!["localhost".to_string()])?;
         let signing_key = KeyPair::generate()?;
         let cert = params.self_signed(&signing_key)?;
