@@ -1,6 +1,6 @@
 # OnSuccess Sink
 
-OnSuccess sink is used to write the messages to a sink only when the processing of the original message has completed 
+OnSuccess sink is used to write messages to a sink, for example, when the processing of the original message has completed 
 successfully in the primary sink.
 
 ## Use Case
