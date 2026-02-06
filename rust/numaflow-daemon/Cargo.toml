@@ -15,6 +15,7 @@ http.workspace = true
 bytes.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
+thiserror.workspace = true
 
 # Daemon-specific dependencies
 http-body-util = "0.1.2"
