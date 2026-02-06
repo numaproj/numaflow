@@ -70,7 +70,7 @@ impl JSWrappedMessage {
             keys: Arc::from(header.keys.into_boxed_slice()),
             tags: None,
             value: match self.compression_type {
-                None => body.payload.into(),
+                None => body.payload,
                 Some(compression_type) => {
                     Bytes::from(compression::decompress(compression_type, &body.payload)?)
                 }

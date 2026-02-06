@@ -25,6 +25,8 @@ fn build_client() {
         .build_server(false)
         .out_dir("src/clients")
         .extern_path(".metadata", "crate::common::metadata")
+        .bytes(".map.v1.MapRequest.Request")
+        .bytes(".map.v1.MapResponse.Result")
         .compile_protos(
             &[
                 "proto/source/v1/source.proto",
@@ -64,6 +66,7 @@ fn build_objects() {
     prost_build::Config::new()
         .out_dir("src/objects")
         .extern_path(".metadata", "crate::common::metadata")
+        .bytes(&[".isb.Body"])
         .compile_protos(
             &[
                 "proto/isb/message.proto",

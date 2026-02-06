@@ -488,7 +488,7 @@ impl From<Message> for MapRequest {
         Self {
             request: Some(map::map_request::Request {
                 keys: message.keys.to_vec(),
-                value: message.value.to_vec(),
+                value: message.value,
                 event_time: Some(prost_timestamp_from_utc(message.event_time)),
                 watermark: message.watermark.map(prost_timestamp_from_utc),
                 headers: Arc::unwrap_or_clone(message.headers),
@@ -515,7 +515,7 @@ impl From<UserDefinedMessage<'_>> for Message {
             },
             keys: Arc::from(value.0.keys),
             tags: Some(Arc::from(value.0.tags)),
-            value: value.0.value.into(),
+            value: value.0.value,
             offset: value.1.offset.clone(),
             event_time: value.1.event_time,
             headers: Arc::clone(&value.1.headers),

@@ -416,7 +416,7 @@ mod tests {
         // convert the bytes value to string and compare
         let values: Vec<String> = all_results
             .iter()
-            .map(|r| String::from_utf8(r.value.clone()).unwrap())
+            .map(|r| String::from_utf8(r.value.to_vec()).unwrap())
             .collect();
         assert_eq!(values, vec!["test", "map", "stream"]);
 
