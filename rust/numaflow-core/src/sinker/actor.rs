@@ -93,32 +93,30 @@ where
                 .map(|resp| (resp.id, resp.status))
                 .collect::<HashMap<_, _>>();
 
-            // Classify messages based on responses
-            let mut i = 0;
-            while let Some(msg) = messages_to_retry.get(i) {
+            // Classify messages based on responses, preserving original ordering.
+            // Take ownership of the current batch so we can iterate by move and push
+            // failed messages back into messages_to_retry in their original order.
+            for msg in std::mem::take(&mut messages_to_retry) {
                 let msg_id = msg.id.to_string();
                 match result_map.remove(&msg_id) {
                     Some(ResponseStatusFromSink::Success) => {
-                        // Remove from retry list, don't need the message anymore
-                        // Don't increment i here, since we swapped the element at i with the last element
-                        messages_to_retry.swap_remove(i);
+                        // Message successfully sunk, nothing more to do
                     }
                     Some(ResponseStatusFromSink::Failed(err_msg)) => {
                         *error_map.entry(err_msg).or_insert(0) += 1;
-                        i += 1; // keep for retry
+                        messages_to_retry.push(msg); // keep for retry
                     }
                     Some(ResponseStatusFromSink::Fallback) => {
-                        fallback_messages.push(messages_to_retry.swap_remove(i));
+                        fallback_messages.push(msg);
                     }
                     Some(ResponseStatusFromSink::Serve(serve_response)) => {
-                        let mut msg = messages_to_retry.swap_remove(i);
+                        let mut msg = msg;
                         if let Some(serve_response) = serve_response {
                             msg.value = serve_response.into();
                         }
                         serving_messages.push(msg);
                     }
                     Some(ResponseStatusFromSink::OnSuccess(on_success_msg)) => {
-                        let msg = messages_to_retry.swap_remove(i);
                         if let Some(on_success_msg) = on_success_msg {
                             let on_success_md: Option<Metadata> =
                                 on_success_msg.metadata.map(|md| md.into());
@@ -153,7 +151,7 @@ where
                             on_success_messages.push(msg);
                         }
                     }
-                    None => unreachable!("should have response for all messages"), // remove if no response
+                    None => unreachable!("should have response for all messages"),
                 }
             }
 
