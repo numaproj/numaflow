@@ -22,20 +22,20 @@ When developing a user-defined sink in Numaflow, your sink container communicate
 ### Core Rules:
 
 1. **Response Count:**
-   - For every batch of `N` input messages received, your sink **must return exactly** `N` responses.
+    - For every batch of `N` input messages received, your sink **must return exactly** `N` responses.
 
 2. **Response Matching:**
-   - Each response must include the corresponding message ID (`datumID`) to identify which message it corresponds to.
-   - The order of responses does **not** need to match the order of incoming messages.
-   - Every input message must have exactly one matching response.
+    - Each response must include the corresponding message ID (`datumID`) to identify which message it corresponds to.
+    - The order of responses does **not** need to match the order of incoming messages.
+    - Every input message must have exactly one matching response.
 
 3. **Response Status:**
-   - Each response must indicate how the message was handled by returning one of the following statuses:
-     - `OK`
-     - `FAILURE`
-     - `FALLBACK`
-     - `SERVE`
-     - `ON_SUCCESS`
+    - Each response must indicate how the message was handled by returning one of the following statuses:
+        - `OK`
+        - `FAILURE`
+        - `FALLBACK`
+        - `SERVE`
+        - `ON_SUCCESS`
 
 ### Response Types
 
