@@ -95,10 +95,7 @@ where
 
             // Classify messages based on responses
             let mut i = 0;
-            while i < messages_to_retry.len() {
-                let Some(msg) = messages_to_retry.get(i) else {
-                    break;
-                };
+            while let Some(msg) = messages_to_retry.get(i) {
                 let msg_id = msg.id.to_string();
                 match result_map.remove(&msg_id) {
                     Some(ResponseStatusFromSink::Success) => {
