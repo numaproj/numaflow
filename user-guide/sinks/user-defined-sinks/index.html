@@ -1061,6 +1061,13 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#on_success-responseonsuccess" class="md-nav__link">
+    ON_SUCCESS (ResponseOnSuccess)
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#serve-responseserve" class="md-nav__link">
     SERVE (ResponseServe)
   </a>
@@ -2897,6 +2904,13 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#on_success-responseonsuccess" class="md-nav__link">
+    ON_SUCCESS (ResponseOnSuccess)
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#serve-responseserve" class="md-nav__link">
     SERVE (ResponseServe)
   </a>
@@ -3035,7 +3049,8 @@
 <p><strong>Related Topics:</strong>
 - <a href="../overview/">Sinks Overview</a> - General information about sinks
 - <a href="../fallback/">Fallback Sink</a> - Dead Letter Queue (DLQ) functionality
-- <a href="../retry-strategy/">Retry Strategy</a> - Configuring retry behavior for failed messages</p>
+- <a href="../retry-strategy/">Retry Strategy</a> - Configuring retry behavior for failed messages
+- <a href="../on-success/">OnSuccess Sink</a> - Sink to receive successful message processing notifications</p>
 </blockquote>
 <h2 id="build-your-own-user-defined-sinks">Build Your Own User-defined Sinks<a class="headerlink" href="#build-your-own-user-defined-sinks" title="Permanent link">&para;</a></h2>
 <p>You can build your own user-defined sinks in multiple languages. Check the SDK examples section below for detailed implementation patterns and working examples.</p>
@@ -3043,26 +3058,31 @@
 <p>When developing a user-defined sink in Numaflow, your sink container communicates with the sidecar via an ordered batches of messages. For each batch of messages received, your sink must return a list of responses that strictly adheres to the following contract:</p>
 <h3 id="core-rules">Core Rules:<a class="headerlink" href="#core-rules" title="Permanent link">&para;</a></h3>
 <ol>
-<li><strong>Response Count:</strong></li>
 <li>
-<p>For every batch of <code>N</code> input messages received, your sink <strong>must return exactly</strong> <code>N</code> responses.</p>
+<p><strong>Response Count:</strong></p>
+<ul>
+<li>For every batch of <code>N</code> input messages received, your sink <strong>must return exactly</strong> <code>N</code> responses.</li>
+</ul>
 </li>
 <li>
 <p><strong>Response Matching:</strong></p>
-</li>
+<ul>
 <li>Each response must include the corresponding message ID (<code>datumID</code>) to identify which message it corresponds to.</li>
 <li>The order of responses does <strong>not</strong> need to match the order of incoming messages.</li>
-<li>
-<p>Every input message must have exactly one matching response.</p>
+<li>Every input message must have exactly one matching response.</li>
+</ul>
 </li>
 <li>
 <p><strong>Response Status:</strong></p>
-</li>
+<ul>
 <li>Each response must indicate how the message was handled by returning one of the following statuses:<ul>
 <li><code>OK</code></li>
 <li><code>FAILURE</code></li>
 <li><code>FALLBACK</code></li>
 <li><code>SERVE</code></li>
+<li><code>ON_SUCCESS</code></li>
+</ul>
+</li>
 </ul>
 </li>
 </ol>
@@ -3087,9 +3107,21 @@
 <li><strong>Action:</strong> Message is immediately sent to the configured fallback sink without retry.</li>
 <li><strong>Requirements:</strong> </li>
 <li>A fallback sink must be configured in the pipeline spec.</li>
-<li>Fallback responses <strong>must not</strong> return further fallback or serve statuses.</li>
+<li>Fallback responses <strong>must not</strong> return further fallback, on-success or serve statuses.</li>
 <li><strong>Use Case:</strong> Messages that cannot be processed by the primary sink but should be preserved.</li>
 <li><strong>Related:</strong> See <a href="../fallback/">Fallback Sink</a> for detailed configuration.</li>
+</ul>
+<h4 id="on_success-responseonsuccess"><strong>ON_SUCCESS</strong> (<code>ResponseOnSuccess</code>)<a class="headerlink" href="#on_success-responseonsuccess" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Meaning:</strong> Message should be routed to the on-success sink.</li>
+<li><strong>Action:</strong> Message is immediately sent to the configured on-success sink without retry.</li>
+<li><strong>Requirements:</strong><ul>
+<li>An on-success sink must be configured in the pipeline spec.</li>
+<li>OnSuccess responses <strong>must not</strong> return further fallback, on-success, or serve statuses.</li>
+</ul>
+</li>
+<li><strong>Use Case:</strong> Notify downstream through on-success sink of the successful processing of a message (e.g., send a kafka message after writing to the primary DB sink) .</li>
+<li><strong>Related:</strong> See <a href="../on-success/">OnSuccess Sink</a> for detailed configuration.</li>
 </ul>
 <h4 id="serve-responseserve"><strong>SERVE</strong> (<code>ResponseServe</code>)<a class="headerlink" href="#serve-responseserve" title="Permanent link">&para;</a></h4>
 <ul>
@@ -3142,30 +3174,63 @@
 </ul>
 <h3 id="sdk-methods">SDK Methods<a class="headerlink" href="#sdk-methods" title="Permanent link">&para;</a></h3>
 <p>Check the links below to see the examples for different languages.</p>
-<p><strong>Golang:</strong>
-<div class="highlight"><pre><span></span><code><span class="nx">ResponseOK</span><span class="p">(</span><span class="nx">id</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:5"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><input id="__tabbed_1_5" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Golang</label><label for="__tabbed_1_2">Java</label><label for="__tabbed_1_3">Python</label><label for="__tabbed_1_4">Rust</label><label for="__tabbed_1_5">JS/TS</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p><div class="highlight"><pre><span></span><code><span class="nx">ResponseOK</span><span class="p">(</span><span class="nx">id</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span>
 <span class="nx">ResponseFailure</span><span class="p">(</span><span class="nx">id</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">errMsg</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span>
 <span class="nx">ResponseFallback</span><span class="p">(</span><span class="nx">id</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span>
 <span class="nx">ResponseServe</span><span class="p">(</span><span class="nx">id</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">serveResponse</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span><span class="p">)</span>
-</code></pre></div></p>
-<p><strong>Java:</strong>
-<div class="highlight"><pre><span></span><code><span class="n">Response</span><span class="p">.</span><span class="na">ok</span><span class="p">(</span><span class="n">id</span><span class="p">)</span>
-<span class="n">Response</span><span class="p">.</span><span class="na">failure</span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">errMsg</span><span class="p">)</span>
-<span class="n">Response</span><span class="p">.</span><span class="na">fallback</span><span class="p">(</span><span class="n">id</span><span class="p">)</span>
-<span class="n">Response</span><span class="p">.</span><span class="na">serve</span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">serveResponse</span><span class="p">)</span>
-</code></pre></div></p>
-<p><strong>Python:</strong>
-<div class="highlight"><pre><span></span><code><span class="n">Response</span><span class="o">.</span><span class="n">ok</span><span class="p">(</span><span class="nb">id</span><span class="p">)</span>
-<span class="n">Response</span><span class="o">.</span><span class="n">failure</span><span class="p">(</span><span class="nb">id</span><span class="p">,</span> <span class="n">err_msg</span><span class="p">)</span>
-<span class="n">Response</span><span class="o">.</span><span class="n">fallback</span><span class="p">(</span><span class="nb">id</span><span class="p">)</span>
-<span class="n">Response</span><span class="o">.</span><span class="n">serve</span><span class="p">(</span><span class="nb">id</span><span class="p">,</span> <span class="n">serve_response</span><span class="p">)</span>
-</code></pre></div></p>
+<span class="nx">ResponseOnSuccess</span><span class="p">(</span><span class="nx">id</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">onSuccessMessage</span><span class="w"> </span><span class="nx">Message</span><span class="p">)</span>
+</code></pre></div>
+<a href="https://github.com/numaproj/numaflow-go/tree/main/examples/sinker">Golang SDK Examples</a></p>
+</div>
+<div class="tabbed-block">
+<p><div class="highlight"><pre><span></span><code><span class="n">Response</span><span class="p">.</span><span class="na">responseOK</span><span class="p">(</span><span class="n">id</span><span class="p">)</span>
+<span class="n">Response</span><span class="p">.</span><span class="na">responseFailure</span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">errMsg</span><span class="p">)</span>
+<span class="n">Response</span><span class="p">.</span><span class="na">responseFallback</span><span class="p">(</span><span class="n">id</span><span class="p">)</span>
+<span class="n">Response</span><span class="p">.</span><span class="na">responseServe</span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">serveResponse</span><span class="p">)</span>
+<span class="n">Response</span><span class="p">.</span><span class="na">responseOnSuccess</span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">onSuccessMessage</span><span class="p">)</span>
+</code></pre></div>
+<a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple/">Java SDK Examples</a></p>
+</div>
+<div class="tabbed-block">
+<p><div class="highlight"><pre><span></span><code><span class="n">Response</span><span class="o">.</span><span class="n">as_success</span><span class="p">(</span><span class="nb">id</span><span class="p">)</span>
+<span class="n">Response</span><span class="o">.</span><span class="n">as_failure</span><span class="p">(</span><span class="nb">id</span><span class="p">,</span> <span class="n">err_msg</span><span class="p">)</span>
+<span class="n">Response</span><span class="o">.</span><span class="n">as_fallback</span><span class="p">(</span><span class="nb">id</span><span class="p">)</span>
+<span class="n">Response</span><span class="o">.</span><span class="n">as_serve</span><span class="p">(</span><span class="nb">id</span><span class="p">,</span> <span class="n">serve_response</span><span class="p">)</span>
+<span class="n">Response</span><span class="o">.</span><span class="n">as_on_success</span><span class="p">(</span><span class="nb">id</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+</code></pre></div>
+<a href="https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/sink/">Python SDK Examples</a></p>
+</div>
+<div class="tabbed-block">
+<p><div class="highlight"><pre><span></span><code><span class="n">Response</span><span class="p">::</span><span class="n">ok</span><span class="p">(</span><span class="n">id</span><span class="p">)</span>
+<span class="n">Response</span><span class="p">::</span><span class="n">failure</span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">err_msg</span><span class="p">)</span>
+<span class="n">Response</span><span class="p">::</span><span class="n">fallback</span><span class="p">(</span><span class="n">id</span><span class="p">)</span>
+<span class="n">Response</span><span class="p">::</span><span class="n">serve</span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">serve_response</span><span class="p">)</span>
+<span class="n">Response</span><span class="p">::</span><span class="n">on_success</span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">payload</span><span class="p">)</span>
+</code></pre></div>
+<a href="https://github.com/numaproj/numaflow-rs/tree/main/examples">Rust SDK Examples</a></p>
+</div>
+<div class="tabbed-block">
+<p><div class="highlight"><pre><span></span><code><span class="nx">Response</span><span class="p">.</span><span class="nx">ok</span><span class="p">(</span><span class="nx">id</span><span class="p">)</span>
+<span class="nx">Response</span><span class="p">.</span><span class="nx">failure</span><span class="p">(</span><span class="nx">id</span><span class="p">,</span><span class="w"> </span><span class="nx">err_msg</span><span class="p">)</span>
+<span class="nx">Response</span><span class="p">.</span><span class="nx">fallback</span><span class="p">(</span><span class="nx">id</span><span class="p">)</span>
+<span class="nx">Response</span><span class="p">.</span><span class="nx">serve</span><span class="p">(</span><span class="nx">id</span><span class="p">,</span><span class="w"> </span><span class="nx">serve_response</span><span class="p">)</span>
+<span class="nx">Response</span><span class="p">.</span><span class="nx">onSuccess</span><span class="p">(</span><span class="nx">id</span><span class="p">,</span><span class="w"> </span><span class="nx">payload</span><span class="p">)</span>
+</code></pre></div>
+<a href="https://github.com/numaproj/numaflow-js/tree/main/examples/sinker">Javascript SDK Examples</a></p>
+</div>
+</div>
+</div>
 <h3 id="explore-sdk-examples">Explore SDK Examples<a class="headerlink" href="#explore-sdk-examples" title="Permanent link">&para;</a></h3>
 <p>For more detailed examples and implementation patterns, check out the official SDK repositories:</p>
 <ul>
 <li><strong><a href="https://github.com/numaproj/numaflow-go/tree/main/examples/sinker">Golang SDK Examples</a></strong></li>
 <li><strong><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple/">Java SDK Examples</a></strong></li>
 <li><strong><a href="https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/sink/">Python SDK Examples</a></strong></li>
+<li><strong><a href="https://github.com/numaproj/numaflow-rs/tree/main/examples">Rust SDK Examples</a></strong></li>
+<li><strong><a href="https://github.com/numaproj/numaflow-js/tree/main/examples/sinker">Javascript SDK Examples</a></strong></li>
 </ul>
 <p>These repositories contain complete working examples of user-defined sinks with various response types and error handling patterns.</p>
 <h3 id="reminder"><strong>Reminder</strong><a class="headerlink" href="#reminder" title="Permanent link">&para;</a></h3>
