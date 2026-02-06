@@ -15,8 +15,8 @@ use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Error;
 use crate::message::{Message, Offset};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_metric_labels,
-    pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_metrics_labels, pipeline_drop_metric_labels,
+    pipeline_metric_labels, pipeline_metrics,
 };
 use crate::pipeline::isb::error::ISBError;
 use crate::pipeline::isb::{ISBWriter, WriteError, WriteResult};
@@ -64,6 +64,9 @@ pub(crate) struct ISBWriterOrchestrator<C: NumaflowTypeConfig> {
     /// Cached metric labels per stream to avoid repeated allocations
     /// HashMap: stream_name -> labels
     stream_metric_labels: StreamMetricLabelsMap,
+    /// Cached jetstream ISB metric labels per stream to avoid per-message allocation
+    /// HashMap: stream_name -> labels
+    jetstream_stream_labels: StreamMetricLabelsMap,
 }
 
 impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
@@ -73,6 +76,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
     pub(crate) fn new(components: ISBWriterOrchestratorComponents<C>) -> Self {
         // Build metric labels for each stream once during initialization
         let mut stream_metric_labels = HashMap::new();
+        let mut jetstream_stream_labels = HashMap::new();
         for stream_name in components.writers.keys() {
             let mut labels = pipeline_metric_labels(components.vertex_type.as_str()).clone();
             labels.push((
@@ -80,6 +84,10 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
                 (*stream_name).to_string(),
             ));
             stream_metric_labels.insert(*stream_name, Arc::new(labels));
+
+            // Build jetstream ISB metric labels once to avoid per-message allocation
+            jetstream_stream_labels
+                .insert(*stream_name, Arc::new(jetstream_isb_metrics_labels(stream_name)));
         }
 
         Self {
@@ -90,6 +98,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
             paf_concurrency: components.paf_concurrency,
             vertex_type: components.vertex_type,
             stream_metric_labels: Arc::new(stream_metric_labels),
+            jetstream_stream_labels: Arc::new(jetstream_stream_labels),
         }
     }
 
@@ -337,12 +346,14 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
             .observe(write_processing_start.elapsed().as_micros() as f64);
 
         // jetstream write time histogram metric
+        let js_labels = self
+            .jetstream_stream_labels
+            .get(partition_name)
+            .expect("jetstream labels should exist for stream");
         pipeline_metrics()
             .jetstream_isb
             .write_time_total
-            .get_or_create(&crate::metrics::jetstream_isb_metrics_labels(
-                partition_name,
-            ))
+            .get_or_create(js_labels)
             .observe(write_processing_start.elapsed().as_micros() as f64);
     }
 

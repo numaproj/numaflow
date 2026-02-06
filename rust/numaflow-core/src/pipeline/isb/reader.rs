@@ -56,6 +56,8 @@ pub(crate) struct ISBReaderOrchestrator<C: NumaflowTypeConfig> {
     rate_limiter: Option<C::RateLimiter>,
     /// Cached metric labels to avoid repeated allocations
     metric_labels: MetricLabels,
+    /// Cached jetstream ISB metric labels to avoid per-message allocation
+    jetstream_labels: MetricLabels,
 }
 
 impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
@@ -72,6 +74,9 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         ));
         let metric_labels = Arc::new(labels);
 
+        // Build jetstream ISB metric labels once to avoid per-message allocation
+        let jetstream_labels = Arc::new(jetstream_isb_metrics_labels(components.stream.name));
+
         Ok(Self {
             vertex_type: components.vertex_type,
             stream: components.stream,
@@ -83,6 +88,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             reader,
             rate_limiter,
             metric_labels,
+            jetstream_labels,
         })
     }
 
@@ -122,7 +128,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                 pipeline_metrics()
                     .jetstream_isb
                     .read_time_total
-                    .get_or_create(&jetstream_isb_metrics_labels(self.stream.name))
+                    .get_or_create(&self.jetstream_labels)
                     .observe(start.elapsed().as_micros() as f64);
 
                 // Handle idle watermarks
@@ -181,7 +187,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                                 error!(?e, ?params.offset, "Failed to ack message after retries");
                             } else {
                                 Self::publish_ack_metrics(
-                                    params.stream_name,
+                                    &params.jetstream_labels,
                                     &params.labels,
                                     ack_start,
                                     params.message_processing_start,
@@ -302,7 +308,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
     }
 
     fn publish_ack_metrics(
-        stream_name: &'static str,
+        jetstream_labels: &MetricLabels,
         labels: &MetricLabels,
         ack_start: Instant,
         message_processing_start: Instant,
@@ -310,7 +316,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         pipeline_metrics()
             .jetstream_isb
             .ack_time_total
-            .get_or_create(&jetstream_isb_metrics_labels(stream_name))
+            .get_or_create(jetstream_labels)
             .observe(ack_start.elapsed().as_micros() as f64);
         pipeline_metrics()
             .forwarder
@@ -497,8 +503,8 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
     ) -> Result<()> {
         self.tracker.insert(message).await?;
         let params = WipParams {
-            stream_name: self.stream.name,
             labels: Arc::clone(&self.metric_labels),
+            jetstream_labels: Arc::clone(&self.jetstream_labels),
             reader: self.reader.clone(),
             offset: message.offset.clone(),
             ack_rx,
@@ -547,8 +553,8 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 }
 
 struct WipParams<C: NumaflowTypeConfig> {
-    stream_name: &'static str,
     labels: Arc<Vec<(String, String)>>,
+    jetstream_labels: Arc<Vec<(String, String)>>,
     reader: C::ISBReader,
     offset: Offset,
     ack_rx: oneshot::Receiver<ReadAck>,
