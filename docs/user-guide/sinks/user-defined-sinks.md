@@ -66,7 +66,7 @@ When developing a user-defined sink in Numaflow, your sink container communicate
 - **Requirements:**
     - An on-success sink must be configured in the pipeline spec.
     - OnSuccess responses **must not** return further fallback, on-success, or serve statuses.
-- **Use Case:** Notify downstream through on-success sink of the successful processing of a message.
+- **Use Case:** Notify downstream through on-success sink of the successful processing of a message (e.g., send a kafka message after writing to the primary DB sink) .
 - **Related:** See [OnSuccess Sink](./on-success.md) for detailed configuration.
 
 #### **SERVE** (`ResponseServe`)
