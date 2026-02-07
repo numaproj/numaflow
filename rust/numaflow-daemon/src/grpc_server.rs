@@ -34,7 +34,7 @@ mod tests {
     #[tokio::test]
     async fn stops_on_cancellation()
     -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let (_, rx) = mpsc::channel::<tokio_rustls::server::TlsStream<tokio::net::TcpStream>>(1);
+        let (tx, rx) = mpsc::channel::<tokio_rustls::server::TlsStream<tokio::net::TcpStream>>(1);
         let cln_token = CancellationToken::new();
         let cln_token_copy = cln_token.clone();
 
@@ -42,14 +42,25 @@ mod tests {
 
         cln_token.cancel();
 
-        if let Err(err) = timeout(Duration::from_secs(2), handle).await {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                format!("Timed out waiting for gRPC server to stop: {}", err),
-            )
-            .into());
+        if let Err(e) = timeout(Duration::from_millis(10), handle).await {
+            panic!("Failed waiting for the gRPC server to stop: {}", e);
         }
+        let _ = tx;
+        Ok(())
+    }
 
+    #[tokio::test]
+    async fn long_running_if_not_cancelled()
+    -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let (tx, rx) = mpsc::channel::<tokio_rustls::server::TlsStream<tokio::net::TcpStream>>(1);
+        let cln_token = CancellationToken::new();
+        let cln_token_copy = cln_token.clone();
+
+        let handle = tokio::spawn(async move { run_grpc_server(rx, cln_token_copy).await });
+
+        assert!(timeout(Duration::from_millis(10), handle).await.is_err());
+
+        let _ = tx;
         Ok(())
     }
 }

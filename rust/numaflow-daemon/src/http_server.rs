@@ -60,7 +60,7 @@ mod tests {
 
     use bytes::Bytes;
     use http::StatusCode;
-    use http_body_util::{BodyExt, Empty};
+    use http_body_util::Empty;
     use hyper::client::conn::http1;
     use rcgen::{CertificateParams, KeyPair};
     use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName};
@@ -72,20 +72,21 @@ mod tests {
     use tokio_rustls::{TlsAcceptor, TlsConnector};
 
     #[tokio::test]
-    async fn serves_readyz() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn serves_readyz_and_unknown_http()
+    -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let (tls_acceptor, cert_der) = build_test_tls_acceptor()?;
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let addr = listener.local_addr()?;
         let (tx, rx) = mpsc::channel(1);
 
-        let http_handle = tokio::spawn(async move { run_http_server(rx).await });
+        let http_server = tokio::spawn(async move { run_http_server(rx).await });
 
         let server_task = tokio::spawn(async move {
             let (tcp, _) = listener.accept().await?;
             let tls_stream = tls_acceptor.accept(tcp).await?;
             tx.send(tls_stream)
                 .await
-                .map_err(|e| std::io::Error::other(e.to_string()))?;
+                .map_err(|e| std::io::Error::other(format!("Failed to send TLS stream: {}", e)))?;
             Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
         });
 
@@ -95,7 +96,7 @@ mod tests {
         let tls_stream = connector.connect(server_name, tcp).await?;
 
         let (mut sender, conn) = http1::handshake(hyper_util::rt::TokioIo::new(tls_stream)).await?;
-        let conn_task = tokio::spawn(async move { conn.await });
+        let conn_task = tokio::spawn(conn);
 
         let ready_req = http::Request::builder()
             .method("GET")
@@ -103,7 +104,6 @@ mod tests {
             .body(Empty::<Bytes>::new())?;
         let ready_resp = sender.send_request(ready_req).await?;
         assert_eq!(ready_resp.status(), StatusCode::NO_CONTENT);
-        let _ = ready_resp.into_body().collect().await?;
 
         let not_found_req = http::Request::builder()
             .method("GET")
@@ -111,36 +111,20 @@ mod tests {
             .body(Empty::<Bytes>::new())?;
         let not_found_resp = sender.send_request(not_found_req).await?;
         assert_eq!(not_found_resp.status(), StatusCode::NOT_FOUND);
-        let _ = not_found_resp.into_body().collect().await?;
 
         drop(sender);
 
-        if let Err(e) = conn_task.await {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                format!(
-                    "Error waiting for HTTP client connection task to stop: {}",
-                    e
-                ),
-            )
-            .into());
-        }
+        conn_task
+            .await
+            .expect("Error waiting for HTTP client connection task to stop")?;
 
-        if let Err(e) = server_task.await {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                format!("Error waiting for HTTP server task to stop: {}", e),
-            )
-            .into());
-        }
+        server_task
+            .await
+            .expect("Error waiting for HTTP server task to stop")?;
 
-        if let Err(e) = http_handle.await {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                format!("Error waiting for HTTP server to stop: {}", e),
-            )
-            .into());
-        }
+        http_server
+            .await
+            .expect("Error waiting for HTTP server to stop")?;
 
         Ok(())
     }
