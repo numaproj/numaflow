@@ -123,7 +123,7 @@ mod tests {
         let body = resp.into_inner();
 
         assert_eq!(body.errors.len(), 1);
-        let first = &body.errors[0];
+        let first = body.errors.first().expect("first error");
         assert_eq!(first.replica, "mock_replica");
         assert!(first.container_errors.is_empty());
     }
