@@ -185,6 +185,11 @@ statefulSetWatch:
 							podReady = false
 						}
 					}
+					for _, ics := range p.Status.InitContainerStatuses {
+						if !ics.Ready {
+							podReady = false
+						}
+					}
 					if podReady {
 						if _, existing := podNames[p.GetName()]; !existing {
 							podNames[p.GetName()] = true
@@ -355,6 +360,11 @@ func isPodReady(pod corev1.Pod) bool {
 		return false
 	}
 	for _, c := range pod.Status.ContainerStatuses {
+		if !c.Ready {
+			return false
+		}
+	}
+	for _, c := range pod.Status.InitContainerStatuses {
 		if !c.Ready {
 			return false
 		}
