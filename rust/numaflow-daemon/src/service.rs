@@ -69,3 +69,62 @@ impl MonoVertexDaemonService for MvtxDaemonService {
         Ok(Response::new(mock_resp))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn get_mono_vertex_metrics_returns_mock_data() {
+        let svc = MvtxDaemonService;
+        let resp = svc
+            .get_mono_vertex_metrics(Request::new(()))
+            .await
+            .expect("metrics response");
+        let body = resp.into_inner();
+        let metrics = body.metrics.expect("metrics payload");
+
+        assert_eq!(metrics.mono_vertex, "mock_mvtx_spec");
+        assert_eq!(metrics.processing_rates.get("default"), Some(&67.0));
+        assert_eq!(metrics.processing_rates.get("1m"), Some(&10.0));
+        assert_eq!(metrics.processing_rates.get("5m"), Some(&50.0));
+        assert_eq!(metrics.processing_rates.get("15m"), Some(&150.0));
+
+        assert_eq!(metrics.pendings.get("default"), Some(&67));
+        assert_eq!(metrics.pendings.get("1m"), Some(&10));
+        assert_eq!(metrics.pendings.get("5m"), Some(&50));
+        assert_eq!(metrics.pendings.get("15m"), Some(&150));
+    }
+
+    #[tokio::test]
+    async fn get_mono_vertex_status_returns_mock_data() {
+        let svc = MvtxDaemonService;
+        let resp = svc
+            .get_mono_vertex_status(Request::new(()))
+            .await
+            .expect("status response");
+        let body = resp.into_inner();
+        let status = body.status.expect("status payload");
+
+        assert_eq!(status.status, "mock_status");
+        assert_eq!(status.message, "mock_status_message");
+        assert_eq!(status.code, "mock_status_code");
+    }
+
+    #[tokio::test]
+    async fn get_mono_vertex_errors_returns_mock_data() {
+        let svc = MvtxDaemonService;
+        let resp = svc
+            .get_mono_vertex_errors(Request::new(GetMonoVertexErrorsRequest {
+                mono_vertex: "mock_mono_vertex".to_string(),
+            }))
+            .await
+            .expect("errors response");
+        let body = resp.into_inner();
+
+        assert_eq!(body.errors.len(), 1);
+        let first = &body.errors[0];
+        assert_eq!(first.replica, "mock_replica");
+        assert!(first.container_errors.is_empty());
+    }
+}
