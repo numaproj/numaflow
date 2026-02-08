@@ -1,10 +1,8 @@
 //! Internal buffer state and core types for the simple buffer.
 
 use std::collections::{HashMap, VecDeque};
-use std::sync::Arc;
 
 use bytes::Bytes;
-use chrono::{DateTime, Utc};
 
 /// Offset for identifying messages in the buffer.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
@@ -30,54 +28,34 @@ impl std::fmt::Display for Offset {
     }
 }
 
-/// Message ID for deduplication.
-#[derive(Debug, Clone, Default, Hash, Eq, PartialEq)]
-pub struct MessageID {
-    pub vertex_name: String,
-    pub offset: String,
-    pub index: i32,
-}
-
-impl std::fmt::Display for MessageID {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}-{}-{}", self.vertex_name, self.offset, self.index)
-    }
-}
-
-/// Message that flows through the ISB.
+/// Message read from the buffer.
+///
+/// This is what the reader returns - just the payload, headers, and offset.
+/// The ISB doesn't care about numaflow-core specific fields like keys, tags, event_time, etc.
 #[derive(Debug, Clone)]
-pub struct Message {
-    pub keys: Arc<[String]>,
-    pub tags: Option<Arc<[String]>>,
-    pub value: Bytes,
-    pub offset: Offset,
-    pub event_time: DateTime<Utc>,
-    pub watermark: Option<DateTime<Utc>>,
-    pub id: MessageID,
+pub struct ReadMessage {
+    /// The payload bytes.
+    pub payload: Bytes,
+    /// Message headers.
     pub headers: HashMap<String, String>,
-}
-
-impl Default for Message {
-    fn default() -> Self {
-        Self {
-            keys: Arc::new([]),
-            tags: None,
-            value: Bytes::new(),
-            offset: Offset::new(0, 0),
-            event_time: Utc::now(),
-            watermark: None,
-            id: MessageID::default(),
-            headers: HashMap::new(),
-        }
-    }
+    /// Offset for ack/nack operations.
+    pub offset: Offset,
 }
 
 /// A slot in the circular buffer.
 #[derive(Debug, Clone)]
 pub(crate) struct BufferSlot {
-    pub(crate) message: Message,
+    /// The payload bytes.
+    pub(crate) payload: Bytes,
+    /// Message headers.
+    pub(crate) headers: HashMap<String, String>,
+    /// Message ID for deduplication.
+    pub(crate) id: String,
+    /// Offset assigned to this message.
+    pub(crate) offset: Offset,
+    /// State of the message.
     pub(crate) state: MessageState,
-    /// Monotonic sequence number for deduplication.
+    /// Monotonic sequence number.
     pub(crate) sequence: i64,
     /// Timestamp when the message was fetched (for WIP timeout tracking).
     pub(crate) fetched_at: Option<std::time::Instant>,
@@ -105,8 +83,8 @@ pub(crate) struct BufferState {
     pub(crate) next_sequence: i64,
     /// Mapping from offset to index in slots for fast lookup.
     pub(crate) offset_to_index: HashMap<Offset, usize>,
-    /// Deduplication window: message_id -> sequence number.
-    pub(crate) dedup_window: HashMap<MessageID, i64>,
+    /// Deduplication window: message_id (String) -> sequence number.
+    pub(crate) dedup_window: HashMap<String, i64>,
     /// Usage limit (0.0 to 1.0) at which buffer is considered full.
     pub(crate) usage_limit: f64,
 }
@@ -159,9 +137,8 @@ impl BufferState {
         while let Some(front) = self.slots.front() {
             if front.state == MessageState::Acked {
                 let slot = self.slots.pop_front().unwrap();
-                let offset = Offset::new(slot.sequence, slot.message.offset.partition_idx);
-                self.offset_to_index.remove(&offset);
-                self.dedup_window.remove(&slot.message.id);
+                self.offset_to_index.remove(&slot.offset);
+                self.dedup_window.remove(&slot.id);
                 // FIXME: this does not look very efficient since we will be calling reclaim_acked
                 //   very often.
                 // Update indices for remaining slots
@@ -199,24 +176,13 @@ impl BufferState {
 mod tests {
     use super::*;
     use bytes::Bytes;
-    use chrono::Utc;
 
     fn create_test_slot(seq: i64, state: MessageState) -> BufferSlot {
         BufferSlot {
-            message: Message {
-                keys: Arc::new(["key".to_string()]),
-                tags: None,
-                value: Bytes::from("test"),
-                offset: Offset::new(seq, 0),
-                event_time: Utc::now(),
-                watermark: None,
-                id: MessageID {
-                    vertex_name: "test".to_string(),
-                    offset: seq.to_string(),
-                    index: 0,
-                },
-                headers: std::collections::HashMap::new(),
-            },
+            payload: Bytes::from("test"),
+            headers: HashMap::new(),
+            id: format!("msg-{}", seq),
+            offset: Offset::new(seq, 0),
             state,
             sequence: seq,
             fetched_at: None,
@@ -312,9 +278,9 @@ mod tests {
         state.offset_to_index.insert(Offset::new(1, 0), 0);
         state.offset_to_index.insert(Offset::new(2, 0), 1);
         state.offset_to_index.insert(Offset::new(3, 0), 2);
-        state.dedup_window.insert(slot1.message.id.clone(), 1);
-        state.dedup_window.insert(slot2.message.id.clone(), 2);
-        state.dedup_window.insert(slot3.message.id.clone(), 3);
+        state.dedup_window.insert(slot1.id.clone(), 1);
+        state.dedup_window.insert(slot2.id.clone(), 2);
+        state.dedup_window.insert(slot3.id.clone(), 3);
         state.slots.push_back(slot1);
         state.slots.push_back(slot2);
         state.slots.push_back(slot3);
@@ -332,9 +298,9 @@ mod tests {
         state.offset_to_index.insert(Offset::new(1, 0), 0);
         state.offset_to_index.insert(Offset::new(2, 0), 1);
         state.offset_to_index.insert(Offset::new(3, 0), 2);
-        state.dedup_window.insert(slot1.message.id.clone(), 1);
-        state.dedup_window.insert(slot2.message.id.clone(), 2);
-        state.dedup_window.insert(slot3.message.id.clone(), 3);
+        state.dedup_window.insert(slot1.id.clone(), 1);
+        state.dedup_window.insert(slot2.id.clone(), 2);
+        state.dedup_window.insert(slot3.id.clone(), 3);
         state.slots.push_back(slot1);
         state.slots.push_back(slot2);
         state.slots.push_back(slot3);
@@ -400,89 +366,21 @@ mod tests {
         assert_eq!(set.len(), 2);
     }
 
-    // ========== MessageID tests ==========
+    // ========== ReadMessage tests ==========
 
     #[test]
-    fn test_message_id() {
-        use std::collections::HashSet;
-
-        // Default
-        let id = MessageID::default();
-        assert_eq!(id.vertex_name, "");
-        assert_eq!(id.offset, "");
-        assert_eq!(id.index, 0);
-
-        // Display
-        let id = MessageID {
-            vertex_name: "vertex1".to_string(),
-            offset: "offset123".to_string(),
-            index: 5,
-        };
-        assert_eq!(format!("{}", id), "vertex1-offset123-5");
-
-        // Equality
-        let id1 = MessageID {
-            vertex_name: "v1".to_string(),
-            offset: "o1".to_string(),
-            index: 0,
-        };
-        let id2 = MessageID {
-            vertex_name: "v1".to_string(),
-            offset: "o1".to_string(),
-            index: 0,
-        };
-        let id3 = MessageID {
-            vertex_name: "v2".to_string(),
-            offset: "o1".to_string(),
-            index: 0,
-        };
-        assert_eq!(id1, id2);
-        assert_ne!(id1, id3);
-
-        // Hash
-        let mut set = HashSet::new();
-        set.insert(id1.clone());
-        set.insert(id1); // duplicate
-        assert_eq!(set.len(), 1);
-    }
-
-    // ========== Message tests ==========
-
-    #[test]
-    fn test_message() {
-        // Default
-        let msg = Message::default();
-        assert!(msg.keys.is_empty());
-        assert!(msg.tags.is_none());
-        assert!(msg.value.is_empty());
-        assert_eq!(msg.offset.sequence, 0);
-        assert!(msg.watermark.is_none());
-        assert!(msg.headers.is_empty());
-
-        // With values
-        let msg = Message {
-            keys: Arc::new(["key1".to_string(), "key2".to_string()]),
-            tags: Some(Arc::new(["tag1".to_string()])),
-            value: Bytes::from("hello world"),
-            offset: Offset::new(42, 0),
-            event_time: Utc::now(),
-            watermark: Some(Utc::now()),
-            id: MessageID {
-                vertex_name: "test".to_string(),
-                offset: "1".to_string(),
-                index: 0,
-            },
+    fn test_read_message() {
+        let msg = ReadMessage {
+            payload: Bytes::from("hello world"),
             headers: {
                 let mut h = HashMap::new();
                 h.insert("key".to_string(), "value".to_string());
                 h
             },
+            offset: Offset::new(42, 0),
         };
-        assert_eq!(msg.keys.len(), 2);
-        assert!(msg.tags.is_some());
-        assert_eq!(msg.value, Bytes::from("hello world"));
-        assert_eq!(msg.offset.sequence, 42);
-        assert!(msg.watermark.is_some());
+        assert_eq!(msg.payload, Bytes::from("hello world"));
         assert_eq!(msg.headers.len(), 1);
+        assert_eq!(msg.offset.sequence, 42);
     }
 }

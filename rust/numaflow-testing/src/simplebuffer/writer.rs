@@ -1,11 +1,13 @@
 //! Simple buffer writer implementation.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
+use bytes::Bytes;
 use parking_lot::RwLock;
 
-use super::buffer::{BufferSlot, BufferState, Message, MessageState, Offset};
+use super::buffer::{BufferSlot, BufferState, MessageState, Offset};
 use super::error_injector::ErrorInjector;
 
 /// Error types for write operations.
@@ -73,9 +75,16 @@ impl SimpleWriter {
     ///
     /// This is the high-performance write method. The returned `PendingWrite` can be
     /// resolved later using `resolve()` to get the offset.
+    ///
+    /// # Arguments
+    /// * `id` - Unique message ID for deduplication
+    /// * `payload` - The message payload bytes
+    /// * `headers` - Optional message headers
     pub async fn async_write(
         &self,
-        message: Message,
+        id: String,
+        payload: Bytes,
+        headers: HashMap<String, String>,
     ) -> std::result::Result<PendingWrite, WriteError> {
         // Apply artificial latency if set
         self.error_injector.apply_write_latency().await;
@@ -100,7 +109,7 @@ impl SimpleWriter {
         }
 
         // Check for duplicate
-        if let Some(&existing_seq) = state.dedup_window.get(&message.id) {
+        if let Some(&existing_seq) = state.dedup_window.get(&id) {
             let offset = Offset::new(existing_seq, self.partition_idx);
             return Ok(PendingWrite {
                 offset,
@@ -123,10 +132,10 @@ impl SimpleWriter {
 
         // Create the slot
         let slot = BufferSlot {
-            message: Message {
-                offset: offset.clone(),
-                ..message.clone()
-            },
+            payload,
+            headers,
+            id: id.clone(),
+            offset: offset.clone(),
             state: MessageState::Pending,
             sequence,
             fetched_at: None,
@@ -136,7 +145,7 @@ impl SimpleWriter {
         let index = state.slots.len();
         state.slots.push_back(slot);
         state.offset_to_index.insert(offset.clone(), index);
-        state.dedup_window.insert(message.id, sequence);
+        state.dedup_window.insert(id, sequence);
 
         Ok(PendingWrite {
             offset,
@@ -159,8 +168,13 @@ impl SimpleWriter {
     /// Write a message and wait for confirmation.
     ///
     /// This is a convenience method that combines `async_write` and `resolve`.
-    pub async fn write(&self, message: Message) -> std::result::Result<WriteResult, WriteError> {
-        let pending = self.async_write(message).await?;
+    pub async fn write(
+        &self,
+        id: String,
+        payload: Bytes,
+        headers: HashMap<String, String>,
+    ) -> std::result::Result<WriteResult, WriteError> {
+        let pending = self.async_write(id, payload, headers).await?;
         self.resolve(pending).await
     }
 
@@ -182,9 +196,6 @@ impl SimpleWriter {
 mod tests {
     use super::*;
     use bytes::Bytes;
-    use chrono::Utc;
-
-    use crate::simplebuffer::buffer::MessageID;
 
     fn create_test_writer() -> (SimpleWriter, Arc<RwLock<BufferState>>) {
         let state = Arc::new(RwLock::new(BufferState::new(10, 0.8)));
@@ -196,23 +207,6 @@ mod tests {
             error_injector,
         };
         (writer, state)
-    }
-
-    fn create_test_message(id: &str) -> Message {
-        Message {
-            keys: Arc::new(["key".to_string()]),
-            tags: None,
-            value: Bytes::from("test"),
-            offset: Offset::new(0, 0),
-            event_time: Utc::now(),
-            watermark: None,
-            id: MessageID {
-                vertex_name: "test".to_string(),
-                offset: id.to_string(),
-                index: 0,
-            },
-            headers: std::collections::HashMap::new(),
-        }
     }
 
     #[test]
@@ -235,7 +229,7 @@ mod tests {
         // Basic write
         let (writer, state) = create_test_writer();
         let pending = writer
-            .async_write(create_test_message("msg1"))
+            .async_write("msg1".to_string(), Bytes::from("test"), HashMap::new())
             .await
             .unwrap();
         assert!(!pending.is_duplicate);
@@ -246,7 +240,7 @@ mod tests {
         let (writer, state) = create_test_writer();
         for i in 1..=3 {
             let pending = writer
-                .async_write(create_test_message(&format!("msg{}", i)))
+                .async_write(format!("msg{}", i), Bytes::from("test"), HashMap::new())
                 .await
                 .unwrap();
             assert_eq!(pending.offset.sequence, i);
@@ -255,7 +249,10 @@ mod tests {
 
         // Convenience write method
         let (writer, state) = create_test_writer();
-        let result = writer.write(create_test_message("msg1")).await.unwrap();
+        let result = writer
+            .write("msg1".to_string(), Bytes::from("test"), HashMap::new())
+            .await
+            .unwrap();
         assert_eq!(result.offset.sequence, 1);
         assert!(!result.is_duplicate);
         assert_eq!(state.read().slots.len(), 1);
@@ -267,14 +264,14 @@ mod tests {
 
         // First write
         let pending1 = writer
-            .async_write(create_test_message("same-id"))
+            .async_write("same-id".to_string(), Bytes::from("test"), HashMap::new())
             .await
             .unwrap();
         assert!(!pending1.is_duplicate);
 
         // Duplicate detected
         let pending2 = writer
-            .async_write(create_test_message("same-id"))
+            .async_write("same-id".to_string(), Bytes::from("test"), HashMap::new())
             .await
             .unwrap();
         assert!(pending2.is_duplicate);
@@ -306,17 +303,21 @@ mod tests {
         let (writer, _) = create_test_writer();
         for i in 1..=8 {
             writer
-                .async_write(create_test_message(&format!("msg{}", i)))
+                .async_write(format!("msg{}", i), Bytes::from("test"), HashMap::new())
                 .await
                 .unwrap();
         }
-        let result = writer.async_write(create_test_message("msg9")).await;
+        let result = writer
+            .async_write("msg9".to_string(), Bytes::from("test"), HashMap::new())
+            .await;
         assert!(matches!(result.unwrap_err(), WriteError::BufferFull));
 
         // Forced buffer full
         let (writer, _) = create_test_writer();
         writer.error_injector.set_buffer_full(true);
-        let result = writer.async_write(create_test_message("msg1")).await;
+        let result = writer
+            .async_write("msg1".to_string(), Bytes::from("test"), HashMap::new())
+            .await;
         assert!(matches!(result.unwrap_err(), WriteError::BufferFull));
     }
 
@@ -324,13 +325,17 @@ mod tests {
     async fn test_injected_failure() {
         let (writer, _) = create_test_writer();
         writer.error_injector.fail_writes(1);
-        let result = writer.async_write(create_test_message("msg1")).await;
+        let result = writer
+            .async_write("msg1".to_string(), Bytes::from("test"), HashMap::new())
+            .await;
         assert!(matches!(result.unwrap_err(), WriteError::WriteFailed(_)));
 
         // Also test via convenience method
         let (writer, _) = create_test_writer();
         writer.error_injector.fail_writes(1);
-        let result = writer.write(create_test_message("msg1")).await;
+        let result = writer
+            .write("msg1".to_string(), Bytes::from("test"), HashMap::new())
+            .await;
         assert!(result.is_err());
     }
 

@@ -30,7 +30,7 @@ mod reader;
 mod writer;
 
 // Re-exports
-pub use buffer::{Message, MessageID, Offset};
+pub use buffer::{Offset, ReadMessage};
 pub use error::{Result, SimpleBufferError};
 pub use error_injector::ErrorInjector;
 pub use reader::SimpleReader;
@@ -160,21 +160,9 @@ impl SimpleBuffer {
 #[allow(clippy::indexing_slicing)]
 mod tests {
     use bytes::Bytes;
+    use std::collections::HashMap;
 
     use super::*;
-
-    fn create_test_message(id: &str, value: &str) -> Message {
-        Message {
-            keys: Arc::new(["key1".to_string()]),
-            value: Bytes::from(value.to_string()),
-            id: MessageID {
-                vertex_name: "test-vertex".to_string(),
-                offset: id.to_string(),
-                index: 0,
-            },
-            ..Default::default()
-        }
-    }
 
     #[tokio::test]
     async fn test_basic_write_and_read() {
@@ -183,15 +171,17 @@ mod tests {
         let mut reader = buffer.reader();
 
         // Write a message
-        let msg = create_test_message("1", "hello");
-        let result = writer.write(msg).await.unwrap();
+        let result = writer
+            .write("msg-1".to_string(), Bytes::from("hello"), HashMap::new())
+            .await
+            .unwrap();
         assert!(!result.is_duplicate);
         assert_eq!(result.offset.sequence, 1);
 
         // Read the message
         let messages = reader.fetch(10, Duration::from_millis(100)).await.unwrap();
         assert_eq!(messages.len(), 1);
-        assert_eq!(messages[0].value, Bytes::from("hello"));
+        assert_eq!(messages[0].payload, Bytes::from("hello"));
 
         // Ack the message
         reader.ack(&messages[0].offset).await.unwrap();
@@ -207,8 +197,10 @@ mod tests {
         let mut reader = buffer.reader();
 
         // Write a message
-        let msg = create_test_message("1", "hello");
-        writer.write(msg).await.unwrap();
+        writer
+            .write("msg-1".to_string(), Bytes::from("hello"), HashMap::new())
+            .await
+            .unwrap();
 
         // Read the message
         let messages = reader.fetch(10, Duration::from_millis(100)).await.unwrap();
@@ -234,13 +226,20 @@ mod tests {
 
         // Fill the buffer to 80% (4 messages out of 5)
         for i in 0..4 {
-            let msg = create_test_message(&i.to_string(), &format!("msg{}", i));
-            writer.write(msg).await.unwrap();
+            writer
+                .write(
+                    format!("msg-{}", i),
+                    Bytes::from(format!("msg{}", i)),
+                    HashMap::new(),
+                )
+                .await
+                .unwrap();
         }
 
         // Next write should fail with buffer full
-        let msg = create_test_message("4", "msg4");
-        let result = writer.write(msg).await;
+        let result = writer
+            .write("msg-4".to_string(), Bytes::from("msg4"), HashMap::new())
+            .await;
         assert!(matches!(result, Err(WriteError::BufferFull)));
     }
 
@@ -252,15 +251,17 @@ mod tests {
         // Force buffer full
         buffer.error_injector().set_buffer_full(true);
 
-        let msg = create_test_message("1", "hello");
-        let result = writer.write(msg).await;
+        let result = writer
+            .write("msg-1".to_string(), Bytes::from("hello"), HashMap::new())
+            .await;
         assert!(matches!(result, Err(WriteError::BufferFull)));
 
         // Unset buffer full
         buffer.error_injector().set_buffer_full(false);
 
-        let msg = create_test_message("2", "hello2");
-        let result = writer.write(msg).await;
+        let result = writer
+            .write("msg-2".to_string(), Bytes::from("hello2"), HashMap::new())
+            .await;
         assert!(result.is_ok());
     }
 
@@ -272,21 +273,27 @@ mod tests {
         // Fail next 2 writes
         buffer.error_injector().fail_writes(2);
 
-        let msg = create_test_message("1", "hello");
         assert!(matches!(
-            writer.write(msg).await,
+            writer
+                .write("msg-1".to_string(), Bytes::from("hello"), HashMap::new())
+                .await,
             Err(WriteError::WriteFailed(_))
         ));
 
-        let msg = create_test_message("2", "hello2");
         assert!(matches!(
-            writer.write(msg).await,
+            writer
+                .write("msg-2".to_string(), Bytes::from("hello2"), HashMap::new())
+                .await,
             Err(WriteError::WriteFailed(_))
         ));
 
         // Third write should succeed
-        let msg = create_test_message("3", "hello3");
-        assert!(writer.write(msg).await.is_ok());
+        assert!(
+            writer
+                .write("msg-3".to_string(), Bytes::from("hello3"), HashMap::new())
+                .await
+                .is_ok()
+        );
     }
 
     #[tokio::test]
@@ -295,8 +302,10 @@ mod tests {
         let writer = buffer.writer();
         let mut reader = buffer.reader();
 
-        let msg = create_test_message("1", "hello");
-        writer.write(msg).await.unwrap();
+        writer
+            .write("msg-1".to_string(), Bytes::from("hello"), HashMap::new())
+            .await
+            .unwrap();
 
         let messages = reader.fetch(10, Duration::from_millis(100)).await.unwrap();
         let offset = messages[0].offset.clone();
@@ -318,12 +327,21 @@ mod tests {
         let buffer = SimpleBuffer::new(100, 0, "test-buffer");
         let writer = buffer.writer();
 
-        let msg = create_test_message("1", "hello");
-        let result1 = writer.write(msg.clone()).await.unwrap();
+        let result1 = writer
+            .write("msg-1".to_string(), Bytes::from("hello"), HashMap::new())
+            .await
+            .unwrap();
         assert!(!result1.is_duplicate);
 
-        // Write same message again
-        let result2 = writer.write(msg).await.unwrap();
+        // Write same message ID again (payload doesn't matter for dedup)
+        let result2 = writer
+            .write(
+                "msg-1".to_string(),
+                Bytes::from("different"),
+                HashMap::new(),
+            )
+            .await
+            .unwrap();
         assert!(result2.is_duplicate);
         assert_eq!(result1.offset, result2.offset);
     }
@@ -334,8 +352,10 @@ mod tests {
         let writer = buffer.writer();
         let mut reader = buffer.reader();
 
-        let msg = create_test_message("1", "hello");
-        writer.write(msg).await.unwrap();
+        writer
+            .write("msg-1".to_string(), Bytes::from("hello"), HashMap::new())
+            .await
+            .unwrap();
 
         let messages = reader.fetch(10, Duration::from_millis(100)).await.unwrap();
         let offset = messages[0].offset.clone();
@@ -370,8 +390,14 @@ mod tests {
 
         // Write messages
         for i in 0..5 {
-            let msg = create_test_message(&i.to_string(), &format!("msg{}", i));
-            writer.write(msg).await.unwrap();
+            writer
+                .write(
+                    format!("msg-{}", i),
+                    Bytes::from(format!("msg{}", i)),
+                    HashMap::new(),
+                )
+                .await
+                .unwrap();
         }
 
         // Should have 5 pending

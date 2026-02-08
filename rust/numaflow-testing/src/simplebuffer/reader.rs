@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use parking_lot::RwLock;
 
-use super::buffer::{BufferState, Message, MessageState, Offset};
+use super::buffer::{BufferState, MessageState, Offset, ReadMessage};
 use super::error::{Result, SimpleBufferError};
 use super::error_injector::ErrorInjector;
 
@@ -25,7 +25,7 @@ impl SimpleReader {
     ///
     /// This is a blocking call that waits up to `timeout` for messages.
     /// Returns pending messages and marks them as in-flight.
-    pub async fn fetch(&mut self, max: usize, timeout: Duration) -> Result<Vec<Message>> {
+    pub async fn fetch(&mut self, max: usize, timeout: Duration) -> Result<Vec<ReadMessage>> {
         // Apply artificial latency if set
         self.error_injector.apply_fetch_latency().await;
 
@@ -49,7 +49,11 @@ impl SimpleReader {
                     if slot.state == MessageState::Pending {
                         slot.state = MessageState::InFlight;
                         slot.fetched_at = Some(now);
-                        messages.push(slot.message.clone());
+                        messages.push(ReadMessage {
+                            payload: slot.payload.clone(),
+                            headers: slot.headers.clone(),
+                            offset: slot.offset.clone(),
+                        });
 
                         if messages.len() >= max {
                             break;
@@ -182,9 +186,7 @@ impl SimpleReader {
 mod tests {
     use super::*;
     use bytes::Bytes;
-    use chrono::Utc;
-
-    use crate::simplebuffer::buffer::MessageID;
+    use std::collections::HashMap;
 
     fn create_test_reader() -> (SimpleReader, Arc<RwLock<BufferState>>) {
         let state = Arc::new(RwLock::new(BufferState::new(10, 0.8)));
@@ -199,28 +201,13 @@ mod tests {
         (reader, state)
     }
 
-    fn create_test_message(seq: i64) -> Message {
-        Message {
-            keys: Arc::new(["key".to_string()]),
-            tags: None,
-            value: Bytes::from("test"),
-            offset: Offset::new(seq, 0),
-            event_time: Utc::now(),
-            watermark: None,
-            id: MessageID {
-                vertex_name: "test".to_string(),
-                offset: seq.to_string(),
-                index: 0,
-            },
-            headers: std::collections::HashMap::new(),
-        }
-    }
-
     fn add_slot(state: &Arc<RwLock<BufferState>>, seq: i64, msg_state: MessageState) {
         let mut s = state.write();
-        let msg = create_test_message(seq);
         s.slots.push_back(super::super::buffer::BufferSlot {
-            message: msg,
+            payload: Bytes::from("test"),
+            headers: HashMap::new(),
+            id: format!("msg-{}", seq),
+            offset: Offset::new(seq, 0),
             state: msg_state,
             sequence: seq,
             fetched_at: if msg_state == MessageState::InFlight {
