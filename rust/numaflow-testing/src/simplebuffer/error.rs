@@ -41,106 +41,73 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_offset_not_found_display() {
-        let err = SimpleBufferError::OffsetNotFound("42-0".to_string());
-        assert_eq!(format!("{}", err), "Offset not found: 42-0");
-    }
-
-    #[test]
-    fn test_ack_error_display() {
-        let err = SimpleBufferError::Ack("message not in-flight".to_string());
+    fn test_error_display_all_variants() {
+        // Test display format for all error variants
         assert_eq!(
-            format!("{}", err),
-            "Failed to acknowledge message: message not in-flight"
+            format!("{}", SimpleBufferError::OffsetNotFound("42-0".to_string())),
+            "Offset not found: 42-0"
         );
-    }
-
-    #[test]
-    fn test_nack_error_display() {
-        let err = SimpleBufferError::Nack("message not in-flight".to_string());
         assert_eq!(
-            format!("{}", err),
-            "Failed to negatively acknowledge message: message not in-flight"
+            format!("{}", SimpleBufferError::Ack("not in-flight".to_string())),
+            "Failed to acknowledge message: not in-flight"
         );
-    }
-
-    #[test]
-    fn test_wip_ack_error_display() {
-        let err = SimpleBufferError::WipAck("timeout".to_string());
         assert_eq!(
-            format!("{}", err),
+            format!("{}", SimpleBufferError::Nack("not in-flight".to_string())),
+            "Failed to negatively acknowledge message: not in-flight"
+        );
+        assert_eq!(
+            format!("{}", SimpleBufferError::WipAck("timeout".to_string())),
             "Failed to send work-in-progress acknowledgment: timeout"
         );
-    }
-
-    #[test]
-    fn test_fetch_error_display() {
-        let err = SimpleBufferError::Fetch("connection lost".to_string());
         assert_eq!(
-            format!("{}", err),
+            format!(
+                "{}",
+                SimpleBufferError::Fetch("connection lost".to_string())
+            ),
             "Failed to fetch messages: connection lost"
         );
-    }
-
-    #[test]
-    fn test_pending_error_display() {
-        let err = SimpleBufferError::Pending("query failed".to_string());
         assert_eq!(
-            format!("{}", err),
+            format!("{}", SimpleBufferError::Pending("query failed".to_string())),
             "Failed to query pending messages: query failed"
+        );
+        assert_eq!(
+            format!("{}", SimpleBufferError::Write("disk full".to_string())),
+            "Failed to write message: disk full"
+        );
+        assert_eq!(
+            format!("{}", SimpleBufferError::BufferFull),
+            "Buffer is full"
+        );
+        assert_eq!(
+            format!("{}", SimpleBufferError::Other("unknown".to_string())),
+            "Buffer operation failed: unknown"
         );
     }
 
     #[test]
-    fn test_write_error_display() {
-        let err = SimpleBufferError::Write("disk full".to_string());
-        assert_eq!(format!("{}", err), "Failed to write message: disk full");
-    }
-
-    #[test]
-    fn test_buffer_full_display() {
-        let err = SimpleBufferError::BufferFull;
-        assert_eq!(format!("{}", err), "Buffer is full");
-    }
-
-    #[test]
-    fn test_other_error_display() {
-        let err = SimpleBufferError::Other("unknown error".to_string());
-        assert_eq!(format!("{}", err), "Buffer operation failed: unknown error");
-    }
-
-    #[test]
-    fn test_error_is_std_error() {
+    fn test_error_traits() {
+        // Test std::error::Error trait
         let err: Box<dyn std::error::Error> =
             Box::new(SimpleBufferError::OffsetNotFound("1-0".to_string()));
         assert!(err.to_string().contains("Offset not found"));
-    }
 
-    #[test]
-    fn test_error_clone() {
+        // Test Clone
         let err1 = SimpleBufferError::Ack("test".to_string());
         let err2 = err1.clone();
         assert_eq!(format!("{}", err1), format!("{}", err2));
-    }
 
-    #[test]
-    fn test_error_debug() {
+        // Test Debug
         let err = SimpleBufferError::BufferFull;
-        let debug_str = format!("{:?}", err);
-        assert!(debug_str.contains("BufferFull"));
-    }
+        assert!(format!("{:?}", err).contains("BufferFull"));
 
-    #[test]
-    fn test_result_type_alias() {
-        fn returns_result() -> Result<i32> {
+        // Test Result type alias
+        fn returns_ok() -> Result<i32> {
             Ok(42)
         }
-
-        fn returns_error() -> Result<i32> {
+        fn returns_err() -> Result<i32> {
             Err(SimpleBufferError::BufferFull)
         }
-
-        assert_eq!(returns_result().unwrap(), 42);
-        assert!(returns_error().is_err());
+        assert_eq!(returns_ok().unwrap(), 42);
+        assert!(returns_err().is_err());
     }
 }

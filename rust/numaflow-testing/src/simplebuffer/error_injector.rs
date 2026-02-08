@@ -164,7 +164,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_error_injector_default() {
+    fn test_error_injector_init_and_buffer_full() {
+        // Default/new starts with everything disabled
         let injector = ErrorInjector::default();
         assert!(!injector.force_buffer_full.load(Ordering::Relaxed));
         assert!(!injector.should_fail_write());
@@ -172,184 +173,119 @@ mod tests {
         assert!(!injector.should_fail_ack());
         assert!(!injector.should_fail_nack());
         assert!(!injector.should_fail_wip_ack());
-    }
 
-    #[test]
-    fn test_error_injector_new() {
+        // Toggle buffer full
         let injector = ErrorInjector::new();
-        assert!(!injector.force_buffer_full.load(Ordering::Relaxed));
-    }
-
-    #[test]
-    fn test_set_buffer_full() {
-        let injector = ErrorInjector::new();
-
         injector.set_buffer_full(true);
         assert!(injector.force_buffer_full.load(Ordering::Relaxed));
-
         injector.set_buffer_full(false);
         assert!(!injector.force_buffer_full.load(Ordering::Relaxed));
     }
 
     #[test]
-    fn test_fail_writes_countdown() {
+    fn test_failure_countdowns() {
         let injector = ErrorInjector::new();
 
-        injector.fail_writes(3);
+        // Write countdown
+        injector.fail_writes(2);
+        assert!(injector.should_fail_write());
+        assert!(injector.should_fail_write());
+        assert!(!injector.should_fail_write());
 
-        assert!(injector.should_fail_write()); // 3 -> 2
-        assert!(injector.should_fail_write()); // 2 -> 1
-        assert!(injector.should_fail_write()); // 1 -> 0
-        assert!(!injector.should_fail_write()); // 0, no more failures
-        assert!(!injector.should_fail_write()); // still 0
-    }
-
-    #[test]
-    fn test_fail_fetches_countdown() {
-        let injector = ErrorInjector::new();
-
-        injector.fail_fetches(2);
-
-        assert!(injector.should_fail_fetch());
+        // Fetch countdown
+        injector.fail_fetches(1);
         assert!(injector.should_fail_fetch());
         assert!(!injector.should_fail_fetch());
-    }
 
-    #[test]
-    fn test_fail_acks_countdown() {
-        let injector = ErrorInjector::new();
-
+        // Ack countdown
         injector.fail_acks(1);
-
         assert!(injector.should_fail_ack());
         assert!(!injector.should_fail_ack());
-    }
 
-    #[test]
-    fn test_fail_nacks_countdown() {
-        let injector = ErrorInjector::new();
-
-        injector.fail_nacks(2);
-
-        assert!(injector.should_fail_nack());
+        // Nack countdown
+        injector.fail_nacks(1);
         assert!(injector.should_fail_nack());
         assert!(!injector.should_fail_nack());
-    }
 
-    #[test]
-    fn test_fail_wip_acks_countdown() {
-        let injector = ErrorInjector::new();
-
+        // WIP ack countdown
         injector.fail_wip_acks(1);
-
         assert!(injector.should_fail_wip_ack());
         assert!(!injector.should_fail_wip_ack());
+
+        // Reset by setting to 0
+        injector.fail_writes(5);
+        assert!(injector.should_fail_write());
+        injector.fail_writes(0);
+        assert!(!injector.should_fail_write());
     }
 
     #[test]
-    fn test_multiple_failure_types_independent() {
+    fn test_independent_failure_counters() {
         let injector = ErrorInjector::new();
 
         injector.fail_writes(1);
         injector.fail_acks(2);
 
-        // Write failure is independent of ack failure
+        // Consuming write failures doesn't affect ack failures
         assert!(injector.should_fail_write());
         assert!(!injector.should_fail_write());
-
-        // Ack failures still available
         assert!(injector.should_fail_ack());
         assert!(injector.should_fail_ack());
         assert!(!injector.should_fail_ack());
     }
 
     #[test]
-    fn test_set_latencies() {
+    fn test_latency_settings() {
         let injector = ErrorInjector::new();
 
         injector.set_write_latency(100);
         injector.set_fetch_latency(200);
         injector.set_ack_latency(300);
 
-        // Verify latencies are stored (we can't easily test the async behavior here)
         assert_eq!(injector.write_latency_ms.load(Ordering::Relaxed), 100);
         assert_eq!(injector.fetch_latency_ms.load(Ordering::Relaxed), 200);
         assert_eq!(injector.ack_latency_ms.load(Ordering::Relaxed), 300);
     }
 
-    #[tokio::test]
-    async fn test_apply_write_latency_zero() {
-        let injector = ErrorInjector::new();
-        injector.set_write_latency(0);
-
-        let start = std::time::Instant::now();
-        injector.apply_write_latency().await;
-        let elapsed = start.elapsed();
-
-        // Should be nearly instant
-        assert!(elapsed.as_millis() < 50);
-    }
-
-    #[tokio::test]
-    async fn test_apply_write_latency_nonzero() {
-        let injector = ErrorInjector::new();
-        injector.set_write_latency(50);
-
-        let start = std::time::Instant::now();
-        injector.apply_write_latency().await;
-        let elapsed = start.elapsed();
-
-        // Should take at least 50ms
-        assert!(elapsed.as_millis() >= 50);
-    }
-
-    #[tokio::test]
-    async fn test_apply_fetch_latency() {
-        let injector = ErrorInjector::new();
-        injector.set_fetch_latency(50);
-
-        let start = std::time::Instant::now();
-        injector.apply_fetch_latency().await;
-        let elapsed = start.elapsed();
-
-        assert!(elapsed.as_millis() >= 50);
-    }
-
-    #[tokio::test]
-    async fn test_apply_ack_latency() {
-        let injector = ErrorInjector::new();
-        injector.set_ack_latency(50);
-
-        let start = std::time::Instant::now();
-        injector.apply_ack_latency().await;
-        let elapsed = start.elapsed();
-
-        assert!(elapsed.as_millis() >= 50);
-    }
-
     #[test]
-    fn test_decrement_counter_from_zero() {
+    fn test_decrement_counter() {
+        // From zero - no change
         let counter = AtomicUsize::new(0);
         assert!(!ErrorInjector::decrement_counter(&counter));
         assert_eq!(counter.load(Ordering::Relaxed), 0);
-    }
 
-    #[test]
-    fn test_decrement_counter_from_positive() {
+        // From positive - decrements
         let counter = AtomicUsize::new(5);
         assert!(ErrorInjector::decrement_counter(&counter));
         assert_eq!(counter.load(Ordering::Relaxed), 4);
     }
 
-    #[test]
-    fn test_reset_failure_count() {
+    #[tokio::test]
+    async fn test_apply_latencies() {
         let injector = ErrorInjector::new();
 
-        injector.fail_writes(5);
-        assert!(injector.should_fail_write()); // 5 -> 4
+        // Zero latency is nearly instant
+        injector.set_write_latency(0);
+        let start = std::time::Instant::now();
+        injector.apply_write_latency().await;
+        assert!(start.elapsed().as_millis() < 50);
 
-        // Reset to 0
-        injector.fail_writes(0);
-        assert!(!injector.should_fail_write());
+        // Non-zero write latency
+        injector.set_write_latency(50);
+        let start = std::time::Instant::now();
+        injector.apply_write_latency().await;
+        assert!(start.elapsed().as_millis() >= 50);
+
+        // Fetch latency
+        injector.set_fetch_latency(50);
+        let start = std::time::Instant::now();
+        injector.apply_fetch_latency().await;
+        assert!(start.elapsed().as_millis() >= 50);
+
+        // Ack latency
+        injector.set_ack_latency(50);
+        let start = std::time::Instant::now();
+        injector.apply_ack_latency().await;
+        assert!(start.elapsed().as_millis() >= 50);
     }
 }

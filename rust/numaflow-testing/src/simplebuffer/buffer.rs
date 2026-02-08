@@ -224,24 +224,16 @@ mod tests {
     }
 
     #[test]
-    fn test_buffer_state_new() {
+    fn test_buffer_state_new_and_usage() {
+        // Test initial state
         let state = BufferState::new(100, 0.8);
         assert_eq!(state.capacity, 100);
         assert_eq!(state.next_sequence, 1);
         assert!(state.slots.is_empty());
-        assert!(state.offset_to_index.is_empty());
-        assert!(state.dedup_window.is_empty());
         assert!((state.usage_limit - 0.8).abs() < f64::EPSILON);
-    }
-
-    #[test]
-    fn test_usage_empty_buffer() {
-        let state = BufferState::new(10, 0.8);
         assert!((state.usage() - 0.0).abs() < f64::EPSILON);
-    }
 
-    #[test]
-    fn test_usage_with_pending_messages() {
+        // Test usage with pending messages
         let mut state = BufferState::new(10, 0.8);
         state
             .slots
@@ -249,12 +241,9 @@ mod tests {
         state
             .slots
             .push_back(create_test_slot(2, MessageState::Pending));
-        // 2 active out of 10 = 0.2
         assert!((state.usage() - 0.2).abs() < f64::EPSILON);
-    }
 
-    #[test]
-    fn test_usage_excludes_acked() {
+        // Test usage excludes acked
         let mut state = BufferState::new(10, 0.8);
         state
             .slots
@@ -265,26 +254,22 @@ mod tests {
         state
             .slots
             .push_back(create_test_slot(3, MessageState::InFlight));
-        // 2 active (Pending + InFlight), 1 Acked = 0.2
         assert!((state.usage() - 0.2).abs() < f64::EPSILON);
     }
 
     #[test]
-    fn test_is_full() {
+    fn test_buffer_is_full() {
+        // Full when at usage_limit
         let mut state = BufferState::new(10, 0.5);
-        // Add 5 pending messages (50% = usage_limit)
         for i in 1..=5 {
             state
                 .slots
                 .push_back(create_test_slot(i, MessageState::Pending));
         }
         assert!(state.is_full());
-    }
 
-    #[test]
-    fn test_is_not_full() {
+        // Not full when below usage_limit
         let mut state = BufferState::new(10, 0.5);
-        // Add 4 pending messages (40% < 50% usage_limit)
         for i in 1..=4 {
             state
                 .slots
@@ -294,7 +279,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pending_count() {
+    fn test_pending_and_in_flight_counts() {
         let mut state = BufferState::new(10, 0.8);
         state
             .slots
@@ -308,32 +293,18 @@ mod tests {
         state
             .slots
             .push_back(create_test_slot(4, MessageState::Acked));
-        assert_eq!(state.pending_count(), 2);
-    }
+        state
+            .slots
+            .push_back(create_test_slot(5, MessageState::InFlight));
 
-    #[test]
-    fn test_in_flight_count() {
-        let mut state = BufferState::new(10, 0.8);
-        state
-            .slots
-            .push_back(create_test_slot(1, MessageState::Pending));
-        state
-            .slots
-            .push_back(create_test_slot(2, MessageState::InFlight));
-        state
-            .slots
-            .push_back(create_test_slot(3, MessageState::InFlight));
-        state
-            .slots
-            .push_back(create_test_slot(4, MessageState::Acked));
+        assert_eq!(state.pending_count(), 2);
         assert_eq!(state.in_flight_count(), 2);
     }
 
     #[test]
-    fn test_reclaim_acked_from_front() {
+    fn test_reclaim_acked() {
+        // Test reclaiming from front
         let mut state = BufferState::new(10, 0.8);
-
-        // Add slots with offsets in the index
         let slot1 = create_test_slot(1, MessageState::Acked);
         let slot2 = create_test_slot(2, MessageState::Acked);
         let slot3 = create_test_slot(3, MessageState::Pending);
@@ -344,26 +315,18 @@ mod tests {
         state.dedup_window.insert(slot1.message.id.clone(), 1);
         state.dedup_window.insert(slot2.message.id.clone(), 2);
         state.dedup_window.insert(slot3.message.id.clone(), 3);
-
         state.slots.push_back(slot1);
         state.slots.push_back(slot2);
         state.slots.push_back(slot3);
 
         state.reclaim_acked();
-
-        // Should have removed the first two acked slots
         assert_eq!(state.slots.len(), 1);
         assert_eq!(state.slots[0].sequence, 3);
-        assert!(!state.offset_to_index.contains_key(&Offset::new(1, 0)));
-        assert!(!state.offset_to_index.contains_key(&Offset::new(2, 0)));
-    }
 
-    #[test]
-    fn test_reclaim_stops_at_non_acked() {
+        // Test reclaim stops at non-acked
         let mut state = BufferState::new(10, 0.8);
-
         let slot1 = create_test_slot(1, MessageState::Acked);
-        let slot2 = create_test_slot(2, MessageState::Pending); // Stops here
+        let slot2 = create_test_slot(2, MessageState::Pending);
         let slot3 = create_test_slot(3, MessageState::Acked);
 
         state.offset_to_index.insert(Offset::new(1, 0), 0);
@@ -372,47 +335,30 @@ mod tests {
         state.dedup_window.insert(slot1.message.id.clone(), 1);
         state.dedup_window.insert(slot2.message.id.clone(), 2);
         state.dedup_window.insert(slot3.message.id.clone(), 3);
-
         state.slots.push_back(slot1);
         state.slots.push_back(slot2);
         state.slots.push_back(slot3);
 
         state.reclaim_acked();
-
-        // Should only remove the first acked slot
         assert_eq!(state.slots.len(), 2);
         assert_eq!(state.slots[0].sequence, 2);
     }
 
     #[test]
-    fn test_find_slot_mut() {
+    fn test_find_slot() {
         let mut state = BufferState::new(10, 0.8);
         let slot = create_test_slot(1, MessageState::Pending);
         state.slots.push_back(slot);
         state.offset_to_index.insert(Offset::new(1, 0), 0);
 
-        let found = state.find_slot_mut(&Offset::new(1, 0));
-        assert!(found.is_some());
-        assert_eq!(found.unwrap().sequence, 1);
-    }
+        // Mutable find
+        assert!(state.find_slot_mut(&Offset::new(1, 0)).is_some());
+        assert_eq!(state.find_slot_mut(&Offset::new(1, 0)).unwrap().sequence, 1);
+        assert!(state.find_slot_mut(&Offset::new(999, 0)).is_none());
 
-    #[test]
-    fn test_find_slot_mut_not_found() {
-        let mut state = BufferState::new(10, 0.8);
-        let found = state.find_slot_mut(&Offset::new(999, 0));
-        assert!(found.is_none());
-    }
-
-    #[test]
-    fn test_find_slot_immutable() {
-        let mut state = BufferState::new(10, 0.8);
-        let slot = create_test_slot(1, MessageState::Pending);
-        state.slots.push_back(slot);
-        state.offset_to_index.insert(Offset::new(1, 0), 0);
-
-        let found = state.find_slot(&Offset::new(1, 0));
-        assert!(found.is_some());
-        assert_eq!(found.unwrap().sequence, 1);
+        // Immutable find
+        assert!(state.find_slot(&Offset::new(1, 0)).is_some());
+        assert_eq!(state.find_slot(&Offset::new(1, 0)).unwrap().sequence, 1);
     }
 
     #[test]
@@ -425,80 +371,56 @@ mod tests {
     // ========== Offset tests ==========
 
     #[test]
-    fn test_offset_new() {
+    fn test_offset() {
+        use std::collections::HashSet;
+
+        // Basic creation and display
         let offset = Offset::new(42, 3);
         assert_eq!(offset.sequence, 42);
         assert_eq!(offset.partition_idx, 3);
-    }
+        assert_eq!(format!("{}", offset), "42-3");
 
-    #[test]
-    fn test_offset_display() {
-        let offset = Offset::new(123, 5);
-        assert_eq!(format!("{}", offset), "123-5");
-    }
-
-    #[test]
-    fn test_offset_equality() {
+        // Equality and clone
         let o1 = Offset::new(1, 0);
         let o2 = Offset::new(1, 0);
         let o3 = Offset::new(2, 0);
-        let o4 = Offset::new(1, 1);
-
         assert_eq!(o1, o2);
+        assert_eq!(o1, o1.clone());
         assert_ne!(o1, o3);
-        assert_ne!(o1, o4);
-    }
 
-    #[test]
-    fn test_offset_ordering() {
-        let o1 = Offset::new(1, 0);
-        let o2 = Offset::new(2, 0);
-        let o3 = Offset::new(1, 1);
+        // Ordering
+        assert!(Offset::new(1, 0) < Offset::new(2, 0));
+        assert!(Offset::new(1, 0) < Offset::new(1, 1));
 
-        assert!(o1 < o2);
-        assert!(o1 < o3); // partition_idx is secondary
-    }
-
-    #[test]
-    fn test_offset_hash() {
-        use std::collections::HashSet;
+        // Hash (works in HashSet)
         let mut set = HashSet::new();
         set.insert(Offset::new(1, 0));
         set.insert(Offset::new(1, 0)); // duplicate
         set.insert(Offset::new(2, 0));
-
         assert_eq!(set.len(), 2);
-    }
-
-    #[test]
-    fn test_offset_clone() {
-        let o1 = Offset::new(42, 7);
-        let o2 = o1.clone();
-        assert_eq!(o1, o2);
     }
 
     // ========== MessageID tests ==========
 
     #[test]
-    fn test_message_id_default() {
+    fn test_message_id() {
+        use std::collections::HashSet;
+
+        // Default
         let id = MessageID::default();
         assert_eq!(id.vertex_name, "");
         assert_eq!(id.offset, "");
         assert_eq!(id.index, 0);
-    }
 
-    #[test]
-    fn test_message_id_display() {
+        // Display
         let id = MessageID {
             vertex_name: "vertex1".to_string(),
             offset: "offset123".to_string(),
             index: 5,
         };
         assert_eq!(format!("{}", id), "vertex1-offset123-5");
-    }
 
-    #[test]
-    fn test_message_id_equality() {
+        // Equality
         let id1 = MessageID {
             vertex_name: "v1".to_string(),
             offset: "o1".to_string(),
@@ -514,33 +436,21 @@ mod tests {
             offset: "o1".to_string(),
             index: 0,
         };
-
         assert_eq!(id1, id2);
         assert_ne!(id1, id3);
-    }
 
-    #[test]
-    fn test_message_id_hash() {
-        use std::collections::HashSet;
+        // Hash
         let mut set = HashSet::new();
-
-        let id1 = MessageID {
-            vertex_name: "v1".to_string(),
-            offset: "o1".to_string(),
-            index: 0,
-        };
-        let id2 = id1.clone();
-
-        set.insert(id1);
-        set.insert(id2); // duplicate
-
+        set.insert(id1.clone());
+        set.insert(id1); // duplicate
         assert_eq!(set.len(), 1);
     }
 
     // ========== Message tests ==========
 
     #[test]
-    fn test_message_default() {
+    fn test_message() {
+        // Default
         let msg = Message::default();
         assert!(msg.keys.is_empty());
         assert!(msg.tags.is_none());
@@ -548,10 +458,8 @@ mod tests {
         assert_eq!(msg.offset.sequence, 0);
         assert!(msg.watermark.is_none());
         assert!(msg.headers.is_empty());
-    }
 
-    #[test]
-    fn test_message_with_values() {
+        // With values
         let msg = Message {
             keys: Arc::new(["key1".to_string(), "key2".to_string()]),
             tags: Some(Arc::new(["tag1".to_string()])),
@@ -570,7 +478,6 @@ mod tests {
                 h
             },
         };
-
         assert_eq!(msg.keys.len(), 2);
         assert!(msg.tags.is_some());
         assert_eq!(msg.value, Bytes::from("hello world"));

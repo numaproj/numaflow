@@ -216,159 +216,121 @@ mod tests {
     }
 
     #[test]
-    fn test_writer_name() {
+    fn test_writer_basics() {
         let (writer, _) = create_test_writer();
         assert_eq!(writer.name(), "test-writer");
-    }
-
-    #[test]
-    fn test_is_full_empty_buffer() {
-        let (writer, _) = create_test_writer();
         assert!(!writer.is_full());
-    }
 
-    #[test]
-    fn test_is_full_forced() {
-        let (writer, _) = create_test_writer();
+        // Clone works
+        let writer2 = writer.clone();
+        assert_eq!(writer.name(), writer2.name());
+
+        // Forced buffer full
         writer.error_injector.set_buffer_full(true);
         assert!(writer.is_full());
     }
 
     #[tokio::test]
-    async fn test_async_write_success() {
+    async fn test_write_operations() {
+        // Basic write
         let (writer, state) = create_test_writer();
-        let msg = create_test_message("msg1");
-
-        let pending = writer.async_write(msg).await.unwrap();
+        let pending = writer
+            .async_write(create_test_message("msg1"))
+            .await
+            .unwrap();
         assert!(!pending.is_duplicate);
         assert_eq!(pending.offset.sequence, 1);
+        assert_eq!(state.read().pending_count(), 1);
 
-        // Verify message was added to buffer
-        {
-            let s = state.read();
-            assert_eq!(s.slots.len(), 1);
-            assert_eq!(s.pending_count(), 1);
-        }
-    }
-
-    #[tokio::test]
-    async fn test_async_write_multiple() {
+        // Multiple writes
         let (writer, state) = create_test_writer();
-
         for i in 1..=3 {
-            let msg = create_test_message(&format!("msg{}", i));
-            let pending = writer.async_write(msg).await.unwrap();
+            let pending = writer
+                .async_write(create_test_message(&format!("msg{}", i)))
+                .await
+                .unwrap();
             assert_eq!(pending.offset.sequence, i);
         }
+        assert_eq!(state.read().slots.len(), 3);
 
-        {
-            let s = state.read();
-            assert_eq!(s.slots.len(), 3);
-        }
-    }
-
-    #[tokio::test]
-    async fn test_async_write_duplicate_detection() {
-        let (writer, _) = create_test_writer();
-        let msg1 = create_test_message("same-id");
-        let msg2 = create_test_message("same-id");
-
-        let pending1 = writer.async_write(msg1).await.unwrap();
-        assert!(!pending1.is_duplicate);
-
-        let pending2 = writer.async_write(msg2).await.unwrap();
-        assert!(pending2.is_duplicate);
-        assert_eq!(pending1.offset, pending2.offset);
-    }
-
-    #[tokio::test]
-    async fn test_async_write_buffer_full() {
-        let (writer, _) = create_test_writer();
-
-        // Fill the buffer (capacity 10, usage_limit 0.8 = 8 messages)
-        for i in 1..=8 {
-            let msg = create_test_message(&format!("msg{}", i));
-            writer.async_write(msg).await.unwrap();
-        }
-
-        // 9th message should fail
-        let msg = create_test_message("msg9");
-        let result = writer.async_write(msg).await;
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), WriteError::BufferFull));
-    }
-
-    #[tokio::test]
-    async fn test_async_write_forced_buffer_full() {
-        let (writer, _) = create_test_writer();
-        writer.error_injector.set_buffer_full(true);
-
-        let msg = create_test_message("msg1");
-        let result = writer.async_write(msg).await;
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), WriteError::BufferFull));
-    }
-
-    #[tokio::test]
-    async fn test_async_write_injected_failure() {
-        let (writer, _) = create_test_writer();
-        writer.error_injector.fail_writes(1);
-
-        let msg = create_test_message("msg1");
-        let result = writer.async_write(msg).await;
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), WriteError::WriteFailed(_)));
-    }
-
-    #[tokio::test]
-    async fn test_resolve_pending_write() {
-        let (writer, _) = create_test_writer();
-        let msg = create_test_message("msg1");
-
-        let pending = writer.async_write(msg).await.unwrap();
-        let result = writer.resolve(pending).await.unwrap();
-
+        // Convenience write method
+        let (writer, state) = create_test_writer();
+        let result = writer.write(create_test_message("msg1")).await.unwrap();
         assert_eq!(result.offset.sequence, 1);
         assert!(!result.is_duplicate);
+        assert_eq!(state.read().slots.len(), 1);
     }
 
     #[tokio::test]
-    async fn test_resolve_duplicate() {
+    async fn test_duplicate_detection() {
         let (writer, _) = create_test_writer();
-        let msg1 = create_test_message("same-id");
-        let msg2 = create_test_message("same-id");
 
-        let pending1 = writer.async_write(msg1).await.unwrap();
-        let result1 = writer.resolve(pending1).await.unwrap();
+        // First write
+        let pending1 = writer
+            .async_write(create_test_message("same-id"))
+            .await
+            .unwrap();
+        assert!(!pending1.is_duplicate);
+
+        // Duplicate detected
+        let pending2 = writer
+            .async_write(create_test_message("same-id"))
+            .await
+            .unwrap();
+        assert!(pending2.is_duplicate);
+        assert_eq!(pending1.offset, pending2.offset);
+
+        // Resolve works for both
+        let result1 = writer
+            .resolve(PendingWrite {
+                offset: pending1.offset.clone(),
+                is_duplicate: false,
+            })
+            .await
+            .unwrap();
         assert!(!result1.is_duplicate);
 
-        let pending2 = writer.async_write(msg2).await.unwrap();
-        let result2 = writer.resolve(pending2).await.unwrap();
+        let result2 = writer
+            .resolve(PendingWrite {
+                offset: pending2.offset,
+                is_duplicate: true,
+            })
+            .await
+            .unwrap();
         assert!(result2.is_duplicate);
     }
 
     #[tokio::test]
-    async fn test_write_convenience_method() {
-        let (writer, state) = create_test_writer();
-        let msg = create_test_message("msg1");
-
-        let result = writer.write(msg).await.unwrap();
-        assert_eq!(result.offset.sequence, 1);
-        assert!(!result.is_duplicate);
-
-        {
-            let s = state.read();
-            assert_eq!(s.slots.len(), 1);
+    async fn test_buffer_full() {
+        // Natural buffer full (capacity 10, usage_limit 0.8 = 8 messages)
+        let (writer, _) = create_test_writer();
+        for i in 1..=8 {
+            writer
+                .async_write(create_test_message(&format!("msg{}", i)))
+                .await
+                .unwrap();
         }
+        let result = writer.async_write(create_test_message("msg9")).await;
+        assert!(matches!(result.unwrap_err(), WriteError::BufferFull));
+
+        // Forced buffer full
+        let (writer, _) = create_test_writer();
+        writer.error_injector.set_buffer_full(true);
+        let result = writer.async_write(create_test_message("msg1")).await;
+        assert!(matches!(result.unwrap_err(), WriteError::BufferFull));
     }
 
     #[tokio::test]
-    async fn test_write_with_failure() {
+    async fn test_injected_failure() {
         let (writer, _) = create_test_writer();
         writer.error_injector.fail_writes(1);
+        let result = writer.async_write(create_test_message("msg1")).await;
+        assert!(matches!(result.unwrap_err(), WriteError::WriteFailed(_)));
 
-        let msg = create_test_message("msg1");
-        let result = writer.write(msg).await;
+        // Also test via convenience method
+        let (writer, _) = create_test_writer();
+        writer.error_injector.fail_writes(1);
+        let result = writer.write(create_test_message("msg1")).await;
         assert!(result.is_err());
     }
 
@@ -384,43 +346,23 @@ mod tests {
     }
 
     #[test]
-    fn test_writer_clone() {
-        let (writer, _) = create_test_writer();
-        let writer2 = writer.clone();
-        assert_eq!(writer.name(), writer2.name());
-    }
+    fn test_write_error_and_result_types() {
+        // WriteError display
+        assert_eq!(format!("{}", WriteError::BufferFull), "buffer is full");
+        assert_eq!(
+            format!("{}", WriteError::WriteFailed("lost".to_string())),
+            "write failed: lost"
+        );
 
-    // ========== WriteError tests ==========
-
-    #[test]
-    fn test_write_error_buffer_full_display() {
-        let err = WriteError::BufferFull;
-        assert_eq!(format!("{}", err), "buffer is full");
-    }
-
-    #[test]
-    fn test_write_error_write_failed_display() {
-        let err = WriteError::WriteFailed("connection lost".to_string());
-        assert_eq!(format!("{}", err), "write failed: connection lost");
-    }
-
-    #[test]
-    fn test_write_error_is_error() {
+        // WriteError is std::error::Error
         let err: Box<dyn std::error::Error> = Box::new(WriteError::BufferFull);
         assert!(err.to_string().contains("buffer is full"));
-    }
 
-    // ========== WriteResult tests ==========
-
-    #[test]
-    fn test_write_result_new() {
+        // WriteResult constructors
         let result = WriteResult::new(Offset::new(42, 0));
         assert_eq!(result.offset.sequence, 42);
         assert!(!result.is_duplicate);
-    }
 
-    #[test]
-    fn test_write_result_duplicate() {
         let result = WriteResult::duplicate(Offset::new(42, 0));
         assert_eq!(result.offset.sequence, 42);
         assert!(result.is_duplicate);
