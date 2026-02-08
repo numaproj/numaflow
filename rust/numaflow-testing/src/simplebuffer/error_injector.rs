@@ -353,4 +353,3 @@ mod tests {
         assert!(!injector.should_fail_write());
     }
 }
-

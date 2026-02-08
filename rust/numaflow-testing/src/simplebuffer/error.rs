@@ -76,7 +76,10 @@ mod tests {
     #[test]
     fn test_fetch_error_display() {
         let err = SimpleBufferError::Fetch("connection lost".to_string());
-        assert_eq!(format!("{}", err), "Failed to fetch messages: connection lost");
+        assert_eq!(
+            format!("{}", err),
+            "Failed to fetch messages: connection lost"
+        );
     }
 
     #[test]
