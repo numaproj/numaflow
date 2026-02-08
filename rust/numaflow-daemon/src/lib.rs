@@ -57,10 +57,9 @@ pub async fn run_monovertex(mvtx_name: String, cln_token: CancellationToken) -> 
     info!("MonoVertex name is {}", mvtx_name);
 
     // Create two channels, one serving gRPC requests, the other HTTP.
-    // Given the request rate a daemon server expect to receive, a buffer size of 1000 should be sufficent.
-    // Buffer size 1000 is sufficient for the expected request rate.
-    let (grpc_tx, grpc_rx): (TlsStreamSender, TlsStreamReceiver) = mpsc::channel(1000);
-    let (http_tx, http_rx): (TlsStreamSender, TlsStreamReceiver) = mpsc::channel(1000);
+    // A buffer size of 500 should be sufficient to handle the expected request rate.
+    let (grpc_tx, grpc_rx): (TlsStreamSender, TlsStreamReceiver) = mpsc::channel(500);
+    let (http_tx, http_rx): (TlsStreamSender, TlsStreamReceiver) = mpsc::channel(500);
 
     // Use a join set to manage spawned tasks.
     let mut join_set = JoinSet::new();
