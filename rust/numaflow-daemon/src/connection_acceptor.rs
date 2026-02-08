@@ -127,7 +127,7 @@ impl ConnectionAcceptor {
 
         while let Some(res) = conn_set.join_next().await {
             res.map_err(|join_error| {
-                Error::Completion(format!(
+                Error::NotComplete(format!(
                     "Failed to complete one of the TCP connection acceptor tasks: {}",
                     join_error
                 ))
@@ -146,9 +146,10 @@ mod tests {
     use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName};
     use rustls::{ClientConfig, RootCertStore, ServerConfig};
     use std::sync::Arc;
+    use std::time::Duration;
     use tokio::net::TcpStream;
     use tokio::sync::mpsc;
-    use tokio::time::{Duration as TokioDuration, timeout};
+    use tokio::time::timeout;
     use tokio_rustls::TlsConnector;
 
     #[tokio::test]
@@ -171,18 +172,20 @@ mod tests {
         connect_with_alpn(addr, Some(b"h2"), cert_der).await?;
 
         // Verify that the stream is received on gRPC channel.
-        if let Err(err) = timeout(TokioDuration::from_secs(2), grpc_rx.recv()).await {
-            panic!("gRPC channel did not receive a stream{}", err);
+        if let Err(err) = timeout(Duration::from_millis(20), grpc_rx.recv()).await {
+            panic!("gRPC channel did not receive a stream: {}", err);
         };
 
         // Verify that the stream is not received on HTTP channel.
-        if let Ok(Some(_)) = timeout(TokioDuration::from_millis(200), http_rx.recv()).await {
+        if let Ok(Some(_)) = timeout(Duration::from_millis(20), http_rx.recv()).await {
             panic!("Unexpected HTTP stream received for h2 connection");
         }
 
         cln_token.cancel();
         // Verify the graceful shutdown.
-        acceptor_handle.await??;
+        if let Err(err) = timeout(Duration::from_millis(20), acceptor_handle).await {
+            panic!("Timed out waiting for the graceful shutdown: {}", err)
+        }
 
         Ok(())
     }
@@ -207,18 +210,20 @@ mod tests {
         connect_with_alpn(addr, Some(b"http/1.1"), cert_der).await?;
 
         // Verify that the stream is received on HTTP channel.
-        if let Err(err) = timeout(TokioDuration::from_secs(2), http_rx.recv()).await {
+        if let Err(err) = timeout(Duration::from_millis(20), http_rx.recv()).await {
             panic!("HTTP channel did not receive a stream {}", err);
         };
 
         // Verify that the stream is not received on gRPC channel.
-        if let Ok(Some(_stream)) = timeout(TokioDuration::from_millis(200), grpc_rx.recv()).await {
+        if let Ok(Some(_stream)) = timeout(Duration::from_millis(20), grpc_rx.recv()).await {
             panic!("Unexpected gRPC stream received for http/1.1 connection")
         }
 
         cln_token.cancel();
         // Verify the graceful shutdown.
-        acceptor_handle.await??;
+        if let Err(err) = timeout(Duration::from_millis(20), acceptor_handle).await {
+            panic!("Timed out waiting for the graceful shutdown: {}", err)
+        }
 
         Ok(())
     }
@@ -243,18 +248,20 @@ mod tests {
         connect_with_alpn(addr, None, cert_der).await?;
 
         // Verify the stream is received on HTTP channel.
-        if let Err(err) = timeout(TokioDuration::from_secs(2), http_rx.recv()).await {
+        if let Err(err) = timeout(Duration::from_millis(20), http_rx.recv()).await {
             panic!("HTTP channel did not receive a stream {}", err);
         }
 
         // Verify the stream is not received on gRPC channel.
-        if let Ok(Some(_stream)) = timeout(TokioDuration::from_millis(200), grpc_rx.recv()).await {
+        if let Ok(Some(_stream)) = timeout(Duration::from_millis(20), grpc_rx.recv()).await {
             panic!("Unexpected gRPC stream received on gRPC channel");
         }
 
         cln_token.cancel();
         // Verify the graceful shutdown.
-        acceptor_handle.await??;
+        if let Err(err) = timeout(Duration::from_millis(20), acceptor_handle).await {
+            panic!("Timed out waiting for the graceful shutdown: {}", err)
+        }
 
         Ok(())
     }

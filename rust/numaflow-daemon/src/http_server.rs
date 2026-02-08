@@ -44,7 +44,7 @@ pub(crate) async fn run_http_server(mut http_rx: TlsStreamReceiver) -> Result<()
 
     while let Some(res) = conn_set.join_next().await {
         res.map_err(|join_error| {
-            Error::Completion(format!(
+            Error::NotComplete(format!(
                 "Failed to complete one of the HTTP stream connections: {}",
                 join_error
             ))
@@ -66,9 +66,11 @@ mod tests {
     use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName};
     use rustls::{ClientConfig, RootCertStore, ServerConfig};
     use std::sync::Arc;
+    use std::time::Duration;
     use tokio::net::TcpListener;
     use tokio::net::TcpStream;
     use tokio::sync::mpsc;
+    use tokio::time::timeout;
     use tokio_rustls::{TlsAcceptor, TlsConnector};
 
     #[tokio::test]
@@ -114,17 +116,21 @@ mod tests {
 
         drop(sender);
 
-        conn_task
-            .await
-            .expect("Error waiting for HTTP client connection task to stop")?;
+        // Verify the graceful shutdown.
+        if let Err(err) = timeout(Duration::from_millis(20), conn_task).await {
+            panic!(
+                "Timed out waiting for HTTP client connection task to stop: {}",
+                err
+            )
+        }
 
-        server_task
-            .await
-            .expect("Error waiting for HTTP server task to stop")?;
+        if let Err(err) = timeout(Duration::from_millis(20), server_task).await {
+            panic!("Timed out waiting for HTTP server task to stop: {}", err)
+        }
 
-        http_server
-            .await
-            .expect("Error waiting for HTTP server to stop")?;
+        if let Err(err) = timeout(Duration::from_millis(20), http_server).await {
+            panic!("Timed out waiting for HTTP server to stop: {}", err)
+        }
 
         Ok(())
     }

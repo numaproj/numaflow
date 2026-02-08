@@ -19,7 +19,7 @@ pub(crate) async fn run_grpc_server(
         .add_service(grpc_service)
         .serve_with_incoming_shutdown(incoming_stream, cln_token.cancelled())
         .await
-        .map_err(|e| Error::Completion(format!("Failed to terminate the gRPC server: {}", e)))?;
+        .map_err(|e| Error::NotComplete(format!("Failed to terminate the gRPC server: {}", e)))?;
 
     Ok(())
 }
@@ -28,8 +28,10 @@ pub(crate) async fn run_grpc_server(
 mod tests {
     use super::*;
 
+    use std::panic;
+    use std::time::Duration;
     use tokio::sync::mpsc;
-    use tokio::time::{Duration, timeout};
+    use tokio::time::timeout;
 
     #[tokio::test]
     async fn stops_on_cancellation()
@@ -42,7 +44,7 @@ mod tests {
 
         cln_token.cancel();
 
-        if let Err(e) = timeout(Duration::from_millis(10), handle).await {
+        if let Err(e) = timeout(Duration::from_millis(20), handle).await {
             panic!("Failed waiting for the gRPC server to stop: {}", e);
         }
         let _ = tx;
@@ -58,7 +60,9 @@ mod tests {
 
         let handle = tokio::spawn(async move { run_grpc_server(rx, cln_token_copy).await });
 
-        assert!(timeout(Duration::from_millis(10), handle).await.is_err());
+        if let Ok(_) = timeout(Duration::from_millis(20), handle).await {
+            panic!("Unexpected termination of the gRPC server");
+        }
 
         let _ = tx;
         Ok(())

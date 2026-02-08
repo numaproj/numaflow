@@ -124,7 +124,7 @@ pub async fn run_monovertex(
 
 fn generate_self_signed_tls_config() -> Result<Arc<ServerConfig>, Error> {
     let mut params = CertificateParams::new(vec!["localhost".to_string()]).map_err(|e| {
-        Error::ConnConfig(format!("Failed to create certificate parameters: {}", e))
+        Error::TlsConfiguration(format!("Failed to create certificate parameters: {}", e))
     })?;
 
     let mut dn = DistinguishedName::new();
@@ -143,10 +143,10 @@ fn generate_self_signed_tls_config() -> Result<Arc<ServerConfig>, Error> {
     params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
 
     let signing_key = KeyPair::generate()
-        .map_err(|e| Error::ConnConfig(format!("Failed to generate signing key: {}", e)))?;
+        .map_err(|e| Error::TlsConfiguration(format!("Failed to generate signing key: {}", e)))?;
 
     let cert = params.self_signed(&signing_key).map_err(|e| {
-        Error::ConnConfig(format!("Failed to generate self-signed certificate: {}", e))
+        Error::TlsConfiguration(format!("Failed to generate self-signed certificate: {}", e))
     })?;
 
     let cert_der = cert.der().clone();
@@ -156,7 +156,7 @@ fn generate_self_signed_tls_config() -> Result<Arc<ServerConfig>, Error> {
     let mut cfg = ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(vec![cert_der], key_der)
-        .map_err(|e| Error::ConnConfig(format!("Failed to build server config: {}", e)))?;
+        .map_err(|e| Error::TlsConfiguration(format!("Failed to build server config: {}", e)))?;
 
     // Serve both http and gRPC.
     // Note: order matters, most preferred first.
