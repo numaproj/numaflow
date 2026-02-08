@@ -60,7 +60,7 @@ mod tests {
 
         let handle = tokio::spawn(async move { run_grpc_server(rx, cln_token_copy).await });
 
-        if let Ok(_) = timeout(Duration::from_millis(20), handle).await {
+        if (timeout(Duration::from_millis(20), handle).await).is_ok() {
             panic!("Unexpected termination of the gRPC server");
         }
 

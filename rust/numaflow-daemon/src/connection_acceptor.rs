@@ -1,11 +1,22 @@
 use crate::TlsStreamSender;
 use crate::error::{Error, Result};
 
+use rcgen::{
+    CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose,
+};
+use rustls::ServerConfig;
+use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
+use std::net::{SocketAddr, TcpListener as StdTcpListener};
+use std::sync::Arc;
+use time::{Duration, OffsetDateTime};
 use tokio::net::TcpListener;
 use tokio::task::JoinSet;
 use tokio_rustls::TlsAcceptor;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
+
+/// Matches the DaemonServicePort in pkg/apis/numaflow/v1alpha1/const.go
+const DAEMON_SERVICE_PORT: u16 = 4327;
 
 /// ConnectionAcceptor accepts incoming connections and
 /// dispatches them to the either gRPC or HTTP channels based on the connection type.
@@ -24,6 +35,76 @@ pub(crate) struct ConnectionAcceptor {
 
 impl ConnectionAcceptor {
     pub(crate) fn new(
+        grpc_tx: TlsStreamSender,
+        http_tx: TlsStreamSender,
+        cln_token: CancellationToken,
+    ) -> Result<Self> {
+        let addr: SocketAddr = format!("[::]:{}", DAEMON_SERVICE_PORT)
+            .parse::<SocketAddr>()
+            .map_err(|e| Error::Address(e.to_string()))?;
+        let std_listener = StdTcpListener::bind(addr)?;
+        std_listener.set_nonblocking(true)?;
+        let tcp_listener = TcpListener::from_std(std_listener)?;
+
+        let tls_config = Self::generate_self_signed_tls_config()?;
+        let tls_acceptor = TlsAcceptor::from(tls_config);
+        Ok(Self::new_with_tls_acceptor(
+            tcp_listener,
+            tls_acceptor,
+            grpc_tx,
+            http_tx,
+            cln_token,
+        ))
+    }
+
+    fn generate_self_signed_tls_config() -> Result<Arc<ServerConfig>> {
+        let mut params = CertificateParams::new(vec!["localhost".to_string()]).map_err(|e| {
+            Error::TlsConfiguration(format!("Failed to create certificate parameters: {}", e))
+        })?;
+
+        let mut dn = DistinguishedName::new();
+        dn.push(DnType::OrganizationName, "Numaproj");
+        params.distinguished_name = dn;
+
+        let not_before = OffsetDateTime::now_utc();
+        params.not_before = not_before;
+        params.not_after = not_before + Duration::days(365);
+
+        params.key_usages = vec![
+            KeyUsagePurpose::KeyEncipherment,
+            KeyUsagePurpose::DigitalSignature,
+        ];
+
+        params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
+
+        let signing_key = KeyPair::generate().map_err(|e| {
+            Error::TlsConfiguration(format!("Failed to generate signing key: {}", e))
+        })?;
+
+        let cert = params.self_signed(&signing_key).map_err(|e| {
+            Error::TlsConfiguration(format!("Failed to generate self-signed certificate: {}", e))
+        })?;
+
+        let cert_der = cert.der().clone();
+        let key_der = PrivatePkcs8KeyDer::from(signing_key.serialize_der());
+        let key_der = PrivateKeyDer::from(key_der);
+
+        let mut cfg = ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(vec![cert_der], key_der)
+            .map_err(|e| {
+                Error::TlsConfiguration(format!("Failed to build server config: {}", e))
+            })?;
+
+        // Serve both http and gRPC.
+        // Note: order matters, most preferred first.
+        // We choose http/1.1 first because it's more widely supported.
+        cfg.alpn_protocols = vec![b"http/1.1".to_vec(), b"h2".to_vec()];
+
+        Ok(Arc::new(cfg))
+    }
+
+    fn new_with_tls_acceptor(
         tcp_listener: TcpListener,
         tls_acceptor: TlsAcceptor,
         grpc_tx: TlsStreamSender,
@@ -163,8 +244,13 @@ mod tests {
         let (http_tx, mut http_rx) = mpsc::channel(1);
         let cln_token = CancellationToken::new();
 
-        let acceptor =
-            ConnectionAcceptor::new(listener, tls_acceptor, grpc_tx, http_tx, cln_token.clone());
+        let acceptor = ConnectionAcceptor::new_with_tls_acceptor(
+            listener,
+            tls_acceptor,
+            grpc_tx,
+            http_tx,
+            cln_token.clone(),
+        );
 
         let acceptor_handle = tokio::spawn(async move { acceptor.run().await });
 
@@ -201,8 +287,13 @@ mod tests {
         let (http_tx, mut http_rx) = mpsc::channel(1);
         let cln_token = CancellationToken::new();
 
-        let acceptor =
-            ConnectionAcceptor::new(listener, tls_acceptor, grpc_tx, http_tx, cln_token.clone());
+        let acceptor = ConnectionAcceptor::new_with_tls_acceptor(
+            listener,
+            tls_acceptor,
+            grpc_tx,
+            http_tx,
+            cln_token.clone(),
+        );
 
         let acceptor_handle = tokio::spawn(async move { acceptor.run().await });
 
@@ -239,8 +330,13 @@ mod tests {
         let (http_tx, mut http_rx) = mpsc::channel(1);
         let cln_token = CancellationToken::new();
 
-        let acceptor =
-            ConnectionAcceptor::new(listener, tls_acceptor, grpc_tx, http_tx, cln_token.clone());
+        let acceptor = ConnectionAcceptor::new_with_tls_acceptor(
+            listener,
+            tls_acceptor,
+            grpc_tx,
+            http_tx,
+            cln_token.clone(),
+        );
 
         let acceptor_handle = tokio::spawn(async move { acceptor.run().await });
 
