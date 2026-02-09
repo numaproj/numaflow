@@ -21,12 +21,16 @@ pub struct ErrorInjector {
     fail_next_nacks: AtomicUsize,
     /// Fail the next N wip acks.
     fail_next_wip_acks: AtomicUsize,
+    /// Fail the next N resolves.
+    fail_next_resolves: AtomicUsize,
     /// Artificial write latency in milliseconds.
     write_latency_ms: AtomicU64,
     /// Artificial fetch latency in milliseconds.
     fetch_latency_ms: AtomicU64,
     /// Artificial ack latency in milliseconds.
     ack_latency_ms: AtomicU64,
+    /// Artificial resolve latency in milliseconds.
+    resolve_latency_ms: AtomicU64,
 }
 
 impl Default for ErrorInjector {
@@ -38,9 +42,11 @@ impl Default for ErrorInjector {
             fail_next_acks: AtomicUsize::new(0),
             fail_next_nacks: AtomicUsize::new(0),
             fail_next_wip_acks: AtomicUsize::new(0),
+            fail_next_resolves: AtomicUsize::new(0),
             write_latency_ms: AtomicU64::new(0),
             fetch_latency_ms: AtomicU64::new(0),
             ack_latency_ms: AtomicU64::new(0),
+            resolve_latency_ms: AtomicU64::new(0),
         }
     }
 }
@@ -81,6 +87,11 @@ impl ErrorInjector {
         self.fail_next_wip_acks.store(count, Ordering::Relaxed);
     }
 
+    /// Fail the next N resolve operations.
+    pub fn fail_resolves(&self, count: usize) {
+        self.fail_next_resolves.store(count, Ordering::Relaxed);
+    }
+
     /// Set artificial write latency.
     pub fn set_write_latency(&self, ms: u64) {
         self.write_latency_ms.store(ms, Ordering::Relaxed);
@@ -94,6 +105,11 @@ impl ErrorInjector {
     /// Set artificial ack latency.
     pub fn set_ack_latency(&self, ms: u64) {
         self.ack_latency_ms.store(ms, Ordering::Relaxed);
+    }
+
+    /// Set artificial resolve latency.
+    pub fn set_resolve_latency(&self, ms: u64) {
+        self.resolve_latency_ms.store(ms, Ordering::Relaxed);
     }
 
     /// Check and decrement the write failure counter.
@@ -119,6 +135,11 @@ impl ErrorInjector {
     /// Check and decrement the wip ack failure counter.
     pub(crate) fn should_fail_wip_ack(&self) -> bool {
         Self::decrement_counter(&self.fail_next_wip_acks)
+    }
+
+    /// Check and decrement the resolve failure counter.
+    pub(crate) fn should_fail_resolve(&self) -> bool {
+        Self::decrement_counter(&self.fail_next_resolves)
     }
 
     /// Helper to decrement a counter and return true if it was > 0.
@@ -148,6 +169,11 @@ impl ErrorInjector {
     /// Apply ack latency if set.
     pub(crate) async fn apply_ack_latency(&self) {
         self.apply_latency(&self.ack_latency_ms).await;
+    }
+
+    /// Apply resolve latency if set.
+    pub(crate) async fn apply_resolve_latency(&self) {
+        self.apply_latency(&self.resolve_latency_ms).await;
     }
 
     /// Helper to apply latency.

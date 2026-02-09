@@ -1,8 +1,11 @@
 //! Simple buffer writer implementation.
 
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::task::{Context, Poll};
 
 use bytes::Bytes;
 use parking_lot::RwLock;
@@ -53,11 +56,49 @@ impl WriteResult {
     }
 }
 
-/// Pending write handle for async write pattern.
+/// Pending write handle that implements Future.
+///
+/// This represents a write operation that has been initiated but not yet confirmed.
+/// Await this future to get the final `WriteResult`.
 #[derive(Debug)]
 pub struct PendingWrite {
-    pub(super) offset: Offset,
-    pub(super) is_duplicate: bool,
+    result: std::result::Result<WriteResult, WriteError>,
+}
+
+impl PendingWrite {
+    /// Create a new pending write with a successful result.
+    fn success(offset: Offset, is_duplicate: bool) -> Self {
+        Self {
+            result: Ok(WriteResult {
+                offset,
+                is_duplicate,
+            }),
+        }
+    }
+
+    /// Create a new pending write with an error.
+    fn error(err: WriteError) -> Self {
+        Self { result: Err(err) }
+    }
+
+    /// Get the offset if the write was successful.
+    pub fn offset(&self) -> Option<&Offset> {
+        self.result.as_ref().ok().map(|r| &r.offset)
+    }
+
+    /// Check if this was a duplicate write.
+    pub fn is_duplicate(&self) -> Option<bool> {
+        self.result.as_ref().ok().map(|r| r.is_duplicate)
+    }
+}
+
+impl Future for PendingWrite {
+    type Output = std::result::Result<WriteResult, WriteError>;
+
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+        // For in-memory implementation, the result is immediately available
+        Poll::Ready(self.get_mut().result.clone())
+    }
 }
 
 /// Simple buffer writer.
@@ -71,50 +112,51 @@ pub struct SimpleWriter {
 }
 
 impl SimpleWriter {
-    /// Write a message asynchronously, returning a pending write handle.
+    /// Write a message asynchronously, returning a pending write future.
     ///
-    /// This is the high-performance write method. The returned `PendingWrite` can be
-    /// resolved later using `resolve()` to get the offset.
+    /// This is the high-performance write method. The returned `PendingWrite` is a
+    /// future that can be awaited later to get the `WriteResult`.
     ///
     /// # Arguments
     /// * `id` - Unique message ID for deduplication
     /// * `payload` - The message payload bytes
     /// * `headers` - Optional message headers
-    pub async fn async_write(
+    ///
+    /// # Example
+    /// ```ignore
+    /// let pending = writer.async_write("id".to_string(), payload, headers);
+    /// // ... do other work ...
+    /// let result = pending.await?;  // or use resolve()
+    /// ```
+    pub fn async_write(
         &self,
         id: String,
         payload: Bytes,
         headers: HashMap<String, String>,
-    ) -> std::result::Result<PendingWrite, WriteError> {
-        // Apply artificial latency if set
-        self.error_injector.apply_write_latency().await;
-
+    ) -> PendingWrite {
         // Check for injected write failure
         if self.error_injector.should_fail_write() {
-            return Err(WriteError::WriteFailed(
+            return PendingWrite::error(WriteError::WriteFailed(
                 "injected write failure".to_string(),
             ));
         }
 
         // Check for forced buffer full
         if self.error_injector.force_buffer_full.load(Ordering::SeqCst) {
-            return Err(WriteError::BufferFull);
+            return PendingWrite::error(WriteError::BufferFull);
         }
 
         let mut state = self.state.write();
 
         // Check if buffer is full
         if state.is_full() {
-            return Err(WriteError::BufferFull);
+            return PendingWrite::error(WriteError::BufferFull);
         }
 
         // Check for duplicate
         if let Some(&existing_seq) = state.dedup_window.get(&id) {
             let offset = Offset::new(existing_seq, self.partition_idx);
-            return Ok(PendingWrite {
-                offset,
-                is_duplicate: true,
-            });
+            return PendingWrite::success(offset, true);
         }
 
         // Reclaim acked slots to make room
@@ -122,7 +164,7 @@ impl SimpleWriter {
 
         // Check capacity after reclaim
         if state.slots.len() >= state.capacity {
-            return Err(WriteError::BufferFull);
+            return PendingWrite::error(WriteError::BufferFull);
         }
 
         // Assign sequence number and create offset
@@ -147,35 +189,40 @@ impl SimpleWriter {
         state.offset_to_index.insert(offset.clone(), index);
         state.dedup_window.insert(id, sequence);
 
-        Ok(PendingWrite {
-            offset,
-            is_duplicate: false,
-        })
+        PendingWrite::success(offset, false)
     }
 
-    /// Resolve a pending write to get the result.
+    /// Resolve a pending write by awaiting it.
+    ///
+    /// This method applies any configured error injection (latency, failures)
+    /// before returning the result.
     pub async fn resolve(
         &self,
         pending: PendingWrite,
     ) -> std::result::Result<WriteResult, WriteError> {
-        // In-memory implementation resolves immediately
-        Ok(WriteResult {
-            offset: pending.offset,
-            is_duplicate: pending.is_duplicate,
-        })
+        // Apply artificial latency if set
+        self.error_injector.apply_resolve_latency().await;
+
+        // Check for injected resolve failure
+        if self.error_injector.should_fail_resolve() {
+            return Err(WriteError::WriteFailed(
+                "injected resolve failure".to_string(),
+            ));
+        }
+
+        pending.await
     }
 
     /// Write a message and wait for confirmation.
     ///
-    /// This is a convenience method that combines `async_write` and `resolve`.
+    /// This is a convenience method that combines `async_write` and awaiting the result.
     pub async fn write(
         &self,
         id: String,
         payload: Bytes,
         headers: HashMap<String, String>,
     ) -> std::result::Result<WriteResult, WriteError> {
-        let pending = self.async_write(id, payload, headers).await?;
-        self.resolve(pending).await
+        self.async_write(id, payload, headers).await
     }
 
     /// Returns the name of this writer.
@@ -226,24 +273,26 @@ mod tests {
 
     #[tokio::test]
     async fn test_write_operations() {
-        // Basic write
+        // Basic write - async_write returns a future, await it to get result
         let (writer, state) = create_test_writer();
-        let pending = writer
-            .async_write("msg1".to_string(), Bytes::from("test"), HashMap::new())
-            .await
-            .unwrap();
-        assert!(!pending.is_duplicate);
-        assert_eq!(pending.offset.sequence, 1);
+        let pending = writer.async_write("msg1".to_string(), Bytes::from("test"), HashMap::new());
+        // Can inspect before awaiting
+        assert_eq!(pending.offset().unwrap().sequence, 1);
+        assert!(!pending.is_duplicate().unwrap());
+        // Await to get final result
+        let result = pending.await.unwrap();
+        assert_eq!(result.offset.sequence, 1);
+        assert!(!result.is_duplicate);
         assert_eq!(state.read().pending_count(), 1);
 
         // Multiple writes
         let (writer, state) = create_test_writer();
         for i in 1..=3 {
-            let pending = writer
+            let result = writer
                 .async_write(format!("msg{}", i), Bytes::from("test"), HashMap::new())
                 .await
                 .unwrap();
-            assert_eq!(pending.offset.sequence, i);
+            assert_eq!(result.offset.sequence, i);
         }
         assert_eq!(state.read().slots.len(), 3);
 
@@ -263,38 +312,24 @@ mod tests {
         let (writer, _) = create_test_writer();
 
         // First write
-        let pending1 = writer
-            .async_write("same-id".to_string(), Bytes::from("test"), HashMap::new())
-            .await
-            .unwrap();
-        assert!(!pending1.is_duplicate);
-
-        // Duplicate detected
-        let pending2 = writer
-            .async_write("same-id".to_string(), Bytes::from("test"), HashMap::new())
-            .await
-            .unwrap();
-        assert!(pending2.is_duplicate);
-        assert_eq!(pending1.offset, pending2.offset);
-
-        // Resolve works for both
         let result1 = writer
-            .resolve(PendingWrite {
-                offset: pending1.offset.clone(),
-                is_duplicate: false,
-            })
+            .async_write("same-id".to_string(), Bytes::from("test"), HashMap::new())
             .await
             .unwrap();
         assert!(!result1.is_duplicate);
 
+        // Duplicate detected
         let result2 = writer
-            .resolve(PendingWrite {
-                offset: pending2.offset,
-                is_duplicate: true,
-            })
+            .async_write("same-id".to_string(), Bytes::from("test"), HashMap::new())
             .await
             .unwrap();
         assert!(result2.is_duplicate);
+        assert_eq!(result1.offset, result2.offset);
+
+        // Test resolve method
+        let pending = writer.async_write("new-id".to_string(), Bytes::from("test"), HashMap::new());
+        let result3 = writer.resolve(pending).await.unwrap();
+        assert!(!result3.is_duplicate);
     }
 
     #[tokio::test]
@@ -339,15 +374,47 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_pending_write_debug() {
-        let pending = PendingWrite {
-            offset: Offset::new(42, 0),
-            is_duplicate: false,
-        };
+    #[tokio::test]
+    async fn test_pending_write_future() {
+        let (writer, _) = create_test_writer();
+
+        // Create pending write (not yet awaited)
+        let pending = writer.async_write("msg1".to_string(), Bytes::from("test"), HashMap::new());
+
+        // Can inspect the pending state
+        assert!(pending.offset().is_some());
+        assert_eq!(pending.is_duplicate(), Some(false));
+
+        // Debug works
         let debug_str = format!("{:?}", pending);
         assert!(debug_str.contains("PendingWrite"));
-        assert!(debug_str.contains("42"));
+
+        // Await to get result
+        let result = pending.await.unwrap();
+        assert_eq!(result.offset.sequence, 1);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_error_injection() {
+        let (writer, _) = create_test_writer();
+
+        // Successful resolve
+        let pending = writer.async_write("msg1".to_string(), Bytes::from("test"), HashMap::new());
+        let result = writer.resolve(pending).await;
+        assert!(result.is_ok());
+
+        // Injected resolve failure
+        writer.error_injector.fail_resolves(1);
+        let pending = writer.async_write("msg2".to_string(), Bytes::from("test"), HashMap::new());
+        let result = writer.resolve(pending).await;
+        assert!(
+            matches!(result.unwrap_err(), WriteError::WriteFailed(msg) if msg.contains("injected resolve failure"))
+        );
+
+        // After countdown expires, resolve works again
+        let pending = writer.async_write("msg3".to_string(), Bytes::from("test"), HashMap::new());
+        let result = writer.resolve(pending).await;
+        assert!(result.is_ok());
     }
 
     #[test]
