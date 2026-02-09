@@ -1,10 +1,12 @@
+use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
+use tokio_rustls::server::TlsStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-type TlsStreamSender = mpsc::Sender<tokio_rustls::server::TlsStream<tokio::net::TcpStream>>;
-type TlsStreamReceiver = mpsc::Receiver<tokio_rustls::server::TlsStream<tokio::net::TcpStream>>;
+type TlsStreamSender = mpsc::Sender<TlsStream<TcpStream>>;
+type TlsStreamReceiver = mpsc::Receiver<TlsStream<TcpStream>>;
 
 mod connection_acceptor;
 mod error;
@@ -61,8 +63,8 @@ pub async fn run_monovertex(mvtx_name: String, cln_token: CancellationToken) -> 
 
     // Create two channels, one serving gRPC requests, the other HTTP.
     // A buffer size of 500 should be sufficient to handle the expected request rate.
-    let (grpc_tx, grpc_rx): (TlsStreamSender, TlsStreamReceiver) = mpsc::channel(500);
-    let (http_tx, http_rx): (TlsStreamSender, TlsStreamReceiver) = mpsc::channel(500);
+    let (grpc_tx, grpc_rx) = mpsc::channel(500);
+    let (http_tx, http_rx) = mpsc::channel(500);
 
     // Use a join set to manage spawned tasks.
     let mut join_set = JoinSet::new();
