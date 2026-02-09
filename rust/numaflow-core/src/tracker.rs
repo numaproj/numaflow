@@ -33,8 +33,11 @@ struct TrackerEntry {
 
 /// TrackerState holds the mutable state of the tracker.
 struct TrackerState {
-    /// entries organized by partition, each partition has its own BTreeMap of offsets
-    entries: HashMap<u16, BTreeMap<Offset, TrackerEntry>>,
+    /// entries organized by partition, each partition has its own HashMap of offsets
+    entries: HashMap<u16, HashMap<Offset, TrackerEntry>>,
+    /// Minimum watermark tracked separately per partition.
+    /// Maps watermark timestamp to the count of entries with that watermark.
+    min_watermarks: HashMap<u16, BTreeMap<DateTime<Utc>, usize>>,
 }
 
 impl Drop for TrackerState {
@@ -120,6 +123,7 @@ impl Tracker {
 
         let state = Arc::new(RwLock::new(TrackerState {
             entries: HashMap::new(),
+            min_watermarks: HashMap::new(),
         }));
 
         let idle_offset_map = Arc::new(RwLock::new(HashMap::new()));
@@ -204,15 +208,22 @@ impl Tracker {
         }
 
         let partition = offset.partition_idx();
+        let watermark = message.watermark;
         let mut state = self.state.write().await;
         let partition_entries = state.entries.entry(partition).or_default();
         partition_entries.insert(
-            offset.clone(),
+            offset,
             TrackerEntry {
                 serving_callback_info: callback_info,
-                watermark: message.watermark,
+                watermark,
             },
         );
+
+        // Track the watermark in the min_watermarks BTreeMap
+        if let Some(wm) = watermark {
+            let wm_counts = state.min_watermarks.entry(partition).or_default();
+            *wm_counts.entry(wm).or_insert(0) += 1;
+        }
         Ok(())
     }
 
@@ -305,6 +316,18 @@ impl Tracker {
             return Ok(());
         };
 
+        // Decrement the watermark count and remove the entry if it reaches 0
+        if let Some(wm) = entry.watermark {
+            if let Some(wm_counts) = state.min_watermarks.get_mut(&partition) {
+                if let Some(count) = wm_counts.get_mut(&wm) {
+                    *count -= 1;
+                    if *count == 0 {
+                        wm_counts.remove(&wm);
+                    }
+                }
+            }
+        }
+
         // if count is 0 and is eof we are sure that we can ack the offset.
         // In map-streaming this won't happen because eof is not tied to the message, rather it is
         // tied to channel-close.
@@ -324,15 +347,11 @@ impl Tracker {
     /// Returns the lowest watermark among all the tracked offsets.
     pub(crate) async fn lowest_watermark(&self) -> Result<DateTime<Utc>> {
         let state = self.state.read().await;
-        // Get the lowest watermark across all partitions
+        // Get the lowest watermark across all partitions from the min_watermarks BTreeMap
         let watermark = state
-            .entries
+            .min_watermarks
             .values()
-            .filter_map(|partition_entries| {
-                partition_entries
-                    .first_key_value()
-                    .and_then(|(_, entry)| entry.watermark)
-            })
+            .filter_map(|wm_counts| wm_counts.first_key_value().map(|(wm, _)| *wm))
             .min();
         Ok(watermark.unwrap_or(DateTime::from_timestamp_millis(-1).unwrap()))
     }
