@@ -287,11 +287,11 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             watermark: Some(idle_watermark),
             offset: Offset::Int(IntOffset::new(idle_wmb.offset, partition)),
             event_time: idle_watermark,
-            id: crate::message::MessageID {
-                vertex_name: get_vertex_name().to_string().into(),
-                offset: idle_wmb.offset.to_string().into(),
-                index: 0,
-            },
+            id: crate::message::MessageID::new(
+                get_vertex_name().to_string().into(),
+                idle_wmb.offset.to_string().into(),
+                0,
+            ),
             ..Default::default()
         };
         tx.send(msg).await.map_err(|_| {
@@ -728,11 +728,7 @@ mod tests {
                 offset,
                 event_time: Utc::now(),
                 watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex".to_string().into(),
-                    offset: format!("offset_{}", i).into(),
-                    index: i as i32,
-                },
+                id: MessageID::new("vertex".to_string().into(), format!("offset_{}", i).into(), i as i32),
                 ..Default::default()
             };
             let message_bytes: BytesMut = message.try_into().unwrap();
@@ -841,11 +837,7 @@ mod tests {
                 offset: Offset::Int(IntOffset::new(i + 1, 0)),
                 event_time: Utc::now(),
                 watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex".to_string().into(),
-                    offset: format!("{}-0", i + 1).into(),
-                    index: i as i32,
-                },
+                id: MessageID::new("vertex".to_string().into(), format!("{}-0", i + 1).into(), i as i32),
                 ..Default::default()
             };
             offsets.push(message.offset.clone());
@@ -996,11 +988,7 @@ mod tests {
             offset: offset.clone(),
             event_time: Utc::now(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex".to_string().into(),
-                offset: "offset_1".into(),
-                index: 0,
-            },
+            id: MessageID::new("vertex".to_string().into(), "offset_1".into(), 0),
             ..Default::default()
         };
 
@@ -1071,11 +1059,7 @@ mod tests {
             value: Bytes::from("test message"),
             offset: Offset::Int(IntOffset::new(1, 0)),
             event_time: Utc::now(),
-            id: MessageID {
-                vertex_name: "vertex".to_string().into(),
-                offset: "offset_1".into(),
-                index: 0,
-            },
+            id: MessageID::new("vertex".to_string().into(), "offset_1".into(), 0),
             ..Default::default()
         };
 
@@ -1216,11 +1200,7 @@ mod tests {
             value: Bytes::from("test message"),
             offset: Offset::Int(IntOffset::new(1, 0)),
             event_time: Utc::now(),
-            id: MessageID {
-                vertex_name: "vertex".to_string().into(),
-                offset: "offset_1".into(),
-                index: 0,
-            },
+            id: MessageID::new("vertex".to_string().into(), "offset_1".into(), 0),
             ..Default::default()
         };
 

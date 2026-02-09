@@ -508,11 +508,11 @@ impl From<UserDefinedMessage<'_>> for Message {
     fn from(value: UserDefinedMessage<'_>) -> Self {
         Message {
             typ: Default::default(),
-            id: MessageID {
-                vertex_name: get_vertex_name().to_string().into(),
-                index: value.2,
-                offset: value.1.offset.to_string().into(),
-            },
+            id: MessageID::new(
+                get_vertex_name().to_string().into(),
+                value.1.offset.to_string().into(),
+                value.2,
+            ),
             keys: Arc::from(value.0.keys),
             tags: Some(Arc::from(value.0.tags)),
             value: value.0.value.into(),
@@ -650,11 +650,7 @@ mod tests {
             offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: Utc::now(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "0".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("vertex_name".to_string().into(), "0".to_string().into(), 0),
             ..Default::default()
         };
 
@@ -773,11 +769,7 @@ mod tests {
                 offset: Offset::String(StringOffset::new("0".to_string(), 0)),
                 event_time: chrono::Utc::now(),
                 watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: "0".to_string().into(),
-                    index: 0,
-                },
+                id: MessageID::new("vertex_name".to_string().into(), "0".to_string().into(), 0),
                 ..Default::default()
             },
             Message {
@@ -788,11 +780,7 @@ mod tests {
                 offset: Offset::String(StringOffset::new("1".to_string(), 1)),
                 event_time: chrono::Utc::now(),
                 watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: "1".to_string().into(),
-                    index: 1,
-                },
+                id: MessageID::new("vertex_name".to_string().into(), "1".to_string().into(), 1),
                 ..Default::default()
             },
         ];
@@ -896,11 +884,7 @@ mod tests {
             offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "0".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("vertex_name".to_string().into(), "0".to_string().into(), 0),
             ..Default::default()
         };
 
@@ -999,11 +983,7 @@ mod tests {
                 offset: Offset::String(StringOffset::new(i.to_string(), 0)),
                 event_time: chrono::Utc::now(),
                 watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: i.to_string().into(),
-                    index: i,
-                },
+                id: MessageID::new("vertex_name".to_string().into(), i.to_string().into(), i),
                 ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                 ..Default::default()
             };
@@ -1095,11 +1075,7 @@ mod tests {
                 offset: Offset::String(StringOffset::new("0".to_string(), 0)),
                 event_time: chrono::Utc::now(),
                 watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: "0".to_string().into(),
-                    index: 0,
-                },
+                id: MessageID::new("vertex_name".to_string().into(), "0".to_string().into(), 0),
                 ack_handle: Some(Arc::new(AckHandle::new(ack_tx1))),
                 ..Default::default()
             },
@@ -1111,11 +1087,7 @@ mod tests {
                 offset: Offset::String(StringOffset::new("1".to_string(), 1)),
                 event_time: chrono::Utc::now(),
                 watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: "1".to_string().into(),
-                    index: 1,
-                },
+                id: MessageID::new("vertex_name".to_string().into(), "1".to_string().into(), 1),
                 ack_handle: Some(Arc::new(AckHandle::new(ack_tx2))),
                 ..Default::default()
             },
@@ -1220,11 +1192,7 @@ mod tests {
                 offset: Offset::String(StringOffset::new(i.to_string(), 0)),
                 event_time: chrono::Utc::now(),
                 watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: i.to_string().into(),
-                    index: i,
-                },
+                id: MessageID::new("vertex_name".to_string().into(), i.to_string().into(), i),
                 ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                 ..Default::default()
             };

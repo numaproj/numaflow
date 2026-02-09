@@ -386,11 +386,7 @@ mod tests {
             offset: Offset::Int(IntOffset::new(0, 0)),
             event_time: Default::default(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "in".into(),
-                offset: Bytes::from_static(b"0"),
-                index: 1,
-            },
+            id: MessageID::new("in".into(), Bytes::from_static(b"0"), 1),
             ..Default::default()
         };
 
@@ -426,11 +422,7 @@ mod tests {
             offset: Offset::String(StringOffset::new("offset1".to_string(), 0)),
             event_time: Default::default(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "in".into(),
-                offset: Bytes::from_static(b"offset1"),
-                index: 1,
-            },
+            id: MessageID::new("in".into(), Bytes::from_static(b"offset1"), 1),
             ..Default::default()
         };
 
@@ -482,11 +474,7 @@ mod tests {
             offset: offset.clone(),
             event_time: Default::default(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "in".into(),
-                offset: Bytes::from_static(b"offset1"),
-                index: 1,
-            },
+            id: MessageID::new("in".into(), Bytes::from_static(b"offset1"), 1),
             headers: Arc::new(headers),
             metadata: Some(Arc::new(Metadata {
                 previous_vertex: "source-vertex".into(),
@@ -557,11 +545,7 @@ mod tests {
             offset: Offset::String(StringOffset::new("offset1".to_string(), 0)),
             event_time: Default::default(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "in".into(),
-                offset: Bytes::from_static(b"offset1"),
-                index: 1,
-            },
+            id: MessageID::new("in".into(), Bytes::from_static(b"offset1"), 1),
             ..Default::default()
         };
 
@@ -573,11 +557,7 @@ mod tests {
             offset: Offset::String(StringOffset::new("offset2".to_string(), 1)),
             event_time: Default::default(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "in".into(),
-                offset: Bytes::from_static(b"offset2"),
-                index: 2,
-            },
+            id: MessageID::new("in".into(), Bytes::from_static(b"offset2"), 2),
             ..Default::default()
         };
 

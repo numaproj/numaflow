@@ -80,11 +80,7 @@ impl JSWrappedMessage {
                 .event_time
                 .map(utc_from_timestamp)
                 .expect("event time should be present"),
-            id: MessageID {
-                vertex_name: self.vertex_name.into(),
-                offset: offset.to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new(self.vertex_name.into(), offset.to_string().into(), 0),
             headers: Arc::new(header.headers),
             watermark: None,
             metadata: header.metadata.map(|m| Arc::new(Metadata::from(m))),
@@ -396,11 +392,7 @@ mod tests {
             offset: offset.clone(),
             event_time: Utc::now(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex".to_string().into(),
-                offset: "offset_1".into(),
-                index: 0,
-            },
+            id: MessageID::new("vertex".to_string().into(), "offset_1".into(), 0),
             ..Default::default()
         };
 

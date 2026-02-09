@@ -2,6 +2,7 @@ use numaflow_pulsar::sink::{
     Message as PulsarMessage, Response as PulsarResponse, Sink as PulsarSink,
 };
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::error::{Error, Result};
 use crate::message::Message;
@@ -45,11 +46,11 @@ impl From<PulsarResponse> for ResponseFromSink {
     fn from(resp: PulsarResponse) -> Self {
         match &resp.status {
             Ok(_) => ResponseFromSink {
-                id: resp.id,
+                id: Arc::from(resp.id),
                 status: ResponseStatusFromSink::Success,
             },
             Err(e) => ResponseFromSink {
-                id: resp.id,
+                id: Arc::from(resp.id),
                 status: ResponseStatusFromSink::Failed(e.to_string()),
             },
         }
@@ -97,11 +98,7 @@ mod tests {
             offset: Offset::Int(IntOffset::new(event_time, 0)),
             event_time: Utc.timestamp_millis_opt(event_time).unwrap(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "test-vertex".to_string().into(),
-                offset: id.to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("test-vertex".to_string().into(), id.to_string().into(), 0),
             headers: Arc::new(headers),
             ..Default::default()
         }
@@ -192,7 +189,7 @@ mod tests {
 
         let response: ResponseFromSink = pulsar_response.into();
 
-        assert_eq!(response.id, "test-id");
+        assert_eq!(&*response.id, "test-id");
         assert!(matches!(response.status, ResponseStatusFromSink::Success));
     }
 
@@ -207,7 +204,7 @@ mod tests {
 
         let response: ResponseFromSink = pulsar_response.into();
 
-        assert_eq!(response.id, "test-id");
+        assert_eq!(&*response.id, "test-id");
         match response.status {
             ResponseStatusFromSink::Failed(error_msg) => {
                 assert!(error_msg.contains("test error"));
@@ -368,11 +365,7 @@ mod tests {
             offset: Offset::Int(IntOffset::new(1234567890, 0)),
             event_time: Utc.timestamp_millis_opt(1234567890).unwrap(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "test-vertex".to_string().into(),
-                offset: "large-msg".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("test-vertex".to_string().into(), "large-msg".to_string().into(), 0),
             headers: Arc::new(HashMap::new()),
             ..Default::default()
         };

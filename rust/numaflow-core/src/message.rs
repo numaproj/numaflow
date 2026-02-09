@@ -286,30 +286,58 @@ pub(crate) enum ReadAck {
 
 /// Message ID which is used to uniquely identify a message. It cheap to clone this.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(from = "MessageIDDe")]
 pub(crate) struct MessageID {
     pub(crate) vertex_name: Bytes,
     pub(crate) offset: Bytes,
     /// Index is used to identify the index of the message in case of flatmap.
     pub(crate) index: i32,
+    /// Cached string representation to avoid repeated formatting.
+    #[serde(skip)]
+    pub(crate) string_repr: Arc<str>,
+}
+
+/// Helper for serde deserialization that rebuilds the cached string_repr via [`MessageID::new`].
+#[derive(Deserialize)]
+struct MessageIDDe {
+    vertex_name: Bytes,
+    offset: Bytes,
+    index: i32,
+}
+
+impl From<MessageIDDe> for MessageID {
+    fn from(raw: MessageIDDe) -> Self {
+        MessageID::new(raw.vertex_name, raw.offset, raw.index)
+    }
+}
+
+impl MessageID {
+    /// Create a new MessageID, pre-computing the cached string representation.
+    pub(crate) fn new(vertex_name: Bytes, offset: Bytes, index: i32) -> Self {
+        let s = format!(
+            "{}-{}-{}",
+            std::str::from_utf8(&vertex_name).expect("valid utf-8"),
+            std::str::from_utf8(&offset).expect("valid utf-8"),
+            index
+        );
+        Self {
+            vertex_name,
+            offset,
+            index,
+            string_repr: Arc::from(s),
+        }
+    }
 }
 
 impl Default for MessageID {
     fn default() -> Self {
-        Self {
-            vertex_name: Bytes::new(),
-            offset: Bytes::new(),
-            index: 0,
-        }
+        MessageID::new(Bytes::new(), Bytes::new(), 0)
     }
 }
 
 impl From<numaflow_pb::objects::isb::MessageId> for MessageID {
     fn from(id: numaflow_pb::objects::isb::MessageId) -> Self {
-        Self {
-            vertex_name: id.vertex_name.into(),
-            offset: id.offset.into(),
-            index: id.index,
-        }
+        MessageID::new(id.vertex_name.into(), id.offset.into(), id.index)
     }
 }
 
@@ -322,15 +350,10 @@ impl From<MessageID> for numaflow_pb::objects::isb::MessageId {
         }
     }
 }
+
 impl fmt::Display for MessageID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}-{}-{}",
-            std::str::from_utf8(&self.vertex_name).expect("it should be valid utf-8"),
-            std::str::from_utf8(&self.offset).expect("it should be valid utf-8"),
-            self.index
-        )
+        f.write_str(&self.string_repr)
     }
 }
 
@@ -399,11 +422,7 @@ mod tests {
 
     #[test]
     fn test_message_id_display() {
-        let message_id = MessageID {
-            vertex_name: "vertex".to_string().into(),
-            offset: "123".to_string().into(),
-            index: 0,
-        };
+        let message_id = MessageID::new("vertex".to_string().into(), "123".to_string().into(), 0);
         assert_eq!(format!("{}", message_id), "vertex-123-0");
     }
 
@@ -420,11 +439,7 @@ mod tests {
             }),
             event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex".to_string().into(),
-                offset: "123".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("vertex".to_string().into(), "123".to_string().into(), 0),
             ..Default::default()
         };
 
@@ -468,11 +483,7 @@ mod tests {
 
     #[test]
     fn test_message_id_to_proto() {
-        let message_id = MessageID {
-            vertex_name: "vertex".to_string().into(),
-            offset: "123".to_string().into(),
-            index: 0,
-        };
+        let message_id = MessageID::new("vertex".to_string().into(), "123".to_string().into(), 0);
         let proto_id: MessageId = message_id.into();
         assert_eq!(proto_id.vertex_name, "vertex");
         assert_eq!(proto_id.offset, "123");

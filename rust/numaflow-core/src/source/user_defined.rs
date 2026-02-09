@@ -165,11 +165,11 @@ impl TryFrom<read_response::Result> for Message {
                 .event_time
                 .map(utc_from_timestamp)
                 .expect("event time should be present"),
-            id: MessageID {
-                vertex_name: config::get_vertex_name().to_string().into(),
-                offset: source_offset.to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new(
+                config::get_vertex_name().to_string().into(),
+                source_offset.to_string().into(),
+                0,
+            ),
             headers: Arc::new(result.headers),
             watermark: None,
             // If we receive metadata in the response, we use it, otherwise we use the default metadata so that metadata is always present.

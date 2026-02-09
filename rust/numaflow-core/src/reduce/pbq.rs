@@ -286,11 +286,11 @@ mod tests {
                 offset,
                 event_time: Utc::now(),
                 watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex".to_string().into(),
-                    offset: format!("offset_{}", i).into(),
-                    index: i as i32,
-                },
+                id: MessageID::new(
+                    "vertex".to_string().into(),
+                    format!("offset_{}", i).into(),
+                    i as i32,
+                ),
                 ..Default::default()
             };
             let message_bytes: BytesMut = message.try_into().unwrap();
@@ -442,11 +442,11 @@ mod tests {
                 offset,
                 event_time: Utc::now(),
                 watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex".to_string().into(),
-                    offset: format!("offset_{}", i).into(),
-                    index: i as i32,
-                },
+                id: MessageID::new(
+                    "vertex".to_string().into(),
+                    format!("offset_{}", i).into(),
+                    i as i32,
+                ),
                 ..Default::default()
             };
             let message_bytes: BytesMut = message.try_into().unwrap();
@@ -584,11 +584,11 @@ mod tests {
                 offset: Offset::Int(IntOffset::new(i + 1, 0)),
                 event_time: Utc::now(),
                 watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex".to_string().into(),
-                    offset: format!("wal_offset_{}", i).into(),
-                    index: i as i32,
-                },
+                id: MessageID::new(
+                    "vertex".to_string().into(),
+                    format!("wal_offset_{}", i).into(),
+                    i as i32,
+                ),
                 ..Default::default()
             };
 
@@ -700,11 +700,11 @@ mod tests {
                 offset,
                 event_time: Utc::now(),
                 watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex".to_string().into(),
-                    offset: format!("isb_offset_{}", i).into(),
-                    index: i as i32,
-                },
+                id: MessageID::new(
+                    "vertex".to_string().into(),
+                    format!("isb_offset_{}", i).into(),
+                    i as i32,
+                ),
                 ..Default::default()
             };
             let message_bytes: BytesMut = message.try_into().unwrap();

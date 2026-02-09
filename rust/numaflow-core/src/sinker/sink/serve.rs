@@ -41,7 +41,7 @@ impl Sink for ServeSink {
         let mut result = Vec::with_capacity(messages.len());
         for msg in messages {
             result.push(ResponseFromSink {
-                id: msg.id.to_string(),
+                id: msg.id.string_repr.clone(),
                 status: ResponseStatusFromSink::Serve(None),
             })
         }
@@ -72,11 +72,7 @@ mod tests {
                 offset: Offset::Int(IntOffset::new(1, 0)),
                 event_time: Utc::now(),
                 headers: Default::default(),
-                id: MessageID {
-                    vertex_name: "vertex".to_string().into(),
-                    offset: "1".to_string().into(),
-                    index: 0,
-                },
+                id: MessageID::new("vertex".to_string().into(), "1".to_string().into(), 0),
                 ..Default::default()
             },
             Message {
@@ -87,11 +83,7 @@ mod tests {
                 offset: Offset::Int(IntOffset::new(1, 0)),
                 event_time: Utc::now(),
                 headers: Default::default(),
-                id: MessageID {
-                    vertex_name: "vertex".to_string().into(),
-                    offset: "2".to_string().into(),
-                    index: 1,
-                },
+                id: MessageID::new("vertex".to_string().into(), "2".to_string().into(), 1),
                 ..Default::default()
             },
         ];
@@ -100,7 +92,7 @@ mod tests {
             .iter()
             .map(|msg| ResponseFromSink {
                 status: ResponseStatusFromSink::Serve(None),
-                id: msg.id.to_string(),
+                id: msg.id.string_repr.clone(),
             })
             .collect::<Vec<ResponseFromSink>>();
 

@@ -398,11 +398,11 @@ mod tests {
             offset: Offset::Int(IntOffset::new(id as i64, 0)),
             event_time: Utc::now(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex".to_string().into(),
-                offset: format!("offset_{}", id).into(),
-                index: id,
-            },
+            id: MessageID::new(
+                "vertex".to_string().into(),
+                format!("offset_{}", id).into(),
+                id,
+            ),
             headers: Arc::new(HashMap::new()),
             metadata: None,
             is_late: false,
@@ -527,11 +527,11 @@ mod tests {
                     offset: Offset::Int(IntOffset::new(i, 0)),
                     event_time: Utc::now(),
                     watermark: None,
-                    id: MessageID {
-                        vertex_name: "vertex".to_string().into(),
-                        offset: format!("offset_{}", i).into(),
-                        index: i as i32,
-                    },
+                    id: MessageID::new(
+                        "vertex".to_string().into(),
+                        format!("offset_{}", i).into(),
+                        i as i32,
+                    ),
                     ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                     ..Default::default()
                 }

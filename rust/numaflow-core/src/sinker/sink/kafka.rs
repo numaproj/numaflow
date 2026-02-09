@@ -1,5 +1,6 @@
 use numaflow_kafka::sink::{KafkaSink, KafkaSinkMessage, KafkaSinkResponse};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::error::{Error, Result};
 use crate::message::Message;
@@ -41,11 +42,11 @@ impl From<KafkaSinkResponse> for ResponseFromSink {
     fn from(resp: KafkaSinkResponse) -> Self {
         match &resp.status {
             Ok(_) => ResponseFromSink {
-                id: resp.id,
+                id: Arc::from(resp.id),
                 status: ResponseStatusFromSink::Success,
             },
             Err(e) => ResponseFromSink {
-                id: resp.id,
+                id: Arc::from(resp.id),
                 status: ResponseStatusFromSink::Failed(e.to_string()),
             },
         }
@@ -104,11 +105,7 @@ mod tests {
                 offset: Offset::Int(IntOffset::new(i, 0)),
                 event_time: Utc::now(),
                 watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex".to_string().into(),
-                    offset: i.to_string().into(),
-                    index: i as i32,
-                },
+                id: MessageID::new("vertex".to_string().into(), i.to_string().into(), i as i32),
                 headers: Arc::new(headers),
                 ..Default::default()
             });

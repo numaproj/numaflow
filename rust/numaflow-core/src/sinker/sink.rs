@@ -15,6 +15,7 @@ use numaflow_pb::clients::sink::sink_response;
 use numaflow_pulsar::sink::Sink as PulsarSink;
 use numaflow_sqs::sink::SqsSink;
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
@@ -694,7 +695,8 @@ pub(crate) enum ResponseStatusFromSink {
 #[derive(Debug, PartialEq)]
 pub(crate) struct ResponseFromSink {
     /// Unique id per [Message]. We need to track per [Message] status.
-    pub(crate) id: String,
+    /// Uses `Arc<str>` to avoid allocations when matching against cached [`MessageID::string_repr`].
+    pub(crate) id: Arc<str>,
     /// Status of the "sink" operation per [Message].
     pub(crate) status: ResponseStatusFromSink,
 }
@@ -709,7 +711,7 @@ impl From<sink_response::Result> for ResponseFromSink {
             OnSuccess => ResponseStatusFromSink::OnSuccess(value.on_success_msg),
         };
         Self {
-            id: value.id,
+            id: Arc::from(value.id),
             status,
         }
     }
@@ -783,11 +785,7 @@ mod tests {
                 offset: Offset::Int(IntOffset::new(i, 0)),
                 event_time: Utc::now(),
                 watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex".to_string().into(),
-                    offset: format!("offset_{}", i).into(),
-                    index: i as i32,
-                },
+                id: MessageID::new("vertex".to_string().into(), format!("offset_{}", i).into(), i as i32),
                 ..Default::default()
             })
             .collect();
@@ -819,11 +817,7 @@ mod tests {
                     offset: Offset::Int(IntOffset::new(i, 0)),
                     event_time: Utc::now(),
                     watermark: None,
-                    id: MessageID {
-                        vertex_name: "vertex".to_string().into(),
-                        offset: format!("offset_{}", i).into(),
-                        index: i as i32,
-                    },
+                    id: MessageID::new("vertex".to_string().into(), format!("offset_{}", i).into(), i as i32),
                     ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                     ..Default::default()
                 }
@@ -898,11 +892,7 @@ mod tests {
                     offset: Offset::Int(IntOffset::new(i, 0)),
                     event_time: Utc::now(),
                     watermark: None,
-                    id: MessageID {
-                        vertex_name: "vertex".to_string().into(),
-                        offset: format!("offset_{}", i).into(),
-                        index: i as i32,
-                    },
+                    id: MessageID::new("vertex".to_string().into(), format!("offset_{}", i).into(), i as i32),
                     ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                     ..Default::default()
                 }
@@ -987,11 +977,7 @@ mod tests {
                     offset: Offset::Int(IntOffset::new(i, 0)),
                     event_time: Utc::now(),
                     watermark: None,
-                    id: MessageID {
-                        vertex_name: "vertex".to_string().into(),
-                        offset: format!("offset_{}", i).into(),
-                        index: i as i32,
-                    },
+                    id: MessageID::new("vertex".to_string().into(), format!("offset_{}", i).into(), i as i32),
                     ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                     ..Default::default()
                 }
@@ -1069,11 +1055,7 @@ mod tests {
                     offset: Offset::Int(IntOffset::new(i, 0)),
                     event_time: Utc::now(),
                     watermark: None,
-                    id: MessageID {
-                        vertex_name: "vertex".to_string().into(),
-                        offset: format!("offset_{}", i).into(),
-                        index: i as i32,
-                    },
+                    id: MessageID::new("vertex".to_string().into(), format!("offset_{}", i).into(), i as i32),
                     ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                     ..Default::default()
                 }
@@ -1182,11 +1164,7 @@ mod tests {
                     offset: Offset::Int(IntOffset::new(i, 0)),
                     event_time: Default::default(),
                     watermark: None,
-                    id: MessageID {
-                        vertex_name: "vertex".to_string().into(),
-                        offset: "123".to_string().into(),
-                        index: i as i32,
-                    },
+                    id: MessageID::new("vertex".to_string().into(), "123".to_string().into(), i as i32),
                     headers: Arc::new(headers),
                     ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                     ..Default::default()
@@ -1228,11 +1206,7 @@ mod tests {
             offset: Offset::Int(IntOffset::new(0, 0)),
             event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex".to_string().into(),
-                offset: "123".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("vertex".to_string().into(), "123".to_string().into(), 0),
             ..Default::default()
         };
 
@@ -1261,7 +1235,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(!results.is_empty());
 
-        assert_eq!(results.first().unwrap().id, "123");
+        assert_eq!(&*results.first().unwrap().id, "123");
         assert_eq!(
             results.first().unwrap().status,
             ResponseStatusFromSink::Success

@@ -770,11 +770,11 @@ mod tests {
                 keys: Arc::from(vec!["test-key".to_string()]),
                 value: bytes::Bytes::from(vec![1, 2, 3]),
                 offset: Offset::Int(IntOffset::new(i as i64, 0)),
-                id: MessageID {
-                    vertex_name: "test-vertex".to_string().into(),
-                    offset: i.to_string().into(),
-                    index: 0,
-                },
+                id: MessageID::new(
+                    "test-vertex".to_string().into(),
+                    i.to_string().into(),
+                    0,
+                ),
                 ..Default::default()
             };
 
@@ -929,11 +929,11 @@ mod tests {
             keys: Arc::from(vec!["test-key".to_string()]),
             value: bytes::Bytes::from(vec![1, 2, 3]),
             offset: Offset::Int(IntOffset::new(1, 0)),
-            id: MessageID {
-                vertex_name: "test-vertex".to_string().into(),
-                offset: "1".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new(
+                "test-vertex".to_string().into(),
+                "1".to_string().into(),
+                0,
+            ),
             ..Default::default()
         };
 
@@ -944,11 +944,11 @@ mod tests {
             keys: Arc::from(vec!["test-key".to_string()]),
             value: bytes::Bytes::from(vec![4, 5, 6]),
             offset: Offset::Int(IntOffset::new(2, 0)),
-            id: MessageID {
-                vertex_name: "test-vertex".to_string().into(),
-                offset: "2".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new(
+                "test-vertex".to_string().into(),
+                "2".to_string().into(),
+                0,
+            ),
             ..Default::default()
         };
 
@@ -1142,11 +1142,11 @@ mod tests {
             keys: Arc::from(vec!["key1".to_string(), "key2".to_string()]),
             value: bytes::Bytes::from(vec![1, 2, 3]),
             offset: Offset::Int(IntOffset::new(1, 0)),
-            id: MessageID {
-                vertex_name: "test-vertex".to_string().into(),
-                offset: "1".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new(
+                "test-vertex".to_string().into(),
+                "1".to_string().into(),
+                0,
+            ),
             ..Default::default()
         };
         let wal_message_1: WalMessage = message_1.clone().into();
@@ -1158,11 +1158,11 @@ mod tests {
             keys: Arc::from(vec!["key1".to_string(), "key2".to_string()]),
             value: bytes::Bytes::from(vec![4, 5, 6]),
             offset: Offset::Int(IntOffset::new(2, 0)),
-            id: MessageID {
-                vertex_name: "test-vertex".to_string().into(),
-                offset: "2".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new(
+                "test-vertex".to_string().into(),
+                "2".to_string().into(),
+                0,
+            ),
             ..Default::default()
         };
         let wal_message_2: WalMessage = message_2.clone().into();
@@ -1174,11 +1174,11 @@ mod tests {
             keys: Arc::from(vec!["key3".to_string(), "key4".to_string()]),
             value: bytes::Bytes::from(vec![7, 8, 9]),
             offset: Offset::Int(IntOffset::new(3, 0)),
-            id: MessageID {
-                vertex_name: "test-vertex".to_string().into(),
-                offset: "3".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new(
+                "test-vertex".to_string().into(),
+                "3".to_string().into(),
+                0,
+            ),
             ..Default::default()
         };
         let wal_message_3: WalMessage = message_3.clone().into();
@@ -1190,11 +1190,11 @@ mod tests {
             keys: Arc::from(vec!["key3".to_string(), "key4".to_string()]),
             value: bytes::Bytes::from(vec![10, 11, 12]),
             offset: Offset::Int(IntOffset::new(4, 0)),
-            id: MessageID {
-                vertex_name: "test-vertex".to_string().into(),
-                offset: "4".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new(
+                "test-vertex".to_string().into(),
+                "4".to_string().into(),
+                0,
+            ),
             ..Default::default()
         };
         let wal_message_4: WalMessage = message_4.clone().into();

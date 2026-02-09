@@ -230,11 +230,7 @@ mod tests {
                 offset: Offset::Int(IntOffset::new(0, 0)),
                 event_time: Utc::now(),
                 headers: Default::default(),
-                id: MessageID {
-                    vertex_name: "vertex".to_string().into(),
-                    offset: "1".to_string().into(),
-                    index: 0,
-                },
+                id: MessageID::new("vertex".to_string().into(), "1".to_string().into(), 0),
                 ..Default::default()
             },
             Message {
@@ -245,11 +241,7 @@ mod tests {
                 offset: Offset::Int(IntOffset::new(0, 0)),
                 event_time: Utc::now(),
                 headers: Default::default(),
-                id: MessageID {
-                    vertex_name: "vertex".to_string().into(),
-                    offset: "2".to_string().into(),
-                    index: 1,
-                },
+                id: MessageID::new("vertex".to_string().into(), "2".to_string().into(), 1),
                 ..Default::default()
             },
         ];

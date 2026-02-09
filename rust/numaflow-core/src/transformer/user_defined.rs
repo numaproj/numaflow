@@ -40,11 +40,11 @@ impl From<UserDefinedTransformerMessage<'_>> for Message {
     fn from(value: UserDefinedTransformerMessage<'_>) -> Self {
         Message {
             typ: Default::default(),
-            id: MessageID {
-                vertex_name: get_vertex_name().to_string().into(),
-                index: value.2,
-                offset: value.1.offset.clone().to_string().into(),
-            },
+            id: MessageID::new(
+                get_vertex_name().to_string().into(),
+                value.1.offset.clone().to_string().into(),
+                value.2,
+            ),
             keys: Arc::from(value.0.keys),
             tags: Some(Arc::from(value.0.tags)),
             value: value.0.value.into(),
@@ -283,11 +283,7 @@ mod tests {
             offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: Utc::now(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "0".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("vertex_name".to_string().into(), "0".to_string().into(), 0),
             ..Default::default()
         };
 
@@ -329,11 +325,7 @@ mod tests {
             }),
             event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex".to_string().into(),
-                offset: "123".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("vertex".to_string().into(), "123".to_string().into(), 0),
             ..Default::default()
         };
 

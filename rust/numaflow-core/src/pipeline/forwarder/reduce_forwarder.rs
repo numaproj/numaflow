@@ -757,11 +757,11 @@ mod tests {
             offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: base_time,
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "0".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new(
+                "vertex_name".to_string().into(),
+                "0".to_string().into(),
+                0,
+            ),
             ..Default::default()
         };
 
@@ -774,11 +774,11 @@ mod tests {
             offset: Offset::String(StringOffset::new("1".to_string(), 1)),
             event_time: base_time,
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "1".to_string().into(),
-                index: 1,
-            },
+            id: MessageID::new(
+                "vertex_name".to_string().into(),
+                "1".to_string().into(),
+                1,
+            ),
             ..Default::default()
         };
 
@@ -791,11 +791,11 @@ mod tests {
             offset: Offset::String(StringOffset::new("2".to_string(), 2)),
             event_time: base_time,
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "2".to_string().into(),
-                index: 2,
-            },
+            id: MessageID::new(
+                "vertex_name".to_string().into(),
+                "2".to_string().into(),
+                2,
+            ),
             ..Default::default()
         };
 
@@ -808,11 +808,11 @@ mod tests {
             offset: Offset::String(StringOffset::new("3".to_string(), 2)),
             event_time: base_time + chrono::Duration::seconds(120),
             watermark: Some(base_time + chrono::Duration::seconds(100)), // Past window end
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "3".to_string().into(),
-                index: 3,
-            },
+            id: MessageID::new(
+                "vertex_name".to_string().into(),
+                "3".to_string().into(),
+                3,
+            ),
             ..Default::default()
         };
 
@@ -1134,11 +1134,11 @@ mod tests {
                 offset: Offset::String(StringOffset::new(i.to_string(), 0)),
                 event_time: base_time + chrono::Duration::seconds(((i + 1) * 10) as i64),
                 watermark: Some(base_time + chrono::Duration::seconds(((i + 1) * 10) as i64)),
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: i.to_string().into(),
-                    index: i,
-                },
+                id: MessageID::new(
+                    "vertex_name".to_string().into(),
+                    i.to_string().into(),
+                    i,
+                ),
                 ..Default::default()
             };
 

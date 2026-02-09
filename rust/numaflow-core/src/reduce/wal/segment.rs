@@ -193,11 +193,11 @@ mod tests {
                 keys: Arc::from(vec!["test-key".to_string()]),
                 value: bytes::Bytes::from(vec![1, 2, 3]),
                 offset: Offset::Int(IntOffset::new(i as i64, 0)),
-                id: MessageID {
-                    vertex_name: "test-vertex".to_string().into(),
-                    offset: i.to_string().into(),
-                    index: 0,
-                },
+                id: MessageID::new(
+                    "test-vertex".to_string().into(),
+                    i.to_string().into(),
+                    0,
+                ),
                 ..Default::default()
             };
 
@@ -342,11 +342,11 @@ mod tests {
                 keys: Arc::from(vec![key.to_string()]),
                 value: bytes::Bytes::from(vec![1, 2, 3]),
                 offset: Offset::Int(IntOffset::new(i as i64, 0)),
-                id: MessageID {
-                    vertex_name: "test-vertex".to_string().into(),
-                    offset: i.to_string().into(),
-                    index: 0,
-                },
+                id: MessageID::new(
+                    "test-vertex".to_string().into(),
+                    i.to_string().into(),
+                    0,
+                ),
                 ..Default::default()
             };
 

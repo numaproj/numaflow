@@ -32,11 +32,11 @@ impl From<HttpMessage> for Message {
             offset: Offset::String(StringOffset::new(value.id.clone(), *get_vertex_replica())),
             event_time: value.event_time,
             watermark: None,
-            id: MessageID {
-                vertex_name: get_vertex_name().to_string().into(),
-                offset: value.id.into(),
-                index: 0,
-            },
+            id: MessageID::new(
+                get_vertex_name().to_string().into(),
+                value.id.into(),
+                0,
+            ),
             headers: Arc::new(value.headers),
             // Set default metadata so that metadata is always present.
             metadata: Some(Arc::new(Metadata::default())),

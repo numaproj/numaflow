@@ -2,6 +2,7 @@ use numaflow_sqs::{
     SQS_METADATA_KEY,
     sink::{SqsSink, SqsSinkMessage},
 };
+use std::sync::Arc;
 
 use crate::error;
 use crate::error::Error;
@@ -76,13 +77,13 @@ impl Sink for SqsSink {
             match &sqs_response.status {
                 Ok(_) => {
                     result.push(ResponseFromSink {
-                        id: sqs_response.id.clone(),
+                        id: Arc::from(sqs_response.id.as_str()),
                         status: ResponseStatusFromSink::Success,
                     });
                 }
                 Err(err) => {
                     result.push(ResponseFromSink {
-                        id: sqs_response.id.clone(),
+                        id: Arc::from(sqs_response.id.as_str()),
                         status: ResponseStatusFromSink::Failed(err.to_string()),
                     });
                 }
@@ -118,11 +119,7 @@ mod unit_tests {
             offset: Offset::String(StringOffset::new("offset".to_string(), 0)),
             event_time: Utc::now(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "test".to_string().into(),
-                offset: "offset".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("test".to_string().into(), "offset".to_string().into(), 0),
             headers: Arc::new(headers.clone()),
             metadata: None,
             is_late: false,
@@ -177,11 +174,7 @@ mod unit_tests {
             offset: Offset::String(StringOffset::new("offset".to_string(), 0)),
             event_time: Utc::now(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "test".to_string().into(),
-                offset: "offset".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("test".to_string().into(), "offset".to_string().into(), 0),
             headers: Arc::new(headers),
             metadata: Some(Arc::new(metadata)),
             is_late: false,
@@ -241,11 +234,7 @@ mod unit_tests {
             offset: Offset::String(StringOffset::new("offset".to_string(), 0)),
             event_time: Utc::now(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "test".to_string().into(),
-                offset: "offset".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("test".to_string().into(), "offset".to_string().into(), 0),
             headers: Arc::new(headers),
             metadata: Some(Arc::new(metadata)),
             is_late: false,

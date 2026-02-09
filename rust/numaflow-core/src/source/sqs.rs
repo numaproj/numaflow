@@ -41,11 +41,11 @@ impl TryFrom<SqsMessage> for Message {
             offset: offset.clone(),
             event_time: message.event_time,
             watermark: Some(message.event_time),
-            id: MessageID {
-                vertex_name: get_vertex_name().to_string().into(),
-                offset: offset.to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new(
+                get_vertex_name().to_string().into(),
+                offset.to_string().into(),
+                0,
+            ),
             headers: Arc::new(message.system_attributes),
             metadata,
             is_late: false,

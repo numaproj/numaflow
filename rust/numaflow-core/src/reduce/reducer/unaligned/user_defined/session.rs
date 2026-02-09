@@ -143,15 +143,15 @@ impl From<UserDefinedSessionResponse> for Message {
                 .map(|ts| ts - chrono::Duration::milliseconds(1)),
             // this will be unique for each response which will be used for dedup (index is used because
             // each window can have multiple reduce responses)
-            id: MessageID {
-                vertex_name: format!(
+            id: MessageID::new(
+                format!(
                     "{}-{}",
                     user_response.vertex_name, user_response.vertex_replica
                 )
                 .into(),
-                offset: offset_str.into(),
-                index: user_response.index as i32,
-            },
+                offset_str.into(),
+                user_response.index as i32,
+            ),
             headers: Arc::new(HashMap::new()), // reset headers since it is a new message
             metadata: None,
             is_late: false,
@@ -379,11 +379,7 @@ mod tests {
             offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 10).unwrap(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "0".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("vertex_name".to_string().into(), "0".to_string().into(), 0),
             ..Default::default()
         };
 
@@ -494,11 +490,7 @@ mod tests {
             offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 10).unwrap(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "0".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("vertex_name".to_string().into(), "0".to_string().into(), 0),
             ..Default::default()
         };
 
@@ -510,11 +502,7 @@ mod tests {
             offset: Offset::String(StringOffset::new("1".to_string(), 1)),
             event_time: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 20).unwrap(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "1".to_string().into(),
-                index: 1,
-            },
+            id: MessageID::new("vertex_name".to_string().into(), "1".to_string().into(), 1),
             ..Default::default()
         };
 
@@ -634,11 +622,7 @@ mod tests {
             offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: base_time + chrono::Duration::seconds(10),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "0".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("vertex_name".to_string().into(), "0".to_string().into(), 0),
             ..Default::default()
         };
 
@@ -650,11 +634,7 @@ mod tests {
             offset: Offset::String(StringOffset::new("1".to_string(), 1)),
             event_time: base_time + chrono::Duration::seconds(40),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "1".to_string().into(),
-                index: 1,
-            },
+            id: MessageID::new("vertex_name".to_string().into(), "1".to_string().into(), 1),
             ..Default::default()
         };
 
@@ -666,11 +646,7 @@ mod tests {
             offset: Offset::String(StringOffset::new("2".to_string(), 2)),
             event_time: base_time + chrono::Duration::seconds(20),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "2".to_string().into(),
-                index: 2,
-            },
+            id: MessageID::new("vertex_name".to_string().into(), "2".to_string().into(), 2),
             ..Default::default()
         };
 
@@ -889,11 +865,7 @@ mod tests {
             offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: base_time + chrono::Duration::seconds(10),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "0".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("vertex_name".to_string().into(), "0".to_string().into(), 0),
             ..Default::default()
         };
 
@@ -905,11 +877,7 @@ mod tests {
             offset: Offset::String(StringOffset::new("1".to_string(), 1)),
             event_time: base_time + chrono::Duration::seconds(70),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "1".to_string().into(),
-                index: 1,
-            },
+            id: MessageID::new("vertex_name".to_string().into(), "1".to_string().into(), 1),
             ..Default::default()
         };
 
@@ -1054,11 +1022,7 @@ mod tests {
             offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 10).unwrap(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "0".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("vertex_name".to_string().into(), "0".to_string().into(), 0),
             ..Default::default()
         };
 

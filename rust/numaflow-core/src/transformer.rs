@@ -382,11 +382,7 @@ mod tests {
             offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: Utc::now(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "0".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("vertex_name".to_string().into(), "0".to_string().into(), 0),
             ..Default::default()
         };
 
@@ -459,11 +455,7 @@ mod tests {
                 offset: Offset::String(StringOffset::new(i.to_string(), 0)),
                 event_time: chrono::Utc::now(),
                 watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: i.to_string().into(),
-                    index: i,
-                },
+                id: MessageID::new("vertex_name".to_string().into(), i.to_string().into(), i),
                 ..Default::default()
             };
             messages.push(message);
@@ -538,11 +530,7 @@ mod tests {
             offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
             watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "0".to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new("vertex_name".to_string().into(), "0".to_string().into(), 0),
             ..Default::default()
         };
 

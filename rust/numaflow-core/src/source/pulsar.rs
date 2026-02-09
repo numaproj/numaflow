@@ -23,11 +23,11 @@ impl TryFrom<PulsarMessage> for Message {
             offset: offset.clone(),
             event_time: message.event_time,
             watermark: None,
-            id: MessageID {
-                vertex_name: get_vertex_name().to_string().into(),
-                offset: offset.to_string().into(),
-                index: 0,
-            },
+            id: MessageID::new(
+                get_vertex_name().to_string().into(),
+                offset.to_string().into(),
+                0,
+            ),
             headers: Arc::new(message.headers),
             // Set default metadata so that metadata is always present.
             metadata: Some(Arc::new(Metadata::default())),
