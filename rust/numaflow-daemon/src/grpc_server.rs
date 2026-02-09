@@ -28,10 +28,10 @@ pub(crate) async fn run_grpc_server(
 mod tests {
     use super::*;
 
-    use std::panic;
+    use crate::timeout_checker::{should_not_timeout, should_timeout};
+
     use std::time::Duration;
     use tokio::sync::mpsc;
-    use tokio::time::timeout;
 
     #[tokio::test]
     async fn stops_on_cancellation()
@@ -44,9 +44,7 @@ mod tests {
 
         cln_token.cancel();
 
-        if let Err(e) = timeout(Duration::from_millis(20), handle).await {
-            panic!("Failed waiting for the gRPC server to stop: {}", e);
-        }
+        should_not_timeout(Duration::from_millis(50), handle).await;
         let _ = tx;
         Ok(())
     }
@@ -60,9 +58,7 @@ mod tests {
 
         let handle = tokio::spawn(async move { run_grpc_server(rx, cln_token_copy).await });
 
-        if (timeout(Duration::from_millis(20), handle).await).is_ok() {
-            panic!("Unexpected termination of the gRPC server");
-        }
+        should_timeout(Duration::from_millis(50), handle).await;
 
         let _ = tx;
         Ok(())

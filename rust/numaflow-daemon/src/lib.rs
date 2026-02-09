@@ -18,6 +18,9 @@ use grpc_server::run_grpc_server;
 use http_server::run_http_server;
 pub(crate) use service::MvtxDaemonService;
 
+#[cfg(test)]
+mod timeout_checker;
+
 /// MonoVertex Daemon Service
 /// ========================
 ///

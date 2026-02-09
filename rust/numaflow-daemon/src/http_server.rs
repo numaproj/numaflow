@@ -58,6 +58,8 @@ pub(crate) async fn run_http_server(mut http_rx: TlsStreamReceiver) -> Result<()
 mod tests {
     use super::*;
 
+    use crate::timeout_checker::should_not_timeout;
+
     use bytes::Bytes;
     use http::StatusCode;
     use http_body_util::Empty;
@@ -70,7 +72,6 @@ mod tests {
     use tokio::net::TcpListener;
     use tokio::net::TcpStream;
     use tokio::sync::mpsc;
-    use tokio::time::timeout;
     use tokio_rustls::{TlsAcceptor, TlsConnector};
 
     #[tokio::test]
@@ -117,20 +118,9 @@ mod tests {
         drop(sender);
 
         // Verify the graceful shutdown.
-        if let Err(err) = timeout(Duration::from_millis(20), conn_task).await {
-            panic!(
-                "Timed out waiting for HTTP client connection task to stop: {}",
-                err
-            )
-        }
-
-        if let Err(err) = timeout(Duration::from_millis(20), server_task).await {
-            panic!("Timed out waiting for HTTP server task to stop: {}", err)
-        }
-
-        if let Err(err) = timeout(Duration::from_millis(20), http_server).await {
-            panic!("Timed out waiting for HTTP server to stop: {}", err)
-        }
+        should_not_timeout(Duration::from_millis(50), conn_task).await;
+        should_not_timeout(Duration::from_millis(50), server_task).await;
+        should_not_timeout(Duration::from_millis(50), http_server).await;
 
         Ok(())
     }

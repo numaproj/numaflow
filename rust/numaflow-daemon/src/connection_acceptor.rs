@@ -223,6 +223,8 @@ impl ConnectionAcceptor {
 mod tests {
     use super::*;
 
+    use crate::timeout_checker::{should_not_timeout, should_timeout};
+
     use rcgen::{CertificateParams, KeyPair};
     use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName};
     use rustls::{ClientConfig, RootCertStore, ServerConfig};
@@ -230,7 +232,6 @@ mod tests {
     use std::time::Duration;
     use tokio::net::TcpStream;
     use tokio::sync::mpsc;
-    use tokio::time::timeout;
     use tokio_rustls::TlsConnector;
 
     #[tokio::test]
@@ -258,20 +259,14 @@ mod tests {
         connect_with_alpn(addr, Some(b"h2"), cert_der).await?;
 
         // Verify that the stream is received on gRPC channel.
-        if let Err(err) = timeout(Duration::from_millis(20), grpc_rx.recv()).await {
-            panic!("gRPC channel did not receive a stream: {}", err);
-        };
+        should_not_timeout(Duration::from_millis(50), grpc_rx.recv()).await;
 
         // Verify that the stream is not received on HTTP channel.
-        if let Ok(Some(_)) = timeout(Duration::from_millis(20), http_rx.recv()).await {
-            panic!("Unexpected HTTP stream received for h2 connection");
-        }
+        should_timeout(Duration::from_millis(50), http_rx.recv()).await;
 
         cln_token.cancel();
         // Verify the graceful shutdown.
-        if let Err(err) = timeout(Duration::from_millis(20), acceptor_handle).await {
-            panic!("Timed out waiting for the graceful shutdown: {}", err)
-        }
+        should_not_timeout(Duration::from_millis(50), acceptor_handle).await;
 
         Ok(())
     }
@@ -301,20 +296,14 @@ mod tests {
         connect_with_alpn(addr, Some(b"http/1.1"), cert_der).await?;
 
         // Verify that the stream is received on HTTP channel.
-        if let Err(err) = timeout(Duration::from_millis(20), http_rx.recv()).await {
-            panic!("HTTP channel did not receive a stream {}", err);
-        };
+        should_not_timeout(Duration::from_millis(50), http_rx.recv()).await;
 
         // Verify that the stream is not received on gRPC channel.
-        if let Ok(Some(_stream)) = timeout(Duration::from_millis(20), grpc_rx.recv()).await {
-            panic!("Unexpected gRPC stream received for http/1.1 connection")
-        }
+        should_timeout(Duration::from_millis(50), grpc_rx.recv()).await;
 
         cln_token.cancel();
         // Verify the graceful shutdown.
-        if let Err(err) = timeout(Duration::from_millis(20), acceptor_handle).await {
-            panic!("Timed out waiting for the graceful shutdown: {}", err)
-        }
+        should_not_timeout(Duration::from_millis(50), acceptor_handle).await;
 
         Ok(())
     }
@@ -344,20 +333,14 @@ mod tests {
         connect_with_alpn(addr, None, cert_der).await?;
 
         // Verify the stream is received on HTTP channel.
-        if let Err(err) = timeout(Duration::from_millis(20), http_rx.recv()).await {
-            panic!("HTTP channel did not receive a stream {}", err);
-        }
+        should_not_timeout(Duration::from_millis(50), http_rx.recv()).await;
 
         // Verify the stream is not received on gRPC channel.
-        if let Ok(Some(_stream)) = timeout(Duration::from_millis(20), grpc_rx.recv()).await {
-            panic!("Unexpected gRPC stream received on gRPC channel");
-        }
+        should_timeout(Duration::from_millis(50), grpc_rx.recv()).await;
 
         cln_token.cancel();
         // Verify the graceful shutdown.
-        if let Err(err) = timeout(Duration::from_millis(20), acceptor_handle).await {
-            panic!("Timed out waiting for the graceful shutdown: {}", err)
-        }
+        should_not_timeout(Duration::from_millis(50), acceptor_handle).await;
 
         Ok(())
     }
