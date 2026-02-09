@@ -12,11 +12,15 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 
 use crate::Result;
+#[cfg(test)]
+use crate::mark_success;
+#[cfg(test)]
+use crate::mark_success_batch;
 use crate::config::get_vertex_name;
 use crate::config::pipeline::VertexType::ReduceUDF;
 use crate::config::pipeline::isb::{BufferReaderConfig, ISBConfig, Stream};
 use crate::error::Error;
-use crate::message::{AckHandle, IntOffset, Message, MessageType, Offset, ReadAck};
+use crate::message::{AckHandle, IntOffset, Message, MessageType, Offset, ReadAck, MessageHandle};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
     jetstream_isb_metrics_labels, pipeline_metric_labels, pipeline_metrics,
@@ -86,14 +90,14 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         })
     }
 
-    /// Streaming read from ISB, returns a ReceiverStream and a JoinHandle for monitoring errors.
+    /// Streaming read from ISB, returns a ReceiverStream of MessageHandle and a JoinHandle for monitoring errors.
     pub(crate) async fn streaming_read(
         mut self,
         cancel: CancellationToken,
-    ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
+    ) -> Result<(ReceiverStream<MessageHandle>, JoinHandle<Result<()>>)> {
         let max_ack_pending = self.cfg.max_ack_pending;
         let batch_size = std::cmp::min(self.batch_size, max_ack_pending);
-        let (tx, rx) = mpsc::channel(batch_size);
+        let (tx, rx) = mpsc::channel::<MessageHandle>(batch_size);
 
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             let semaphore = Arc::new(Semaphore::new(max_ack_pending));
@@ -274,7 +278,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         vertex_type: &str,
         partition: u16,
         idle_wmb: WMB,
-        tx: &mpsc::Sender<Message>,
+        tx: &mpsc::Sender<MessageHandle>,
     ) -> Result<()> {
         if vertex_type != ReduceUDF.as_str() {
             return Ok(());
@@ -294,7 +298,9 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             },
             ..Default::default()
         };
-        tx.send(msg).await.map_err(|_| {
+
+        let read_msg = MessageHandle::without_ack_tracking(msg);
+        tx.send(read_msg).await.map_err(|_| {
             Error::ISB(crate::pipeline::isb::error::ISBError::Other(
                 "Failed to send wmb message to channel".to_string(),
             ))
@@ -405,7 +411,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
     async fn handle_idle_watermarks(
         &mut self,
         batch_is_empty: bool,
-        tx: &mpsc::Sender<Message>,
+        tx: &mpsc::Sender<MessageHandle>,
     ) -> Result<()> {
         if batch_is_empty {
             if let Some(wm) = self.watermark.as_mut() {
@@ -443,7 +449,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
     async fn process_message_batch(
         &mut self,
         mut batch: Vec<Message>,
-        tx: &mpsc::Sender<Message>,
+        tx: &mpsc::Sender<MessageHandle>,
         permits: &mut tokio::sync::OwnedSemaphorePermit,
         cancel: CancellationToken,
         processing_start: Instant,
@@ -465,7 +471,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             Self::publish_read_metrics(&self.metric_labels, &message);
 
             let (ack_tx, ack_rx) = oneshot::channel();
-            message.ack_handle = Some(Arc::new(AckHandle::new(ack_tx)));
+            let ack_handle = AckHandle::new(ack_tx);
 
             // Start message tracking and WIP loop
             self.start_message_tracking(
@@ -477,8 +483,9 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             )
             .await?;
 
-            // Send message to channel
-            if tx.send(message).await.is_err() {
+            // Create MessageHandle and send to channel
+            let read_message = MessageHandle::new(message, ack_handle);
+            if tx.send(read_message).await.is_err() {
                 break;
             }
         }
@@ -755,7 +762,8 @@ mod tests {
             10,
             "Expected 10 messages from the jetstream reader"
         );
-        drop(buffer);
+        // Mark all messages as success to ACK them
+        mark_success_batch!(buffer);
 
         reader_cancel_token.cancel();
         js_reader_task.await.unwrap().unwrap();
@@ -857,9 +865,11 @@ mod tests {
         }
 
         for _ in 0..5 {
-            let Some(_val) = js_reader_rx.next().await else {
+            let Some(val) = js_reader_rx.next().await else {
                 break;
             };
+            // Mark as success to ACK the message
+            mark_success!(val);
         }
 
         // wait until the tracker becomes empty, don't wait more than 1 second
@@ -1016,14 +1026,21 @@ mod tests {
 
         // Verify the message was correctly decompressed
         assert_eq!(
-            received_message.value.len(),
+            received_message.message().value.len(),
             0,
             "Empty payload should remain empty after compression/decompression"
         );
-        assert_eq!(received_message.keys.as_ref(), &["empty_key".to_string()]);
-        assert_eq!(received_message.offset.to_string(), offset.to_string());
+        assert_eq!(
+            received_message.message().keys.as_ref(),
+            &["empty_key".to_string()]
+        );
+        assert_eq!(
+            received_message.message().offset.to_string(),
+            offset.to_string()
+        );
 
-        drop(received_message);
+        // Mark as success to ACK the message (this consumes the message)
+        mark_success!(received_message);
 
         reader_cancel_token.cancel();
         js_reader_task.await.unwrap().unwrap();

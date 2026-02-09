@@ -106,7 +106,6 @@ impl From<AccumulatorResponse> for Message {
             headers: Arc::new(result.headers),
             metadata: None,
             is_late: false,
-            ack_handle: None,
         }
     }
 }

@@ -238,7 +238,7 @@ impl Compactor {
             match entry {
                 SegmentEntry::DataEntry { data, .. } => {
                     // Deserialize the message
-                    let msg: isb::ReadMessage = prost::Message::decode(data.clone())
+                    let msg: isb::MessageHandle = prost::Message::decode(data.clone())
                         .map_err(|e| format!("Failed to decode message: {e}"))?;
 
                     if should_retain
@@ -472,7 +472,7 @@ impl ShouldRetain for UnalignedCompaction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{IntOffset, Message, MessageID, Offset};
+    use crate::message::{IntOffset, Message, MessageID, Offset, MessageHandle};
     use crate::reduce::wal::WalMessage;
     use crate::shared::grpc::prost_timestamp_from_utc;
     use bytes::Bytes;
@@ -779,9 +779,11 @@ mod tests {
             };
 
             // Send message - conversion to bytes happens internally
-            tx.send(SegmentWriteMessage::WriteMessage { message })
-                .await
-                .unwrap();
+            tx.send(SegmentWriteMessage::WriteMessage {
+                read_message: MessageHandle::without_ack_tracking(message),
+            })
+            .await
+            .unwrap();
 
             // Rotate every 100 messages to create 10 files
             if i % 100 == 0 {
@@ -817,7 +819,7 @@ mod tests {
         let mut remaining_message_count = 0;
         while let Some(entry) = rx.next().await {
             if let SegmentEntry::DataEntry { data, .. } = entry {
-                let msg: isb::ReadMessage = prost::Message::decode(data).unwrap();
+                let msg: isb::MessageHandle = prost::Message::decode(data).unwrap();
                 if let Some(header) = msg.message.unwrap().header
                     && let Some(message_info) = header.message_info
                 {
@@ -954,13 +956,13 @@ mod tests {
 
         // Write the messages to the WAL - conversion to bytes happens internally
         tx.send(SegmentWriteMessage::WriteMessage {
-            message: before_message,
+            read_message: MessageHandle::without_ack_tracking(before_message),
         })
         .await
         .map_err(|e| format!("Failed to send data: {e}"))?;
 
         tx.send(SegmentWriteMessage::WriteMessage {
-            message: after_message,
+            read_message: MessageHandle::without_ack_tracking(after_message),
         })
         .await
         .map_err(|e| format!("Failed to send data: {e}"))?;
@@ -1002,7 +1004,7 @@ mod tests {
         let mut replayed_event_times = Vec::new();
 
         while let Ok(data) = replay_rx.try_recv() {
-            let msg: isb::ReadMessage = prost::Message::decode(data)
+            let msg: isb::MessageHandle = prost::Message::decode(data)
                 .map_err(|e| format!("Failed to decode message: {e}"))?;
 
             // Verify that the message has an event time after the GC end time
@@ -1210,7 +1212,7 @@ mod tests {
         {
             // Send message - conversion to bytes happens internally
             tx.send(SegmentWriteMessage::WriteMessage {
-                message: message.clone(),
+                read_message: MessageHandle::without_ack_tracking(message.clone()),
             })
             .await
             .map_err(|e| format!("Failed to send data: {e}"))?;
@@ -1254,7 +1256,7 @@ mod tests {
         let mut key3_key4_count = 0;
 
         while let Ok(data) = replay_rx.try_recv() {
-            let msg: isb::ReadMessage = prost::Message::decode(data)
+            let msg: isb::MessageHandle = prost::Message::decode(data)
                 .map_err(|e| format!("Failed to decode message: {e}"))?;
 
             // Verify that the message has an event time after the appropriate GC end time

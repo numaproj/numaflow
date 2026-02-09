@@ -1,8 +1,9 @@
 use crate::Result;
+use crate::mark_success_batch;
 use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
-use crate::message::Message;
+use crate::message::{Message, MessageHandle};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
@@ -15,7 +16,6 @@ use numaflow_pb::clients::sink::sink_response;
 use numaflow_pulsar::sink::Sink as PulsarSink;
 use numaflow_sqs::sink::SqsSink;
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -197,7 +197,7 @@ impl SinkWriter {
     /// closed or the cancellation token is triggered.
     pub(crate) async fn streaming_write(
         mut self,
-        messages_stream: ReceiverStream<Message>,
+        messages_stream: ReceiverStream<MessageHandle>,
         cln_token: CancellationToken,
     ) -> Result<JoinHandle<Result<()>>> {
         Ok(tokio::spawn({
@@ -210,69 +210,77 @@ impl SinkWriter {
                 pin!(chunk_stream);
 
                 // Main processing loop
-                while let Some(batch) = chunk_stream.next().await {
-                    // If bypass conditions exist for primary sink, drop the batch
-                    let batch = if let Some(conditions) = &self.bypass_conditions
-                        && let Some(ref _sink) = conditions.sink
-                    {
-                        vec![]
-                    } else {
-                        batch
-                    };
-
-                    // we are in shutting down mode, we will not be writing to the sink,
-                    // mark the messages as failed, and on Drop they will be nack'ed.
+                while let Some(read_batch) = chunk_stream.next().await {
+                    // We are in shutting down mode, NAK all messages
                     if self.shutting_down_on_err {
-                        for msg in &batch {
-                            msg.ack_handle
-                                .as_ref()
-                                .expect("ack handle should be present")
-                                .is_failed
-                                .store(true, Ordering::Relaxed);
-                        }
+                        // read_batch is dropped without ack, causing NAK
                         continue;
                     }
 
-                    // collect ack handles for later failure tracking
-                    let ack_handles = batch
-                        .iter()
-                        .map(|msg| msg.ack_handle.clone())
-                        .collect::<Vec<_>>();
-
-                    let mut dropped_message_count = batch.len();
-                    // filter out messages that are marked for drop
-                    let batch: Vec<_> = batch.into_iter().filter(|msg| !msg.dropped()).collect();
-                    dropped_message_count -= batch.len();
-
-                    // skip if all were dropped
-                    if batch.is_empty() {
-                        continue;
-                    }
-
-                    // perform the write operation
-                    if let Err(e) = self.write_to_sink(batch, cln_token.clone()).await {
-                        // critical error, cancel upstream and mark all acks as failed
-                        error!(?e, "Error writing to sink, initiating shutdown.");
-                        cln_token.cancel();
-
-                        for ack_handle in ack_handles {
-                            ack_handle
-                                .as_ref()
-                                .expect("ack handle should be present")
-                                .is_failed
-                                .store(true, Ordering::Relaxed);
+                    match self.process_batch(read_batch, cln_token.clone()).await {
+                        Ok(()) => {
+                            // Batch processed successfully
                         }
-
-                        self.final_result = Err(e);
-                        self.shutting_down_on_err = true;
+                        Err(e) => {
+                            // Critical error, cancel upstream and initiate shutdown
+                            error!(?e, "Error writing to sink, initiating shutdown.");
+                            cln_token.cancel();
+                            self.final_result = Err(e);
+                            self.shutting_down_on_err = true;
+                        }
                     }
-                    send_drop_metrics(is_mono_vertex(), dropped_message_count);
                 }
 
                 // finalize
                 self.final_result
             }
         }))
+    }
+
+    /// Processes a batch of messages: handles bypass, dropped messages, and writes to sink.
+    /// On success, all messages are ACK'd. On error, messages are NAK'd (dropped without ack).
+    async fn process_batch(
+        &mut self,
+        read_batch: Vec<MessageHandle>,
+        cln_token: CancellationToken,
+    ) -> Result<()> {
+        // If bypass conditions exist for primary sink, ack and skip
+        if let Some(conditions) = &self.bypass_conditions
+            && let Some(ref _sink) = conditions.sink
+        {
+            mark_success_batch!(read_batch);
+            return Ok(());
+        }
+
+        // Separate dropped messages from messages to process
+        let (dropped, to_process): (Vec<_>, Vec<_>) = read_batch
+            .into_iter()
+            .partition(|read_msg| read_msg.message().dropped());
+
+        let dropped_count = dropped.len();
+
+        // Dropped messages are treated as successfully processed
+        mark_success_batch!(dropped);
+
+        // If all messages were dropped, we're done
+        if to_process.is_empty() {
+            send_drop_metrics(is_mono_vertex(), dropped_count);
+            return Ok(());
+        }
+
+        // Extract messages for writing to sink
+        let messages: Vec<Message> = to_process
+            .iter()
+            .map(|read_msg| read_msg.message().clone())
+            .collect();
+
+        // Perform the write operation
+        self.write_to_sink(messages, cln_token.clone()).await?;
+
+        // Success: ack all processed messages
+        mark_success_batch!(to_process);
+        send_drop_metrics(is_mono_vertex(), dropped_count);
+        Ok(())
     }
 
     /// Write the messages to the Sink.
@@ -719,7 +727,7 @@ impl From<sink_response::Result> for ResponseFromSink {
 mod tests {
     use super::*;
     use crate::config::pipeline::NatsStoreConfig;
-    use crate::message::{AckHandle, IntOffset, Message, MessageID, Offset, ReadAck};
+    use crate::message::{AckHandle, IntOffset, Message, MessageID, Offset, ReadAck, MessageHandle};
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::serve::nats::NatsServingStore;
     use crate::tracker::Tracker;
@@ -807,11 +815,11 @@ mod tests {
                 .unwrap();
 
         let mut ack_rxs = vec![];
-        let messages: Vec<Message> = (0..10)
+        let messages: Vec<MessageHandle> = (0..10)
             .map(|i| {
                 let (ack_tx, ack_rx) = oneshot::channel();
                 ack_rxs.push(ack_rx);
-                Message {
+                let message = Message {
                     typ: Default::default(),
                     keys: Arc::from(vec![format!("key_{}", i)]),
                     tags: None,
@@ -824,9 +832,9 @@ mod tests {
                         offset: format!("offset_{}", i).into(),
                         index: i as i32,
                     },
-                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                     ..Default::default()
-                }
+                };
+                MessageHandle::new(message, AckHandle::new(ack_tx))
             })
             .collect();
 
@@ -886,11 +894,11 @@ mod tests {
         .unwrap();
 
         let mut ack_rxs = vec![];
-        let messages: Vec<Message> = (0..10)
+        let messages: Vec<MessageHandle> = (0..10)
             .map(|i| {
                 let (ack_tx, ack_rx) = oneshot::channel();
                 ack_rxs.push(ack_rx);
-                Message {
+                let message = Message {
                     typ: Default::default(),
                     keys: Arc::from(vec!["error".to_string()]),
                     tags: None,
@@ -903,9 +911,9 @@ mod tests {
                         offset: format!("offset_{}", i).into(),
                         index: i as i32,
                     },
-                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                     ..Default::default()
-                }
+                };
+                MessageHandle::new(message, AckHandle::new(ack_tx))
             })
             .collect();
 
@@ -975,11 +983,11 @@ mod tests {
         .unwrap();
 
         let mut ack_rxs = vec![];
-        let messages: Vec<Message> = (0..20)
+        let messages: Vec<MessageHandle> = (0..20)
             .map(|i| {
                 let (ack_tx, ack_rx) = oneshot::channel();
                 ack_rxs.push(ack_rx);
-                Message {
+                let message = Message {
                     typ: Default::default(),
                     keys: Arc::from(vec!["fallback".to_string()]),
                     tags: None,
@@ -992,9 +1000,9 @@ mod tests {
                         offset: format!("offset_{}", i).into(),
                         index: i as i32,
                     },
-                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                     ..Default::default()
-                }
+                };
+                MessageHandle::new(message, AckHandle::new(ack_tx))
             })
             .collect();
 
@@ -1057,11 +1065,11 @@ mod tests {
         .unwrap();
 
         let mut ack_rxs = vec![];
-        let messages: Vec<Message> = (0..20)
+        let messages: Vec<MessageHandle> = (0..20)
             .map(|i| {
                 let (ack_tx, ack_rx) = oneshot::channel();
                 ack_rxs.push(ack_rx);
-                Message {
+                let message = Message {
                     typ: Default::default(),
                     keys: Arc::from(vec!["onSuccess".to_string()]),
                     tags: None,
@@ -1074,9 +1082,9 @@ mod tests {
                         offset: format!("offset_{}", i).into(),
                         index: i as i32,
                     },
-                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                     ..Default::default()
-                }
+                };
+                MessageHandle::new(message, AckHandle::new(ack_tx))
             })
             .collect();
 
@@ -1167,14 +1175,14 @@ mod tests {
         .unwrap();
 
         let mut ack_rxs = vec![];
-        let messages: Vec<Message> = (0..10)
+        let read_messages: Vec<MessageHandle> = (0..10)
             .map(|i| {
                 let mut headers = HashMap::new();
                 headers.insert(DEFAULT_ID_HEADER.to_string(), format!("id_{}", i));
                 headers.insert(DEFAULT_POD_HASH_KEY.to_string(), "abcd".to_string());
                 let (ack_tx, ack_rx) = oneshot::channel();
                 ack_rxs.push(ack_rx);
-                Message {
+                let message = Message {
                     typ: Default::default(),
                     keys: Arc::from(vec!["serve".to_string()]),
                     tags: None,
@@ -1188,14 +1196,14 @@ mod tests {
                         index: i as i32,
                     },
                     headers: Arc::new(headers),
-                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                     ..Default::default()
-                }
+                };
+                MessageHandle::new(message, AckHandle::new(ack_tx))
             })
             .collect();
 
         let (tx, rx) = mpsc::channel(10);
-        for msg in messages {
+        for msg in read_messages {
             let _ = tx.send(msg).await;
         }
 

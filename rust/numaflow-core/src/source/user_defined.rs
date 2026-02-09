@@ -179,7 +179,6 @@ impl TryFrom<read_response::Result> for Message {
                 None => Metadata::default(),
             })),
             is_late: false,
-            ack_handle: None,
         })
     }
 }

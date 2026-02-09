@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant, sleep};
@@ -10,10 +10,11 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
 use crate::Result;
+use crate::mark_success;
 use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
 use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Error;
-use crate::message::{Message, Offset};
+use crate::message::{Message, Offset, MessageHandle};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_metric_labels,
     pipeline_metrics,
@@ -37,6 +38,83 @@ struct PendingWriteResult<C: NumaflowTypeConfig> {
     stream: Stream,
     paf: <C::ISBWriter as ISBWriter>::PendingWrite,
     write_start: Instant,
+}
+
+/// ISBWriteTask encapsulates all the context needed to execute a write operation per message.
+/// Similar to MapUnaryTask, it spawns as a tokio task and calls mark_success() at the end.
+struct ISBWriteTask<C: NumaflowTypeConfig> {
+    orchestrator: ISBWriterOrchestrator<C>,
+    /// Permit to achieve structured concurrency by ensuring we do not exceed the concurrency limit
+    /// and all the tasks are cleaned up when the component is shutting down.
+    permit: OwnedSemaphorePermit,
+    read_message: MessageHandle,
+    cln_token: CancellationToken,
+}
+
+impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
+    /// Spawns the ISB write task as a tokio task.
+    /// The task will write the message to ISB, resolve PAFs, publish watermarks, and mark success.
+    fn spawn(self) {
+        tokio::spawn(async move {
+            self.execute().await;
+        });
+    }
+
+    /// Executes the ISB write operation.
+    /// Flow: check dropped -> route and write -> resolve PAFs -> publish watermarks -> mark_success
+    async fn execute(self) {
+        // Hold the permit until the task completes
+        let _permit = self.permit;
+
+        let message = self.read_message.message();
+
+        // Handle dropped messages
+        if message.dropped() {
+            // Increment metric for user-initiated drops via DROP tag
+            pipeline_metrics()
+                .forwarder
+                .udf_drop_total
+                .get_or_create(pipeline_metric_labels(self.orchestrator.vertex_type.as_str()))
+                .inc();
+            // Mark as success since dropped messages are intentionally dropped
+            mark_success!(self.read_message);
+            return;
+        }
+
+        // Route and write to appropriate streams
+        let write_results = self
+            .orchestrator
+            .route_and_write_message(message, self.cln_token.clone())
+            .await;
+
+        let n = write_results.len();
+
+        // Resolve all PAFs
+        let resolved_offsets = self
+            .orchestrator
+            .resolve_all_pafs(write_results, message, self.cln_token.clone())
+            .await;
+
+        // If any of the writes failed, NAK the message by dropping without mark_success
+        if resolved_offsets.len() != n {
+            warn!(
+                expected = n,
+                actual = resolved_offsets.len(),
+                "Some writes failed during PAF resolution, message will be NAK'd"
+            );
+            // read_message is dropped here without mark_success, causing NAK
+            return;
+        }
+
+        // Publish watermarks for successful writes
+        self.orchestrator
+            .clone()
+            .publish_watermarks_for_offsets(resolved_offsets, message)
+            .await;
+
+        // All PAFs resolved successfully, mark as success to ACK
+        mark_success!(self.read_message);
+    }
 }
 
 /// Components needed to create an ISBWriterOrchestrator.
@@ -94,55 +172,45 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
     }
 
     /// Starts reading messages from the stream and writes them to Jetstream ISB.
+    /// Each message is processed by spawning an ISBWriteTask that handles the full write flow:
+    /// check dropped -> route and write -> resolve PAFs -> publish watermarks -> mark_success
     pub(crate) async fn streaming_write(
         self,
-        messages_stream: ReceiverStream<Message>,
+        messages_stream: ReceiverStream<MessageHandle>,
         cln_token: CancellationToken,
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             let mut messages_stream = messages_stream;
 
-            while let Some(message) = messages_stream.next().await {
-                self.write_to_isb(message, cln_token.clone())
-                    .await
-                    .inspect_err(|e| {
-                        error!(?e, "Failed to process message");
+            while let Some(read_message) = messages_stream.next().await {
+                // Acquire permit for structured concurrency
+                let permit = match Arc::clone(&self.sem).acquire_owned().await {
+                    Ok(permit) => permit,
+                    Err(_) => {
+                        error!("Failed to acquire semaphore permit");
                         cln_token.cancel();
-                    })?;
+                        return Err(Error::ISB(ISBError::Other(
+                            "Failed to acquire semaphore permit".to_string(),
+                        )));
+                    }
+                };
+
+                // Spawn the write task
+                ISBWriteTask {
+                    orchestrator: self.clone(),
+                    permit,
+                    read_message,
+                    cln_token: cln_token.clone(),
+                }
+                .spawn();
             }
 
-            // Wait for all the PAF resolvers to complete before returning
+            // Wait for all the write tasks to complete before returning
             self.wait_for_paf_resolvers().await?;
 
             Ok(())
         });
         Ok(handle)
-    }
-
-    /// Writes a single message to the ISB. It will keep retrying until it succeeds or is cancelled.
-    /// Writes are ordered only if PAF concurrency is 1 because during retries we cannot guarantee order.
-    /// This calls `write_to_stream` internally once it has figured out the target streams. This Write
-    /// is like a `flap-map` operation. It could end in 0, 1, or more writes based on conditions.
-    async fn write_to_isb(&self, message: Message, cln_token: CancellationToken) -> Result<()> {
-        // Handle dropped messages
-        if message.dropped() {
-            // Increment metric for user-initiated drops via DROP tag
-            pipeline_metrics()
-                .forwarder
-                .udf_drop_total
-                .get_or_create(pipeline_metric_labels(self.vertex_type.as_str()))
-                .inc();
-            return Ok(());
-        }
-
-        // Route and write to appropriate streams
-        let write_results = self
-            .route_and_write_message(&message, cln_token.clone())
-            .await;
-
-        // Resolve PAFs and finalize
-        self.resolve_and_finalize(write_results, message, cln_token)
-            .await
     }
 
     /// Routes a message to appropriate streams and writes to each.
@@ -346,54 +414,6 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
             .observe(write_processing_start.elapsed().as_micros() as f64);
     }
 
-    /// Resolves PAFs and finalizes the message processing.
-    /// Spawns a background task to resolve all PAFs, publish watermarks, and update tracker.
-    async fn resolve_and_finalize(
-        &self,
-        write_results: Vec<PendingWriteResult<C>>,
-        message: Message,
-        cln_token: CancellationToken,
-    ) -> Result<()> {
-        let permit = Arc::clone(&self.sem).acquire_owned().await.map_err(|_e| {
-            Error::ISB(ISBError::Other(
-                "Failed to acquire semaphore permit".to_string(),
-            ))
-        });
-
-        let mut this = self.clone();
-        tokio::spawn(async move {
-            let _permit = permit;
-
-            let n = write_results.len();
-            // Resolve all PAFs
-            let resolved_offsets = this
-                .resolve_all_pafs(write_results, &message, cln_token)
-                .await;
-
-            // If any of the writes failed, NAK the message so it can be retried
-            if resolved_offsets.len() != n {
-                message
-                    .ack_handle
-                    .as_ref()
-                    .expect("ack handle should be present")
-                    .is_failed
-                    .store(true, Ordering::Relaxed);
-                warn!(
-                    expected = n,
-                    actual = resolved_offsets.len(),
-                    "Some writes failed during PAF resolution, message will be NAK'd"
-                );
-                return;
-            }
-
-            // Publish watermarks for successful writes
-            this.publish_watermarks_for_offsets(resolved_offsets, &message)
-                .await;
-        });
-
-        Ok(())
-    }
-
     /// Resolves all PAFs and returns the offsets for successful writes.
     async fn resolve_all_pafs(
         &self,
@@ -552,7 +572,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
 mod tests {
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
-    use crate::message::{AckHandle, IntOffset, Message, MessageID, Offset, ReadAck};
+    use crate::message::{AckHandle, IntOffset, Message, MessageID, Offset, ReadAck, MessageHandle};
     use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
     use crate::typ::WithoutRateLimiter;
     use async_nats::jetstream;
@@ -656,11 +676,11 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                 ..Default::default()
             };
+            let read_message = MessageHandle::new(message, AckHandle::new(ack_tx));
             ack_rxs.push(ack_rx);
-            tx.send(message).await.unwrap();
+            tx.send(read_message).await.unwrap();
         }
         drop(tx);
 
@@ -766,11 +786,11 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                 ..Default::default()
             };
+            let read_message = MessageHandle::new(message, AckHandle::new(ack_tx));
             ack_rxs.push(ack_rx);
-            tx.send(message).await.unwrap();
+            tx.send(read_message).await.unwrap();
         }
 
         // Cancel after sending some messages
@@ -938,11 +958,11 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                 ..Default::default()
             };
+            let read_message = MessageHandle::new(message, AckHandle::new(ack_tx));
             ack_rxs.push(ack_rx);
-            tx.send(message).await.unwrap();
+            tx.send(read_message).await.unwrap();
         }
         drop(tx);
 

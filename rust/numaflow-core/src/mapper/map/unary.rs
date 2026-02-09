@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::Ordering;
 
+use crate::mark_success;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
-use crate::message::Message;
+use crate::message::{Message, MessageHandle};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
 use tokio_stream::StreamExt;
@@ -45,7 +45,7 @@ pub(in crate::mapper) struct MapUnaryTask {
     /// Permit to achieve structured concurrency by ensuring we do not exceed the concurrency limit
     /// and all the tasks are cleaned up when the component is shutting down.
     pub permit: OwnedSemaphorePermit,
-    pub message: Message,
+    pub read_message: MessageHandle,
     pub shared_ctx: Arc<SharedMapTaskContext>,
 }
 
@@ -65,9 +65,9 @@ impl MapUnaryTask {
 
         // Store parent message info before sending to UDF
         // parent_info contains offset, so we don't need to clone it separately
-        let parent_info: ParentMessageInfo = (&self.message).into();
+        let parent_info: ParentMessageInfo = self.read_message.message().into();
 
-        let request: MapRequest = self.message.into();
+        let request: MapRequest = self.read_message.message().clone().into();
         update_udf_read_metric(self.shared_ctx.is_mono_vertex);
 
         // Call the UDF and get raw results
@@ -79,12 +79,7 @@ impl MapUnaryTask {
             Ok(results) => results,
             Err(e) => {
                 error!(?e, offset = ?parent_info.offset, "failed to map message");
-                parent_info
-                    .ack_handle
-                    .as_ref()
-                    .expect("ack handle should be present")
-                    .is_failed
-                    .store(true, Ordering::Relaxed);
+                // read_message will be dropped without mark_success, causing NAK
                 let _ = self.shared_ctx.error_tx.send(e).await;
                 return;
             }
@@ -117,23 +112,33 @@ impl MapUnaryTask {
 
         // Send messages downstream
         for mapped_message in mapped_messages {
-            let bypassed = if let Some(ref bypass_router) = self.shared_ctx.bypass_router {
-                bypass_router
-                    .try_bypass(mapped_message.clone())
+            let read_msg = self.read_message.clone_with_message(mapped_message);
+
+            // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
+            // If not bypassed, it returns Some(read_msg) for us to send downstream.
+            let read_msg = if let Some(ref bypass_router) = self.shared_ctx.bypass_router {
+                match bypass_router
+                    .try_bypass(read_msg)
                     .await
                     .expect("failed to send message to bypass channel")
+                {
+                    Some(msg) => msg,
+                    None => continue, // Message was bypassed, move to next
+                }
             } else {
-                false
+                read_msg
             };
 
-            if !bypassed {
-                self.shared_ctx
-                    .output_tx
-                    .send(mapped_message)
-                    .await
-                    .expect("failed to send response");
-            }
+            self.shared_ctx
+                .output_tx
+                .send(read_msg)
+                .await
+                .expect("failed to send response");
         }
+
+        // Mark the original read message as success (decrement its ref_count).
+        // The message will only be ACK'd when all downstream messages also call mark_success().
+        mark_success!(self.read_message);
     }
 }
 

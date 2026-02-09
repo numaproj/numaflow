@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::message::{Message, MessageType};
+use crate::message::{Message, MessageType, MessageHandle};
 use crate::pipeline::isb::writer::ISBWriterOrchestrator;
 use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
 use crate::reduce::reducer::unaligned::user_defined::accumulator::UserDefinedAccumulator;
@@ -170,8 +170,10 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
                     // accumulator acts like a Global Window.
                     let window = response.window.clone().expect("Window not set in response");
                     let window : Window = window.into();
+                    // Wrap the response in MessageHandle without ack tracking since this is reduce output
+                    let message: Message = response.into();
                     writer_tx
-                        .send(response.into())
+                        .send(MessageHandle::without_ack_tracking(message))
                         .await
                         .expect("Failed to send response to writer");
 
@@ -285,8 +287,10 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
                         continue;
                     }
 
+                    // Wrap the response in MessageHandle without ack tracking since this is reduce output
+                    let message: Message = response.into();
                     writer_tx
-                        .send(response.into())
+                        .send(MessageHandle::without_ack_tracking(message))
                         .await
                         .expect("Failed to send response to writer");
                 }

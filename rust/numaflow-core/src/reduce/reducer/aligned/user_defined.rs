@@ -1,5 +1,5 @@
 use crate::config::{get_vertex_name, get_vertex_replica};
-use crate::message::{IntOffset, Message, MessageID, Offset};
+use crate::message::{IntOffset, Message, MessageID, Offset, MessageHandle};
 use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, AlignedWindowOperation};
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use crate::{Result, jh_abort_guard};
@@ -171,7 +171,7 @@ impl UserDefinedAlignedReduce {
     pub(crate) async fn reduce_fn(
         &mut self,
         stream: ReceiverStream<AlignedWindowMessage>,
-        result_tx: tokio::sync::mpsc::Sender<Message>,
+        result_tx: tokio::sync::mpsc::Sender<MessageHandle>,
         cln_token: CancellationToken,
     ) -> Result<()> {
         // Convert AlignedWindowMessage stream to ReduceRequest stream
@@ -245,8 +245,9 @@ impl UserDefinedAlignedReduce {
                     }
                     .into();
 
+                    // Wrap in MessageHandle without ack tracking since this is reduce output
                     result_tx
-                        .send(message)
+                        .send(MessageHandle::without_ack_tracking(message))
                         .await
                         .expect("failed to send response");
 
@@ -456,8 +457,8 @@ mod tests {
             .expect("no result received");
 
         // Verify the result
-        assert_eq!(result.keys.to_vec(), vec!["key1"]);
-        assert_eq!(String::from_utf8(result.value.to_vec()).unwrap(), "3"); // Counter should be 3
+        assert_eq!(result.message().keys.to_vec(), vec!["key1"]);
+        assert_eq!(String::from_utf8(result.message().value.to_vec()).unwrap(), "3"); // Counter should be 3
 
         // Shutdown the server
         shutdown_tx
@@ -682,17 +683,17 @@ mod tests {
         assert_eq!(results.len(), 2);
 
         // Sort results by key for deterministic testing
-        results.sort_by(|a, b| a.keys.to_vec().cmp(&b.keys.to_vec()));
+        results.sort_by(|a, b| a.message().keys.to_vec().cmp(&b.message().keys.to_vec()));
 
         // Check key1 result
         let result0 = results.first().expect("Expected result for key1");
-        assert_eq!(result0.keys.to_vec(), vec!["key1"]);
-        assert_eq!(String::from_utf8(result0.value.to_vec()).unwrap(), "2"); // Counter should be 2
+        assert_eq!(result0.message().keys.to_vec(), vec!["key1"]);
+        assert_eq!(String::from_utf8(result0.message().value.to_vec()).unwrap(), "2"); // Counter should be 2
 
         // Check key2 result
         let result1 = results.get(1).expect("Expected result for key2");
-        assert_eq!(result1.keys.to_vec(), vec!["key2"]);
-        assert_eq!(String::from_utf8(result1.value.to_vec()).unwrap(), "3"); // Counter should be 3
+        assert_eq!(result1.message().keys.to_vec(), vec!["key2"]);
+        assert_eq!(String::from_utf8(result1.message().value.to_vec()).unwrap(), "3"); // Counter should be 3
 
         // Shutdown the server
         shutdown_tx
@@ -846,8 +847,8 @@ mod tests {
             .expect("no result received");
 
         // Verify the result
-        assert_eq!(result.keys.to_vec(), vec!["key1"]);
-        assert_eq!(String::from_utf8(result.value.to_vec()).unwrap(), "3"); // Counter should be 3
+        assert_eq!(result.message().keys.to_vec(), vec!["key1"]);
+        assert_eq!(String::from_utf8(result.message().value.to_vec()).unwrap(), "3"); // Counter should be 3
 
         // Shutdown the server
         shutdown_tx

@@ -34,7 +34,7 @@ impl TryFrom<WalMessage> for Bytes {
             return Err(Error::Other("Invalid offset".to_string()));
         };
 
-        let proto_message = numaflow_pb::objects::isb::ReadMessage {
+        let proto_message = numaflow_pb::objects::isb::MessageHandle {
             message: Some(numaflow_pb::objects::isb::Message {
                 header: Some(numaflow_pb::objects::isb::Header {
                     message_info: Some(numaflow_pb::objects::isb::MessageInfo {
@@ -65,7 +65,7 @@ impl TryFrom<Bytes> for WalMessage {
     type Error = Error;
 
     fn try_from(value: Bytes) -> Result<Self, Self::Error> {
-        let proto_read_message: numaflow_pb::objects::isb::ReadMessage =
+        let proto_read_message: numaflow_pb::objects::isb::MessageHandle =
             prost::Message::decode(value.as_ref()).map_err(|e| Error::Other(e.to_string()))?;
 
         let proto_message = proto_read_message

@@ -6,13 +6,50 @@
 //! The spawned task exposes an [AckHandle] which implements [Drop] trait. As the message is processed,
 //! and cloned (e.g., flat-map), the reference counted Handle will keep track and eventually will be
 //! dropped once the all the copies of [Message] are dropped. This trigger the final ack/nak.
+//!
+//! [MessageHandle] is a wrapper around [Message] that holds the [AckHandle]. It should be explicitly
+//! marked as success after processing via [MessageHandle::mark_success], so that it can be acked.
+//! By default, it will be nacked if not marked as success.
+//!
+//! ## Macros
+//! - [mark_success!] - Marks a single [MessageHandle] as success (consumes the handle).
+//! - [mark_success_batch!] - Marks a batch of [MessageHandle]s as success (consumes the batch).
+
+/// Marks a single [MessageHandle] as success (consumes the handle).
+///
+/// # Example
+/// ```ignore
+/// mark_success!(message_handle);
+/// ```
+#[macro_export]
+macro_rules! mark_success {
+    ($msg:expr) => {{
+        $msg.mark_success();
+        drop($msg);
+    }};
+}
+
+/// Marks a batch of [MessageHandle]s as success (consumes the batch).
+///
+/// # Example
+/// ```ignore
+/// mark_success_batch!(message_handles);
+/// ```
+#[macro_export]
+macro_rules! mark_success_batch {
+    ($batch:expr) => {{
+        for msg in $batch {
+            msg.mark_success();
+        }
+    }};
+}
 
 use crate::Error;
 use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
 
 use crate::metadata::Metadata;
 use crate::shared::grpc::prost_timestamp_from_utc;
@@ -53,17 +90,19 @@ pub(crate) struct Message {
     /// is_late is used to indicate if the message is a late data. Late data is data that arrives
     /// after the watermark has passed. This is set only at source.
     pub(crate) is_late: bool,
-    /// ack_handle is used to send the ack/nak to the source. It is optional because it is not used
-    /// when the message is originated from the WAL (reduce vertex).
-    pub(crate) ack_handle: Option<Arc<AckHandle>>,
 }
 
-/// AckHandle is used to send the ack/nak to the source but it is reference counted and makes sure
-/// when it is dropped, we send the ack/nak to the source.
+/// AckHandle is used to send the ack/nak to the source. It uses a reference count to track
+/// the number of active references. When dropped, it sends NAK if ref_count != 0 (not all
+/// references were marked as success), or ACK if ref_count == 0 (all references were marked
+/// as success).
 #[derive(Debug)]
 pub(crate) struct AckHandle {
     pub(crate) ack_handle: Option<oneshot::Sender<ReadAck>>,
-    pub(crate) is_failed: AtomicBool,
+    /// Reference count to track active references. Starts at 1 when created.
+    /// Incremented when cloned (via MessageHandle::clone), decremented when mark_success is called.
+    /// On drop: NAK if ref_count != 0, ACK if ref_count == 0.
+    pub(crate) ref_count: AtomicUsize,
 }
 
 impl AckHandle {
@@ -71,7 +110,7 @@ impl AckHandle {
     pub(crate) fn new(ack_handle: oneshot::Sender<ReadAck>) -> Self {
         Self {
             ack_handle: Some(ack_handle),
-            is_failed: AtomicBool::new(false),
+            ref_count: AtomicUsize::new(1),
         }
     }
 }
@@ -79,11 +118,97 @@ impl AckHandle {
 impl Drop for AckHandle {
     fn drop(&mut self) {
         if let Some(ack_handle) = self.ack_handle.take() {
-            if self.is_failed.load(std::sync::atomic::Ordering::Relaxed) {
+            // NAK if ref_count is not 0 (meaning not all references were marked as success)
+            if self.ref_count.load(std::sync::atomic::Ordering::SeqCst) != 0 {
                 ack_handle.send(ReadAck::Nak).expect("Failed to send nak");
             } else {
                 ack_handle.send(ReadAck::Ack).expect("Failed to send ack");
             }
+        }
+    }
+}
+
+/// MessageHandle is the message read from the ISB/Source. MessageHandle should be explicitly marked as
+/// success after processing via [MessageHandle::mark_success], so that it can be acked/nacked.
+/// By default, it will be nacked if not marked as success.
+///
+/// MessageHandle implements Clone - when cloned, the reference count is incremented, so each
+/// clone must be marked as success for the original message to be ACK'd.
+#[derive(Debug)]
+pub(crate) struct MessageHandle {
+    pub(crate) message: Message,
+    pub(crate) ack_handle: Arc<AckHandle>,
+}
+
+impl Clone for MessageHandle {
+    fn clone(&self) -> Self {
+        self.ack_handle
+            .ref_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Self {
+            message: self.message.clone(),
+            ack_handle: Arc::clone(&self.ack_handle),
+        }
+    }
+}
+
+impl MessageHandle {
+    /// Creates a new MessageHandle.
+    pub(crate) fn new(message: Message, ack_handle: AckHandle) -> Self {
+        Self {
+            message,
+            ack_handle: Arc::new(ack_handle),
+        }
+    }
+
+    /// Creates a new MessageHandle from an existing Arc<AckHandle>.
+    /// This is used when the AckHandle has already been wrapped in Arc.
+    pub(crate) fn from_arc(message: Message, ack_handle: Arc<AckHandle>) -> Self {
+        Self {
+            message,
+            ack_handle,
+        }
+    }
+
+    /// Creates a MessageHandle without ack tracking.
+    /// This is used for messages that don't need ack tracking, such as mapper output
+    /// where the original message has already been acked by the mapper.
+    /// The ack handle has no sender, so it will be a no-op when dropped.
+    pub(crate) fn without_ack_tracking(message: Message) -> Self {
+        Self {
+            message,
+            ack_handle: Arc::new(AckHandle {
+                ack_handle: None,
+                ref_count: AtomicUsize::new(0), // Already "success" state
+            }),
+        }
+    }
+
+    /// Mark the message as successfully processed.
+    /// This decrements the reference count. When all references are marked as success
+    /// (ref_count reaches 0), the message will be ACK'd when the AckHandle is dropped.
+    pub(crate) fn mark_success(&self) {
+        self.ack_handle
+            .ref_count
+            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Get a reference to the inner message.
+    pub(crate) fn message(&self) -> &Message {
+        &self.message
+    }
+
+    /// Creates a new MessageHandle with a different message but sharing the same AckHandle.
+    /// This is used for flatmap scenarios where one input message produces multiple output messages.
+    /// Each output message shares the same AckHandle and increments the ref_count.
+    /// All output messages must call mark_success() for the original message to be ACK'd.
+    pub(crate) fn clone_with_message(&self, message: Message) -> Self {
+        self.ack_handle
+            .ref_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Self {
+            message,
+            ack_handle: Arc::clone(&self.ack_handle),
         }
     }
 }
@@ -141,7 +266,6 @@ impl Default for Message {
             metadata: None,
             typ: Default::default(),
             is_late: false,
-            ack_handle: None,
         }
     }
 }
@@ -496,5 +620,85 @@ mod tests {
 
         let offset_string = Offset::String(string_offset);
         assert_eq!(format!("{}", offset_string), "42-1");
+    }
+
+    #[tokio::test]
+    async fn test_read_message_nack_by_default() {
+        // When MessageHandle is dropped without calling mark_success, it should NAK
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let message = Message::default();
+        let ack_handle = AckHandle::new(ack_tx);
+        let read_message = MessageHandle::new(message, ack_handle);
+
+        // Drop the MessageHandle without calling mark_success
+        drop(read_message);
+
+        // Should receive NAK
+        let result = ack_rx.await.unwrap();
+        assert_eq!(result, ReadAck::Nak);
+    }
+
+    #[tokio::test]
+    async fn test_read_message_ack_on_mark_success() {
+        // When mark_success is called, it should ACK
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let message = Message::default();
+        let ack_handle = AckHandle::new(ack_tx);
+        let read_message = MessageHandle::new(message, ack_handle);
+
+        // Mark as success before dropping
+        read_message.mark_success();
+        drop(read_message);
+
+        // Should receive ACK
+        let result = ack_rx.await.unwrap();
+        assert_eq!(result, ReadAck::Ack);
+    }
+
+    #[tokio::test]
+    async fn test_read_message_clone_all_success() {
+        // When cloning, all clones must be marked as success for ACK
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let message = Message::default();
+        let ack_handle = AckHandle::new(ack_tx);
+        let read_message = MessageHandle::new(message, ack_handle);
+
+        // Clone (simulating message split in map/transformer)
+        let cloned = read_message.clone();
+
+        // Mark both as success
+        read_message.mark_success();
+        cloned.mark_success();
+
+        // Drop both
+        drop(read_message);
+        drop(cloned);
+
+        // Should receive ACK since all were marked as success
+        let result = ack_rx.await.unwrap();
+        assert_eq!(result, ReadAck::Ack);
+    }
+
+    #[tokio::test]
+    async fn test_read_message_clone_partial_success() {
+        // When only some clones are marked as success, it should NAK
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let message = Message::default();
+        let ack_handle = AckHandle::new(ack_tx);
+        let read_message = MessageHandle::new(message, ack_handle);
+
+        // Clone
+        let cloned = read_message.clone();
+
+        // Only mark the original as success, not the clone
+        read_message.mark_success();
+
+        // Drop both
+        drop(read_message);
+        drop(cloned);
+
+        // Should receive NAK since not all were marked as success
+        let result = ack_rx.await.unwrap();
+        assert_eq!(result, ReadAck::Nak);
     }
 }

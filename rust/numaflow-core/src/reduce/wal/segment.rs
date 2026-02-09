@@ -114,7 +114,7 @@ impl From<GcEventEntry> for GcEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{IntOffset, Message, MessageID, Offset};
+    use crate::message::{IntOffset, Message, MessageID, Offset, MessageHandle};
     use crate::reduce::wal::segment::WalType;
     use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
     use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
@@ -202,9 +202,11 @@ mod tests {
             };
 
             // Send message - conversion to bytes happens internally
-            tx.send(SegmentWriteMessage::WriteMessage { message })
-                .await
-                .unwrap();
+            tx.send(SegmentWriteMessage::WriteMessage {
+                read_message: MessageHandle::without_ack_tracking(message),
+            })
+            .await
+            .unwrap();
         }
 
         drop(tx);
@@ -234,7 +236,7 @@ mod tests {
         let mut remaining_message_count = 0;
         while let Some(entry) = rx.next().await {
             if let SegmentEntry::DataEntry { data, .. } = entry {
-                let msg: numaflow_pb::objects::isb::ReadMessage =
+                let msg: numaflow_pb::objects::isb::MessageHandle =
                     prost::Message::decode(data).unwrap();
                 if let Some(header) = msg.message.unwrap().header
                     && let Some(message_info) = header.message_info
@@ -351,9 +353,11 @@ mod tests {
             };
 
             // Send message - conversion to bytes happens internally
-            tx.send(SegmentWriteMessage::WriteMessage { message })
-                .await
-                .unwrap();
+            tx.send(SegmentWriteMessage::WriteMessage {
+                read_message: MessageHandle::without_ack_tracking(message),
+            })
+            .await
+            .unwrap();
         }
 
         drop(tx);
@@ -392,7 +396,7 @@ mod tests {
 
         while let Some(entry) = rx.next().await {
             if let SegmentEntry::DataEntry { data, .. } = entry {
-                let msg: numaflow_pb::objects::isb::ReadMessage =
+                let msg: numaflow_pb::objects::isb::MessageHandle =
                     prost::Message::decode(data).unwrap();
                 // Check event time based on key
                 if let Some(header) = msg.message.unwrap().header

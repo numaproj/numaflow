@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
@@ -17,7 +16,7 @@ use tracing::{error, info, warn};
 use crate::config::pipeline::map::MapMode;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{self, Error};
-use crate::message::{AckHandle, Message, MessageID, Offset};
+use crate::message::{Message, MessageID, Offset, MessageHandle};
 use crate::metadata::Metadata;
 use crate::shared::grpc::prost_timestamp_from_utc;
 use crate::tracker::Tracker;
@@ -139,10 +138,10 @@ impl MapHandle {
     /// handle.
     pub(crate) async fn streaming_map(
         mut self,
-        input_stream: ReceiverStream<Message>,
+        input_stream: ReceiverStream<MessageHandle>,
         cln_token: CancellationToken,
         bypass_router: Option<MvtxBypassRouter>,
-    ) -> error::Result<(ReceiverStream<Message>, JoinHandle<error::Result<()>>)> {
+    ) -> error::Result<(ReceiverStream<MessageHandle>, JoinHandle<error::Result<()>>)> {
         let (output_tx, output_rx) = mpsc::channel(self.batch_size);
         let (error_tx, error_rx) = mpsc::channel(self.batch_size);
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
@@ -223,7 +222,7 @@ impl MapHandle {
     /// Each message is processed in a separate spawned task.
     async fn process_concurrent_messages(
         &mut self,
-        input_stream: ReceiverStream<Message>,
+        input_stream: ReceiverStream<MessageHandle>,
         mut ctx: ConcurrentMapContext,
     ) -> error::Result<()> {
         let mut input_stream = input_stream;
@@ -254,8 +253,8 @@ impl MapHandle {
 
                     // if there are errors then we need to drain the stream and nack
                     if self.shutting_down_on_err {
-                        warn!(offset = ?read_msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
-                        read_msg.ack_handle.as_ref().expect("ack handle should be present").is_failed.store(true, Ordering::Relaxed);
+                        warn!(offset = ?read_msg.message().offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
+                        // read_msg is dropped here without mark_success, causing NAK
                     } else {
                         let permit = Arc::clone(&ctx.semaphore).acquire_owned()
                             .await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}")))?;
@@ -266,7 +265,7 @@ impl MapHandle {
                                 MapUnaryTask {
                                     mapper: mapper.clone(),
                                     permit,
-                                    message: read_msg,
+                                    read_message: read_msg,
                                     shared_ctx: Arc::clone(&ctx.shared_ctx),
                                 }
                                 .spawn();
@@ -275,7 +274,7 @@ impl MapHandle {
                                 MapStreamTask {
                                     mapper: mapper.clone(),
                                     permit,
-                                    message: read_msg,
+                                    read_message: read_msg,
                                     shared_ctx: Arc::clone(&ctx.shared_ctx),
                                 }
                                 .spawn();
@@ -292,7 +291,7 @@ impl MapHandle {
     /// Messages are collected into batches and processed synchronously.
     async fn process_batch_messages(
         &mut self,
-        input_stream: ReceiverStream<Message>,
+        input_stream: ReceiverStream<MessageHandle>,
         ctx: BatchMapContext,
     ) {
         let timeout_duration = self.read_timeout;
@@ -302,27 +301,20 @@ impl MapHandle {
         let is_mono_vertex = is_mono_vertex();
         // we don't need to tokio spawn here because, unlike unary and stream, batch is
         // a blocking operation, and we process one batch at a time.
-        while let Some(batch) = chunked_stream.next().await {
+        while let Some(read_batch) = chunked_stream.next().await {
             // if there are errors then we need to drain the stream and nack
             if self.shutting_down_on_err {
-                for msg in batch {
-                    warn!(offset = ?msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
-                    msg.ack_handle
-                        .as_ref()
-                        .expect("ack handle should be present")
-                        .is_failed
-                        .store(true, Ordering::Relaxed);
+                for read_msg in read_batch {
+                    warn!(offset = ?read_msg.message().offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
+                    // read_msg is dropped here without mark_success, causing NAK
                 }
                 continue;
             }
 
-            let ack_handles: Vec<Option<Arc<AckHandle>>> =
-                batch.iter().map(|msg| msg.ack_handle.clone()).collect();
-
-            if !batch.is_empty()
+            if !read_batch.is_empty()
                 && let Err(e) = (MapBatchTask {
                     mapper: ctx.batch_mapper.clone(),
-                    batch,
+                    read_batch,
                     output_tx: ctx.output_tx.clone(),
                     tracker: self.tracker.clone(),
                     bypass_router: ctx.bypass_router.clone(),
@@ -333,15 +325,6 @@ impl MapHandle {
                 .await
             {
                 error!(?e, "error received while performing batch map operation");
-                // if there is an error, discard all the messages in the tracker and
-                // return the error.
-                for ack_handle in ack_handles {
-                    ack_handle
-                        .as_ref()
-                        .expect("ack handle should be present")
-                        .is_failed
-                        .store(true, Ordering::Relaxed);
-                }
                 ctx.cln_token.cancel();
                 self.shutting_down_on_err = true;
                 self.final_result = Err(e);
@@ -352,7 +335,7 @@ impl MapHandle {
 
 /// Shared context for concurrent map tasks.
 pub(in crate::mapper) struct SharedMapTaskContext {
-    pub output_tx: mpsc::Sender<Message>,
+    pub output_tx: mpsc::Sender<MessageHandle>,
     pub error_tx: mpsc::Sender<Error>,
     pub tracker: Tracker,
     pub bypass_router: Option<MvtxBypassRouter>,
@@ -371,7 +354,7 @@ struct ConcurrentMapContext {
 
 /// Context for batch map processing.
 struct BatchMapContext {
-    output_tx: mpsc::Sender<Message>,
+    output_tx: mpsc::Sender<MessageHandle>,
     cln_token: CancellationToken,
     bypass_router: Option<MvtxBypassRouter>,
     batch_mapper: UserDefinedBatchMap,
@@ -464,7 +447,6 @@ pub(crate) struct ParentMessageInfo {
     /// one response for a single request.
     pub(crate) current_index: i32,
     pub(crate) metadata: Option<Arc<Metadata>>,
-    pub(crate) ack_handle: Option<Arc<AckHandle>>,
 }
 
 impl From<&Message> for ParentMessageInfo {
@@ -477,7 +459,6 @@ impl From<&Message> for ParentMessageInfo {
             start_time: Instant::now(),
             current_index: 0,
             metadata: message.metadata.clone(),
-            ack_handle: message.ack_handle.clone(),
         }
     }
 }
@@ -534,7 +515,6 @@ impl From<UserDefinedMessage<'_>> for Message {
                 }
                 Some(Arc::new(metadata))
             },
-            ack_handle: value.1.ack_handle.clone(),
         }
     }
 }
@@ -580,18 +560,18 @@ async fn create_response_stream(
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use super::*;
-    use crate::message::ReadAck;
+    use crate::message::{AckHandle, ReadAck};
     use crate::{
         Result,
-        message::{MessageID, Offset, StringOffset},
+        message::{MessageID, Offset, MessageHandle, StringOffset},
         shared::grpc::create_rpc_channel,
     };
+    use futures::{SinkExt, StreamExt};
     use numaflow::shared::ServerExtras;
     use numaflow::{batchmap, map, mapstream};
     use numaflow_pb::clients::map::map_client::MapClient;
+    use std::time::Duration;
     use tempfile::TempDir;
     use tokio::sync::mpsc::Sender;
     use tokio::sync::oneshot;
@@ -657,6 +637,7 @@ mod tests {
             },
             ..Default::default()
         };
+        let read_message = MessageHandle::without_ack_tracking(message);
 
         let (output_tx, mut output_rx) = mpsc::channel(10);
 
@@ -682,7 +663,7 @@ mod tests {
         MapUnaryTask {
             mapper: unary_mapper,
             permit,
-            message,
+            read_message,
             shared_ctx,
         }
         .spawn();
@@ -691,7 +672,7 @@ mod tests {
         assert!(error_rx.recv().await.is_none());
 
         let mapped_message = output_rx.recv().await.unwrap();
-        assert_eq!(mapped_message.value, "hello");
+        assert_eq!(mapped_message.message().value, "hello");
 
         // we need to drop the mapper, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
@@ -765,7 +746,7 @@ mod tests {
         .await?;
 
         let messages = vec![
-            Message {
+            MessageHandle::without_ack_tracking(Message {
                 typ: Default::default(),
                 keys: Arc::from(vec!["first".into()]),
                 tags: None,
@@ -779,8 +760,8 @@ mod tests {
                     index: 0,
                 },
                 ..Default::default()
-            },
-            Message {
+            }),
+            MessageHandle::without_ack_tracking(Message {
                 typ: Default::default(),
                 keys: Arc::from(vec!["second".into()]),
                 tags: None,
@@ -794,7 +775,7 @@ mod tests {
                     index: 1,
                 },
                 ..Default::default()
-            },
+            }),
         ];
 
         let (input_tx, input_rx) = mpsc::channel(10);
@@ -811,10 +792,10 @@ mod tests {
         let mut output_rx = output_stream.into_inner();
 
         let mapped_message1 = output_rx.recv().await.unwrap();
-        assert_eq!(mapped_message1.value, "hello");
+        assert_eq!(mapped_message1.message().value, "hello");
 
         let mapped_message2 = output_rx.recv().await.unwrap();
-        assert_eq!(mapped_message2.value, "world");
+        assert_eq!(mapped_message2.message().value, "world");
 
         shutdown_tx
             .send(())
@@ -888,7 +869,7 @@ mod tests {
         )
         .await?;
 
-        let message = Message {
+        let message = MessageHandle::without_ack_tracking(Message {
             typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
@@ -902,7 +883,7 @@ mod tests {
                 index: 0,
             },
             ..Default::default()
-        };
+        });
 
         let (input_tx, input_rx) = mpsc::channel(10);
         let input_stream = ReceiverStream::new(input_rx);
@@ -923,7 +904,7 @@ mod tests {
         // convert the bytes value to string and compare
         let values: Vec<String> = responses
             .iter()
-            .map(|r| String::from_utf8(Vec::from(r.value.clone())).unwrap())
+            .map(|r| String::from_utf8(Vec::from(r.message().value.clone())).unwrap())
             .collect();
         assert_eq!(values, vec!["test", "map", "stream"]);
 
@@ -1004,10 +985,10 @@ mod tests {
                     offset: i.to_string().into(),
                     index: i,
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                 ..Default::default()
             };
-            input_tx.send(message).await.unwrap();
+            let read_message = MessageHandle::new(message, AckHandle::new(ack_tx));
+            input_tx.send(read_message).await.unwrap();
             ack_rxs.push(ack_rx);
         }
 
@@ -1086,46 +1067,50 @@ mod tests {
 
         let (ack_tx1, ack_rx1) = oneshot::channel();
         let (ack_tx2, ack_rx2) = oneshot::channel();
-        let messages = vec![
-            Message {
-                typ: Default::default(),
-                keys: Arc::from(vec!["first".into()]),
-                tags: None,
-                value: "hello".into(),
-                offset: Offset::String(StringOffset::new("0".to_string(), 0)),
-                event_time: chrono::Utc::now(),
-                watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: "0".to_string().into(),
-                    index: 0,
+        let read_messages = vec![
+            MessageHandle::new(
+                Message {
+                    typ: Default::default(),
+                    keys: Arc::from(vec!["first".into()]),
+                    tags: None,
+                    value: "hello".into(),
+                    offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+                    event_time: chrono::Utc::now(),
+                    watermark: None,
+                    id: MessageID {
+                        vertex_name: "vertex_name".to_string().into(),
+                        offset: "0".to_string().into(),
+                        index: 0,
+                    },
+                    ..Default::default()
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx1))),
-                ..Default::default()
-            },
-            Message {
-                typ: Default::default(),
-                keys: Arc::from(vec!["second".into()]),
-                tags: None,
-                value: "world".into(),
-                offset: Offset::String(StringOffset::new("1".to_string(), 1)),
-                event_time: chrono::Utc::now(),
-                watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: "1".to_string().into(),
-                    index: 1,
+                AckHandle::new(ack_tx1),
+            ),
+            MessageHandle::new(
+                Message {
+                    typ: Default::default(),
+                    keys: Arc::from(vec!["second".into()]),
+                    tags: None,
+                    value: "world".into(),
+                    offset: Offset::String(StringOffset::new("1".to_string(), 1)),
+                    event_time: chrono::Utc::now(),
+                    watermark: None,
+                    id: MessageID {
+                        vertex_name: "vertex_name".to_string().into(),
+                        offset: "1".to_string().into(),
+                        index: 1,
+                    },
+                    ..Default::default()
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx2))),
-                ..Default::default()
-            },
+                AckHandle::new(ack_tx2),
+            ),
         ];
 
         let (input_tx, input_rx) = mpsc::channel(10);
         let input_stream = ReceiverStream::new(input_rx);
 
-        for message in messages {
-            input_tx.send(message).await.unwrap();
+        for read_message in read_messages {
+            input_tx.send(read_message).await.unwrap();
         }
 
         let (_output_stream, map_handle) = mapper
@@ -1225,11 +1210,11 @@ mod tests {
                     offset: i.to_string().into(),
                     index: i,
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                 ..Default::default()
             };
+            let read_message = MessageHandle::new(message, AckHandle::new(ack_tx));
             ack_rxs.push(ack_rx);
-            input_tx.send(message).await.unwrap();
+            input_tx.send(read_message).await.unwrap();
         }
 
         cln_token.cancelled().await;
@@ -1415,7 +1400,6 @@ mod tests {
             start_time: std::time::Instant::now(),
             current_index: 0,
             metadata: None,
-            ack_handle: None,
         };
 
         update_udf_write_metric(true, &msg_info, 5);
@@ -1449,7 +1433,6 @@ mod tests {
             start_time: std::time::Instant::now(),
             current_index: 0,
             metadata: None,
-            ack_handle: None,
         };
 
         update_udf_write_metric(false, &msg_info, 5);
@@ -1479,5 +1462,50 @@ mod tests {
     fn test_update_udf_process_time_metric_pipeline() {
         // Currently only ensuring that this should not panic
         update_udf_process_time_metric(false);
+    }
+
+    #[tokio::test]
+    async fn concurrency_transformer_fn() {
+        let (tx, mut rx) = mpsc::channel(100);
+
+        let rx_stream = ReceiverStream::new(rx);
+        let _ = tx.send("hello");
+
+        let (error_tx, error_rx) = mpsc::channel(1);
+
+        let concurrency = 500;
+        let (futures_tx, mut futures_rx) = mpsc::channel(100);
+        futures_tx
+            .send(async {
+                let x = "yash";
+                if x == "yash" {
+                    error_tx.send(Error::Cancelled()).await.unwrap();
+                }
+            })
+            .await
+            .unwrap();
+
+        let futures_stream = ReceiverStream::new(futures_rx);
+        let mut stream = futures_stream.buffer_unordered(concurrency);
+
+        while let Some(future) = stream.next().await {}
+
+        /*
+         * you read 500 messages
+         * create futures for 500 messages
+         * await for futures using buffer unordered
+         * return
+         */
+
+        /*
+        * read 1 message at a time
+        * have concurrency of 500
+        * create futures for each message
+        * keep adding to the futures until you hit 500 concurrency
+
+
+        * keep getting the response of the completed future
+        * write the response to downstream
+         */
     }
 }

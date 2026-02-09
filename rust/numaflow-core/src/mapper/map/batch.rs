@@ -5,9 +5,10 @@ use super::{
 use crate::config::is_mono_vertex;
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
-use crate::message::Message;
+use crate::message::{Message, MessageHandle};
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::tracker::Tracker;
+use crate::mark_success_batch;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -42,8 +43,8 @@ pub(in crate::mapper) struct BatchSenderMapState {
 /// MapBatchTask encapsulates all the context needed to execute a batch map operation.
 pub(in crate::mapper) struct MapBatchTask {
     pub mapper: UserDefinedBatchMap,
-    pub batch: Vec<Message>,
-    pub output_tx: mpsc::Sender<Message>,
+    pub read_batch: Vec<MessageHandle>,
+    pub output_tx: mpsc::Sender<MessageHandle>,
     pub tracker: Tracker,
     pub bypass_router: Option<MvtxBypassRouter>,
     pub is_mono_vertex: bool,
@@ -55,10 +56,18 @@ impl MapBatchTask {
     /// Returns an error if any message in the batch fails to be processed.
     pub async fn execute(self) -> Result<()> {
         // Store parent message info for each message before sending to UDF
-        let parent_infos: Vec<ParentMessageInfo> = self.batch.iter().map(|m| m.into()).collect();
+        let parent_infos: Vec<ParentMessageInfo> = self
+            .read_batch
+            .iter()
+            .map(|rm| rm.message().into())
+            .collect();
 
         // Convert Messages to MapRequests
-        let requests: Vec<MapRequest> = self.batch.into_iter().map(|m| m.into()).collect();
+        let requests: Vec<MapRequest> = self
+            .read_batch
+            .iter()
+            .map(|rm| rm.message().clone().into())
+            .collect();
 
         // Update read metrics for each request
         for _ in &requests {
@@ -68,7 +77,11 @@ impl MapBatchTask {
         // Call the UDF and get results directly
         let results = self.mapper.batch(requests, self.cln_token).await;
 
-        for (result, parent_info) in results.into_iter().zip(parent_infos.into_iter()) {
+        for (idx, (result, parent_info)) in results
+            .into_iter()
+            .zip(parent_infos.into_iter())
+            .enumerate()
+        {
             match result {
                 Ok(results) => {
                     // Convert raw results to Messages using parent info
@@ -95,30 +108,44 @@ impl MapBatchTask {
                         )
                         .await?;
 
+                    // Send messages downstream wrapped in MessageHandle sharing the same AckHandle.
+                    // Each output message increments ref_count, and downstream will call mark_success()
+                    // when the message is successfully written.
                     for mapped_message in mapped_messages {
-                        let bypassed = if let Some(ref bypass_router) = self.bypass_router {
-                            bypass_router
-                                .try_bypass(mapped_message.clone())
+                        let read_msg = self.read_batch[idx].clone_with_message(mapped_message);
+
+                        // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
+                        // If not bypassed, it returns Some(read_msg) for us to send downstream.
+                        let read_msg = if let Some(ref bypass_router) = self.bypass_router {
+                            match bypass_router
+                                .try_bypass(read_msg)
                                 .await
                                 .expect("failed to send message to bypass channel")
+                            {
+                                Some(msg) => msg,
+                                None => continue, // Message was bypassed, move to next
+                            }
                         } else {
-                            false
+                            read_msg
                         };
 
-                        if !bypassed {
-                            self.output_tx
-                                .send(mapped_message)
-                                .await
-                                .expect("failed to send response");
-                        }
+                        self.output_tx
+                            .send(read_msg)
+                            .await
+                            .expect("failed to send response");
                     }
                 }
                 Err(e) => {
                     error!(err=?e, "failed to map message");
+                    // read_batch will be dropped without mark_success, causing NAK
                     return Err(e);
                 }
             }
         }
+
+        // we have successfully processed the batch, mark the batch as success.
+        mark_success_batch!(self.read_batch);
+
         Ok(())
     }
 }

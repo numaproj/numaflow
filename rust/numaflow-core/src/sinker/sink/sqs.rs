@@ -126,7 +126,6 @@ mod unit_tests {
             headers: Arc::new(headers.clone()),
             metadata: None,
             is_late: false,
-            ack_handle: None,
         };
 
         let sink_msg: SqsSinkMessage = msg.try_into().unwrap();
@@ -185,7 +184,6 @@ mod unit_tests {
             headers: Arc::new(headers),
             metadata: Some(Arc::new(metadata)),
             is_late: false,
-            ack_handle: None,
         };
 
         let sink_msg: SqsSinkMessage = msg.try_into().unwrap();
@@ -249,7 +247,6 @@ mod unit_tests {
             headers: Arc::new(headers),
             metadata: Some(Arc::new(metadata)),
             is_late: false,
-            ack_handle: None,
         };
 
         let sink_msg: SqsSinkMessage = msg.try_into().unwrap();

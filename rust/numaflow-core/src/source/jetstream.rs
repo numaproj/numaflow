@@ -37,7 +37,6 @@ impl From<JetstreamMessage> for Message {
             // Set default metadata so that metadata is always present.
             metadata: Some(Arc::new(Metadata::default())),
             is_late: false,
-            ack_handle: None,
         }
     }
 }
