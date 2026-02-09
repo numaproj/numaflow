@@ -49,7 +49,7 @@ mod timeout_checker;
 ///             │                        │                        │
 ///      ┌──────┴──────┐                 │                        │
 ///      ▼             ▼                 │                        │
-/// [ gRPC channel ] [ HTTP channel ]────┴────────────-───────────┘
+/// [ gRPC channel ] [ HTTP channel ]────┴────────────────────────┘
 /// ```
 ///
 /// Shutdown:

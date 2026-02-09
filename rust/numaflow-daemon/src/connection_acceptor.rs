@@ -48,7 +48,7 @@ impl ConnectionAcceptor {
 
         let tls_config = Self::generate_self_signed_tls_config()?;
         let tls_acceptor = TlsAcceptor::from(tls_config);
-        Ok(Self::new_with_tls_acceptor(
+        Ok(Self::new_with_tcp_tls(
             tcp_listener,
             tls_acceptor,
             grpc_tx,
@@ -104,7 +104,7 @@ impl ConnectionAcceptor {
         Ok(Arc::new(cfg))
     }
 
-    fn new_with_tls_acceptor(
+    fn new_with_tcp_tls(
         tcp_listener: TcpListener,
         tls_acceptor: TlsAcceptor,
         grpc_tx: TlsStreamSender,
@@ -245,7 +245,7 @@ mod tests {
         let (http_tx, mut http_rx) = mpsc::channel(1);
         let cln_token = CancellationToken::new();
 
-        let acceptor = ConnectionAcceptor::new_with_tls_acceptor(
+        let acceptor = ConnectionAcceptor::new_with_tcp_tls(
             listener,
             tls_acceptor,
             grpc_tx,
@@ -282,7 +282,7 @@ mod tests {
         let (http_tx, mut http_rx) = mpsc::channel(1);
         let cln_token = CancellationToken::new();
 
-        let acceptor = ConnectionAcceptor::new_with_tls_acceptor(
+        let acceptor = ConnectionAcceptor::new_with_tcp_tls(
             listener,
             tls_acceptor,
             grpc_tx,
@@ -319,7 +319,7 @@ mod tests {
         let (http_tx, mut http_rx) = mpsc::channel(1);
         let cln_token = CancellationToken::new();
 
-        let acceptor = ConnectionAcceptor::new_with_tls_acceptor(
+        let acceptor = ConnectionAcceptor::new_with_tcp_tls(
             listener,
             tls_acceptor,
             grpc_tx,
