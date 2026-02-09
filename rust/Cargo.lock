@@ -2727,6 +2727,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "numaflow-testing"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "chrono",
+ "parking_lot",
+ "thiserror 2.0.17",
+ "tokio",
+]
+
+[[package]]
 name = "numaflow-throttling"
 version = "0.1.0"
 dependencies = [
