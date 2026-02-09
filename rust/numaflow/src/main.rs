@@ -7,6 +7,11 @@ use tokio::{runtime, signal};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 mod setup_tracing;
 
 /// Build the command line interface.

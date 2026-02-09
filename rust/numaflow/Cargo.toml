@@ -22,6 +22,7 @@ tracing.workspace = true
 rustls.workspace = true
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt", "json"] }
 clap = "4.5.40"
+mimalloc = "0.1.48"
 
 [build-dependencies]
 chrono.workspace = true
