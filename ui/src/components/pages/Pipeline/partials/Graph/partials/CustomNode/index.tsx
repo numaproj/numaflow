@@ -299,6 +299,14 @@ const CustomNode: FC<NodeProps> = ({
       ? { bottom: "-1rem" }
       : {};
 
+  const hasBothSinkContainers =
+    data?.nodeInfo?.sink?.onSuccess && data?.nodeInfo?.sink?.fallback;
+  const pipelineSinkWrapperClass = hasBothSinkContainers
+    ? "pipeline-sink-container-wrapper-small"
+    : "pipeline-sink-container-wrapper";
+  const pipelineSinkImgClass = hasBothSinkContainers
+    ? "pipeline-sink-container-img-small"
+    : "pipeline-sink-container-img";
 
   const nodeStyle = useMemo(() => {
     return {
@@ -350,10 +358,27 @@ const CustomNode: FC<NodeProps> = ({
     );
   }, []);
 
+  const isSinkWithContainers =
+    data?.type === "sink" &&
+    data?.nodeInfo?.sink &&
+    (data?.nodeInfo?.sink?.onSuccess || data?.nodeInfo?.sink?.fallback);
+
+  const isSourceWithContainers =
+    data?.type === "source" &&
+    data?.nodeInfo?.source &&
+    data?.nodeInfo?.source?.transformer;
+
+  const nodeInputClass =
+    isSinkWithContainers
+      ? "react-flow__node-input react-flow__node-input--sink-with-containers"
+      : isSourceWithContainers
+        ? "react-flow__node-input react-flow__node-input--source-with-containers"
+        : "react-flow__node-input";
+
   return (
     <Box data-testid={data?.name}>
       <Box
-        className={"react-flow__node-input"}
+        className={nodeInputClass}
         onClick={handleClick}
         style={nodeStyle}
       >
@@ -549,6 +574,190 @@ const CustomNode: FC<NodeProps> = ({
               )}
             </Box>
           </>
+        )}
+        {data?.type === "sink" &&
+          data?.nodeInfo?.sink &&
+          (data?.nodeInfo?.sink?.onSuccess || data?.nodeInfo?.sink?.fallback) && (
+          <Box
+            className={"pipeline-sink-container-row"}
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              flex: 1,
+              gap: 0,
+            }}
+          >
+            <Tooltip
+              title={<Box className={"node-tooltip"}>Sink Container</Box>}
+              arrow
+              placement={
+                data?.nodeInfo?.sink?.fallback ||
+                data?.nodeInfo?.sink?.onSuccess
+                  ? "bottom"
+                  : "right"
+              }
+            >
+              <Box className={pipelineSinkWrapperClass}>
+                <img
+                  className={pipelineSinkImgClass}
+                  src={sink}
+                  alt={"sink-container"}
+                />
+              </Box>
+            </Tooltip>
+            <Box
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.3rem",
+              }}
+            >
+              {data?.nodeInfo?.sink?.onSuccess &&
+                !data?.nodeInfo?.sink?.fallback && (
+                  <Box style={{ display: "flex", alignItems: "center" }}>
+                    {arrowSvg}
+                    <Tooltip
+                      title={
+                        <Box className={"node-tooltip"}>
+                          OnSuccess Sink Container
+                        </Box>
+                      }
+                      arrow
+                      placement={"right"}
+                    >
+                      <Box className={pipelineSinkWrapperClass}>
+                        <img
+                          className={pipelineSinkImgClass}
+                          src={onSuccess}
+                          alt={"on-success-sink-container"}
+                        />
+                      </Box>
+                    </Tooltip>
+                  </Box>
+                )}
+              {data?.nodeInfo?.sink?.fallback &&
+                !data?.nodeInfo?.sink?.onSuccess && (
+                  <Box style={{ display: "flex", alignItems: "center" }}>
+                    {arrowSvg}
+                    <Tooltip
+                      title={
+                        <Box className={"node-tooltip"}>
+                          Fallback Sink Container
+                        </Box>
+                      }
+                      arrow
+                      placement={"right"}
+                    >
+                      <Box className={pipelineSinkWrapperClass}>
+                        <img
+                          className={pipelineSinkImgClass}
+                          src={fallback}
+                          alt={"fallback-sink-container"}
+                        />
+                      </Box>
+                    </Tooltip>
+                  </Box>
+                )}
+              {data?.nodeInfo?.sink?.onSuccess &&
+                data?.nodeInfo?.sink?.fallback && (
+                <Box
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <Box style={{ display: "flex", alignItems: "center" }}>
+                    {arrowUpSvg}
+                    <Tooltip
+                      title={
+                        <Box className={"node-tooltip"}>
+                          OnSuccess Sink Container
+                        </Box>
+                      }
+                      arrow
+                      placement={"right"}
+                    >
+                      <Box className={pipelineSinkWrapperClass}>
+                        <img
+                          className={pipelineSinkImgClass}
+                          src={onSuccess}
+                          alt={"on-success-sink-container"}
+                        />
+                      </Box>
+                    </Tooltip>
+                  </Box>
+                  <Box style={{ display: "flex", alignItems: "center" }}>
+                    {arrowDownSvg}
+                    <Tooltip
+                      title={
+                        <Box className={"node-tooltip"}>
+                          Fallback Sink Container
+                        </Box>
+                      }
+                      arrow
+                      placement={"right"}
+                    >
+                      <Box className={pipelineSinkWrapperClass}>
+                        <img
+                          className={pipelineSinkImgClass}
+                          src={fallback}
+                          alt={"fallback-sink-container"}
+                        />
+                      </Box>
+                    </Tooltip>
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          </Box>
+        )}
+        {data?.type === "source" &&
+          data?.nodeInfo?.source &&
+          data?.nodeInfo?.source?.transformer && (
+          <Box
+            className={"pipeline-sink-container-row"}
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              flex: 1,
+              gap: "0.4rem",
+            }}
+          >
+            <Tooltip
+              title={<Box className={"node-tooltip"}>Source Container</Box>}
+              arrow
+              placement={"right"}
+            >
+              <Box className={pipelineSinkWrapperClass}>
+                <img
+                  className={pipelineSinkImgClass}
+                  src={source}
+                  alt={"source-container"}
+                />
+              </Box>
+            </Tooltip>
+            {arrowSvg}
+            <Tooltip
+              title={
+                <Box className={"node-tooltip"}>
+                  Source Transformer Container
+                </Box>
+              }
+              arrow
+              placement={"right"}
+            >
+              <Box className={pipelineSinkWrapperClass}>
+                <img
+                  className={pipelineSinkImgClass}
+                  src={transformer}
+                  alt={"transformer-container"}
+                />
+              </Box>
+            </Tooltip>
+          </Box>
         )}
         <Tooltip
           title={
