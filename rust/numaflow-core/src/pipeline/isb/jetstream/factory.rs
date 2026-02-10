@@ -77,12 +77,8 @@ impl ISBFactory for JetStreamFactory {
 mod tests {
     use super::*;
 
-    // Note: These tests require a running NATS server with JetStream enabled.
-    // They are marked as ignored by default and should be run manually
-    // or in an integration test environment.
-
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
-    #[ignore = "requires NATS server"]
     async fn test_jetstream_factory_creation() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
         let context = async_nats::jetstream::new(client);
