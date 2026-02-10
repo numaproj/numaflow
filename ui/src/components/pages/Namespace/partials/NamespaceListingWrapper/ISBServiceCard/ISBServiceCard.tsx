@@ -139,7 +139,7 @@ export function ISBServiceCard({
         <Box
           sx={{
             display: "flex",
-            background: "#F9F9F9",
+            background: "var(--bg-tertiary)",
             flexDirection: "row",
             flexGrow: 1,
             padding: "1.6rem",
@@ -153,7 +153,7 @@ export function ISBServiceCard({
             container
             spacing={2}
             sx={{
-              background: "#F9F9F9",
+              background: "var(--bg-tertiary)",
               marginTop: "1rem",
               flexWrap: "no-wrap",
             }}
@@ -206,7 +206,7 @@ export function ISBServiceCard({
             container
             spacing={2}
             sx={{
-              background: "#F9F9F9",
+              background: "var(--bg-tertiary)",
               marginTop: "1rem",
               flexWrap: "no-wrap",
             }}
@@ -242,7 +242,7 @@ export function ISBServiceCard({
             container
             spacing={0.5}
             sx={{
-              background: "#F9F9F9",
+              background: "var(--bg-tertiary)",
               marginTop: "1rem",
               alignItems: "center",
               justifyContent: "end",

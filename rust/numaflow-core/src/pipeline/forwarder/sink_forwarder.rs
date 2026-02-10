@@ -8,7 +8,7 @@ use crate::metrics::{
 };
 use crate::pipeline::PipelineContext;
 use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
-use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
+use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::sinker::sink::SinkWriter;
@@ -32,12 +32,15 @@ use tracing::{error, info};
 /// Sink forwarder is a component which starts a streaming reader and a sink writer
 /// and manages the lifecycle of these components.
 pub(crate) struct SinkForwarder<C: crate::typ::NumaflowTypeConfig> {
-    jetstream_reader: ISBReader<C>,
+    jetstream_reader: ISBReaderOrchestrator<C>,
     sink_writer: SinkWriter,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> SinkForwarder<C> {
-    pub(crate) async fn new(jetstream_reader: ISBReader<C>, sink_writer: SinkWriter) -> Self {
+    pub(crate) async fn new(
+        jetstream_reader: ISBReaderOrchestrator<C>,
+        sink_writer: SinkWriter,
+    ) -> Self {
         Self {
             jetstream_reader,
             sink_writer,
@@ -209,7 +212,7 @@ pub async fn start_sink_forwarder(
 }
 
 /// Starts sink forwarder for all the streams.
-async fn run_all_sink_forwarders<C: NumaflowTypeConfig>(
+async fn run_all_sink_forwarders<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
     context: &PipelineContext<'_>,
     sink: &SinkVtxConfig,
     reader_config: &BufferReaderConfig,
@@ -222,7 +225,7 @@ async fn run_all_sink_forwarders<C: NumaflowTypeConfig>(
     PendingReaderTasks,
 )> {
     let mut forwarder_tasks = vec![];
-    let mut isb_lag_readers: Vec<ISBReader<C>> = vec![];
+    let mut isb_lag_readers: Vec<ISBReaderOrchestrator<C>> = vec![];
     let mut first_sink_writer = None;
 
     for stream in reader_config.streams.clone() {
@@ -280,11 +283,14 @@ async fn run_all_sink_forwarders<C: NumaflowTypeConfig>(
 }
 
 /// Starts sink forwarder for a single stream.
-async fn run_sink_forwarder_for_stream<C: NumaflowTypeConfig>(
+async fn run_sink_forwarder_for_stream<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
     reader_components: ISBReaderComponents,
     sink_writer: SinkWriter,
     rate_limiter: Option<C::RateLimiter>,
-) -> Result<(tokio::task::JoinHandle<Result<()>>, ISBReader<C>)> {
+) -> Result<(
+    tokio::task::JoinHandle<Result<()>>,
+    ISBReaderOrchestrator<C>,
+)> {
     let cln_token = reader_components.cln_token.clone();
 
     let js_reader = JetStreamReader::new(
@@ -294,7 +300,8 @@ async fn run_sink_forwarder_for_stream<C: NumaflowTypeConfig>(
     )
     .await?;
 
-    let isb_reader = ISBReader::<C>::new(reader_components, js_reader, rate_limiter).await?;
+    let isb_reader =
+        ISBReaderOrchestrator::<C>::new(reader_components, js_reader, rate_limiter).await?;
 
     let forwarder = SinkForwarder::<C>::new(isb_reader.clone(), sink_writer).await;
 
@@ -421,7 +428,7 @@ mod tests {
                 partitions: 0,
             }],
             vertex_type: VertexType::Sink,
-            vertex_config: VertexConfig::Sink(SinkVtxConfig {
+            vertex_config: VertexConfig::Sink(Box::new(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::Blackhole(BlackholeConfig::default()),
                     retry_config: None,
@@ -429,7 +436,7 @@ mod tests {
                 fb_sink_config: None,
                 on_success_sink_config: None,
                 serving_store_config: None,
-            }),
+            })),
             metrics_config: MetricsConfig {
                 metrics_server_listen_port: 2469,
                 lag_check_interval_in_secs: 5,
@@ -442,7 +449,7 @@ mod tests {
         // Extract the sink config from the pipeline config
         let sink_vtx_config =
             if let VertexConfig::Sink(ref sink_config) = pipeline_config.vertex_config {
-                sink_config.clone()
+                (**sink_config).clone()
             } else {
                 panic!("Expected sink vertex config");
             };

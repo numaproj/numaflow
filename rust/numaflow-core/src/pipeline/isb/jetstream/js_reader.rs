@@ -271,9 +271,36 @@ impl JetStreamReader {
 
         Ok(Some(info.num_pending as usize + info.num_ack_pending))
     }
+}
 
-    pub(crate) fn get_wip_ack_interval(&self) -> Duration {
-        self.wip_ack_interval
+#[async_trait::async_trait]
+impl crate::pipeline::isb::ISBReader for JetStreamReader {
+    async fn fetch(&mut self, max: usize, timeout: Duration) -> Result<Vec<Message>> {
+        JetStreamReader::fetch(self, max, timeout).await
+    }
+
+    async fn ack(&self, offset: &Offset) -> Result<()> {
+        JetStreamReader::ack(self, offset).await
+    }
+
+    async fn nack(&self, offset: &Offset) -> Result<()> {
+        JetStreamReader::nack(self, offset).await
+    }
+
+    async fn pending(&mut self) -> Result<Option<usize>> {
+        JetStreamReader::pending(self).await
+    }
+
+    fn name(&self) -> &'static str {
+        JetStreamReader::name(self)
+    }
+
+    async fn mark_wip(&self, offset: &Offset) -> Result<()> {
+        JetStreamReader::mark_wip(self, offset).await
+    }
+
+    fn wip_ack_interval(&self) -> Option<Duration> {
+        Some(self.wip_ack_interval)
     }
 }
 
@@ -391,7 +418,7 @@ mod tests {
             .unwrap();
         assert_eq!(messages.len(), 1);
 
-        let message = &messages[0];
+        let message = messages.first().expect("Expected at least one message");
         assert_eq!(
             message.value.as_ref(),
             "test message for direct fetch".as_bytes()
@@ -414,7 +441,15 @@ mod tests {
         assert_eq!(messages.len(), 1);
 
         // ack the message and check pending again
-        js_reader.ack(&messages[0].offset).await.unwrap();
+        js_reader
+            .ack(
+                &messages
+                    .first()
+                    .expect("Expected at least one message")
+                    .offset,
+            )
+            .await
+            .unwrap();
         // pending should be zero
         let pending = js_reader.pending().await.unwrap();
         assert_eq!(pending, Some(0));

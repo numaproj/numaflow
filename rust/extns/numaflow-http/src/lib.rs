@@ -35,6 +35,15 @@ use uuid::Uuid;
 
 use tokio_util::sync::CancellationToken;
 
+/// Header name for the message ID (lowercase for header lookup)
+const NUMAFLOW_ID_HEADER: &str = "x-numaflow-id";
+/// Header name for the message ID (canonical form for insertion)
+const NUMAFLOW_ID_HEADER_KEY: &str = "X-Numaflow-Id";
+/// Header name for the event time
+const NUMAFLOW_EVENT_TIME_HEADER: &str = "x-numaflow-event-time";
+/// Header name for the keys
+const NUMAFLOW_KEYS_HEADER: &str = "x-numaflow-keys";
+
 /// Map that tracks inflight HTTP requests. This is passed to ack actor to send response back to
 /// the client. The entries are inserted at [axum::handler].
 type InflightRequestsMap = Arc<Mutex<HashMap<String, oneshot::Sender<StatusCode>>>>;
@@ -70,6 +79,7 @@ pub struct HttpMessage {
     pub headers: HashMap<String, String>,
     pub event_time: DateTime<Utc>,
     pub id: String,
+    pub keys: Vec<String>,
 }
 
 /// Response for successful data ingestion
@@ -562,7 +572,7 @@ async fn data_handler(
     body: Bytes,
 ) -> impl IntoResponse {
     // Generate or extract X-Numaflow-Id
-    let id = match headers.get("x-numaflow-id") {
+    let id = match headers.get(NUMAFLOW_ID_HEADER) {
         Some(val) => match parse_message_id_from_header(val) {
             Ok(id) => id,
             Err(e) => return e.into_response(),
@@ -571,7 +581,7 @@ async fn data_handler(
     };
 
     // Generate or extract X-Numaflow-Event-Time
-    let event_time = headers.get("x-numaflow-event-time");
+    let event_time = headers.get(NUMAFLOW_EVENT_TIME_HEADER);
     let event_time = match event_time {
         Some(etime) => match parse_event_time_from_header(etime) {
             Ok(time) => time,
@@ -580,9 +590,18 @@ async fn data_handler(
         None => Utc::now(),
     };
 
+    // Extract X-Numaflow-Keys (comma-separated)
+    let keys = match headers.get(NUMAFLOW_KEYS_HEADER) {
+        Some(val) => match parse_keys_from_header(val) {
+            Ok(keys) => keys,
+            Err(e) => return e.into_response(),
+        },
+        None => vec![],
+    };
+
     // Remove all entries of "x-numaflow-event-time" header
     // https://github.com/numaproj/numaflow/blob/2cab60c2a1ddde0f0272b6570144071a49c4e94b/pkg/sources/http/http.go#L146
-    if let axum::http::header::Entry::Occupied(hm) = headers.entry("x-numaflow-event-time") {
+    if let axum::http::header::Entry::Occupied(hm) = headers.entry(NUMAFLOW_EVENT_TIME_HEADER) {
         hm.remove_entry_mult();
     }
 
@@ -596,7 +615,7 @@ async fn data_handler(
     // Convert headers to HashMap and ensure required headers are present
     let mut header_map = HashMap::new();
     // Ensure X-Numaflow-Id is in the headers
-    header_map.insert("X-Numaflow-Id".to_string(), id.clone());
+    header_map.insert(NUMAFLOW_ID_HEADER_KEY.to_string(), id.clone());
 
     for (key, value) in headers.iter() {
         if let Ok(value_str) = value.to_str() {
@@ -637,6 +656,7 @@ async fn data_handler(
         headers: header_map,
         event_time,
         id: id.clone(),
+        keys,
     };
 
     // Send the message to the processing channel
@@ -722,12 +742,12 @@ fn parse_message_id_from_header(
     id_header_value: &HeaderValue,
 ) -> std::result::Result<String, (StatusCode, axum::Json<serde_json::Value>)> {
     let id = id_header_value.to_str().inspect_err(|e| {
-        error!(?e, "The value of 'x-numaflow-id' header sent by the user contains non-printable ASCII characters");
+        error!(?e, header = NUMAFLOW_ID_HEADER, "The value of header sent by the user contains non-printable ASCII characters");
     }).map_err(|_|{
         (
             StatusCode::BAD_REQUEST,
             axum::Json(serde_json::json!({
-                "error": "Value of 'x-numaflow-id' header contains non-printable ASCII characters",
+                "error": format!("Value of '{}' header contains non-printable ASCII characters", NUMAFLOW_ID_HEADER),
             })),
         )
     })?;
@@ -743,24 +763,25 @@ fn parse_event_time_from_header(
             error!(
                 ?e,
                 ?event_time_header_value,
-                "Converting value of header 'x-numaflow-event-time' to string"
+                header = NUMAFLOW_EVENT_TIME_HEADER,
+                "Converting value of header to string"
             )
         })
         .map_err(|_|  {
             (
                 StatusCode::BAD_REQUEST,
                 axum::Json(serde_json::json!({
-                    "error": "Event time specified in header 'x-numaflow-event-time' is not an ASCII string",
+                    "error": format!("Event time specified in header '{}' is not an ASCII string", NUMAFLOW_EVENT_TIME_HEADER),
                 })),
             )
     })?;
     let epoch_millis = epoch_millis_str.parse::<i64>().inspect_err(|e| {
-        error!(?e, epoch_millis_str, "Event time specified in header 'x-numaflow-event-time' is not a valid integer or within signed 64-bit integer range");
+        error!(?e, epoch_millis_str, header = NUMAFLOW_EVENT_TIME_HEADER, "Event time specified in header is not a valid integer or within signed 64-bit integer range");
     }).map_err(|_| {
         (
             StatusCode::BAD_REQUEST,
             axum::Json(serde_json::json!({
-                "error": "Event time specified in header 'x-numaflow-event-time' is not a valid integer",
+                "error": format!("Event time specified in header '{}' is not a valid integer", NUMAFLOW_EVENT_TIME_HEADER),
                 "details": format!("Specified value is {}", epoch_millis_str)
             })),
         )
@@ -770,15 +791,37 @@ fn parse_event_time_from_header(
         (
             StatusCode::BAD_REQUEST,
             axum::Json(serde_json::json!({
-                "error": "Event time specified in header 'x-numaflow-event-time' is out of range",
+                "error": format!("Event time specified in header '{}' is out of range", NUMAFLOW_EVENT_TIME_HEADER),
                 "details": format!("Specified value is {}", epoch_millis_str)
             })),
         )
     }).inspect_err(|_| {
-        error!("Event time specified in header 'x-numaflow-event-time' is out of range for Epoch milliseconds");
+        error!(header = NUMAFLOW_EVENT_TIME_HEADER, "Event time specified in header is out of range for Epoch milliseconds");
     })?;
 
     Ok(event_time)
+}
+
+fn parse_keys_from_header(
+    keys_header_value: &HeaderValue,
+) -> std::result::Result<Vec<String>, (StatusCode, axum::Json<serde_json::Value>)> {
+    let keys_str = keys_header_value.to_str().inspect_err(|e| {
+        error!(?e, header = NUMAFLOW_KEYS_HEADER, "The value of header sent by the user contains non-printable ASCII characters");
+    }).map_err(|_|{
+        (
+            StatusCode::BAD_REQUEST,
+            axum::Json(serde_json::json!({
+                "error": format!("Value of '{}' header contains non-printable ASCII characters", NUMAFLOW_KEYS_HEADER),
+            })),
+        )
+    })?;
+    // Split by comma and trim whitespace from each key
+    let keys: Vec<String> = keys_str
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    Ok(keys)
 }
 
 #[cfg(test)]
@@ -921,7 +964,7 @@ mod tests {
             .method(Method::POST)
             .uri("/vertices/test")
             .header("Content-Type", "text/plain")
-            .header("X-Numaflow-Id", custom_id)
+            .header(NUMAFLOW_ID_HEADER_KEY, custom_id)
             .body(Body::from("test data"))
             .unwrap();
 
@@ -985,7 +1028,10 @@ mod tests {
                     .method(Method::POST)
                     .uri(format!("https://{}/vertices/test", addr_clone))
                     .header("Content-Type", content_type)
-                    .header("X-Numaflow-Id", format!("test-id-{}", Uuid::now_v7()))
+                    .header(
+                        NUMAFLOW_ID_HEADER_KEY,
+                        format!("test-id-{}", Uuid::now_v7()),
+                    )
                     .body(body_data)
                     .unwrap();
 
@@ -1051,10 +1097,10 @@ mod tests {
         // Verify message contents
         for message in messages.iter() {
             assert!(!message.id.is_empty());
-            assert!(message.headers.contains_key("X-Numaflow-Id"));
+            assert!(message.headers.contains_key(NUMAFLOW_ID_HEADER_KEY));
             assert!(message.headers.contains_key("content-type"));
 
-            // Ensure current time is set when x-numaflow-event-time header is not specified
+            // Ensure current time is set when event time header is not specified
             assert!(
                 current_time
                     .signed_duration_since(message.event_time)
@@ -1168,8 +1214,8 @@ mod tests {
                     .method(Method::POST)
                     .uri(format!("https://{}/vertices/test", addr_clone))
                     .header("Content-Type", "application/json")
-                    .header("X-Numaflow-Id", format!("test-id-{}", i))
-                    .header("x-numaflow-event-time", 1431628200000i64.to_string())
+                    .header(NUMAFLOW_ID_HEADER_KEY, format!("test-id-{}", i))
+                    .header(NUMAFLOW_EVENT_TIME_HEADER, 1431628200000i64.to_string())
                     .body(format!(r#"{{"message": "test{}"}}"#, i))
                     .unwrap();
 
@@ -1193,7 +1239,7 @@ mod tests {
 
         // Verify message contents
         for (i, message) in messages.iter().enumerate() {
-            assert!(message.headers.contains_key("X-Numaflow-Id"));
+            assert!(message.headers.contains_key(NUMAFLOW_ID_HEADER_KEY));
             assert!(message.headers.contains_key("content-type"));
 
             assert_eq!(message.event_time, expected_event_time);
@@ -1316,7 +1362,7 @@ mod tests {
                 .method(Method::POST)
                 .uri("/vertices/test")
                 .header("Content-Type", "application/json")
-                .header("X-Numaflow-Id", "test-ack-behavior")
+                .header(NUMAFLOW_ID_HEADER_KEY, "test-ack-behavior")
                 .body(Body::from(r#"{"test": "ack_behavior"}"#))
                 .unwrap();
 
@@ -1371,7 +1417,7 @@ mod tests {
             .method(Method::POST)
             .uri("/vertices/test")
             .header("Content-Type", "application/json")
-            .header("X-Numaflow-Id", duplicate_id)
+            .header(NUMAFLOW_ID_HEADER_KEY, duplicate_id)
             .body(Body::from(r#"{"test": "first_request"}"#))
             .unwrap();
 
@@ -1380,7 +1426,7 @@ mod tests {
             .method(Method::POST)
             .uri("/vertices/test")
             .header("Content-Type", "application/json")
-            .header("X-Numaflow-Id", duplicate_id)
+            .header(NUMAFLOW_ID_HEADER_KEY, duplicate_id)
             .body(Body::from(r#"{"test": "second_request"}"#))
             .unwrap();
 
@@ -1423,8 +1469,14 @@ mod tests {
 
         // Parse JSON response
         let json_response: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-        assert_eq!(json_response["error"], "Duplicate request ID");
-        assert_eq!(json_response["id"], duplicate_id);
+        assert_eq!(
+            json_response.get("error").expect("Expected error field"),
+            "Duplicate request ID"
+        );
+        assert_eq!(
+            json_response.get("id").expect("Expected id field"),
+            duplicate_id
+        );
     }
 
     #[test]
@@ -1447,5 +1499,38 @@ mod tests {
         let eventtime_header_value = HeaderValue::from_str(&i64::MIN.to_string()).unwrap();
         let result = parse_event_time_from_header(&eventtime_header_value).unwrap_err();
         assert_eq!(result.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_parse_keys_from_header() {
+        // Test single key
+        let keys_header_value = HeaderValue::from_static("key1");
+        let result = parse_keys_from_header(&keys_header_value).unwrap();
+        assert_eq!(result, vec!["key1"]);
+
+        // Test multiple keys
+        let keys_header_value = HeaderValue::from_static("key1,key2,key3");
+        let result = parse_keys_from_header(&keys_header_value).unwrap();
+        assert_eq!(result, vec!["key1", "key2", "key3"]);
+
+        // Test keys with whitespace
+        let keys_header_value = HeaderValue::from_static("key1 , key2 , key3");
+        let result = parse_keys_from_header(&keys_header_value).unwrap();
+        assert_eq!(result, vec!["key1", "key2", "key3"]);
+
+        // Test empty string
+        let keys_header_value = HeaderValue::from_static("");
+        let result = parse_keys_from_header(&keys_header_value).unwrap();
+        assert!(result.is_empty());
+
+        // Test only commas
+        let keys_header_value = HeaderValue::from_static(",,,");
+        let result = parse_keys_from_header(&keys_header_value).unwrap();
+        assert!(result.is_empty());
+
+        // Test keys with empty values between commas
+        let keys_header_value = HeaderValue::from_static("key1,,key2");
+        let result = parse_keys_from_header(&keys_header_value).unwrap();
+        assert_eq!(result, vec!["key1", "key2"]);
     }
 }

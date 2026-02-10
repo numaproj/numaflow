@@ -97,7 +97,7 @@ pub(crate) async fn start_forwarder(
                 cln_token,
                 js_context,
                 config.clone(),
-                sink.clone(),
+                (**sink).clone(),
             )
             .await?;
         }

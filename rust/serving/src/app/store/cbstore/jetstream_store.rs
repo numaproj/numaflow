@@ -119,10 +119,16 @@ impl JetStreamCallbackStore {
 
                             // Parse key: cb.{pod_hash}.{id}.{vertex_name}.{timestamp}
                             let parts: Vec<&str> = entry.key.splitn(5, '.').collect();
-                            let cb_pod_hash = parts[1];
-                            let request_id = parts[2];
 
-                            if parts.len() < 5 || parts[0] != CALLBACK_KEY_PREFIX || cb_pod_hash != pod_hash {
+                            // Validate key format first before accessing indices
+                            let (Some(key_prefix), Some(cb_pod_hash), Some(request_id)) =
+                                (parts.first(), parts.get(1), parts.get(2))
+                            else {
+                                error!(?entry, "Received unexpected key format in central watcher");
+                                continue;
+                            };
+
+                            if parts.len() < 5 || *key_prefix != CALLBACK_KEY_PREFIX || *cb_pod_hash != pod_hash {
                                 error!(?entry, "Received unexpected key format in central watcher");
                                 continue;
                             }
@@ -130,7 +136,7 @@ impl JetStreamCallbackStore {
                             let callback: Arc<Callback> = Arc::new(entry.value.try_into().expect("Failed to deserialize callback"));
                             // we need to send the callback to appropriate sender based on the id
                             let senders_guard = senders.lock().await;
-                            if let Some(cb_sender) = senders_guard.get(request_id) {
+                            if let Some(cb_sender) = senders_guard.get(*request_id) {
                                 cb_sender.send(callback).await.expect("Failed to send callback");
                             } else {
                                 error!(id = ?callback.id, "No active sender found for request id. Callback not sent.");

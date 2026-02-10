@@ -669,7 +669,6 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let _sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -883,7 +882,6 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let _sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -946,7 +944,6 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let _sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {
@@ -1009,7 +1006,6 @@ mod tests {
 
         // create the bypass router config to pass to the forwarder
         let batch_size: usize = 10;
-        let _sink_tags = vec!["sink".to_string()];
         let fallback_tags = vec!["fallback".to_string()];
         let on_success_tags = vec!["on_success".to_string()];
         let conditions = BypassConditions {

@@ -228,12 +228,12 @@ mod tests {
             .await
             .expect("Failed to send messages");
         assert_eq!(responses.len(), 1);
-        assert!(responses[0].status.is_ok());
+        assert!(responses.first().expect("Expected response").status.is_ok());
 
         // Now consume the message from Pulsar to verify
         let messages =
             test_utils::consume_messages_from_topic(&topic_name, &subscription_name, 1).await;
-        let msg = &messages[0];
+        let msg = messages.first().expect("Expected message");
         assert_eq!(msg.payload, "test-payload");
         assert_eq!(msg.properties.get("property1"), Some(&"value1".to_string()));
         assert_eq!(msg.properties.get("property2"), Some(&"value2".to_string()));
@@ -332,12 +332,12 @@ mod tests {
             .await
             .expect("Failed to send large message");
         assert_eq!(responses.len(), 1);
-        assert!(responses[0].status.is_ok());
+        assert!(responses.first().expect("Expected response").status.is_ok());
 
         // Verify the large message was received correctly
         let messages =
             test_utils::consume_messages_from_topic(&topic_name, &subscription_name, 1).await;
-        let msg = &messages[0];
+        let msg = messages.first().expect("Expected message");
         assert_eq!(msg.payload.as_bytes(), large_payload);
     }
 }

@@ -91,8 +91,8 @@ pub(crate) fn get_namespace() -> &'static str {
 /// CustomResources supported by Numaflow.
 #[derive(Debug, Clone)]
 pub(crate) enum CustomResourceType {
-    MonoVertex(MonovertexConfig),
-    Pipeline(PipelineConfig),
+    MonoVertex(Box<MonovertexConfig>),
+    Pipeline(Box<PipelineConfig>),
 }
 
 /// The CRD and other necessary setting to get the Numaflow pipeline/monovertex running.
@@ -109,14 +109,14 @@ impl Settings {
         if env_vars.contains_key(ENV_MONO_VERTEX_OBJ) {
             let cfg = MonovertexConfig::load(env_vars)?;
             return Ok(Settings {
-                custom_resource_type: CustomResourceType::MonoVertex(cfg),
+                custom_resource_type: CustomResourceType::MonoVertex(Box::new(cfg)),
             });
         }
 
         if let Some(obj) = env_vars.get(ENV_VERTEX_OBJ) {
             let cfg = PipelineConfig::load(obj.clone(), env::vars())?;
             return Ok(Settings {
-                custom_resource_type: CustomResourceType::Pipeline(cfg),
+                custom_resource_type: CustomResourceType::Pipeline(Box::new(cfg)),
             });
         }
         Err(Error::Config("No configuration found - environment variable {ENV_MONO_VERTEX_OBJ} or {ENV_VERTEX_OBJ} is not set".to_string()))

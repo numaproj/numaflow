@@ -124,7 +124,8 @@ impl KafkaActor {
         // https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html
         client_config
             .set("enable.partition.eof", "false")
-            .set("session.timeout.ms", "6000")
+            .set("session.timeout.ms", "45000")
+            .set("heartbeat.interval.ms", "15000")
             .set("auto.offset.reset", "earliest");
         if !config.kafka_raw_config.is_empty() {
             info!(
@@ -265,6 +266,8 @@ impl KafkaActor {
         // A successful read will reset the failure count
         const MAX_FAILURE_COUNT: usize = 10;
         let mut continuous_failure_count = 0;
+        let mut last_error: Option<Error> = None;
+        let retry_sleep = self.read_timeout / 3;
         loop {
             if messages.len() >= self.batch_size {
                 break;
@@ -273,6 +276,12 @@ impl KafkaActor {
                 biased;
 
                 _ = &mut timeout => {
+                    // If we timed out with errors and no successful reads, surface the error
+                    if messages.is_empty()
+                        && let Some(err) = last_error
+                    {
+                        return Some(Err(err));
+                    }
                     break;
                 }
 
@@ -280,6 +289,7 @@ impl KafkaActor {
                     let message = match message {
                         Ok(msg) => {
                             continuous_failure_count = 0;
+                            last_error = None;
                             msg
                         }
                         Err(e) => {
@@ -290,8 +300,11 @@ impl KafkaActor {
                                     "Failed to read messages after {MAX_FAILURE_COUNT} retries: {e:?}"
                                 ))));
                             }
-                            error!(?e, "Failed to read messages, will retry after 100 milliseconds");
-                            tokio::time::sleep(Duration::from_millis(100)).await;
+                            error!(?e, ?retry_sleep, "Failed to read messages, will retry");
+                            last_error = Some(Error::Kafka(format!(
+                                "Failed to read messages: {e:?}"
+                            )));
+                            tokio::time::sleep(retry_sleep).await;
                             continue;
                         }
                     };
@@ -375,9 +388,35 @@ impl KafkaActor {
             // This may be a blocking call, so we spawn a new task to run it.
             let consumer = Arc::clone(&self.consumer);
             let task = tokio::task::spawn_blocking(move || {
-                consumer
-                    .commit(&tpl, CommitMode::Sync)
-                    .map_err(|e| Error::Kafka(format!("Failed to commit offsets: {e}")))
+                let Err(commit_error) = consumer.commit(&tpl, CommitMode::Sync) else {
+                    return Ok(());
+                };
+                if let Some(code) = commit_error.rdkafka_error_code() {
+                    use rdkafka::types::RDKafkaErrorCode::{
+                        FencedInstanceId, FencedMemberEpoch, GroupAuthorizationFailed,
+                        IllegalGeneration, RebalanceInProgress, StaleMemberEpoch, UnknownMemberId,
+                    };
+                    // Potential non-retryable errors that can happen in ACK https://kafka.apache.org/41/design/protocol/#error-codes
+                    if matches!(
+                        code,
+                        // Consumer group membership errors
+                        UnknownMemberId
+                            | IllegalGeneration
+                            | RebalanceInProgress
+                            | FencedInstanceId
+                            | FencedMemberEpoch
+                            | StaleMemberEpoch
+                            | GroupAuthorizationFailed
+                    ) {
+                        return Err(Error::NonRetryable(format!(
+                            "Non-retryable commit error ({:?}): {}",
+                            code, commit_error
+                        )));
+                    }
+                }
+                Err(Error::Kafka(format!(
+                    "Failed to commit offsets: {commit_error}"
+                )))
             });
             ack_tasks.push(task);
         }
@@ -854,7 +893,7 @@ mod tests {
 
         assert_eq!(messages.len(), 1);
 
-        let message = &messages[0];
+        let message = messages.first().expect("Expected message");
         assert_eq!(message.headers.get("header1"), Some(&"value1".to_string()));
         assert_eq!(message.headers.get("header2"), Some(&"value2".to_string()));
         // Verify that timestamp is present (should be Some since Kafka sets timestamps)

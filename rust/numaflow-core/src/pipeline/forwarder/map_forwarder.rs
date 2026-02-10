@@ -11,8 +11,8 @@ use crate::metrics::{
 use crate::pipeline::PipelineContext;
 
 use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
-use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
-use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
+use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};
+use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::Tracker;
@@ -32,16 +32,16 @@ use tracing::{error, info};
 /// Map forwarder is a component which starts a streaming reader, a mapper, and a writer
 /// and manages the lifecycle of these components.
 pub(crate) struct MapForwarder<C: crate::typ::NumaflowTypeConfig> {
-    jetstream_reader: ISBReader<C>,
+    jetstream_reader: ISBReaderOrchestrator<C>,
     mapper: MapHandle,
-    jetstream_writer: ISBWriter,
+    jetstream_writer: ISBWriterOrchestrator<C>,
 }
 
 impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
     pub(crate) async fn new(
-        jetstream_reader: ISBReader<C>,
+        jetstream_reader: ISBReaderOrchestrator<C>,
         mapper: MapHandle,
-        jetstream_writer: ISBWriter,
+        jetstream_writer: ISBWriterOrchestrator<C>,
     ) -> Self {
         Self {
             jetstream_reader,
@@ -147,21 +147,28 @@ pub async fn start_map_forwarder(
     )
     .await?;
 
-    let writer_components = ISBWriterComponents {
-        config: config.to_vertex_config.clone(),
-        writers,
-        paf_concurrency: config.writer_concurrency,
-        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
-        vertex_type: config.vertex_type,
-    };
+    // Helper macro to create writer components with specific type
+    macro_rules! create_writer {
+        ($type:ty) => {{
+            let writer_components: ISBWriterOrchestratorComponents<$type> =
+                ISBWriterOrchestratorComponents {
+                    config: config.to_vertex_config.clone(),
+                    writers,
+                    paf_concurrency: config.writer_concurrency,
+                    watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
+                    vertex_type: config.vertex_type,
+                };
+            ISBWriterOrchestrator::<$type>::new(writer_components)
+        }};
+    }
 
-    let buffer_writer = ISBWriter::new(writer_components);
     let (forwarder_tasks, mapper_handle, _pending_reader_task) = if let Some(rate_limit_config) =
         &config.rate_limit
     {
         if should_use_redis_rate_limiter(rate_limit_config) {
             let redis_config =
                 build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
+            let buffer_writer = create_writer!(WithRedisRateLimiter);
             run_all_map_forwarders::<WithRedisRateLimiter>(
                 &context,
                 &map_vtx_config,
@@ -174,6 +181,7 @@ pub async fn start_map_forwarder(
         } else {
             let in_mem_config =
                 build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
+            let buffer_writer = create_writer!(WithInMemoryRateLimiter);
             run_all_map_forwarders::<WithInMemoryRateLimiter>(
                 &context,
                 &map_vtx_config,
@@ -185,6 +193,7 @@ pub async fn start_map_forwarder(
             .await?
         }
     } else {
+        let buffer_writer = create_writer!(WithoutRateLimiter);
         run_all_map_forwarders::<WithoutRateLimiter>(
             &context,
             &map_vtx_config,
@@ -226,11 +235,11 @@ pub async fn start_map_forwarder(
 }
 
 /// Starts map forwarder for all the streams.
-async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
+async fn run_all_map_forwarders<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
     context: &PipelineContext<'_>,
     map_vtx_config: &MapVtxConfig,
     reader_config: &BufferReaderConfig,
-    buffer_writer: ISBWriter,
+    buffer_writer: ISBWriterOrchestrator<C>,
     watermark_handle: Option<crate::watermark::isb::ISBWatermarkHandle>,
     rate_limiter: Option<C::RateLimiter>,
 ) -> Result<(
@@ -239,7 +248,7 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
     PendingReaderTasks,
 )> {
     let mut forwarder_tasks = vec![];
-    let mut isb_lag_readers: Vec<ISBReader<C>> = vec![];
+    let mut isb_lag_readers: Vec<ISBReaderOrchestrator<C>> = vec![];
     let mut mapper_handle = None;
 
     for stream in reader_config.streams.clone() {
@@ -291,12 +300,15 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
 
 /// Start a map forwarder for a single stream, returns the task handle and the ISB reader
 /// (returned so that we can create a pending reader for metrics).
-async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig>(
+async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
     reader_components: ISBReaderComponents,
     mapper: MapHandle,
-    buffer_writer: ISBWriter,
+    buffer_writer: ISBWriterOrchestrator<C>,
     rate_limiter: Option<C::RateLimiter>,
-) -> Result<(tokio::task::JoinHandle<Result<()>>, ISBReader<C>)> {
+) -> Result<(
+    tokio::task::JoinHandle<Result<()>>,
+    ISBReaderOrchestrator<C>,
+)> {
     let cln_token = reader_components.cln_token.clone();
 
     let js_reader = JetStreamReader::new(
@@ -306,7 +318,8 @@ async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig>(
     )
     .await?;
 
-    let isb_reader = ISBReader::<C>::new(reader_components, js_reader, rate_limiter).await?;
+    let isb_reader =
+        ISBReaderOrchestrator::<C>::new(reader_components, js_reader, rate_limiter).await?;
 
     let forwarder = MapForwarder::<C>::new(isb_reader.clone(), mapper, buffer_writer).await;
 

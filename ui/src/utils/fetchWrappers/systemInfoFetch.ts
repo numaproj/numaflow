@@ -42,7 +42,7 @@ export const useSystemInfoFetch = (props: SystemInfoProps) => {
       setSystemInfo(data?.data);
       return;
     }
-  }, [data, fetchLoading]);
+  }, [data, fetchLoading, error]);
 
   return { systemInfo, error: errMsg, loading };
 };

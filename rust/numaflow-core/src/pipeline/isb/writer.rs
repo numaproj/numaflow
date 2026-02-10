@@ -13,14 +13,15 @@ use crate::Result;
 use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
 use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, Offset};
+use crate::message::{Message, Offset};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_metric_labels,
     pipeline_metrics,
 };
 use crate::pipeline::isb::error::ISBError;
-use crate::pipeline::isb::jetstream::js_writer::{JetStreamWriter, WriteError};
+use crate::pipeline::isb::{ISBWriter, WriteError, WriteResult};
 use crate::shared::forward;
+use crate::typ::NumaflowTypeConfig;
 use crate::watermark::WatermarkHandle;
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
@@ -30,31 +31,32 @@ type MetricLabels = Arc<Vec<(String, String)>>;
 /// Type alias for stream metric labels map
 type StreamMetricLabelsMap = Arc<HashMap<&'static str, MetricLabels>>;
 
-/// Result of a successful write operation to a stream.
-struct WriteResult {
+/// Result of a successful async write operation to a stream.
+/// Contains the pending write (PAF) that needs to be resolved.
+struct PendingWriteResult<C: NumaflowTypeConfig> {
     stream: Stream,
-    paf: async_nats::jetstream::context::PublishAckFuture,
+    paf: <C::ISBWriter as ISBWriter>::PendingWrite,
     write_start: Instant,
 }
 
-/// Components needed to create an ISBWriter.
+/// Components needed to create an ISBWriterOrchestrator.
 #[derive(Clone)]
-pub(crate) struct ISBWriterComponents {
+pub(crate) struct ISBWriterOrchestratorComponents<C: NumaflowTypeConfig> {
     pub config: Vec<ToVertexConfig>,
-    pub writers: HashMap<&'static str, JetStreamWriter>,
+    pub writers: HashMap<&'static str, C::ISBWriter>,
     pub paf_concurrency: usize,
     pub watermark_handle: Option<WatermarkHandle>,
     pub vertex_type: VertexType,
 }
 
-/// ISBWriter orchestrates writing to multiple JetStream streams.
-/// It manages multiple JetStreamWriters (one per stream), handles message routing,
-/// PAF resolution, watermark publishing, and tracker operations.
+/// ISBWriterOrchestrator orchestrates writing to multiple ISB streams.
+/// It manages multiple ISBWriters (one per stream), handles message routing,
+/// watermark publishing, and tracker operations.
 #[derive(Clone)]
-pub(crate) struct ISBWriter {
+pub(crate) struct ISBWriterOrchestrator<C: NumaflowTypeConfig> {
     config: Arc<Vec<ToVertexConfig>>,
-    /// HashMap: stream_name -> JetStreamWriter
-    writers: Arc<HashMap<&'static str, JetStreamWriter>>,
+    /// HashMap: stream_name -> ISBWriter
+    writers: Arc<HashMap<&'static str, C::ISBWriter>>,
     watermark_handle: Option<WatermarkHandle>,
     sem: Arc<Semaphore>,
     paf_concurrency: usize,
@@ -64,11 +66,11 @@ pub(crate) struct ISBWriter {
     stream_metric_labels: StreamMetricLabelsMap,
 }
 
-impl ISBWriter {
-    /// Creates a new ISBWriter from pre-created JetStreamWriters.
-    /// The JetStreamWriters are created upstream and passed in, making this more testable
-    /// and decoupled from JetStream implementation details.
-    pub(crate) fn new(components: ISBWriterComponents) -> Self {
+impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
+    /// Creates a new ISBWriterOrchestrator from pre-created ISBWriters.
+    /// The ISBWriters are created upstream and passed in, making this more testable
+    /// and decoupled from ISB implementation details.
+    pub(crate) fn new(components: ISBWriterOrchestratorComponents<C>) -> Self {
         // Build metric labels for each stream once during initialization
         let mut stream_metric_labels = HashMap::new();
         for stream_name in components.writers.keys() {
@@ -144,12 +146,12 @@ impl ISBWriter {
     }
 
     /// Routes a message to appropriate streams and writes to each.
-    /// Returns a list of WriteResults (one per successful write).
+    /// Returns a list of PendingWriteResults (one per successful write) with PAFs to be resolved.
     async fn route_and_write_message(
         &self,
         message: &Message,
         cln_token: CancellationToken,
-    ) -> Vec<WriteResult> {
+    ) -> Vec<PendingWriteResult<C>> {
         let mut results = vec![];
 
         for vertex in &*self.config {
@@ -211,13 +213,14 @@ impl ISBWriter {
 
     /// Writes a message to a single stream with retry logic.
     /// Returns None if the message should be dropped (DiscardLatest + buffer full or cancelled).
+    /// On success, returns a PendingWriteResult containing the PAF that needs to be resolved.
     async fn write_to_stream(
         &self,
         message: &Message,
         stream: &Stream,
         buffer_full_strategy: BufferFullStrategy,
         cln_token: CancellationToken,
-    ) -> Option<WriteResult> {
+    ) -> Option<PendingWriteResult<C>> {
         let writer = self
             .writers
             .get(stream.name)
@@ -226,9 +229,10 @@ impl ISBWriter {
         let mut log_counter = 500u16;
 
         loop {
+            // Use the trait's async_write method which returns immediately with a PAF
             match writer.async_write(message.clone()).await {
                 Ok(paf) => {
-                    return Some(WriteResult {
+                    return Some(PendingWriteResult {
                         stream: stream.clone(),
                         paf,
                         write_start,
@@ -250,15 +254,15 @@ impl ISBWriter {
                                 "buffer-full",
                                 message.value.len(),
                             );
-                            return None; // Don't retry
+                            return None;
                         }
                         BufferFullStrategy::RetryUntilSuccess => {
                             // Continue retrying
                         }
                     }
                 }
-                Err(WriteError::PublishFailed(e)) => {
-                    // Continue retrying
+                Err(WriteError::WriteFailed(e)) => {
+                    // Write failed, continue retrying
                     error!(?e, "Publishing failed, retrying");
                 }
             }
@@ -346,7 +350,7 @@ impl ISBWriter {
     /// Spawns a background task to resolve all PAFs, publish watermarks, and update tracker.
     async fn resolve_and_finalize(
         &self,
-        write_results: Vec<WriteResult>,
+        write_results: Vec<PendingWriteResult<C>>,
         message: Message,
         cln_token: CancellationToken,
     ) -> Result<()> {
@@ -366,7 +370,7 @@ impl ISBWriter {
                 .resolve_all_pafs(write_results, &message, cln_token)
                 .await;
 
-            // If any of the writes failed, NAK the message
+            // If any of the writes failed, NAK the message so it can be retried
             if resolved_offsets.len() != n {
                 message
                     .ack_handle
@@ -374,6 +378,11 @@ impl ISBWriter {
                     .expect("ack handle should be present")
                     .is_failed
                     .store(true, Ordering::Relaxed);
+                warn!(
+                    expected = n,
+                    actual = resolved_offsets.len(),
+                    "Some writes failed during PAF resolution, message will be NAK'd"
+                );
                 return;
             }
 
@@ -388,7 +397,7 @@ impl ISBWriter {
     /// Resolves all PAFs and returns the offsets for successful writes.
     async fn resolve_all_pafs(
         &self,
-        write_results: Vec<WriteResult>,
+        write_results: Vec<PendingWriteResult<C>>,
         message: &Message,
         cln_token: CancellationToken,
     ) -> Vec<(Stream, Offset)> {
@@ -400,25 +409,24 @@ impl ISBWriter {
                 .get(write_result.stream.name)
                 .expect("writer should exist for stream");
 
-            // Try to resolve the PAF
-            let paf_result = match write_result.paf.await {
-                Ok(ack) => Ok(ack),
+            // Try to resolve the PAF using the trait's resolve method
+            let resolve_result = match writer.resolve(write_result.paf).await {
+                Ok(result) => Ok(result),
                 Err(e) => {
                     error!(
                         ?e, stream = ?write_result.stream,
-                        "Failed to resolve the future, trying blocking write",
+                        "Failed to resolve the future, trying write with retry",
                     );
                     Self::publish_paf_error_metrics(write_result.stream.name, &e);
-                    writer
-                        .blocking_write(message.clone(), cln_token.clone())
+                    // Fallback to write with retry loop
+                    self.write_with_retry(writer, message.clone(), cln_token.clone())
                         .await
                 }
             };
 
-            // Handle the ack result
-            if let Some(offset) = self
-                .handle_paf_result(paf_result, &write_result.stream, message)
-                .await
+            // Handle the resolve result
+            if let Some(offset) =
+                self.handle_paf_result(resolve_result, &write_result.stream, message)
             {
                 // Publish write metrics for successful write
                 self.publish_write_metrics(
@@ -433,17 +441,47 @@ impl ISBWriter {
         offsets
     }
 
-    /// Handles the result of an ack operation.
-    /// Returns Some(offset) if successful, None if failed.
-    async fn handle_paf_result(
+    /// Writes a message using the write method with retry logic.
+    /// Retries until success or cancellation.
+    async fn write_with_retry(
         &self,
-        ack_result: Result<async_nats::jetstream::publish::PublishAck>,
+        writer: &C::ISBWriter,
+        message: Message,
+        cln_token: CancellationToken,
+    ) -> std::result::Result<WriteResult, WriteError> {
+        loop {
+            match writer.write(message.clone()).await {
+                Ok(result) => return Ok(result),
+                Err(WriteError::BufferFull) => {
+                    // Buffer is full, wait and retry
+                    debug!("Buffer full during write retry, waiting before next attempt");
+                }
+                Err(WriteError::WriteFailed(ref e)) => {
+                    error!(?e, "Write failed during retry, will retry");
+                }
+            }
+
+            if cln_token.is_cancelled() {
+                return Err(WriteError::WriteFailed("Cancelled".to_string()));
+            }
+
+            // Sleep to avoid busy looping
+            sleep(Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS)).await;
+        }
+    }
+
+    /// Handles the result of a PAF resolution or write.
+    /// Returns Some(offset) if successful, None if failed.
+    /// Also handles duplicate detection and publishes appropriate metrics.
+    fn handle_paf_result(
+        &self,
+        result: std::result::Result<WriteResult, WriteError>,
         stream: &Stream,
         message: &Message,
     ) -> Option<Offset> {
-        match ack_result {
-            Ok(ack) => {
-                if ack.duplicate {
+        match result {
+            Ok(write_result) => {
+                if write_result.is_duplicate {
                     warn!(
                         message_id = ?message.id,
                         stream = ?stream,
@@ -455,41 +493,30 @@ impl ISBWriter {
                         message.value.len(),
                     );
                 }
-                Some(Offset::Int(IntOffset::new(
-                    ack.sequence as i64,
-                    stream.partition,
-                )))
+                Some(write_result.offset)
             }
             Err(e) => {
-                error!(?e, stream = ?stream, "Blocking write failed");
+                error!(?e, stream = ?stream, "Write/resolve failed");
+                self.publish_stream_drop_metric(stream.name, "write-failed", message.value.len());
                 None
             }
         }
     }
 
     /// Publishes error metrics for PAF resolution failures.
-    fn publish_paf_error_metrics(
-        stream_name: &str,
-        e: &async_nats::jetstream::context::PublishError,
-    ) {
+    fn publish_paf_error_metrics(stream_name: &str, e: &WriteError) {
+        let error_kind = match e {
+            WriteError::BufferFull => "buffer_full",
+            WriteError::WriteFailed(_) => "write_failed",
+        };
         pipeline_metrics()
             .jetstream_isb
             .write_error_total
             .get_or_create(&crate::metrics::jetstream_isb_error_metrics_labels(
                 stream_name,
-                e.kind().to_string(),
+                error_kind.to_string(),
             ))
             .inc();
-        if let async_nats::jetstream::context::PublishErrorKind::TimedOut = e.kind() {
-            pipeline_metrics()
-                .jetstream_isb
-                .write_timeout_total
-                .get_or_create(&crate::metrics::jetstream_isb_error_metrics_labels(
-                    stream_name,
-                    e.kind().to_string(),
-                ))
-                .inc();
-        }
     }
 
     /// Publishes watermarks for all resolved offsets.
@@ -526,6 +553,8 @@ mod tests {
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
     use crate::message::{AckHandle, IntOffset, Message, MessageID, Offset, ReadAck};
+    use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
+    use crate::typ::WithoutRateLimiter;
     use async_nats::jetstream;
     use async_nats::jetstream::consumer::{self, Config, Consumer};
     use async_nats::jetstream::stream;
@@ -586,20 +615,21 @@ mod tests {
             .unwrap(),
         );
 
-        let writer_components = ISBWriterComponents {
-            config: vec![ToVertexConfig {
-                name: "test-vertex",
-                partitions: 1,
-                writer_config,
-                conditions: None,
-                to_vertex_type: VertexType::Sink,
-            }],
-            writers,
-            paf_concurrency: 100,
-            watermark_handle: None,
-            vertex_type: VertexType::Source,
-        };
-        let writer = ISBWriter::new(writer_components);
+        let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
+            ISBWriterOrchestratorComponents {
+                config: vec![ToVertexConfig {
+                    name: "test-vertex",
+                    partitions: 1,
+                    writer_config,
+                    conditions: None,
+                    to_vertex_type: VertexType::Sink,
+                }],
+                writers,
+                paf_concurrency: 100,
+                watermark_handle: None,
+                vertex_type: VertexType::Source,
+            };
+        let writer = ISBWriterOrchestrator::<WithoutRateLimiter>::new(writer_components);
 
         let (tx, rx) = mpsc::channel(10);
         let messages_stream = ReceiverStream::new(rx);
@@ -695,20 +725,21 @@ mod tests {
             .unwrap(),
         );
 
-        let writer_components = ISBWriterComponents {
-            config: vec![ToVertexConfig {
-                name: "test-vertex",
-                partitions: 1,
-                writer_config,
-                conditions: None,
-                to_vertex_type: VertexType::Sink,
-            }],
-            writers,
-            paf_concurrency: 100,
-            watermark_handle: None,
-            vertex_type: VertexType::Source,
-        };
-        let writer = ISBWriter::new(writer_components);
+        let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
+            ISBWriterOrchestratorComponents {
+                config: vec![ToVertexConfig {
+                    name: "test-vertex",
+                    partitions: 1,
+                    writer_config,
+                    conditions: None,
+                    to_vertex_type: VertexType::Sink,
+                }],
+                writers,
+                paf_concurrency: 100,
+                watermark_handle: None,
+                vertex_type: VertexType::Source,
+            };
+        let writer = ISBWriterOrchestrator::<WithoutRateLimiter>::new(writer_components);
 
         let (tx, rx) = mpsc::channel(10);
         let messages_stream = ReceiverStream::new(rx);
@@ -832,46 +863,47 @@ mod tests {
             );
         }
 
-        let writer_components = ISBWriterComponents {
-            config: vec![
-                ToVertexConfig {
-                    name: "vertex1",
-                    partitions: 2,
-                    writer_config: vertex1_writer_config,
-                    conditions: Some(Box::new(ForwardConditions {
-                        tags: Box::new(TagConditions {
-                            operator: Some("or".to_string()),
-                            values: vec!["tag1".to_string()],
-                        }),
-                    })),
-                    to_vertex_type: VertexType::Sink,
-                },
-                ToVertexConfig {
-                    name: "vertex2",
-                    partitions: 1,
-                    writer_config: vertex2_writer_config,
-                    conditions: Some(Box::new(ForwardConditions {
-                        tags: Box::new(TagConditions {
-                            operator: Some("or".to_string()),
-                            values: vec!["tag2".to_string()],
-                        }),
-                    })),
-                    to_vertex_type: VertexType::Sink,
-                },
-                ToVertexConfig {
-                    name: "vertex3",
-                    partitions: 1,
-                    writer_config: vertex3_writer_config,
-                    conditions: None, // No conditions, always forward
-                    to_vertex_type: VertexType::Sink,
-                },
-            ],
-            writers,
-            paf_concurrency: 100,
-            watermark_handle: None,
-            vertex_type: VertexType::Source,
-        };
-        let writer = ISBWriter::new(writer_components);
+        let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
+            ISBWriterOrchestratorComponents {
+                config: vec![
+                    ToVertexConfig {
+                        name: "vertex1",
+                        partitions: 2,
+                        writer_config: vertex1_writer_config,
+                        conditions: Some(Box::new(ForwardConditions {
+                            tags: Box::new(TagConditions {
+                                operator: Some("or".to_string()),
+                                values: vec!["tag1".to_string()],
+                            }),
+                        })),
+                        to_vertex_type: VertexType::Sink,
+                    },
+                    ToVertexConfig {
+                        name: "vertex2",
+                        partitions: 1,
+                        writer_config: vertex2_writer_config,
+                        conditions: Some(Box::new(ForwardConditions {
+                            tags: Box::new(TagConditions {
+                                operator: Some("or".to_string()),
+                                values: vec!["tag2".to_string()],
+                            }),
+                        })),
+                        to_vertex_type: VertexType::Sink,
+                    },
+                    ToVertexConfig {
+                        name: "vertex3",
+                        partitions: 1,
+                        writer_config: vertex3_writer_config,
+                        conditions: None, // No conditions, always forward
+                        to_vertex_type: VertexType::Sink,
+                    },
+                ],
+                writers,
+                paf_concurrency: 100,
+                watermark_handle: None,
+                vertex_type: VertexType::Source,
+            };
+        let writer = ISBWriterOrchestrator::<WithoutRateLimiter>::new(writer_components);
 
         let (tx, rx) = mpsc::channel(10);
         let messages_stream = ReceiverStream::new(rx);

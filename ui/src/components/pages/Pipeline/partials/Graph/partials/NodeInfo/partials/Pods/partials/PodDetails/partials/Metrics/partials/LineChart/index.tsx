@@ -633,7 +633,7 @@ const LineChartComponent = ({
             <Box
               className={"line-chart-filters-label"}
               sx={{
-                color: isFilterFocused ? "#0077c5" : "rgba(0, 0, 0, 0.54)",
+                color: isFilterFocused ? "var(--accent-primary)" : "var(--text-tertiary)",
               }}
             >
               Filters

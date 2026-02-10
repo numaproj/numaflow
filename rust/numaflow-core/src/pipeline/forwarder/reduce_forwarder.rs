@@ -9,8 +9,8 @@ use crate::metrics::{
 };
 use crate::pipeline::PipelineContext;
 use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
-use crate::pipeline::isb::reader::{ISBReader, ISBReaderComponents};
-use crate::pipeline::isb::writer::{ISBWriter, ISBWriterComponents};
+use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};
+use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
 use crate::reduce::pbq::{PBQ, PBQBuilder, WAL};
 use crate::reduce::reducer::aligned::reducer::AlignedReducer;
 use crate::reduce::reducer::aligned::windower::AlignedWindowManager;
@@ -42,11 +42,11 @@ use tracing::{error, info, warn};
 /// and manages the lifecycle of these components.
 pub(crate) struct ReduceForwarder<C: NumaflowTypeConfig> {
     pbq: PBQ<C>,
-    reducer: Reducer,
+    reducer: Reducer<C>,
 }
 
 impl<C: NumaflowTypeConfig> ReduceForwarder<C> {
-    pub(crate) fn new(pbq: PBQ<C>, reducer: Reducer) -> Self {
+    pub(crate) fn new(pbq: PBQ<C>, reducer: Reducer<C>) -> Self {
         Self { pbq, reducer }
     }
 
@@ -173,15 +173,16 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     )
     .await?;
 
-    let writer_components = ISBWriterComponents {
-        config: config.to_vertex_config.clone(),
-        writers,
-        paf_concurrency: config.writer_concurrency,
-        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
-        vertex_type: config.vertex_type,
-    };
+    let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
+        ISBWriterOrchestratorComponents {
+            config: config.to_vertex_config.clone(),
+            writers,
+            paf_concurrency: config.writer_concurrency,
+            watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
+            vertex_type: config.vertex_type,
+        };
 
-    let buffer_writer = ISBWriter::new(writer_components);
+    let buffer_writer = ISBWriterOrchestrator::<WithoutRateLimiter>::new(writer_components);
 
     // Create WAL if configured
     let (wal, gc_wal) = create_wal_components(
@@ -311,15 +312,16 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     )
     .await?;
 
-    let writer_components = ISBWriterComponents {
-        config: config.to_vertex_config.clone(),
-        writers,
-        paf_concurrency: config.writer_concurrency,
-        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
-        vertex_type: config.vertex_type,
-    };
+    let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
+        ISBWriterOrchestratorComponents {
+            config: config.to_vertex_config.clone(),
+            writers,
+            paf_concurrency: config.writer_concurrency,
+            watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
+            vertex_type: config.vertex_type,
+        };
 
-    let buffer_writer = ISBWriter::new(writer_components);
+    let buffer_writer = ISBWriterOrchestrator::<WithoutRateLimiter>::new(writer_components);
 
     // Create WAL if configured (use Unaligned WindowKind for unaligned reducers)
     let (wal, gc_wal) = create_wal_components(
@@ -378,10 +380,10 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
 }
 
 /// Starts reduce forwarder.
-async fn run_reduce_forwarder<C: NumaflowTypeConfig>(
+async fn run_reduce_forwarder<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
     context: &PipelineContext<'_>,
     reader_components: ISBReaderComponents,
-    reducer: Reducer,
+    reducer: Reducer<C>,
     wal: Option<WAL>,
     rate_limiter: Option<C::RateLimiter>,
 ) -> Result<()> {
@@ -392,7 +394,8 @@ async fn run_reduce_forwarder<C: NumaflowTypeConfig>(
     )
     .await?;
 
-    let isb_reader = ISBReader::<C>::new(reader_components, js_reader, rate_limiter).await?;
+    let isb_reader =
+        ISBReaderOrchestrator::<C>::new(reader_components, js_reader, rate_limiter).await?;
 
     // Create lag reader with the single buffer reader (reduce only reads from one stream)
     let pending_reader = shared::metrics::create_pending_reader(
@@ -731,11 +734,15 @@ mod tests {
                     crate::config::components::reduce::ReducerConfig::Aligned(config) => {
                         config.clone()
                     }
-                    _ => panic!("Expected aligned config"),
+                    crate::config::components::reduce::ReducerConfig::Unaligned(_) => {
+                        panic!("Expected aligned config")
+                    }
                 };
                 (reduce_config.clone(), aligned_config)
             }
-            _ => panic!("Expected reduce vertex config"),
+            VertexConfig::Source(_) | VertexConfig::Sink(_) | VertexConfig::Map(_) => {
+                panic!("Expected reduce vertex config")
+            }
         };
 
         // Create test messages
@@ -921,7 +928,7 @@ mod tests {
                     + 1;
 
                 // Fire a message every 3 messages
-                if current_count % 3 == 0 {
+                if current_count.is_multiple_of(3) {
                     let mut message =
                         numaflow::accumulator::Message::from_accumulator_request(request);
                     message = message.with_value(format!("count_{}", current_count).into_bytes());
@@ -1103,11 +1110,15 @@ mod tests {
                     crate::config::components::reduce::ReducerConfig::Unaligned(config) => {
                         config.clone()
                     }
-                    _ => panic!("Expected unaligned config"),
+                    crate::config::components::reduce::ReducerConfig::Aligned(_) => {
+                        panic!("Expected unaligned config")
+                    }
                 };
                 (reduce_config.clone(), unaligned_config)
             }
-            _ => panic!("Expected reduce vertex config"),
+            VertexConfig::Source(_) | VertexConfig::Sink(_) | VertexConfig::Map(_) => {
+                panic!("Expected reduce vertex config")
+            }
         };
 
         // Create test messages - accumulator fires every 3 messages

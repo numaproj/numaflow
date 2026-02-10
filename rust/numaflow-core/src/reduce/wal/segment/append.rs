@@ -549,7 +549,7 @@ mod tests {
             .map(|entry| entry.unwrap().path())
             .filter(|path| {
                 path.extension()
-                    .map_or(false, |ext| ext == "wal" || ext == "frozen")
+                    .is_some_and(|ext| ext == "wal" || ext == "frozen")
             })
             .collect();
 
@@ -624,7 +624,7 @@ mod tests {
         let mut files: Vec<_> = fs::read_dir(&base_path)
             .unwrap()
             .map(|entry| entry.unwrap().path())
-            .filter(|path| path.extension().map_or(false, |ext| ext == "frozen"))
+            .filter(|path| path.extension().is_some_and(|ext| ext == "frozen"))
             .collect();
         files.sort();
 
@@ -632,7 +632,9 @@ mod tests {
 
         // Verify the rotated file is renamed correctly
         assert!(
-            files[0]
+            files
+                .first()
+                .expect("Expected at least one frozen file")
                 .file_name()
                 .unwrap()
                 .to_str()
@@ -706,12 +708,12 @@ mod tests {
         let mut files: Vec<_> = fs::read_dir(&base_path)
             .unwrap()
             .map(|entry| entry.unwrap().path())
-            .filter(|path| path.extension().map_or(false, |ext| ext == "frozen"))
+            .filter(|path| path.extension().is_some_and(|ext| ext == "frozen"))
             .collect();
         files.sort();
 
         assert!(
-            files.len() >= 1,
+            !files.is_empty(),
             "There should be at least one frozen file after time-based rotation"
         );
 

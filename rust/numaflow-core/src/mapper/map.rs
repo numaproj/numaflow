@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
-use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
+use tokio::sync::{Semaphore, mpsc};
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
@@ -14,8 +14,8 @@ use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 use tracing::{error, info, warn};
 
-use crate::config::get_vertex_name;
 use crate::config::pipeline::map::MapMode;
+use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{self, Error};
 use crate::message::{AckHandle, Message, MessageID, Offset};
 use crate::metadata::Metadata;
@@ -31,12 +31,429 @@ use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::monovertex::bypass_router::MvtxBypassRouter;
-use batch::UserDefinedBatchMap;
-use stream::UserDefinedStreamMap;
-use unary::UserDefinedUnaryMap;
+use batch::{MapBatchTask, UserDefinedBatchMap};
+use stream::{MapStreamTask, UserDefinedStreamMap};
+use unary::{MapUnaryTask, UserDefinedUnaryMap};
+
+/// ConcurrentMapper represents mappers that process messages concurrently (one task per message).
+/// Both Unary and Stream mappers spawn individual tasks for each message.
+#[derive(Clone)]
+enum ConcurrentMapper {
+    Unary(UserDefinedUnaryMap),
+    Stream(UserDefinedStreamMap),
+}
+
+/// MapperType is an enum to store the different types of mappers.
+#[derive(Clone)]
+enum MapperType {
+    /// Concurrent mappers (Unary/Stream) process messages individually with concurrency control.
+    Concurrent(ConcurrentMapper),
+    /// Batch mapper processes messages in batches sequentially.
+    Batch(UserDefinedBatchMap),
+}
+
+/// MapHandle is responsible for reading messages from the stream and invoke the map operation on
+/// those messages and send the mapped messages to the output stream.
+///
+/// Error handling: There can be critical non-retryable errors in this component like udf failures
+/// etc., since we do concurrent processing of messages, the moment we encounter an error from any
+/// of the tasks, we will go to shut-down mode. We cancel the token to let upstream know that we are
+/// shutting down. We drain the input stream, nack the messages, and exit when the stream is
+/// closed. We will drop the downstream stream so that the downstream components can shut down.
+/// Structured concurrency is honored here, we wait for all the concurrent tokio tasks to exit.
+/// before shutting down the component.
+#[derive(Clone)]
+pub(crate) struct MapHandle {
+    batch_size: usize,
+    read_timeout: Duration,
+    graceful_shutdown_time: Duration,
+    concurrency: usize,
+    tracker: Tracker,
+    mapper: MapperType,
+    /// this the final state of the component (any error will set this as Err)
+    final_result: crate::Result<()>,
+    /// The moment we see an error, we will set this to true.
+    shutting_down_on_err: bool,
+    health_checker: Option<MapClient<Channel>>,
+}
+
+/// Response channel size for streaming map.
+const STREAMING_MAP_RESP_CHANNEL_SIZE: usize = 10;
+
+impl MapHandle {
+    /// Creates a new mapper with the given batch size, concurrency, client, and
+    /// tracker handle. It creates the appropriate mapper based on the map mode.
+    pub(crate) async fn new(
+        map_mode: MapMode,
+        batch_size: usize,
+        read_timeout: Duration,
+        graceful_timeout: Duration,
+        concurrency: usize,
+        client: MapClient<Channel>,
+        tracker: Tracker,
+    ) -> error::Result<Self> {
+        // Based on the map mode, create the appropriate mapper
+        let mapper = match map_mode {
+            MapMode::Unary => MapperType::Concurrent(ConcurrentMapper::Unary(
+                UserDefinedUnaryMap::new(batch_size, client.clone()).await?,
+            )),
+            MapMode::Stream => MapperType::Concurrent(ConcurrentMapper::Stream(
+                UserDefinedStreamMap::new(batch_size, client.clone()).await?,
+            )),
+            MapMode::Batch => {
+                MapperType::Batch(UserDefinedBatchMap::new(batch_size, client.clone()).await?)
+            }
+        };
+
+        Ok(Self {
+            mapper,
+            batch_size,
+            read_timeout,
+            graceful_shutdown_time: graceful_timeout,
+            concurrency,
+            tracker,
+            final_result: Ok(()),
+            shutting_down_on_err: false,
+            health_checker: Some(client),
+        })
+    }
+
+    // Returns true if the mapper is ready to accept messages.
+    pub(crate) async fn ready(&mut self) -> bool {
+        if let Some(client) = &mut self.health_checker {
+            match client.is_ready(Request::new(())).await {
+                Ok(response) => response.into_inner().ready,
+                Err(e) => {
+                    error!(?e, "Map Client is not ready");
+                    false
+                }
+            }
+        } else {
+            false
+        }
+    }
+
+    /// Maps the input stream of messages and returns the output stream and the
+    /// handle to the background task. In case of critical errors it stops
+    /// reading from the input stream and returns the error using the join
+    /// handle.
+    pub(crate) async fn streaming_map(
+        mut self,
+        input_stream: ReceiverStream<Message>,
+        cln_token: CancellationToken,
+        bypass_router: Option<MvtxBypassRouter>,
+    ) -> error::Result<(ReceiverStream<Message>, JoinHandle<error::Result<()>>)> {
+        let (output_tx, output_rx) = mpsc::channel(self.batch_size);
+        let (error_tx, error_rx) = mpsc::channel(self.batch_size);
+        let semaphore = Arc::new(Semaphore::new(self.concurrency));
+
+        // we spawn one of the 3 map types
+        let handle = tokio::spawn(async move {
+            let parent_cln_token = cln_token.clone();
+
+            // create a new cancellation token for the map component, this token is used for hard
+            // shutdown, the parent token is used for graceful shutdown.
+            let hard_shutdown_token = CancellationToken::new();
+            // the one that calls shutdown
+            let hard_shutdown_token_owner = hard_shutdown_token.clone();
+            let graceful_timeout = self.graceful_shutdown_time;
+
+            // spawn a task to cancel the token after graceful timeout when the main token is canceled
+            let shutdown_handle = tokio::spawn(async move {
+                // initiate graceful shutdown
+                parent_cln_token.cancelled().await;
+                // wait for graceful timeout
+                tokio::time::sleep(graceful_timeout).await;
+                // cancel the token to hard shutdown
+                hard_shutdown_token_owner.cancel();
+            });
+
+            // based on the map mode, send the message to the appropriate mapper.
+            match &self.mapper {
+                MapperType::Concurrent(concurrent_mapper) => {
+                    let shared_ctx = Arc::new(SharedMapTaskContext {
+                        output_tx,
+                        error_tx,
+                        tracker: self.tracker.clone(),
+                        bypass_router,
+                        hard_shutdown_token,
+                        is_mono_vertex: is_mono_vertex(),
+                    });
+                    let ctx = ConcurrentMapContext {
+                        error_rx,
+                        semaphore: Arc::clone(&semaphore),
+                        cln_token,
+                        concurrent_mapper: concurrent_mapper.clone(),
+                        shared_ctx,
+                    };
+                    self.process_concurrent_messages(input_stream, ctx).await?;
+                }
+                MapperType::Batch(batch_mapper) => {
+                    let ctx = BatchMapContext {
+                        output_tx,
+                        cln_token,
+                        bypass_router,
+                        batch_mapper: batch_mapper.clone(),
+                    };
+                    self.process_batch_messages(input_stream, ctx).await;
+                }
+            }
+
+            // wait for all the spawned tasks to finish before returning the final result
+            info!("Map input stream ended, waiting for inflight messages to finish");
+            let _permit = semaphore
+                .acquire_many_owned(self.concurrency as u32)
+                .await
+                .map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}")))?;
+            info!(status=?self.final_result, "Map component is completed");
+
+            // abort the shutdown handle since we are done processing, no need to wait for the
+            // hard shutdown
+            if !shutdown_handle.is_finished() {
+                shutdown_handle.abort();
+            }
+
+            self.final_result
+        });
+
+        Ok((ReceiverStream::new(output_rx), handle))
+    }
+
+    /// Processes messages using concurrent (unary or stream) mappers.
+    /// Each message is processed in a separate spawned task.
+    async fn process_concurrent_messages(
+        &mut self,
+        input_stream: ReceiverStream<Message>,
+        mut ctx: ConcurrentMapContext,
+    ) -> error::Result<()> {
+        let mut input_stream = input_stream;
+        loop {
+            // we need tokio select here because we have to listen to both the input stream
+            // and the error channel. If there is an error, we need to discard all the
+            // messages in the tracker and stop processing the input stream.
+            tokio::select! {
+                biased;
+                Some(error) = ctx.error_rx.recv() => {
+                    error!(?error, "error received while performing map operation");
+
+                    if self.final_result.is_ok() {
+                        // cancel the token to let the upstream know that we are shutting down so
+                        // that they stop sending new messages.
+                        ctx.cln_token.cancel();
+                        self.final_result = Err(error);
+                        self.shutting_down_on_err = true;
+                    } else {
+                        // store the error so that latest error will be propagated to the UI.
+                        self.final_result = Err(error);
+                    }
+                },
+                read_msg = input_stream.next() => {
+                    let Some(read_msg) = read_msg else {
+                        break;
+                    };
+
+                    // if there are errors then we need to drain the stream and nack
+                    if self.shutting_down_on_err {
+                        warn!(offset = ?read_msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
+                        read_msg.ack_handle.as_ref().expect("ack handle should be present").is_failed.store(true, Ordering::Relaxed);
+                    } else {
+                        let permit = Arc::clone(&ctx.semaphore).acquire_owned()
+                            .await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}")))?;
+
+                        // Spawn the appropriate task based on mapper type
+                        match &ctx.concurrent_mapper {
+                            ConcurrentMapper::Unary(mapper) => {
+                                MapUnaryTask {
+                                    mapper: mapper.clone(),
+                                    permit,
+                                    message: read_msg,
+                                    shared_ctx: Arc::clone(&ctx.shared_ctx),
+                                }
+                                .spawn();
+                            }
+                            ConcurrentMapper::Stream(mapper) => {
+                                MapStreamTask {
+                                    mapper: mapper.clone(),
+                                    permit,
+                                    message: read_msg,
+                                    shared_ctx: Arc::clone(&ctx.shared_ctx),
+                                }
+                                .spawn();
+                            }
+                        }
+                    }
+                },
+            }
+        }
+        Ok(())
+    }
+
+    /// Processes messages using batch mapper.
+    /// Messages are collected into batches and processed synchronously.
+    async fn process_batch_messages(
+        &mut self,
+        input_stream: ReceiverStream<Message>,
+        ctx: BatchMapContext,
+    ) {
+        let timeout_duration = self.read_timeout;
+        let chunked_stream = input_stream.chunks_timeout(self.batch_size, timeout_duration);
+        tokio::pin!(chunked_stream);
+
+        let is_mono_vertex = is_mono_vertex();
+        // we don't need to tokio spawn here because, unlike unary and stream, batch is
+        // a blocking operation, and we process one batch at a time.
+        while let Some(batch) = chunked_stream.next().await {
+            // if there are errors then we need to drain the stream and nack
+            if self.shutting_down_on_err {
+                for msg in batch {
+                    warn!(offset = ?msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
+                    msg.ack_handle
+                        .as_ref()
+                        .expect("ack handle should be present")
+                        .is_failed
+                        .store(true, Ordering::Relaxed);
+                }
+                continue;
+            }
+
+            let ack_handles: Vec<Option<Arc<AckHandle>>> =
+                batch.iter().map(|msg| msg.ack_handle.clone()).collect();
+
+            if !batch.is_empty()
+                && let Err(e) = (MapBatchTask {
+                    mapper: ctx.batch_mapper.clone(),
+                    batch,
+                    output_tx: ctx.output_tx.clone(),
+                    tracker: self.tracker.clone(),
+                    bypass_router: ctx.bypass_router.clone(),
+                    is_mono_vertex,
+                    cln_token: ctx.cln_token.clone(),
+                })
+                .execute()
+                .await
+            {
+                error!(?e, "error received while performing batch map operation");
+                // if there is an error, discard all the messages in the tracker and
+                // return the error.
+                for ack_handle in ack_handles {
+                    ack_handle
+                        .as_ref()
+                        .expect("ack handle should be present")
+                        .is_failed
+                        .store(true, Ordering::Relaxed);
+                }
+                ctx.cln_token.cancel();
+                self.shutting_down_on_err = true;
+                self.final_result = Err(e);
+            }
+        }
+    }
+}
+
+/// Shared context for concurrent map tasks.
+pub(in crate::mapper) struct SharedMapTaskContext {
+    pub output_tx: mpsc::Sender<Message>,
+    pub error_tx: mpsc::Sender<Error>,
+    pub tracker: Tracker,
+    pub bypass_router: Option<MvtxBypassRouter>,
+    pub hard_shutdown_token: CancellationToken,
+    pub is_mono_vertex: bool,
+}
+
+/// Context for concurrent (unary/stream) map processing.
+struct ConcurrentMapContext {
+    error_rx: mpsc::Receiver<Error>,
+    semaphore: Arc<Semaphore>,
+    cln_token: CancellationToken,
+    concurrent_mapper: ConcurrentMapper,
+    shared_ctx: Arc<SharedMapTaskContext>,
+}
+
+/// Context for batch map processing.
+struct BatchMapContext {
+    output_tx: mpsc::Sender<Message>,
+    cln_token: CancellationToken,
+    bypass_router: Option<MvtxBypassRouter>,
+    batch_mapper: UserDefinedBatchMap,
+}
+
+fn update_udf_error_metric(is_mono_vertex: bool) {
+    if is_mono_vertex {
+        monovertex_metrics()
+            .udf
+            .errors_total
+            .get_or_create(mvtx_forward_metric_labels())
+            .inc();
+    } else {
+        pipeline_metrics()
+            .forwarder
+            .udf_error_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .inc();
+    }
+}
+
+fn update_udf_process_time_metric(is_mono_vertex: bool) {
+    if is_mono_vertex {
+        monovertex_metrics()
+            .udf
+            .time
+            .get_or_create(mvtx_forward_metric_labels())
+            .observe(Instant::now().elapsed().as_micros() as f64);
+    } else {
+        pipeline_metrics()
+            .forwarder
+            .udf_processing_time
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .observe(Instant::now().elapsed().as_micros() as f64);
+    }
+}
+
+fn update_udf_write_only_metric(is_mono_vertex: bool) {
+    if !is_mono_vertex {
+        pipeline_metrics()
+            .forwarder
+            .udf_write_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .inc();
+    }
+}
+
+fn update_udf_write_metric(is_mono_vertex: bool, msg_info: &ParentMessageInfo, message_count: u64) {
+    if is_mono_vertex {
+        monovertex_metrics()
+            .udf
+            .time
+            .get_or_create(mvtx_forward_metric_labels())
+            .observe(msg_info.start_time.elapsed().as_micros() as f64);
+    } else {
+        pipeline_metrics()
+            .forwarder
+            .udf_write_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .inc_by(message_count);
+
+        pipeline_metrics()
+            .forwarder
+            .udf_processing_time
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .observe(msg_info.start_time.elapsed().as_micros() as f64);
+    }
+}
+
+fn update_udf_read_metric(is_mono_vertex: bool) {
+    if !is_mono_vertex {
+        pipeline_metrics()
+            .forwarder
+            .udf_read_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .inc();
+    }
+}
 
 /// ParentMessageInfo is used to store the information of the parent message. This is propagated to
 /// all the downstream messages.
+#[derive(Clone)]
 pub(crate) struct ParentMessageInfo {
     pub(crate) offset: Offset,
     pub(crate) event_time: DateTime<Utc>,
@@ -161,608 +578,6 @@ async fn create_response_stream(
     Ok(resp_stream)
 }
 
-/// MapperType is an enum to store the different types of mappers.
-#[derive(Clone)]
-enum MapperType {
-    Unary(UserDefinedUnaryMap),
-    Batch(UserDefinedBatchMap),
-    Stream(UserDefinedStreamMap),
-}
-
-/// MapHandle is responsible for reading messages from the stream and invoke the map operation on
-/// those messages and send the mapped messages to the output stream.
-///
-/// Error handling: There can be critical non-retryable errors in this component like udf failures
-/// etc., since we do concurrent processing of messages, the moment we encounter an error from any
-/// of the tasks, we will go to shut-down mode. We cancel the token to let upstream know that we are
-/// shutting down. We drain the input stream, nack the messages, and exit when the stream is
-/// closed. We will drop the downstream stream so that the downstream components can shut down.
-/// Structured concurrency is honored here, we wait for all the concurrent tokio tasks to exit.
-/// before shutting down the component.
-#[derive(Clone)]
-pub(crate) struct MapHandle {
-    batch_size: usize,
-    read_timeout: Duration,
-    graceful_shutdown_time: Duration,
-    concurrency: usize,
-    tracker: Tracker,
-    mapper: MapperType,
-    /// this the final state of the component (any error will set this as Err)
-    final_result: crate::Result<()>,
-    /// The moment we see an error, we will set this to true.
-    shutting_down_on_err: bool,
-    health_checker: Option<MapClient<Channel>>,
-}
-
-/// Response channel size for streaming map.
-const STREAMING_MAP_RESP_CHANNEL_SIZE: usize = 10;
-
-impl MapHandle {
-    /// Creates a new mapper with the given batch size, concurrency, client, and
-    /// tracker handle. It creates the appropriate mapper based on the map mode.
-    pub(crate) async fn new(
-        map_mode: MapMode,
-        batch_size: usize,
-        read_timeout: Duration,
-        graceful_timeout: Duration,
-        concurrency: usize,
-        client: MapClient<Channel>,
-        tracker: Tracker,
-    ) -> error::Result<Self> {
-        // Based on the map mode, create the appropriate mapper
-        let mapper = match map_mode {
-            MapMode::Unary => {
-                MapperType::Unary(UserDefinedUnaryMap::new(batch_size, client.clone()).await?)
-            }
-            MapMode::Batch => {
-                MapperType::Batch(UserDefinedBatchMap::new(batch_size, client.clone()).await?)
-            }
-            MapMode::Stream => {
-                MapperType::Stream(UserDefinedStreamMap::new(batch_size, client.clone()).await?)
-            }
-        };
-
-        Ok(Self {
-            mapper,
-            batch_size,
-            read_timeout,
-            graceful_shutdown_time: graceful_timeout,
-            concurrency,
-            tracker,
-            final_result: Ok(()),
-            shutting_down_on_err: false,
-            health_checker: Some(client),
-        })
-    }
-
-    // Returns true if the mapper is ready to accept messages.
-    pub(crate) async fn ready(&mut self) -> bool {
-        if let Some(client) = &mut self.health_checker {
-            match client.is_ready(Request::new(())).await {
-                Ok(response) => response.into_inner().ready,
-                Err(e) => {
-                    error!(?e, "Map Client is not ready");
-                    false
-                }
-            }
-        } else {
-            false
-        }
-    }
-
-    /// Maps the input stream of messages and returns the output stream and the
-    /// handle to the background task. In case of critical errors it stops
-    /// reading from the input stream and returns the error using the join
-    /// handle.
-    pub(crate) async fn streaming_map(
-        mut self,
-        input_stream: ReceiverStream<Message>,
-        cln_token: CancellationToken,
-        bypass_router: Option<MvtxBypassRouter>,
-    ) -> error::Result<(ReceiverStream<Message>, JoinHandle<error::Result<()>>)> {
-        let (output_tx, output_rx) = mpsc::channel(self.batch_size);
-        let (error_tx, mut error_rx) = mpsc::channel(self.batch_size);
-        let semaphore = Arc::new(Semaphore::new(self.concurrency));
-
-        // we spawn one of the 3 map types
-        let handle = tokio::spawn(async move {
-            let parent_cln_token = cln_token.clone();
-
-            // create a new cancellation token for the map component, this token is used for hard
-            // shutdown, the parent token is used for graceful shutdown.
-            let hard_shutdown_token = CancellationToken::new();
-            // the one that calls shutdown
-            let hard_shutdown_token_owner = hard_shutdown_token.clone();
-            let graceful_timeout = self.graceful_shutdown_time;
-
-            // spawn a task to cancel the token after graceful timeout when the main token is cancelled
-            let shutdown_handle = tokio::spawn(async move {
-                // initiate graceful shutdown
-                parent_cln_token.cancelled().await;
-                // wait for graceful timeout
-                tokio::time::sleep(graceful_timeout).await;
-                // cancel the token to hard shutdown
-                hard_shutdown_token_owner.cancel();
-            });
-
-            let mut input_stream = input_stream;
-            // we capture the first error that triggered the map component shutdown
-            // based on the map mode, send the message to the appropriate mapper.
-            match &self.mapper {
-                MapperType::Unary(mapper) => loop {
-                    // we need tokio select here because we have to listen to both the input stream
-                    // and the error channel. If there is an error, we need to discard all the
-                    // messages in the tracker and stop processing the input
-                    // stream.
-                    tokio::select! {
-                        biased;
-                        Some(error) = error_rx.recv() => {
-                            if self.final_result.is_ok() {
-                                error!(?error, "error received while performing unary map operation");
-                                cln_token.cancel();
-                                self.final_result = Err(error);
-                                self.shutting_down_on_err = true;
-                            } else {
-                                // store the error so that latest error will be propagated
-                                // to the UI.
-                                self.final_result = Err(error);
-                            }
-                        },
-                        read_msg = input_stream.next() => {
-                            let Some(read_msg) = read_msg else {
-                                break;
-                            };
-
-                            // if there are errors then we need to drain the stream and nack
-                            if self.shutting_down_on_err {
-                                warn!(offset = ?read_msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
-                                read_msg.ack_handle.as_ref().expect("ack handle should be present").is_failed.store(true, Ordering::Relaxed);
-                            } else {
-                                let permit = Arc::clone(&semaphore).acquire_owned()
-                                    .await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}" )))?;
-                                Self::unary(
-                                    mapper.clone(),
-                                    permit,
-                                    read_msg,
-                                    output_tx.clone(),
-                                    self.tracker.clone(),
-                                    error_tx.clone(),
-                                    hard_shutdown_token.clone(),
-                                    bypass_router.clone(),
-                                ).await;
-                            }
-                        },
-                    }
-                },
-
-                MapperType::Batch(mapper) => {
-                    let timeout_duration = self.read_timeout;
-                    let chunked_stream =
-                        input_stream.chunks_timeout(self.batch_size, timeout_duration);
-                    tokio::pin!(chunked_stream);
-                    // we don't need to tokio spawn here because, unlike unary and stream, batch is
-                    // a blocking operation, and we process one batch at a time.
-                    while let Some(batch) = chunked_stream.next().await {
-                        // if there are errors then we need to drain the stream and nack
-                        if self.shutting_down_on_err {
-                            for msg in batch {
-                                warn!(offset = ?msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
-                                msg.ack_handle
-                                    .as_ref()
-                                    .expect("ack handle should be present")
-                                    .is_failed
-                                    .store(true, Ordering::Relaxed);
-                            }
-                            continue;
-                        }
-
-                        let ack_handles: Vec<Option<Arc<AckHandle>>> =
-                            batch.iter().map(|msg| msg.ack_handle.clone()).collect();
-
-                        if !batch.is_empty()
-                            && let Err(e) = Self::batch(
-                                mapper.clone(),
-                                batch,
-                                output_tx.clone(),
-                                self.tracker.clone(),
-                                bypass_router.clone(),
-                            )
-                            .await
-                        {
-                            error!(?e, "error received while performing batch map operation");
-                            // if there is an error, discard all the messages in the tracker and
-                            // return the error.
-                            for ack_handle in ack_handles {
-                                ack_handle
-                                    .as_ref()
-                                    .expect("ack handle should be present")
-                                    .is_failed
-                                    .store(true, Ordering::Relaxed);
-                            }
-                            cln_token.cancel();
-                            self.shutting_down_on_err = true;
-                            self.final_result = Err(e);
-                        }
-                    }
-                }
-
-                MapperType::Stream(mapper) => loop {
-                    // we need tokio select here because we have to listen to both the input stream
-                    // and the error channel. If there is an error, we need to discard all the
-                    // messages in the tracker and stop processing the input
-                    // stream.
-                    tokio::select! {
-                        biased;
-                       Some(error) = error_rx.recv() => {
-                            // when we get an error we cancel the token to signal the upstream to stop
-                            // sending new messages, and we empty the input stream and return the error.
-                            if self.final_result.is_ok() {
-                                error!(?error, "error received while performing stream map operation");
-                                cln_token.cancel();
-                                // stop further reading since we have seen an error
-                                self.final_result = Err(error);
-                                self.shutting_down_on_err = true;
-                            }
-                        },
-                        read_msg = input_stream.next() => {
-                            let Some(read_msg) = read_msg else {
-                                break;
-                            };
-
-                            if self.shutting_down_on_err {
-                                warn!(offset = ?read_msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
-                                read_msg.ack_handle.as_ref().expect("ack handle should be present").is_failed.store(true, Ordering::Relaxed);
-                            } else {
-                                let permit = Arc::clone(&semaphore).acquire_owned().await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}")))?;
-                                let error_tx = error_tx.clone();
-                                Self::stream(
-                                    mapper.clone(),
-                                    permit,
-                                    read_msg,
-                                    output_tx.clone(),
-                                    self.tracker.clone(),
-                                    error_tx,
-                                    cln_token.clone(),
-                                    bypass_router.clone(),
-                                ).await;
-                            }
-                        },
-                    }
-                },
-            }
-
-            // wait for all the spawned tasks to finish before returning the final result
-            info!("Map input stream ended, waiting for inflight messages to finish");
-            let _permit = Arc::clone(&semaphore)
-                .acquire_many_owned(self.concurrency as u32)
-                .await
-                .map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}")))?;
-            info!(status=?self.final_result, "Map component is completed with status");
-
-            // abort the shutdown handle since we are done processing, no need to wait for the
-            // hard shutdown
-            if !shutdown_handle.is_finished() {
-                shutdown_handle.abort();
-            }
-
-            self.final_result
-        });
-
-        Ok((ReceiverStream::new(output_rx), handle))
-    }
-
-    /// performs unary map operation on the given message and sends the mapped
-    /// messages to the output stream. It updates the tracker with the
-    /// number of messages sent. If there are any errors, it sends the error
-    /// to the error channel.
-    ///
-    /// We use permit to limit the number of concurrent map unary operations, so
-    /// that at any point in time we don't have more than `concurrency`
-    /// number of map operations running.
-    async fn unary(
-        mapper: UserDefinedUnaryMap,
-        permit: OwnedSemaphorePermit,
-        read_msg: Message,
-        output_tx: mpsc::Sender<Message>,
-        tracker: Tracker,
-        error_tx: mpsc::Sender<Error>,
-        cln_token: CancellationToken,
-        bypass_router: Option<MvtxBypassRouter>,
-    ) {
-        let output_tx = output_tx.clone();
-
-        // short-lived tokio spawns we don't need structured concurrency here
-        tokio::spawn(async move {
-            let _permit = permit;
-
-            let offset = read_msg.offset.clone();
-            let (sender, receiver) = oneshot::channel();
-
-            mapper.unary_map(read_msg.clone(), sender).await;
-
-            tokio::select! {
-                result = receiver => {
-                    match result {
-                        Ok( Ok(mapped_messages)) => {
-                            // update the tracker with the number of messages sent and send the mapped messages
-                            tracker
-                                .serving_update(
-                                    &offset,
-                                    mapped_messages.iter().map(|m| m.tags.clone()).collect(),
-                                )
-                                .await
-                                .expect("failed to update tracker");
-
-                            // send messages downstream
-                            for mapped_message in mapped_messages {
-                                if let Some(ref bypass_router) = bypass_router && bypass_router.try_bypass(mapped_message.clone()).await.expect("failed to send message to bypass channel")
-                                {
-                                    continue
-                                } else {
-                                    output_tx
-                                    .send(mapped_message)
-                                    .await
-                                    .expect("failed to send response");
-                                }
-                            }
-                        }
-                        Ok(Err(map_err)) => {
-                            error!(err=?map_err, ?offset, "failed to map message");
-                            read_msg
-                                .ack_handle
-                                .as_ref()
-                                .expect("ack handle should be present")
-                                .is_failed
-                                .store(true, Ordering::Relaxed);
-                            info!("writing error to error channel");
-                            let _ = error_tx.send(map_err).await;
-                        }
-                        Err(err) => {
-                            error!(?err, ?offset, "failed to receive message");
-                            read_msg
-                                .ack_handle
-                                .as_ref()
-                                .expect("ack handle should be present")
-                                .is_failed
-                                .store(true, Ordering::Relaxed);
-                            let _ = error_tx
-                                .send(Error::Mapper(format!("failed to receive message: {err}")))
-                                .await;
-                        }
-                    }
-                },
-                _ = cln_token.cancelled() => {
-                    error!(?offset, "Cancellation token received, discarding message");
-                    read_msg
-                        .ack_handle
-                        .as_ref()
-                        .expect("ack handle should be present")
-                        .is_failed
-                        .store(true, Ordering::Relaxed);
-                }
-            }
-        });
-    }
-
-    /// performs batch map operation on the given batch of messages and sends
-    /// the mapped messages to the output stream. It updates the tracker
-    /// with the number of messages sent.
-    async fn batch(
-        mapper: UserDefinedBatchMap,
-        batch: Vec<Message>,
-        output_tx: mpsc::Sender<Message>,
-        tracker: Tracker,
-        bypass_router: Option<MvtxBypassRouter>,
-    ) -> error::Result<()> {
-        let (senders, receivers): (Vec<_>, Vec<_>) =
-            batch.iter().map(|_| oneshot::channel()).unzip();
-
-        mapper.batch_map(batch, senders).await;
-
-        for receiver in receivers {
-            match receiver.await {
-                Ok(Ok(mapped_messages)) => {
-                    let mut offset: Option<Offset> = None;
-                    for message in mapped_messages.iter() {
-                        if offset.is_none() {
-                            offset = Some(message.offset.clone());
-                        }
-                    }
-
-                    if let Some(offset) = offset {
-                        tracker
-                            .serving_update(
-                                &offset,
-                                mapped_messages.iter().map(|m| m.tags.clone()).collect(),
-                            )
-                            .await?;
-                    }
-
-                    for mapped_message in mapped_messages {
-                        if let Some(ref bypass_router) = bypass_router
-                            && bypass_router
-                                .try_bypass(mapped_message.clone())
-                                .await
-                                .expect("failed to send message to bypass channel")
-                        {
-                            continue;
-                        } else {
-                            output_tx
-                                .send(mapped_message)
-                                .await
-                                .expect("failed to send response");
-                        }
-                    }
-                }
-                Ok(Err(_map_err)) => {
-                    error!(err=?_map_err, "failed to map message");
-                    return Err(_map_err);
-                }
-                Err(e) => {
-                    error!(?e, "failed to receive message");
-                    return Err(Error::Mapper(format!("failed to receive message: {e}")));
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// performs stream map operation on the given message and sends the mapped
-    /// messages to the output stream. It updates the tracker with the
-    /// number of messages sent. If there are any errors, it sends the error
-    /// to the error channel.
-    ///
-    /// We use permit to limit the number of concurrent map unary operations, so
-    /// that at any point in time we don't have more than `concurrency`
-    /// number of map operations running.
-    async fn stream(
-        mapper: UserDefinedStreamMap,
-        permit: OwnedSemaphorePermit,
-        read_msg: Message,
-        output_tx: mpsc::Sender<Message>,
-        tracker: Tracker,
-        error_tx: mpsc::Sender<Error>,
-        cln_token: CancellationToken,
-        bypass_router: Option<MvtxBypassRouter>,
-    ) {
-        let output_tx = output_tx.clone();
-        tokio::spawn(async move {
-            let _permit = permit;
-
-            let (sender, mut receiver) = mpsc::channel(STREAMING_MAP_RESP_CHANNEL_SIZE);
-
-            mapper.stream_map(read_msg.clone(), sender).await;
-
-            // we need update the tracker with no responses, because unlike unary and batch, we cannot update the
-            // responses here we will have to append the responses.
-            tracker
-                .serving_refresh(read_msg.offset.clone())
-                .await
-                .expect("failed to reset tracker");
-            loop {
-                tokio::select! {
-                    result = receiver.recv() => {
-                        match result {
-                            Some(Ok(mapped_message)) => {
-                                tracker
-                                    .serving_append(mapped_message.offset.clone(), mapped_message.tags.clone())
-                                    .await
-                                    .expect("failed to update tracker");
-
-                                if let Some(ref bypass_router) = bypass_router && bypass_router.try_bypass(mapped_message.clone()).await.expect("failed to send message to bypass channel")
-                                {
-                                    continue
-                                } else {
-                                    output_tx.send(mapped_message).await.expect("failed to send response");
-                                }
-                            }
-                            Some(Err(e)) => {
-                                error!(?e, "failed to map message");
-                                read_msg
-                                    .ack_handle
-                                    .as_ref()
-                                    .expect("ack handle should be present")
-                                    .is_failed
-                                    .store(true, Ordering::Relaxed);
-                                let _ = error_tx.send(e).await;
-                                return;
-                            }
-                            None => break,
-                        }
-                    },
-                    _ = cln_token.cancelled() => {
-                        error!(?read_msg.offset, "Cancellation token received, will not wait for the response");
-                        read_msg
-                            .ack_handle
-                            .as_ref()
-                            .expect("ack handle should be present")
-                            .is_failed
-                            .store(true, Ordering::Relaxed);
-                        let _ = error_tx
-                            .send(Error::Mapper("Operation cancelled".to_string()))
-                            .await;
-                        return;
-                    }
-                }
-            }
-        });
-    }
-}
-
-fn update_udf_error_metric(is_mono_vertex: bool) {
-    if is_mono_vertex {
-        monovertex_metrics()
-            .udf
-            .errors_total
-            .get_or_create(mvtx_forward_metric_labels())
-            .inc();
-    } else {
-        pipeline_metrics()
-            .forwarder
-            .udf_error_total
-            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-            .inc();
-    }
-}
-
-fn update_udf_process_time_metric(is_mono_vertex: bool) {
-    if is_mono_vertex {
-        monovertex_metrics()
-            .udf
-            .time
-            .get_or_create(mvtx_forward_metric_labels())
-            .observe(Instant::now().elapsed().as_micros() as f64);
-    } else {
-        pipeline_metrics()
-            .forwarder
-            .udf_processing_time
-            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-            .observe(Instant::now().elapsed().as_micros() as f64);
-    }
-}
-
-fn update_udf_write_only_metric(is_mono_vertex: bool) {
-    if !is_mono_vertex {
-        pipeline_metrics()
-            .forwarder
-            .udf_write_total
-            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-            .inc();
-    }
-}
-
-fn update_udf_write_metric(is_mono_vertex: bool, msg_info: ParentMessageInfo, message_count: u64) {
-    if is_mono_vertex {
-        monovertex_metrics()
-            .udf
-            .time
-            .get_or_create(mvtx_forward_metric_labels())
-            .observe(msg_info.start_time.elapsed().as_micros() as f64);
-    } else {
-        pipeline_metrics()
-            .forwarder
-            .udf_write_total
-            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-            .inc_by(message_count);
-
-        pipeline_metrics()
-            .forwarder
-            .udf_processing_time
-            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-            .observe(msg_info.start_time.elapsed().as_micros() as f64);
-    }
-}
-
-fn update_udf_read_metric(is_mono_vertex: bool) {
-    if !is_mono_vertex {
-        pipeline_metrics()
-            .forwarder
-            .udf_read_total
-            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-            .inc();
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -833,7 +648,7 @@ mod tests {
             tags: None,
             value: "hello".into(),
             offset: Offset::String(StringOffset::new("0".to_string(), 0)),
-            event_time: chrono::Utc::now(),
+            event_time: Utc::now(),
             watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
@@ -851,21 +666,26 @@ mod tests {
 
         // Extract the mapper from the MapperType enum
         let unary_mapper = match &mapper.mapper {
-            MapperType::Unary(m) => m.clone(),
+            MapperType::Concurrent(ConcurrentMapper::Unary(m)) => m.clone(),
             _ => panic!("Expected Unary mapper"),
         };
 
-        MapHandle::unary(
-            unary_mapper,
+        let shared_ctx = Arc::new(SharedMapTaskContext {
+            output_tx,
+            error_tx,
+            tracker,
+            bypass_router: None,
+            hard_shutdown_token: CancellationToken::new(),
+            is_mono_vertex: false,
+        });
+
+        MapUnaryTask {
+            mapper: unary_mapper,
             permit,
             message,
-            output_tx,
-            tracker,
-            error_tx,
-            CancellationToken::new(),
-            None,
-        )
-        .await;
+            shared_ctx,
+        }
+        .spawn();
 
         // check for errors
         assert!(error_rx.recv().await.is_none());
@@ -1598,7 +1418,7 @@ mod tests {
             ack_handle: None,
         };
 
-        update_udf_write_metric(true, msg_info, 5);
+        update_udf_write_metric(true, &msg_info, 5);
 
         let pipeline_write_after = pipeline_metrics()
             .forwarder
@@ -1632,7 +1452,7 @@ mod tests {
             ack_handle: None,
         };
 
-        update_udf_write_metric(false, msg_info, 5);
+        update_udf_write_metric(false, &msg_info, 5);
 
         let after = pipeline_metrics()
             .forwarder

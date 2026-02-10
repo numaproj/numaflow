@@ -422,7 +422,7 @@ mod tests {
             let rs_key = format!("rs.{pod_hash}.{request_id}.start.processing");
             let start_time = Instant::now();
             loop {
-                if let Some(_) = kv_store.get(&rs_key).await.unwrap() {
+                if kv_store.get(&rs_key).await.unwrap().is_some() {
                     break;
                 }
 
@@ -479,8 +479,8 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(result.len(), 2);
-        assert_eq!(result[0], b"response1");
-        assert_eq!(result[1], b"response2");
+        assert_eq!(result.first().expect("Expected result[0]"), b"response1");
+        assert_eq!(result.get(1).expect("Expected result[1]"), b"response2");
     }
 
     #[cfg(feature = "nats-tests")]
@@ -594,7 +594,7 @@ mod tests {
             let rs_key = format!("rs.{pod_hash}.{request_id}.start.processing");
             let start_time = Instant::now();
             loop {
-                if let Some(_) = kv_store.get(&rs_key).await.unwrap() {
+                if kv_store.get(&rs_key).await.unwrap().is_some() {
                     break;
                 }
 

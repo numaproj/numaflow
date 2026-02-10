@@ -41,11 +41,6 @@ go-to-protobuf \
         --output-dir="${GOPATH}/src/" \
         --proto-import ./vendor
 
-# Following 2 proto files are needed
-mkdir -p ${GOPATH}/src/google/api
-curl -Ls https://raw.githubusercontent.com/googleapis/googleapis/master/google/api/annotations.proto -o ${GOPATH}/src/google/api/annotations.proto
-curl -Ls https://raw.githubusercontent.com/googleapis/googleapis/master/google/api/http.proto -o ${GOPATH}/src/google/api/http.proto
-
 gen-protoc(){
     protoc \
       -I /usr/local/include \
@@ -67,4 +62,3 @@ gen-protoc pkg/apis/proto/metadata.proto
 gen-protoc pkg/apis/proto/isb/message.proto
 
 gen-protoc pkg/apis/proto/watermark/watermark.proto
-

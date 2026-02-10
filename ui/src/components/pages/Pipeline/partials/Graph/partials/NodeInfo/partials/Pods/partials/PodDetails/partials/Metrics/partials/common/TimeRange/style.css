@@ -8,9 +8,9 @@
   position: absolute;
   top: -1rem;
   left: 1rem;
-  color: rgba(0, 0, 0, 0.54);
+  color: var(--text-tertiary);
   transition: 0.2s ease all;
-  background-color: white;
+  background-color: var(--bg-secondary);
   padding: 0 5px;
   z-index: 1;
 }
@@ -24,7 +24,7 @@
   font-size: 1.2rem;
   font-weight: 600;
   font-family: Avenir Next, sans-serif;
-  color: #393a3d;
+  color: var(--text-primary);
   text-transform: uppercase;
   line-height: 100%;
   height: 5rem;
@@ -32,16 +32,17 @@
   cursor: pointer;
   outline: none;
   border: 1px solid rgba(255, 255, 255, 0);
+  background-color: transparent;
   transition: border-color 0.3s;
   padding: 1.65rem 3.2rem 1.65rem 1.4rem;
 }
 
 .date-input:hover {
-  border-color: #000000;
+  border-color: var(--text-primary);
 }
 
 .date-input:focus {
-  border-color: #0077c5;
+  border-color: var(--accent-primary);
   outline: none;
   box-shadow: none;
   border-width: 2px;
@@ -52,7 +53,7 @@
   top: 50%;
   transform: translateY(-55%);
   pointer-events: none;
-  color: rgba(0, 0, 0, 0.54);
+  color: var(--text-tertiary);
 }
 
 .open {
@@ -60,7 +61,7 @@
 }
 
 .date-range-picker-container:focus-within .date-range-label {
-  color: #0077c5;
+  color: var(--accent-primary);
 }
 
 .daterangepicker {
@@ -69,6 +70,7 @@
   border-radius: 0.4rem !important;
   box-shadow: 0 5px 5px -3px rgba(0, 0, 0, 0.2),
     0 8px 10px 1px rgba(0, 0, 0, 0.14), 0 3px 14px 2px rgba(0, 0, 0, 0.12) !important;
+  background-color: var(--bg-primary) !important;
 }
 
 .daterangepicker:before {
@@ -91,15 +93,19 @@
   height: 3.15rem !important;
   font-size: 1.3rem !important;
   padding: 0.6rem 1.6rem !important;
-  color: rgba(0, 0, 0, 0.87) !important;
+  color: var(--text-primary) !important;
 }
 
 .active {
-  background-color: rgba(0, 119, 197, 0.08) !important;
+  background-color: var(--bg-secondary) !important;
 }
 
 .active:hover {
-  background-color: #e3f2fd !important;
+  background-color: var(--bg-tertiary) !important;
+}
+
+.daterangepicker .ranges li:hover {
+  background-color: var(--bg-secondary) !important;
 }
 
 .daterangepicker.show-ranges.ltr .drp-calendar.left {

@@ -2,7 +2,7 @@
   font-size: 2rem;
   font-style: normal;
   font-weight: 400;
-  color: #000;
+  color: var(--text-primary);
 }
 
 .pipeline-card-icon {

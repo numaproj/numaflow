@@ -353,17 +353,14 @@ fn extract_error_details(details_bytes: &[u8]) -> Option<String> {
     if let Ok(status) = RpcStatus::decode(details_bytes) {
         // Look for known error detail types in the status details
         for detail in &status.details {
-            match detail.type_url.as_str() {
-                "type.googleapis.com/google.rpc.DebugInfo" => {
-                    if let Ok(debug_info) = DebugInfo::decode(&detail.value[..]) {
-                        return Some(debug_info.detail);
-                    }
-                }
-                // Future error types can be added here:
-                // "type.googleapis.com/google.rpc.QuotaFailure" => { ... }
-                // "type.googleapis.com/google.rpc.BadRequest" => { ... }
-                // "type.googleapis.com/google.rpc.PreconditionFailure" => { ... }
-                _ => {}
+            // Future error types can be added here:
+            // "type.googleapis.com/google.rpc.QuotaFailure" => { ... }
+            // "type.googleapis.com/google.rpc.BadRequest" => { ... }
+            // "type.googleapis.com/google.rpc.PreconditionFailure" => { ... }
+            if detail.type_url.as_str() == "type.googleapis.com/google.rpc.DebugInfo"
+                && let Ok(debug_info) = DebugInfo::decode(&detail.value[..])
+            {
+                return Some(debug_info.detail);
             }
         }
     }
@@ -452,7 +449,12 @@ mod tests {
         assert_eq!(files.len(), 1);
 
         // Verify the file name format
-        let file_name = files[0].file_name().into_string().unwrap();
+        let file_name = files
+            .first()
+            .expect("Expected file entry")
+            .file_name()
+            .into_string()
+            .unwrap();
         assert!(file_name.ends_with(".json"));
     }
 
@@ -480,7 +482,12 @@ mod tests {
         assert_eq!(files.len(), 1);
 
         // Verify the file name format
-        let file_name = files[0].file_name().into_string().unwrap();
+        let file_name = files
+            .first()
+            .expect("Expected file entry")
+            .file_name()
+            .into_string()
+            .unwrap();
         assert!(file_name.ends_with(".json"));
     }
 
@@ -524,8 +531,9 @@ mod tests {
             .get_application_errors()
             .expect("Failed to get application errors");
         assert_eq!(errors.len(), 1);
+        let error0 = errors.first().expect("Expected error");
         assert_eq!(
-            errors[0].message,
+            error0.message,
             "UDF_EXECUTION_ERROR(test-container): Test error message"
         );
     }
@@ -562,11 +570,12 @@ mod tests {
         }
 
         assert_eq!(errors.len(), 1);
-        assert_eq!(errors[0].container, "test_container");
-        assert_eq!(errors[0].timestamp, 1234567890);
-        assert_eq!(errors[0].code, "Internal error");
-        assert_eq!(errors[0].message, "An error occurred");
-        assert_eq!(errors[0].details, "Error details");
+        let error0 = errors.first().expect("Expected error");
+        assert_eq!(error0.container, "test_container");
+        assert_eq!(error0.timestamp, 1234567890);
+        assert_eq!(error0.code, "Internal error");
+        assert_eq!(error0.message, "An error occurred");
+        assert_eq!(error0.details, "Error details");
     }
 
     #[test]

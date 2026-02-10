@@ -10,6 +10,7 @@ members = [
     "numaflow-daemon",
     "numaflow-shared",
     "numaflow-throttling",
+    "numaflow-testing",
     # extensions
     "extns/numaflow-pulsar",
     "extns/numaflow-sqs",
@@ -80,7 +81,7 @@ numaflow-throttling = { path = "numaflow-throttling" }
 tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread", "time"] }
 tokio-stream = "0.1.17"
 tokio-util = { version = "0.7", features = ["rt"] }
-bytes = "1.9.0"
+bytes = "1.11.1"
 tracing = "0.1.41"
 async-nats = "0.44.2"
 thiserror = "2.0.12"
@@ -107,7 +108,7 @@ futures = "0.3.31"
 rcgen = "0.14.1"
 chrono = "0.4.41"
 serde_json = "1.0.140"
-tonic = "0.14.2"
+tonic = { version = "0.14.2", features = ["transport", "tls-aws-lc"] }
 tonic-types = "0.14.2"
 tonic-build = "0.14.2"
 tonic-prost = "0.14.2"
@@ -123,3 +124,4 @@ prometheus-client = "0.24.0"
 pin-project = "1.1.5"
 kube = "0.99.0"
 rand = "0.9.2"
+time = "0.3.47"

@@ -6,10 +6,9 @@ use async_nats::jetstream::Context;
 use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::context::{PublishAckFuture, PublishErrorKind};
 use async_nats::jetstream::message::PublishMessage;
-use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
-use bytes::BytesMut;
-use tokio::time::{Instant, sleep};
+use bytes::{Bytes, BytesMut};
+use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
 
@@ -31,8 +30,8 @@ type MetricLabels = Arc<Vec<(String, String)>>;
 pub(crate) enum WriteError {
     /// Buffer is full, cannot write (retryable)
     BufferFull,
-    /// Publish operation failed (retryable)
-    PublishFailed(String),
+    /// Write operation failed (retryable)
+    WriteFailed(String),
 }
 
 /// Buffer information for a JetStream stream.
@@ -44,7 +43,6 @@ struct BufferInfo {
     num_ack_pending: usize,
 }
 
-const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
 
 /// Lightweight JetStream Writer for a single stream.
@@ -167,7 +165,7 @@ impl JetStreamWriter {
         if let Some(compression_type) = self.compression_type {
             message.value = bytes::Bytes::from(
                 compression::compress(compression_type, &message.value)
-                    .map_err(|e| WriteError::PublishFailed(format!("Compression failed: {}", e)))?,
+                    .map_err(|e| WriteError::WriteFailed(format!("Compression failed: {}", e)))?,
             );
         }
 
@@ -206,74 +204,88 @@ impl JetStreamWriter {
                         ))
                         .inc();
                 }
-                // Return publish error - orchestrator will decide whether to retry
-                Err(WriteError::PublishFailed(e.to_string()))
+                // Return write error - orchestrator will decide whether to retry
+                Err(WriteError::WriteFailed(e.to_string()))
             }
         }
     }
 
-    /// Writes the message to the JetStream ISB and returns the PublishAck. It will do
-    /// infinite retries until the message gets published successfully. If it returns
-    /// an error it means it is fatal non-retryable error.
-    pub(crate) async fn blocking_write(
+    /// Writes a message to the JetStream ISB and waits for confirmation.
+    ///
+    /// This is a single-attempt write that returns immediately after the write
+    /// completes or fails. The orchestrator is responsible for retry logic.
+    ///
+    /// Returns `Err(WriteError::BufferFull)` if the buffer is full.
+    /// Returns `Err(WriteError::WriteFailed)` if the write operation fails.
+    pub(crate) async fn write(
         &self,
         message: Message,
-        cln_token: CancellationToken,
-    ) -> Result<PublishAck> {
+    ) -> std::result::Result<crate::pipeline::isb::WriteResult, WriteError> {
         let start_time = Instant::now();
+
+        // Check if buffer is full
+        if self.is_full() {
+            pipeline_metrics()
+                .jetstream_isb
+                .isfull_total
+                .get_or_create(&self.buffer_labels)
+                .inc();
+            return Err(WriteError::BufferFull);
+        }
 
         // Compress the message value if compression is enabled
         let mut message = message;
-        message.value = match self.compression_type {
-            Some(compression_type) => bytes::Bytes::from(
-                compression::compress(compression_type, &message.value).map_err(|e| {
-                    Error::ISB(ISBError::Encode(format!("Compression failed: {}", e)))
-                })?,
-            ),
-            None => message.value,
-        };
+        if let Some(compression_type) = self.compression_type {
+            message.value = bytes::Bytes::from(
+                compression::compress(compression_type, &message.value)
+                    .map_err(|e| WriteError::WriteFailed(format!("Compression failed: {}", e)))?,
+            );
+        }
 
-        let payload: BytesMut = message
+        let payload: Bytes = message
             .try_into()
             .expect("message serialization should not fail");
 
-        loop {
-            match self
-                .js_ctx
-                .publish(self.stream.name, payload.clone().freeze())
-                .await
-            {
-                Ok(paf) => match paf.await {
-                    Ok(ack) => {
-                        debug!(
-                            elapsed_ms = start_time.elapsed().as_millis(),
-                            "Blocking write successful in",
-                        );
-                        pipeline_metrics()
-                            .jetstream_isb
-                            .write_time_total
-                            .get_or_create(&self.buffer_labels)
-                            .observe(start_time.elapsed().as_micros() as f64);
-                        return Ok(ack);
-                    }
-                    Err(e) => {
-                        error!(?e, "awaiting publish ack failed, retrying");
-                        sleep(Duration::from_millis(10)).await;
-                    }
-                },
-                Err(e) => {
+        // Publish and await acknowledgment
+        match self.js_ctx.publish(self.stream.name, payload).await {
+            Ok(paf) => match paf.await {
+                Ok(ack) => {
+                    debug!(
+                        elapsed_ms = start_time.elapsed().as_millis(),
+                        "Write successful",
+                    );
                     pipeline_metrics()
                         .jetstream_isb
-                        .write_error_total
+                        .write_time_total
                         .get_or_create(&self.buffer_labels)
-                        .inc();
-                    error!(?e, "publishing failed, retrying");
-                    sleep(Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS)).await;
-                }
-            }
+                        .observe(start_time.elapsed().as_micros() as f64);
 
-            if cln_token.is_cancelled() {
-                return Err(Error::Cancelled());
+                    // Convert sequence number to Offset using the stream's partition
+                    let offset = crate::message::Offset::Int(crate::message::IntOffset::new(
+                        ack.sequence as i64,
+                        self.stream.partition,
+                    ));
+
+                    // Check if this was a duplicate message
+                    if ack.duplicate {
+                        Ok(crate::pipeline::isb::WriteResult::duplicate(offset))
+                    } else {
+                        Ok(crate::pipeline::isb::WriteResult::new(offset))
+                    }
+                }
+                Err(e) => {
+                    error!(?e, "awaiting publish ack failed");
+                    Err(WriteError::WriteFailed(e.to_string()))
+                }
+            },
+            Err(e) => {
+                pipeline_metrics()
+                    .jetstream_isb
+                    .write_error_total
+                    .get_or_create(&self.buffer_labels)
+                    .inc();
+                error!(?e, "publishing failed");
+                Err(WriteError::WriteFailed(e.to_string()))
             }
         }
     }
@@ -378,6 +390,66 @@ impl JetStreamWriter {
             num_pending: consumer_info.num_pending,
             num_ack_pending: consumer_info.num_ack_pending,
         })
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::pipeline::isb::ISBWriter for JetStreamWriter {
+    type PendingWrite = PublishAckFuture;
+
+    async fn async_write(
+        &self,
+        message: Message,
+    ) -> std::result::Result<Self::PendingWrite, crate::pipeline::isb::WriteError> {
+        // Delegate to the existing async_write method
+        self.async_write(message).await.map_err(|e| match e {
+            WriteError::BufferFull => crate::pipeline::isb::WriteError::BufferFull,
+            WriteError::WriteFailed(msg) => crate::pipeline::isb::WriteError::WriteFailed(msg),
+        })
+    }
+
+    async fn resolve(
+        &self,
+        pending: Self::PendingWrite,
+    ) -> std::result::Result<crate::pipeline::isb::WriteResult, crate::pipeline::isb::WriteError>
+    {
+        // Await the PAF to get the PublishAck
+        let ack = pending
+            .await
+            .map_err(|e| crate::pipeline::isb::WriteError::WriteFailed(e.to_string()))?;
+
+        // Convert sequence number to Offset using the stream's partition
+        let offset = crate::message::Offset::Int(crate::message::IntOffset::new(
+            ack.sequence as i64,
+            self.stream.partition,
+        ));
+
+        // Check if this was a duplicate message
+        if ack.duplicate {
+            Ok(crate::pipeline::isb::WriteResult::duplicate(offset))
+        } else {
+            Ok(crate::pipeline::isb::WriteResult::new(offset))
+        }
+    }
+
+    async fn write(
+        &self,
+        message: Message,
+    ) -> std::result::Result<crate::pipeline::isb::WriteResult, crate::pipeline::isb::WriteError>
+    {
+        // Delegate to the inherent write method
+        self.write(message).await.map_err(|e| match e {
+            WriteError::BufferFull => crate::pipeline::isb::WriteError::BufferFull,
+            WriteError::WriteFailed(msg) => crate::pipeline::isb::WriteError::WriteFailed(msg),
+        })
+    }
+
+    fn name(&self) -> &'static str {
+        self.stream.name
+    }
+
+    fn is_full(&self) -> bool {
+        self.is_full.load(Ordering::Relaxed)
     }
 }
 
@@ -489,7 +561,6 @@ mod tests {
             usage_limit: 0.5,
             buffer_full_strategy:
                 crate::config::pipeline::isb::BufferFullStrategy::RetryUntilSuccess,
-            ..Default::default()
         };
 
         let writer = JetStreamWriter::new(
@@ -627,13 +698,13 @@ mod tests {
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
-    async fn test_blocking_write_with_compression() {
+    async fn test_write_with_compression() {
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
         let cln_token = CancellationToken::new();
 
-        let stream = Stream::new("test-blocking-compress", "temp", 0);
+        let stream = Stream::new("test-write-compress", "temp", 0);
         let _ = context.delete_stream(stream.name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
@@ -691,11 +762,12 @@ mod tests {
             ..Default::default()
         };
 
-        let result = writer.blocking_write(message, cln_token).await;
-        assert!(
-            result.is_ok(),
-            "blocking_write with compression should succeed"
-        );
+        let result = writer.write(message).await;
+        assert!(result.is_ok(), "write with compression should succeed");
+
+        // Verify the WriteResult has the expected structure
+        let write_result = result.unwrap();
+        assert!(!write_result.is_duplicate, "should not be a duplicate");
 
         context.delete_stream(stream.name).await.unwrap();
     }

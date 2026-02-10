@@ -14,7 +14,7 @@
 .filter-menu-item-forward-icon {
     height: 2rem !important;
     width: 2rem !important;
-    color: #0077C5 !important;
+    color: var(--accent-primary) !important;
 }
 
 .filters-dropdown-container {
@@ -26,13 +26,19 @@
     height: 5rem;
     padding: 1rem;
     gap: 1rem;
+    background-color: transparent;
+    transition: border-color 0.2s ease;
+}
+
+.filters-dropdown-container:hover {
+    border-color: var(--text-primary) !important;
 }
 
 .filters-dropdown-selected-filters-container {
     display: flex;
     align-items: center;
     padding: 0.5rem 1rem;
-    background-color: #E3E5E8;
+    background-color: var(--bg-tertiary);
     border-radius: 0.4rem;
     justify-content: space-between;
     width: fit-content;
@@ -44,19 +50,20 @@
     text-overflow: ellipsis;
     overflow: hidden;
     white-space: nowrap;
-    color: #393A3D;
+    color: var(--text-primary);
     font-size: 1.1rem;
     font-weight: 600;
 }
 
 .filters-dropdown-add-filter-button {
-    color: #0077C5 !important;
+    color: var(--accent-primary) !important;
     width: 11rem !important;
     font-family: "Avenir Next", sans-serif !important;
     font-size: 1.1rem !important;
     font-weight: bold !important;
     text-transform: capitalize !important;
     align-items: end !important;
+    background-color: transparent !important;
 }
 
 .filters-dropdown-active-filters-options {

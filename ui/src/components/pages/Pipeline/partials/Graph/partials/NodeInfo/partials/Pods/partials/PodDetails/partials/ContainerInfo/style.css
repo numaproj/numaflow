@@ -1,12 +1,13 @@
 .category-title {
   font-weight: 600;
   font-size: 2rem;
+  color: var(--text-primary);
 }
 
 .outer-box {
   display: flex;
   width: 100%;
-  border-bottom: 1px solid #DCDCDC;
+  border-bottom: 1px solid var(--border-primary);
   padding: 1rem 1rem 1rem 2rem;
 }
 
@@ -15,10 +16,12 @@
   width: 45%;
   font-size: 1.4rem;
   font-family: "IBM Plex Sans", sans-serif;
+  color: var(--text-primary);
 }
 
 .inner-box-value {
   font-size: 1.4rem;
   font-family: "IBM Plex Sans", sans-serif;
   flex-grow: 1;
+  color: var(--text-secondary);
 }

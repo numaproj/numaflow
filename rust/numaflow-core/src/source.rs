@@ -500,14 +500,31 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 // start a background task to invoke ack on the source for the offsets that are acked.
                 // if read ahead is disabled, acquire the semaphore permit before invoking ack so that
                 // we wait for all the inflight messages to be acked before reading the next batch.
-                tokio::spawn(Self::invoke_ack(
-                    read_start_time,
-                    self.sender.clone(),
-                    ack_batch,
-                    _permit,
-                    self.tracker.clone(),
-                    cln_token.clone(),
-                ));
+                tokio::spawn({
+                    let sender = self.sender.clone();
+                    let tracker = self.tracker.clone();
+                    let cln_token = cln_token.clone();
+                    async move {
+                        let result = Self::invoke_ack(
+                            read_start_time,
+                            sender,
+                            ack_batch,
+                            _permit,
+                            tracker,
+                            cln_token.clone(),
+                        )
+                        .await;
+
+                        if let Err(e) = result {
+                            error!(
+                                ?e,
+                                "Non retryable error while invoking ack, stopping the source forwarder"
+                            );
+                            // This cancels the source forwarder, which will stop the source.
+                            cln_token.cancel();
+                        }
+                    }
+                });
 
                 // transform the batch if the transformer is present, this need not
                 // be streaming because transformation should be fast operation.
@@ -550,14 +567,16 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
                 // write the messages to downstream.
                 for message in messages {
-                    if let Some(ref bypass_router) = bypass_router
-                        && bypass_router
+                    let bypassed = if let Some(ref bypass_router) = bypass_router {
+                        bypass_router
                             .try_bypass(message.clone())
                             .await
                             .expect("failed to send message to bypass channel")
-                    {
-                        continue;
                     } else {
+                        false
+                    };
+
+                    if !bypassed {
                         messages_tx
                             .send(message)
                             .await
@@ -622,7 +641,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
         let start = Instant::now();
         if !offsets_to_ack.is_empty() {
-            Self::ack_with_retry(source_handle.clone(), offsets_to_ack, &cancel_token).await;
+            Self::ack_with_retry(source_handle.clone(), offsets_to_ack, &cancel_token).await?;
         }
         if !offsets_to_nack.is_empty() {
             Self::nack_with_retry(source_handle, offsets_to_nack, &cancel_token).await;
@@ -637,27 +656,30 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         source_handle: mpsc::Sender<ActorMessage>,
         offsets: Vec<Offset>,
         cancel_token: &CancellationToken,
-    ) {
+    ) -> Result<()> {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
-        let _ = Retry::new(
+        Retry::new(
             interval,
-            async || {
-                let result = Self::ack(source_handle.clone(), offsets.clone()).await;
-                if result.is_err() {
-                    error!(?result, "Failed to send ack to source, retrying...");
-                    if cancel_token.is_cancelled() {
-                        error!(
-                            ?result,
-                            "Cancellation token received, stopping the ack retry loop"
-                        );
-                        return Ok(());
-                    }
+            async || Self::ack(source_handle.clone(), offsets.clone()).await,
+            |e: &Error| {
+                error!(?e, "Failed to send ack to source, retrying...");
+                // Don't retry non-retryable errors
+                if matches!(e, Error::NonRetryable(_)) {
+                    error!(?e, "Non retryable error, stopping the ack retry loop");
+                    return false;
                 }
-                result
+                // Don't retry if cancelled
+                if cancel_token.is_cancelled() {
+                    error!(
+                        ?e,
+                        "Cancellation token received, stopping the ack retry loop"
+                    );
+                    return false;
+                }
+                true // Retry for all other errors
             },
-            |_: &Error| !cancel_token.is_cancelled(),
         )
-        .await;
+        .await
     }
 
     /// Invokes nack with infinite retries until the cancellation token is cancelled.
