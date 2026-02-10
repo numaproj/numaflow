@@ -10,8 +10,8 @@ use async_trait::async_trait;
 use tokio_util::sync::CancellationToken;
 
 use crate::Result;
-use crate::config::pipeline::isb::{BufferWriterConfig, ISBConfig, Stream};
 use crate::config::pipeline::ToVertexConfig;
+use crate::config::pipeline::isb::{BufferWriterConfig, ISBConfig, Stream};
 use crate::pipeline::isb::{ISBReader, ISBWriter};
 
 /// Trait for creating ISB readers and writers.
@@ -47,7 +47,6 @@ pub(crate) trait ISBFactory: Send + Sync {
     /// * `writer_config` - Writer configuration (buffer limits, strategies, etc.)
     /// * `isb_config` - Optional ISB-specific configuration (e.g., compression settings)
     /// * `cln_token` - Cancellation token for graceful shutdown
-    #[allow(dead_code)] // Will be used when we migrate writer creation to factory pattern
     async fn create_writer(
         &self,
         stream: Stream,
@@ -65,7 +64,6 @@ pub(crate) trait ISBFactory: Send + Sync {
     /// * `to_vertex_config` - List of vertex configurations containing stream info
     /// * `isb_config` - Optional ISB-specific configuration
     /// * `cln_token` - Cancellation token for graceful shutdown
-    #[allow(dead_code)] // Will be used when we migrate writer creation to factory pattern
     async fn create_writers(
         &self,
         to_vertex_config: &[ToVertexConfig],
@@ -89,4 +87,3 @@ pub(crate) trait ISBFactory: Send + Sync {
         Ok(writers)
     }
 }
-

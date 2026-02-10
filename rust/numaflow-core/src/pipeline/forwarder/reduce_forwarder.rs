@@ -169,13 +169,14 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         &context,
     );
 
-    let writers = create_components::create_js_writers(
-        &config.to_vertex_config,
-        js_context.clone(),
-        config.isb_config.as_ref(),
-        cln_token.clone(),
-    )
-    .await?;
+    use crate::pipeline::isb::ISBFactory;
+    let writers = isb_factory
+        .create_writers(
+            &config.to_vertex_config,
+            config.isb_config.as_ref(),
+            cln_token.clone(),
+        )
+        .await?;
 
     let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
         ISBWriterOrchestratorComponents {
@@ -312,13 +313,14 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         &context,
     );
 
-    let writers = create_components::create_js_writers(
-        &config.to_vertex_config,
-        js_context.clone(),
-        config.isb_config.as_ref(),
-        cln_token.clone(),
-    )
-    .await?;
+    use crate::pipeline::isb::ISBFactory;
+    let writers = isb_factory
+        .create_writers(
+            &config.to_vertex_config,
+            config.isb_config.as_ref(),
+            cln_token.clone(),
+        )
+        .await?;
 
     let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
         ISBWriterOrchestratorComponents {

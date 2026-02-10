@@ -92,4 +92,3 @@ mod tests {
         assert!(std::ptr::eq(factory.context(), &factory.context));
     }
 }
-

@@ -3,9 +3,9 @@
 use crate::Result;
 use crate::config::components::ratelimit::RateLimitConfig;
 use crate::error::Error;
+use crate::pipeline::isb::jetstream::JetStreamFactory;
 use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
-use crate::pipeline::isb::jetstream::JetStreamFactory;
 use crate::pipeline::isb::{ISBFactory, ISBReader, ISBWriter};
 use numaflow_throttling::state::OptimisticValidityUpdateSecs;
 use numaflow_throttling::state::store::in_memory_store::InMemoryStore;
@@ -29,7 +29,9 @@ pub(crate) trait NumaflowTypeConfig: Send + Sync + Clone + 'static {
     /// The ISB writer type
     type ISBWriter: ISBWriter + 'static;
     /// The ISB factory type that creates readers and writers
-    type ISBFactory: ISBFactory<Reader = Self::ISBReader, Writer = Self::ISBWriter> + Clone + 'static;
+    type ISBFactory: ISBFactory<Reader = Self::ISBReader, Writer = Self::ISBWriter>
+        + Clone
+        + 'static;
 }
 
 #[derive(Clone)]

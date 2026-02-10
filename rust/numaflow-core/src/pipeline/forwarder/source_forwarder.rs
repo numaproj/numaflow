@@ -90,16 +90,17 @@ pub(crate) async fn start_source_forwarder(
     let tracker = Tracker::new(serving_callback_handler, cln_token.clone());
 
     // Create the ISB factory from the JetStream context
+    use crate::pipeline::isb::ISBFactory;
     use crate::pipeline::isb::jetstream::JetStreamFactory;
     let isb_factory = JetStreamFactory::new(js_context.clone());
 
-    let writers = create_components::create_js_writers(
-        &config.to_vertex_config,
-        js_context.clone(),
-        config.isb_config.as_ref(),
-        cln_token.clone(),
-    )
-    .await?;
+    let writers = isb_factory
+        .create_writers(
+            &config.to_vertex_config,
+            config.isb_config.as_ref(),
+            cln_token.clone(),
+        )
+        .await?;
 
     // Helper macro to create writer components with specific type
     macro_rules! create_writer {
