@@ -114,7 +114,7 @@ impl From<GcEventEntry> for GcEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{IntOffset, Message, MessageID, Offset, MessageHandle};
+    use crate::message::{IntOffset, Message, MessageID, Offset};
     use crate::reduce::wal::segment::WalType;
     use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
     use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
@@ -203,7 +203,7 @@ mod tests {
 
             // Send message - conversion to bytes happens internally
             tx.send(SegmentWriteMessage::WriteMessage {
-                read_message: MessageHandle::without_ack_tracking(message),
+                read_message: message.into(),
             })
             .await
             .unwrap();
@@ -354,7 +354,7 @@ mod tests {
 
             // Send message - conversion to bytes happens internally
             tx.send(SegmentWriteMessage::WriteMessage {
-                read_message: MessageHandle::without_ack_tracking(message),
+                read_message: message.into(),
             })
             .await
             .unwrap();

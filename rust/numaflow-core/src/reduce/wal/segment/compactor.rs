@@ -472,7 +472,7 @@ impl ShouldRetain for UnalignedCompaction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{IntOffset, Message, MessageID, Offset, MessageHandle};
+    use crate::message::{IntOffset, Message, MessageID, Offset};
     use crate::reduce::wal::WalMessage;
     use crate::shared::grpc::prost_timestamp_from_utc;
     use bytes::Bytes;
@@ -780,7 +780,7 @@ mod tests {
 
             // Send message - conversion to bytes happens internally
             tx.send(SegmentWriteMessage::WriteMessage {
-                read_message: MessageHandle::without_ack_tracking(message),
+                read_message: message.into(),
             })
             .await
             .unwrap();
@@ -956,13 +956,13 @@ mod tests {
 
         // Write the messages to the WAL - conversion to bytes happens internally
         tx.send(SegmentWriteMessage::WriteMessage {
-            read_message: MessageHandle::without_ack_tracking(before_message),
+            read_message: before_message.into(),
         })
         .await
         .map_err(|e| format!("Failed to send data: {e}"))?;
 
         tx.send(SegmentWriteMessage::WriteMessage {
-            read_message: MessageHandle::without_ack_tracking(after_message),
+            read_message: after_message.into(),
         })
         .await
         .map_err(|e| format!("Failed to send data: {e}"))?;
@@ -1212,7 +1212,7 @@ mod tests {
         {
             // Send message - conversion to bytes happens internally
             tx.send(SegmentWriteMessage::WriteMessage {
-                read_message: MessageHandle::without_ack_tracking(message.clone()),
+                read_message: message.clone().into(),
             })
             .await
             .map_err(|e| format!("Failed to send data: {e}"))?;

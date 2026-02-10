@@ -192,7 +192,7 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
 mod tests {
     use super::*;
     use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
-    use crate::message::{IntOffset, MessageID, Offset, MessageHandle};
+    use crate::message::{IntOffset, MessageID, Offset};
     use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
     use crate::pipeline::isb::reader::ISBReaderOrchestrator;
     use crate::reduce::wal::segment::WalType;
@@ -599,7 +599,7 @@ mod tests {
             };
 
             tx.send(SegmentWriteMessage::WriteMessage {
-                read_message: MessageHandle::without_ack_tracking(message),
+                read_message: message.into(),
             })
             .await
             .unwrap();

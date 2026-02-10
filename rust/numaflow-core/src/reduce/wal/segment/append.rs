@@ -377,7 +377,7 @@ impl AppendOnlyWal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{IntOffset, Message, Offset, MessageHandle};
+    use crate::message::{IntOffset, Message, Offset};
     use crate::reduce::wal::segment::WalType;
     use std::fs;
     use tempfile::tempdir;
@@ -415,7 +415,7 @@ mod tests {
         };
         wal_tx
             .send(SegmentWriteMessage::WriteMessage {
-                read_message: MessageHandle::without_ack_tracking(msg1),
+                read_message: msg1.into(),
             })
             .await
             .unwrap();
@@ -427,7 +427,7 @@ mod tests {
         };
         wal_tx
             .send(SegmentWriteMessage::WriteMessage {
-                read_message: MessageHandle::without_ack_tracking(msg2),
+                read_message: msg2.into(),
             })
             .await
             .unwrap();
@@ -441,7 +441,7 @@ mod tests {
         };
         wal_tx
             .send(SegmentWriteMessage::WriteMessage {
-                read_message: MessageHandle::without_ack_tracking(msg3),
+                read_message: msg3.into(),
             })
             .await
             .unwrap();
@@ -454,7 +454,7 @@ mod tests {
         };
         wal_tx
             .send(SegmentWriteMessage::WriteMessage {
-                read_message: MessageHandle::without_ack_tracking(msg4),
+                read_message: msg4.into(),
             })
             .await
             .unwrap();
@@ -466,7 +466,7 @@ mod tests {
         };
         wal_tx
             .send(SegmentWriteMessage::WriteMessage {
-                read_message: MessageHandle::without_ack_tracking(msg5),
+                read_message: msg5.into(),
             })
             .await
             .unwrap();
@@ -478,7 +478,7 @@ mod tests {
         };
         wal_tx
             .send(SegmentWriteMessage::WriteMessage {
-                read_message: MessageHandle::without_ack_tracking(msg6),
+                read_message: msg6.into(),
             })
             .await
             .unwrap();
@@ -546,7 +546,7 @@ mod tests {
         };
         wal_tx
             .send(SegmentWriteMessage::WriteMessage {
-                read_message: MessageHandle::without_ack_tracking(msg1),
+                read_message: msg1.into(),
             })
             .await
             .unwrap();
@@ -604,7 +604,7 @@ mod tests {
         };
         wal_tx
             .send(SegmentWriteMessage::WriteMessage {
-                read_message: MessageHandle::without_ack_tracking(msg1),
+                read_message: msg1.into(),
             })
             .await
             .unwrap();
@@ -623,7 +623,7 @@ mod tests {
         };
         wal_tx
             .send(SegmentWriteMessage::WriteMessage {
-                read_message: MessageHandle::without_ack_tracking(msg2),
+                read_message: msg2.into(),
             })
             .await
             .unwrap();
@@ -697,7 +697,7 @@ mod tests {
         };
         wal_tx
             .send(SegmentWriteMessage::WriteMessage {
-                read_message: MessageHandle::without_ack_tracking(msg1),
+                read_message: msg1.into(),
             })
             .await
             .unwrap();
@@ -713,7 +713,7 @@ mod tests {
         };
         wal_tx
             .send(SegmentWriteMessage::WriteMessage {
-                read_message: MessageHandle::without_ack_tracking(msg2),
+                read_message: msg2.into(),
             })
             .await
             .unwrap();

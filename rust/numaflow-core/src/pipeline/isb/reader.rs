@@ -299,7 +299,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             ..Default::default()
         };
 
-        let read_msg = MessageHandle::without_ack_tracking(msg);
+        let read_msg: MessageHandle = msg.into();
         tx.send(read_msg).await.map_err(|_| {
             Error::ISB(crate::pipeline::isb::error::ISBError::Other(
                 "Failed to send wmb message to channel".to_string(),

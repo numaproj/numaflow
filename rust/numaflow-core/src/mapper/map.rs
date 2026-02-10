@@ -637,7 +637,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let read_message = MessageHandle::without_ack_tracking(message);
+        let read_message: MessageHandle = message.into();
 
         let (output_tx, mut output_rx) = mpsc::channel(10);
 
@@ -745,8 +745,8 @@ mod tests {
         )
         .await?;
 
-        let messages = vec![
-            MessageHandle::without_ack_tracking(Message {
+        let messages: Vec<MessageHandle> = vec![
+            Message {
                 typ: Default::default(),
                 keys: Arc::from(vec!["first".into()]),
                 tags: None,
@@ -760,8 +760,9 @@ mod tests {
                     index: 0,
                 },
                 ..Default::default()
-            }),
-            MessageHandle::without_ack_tracking(Message {
+            }
+            .into(),
+            Message {
                 typ: Default::default(),
                 keys: Arc::from(vec!["second".into()]),
                 tags: None,
@@ -775,7 +776,8 @@ mod tests {
                     index: 1,
                 },
                 ..Default::default()
-            }),
+            }
+            .into(),
         ];
 
         let (input_tx, input_rx) = mpsc::channel(10);
@@ -869,7 +871,7 @@ mod tests {
         )
         .await?;
 
-        let message = MessageHandle::without_ack_tracking(Message {
+        let message: MessageHandle = Message {
             typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
@@ -883,7 +885,8 @@ mod tests {
                 index: 0,
             },
             ..Default::default()
-        });
+        }
+        .into();
 
         let (input_tx, input_rx) = mpsc::channel(10);
         let input_stream = ReceiverStream::new(input_rx);

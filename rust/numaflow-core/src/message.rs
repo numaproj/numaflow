@@ -170,20 +170,6 @@ impl MessageHandle {
         }
     }
 
-    /// Creates a MessageHandle without ack tracking.
-    /// This is used for messages that don't need ack tracking, such as mapper output
-    /// where the original message has already been acked by the mapper.
-    /// The ack handle has no sender, so it will be a no-op when dropped.
-    pub(crate) fn without_ack_tracking(message: Message) -> Self {
-        Self {
-            message,
-            ack_handle: Arc::new(AckHandle {
-                ack_handle: None,
-                ref_count: AtomicUsize::new(0), // Already "success" state
-            }),
-        }
-    }
-
     /// Mark the message as successfully processed.
     /// This decrements the reference count. When all references are marked as success
     /// (ref_count reaches 0), the message will be ACK'd when the AckHandle is dropped.
@@ -209,6 +195,22 @@ impl MessageHandle {
         Self {
             message,
             ack_handle: Arc::clone(&self.ack_handle),
+        }
+    }
+}
+
+/// Converts a [Message] into a [MessageHandle] without ack tracking.
+/// This is used for newly created messages (e.g., reduce output, watermark messages)
+/// that don't need to be acked back to a source.
+/// The ack handle is a no-op - mark_success() and drop will have no effect.
+impl From<Message> for MessageHandle {
+    fn from(message: Message) -> Self {
+        Self {
+            message,
+            ack_handle: Arc::new(AckHandle {
+                ack_handle: None,
+                ref_count: AtomicUsize::new(0), // Already "success" state
+            }),
         }
     }
 }

@@ -245,9 +245,9 @@ impl UserDefinedAlignedReduce {
                     }
                     .into();
 
-                    // Wrap in MessageHandle without ack tracking since this is reduce output
+                    // Send to ISB writer (message is converted to MessageHandle via From trait)
                     result_tx
-                        .send(MessageHandle::without_ack_tracking(message))
+                        .send(message.into())
                         .await
                         .expect("failed to send response");
 
