@@ -89,12 +89,9 @@ pub(crate) async fn start_source_forwarder(
 
     let tracker = Tracker::new(serving_callback_handler, cln_token.clone());
 
-    let context = PipelineContext {
-        cln_token: cln_token.clone(),
-        js_context: &js_context,
-        config: &config,
-        tracker: tracker.clone(),
-    };
+    // Create the ISB factory from the JetStream context
+    use crate::pipeline::isb::jetstream::JetStreamFactory;
+    let isb_factory = JetStreamFactory::new(js_context.clone());
 
     let writers = create_components::create_js_writers(
         &config.to_vertex_config,
@@ -135,6 +132,13 @@ pub(crate) async fn start_source_forwarder(
                 build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
             let buffer_writer = create_writer!(WithRedisRateLimiter);
 
+            let context = PipelineContext::<WithRedisRateLimiter>::new(
+                cln_token.clone(),
+                &isb_factory,
+                &config,
+                tracker.clone(),
+            );
+
             run_source_forwarder::<WithRedisRateLimiter>(
                 &context,
                 &source_config,
@@ -149,6 +153,13 @@ pub(crate) async fn start_source_forwarder(
                 build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
             let buffer_writer = create_writer!(WithInMemoryRateLimiter);
 
+            let context = PipelineContext::<WithInMemoryRateLimiter>::new(
+                cln_token.clone(),
+                &isb_factory,
+                &config,
+                tracker.clone(),
+            );
+
             run_source_forwarder::<WithInMemoryRateLimiter>(
                 &context,
                 &source_config,
@@ -161,6 +172,14 @@ pub(crate) async fn start_source_forwarder(
         }
     } else {
         let buffer_writer = create_writer!(WithoutRateLimiter);
+
+        let context = PipelineContext::<WithoutRateLimiter>::new(
+            cln_token.clone(),
+            &isb_factory,
+            &config,
+            tracker.clone(),
+        );
+
         run_source_forwarder::<WithoutRateLimiter>(
             &context,
             &source_config,
@@ -177,7 +196,7 @@ pub(crate) async fn start_source_forwarder(
 
 /// Starts source forwarder.
 async fn run_source_forwarder<C: NumaflowTypeConfig>(
-    context: &PipelineContext<'_>,
+    context: &PipelineContext<'_, C>,
     source_config: &SourceVtxConfig,
     transformer: Option<Transformer>,
     source_watermark_handle: Option<SourceWatermarkHandle>,

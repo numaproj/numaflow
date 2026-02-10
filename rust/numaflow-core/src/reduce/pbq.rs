@@ -244,7 +244,6 @@ mod tests {
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
             stream: stream.clone(),
-            js_ctx: context.clone(),
             config: buf_reader_config,
             tracker: tracker.clone(),
             batch_size: 500,
@@ -255,7 +254,7 @@ mod tests {
         };
         let js_reader = JetStreamReader::new(
             reader_components.stream.clone(),
-            reader_components.js_ctx.clone(),
+            context.clone(),
             reader_components.isb_config.clone(),
         )
         .await
@@ -377,7 +376,6 @@ mod tests {
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
             stream: stream.clone(),
-            js_ctx: context.clone(),
             config: buf_reader_config,
             tracker: tracker.clone(),
             batch_size: 500,
@@ -388,7 +386,7 @@ mod tests {
         };
         let js_reader = JetStreamReader::new(
             reader_components.stream.clone(),
-            reader_components.js_ctx.clone(),
+            context.clone(),
             reader_components.isb_config.clone(),
         )
         .await
@@ -611,7 +609,6 @@ mod tests {
         let reader_components = ISBReaderComponents {
             vertex_type: "test".to_string(),
             stream: stream.clone(),
-            js_ctx: context.clone(),
             config: buf_reader_config,
             tracker: tracker.clone(),
             batch_size: 500,
@@ -622,7 +619,7 @@ mod tests {
         };
         let js_reader = JetStreamReader::new(
             reader_components.stream.clone(),
-            reader_components.js_ctx.clone(),
+            context.clone(),
             reader_components.isb_config.clone(),
         )
         .await

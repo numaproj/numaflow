@@ -132,12 +132,9 @@ pub async fn start_map_forwarder(
     )
     .await?;
 
-    let context = PipelineContext {
-        cln_token: cln_token.clone(),
-        js_context: &js_context,
-        config: &config,
-        tracker: tracker.clone(),
-    };
+    // Create the ISB factory from the JetStream context
+    use crate::pipeline::isb::jetstream::JetStreamFactory;
+    let isb_factory = JetStreamFactory::new(js_context.clone());
 
     let writers = create_components::create_js_writers(
         &config.to_vertex_config,
@@ -169,6 +166,14 @@ pub async fn start_map_forwarder(
             let redis_config =
                 build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
             let buffer_writer = create_writer!(WithRedisRateLimiter);
+
+            let context = PipelineContext::<WithRedisRateLimiter>::new(
+                cln_token.clone(),
+                &isb_factory,
+                &config,
+                tracker.clone(),
+            );
+
             run_all_map_forwarders::<WithRedisRateLimiter>(
                 &context,
                 &map_vtx_config,
@@ -182,6 +187,14 @@ pub async fn start_map_forwarder(
             let in_mem_config =
                 build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
             let buffer_writer = create_writer!(WithInMemoryRateLimiter);
+
+            let context = PipelineContext::<WithInMemoryRateLimiter>::new(
+                cln_token.clone(),
+                &isb_factory,
+                &config,
+                tracker.clone(),
+            );
+
             run_all_map_forwarders::<WithInMemoryRateLimiter>(
                 &context,
                 &map_vtx_config,
@@ -194,6 +207,14 @@ pub async fn start_map_forwarder(
         }
     } else {
         let buffer_writer = create_writer!(WithoutRateLimiter);
+
+        let context = PipelineContext::<WithoutRateLimiter>::new(
+            cln_token.clone(),
+            &isb_factory,
+            &config,
+            tracker.clone(),
+        );
+
         run_all_map_forwarders::<WithoutRateLimiter>(
             &context,
             &map_vtx_config,
@@ -236,7 +257,7 @@ pub async fn start_map_forwarder(
 
 /// Starts map forwarder for all the streams.
 async fn run_all_map_forwarders<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
-    context: &PipelineContext<'_>,
+    context: &PipelineContext<'_, C>,
     map_vtx_config: &MapVtxConfig,
     reader_config: &BufferReaderConfig,
     buffer_writer: ISBWriterOrchestrator<C>,
@@ -280,6 +301,7 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig<ISBReader = JetStreamReade
             mapper,
             buffer_writer.clone(),
             rate_limiter.clone(),
+            context.factory(),
         )
         .await?;
 
@@ -305,21 +327,23 @@ async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig<ISBReader = JetStrea
     mapper: MapHandle,
     buffer_writer: ISBWriterOrchestrator<C>,
     rate_limiter: Option<C::RateLimiter>,
+    isb_factory: &C::ISBFactory,
 ) -> Result<(
     tokio::task::JoinHandle<Result<()>>,
     ISBReaderOrchestrator<C>,
 )> {
+    use crate::pipeline::isb::ISBFactory;
     let cln_token = reader_components.cln_token.clone();
 
-    let js_reader = JetStreamReader::new(
-        reader_components.stream.clone(),
-        reader_components.js_ctx.clone(),
-        reader_components.isb_config.clone(),
-    )
-    .await?;
+    let isb_reader_impl = isb_factory
+        .create_reader(
+            reader_components.stream.clone(),
+            reader_components.isb_config.as_ref(),
+        )
+        .await?;
 
     let isb_reader =
-        ISBReaderOrchestrator::<C>::new(reader_components, js_reader, rate_limiter).await?;
+        ISBReaderOrchestrator::<C>::new(reader_components, isb_reader_impl, rate_limiter).await?;
 
     let forwarder = MapForwarder::<C>::new(isb_reader.clone(), mapper, buffer_writer).await;
 

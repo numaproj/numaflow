@@ -5,7 +5,8 @@ use crate::config::components::ratelimit::RateLimitConfig;
 use crate::error::Error;
 use crate::pipeline::isb::jetstream::js_reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
-use crate::pipeline::isb::{ISBReader, ISBWriter};
+use crate::pipeline::isb::jetstream::JetStreamFactory;
+use crate::pipeline::isb::{ISBFactory, ISBReader, ISBWriter};
 use numaflow_throttling::state::OptimisticValidityUpdateSecs;
 use numaflow_throttling::state::store::in_memory_store::InMemoryStore;
 use numaflow_throttling::state::store::redis_store::{RedisMode, RedisStore};
@@ -15,10 +16,20 @@ use numaflow_throttling::{
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
+/// Type configuration trait for Numaflow components.
+///
+/// This trait defines the associated types for rate limiting and ISB operations.
+/// Different implementations can provide different ISB backends (JetStream, SimpleBuffer, etc.)
+/// while keeping the rest of the pipeline code generic.
 pub(crate) trait NumaflowTypeConfig: Send + Sync + Clone + 'static {
+    /// The rate limiter type used for throttling
     type RateLimiter: RateLimiter + Clone + Sync + 'static;
+    /// The ISB reader type
     type ISBReader: ISBReader + 'static;
+    /// The ISB writer type
     type ISBWriter: ISBWriter + 'static;
+    /// The ISB factory type that creates readers and writers
+    type ISBFactory: ISBFactory<Reader = Self::ISBReader, Writer = Self::ISBWriter> + Clone + 'static;
 }
 
 #[derive(Clone)]
@@ -29,6 +40,7 @@ impl NumaflowTypeConfig for WithRedisRateLimiter {
     type RateLimiter = RateLimit<WithState<RedisStore>>;
     type ISBReader = JetStreamReader;
     type ISBWriter = JetStreamWriter;
+    type ISBFactory = JetStreamFactory;
 }
 
 #[derive(Clone)]
@@ -39,6 +51,7 @@ impl NumaflowTypeConfig for WithInMemoryRateLimiter {
     type RateLimiter = RateLimit<WithState<InMemoryStore>>;
     type ISBReader = JetStreamReader;
     type ISBWriter = JetStreamWriter;
+    type ISBFactory = JetStreamFactory;
 }
 
 #[derive(Clone)]
@@ -47,6 +60,7 @@ impl NumaflowTypeConfig for WithoutRateLimiter {
     type RateLimiter = NoOpRateLimiter;
     type ISBReader = JetStreamReader;
     type ISBWriter = JetStreamWriter;
+    type ISBFactory = JetStreamFactory;
 }
 
 /// Build a Redis-backed rate limiter from rate limit config

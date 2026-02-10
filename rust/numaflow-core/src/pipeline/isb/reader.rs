@@ -28,7 +28,6 @@ use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
 
 use crate::watermark::wmb::WMB;
-use async_nats::jetstream::Context;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use numaflow_throttling::RateLimiter;
@@ -559,12 +558,15 @@ struct WipParams<C: NumaflowTypeConfig> {
     tracker: Tracker,
 }
 
-/// Components needed to create a JetStreamReader.
+/// Components needed to create an ISB reader.
+///
+/// This struct holds all the configuration and runtime components needed
+/// to create an ISB reader. It is ISB-agnostic - the actual reader creation
+/// is handled by the ISBFactory.
 #[derive(Clone)]
 pub(crate) struct ISBReaderComponents {
     pub vertex_type: String,
     pub stream: Stream,
-    pub js_ctx: Context,
     pub config: BufferReaderConfig,
     pub tracker: Tracker,
     pub batch_size: usize,
@@ -575,16 +577,15 @@ pub(crate) struct ISBReaderComponents {
 }
 
 impl ISBReaderComponents {
-    pub fn new(
+    pub fn new<C: crate::typ::NumaflowTypeConfig>(
         stream: Stream,
         reader_config: BufferReaderConfig,
         watermark_handle: Option<ISBWatermarkHandle>,
-        context: &crate::pipeline::PipelineContext<'_>,
+        context: &crate::pipeline::PipelineContext<'_, C>,
     ) -> Self {
         Self {
             vertex_type: context.config.vertex_type.to_string(),
             stream,
-            js_ctx: context.js_context.clone(),
             config: reader_config,
             tracker: context.tracker.clone(),
             batch_size: context.config.batch_size,
@@ -695,7 +696,6 @@ mod tests {
         let isb_reader_components = ISBReaderComponents {
             vertex_type: "Map".to_string(),
             stream: stream.clone(),
-            js_ctx: context.clone(),
             config: buf_reader_config,
             tracker: tracker.clone(),
             batch_size: 500,
@@ -809,7 +809,6 @@ mod tests {
         let isb_reader_components = ISBReaderComponents {
             vertex_type: "Map".to_string(),
             stream: js_stream.clone(),
-            js_ctx: context.clone(),
             config: buf_reader_config,
             tracker: tracker.clone(),
             batch_size: 1,
@@ -942,7 +941,6 @@ mod tests {
         let isb_reader_components = ISBReaderComponents {
             vertex_type: "Map".to_string(),
             stream: stream.clone(),
-            js_ctx: context.clone(),
             config: buf_reader_config,
             tracker: tracker.clone(),
             batch_size: 500,

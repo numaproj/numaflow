@@ -151,12 +151,16 @@ pub(crate) async fn start_aligned_reduce_forwarder(
             crate::error::Error::Config("No stream found for reduce vertex".to_string())
         })?;
 
-    let context = PipelineContext {
-        cln_token: cln_token.clone(),
-        js_context: &js_context,
-        config: &config,
-        tracker: tracker.clone(),
-    };
+    // Create the ISB factory from the JetStream context
+    use crate::pipeline::isb::jetstream::JetStreamFactory;
+    let isb_factory = JetStreamFactory::new(js_context.clone());
+
+    let context = PipelineContext::<WithoutRateLimiter>::new(
+        cln_token.clone(),
+        &isb_factory,
+        &config,
+        tracker.clone(),
+    );
 
     let reader_components = ISBReaderComponents::new(
         stream,
@@ -227,12 +231,12 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         .await,
     );
 
-    let context = PipelineContext {
-        cln_token: cln_token.clone(),
-        js_context: &js_context,
-        config: &config,
+    let context = PipelineContext::<WithoutRateLimiter>::new(
+        cln_token.clone(),
+        &isb_factory,
+        &config,
         tracker,
-    };
+    );
 
     // rate limit is not applicable for reduce
     run_reduce_forwarder::<WithoutRateLimiter>(&context, reader_components, reducer, wal, None)
@@ -290,12 +294,16 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
             crate::error::Error::Config("No stream found for reduce vertex".to_string())
         })?;
 
-    let context = PipelineContext {
-        cln_token: cln_token.clone(),
-        js_context: &js_context,
-        config: &config,
-        tracker: tracker.clone(),
-    };
+    // Create the ISB factory from the JetStream context
+    use crate::pipeline::isb::jetstream::JetStreamFactory;
+    let isb_factory = JetStreamFactory::new(js_context.clone());
+
+    let context = PipelineContext::<WithoutRateLimiter>::new(
+        cln_token.clone(),
+        &isb_factory,
+        &config,
+        tracker.clone(),
+    );
 
     let reader_components = ISBReaderComponents::new(
         stream,
@@ -364,12 +372,12 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         .await,
     );
 
-    let context = PipelineContext {
-        cln_token: cln_token.clone(),
-        js_context: &js_context,
-        config: &config,
+    let context = PipelineContext::<WithoutRateLimiter>::new(
+        cln_token.clone(),
+        &isb_factory,
+        &config,
         tracker,
-    };
+    );
 
     // rate limit is not applicable for reduce
     run_reduce_forwarder::<WithoutRateLimiter>(&context, reader_components, reducer, wal, None)
@@ -381,21 +389,23 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
 
 /// Starts reduce forwarder.
 async fn run_reduce_forwarder<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
-    context: &PipelineContext<'_>,
+    context: &PipelineContext<'_, C>,
     reader_components: ISBReaderComponents,
     reducer: Reducer<C>,
     wal: Option<WAL>,
     rate_limiter: Option<C::RateLimiter>,
 ) -> Result<()> {
-    let js_reader = JetStreamReader::new(
-        reader_components.stream.clone(),
-        reader_components.js_ctx.clone(),
-        reader_components.isb_config.clone(),
-    )
-    .await?;
+    use crate::pipeline::isb::ISBFactory;
+    let isb_reader_impl = context
+        .factory()
+        .create_reader(
+            reader_components.stream.clone(),
+            reader_components.isb_config.as_ref(),
+        )
+        .await?;
 
     let isb_reader =
-        ISBReaderOrchestrator::<C>::new(reader_components, js_reader, rate_limiter).await?;
+        ISBReaderOrchestrator::<C>::new(reader_components, isb_reader_impl, rate_limiter).await?;
 
     // Create lag reader with the single buffer reader (reduce only reads from one stream)
     let pending_reader = shared::metrics::create_pending_reader(
