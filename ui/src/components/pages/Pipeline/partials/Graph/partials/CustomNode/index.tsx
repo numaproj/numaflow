@@ -293,12 +293,6 @@ const CustomNode: FC<NodeProps> = ({
     ? "mono-vertex-img-wrapper-small"
     : "mono-vertex-img-wrapper";
   const imgClass = hasBothSinks ? "mono-vertex-img-small" : "mono-vertex-img";
-  const pipelineSinkWrapperClass = hasBothSinks
-    ? "pipeline-sink-container-wrapper-small"
-    : "pipeline-sink-container-wrapper";
-  const pipelineSinkImgClass = hasBothSinks
-    ? "pipeline-sink-container-img-small"
-    : "pipeline-sink-container-img";
   const nodeRateWrapperClass = hasBothSinks ? "node-rate-small" : "node-rate";
   const nodeRateStyle =
     data?.type === "monoVertex" && hasBothSinks
