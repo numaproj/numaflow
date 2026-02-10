@@ -155,14 +155,14 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     use crate::pipeline::isb::jetstream::JetStreamFactory;
     let isb_factory = JetStreamFactory::new(js_context.clone());
 
-    let context = PipelineContext::<WithoutRateLimiter>::new(
+    let context = PipelineContext::<WithoutRateLimiter, _>::new(
         cln_token.clone(),
         &isb_factory,
         &config,
         tracker.clone(),
     );
 
-    let reader_components = ISBReaderComponents::new(
+    let reader_components = ISBReaderComponents::new::<WithoutRateLimiter, _>(
         stream,
         reader_config.clone(),
         watermark_handle.clone(),
@@ -232,7 +232,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
         .await,
     );
 
-    let context = PipelineContext::<WithoutRateLimiter>::new(
+    let context = PipelineContext::<WithoutRateLimiter, _>::new(
         cln_token.clone(),
         &isb_factory,
         &config,
@@ -240,7 +240,7 @@ pub(crate) async fn start_aligned_reduce_forwarder(
     );
 
     // rate limit is not applicable for reduce
-    run_reduce_forwarder::<WithoutRateLimiter>(&context, reader_components, reducer, wal, None)
+    run_reduce_forwarder::<WithoutRateLimiter, _>(&context, reader_components, reducer, wal, None)
         .await?;
 
     info!("Aligned reduce forwarder has stopped successfully");
@@ -299,14 +299,14 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     use crate::pipeline::isb::jetstream::JetStreamFactory;
     let isb_factory = JetStreamFactory::new(js_context.clone());
 
-    let context = PipelineContext::<WithoutRateLimiter>::new(
+    let context = PipelineContext::<WithoutRateLimiter, _>::new(
         cln_token.clone(),
         &isb_factory,
         &config,
         tracker.clone(),
     );
 
-    let reader_components = ISBReaderComponents::new(
+    let reader_components = ISBReaderComponents::new::<WithoutRateLimiter, _>(
         stream,
         reader_config.clone(),
         watermark_handle.clone(),
@@ -374,7 +374,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
         .await,
     );
 
-    let context = PipelineContext::<WithoutRateLimiter>::new(
+    let context = PipelineContext::<WithoutRateLimiter, _>::new(
         cln_token.clone(),
         &isb_factory,
         &config,
@@ -382,7 +382,7 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
     );
 
     // rate limit is not applicable for reduce
-    run_reduce_forwarder::<WithoutRateLimiter>(&context, reader_components, reducer, wal, None)
+    run_reduce_forwarder::<WithoutRateLimiter, _>(&context, reader_components, reducer, wal, None)
         .await?;
 
     info!("Unaligned reduce forwarder has stopped successfully");
@@ -390,14 +390,17 @@ pub(crate) async fn start_unaligned_reduce_forwarder(
 }
 
 /// Starts reduce forwarder.
-async fn run_reduce_forwarder<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
-    context: &PipelineContext<'_, C>,
+async fn run_reduce_forwarder<C, F>(
+    context: &PipelineContext<'_, C, F>,
     reader_components: ISBReaderComponents,
     reducer: Reducer<C>,
     wal: Option<WAL>,
     rate_limiter: Option<C::RateLimiter>,
-) -> Result<()> {
-    use crate::pipeline::isb::ISBFactory;
+) -> Result<()>
+where
+    C: NumaflowTypeConfig<ISBReader = JetStreamReader>,
+    F: crate::pipeline::isb::ISBFactory<Reader = C::ISBReader, Writer = C::ISBWriter>,
+{
     let isb_reader_impl = context
         .factory()
         .create_reader(

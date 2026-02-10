@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use std::time::Duration;
 
 use async_nats::jetstream::Context;
@@ -6,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::config::pipeline;
 use crate::config::pipeline::PipelineConfig;
+use crate::pipeline::isb::ISBFactory;
 use crate::tracker::Tracker;
 use crate::typ::NumaflowTypeConfig;
 use crate::{Result, error};
@@ -17,18 +19,29 @@ pub(crate) mod isb;
 ///
 /// This struct is generic over the `NumaflowTypeConfig` to support different
 /// ISB implementations (JetStream, SimpleBuffer, etc.) through the factory pattern.
-pub(crate) struct PipelineContext<'a, C: NumaflowTypeConfig> {
+/// The factory is passed as a separate generic parameter to allow flexibility in
+/// choosing the ISB backend implementation.
+pub(crate) struct PipelineContext<'a, C, F>
+where
+    C: NumaflowTypeConfig,
+    F: ISBFactory<Reader = C::ISBReader, Writer = C::ISBWriter>,
+{
     pub(crate) cln_token: CancellationToken,
-    pub(crate) isb_factory: &'a C::ISBFactory,
+    pub(crate) isb_factory: &'a F,
     pub(crate) config: &'a PipelineConfig,
     pub(crate) tracker: Tracker,
+    _phantom: PhantomData<C>,
 }
 
-impl<'a, C: NumaflowTypeConfig> PipelineContext<'a, C> {
+impl<'a, C, F> PipelineContext<'a, C, F>
+where
+    C: NumaflowTypeConfig,
+    F: ISBFactory<Reader = C::ISBReader, Writer = C::ISBWriter>,
+{
     /// Creates a new PipelineContext with the given components.
     pub(crate) fn new(
         cln_token: CancellationToken,
-        isb_factory: &'a C::ISBFactory,
+        isb_factory: &'a F,
         config: &'a PipelineConfig,
         tracker: Tracker,
     ) -> Self {
@@ -37,11 +50,12 @@ impl<'a, C: NumaflowTypeConfig> PipelineContext<'a, C> {
             isb_factory,
             config,
             tracker,
+            _phantom: PhantomData,
         }
     }
 
     /// Returns a reference to the ISB factory.
-    pub(crate) fn factory(&self) -> &C::ISBFactory {
+    pub(crate) fn factory(&self) -> &F {
         self.isb_factory
     }
 }

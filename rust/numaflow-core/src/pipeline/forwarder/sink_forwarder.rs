@@ -145,14 +145,14 @@ pub async fn start_sink_forwarder(
                 let redis_config =
                     build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
 
-                let context = PipelineContext::<WithRedisRateLimiter>::new(
+                let context = PipelineContext::<WithRedisRateLimiter, _>::new(
                     cln_token.clone(),
                     &isb_factory,
                     &config,
                     tracker.clone(),
                 );
 
-                run_all_sink_forwarders::<WithRedisRateLimiter>(
+                run_all_sink_forwarders::<WithRedisRateLimiter, _>(
                     &context,
                     &sink,
                     reader_config,
@@ -166,14 +166,14 @@ pub async fn start_sink_forwarder(
                     build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone())
                         .await?;
 
-                let context = PipelineContext::<WithInMemoryRateLimiter>::new(
+                let context = PipelineContext::<WithInMemoryRateLimiter, _>::new(
                     cln_token.clone(),
                     &isb_factory,
                     &config,
                     tracker.clone(),
                 );
 
-                run_all_sink_forwarders::<WithInMemoryRateLimiter>(
+                run_all_sink_forwarders::<WithInMemoryRateLimiter, _>(
                     &context,
                     &sink,
                     reader_config,
@@ -184,14 +184,14 @@ pub async fn start_sink_forwarder(
                 .await?
             }
         } else {
-            let context = PipelineContext::<WithoutRateLimiter>::new(
+            let context = PipelineContext::<WithoutRateLimiter, _>::new(
                 cln_token.clone(),
                 &isb_factory,
                 &config,
                 tracker.clone(),
             );
 
-            run_all_sink_forwarders::<WithoutRateLimiter>(
+            run_all_sink_forwarders::<WithoutRateLimiter, _>(
                 &context,
                 &sink,
                 reader_config,
@@ -230,8 +230,8 @@ pub async fn start_sink_forwarder(
 }
 
 /// Starts sink forwarder for all the streams.
-async fn run_all_sink_forwarders<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
-    context: &PipelineContext<'_, C>,
+async fn run_all_sink_forwarders<C, F>(
+    context: &PipelineContext<'_, C, F>,
     sink: &SinkVtxConfig,
     reader_config: &BufferReaderConfig,
     watermark_handle: Option<crate::watermark::isb::ISBWatermarkHandle>,
@@ -241,7 +241,11 @@ async fn run_all_sink_forwarders<C: NumaflowTypeConfig<ISBReader = JetStreamRead
     Vec<tokio::task::JoinHandle<Result<()>>>,
     SinkWriter,
     PendingReaderTasks,
-)> {
+)>
+where
+    C: NumaflowTypeConfig<ISBReader = JetStreamReader>,
+    F: crate::pipeline::isb::ISBFactory<Reader = C::ISBReader, Writer = C::ISBWriter>,
+{
     let mut forwarder_tasks = vec![];
     let mut isb_lag_readers: Vec<ISBReaderOrchestrator<C>> = vec![];
     let mut first_sink_writer = None;
@@ -268,14 +272,14 @@ async fn run_all_sink_forwarders<C: NumaflowTypeConfig<ISBReader = JetStreamRead
             first_sink_writer = Some(sink_writer.clone());
         }
 
-        let reader_components = ISBReaderComponents::new(
+        let reader_components = ISBReaderComponents::new::<C, F>(
             stream,
             reader_config.clone(),
             watermark_handle.clone(),
             context,
         );
 
-        let (task, reader) = run_sink_forwarder_for_stream::<C>(
+        let (task, reader) = run_sink_forwarder_for_stream::<C, F>(
             reader_components,
             sink_writer,
             rate_limiter.clone(),
@@ -302,16 +306,19 @@ async fn run_all_sink_forwarders<C: NumaflowTypeConfig<ISBReader = JetStreamRead
 }
 
 /// Starts sink forwarder for a single stream.
-async fn run_sink_forwarder_for_stream<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
+async fn run_sink_forwarder_for_stream<C, F>(
     reader_components: ISBReaderComponents,
     sink_writer: SinkWriter,
     rate_limiter: Option<C::RateLimiter>,
-    isb_factory: &C::ISBFactory,
+    isb_factory: &F,
 ) -> Result<(
     tokio::task::JoinHandle<Result<()>>,
     ISBReaderOrchestrator<C>,
-)> {
-    use crate::pipeline::isb::ISBFactory;
+)>
+where
+    C: NumaflowTypeConfig<ISBReader = JetStreamReader>,
+    F: crate::pipeline::isb::ISBFactory<Reader = C::ISBReader, Writer = C::ISBWriter>,
+{
     let cln_token = reader_components.cln_token.clone();
 
     let isb_reader_impl = isb_factory

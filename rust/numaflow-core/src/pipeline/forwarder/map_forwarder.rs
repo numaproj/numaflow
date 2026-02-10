@@ -168,14 +168,14 @@ pub async fn start_map_forwarder(
                 build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
             let buffer_writer = create_writer!(WithRedisRateLimiter);
 
-            let context = PipelineContext::<WithRedisRateLimiter>::new(
+            let context = PipelineContext::<WithRedisRateLimiter, _>::new(
                 cln_token.clone(),
                 &isb_factory,
                 &config,
                 tracker.clone(),
             );
 
-            run_all_map_forwarders::<WithRedisRateLimiter>(
+            run_all_map_forwarders::<WithRedisRateLimiter, _>(
                 &context,
                 &map_vtx_config,
                 reader_config,
@@ -189,14 +189,14 @@ pub async fn start_map_forwarder(
                 build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
             let buffer_writer = create_writer!(WithInMemoryRateLimiter);
 
-            let context = PipelineContext::<WithInMemoryRateLimiter>::new(
+            let context = PipelineContext::<WithInMemoryRateLimiter, _>::new(
                 cln_token.clone(),
                 &isb_factory,
                 &config,
                 tracker.clone(),
             );
 
-            run_all_map_forwarders::<WithInMemoryRateLimiter>(
+            run_all_map_forwarders::<WithInMemoryRateLimiter, _>(
                 &context,
                 &map_vtx_config,
                 reader_config,
@@ -209,14 +209,14 @@ pub async fn start_map_forwarder(
     } else {
         let buffer_writer = create_writer!(WithoutRateLimiter);
 
-        let context = PipelineContext::<WithoutRateLimiter>::new(
+        let context = PipelineContext::<WithoutRateLimiter, _>::new(
             cln_token.clone(),
             &isb_factory,
             &config,
             tracker.clone(),
         );
 
-        run_all_map_forwarders::<WithoutRateLimiter>(
+        run_all_map_forwarders::<WithoutRateLimiter, _>(
             &context,
             &map_vtx_config,
             reader_config,
@@ -257,8 +257,8 @@ pub async fn start_map_forwarder(
 }
 
 /// Starts map forwarder for all the streams.
-async fn run_all_map_forwarders<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
-    context: &PipelineContext<'_, C>,
+async fn run_all_map_forwarders<C, F>(
+    context: &PipelineContext<'_, C, F>,
     map_vtx_config: &MapVtxConfig,
     reader_config: &BufferReaderConfig,
     buffer_writer: ISBWriterOrchestrator<C>,
@@ -268,7 +268,11 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig<ISBReader = JetStreamReade
     Vec<tokio::task::JoinHandle<Result<()>>>,
     MapHandle,
     PendingReaderTasks,
-)> {
+)>
+where
+    C: NumaflowTypeConfig<ISBReader = JetStreamReader>,
+    F: crate::pipeline::isb::ISBFactory<Reader = C::ISBReader, Writer = C::ISBWriter>,
+{
     let mut forwarder_tasks = vec![];
     let mut isb_lag_readers: Vec<ISBReaderOrchestrator<C>> = vec![];
     let mut mapper_handle = None;
@@ -290,14 +294,14 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig<ISBReader = JetStreamReade
             mapper_handle = Some(mapper.clone());
         }
 
-        let reader_components = ISBReaderComponents::new(
+        let reader_components = ISBReaderComponents::new::<C, F>(
             stream,
             reader_config.clone(),
             watermark_handle.clone(),
             context,
         );
 
-        let (task, reader) = run_map_forwarder_for_stream::<C>(
+        let (task, reader) = run_map_forwarder_for_stream::<C, F>(
             reader_components,
             mapper,
             buffer_writer.clone(),
@@ -323,17 +327,20 @@ async fn run_all_map_forwarders<C: NumaflowTypeConfig<ISBReader = JetStreamReade
 
 /// Start a map forwarder for a single stream, returns the task handle and the ISB reader
 /// (returned so that we can create a pending reader for metrics).
-async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig<ISBReader = JetStreamReader>>(
+async fn run_map_forwarder_for_stream<C, F>(
     reader_components: ISBReaderComponents,
     mapper: MapHandle,
     buffer_writer: ISBWriterOrchestrator<C>,
     rate_limiter: Option<C::RateLimiter>,
-    isb_factory: &C::ISBFactory,
+    isb_factory: &F,
 ) -> Result<(
     tokio::task::JoinHandle<Result<()>>,
     ISBReaderOrchestrator<C>,
-)> {
-    use crate::pipeline::isb::ISBFactory;
+)>
+where
+    C: NumaflowTypeConfig<ISBReader = JetStreamReader>,
+    F: crate::pipeline::isb::ISBFactory<Reader = C::ISBReader, Writer = C::ISBWriter>,
+{
     let cln_token = reader_components.cln_token.clone();
 
     let isb_reader_impl = isb_factory

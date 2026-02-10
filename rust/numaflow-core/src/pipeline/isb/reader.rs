@@ -577,12 +577,16 @@ pub(crate) struct ISBReaderComponents {
 }
 
 impl ISBReaderComponents {
-    pub fn new<C: crate::typ::NumaflowTypeConfig>(
+    pub fn new<C, F>(
         stream: Stream,
         reader_config: BufferReaderConfig,
         watermark_handle: Option<ISBWatermarkHandle>,
-        context: &crate::pipeline::PipelineContext<'_, C>,
-    ) -> Self {
+        context: &crate::pipeline::PipelineContext<'_, C, F>,
+    ) -> Self
+    where
+        C: crate::typ::NumaflowTypeConfig,
+        F: crate::pipeline::isb::ISBFactory<Reader = C::ISBReader, Writer = C::ISBWriter>,
+    {
         Self {
             vertex_type: context.config.vertex_type.to_string(),
             stream,
