@@ -299,14 +299,17 @@ const CustomNode: FC<NodeProps> = ({
       ? { bottom: "-1rem" }
       : {};
 
-  const hasBothSinkContainers =
-    data?.nodeInfo?.sink?.onSuccess && data?.nodeInfo?.sink?.fallback;
-  const pipelineSinkWrapperClass = hasBothSinkContainers
+  // Sink container wrappers/images (size adjusts when both onSuccess & fallback are present)
+  const pipelineSinkWrapperClass = hasBothSinks
     ? "pipeline-sink-container-wrapper-small"
     : "pipeline-sink-container-wrapper";
-  const pipelineSinkImgClass = hasBothSinkContainers
+  const pipelineSinkImgClass = hasBothSinks
     ? "pipeline-sink-container-img-small"
     : "pipeline-sink-container-img";
+
+  // Source container wrappers/images (single size)
+  const pipelineSourceWrapperClass = "pipeline-source-container-wrapper";
+  const pipelineSourceImgClass = "pipeline-source-container-img";
 
   const nodeStyle = useMemo(() => {
     return {
@@ -368,12 +371,14 @@ const CustomNode: FC<NodeProps> = ({
     data?.nodeInfo?.source &&
     data?.nodeInfo?.source?.transformer;
 
-  const nodeInputClass =
-    isSinkWithContainers
-      ? "react-flow__node-input react-flow__node-input--sink-with-containers"
-      : isSourceWithContainers
-        ? "react-flow__node-input react-flow__node-input--source-with-containers"
-        : "react-flow__node-input";
+  let nodeInputClass = "react-flow__node-input";
+  if (isSinkWithContainers) {
+    nodeInputClass =
+      "react-flow__node-input react-flow__node-input--sink-with-containers";
+  } else if (isSourceWithContainers) {
+    nodeInputClass =
+      "react-flow__node-input react-flow__node-input--source-with-containers";
+  }
 
   return (
     <Box data-testid={data?.name}>
@@ -717,7 +722,7 @@ const CustomNode: FC<NodeProps> = ({
           data?.nodeInfo?.source &&
           data?.nodeInfo?.source?.transformer && (
           <Box
-            className={"pipeline-sink-container-row"}
+            className={"pipeline-source-container-row"}
             style={{
               display: "flex",
               justifyContent: "center",
@@ -731,9 +736,9 @@ const CustomNode: FC<NodeProps> = ({
               arrow
               placement={"right"}
             >
-              <Box className={pipelineSinkWrapperClass}>
+              <Box className={pipelineSourceWrapperClass}>
                 <img
-                  className={pipelineSinkImgClass}
+                  className={pipelineSourceImgClass}
                   src={source}
                   alt={"source-container"}
                 />
@@ -749,9 +754,9 @@ const CustomNode: FC<NodeProps> = ({
               arrow
               placement={"right"}
             >
-              <Box className={pipelineSinkWrapperClass}>
+              <Box className={pipelineSourceWrapperClass}>
                 <img
-                  className={pipelineSinkImgClass}
+                  className={pipelineSourceImgClass}
                   src={transformer}
                   alt={"transformer-container"}
                 />
