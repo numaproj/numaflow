@@ -15,6 +15,8 @@ pub(crate) mod error;
 pub(crate) mod factory;
 pub(crate) mod jetstream;
 pub(crate) mod reader;
+#[cfg(test)]
+pub(crate) mod simplebuffer;
 pub(crate) mod writer;
 
 pub(crate) use factory::ISBFactory;
