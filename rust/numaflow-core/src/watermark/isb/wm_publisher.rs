@@ -19,6 +19,9 @@ use crate::watermark::wmb::WMB;
 /// Interval at which the pod sends heartbeats.
 const DEFAULT_POD_HEARTBEAT_INTERVAL: u16 = 5;
 
+/// Interval at which the watermark summary is logged.
+const WATERMARK_LOG_INTERVAL: Duration = Duration::from_secs(5);
+
 /// LastPublishedState is the state of the last published watermark and offset
 /// for a partition.
 #[derive(Clone, Debug)]
@@ -61,6 +64,8 @@ pub(crate) struct ISBWatermarkPublisher {
     last_published_wm: HashMap<&'static str, HashMap<u16, LastPublishedState>>,
     /// map of vertex to its ot bucket.
     ot_buckets: HashMap<&'static str, async_nats::jetstream::kv::Store>,
+    /// last time the watermark summary was logged.
+    last_log_time: Instant,
 }
 
 impl Drop for ISBWatermarkPublisher {
@@ -117,6 +122,7 @@ impl ISBWatermarkPublisher {
             hb_handle,
             last_published_wm,
             ot_buckets,
+            last_log_time: Instant::now(),
         })
     }
 
@@ -230,6 +236,57 @@ impl ISBWatermarkPublisher {
 
         // reset the last published time
         last_state.last_published_time = Instant::now();
+
+        // Log summary periodically
+        self.maybe_log_summary();
+    }
+
+    /// Logs a summary of the publisher state if the log interval has elapsed.
+    fn maybe_log_summary(&mut self) {
+        if self.last_log_time.elapsed() >= WATERMARK_LOG_INTERVAL {
+            let summary = self.build_summary();
+            info!("{}", summary);
+            self.last_log_time = Instant::now();
+        }
+    }
+
+    /// Builds a summary string of the publisher state.
+    fn build_summary(&self) -> String {
+        let mut summary = format!(
+            "Publish Watermark Summary: processor={}, last_published={{",
+            self.processor_name
+        );
+
+        let mut first_vertex = true;
+        for (vertex, partitions) in &self.last_published_wm {
+            if !first_vertex {
+                summary.push_str(", ");
+            }
+            first_vertex = false;
+
+            summary.push_str(vertex);
+            summary.push_str(":[");
+
+            let mut first_partition = true;
+            let mut sorted_partitions: Vec<_> = partitions.iter().collect();
+            sorted_partitions.sort_by_key(|(p, _)| *p);
+
+            for (partition, state) in sorted_partitions {
+                if !first_partition {
+                    summary.push(',');
+                }
+                first_partition = false;
+
+                summary.push_str(&format!(
+                    "p{}=(wm={},off={})",
+                    partition, state.watermark, state.offset
+                ));
+            }
+            summary.push(']');
+        }
+        summary.push('}');
+
+        summary
     }
 }
 
