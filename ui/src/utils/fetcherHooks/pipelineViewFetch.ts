@@ -83,10 +83,8 @@ export const usePipelineViewFetch = (
             }
           }
         } else {
-          // Handle the case when the response is not OK
           if (requestKey === "") {
             if (response.status === 403) {
-              // Unauthorized user, display given or default error message
               const data = await response.json();
               if (data.errMsg) {
                 setPipelineErr(`Error: ${data.errMsg}`);
@@ -103,7 +101,6 @@ export const usePipelineViewFetch = (
           }
         }
       } catch (e: any) {
-        // Handle any errors that occur during the fetch request
         if (requestKey === "") {
           setPipelineErr(e.message);
         } else {
@@ -129,7 +126,6 @@ export const usePipelineViewFetch = (
             setBuffers(json.data);
             setBuffersErr(undefined);
           } else if (json?.errMsg) {
-            // Buffer API call returns an error message
             if (requestKey === "") {
               setBuffersErr(json.errMsg);
             } else {
@@ -137,7 +133,6 @@ export const usePipelineViewFetch = (
             }
           }
         } else {
-          // Handle the case when the response is not OK
           if (requestKey === "") {
             setBuffersErr(`Failed with code: ${response.status}`);
           } else {
@@ -145,7 +140,6 @@ export const usePipelineViewFetch = (
           }
         }
       } catch (e: any) {
-        // Handle any errors that occur during the fetch request
         if (requestKey === "") {
           setBuffersErr(e.message);
         } else {
@@ -182,10 +176,8 @@ export const usePipelineViewFetch = (
             })
             .then((json) => {
               if (json?.data) {
-                // Update vertexToPodsMap with the number of pods for the current vertex
                 vertexToPodsMap.set(vertex.name, json.data.length);
               } else if (json?.errMsg) {
-                // Pods API call returns an error message
                 addError(json.errMsg);
               }
             });
@@ -194,14 +186,12 @@ export const usePipelineViewFetch = (
         .then((results) => {
           results.forEach((result) => {
             if (result && result?.status === "rejected") {
-              // Handle rejected promises and add error messages to podsErr
-              addError(`Failed to get pods: ${result.reason.response.status}`);
+              addError(`Failed to get pods: ${result.reason.response?.status ?? "unknown"}`);
             }
           });
         })
         .then(() => {
           if (!isEqual(vertexPods, vertexToPodsMap)) {
-            // Update vertexPods state if it is not equal to vertexToPodsMap
             setVertexPods(vertexToPodsMap);
           }
         })
@@ -337,7 +327,6 @@ export const usePipelineViewFetch = (
                   edgeToWatermarkMap.set(edge.edge, edgeWatermark);
                 });
               } else if (json?.errMsg) {
-                // Watermarks API call returns an error message
                 addError(json.errMsg);
               }
             }),
@@ -345,8 +334,7 @@ export const usePipelineViewFetch = (
           .then((results) => {
             results.forEach((result) => {
               if (result && result?.status === "rejected") {
-                // Handle rejected promises and add error messages to watermarkErr
-                addError(`Failed to get watermarks: ${result.reason.status}`);
+                addError(`Failed to get watermarks: ${result.reason?.status ?? "unknown"}`);
               }
             });
           })
@@ -678,17 +666,16 @@ export const usePipelineViewFetch = (
     nodeOutDegree,
   ]);
 
-  //sets loading variable
   useEffect(() => {
     if (
       pipeline &&
-      buffers?.length > 0 &&
+      (buffers?.length ?? 0) > 0 &&
       vertices?.length > 0 &&
       edges?.length > 0
     ) {
       setLoading(false);
     }
-  }, [pipeline, vertices, edges]);
+  }, [pipeline, vertices, edges, buffers?.length]);
 
   return {
     pipeline,

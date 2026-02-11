@@ -80,7 +80,6 @@ export const usePipelineSummaryFetch = ({
     }
     if (pipelineError || isbError) {
       if (options?.requestKey === "") {
-        // Failed on first load, return error
         setResults({
           data: undefined,
           loading: false,
@@ -95,7 +94,6 @@ export const usePipelineSummaryFetch = ({
     }
     if (pipelineData?.errMsg || isbData?.errMsg) {
       if (options?.requestKey === "") {
-        // Failed on first load, return error
         setResults({
           data: undefined,
           loading: false,
