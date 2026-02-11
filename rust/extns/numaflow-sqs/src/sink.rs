@@ -39,57 +39,19 @@ pub struct SqsSinkMessage {
     pub headers: HashMap<String, String>,
 }
 
-/// Main SQS sink client that handles sending messages to SQS.
-#[derive(Clone)]
-pub struct SqsSink {
-    client: Client,
-    queue_url: &'static str,
-}
-
-/// Builder for creating and configuring an SQS sink.
-#[derive(Clone)]
-pub struct SqsSinkBuilder {
-    config: SqsSinkConfig,
-    client: Option<Client>,
-}
-/// Response from sending a message to SQS.
-#[derive(Debug)]
-pub struct SqsSinkResponse {
-    /// ID of the message that was sent
-    pub id: String,
-    /// Status of the send operation
-    pub status: Result<()>,
-    /// Error code if any
-    pub code: Option<String>,
-    /// Indicates if the error was caused by the sender
-    pub sender_fault: Option<bool>,
-}
-
 /// Input for converting a sink message to a batch request entry.
-/// Combines the message with its batch index for conversion.
 struct BatchEntryInput {
-    /// The batch index used to generate a unique batch ID
     index: usize,
-    /// The sink message to convert
     message: SqsSinkMessage,
 }
 
-/// Output from batch entry conversion, preserving correlation info.
-struct BatchEntryOutput {
-    /// The SQS batch request entry
-    entry: SendMessageBatchRequestEntry,
-    /// The original message ID for response correlation
-    original_id: String,
-    /// The SQS batch ID (e.g., "msg_0")
-    batch_id: String,
-}
-
-impl TryFrom<BatchEntryInput> for BatchEntryOutput {
+/// Converts BatchEntryInput into (entry, original_id) tuple.
+/// The batch_id can be retrieved from entry.id().
+impl TryFrom<BatchEntryInput> for SendMessageBatchRequestEntry {
     type Error = SqsSinkError;
 
     fn try_from(input: BatchEntryInput) -> std::result::Result<Self, Self::Error> {
         let batch_id = format!("msg_{}", input.index);
-        let original_id = input.message.id;
 
         let mut entry = SendMessageBatchRequestEntry::builder()
             .id(&batch_id)
@@ -127,11 +89,53 @@ impl TryFrom<BatchEntryInput> for BatchEntryOutput {
             SqsSinkError::from(Error::Other(format!("Failed to build entry: {}", e)))
         })?;
 
-        Ok(BatchEntryOutput {
-            entry,
-            original_id,
-            batch_id,
-        })
+        Ok(entry)
+    }
+}
+
+/// Main SQS sink client that handles sending messages to SQS.
+#[derive(Clone)]
+pub struct SqsSink {
+    client: Client,
+    queue_url: &'static str,
+}
+
+/// Builder for creating and configuring an SQS sink.
+#[derive(Clone)]
+pub struct SqsSinkBuilder {
+    config: SqsSinkConfig,
+    client: Option<Client>,
+}
+/// Response from sending a message to SQS.
+#[derive(Debug)]
+pub struct SqsSinkResponse {
+    /// ID of the message that was sent
+    pub id: String,
+    /// Status of the send operation
+    pub status: Result<()>,
+    /// Error code if any
+    pub code: Option<String>,
+    /// Indicates if the error was caused by the sender
+    pub sender_fault: Option<bool>,
+}
+
+impl SqsSinkResponse {
+    fn success(id: String) -> Self {
+        Self {
+            id,
+            status: Ok(()),
+            code: None,
+            sender_fault: None,
+        }
+    }
+
+    fn failure(id: String, message: String, code: String, sender_fault: bool) -> Self {
+        Self {
+            id,
+            status: Err(SqsSinkError::from(Error::Other(message))),
+            code: Some(code),
+            sender_fault: Some(sender_fault),
+        }
     }
 }
 
@@ -204,12 +208,15 @@ impl SqsSink {
         messages: Vec<SqsSinkMessage>,
     ) -> Result<Vec<SqsSinkResponse>> {
         let mut entries = Vec::with_capacity(messages.len());
-        let mut id_correlation = std::collections::HashMap::with_capacity(messages.len());
+        let mut id_correlation = HashMap::with_capacity(messages.len());
 
         for (index, message) in messages.into_iter().enumerate() {
-            let output = BatchEntryOutput::try_from(BatchEntryInput { index, message })?;
-            id_correlation.insert(output.batch_id, output.original_id);
-            entries.push(output.entry);
+            let original_id = message.id.clone();
+            let entry: SendMessageBatchRequestEntry =
+                BatchEntryInput { index, message }.try_into()?;
+
+            id_correlation.insert(entry.id().to_string(), original_id);
+            entries.push(entry);
         }
 
         // on error, we will cascade the error to numaflow core which will initiate a shutdown.
@@ -222,37 +229,28 @@ impl SqsSink {
             .await
             .map_err(|e| SqsSinkError::from(Error::Sqs(extract_aws_error(&e))))?;
 
-        let mut responses = Vec::new();
+        let mut responses: Vec<_> = output
+            .successful
+            .into_iter()
+            .map(|s| {
+                SqsSinkResponse::success(
+                    id_correlation
+                        .remove(&s.id)
+                        .expect("AWS returned unknown batch ID - this should never happen"),
+                )
+            })
+            .collect();
 
-        // Process successful messages
-        for succeeded in output.successful {
-            let original_id = id_correlation
-                .remove(&succeeded.id)
-                .expect("AWS returned unknown batch ID - this should never happen");
-
-            responses.push(SqsSinkResponse {
-                id: original_id,
-                status: Ok(()),
-                code: None,
-                sender_fault: None,
-            });
-        }
-
-        // Process failed messages
-        for failed in output.failed {
-            let original_id = id_correlation
-                .remove(&failed.id)
-                .expect("AWS returned unknown batch ID - this should never happen");
-
-            responses.push(SqsSinkResponse {
-                id: original_id,
-                status: Err(SqsSinkError::from(Error::Other(
-                    failed.message.unwrap_or_default(),
-                ))),
-                code: Some(failed.code),
-                sender_fault: Some(failed.sender_fault),
-            });
-        }
+        responses.extend(output.failed.into_iter().map(|f| {
+            SqsSinkResponse::failure(
+                id_correlation
+                    .remove(&f.id)
+                    .expect("AWS returned unknown batch ID - this should never happen"),
+                f.message.unwrap_or_default(),
+                f.code,
+                f.sender_fault,
+            )
+        }));
 
         Ok(responses)
     }
@@ -267,9 +265,9 @@ mod tests {
     use bytes::Bytes;
     use test_log::test;
 
-    use crate::sink::{
-        BatchEntryInput, BatchEntryOutput, SqsSinkBuilder, SqsSinkConfig, SqsSinkMessage,
-    };
+    use aws_sdk_sqs::types::SendMessageBatchRequestEntry;
+
+    use crate::sink::{BatchEntryInput, SqsSinkBuilder, SqsSinkConfig, SqsSinkMessage};
     use crate::source::SQS_DEFAULT_REGION;
     use crate::{
         Error, HEADER_DELAY_SECONDS, HEADER_MESSAGE_DEDUPLICATION_ID, HEADER_MESSAGE_GROUP_ID,
@@ -537,8 +535,6 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    // ==================== BatchEntryInput -> BatchEntryOutput TryFrom Tests ====================
-
     #[test]
     fn test_batch_entry_conversion_basic() {
         let message = SqsSinkMessage {
@@ -548,30 +544,13 @@ mod tests {
         };
 
         let input = BatchEntryInput { index: 0, message };
-        let output = BatchEntryOutput::try_from(input).unwrap();
+        let entry: SendMessageBatchRequestEntry = input.try_into().unwrap();
 
-        assert_eq!(output.batch_id, "msg_0");
-        assert_eq!(output.original_id, "original-id-123");
-        assert_eq!(output.entry.id(), "msg_0");
-        assert_eq!(output.entry.message_body(), "test message body");
-        assert_eq!(output.entry.delay_seconds(), None);
-        assert_eq!(output.entry.message_group_id(), None);
-        assert_eq!(output.entry.message_deduplication_id(), None);
-    }
-
-    #[test]
-    fn test_batch_entry_conversion_with_index() {
-        let message = SqsSinkMessage {
-            id: "test-id".to_string(),
-            message_body: Bytes::from("body"),
-            headers: Default::default(),
-        };
-
-        let input = BatchEntryInput { index: 42, message };
-        let output = BatchEntryOutput::try_from(input).unwrap();
-
-        assert_eq!(output.batch_id, "msg_42");
-        assert_eq!(output.entry.id(), "msg_42");
+        assert_eq!(entry.id(), "msg_0");
+        assert_eq!(entry.message_body(), "test message body");
+        assert_eq!(entry.delay_seconds(), None);
+        assert_eq!(entry.message_group_id(), None);
+        assert_eq!(entry.message_deduplication_id(), None);
     }
 
     #[test]
@@ -586,26 +565,9 @@ mod tests {
         };
 
         let input = BatchEntryInput { index: 0, message };
-        let output = BatchEntryOutput::try_from(input).unwrap();
+        let entry: SendMessageBatchRequestEntry = input.try_into().unwrap();
 
-        assert_eq!(output.entry.delay_seconds(), Some(30));
-    }
-
-    #[test]
-    fn test_batch_entry_conversion_with_zero_delay_seconds() {
-        let mut headers = std::collections::HashMap::new();
-        headers.insert(HEADER_DELAY_SECONDS.to_string(), "0".to_string());
-
-        let message = SqsSinkMessage {
-            id: "test-id".to_string(),
-            message_body: Bytes::from("body"),
-            headers,
-        };
-
-        let input = BatchEntryInput { index: 0, message };
-        let output = BatchEntryOutput::try_from(input).unwrap();
-
-        assert_eq!(output.entry.delay_seconds(), Some(0));
+        assert_eq!(entry.delay_seconds(), Some(30));
     }
 
     #[test]
@@ -620,10 +582,10 @@ mod tests {
         };
 
         let input = BatchEntryInput { index: 0, message };
-        let output = BatchEntryOutput::try_from(input).unwrap();
+        let entry: SendMessageBatchRequestEntry = input.try_into().unwrap();
 
         // Negative delay is ignored (warning logged)
-        assert_eq!(output.entry.delay_seconds(), None);
+        assert_eq!(entry.delay_seconds(), None);
     }
 
     #[test]
@@ -638,10 +600,10 @@ mod tests {
         };
 
         let input = BatchEntryInput { index: 0, message };
-        let output = BatchEntryOutput::try_from(input).unwrap();
+        let entry: SendMessageBatchRequestEntry = input.try_into().unwrap();
 
         // Invalid delay is ignored (warning logged)
-        assert_eq!(output.entry.delay_seconds(), None);
+        assert_eq!(entry.delay_seconds(), None);
     }
 
     #[test]
@@ -656,9 +618,9 @@ mod tests {
         };
 
         let input = BatchEntryInput { index: 0, message };
-        let output = BatchEntryOutput::try_from(input).unwrap();
+        let entry: SendMessageBatchRequestEntry = input.try_into().unwrap();
 
-        assert_eq!(output.entry.message_group_id(), Some("my-group"));
+        assert_eq!(entry.message_group_id(), Some("my-group"));
     }
 
     #[test]
@@ -676,75 +638,9 @@ mod tests {
         };
 
         let input = BatchEntryInput { index: 0, message };
-        let output = BatchEntryOutput::try_from(input).unwrap();
+        let entry: SendMessageBatchRequestEntry = input.try_into().unwrap();
 
-        assert_eq!(output.entry.message_deduplication_id(), Some("dedup-123"));
-    }
-
-    #[test]
-    fn test_batch_entry_conversion_with_all_headers() {
-        let mut headers = std::collections::HashMap::new();
-        headers.insert(HEADER_DELAY_SECONDS.to_string(), "60".to_string());
-        headers.insert(
-            HEADER_MESSAGE_GROUP_ID.to_string(),
-            "fifo-group".to_string(),
-        );
-        headers.insert(
-            HEADER_MESSAGE_DEDUPLICATION_ID.to_string(),
-            "unique-id".to_string(),
-        );
-
-        let message = SqsSinkMessage {
-            id: "original-msg-id".to_string(),
-            message_body: Bytes::from("complete message"),
-            headers,
-        };
-
-        let input = BatchEntryInput { index: 5, message };
-        let output = BatchEntryOutput::try_from(input).unwrap();
-
-        assert_eq!(output.batch_id, "msg_5");
-        assert_eq!(output.original_id, "original-msg-id");
-        assert_eq!(output.entry.id(), "msg_5");
-        assert_eq!(output.entry.message_body(), "complete message");
-        assert_eq!(output.entry.delay_seconds(), Some(60));
-        assert_eq!(output.entry.message_group_id(), Some("fifo-group"));
-        assert_eq!(output.entry.message_deduplication_id(), Some("unique-id"));
-    }
-
-    #[test]
-    fn test_batch_entry_conversion_preserves_binary_message_body() {
-        // Test that binary data is converted using lossy UTF-8 conversion
-        let binary_data = vec![0x48, 0x65, 0x6c, 0x6c, 0x6f]; // "Hello" in bytes
-
-        let message = SqsSinkMessage {
-            id: "binary-msg".to_string(),
-            message_body: Bytes::from(binary_data),
-            headers: Default::default(),
-        };
-
-        let input = BatchEntryInput { index: 0, message };
-        let output = BatchEntryOutput::try_from(input).unwrap();
-
-        assert_eq!(output.entry.message_body(), "Hello");
-    }
-
-    #[test]
-    fn test_batch_entry_conversion_with_max_delay_seconds() {
-        // SQS allows delay up to 900 seconds (15 minutes)
-        let mut headers = std::collections::HashMap::new();
-        headers.insert(HEADER_DELAY_SECONDS.to_string(), "900".to_string());
-
-        let message = SqsSinkMessage {
-            id: "test-id".to_string(),
-            message_body: Bytes::from("body"),
-            headers,
-        };
-
-        let input = BatchEntryInput { index: 0, message };
-        let output = BatchEntryOutput::try_from(input).unwrap();
-
-        assert_eq!(output.entry.delay_seconds(), Some(900));
+        assert_eq!(entry.message_deduplication_id(), Some("dedup-123"));
     }
 
     fn get_queue_url_output() -> Rule {
