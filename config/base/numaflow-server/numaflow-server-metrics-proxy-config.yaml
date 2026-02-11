@@ -15,7 +15,7 @@ data:
       title: Vertex Gauge Metrics
       description: This pattern represents the gauge metrics for a vertex across different dimensions
       expr: |
-        sum($metric_name{$filters}) by ($dimension, period)
+        sum(max($metric_name{$filters}) by ($dimension,partition_name)) by ($dimension, period)
       params:
         - name: start_time
           required: false
@@ -29,24 +29,13 @@ data:
             - namespace
             - pipeline
             - vertex
-            # replica is added so that the pending calculation is done only for 0th replica.
-            - replica
           dimensions:
-            - name: pod
-              # expr: optional expression for prometheus query
-              # overrides the default expression
-              filters:
-                - name: pod
-                  required: false
-                - name: period
-                  required: false
             - name: vertex
               # expr: optional expression for prometheus query
               # overrides the default expression
               filters:
                 - name: period
                   required: false
-
     - name: mono_vertex_gauge
       objects: 
         - mono-vertex
