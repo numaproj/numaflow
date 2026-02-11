@@ -470,6 +470,7 @@ impl AlignedReducer {
                                 // Handle WMB messages with idle watermarks
                                 if let MessageType::WMB = msg.typ {
                                     if let Some(idle_watermark) = msg.watermark {
+                                        info!(wm = ?idle_watermark.timestamp_millis(), "Idle watermark received for reduce");
                                         // Only close windows if the idle watermark is greater than current watermark
                                         if idle_watermark > self.current_watermark {
                                             self.current_watermark = idle_watermark;
@@ -586,11 +587,17 @@ impl AlignedReducer {
             return;
         }
 
+        // Update the watermark - use max to ensure it never regresses (only after accepting the message)
+        self.current_watermark = self
+            .current_watermark
+            .max(msg.watermark.unwrap_or_default());
+
         // Validate message event time against current watermark (must not have progressed past this message)
         if self.current_watermark > msg.event_time {
             error!(
                 current_watermark = ?self.current_watermark.timestamp_millis(),
                 message_event_time = ?msg.event_time.timestamp_millis(),
+                message_watermark = ?msg.watermark.map(|wm| wm.timestamp_millis()),
                 is_late = ?msg.is_late,
                 offset = ?msg.offset,
                 "Old message popped up, Watermark has progressed past event time"
@@ -606,11 +613,6 @@ impl AlignedReducer {
                 .inc();
             return;
         }
-
-        // Update the watermark - use max to ensure it never regresses (only after accepting the message)
-        self.current_watermark = self
-            .current_watermark
-            .max(msg.watermark.unwrap_or_default());
 
         // Close windows based on current watermark
         self.close_windows_with_watermark(self.current_watermark, actor_tx)
