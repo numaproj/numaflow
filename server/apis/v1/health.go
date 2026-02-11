@@ -211,16 +211,16 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 		// Iterate over all the initContainers in the pod
 		for _, containerStatus := range pod.Status.InitContainerStatuses {
 			// if waiting, check that there is no backoff error
-			if containerStatus.State.Waiting != nil && slices.Contains([]string{"CrashLoopBackOff", "ImagePullBackOff"}, containerStatus.State.Waiting.Reason) {
+			if containerStatus.State.Waiting != nil && slices.Contains(dfv1.UnhealthyWaitingStatus, containerStatus.State.Waiting.Reason) {
 				return false, &resourceHealthResponse{
-					Message: fmt.Sprintf("Init container %q in pod %q is not healthy", containerStatus.Name, pod.Name),
+					Message: fmt.Sprintf("Init container %q in pod %q is in waiting state and not healthy", containerStatus.Name, pod.Name),
 					Code:    "V3",
 				}, nil
 			}
 			// if terminated, check that it did not error
 			if containerStatus.State.Terminated != nil && containerStatus.State.Terminated.Reason == "Error" {
 				return false, &resourceHealthResponse{
-					Message: fmt.Sprintf("Init container %q in pod %q is not healthy", containerStatus.Name, pod.Name),
+					Message: fmt.Sprintf("Init container %q in pod %q terminated and is not healthy", containerStatus.Name, pod.Name),
 					Code:    "V3",
 				}, nil
 			}
