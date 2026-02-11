@@ -61,6 +61,8 @@ pub(crate) struct ISBWatermarkPublisher {
     last_published_wm: HashMap<&'static str, HashMap<u16, LastPublishedState>>,
     /// map of vertex to its ot bucket.
     ot_buckets: HashMap<&'static str, async_nats::jetstream::kv::Store>,
+    /// whether this publisher is for a source vertex (data can be out of order).
+    is_source: bool,
 }
 
 impl Drop for ISBWatermarkPublisher {
@@ -71,10 +73,13 @@ impl Drop for ISBWatermarkPublisher {
 
 impl ISBWatermarkPublisher {
     /// Creates a new ISBWatermarkPublisher.
+    /// If `is_source` is true, watermark regression warnings will be suppressed since
+    /// source data can be out of order.
     pub(crate) async fn new(
         processor_name: String,
         js_context: async_nats::jetstream::Context,
         bucket_configs: &[BucketConfig],
+        is_source: bool,
     ) -> Result<Self> {
         let mut ot_buckets = HashMap::new();
         let mut hb_buckets = Vec::with_capacity(bucket_configs.len());
@@ -117,6 +122,7 @@ impl ISBWatermarkPublisher {
             hb_handle,
             last_published_wm,
             ot_buckets,
+            is_source,
         })
     }
 
@@ -194,8 +200,12 @@ impl ISBWatermarkPublisher {
             return;
         }
 
+        // Skip publishing if watermark regression is detected.
+        // For source publishers, we silently skip without logging since data can be out of order.
         if watermark < last_state.watermark {
-            warn!(?watermark, ?last_state.watermark, "Watermark regression detected, skipping publish");
+            if !self.is_source {
+                warn!(?watermark, ?last_state.watermark, "Watermark regression detected, skipping publish");
+            }
             return;
         }
 
@@ -282,6 +292,7 @@ mod tests {
             "processor1".to_string(),
             js_context.clone(),
             &bucket_configs,
+            false,
         )
         .await
         .expect("Failed to create publisher");
@@ -427,6 +438,7 @@ mod tests {
             "processor1".to_string(),
             js_context.clone(),
             &bucket_configs,
+            false,
         )
         .await
         .expect("Failed to create publisher");
@@ -535,6 +547,7 @@ mod tests {
             "processor1".to_string(),
             js_context.clone(),
             &bucket_configs,
+            false,
         )
         .await
         .expect("Failed to create publisher");
