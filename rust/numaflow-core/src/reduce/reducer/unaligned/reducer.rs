@@ -10,7 +10,7 @@ use crate::reduce::reducer::unaligned::windower::{
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 
 use crate::jh_abort_guard;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use numaflow_pb::clients::accumulator::AccumulatorRequest;
 use numaflow_pb::clients::sessionreduce::SessionReduceRequest;
 use numaflow_pb::objects::wal::GcEvent;
@@ -710,10 +710,15 @@ impl UnalignedReducer {
         msg: Message,
         actor_tx: &mpsc::Sender<UnalignedWindowMessage>,
     ) {
+        // Update the watermark - use max to ensure it never regresses (only after accepting the message)
+        // use -1 as the default watermark so that we can close the windows based on the event time.
+        self.current_watermark = self
+            .current_watermark
+            .max(msg.watermark.unwrap_or_default());
+
         // Drop late messages
         if msg.is_late && msg.event_time < self.current_watermark.sub(self.allowed_lateness) {
-            debug!(event_time = ?msg.event_time.timestamp_millis(), watermark = ?self.current_watermark.timestamp_millis(), "Late message detected, dropping");
-            // TODO(ajain): add a metric for this
+            info!(event_time = ?msg.event_time.timestamp_millis(), watermark = ?self.current_watermark.timestamp_millis(), "Late message detected, dropping");
             return;
         }
 
@@ -728,11 +733,6 @@ impl UnalignedReducer {
             );
             return;
         }
-
-        // Update the watermark - use max to ensure it never regresses (only after accepting the message)
-        self.current_watermark = self
-            .current_watermark
-            .max(msg.watermark.unwrap_or_default());
 
         // Close windows based on current watermark
         self.close_windows_by_wm(self.current_watermark, actor_tx)

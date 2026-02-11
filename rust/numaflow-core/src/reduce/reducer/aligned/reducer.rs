@@ -9,7 +9,7 @@ use crate::reduce::reducer::aligned::windower::{
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use bytes::Bytes;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use numaflow_pb::objects::wal::GcEvent;
 use std::collections::HashMap;
 use std::ops::Sub;
@@ -571,9 +571,14 @@ impl AlignedReducer {
         msg: Message,
         actor_tx: &mpsc::Sender<AlignedWindowMessage>,
     ) {
+        // Update the watermark - use max to ensure it never regresses (only after accepting the message)
+        self.current_watermark = self
+            .current_watermark
+            .max(msg.watermark.unwrap_or_default());
+
         // Drop late messages
         if msg.is_late && msg.event_time < self.current_watermark.sub(self.allowed_lateness) {
-            debug!(event_time = ?msg.event_time.timestamp_millis(), watermark = ?self.current_watermark.timestamp_millis(), "Late message detected, dropping");
+            info!(event_time = ?msg.event_time.timestamp_millis(), watermark = ?self.current_watermark.timestamp_millis(), "Late message detected, dropping");
             pipeline_metrics()
                 .forwarder
                 .drop_total
@@ -586,11 +591,6 @@ impl AlignedReducer {
 
             return;
         }
-
-        // Update the watermark - use max to ensure it never regresses (only after accepting the message)
-        self.current_watermark = self
-            .current_watermark
-            .max(msg.watermark.unwrap_or_default());
 
         // Validate message event time against current watermark (must not have progressed past this message)
         if self.current_watermark > msg.event_time {
