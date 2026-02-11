@@ -449,12 +449,18 @@ const LineChartComponent = ({
   };
 
   const updateChartData = useCallback(() => {
-    if (!chartData) return;
-
     const labels: string[] = [];
     const transformedData: Record<string, any>[] = [];
-    let filteredChartData = chartData;
     const label = groupByLabel(metricsReq?.dimension, metricsReq?.display_name);
+    let filteredChartData = chartData ?? [];
+
+    if (!chartData || chartData.length === 0) {
+      // Keep the standard empty-state for missing data
+      // eg: Pending messages for builtins like generator.
+      setChartLabels([]);
+      setTransformedData([]);
+      return;
+    }
 
     if (
       [VERTEX_PENDING_MESSAGES, MONO_VERTEX_PENDING_MESSAGES]?.includes(
@@ -516,7 +522,7 @@ const LineChartComponent = ({
         }
       });
     });
-    transformedData.sort((a, b) => {
+    transformedData?.sort((a, b) => {
       return a?.timestamp - b?.timestamp;
     });
     setChartLabels(labels);
@@ -562,7 +568,7 @@ const LineChartComponent = ({
     }
 
     // filtering points with minutes in multiple of 5
-    const filteredData = transformedData.filter((td) => {
+    const filteredData = transformedData?.filter((td) => {
       const minutes = td?.time?.split(" ")[0]?.split(":")[1];
       return Number(minutes) % 5 === 0;
     });
