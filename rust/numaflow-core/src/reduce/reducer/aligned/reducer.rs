@@ -484,11 +484,6 @@ impl AlignedReducer {
                                     msg.keys = Arc::new([DEFAULT_KEY_FOR_NON_KEYED_STREAM.to_string()]);
                                 }
 
-                                // Update the watermark - use max to ensure it never regresses
-                                self.current_watermark = self
-                                    .current_watermark
-                                    .max(msg.watermark.unwrap_or_default());
-
                                 self.assign_and_close_windows(msg, &actor_tx).await;
                             }
                             None => {
@@ -591,14 +586,14 @@ impl AlignedReducer {
             return;
         }
 
-        // Validate message event time against current watermark
+        // Validate message event time against current watermark (must not have progressed past this message)
         if self.current_watermark > msg.event_time {
             error!(
                 current_watermark = ?self.current_watermark.timestamp_millis(),
                 message_event_time = ?msg.event_time.timestamp_millis(),
                 is_late = ?msg.is_late,
                 offset = ?msg.offset,
-                "Old message popped up, Watermark is behind the event time"
+                "Old message popped up, Watermark has progressed past event time"
             );
             pipeline_metrics()
                 .forwarder
@@ -611,6 +606,11 @@ impl AlignedReducer {
                 .inc();
             return;
         }
+
+        // Update the watermark - use max to ensure it never regresses (only after accepting the message)
+        self.current_watermark = self
+            .current_watermark
+            .max(msg.watermark.unwrap_or_default());
 
         // Close windows based on current watermark
         self.close_windows_with_watermark(self.current_watermark, actor_tx)
