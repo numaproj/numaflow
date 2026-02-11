@@ -14,8 +14,11 @@ data:
         - vertex
       title: Vertex Gauge Metrics
       description: This pattern represents the gauge metrics for a vertex across different dimensions
+      # below expression calulates max pending messages(across replicas) for each partition and then sums up pending of all partitions.
+      # This is done since in versions < 1.6, we used to emit pending metric for each pod.
+      # With version >= 1.6, we emit pending metric from daemon
       expr: |
-        sum(max($metric_name{$filters}) by ($dimension,partition_name)) by ($dimension, period)
+        sum(max($metric_name{$filters}) by ($dimension,partition_name,period)) by ($dimension, period)
       params:
         - name: start_time
           required: false

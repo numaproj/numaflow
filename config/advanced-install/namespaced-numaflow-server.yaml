@@ -146,12 +146,16 @@ data:
     url: http://prometheus-operated.monitoring.svc.cluster.local:9090\npatterns:\n-
     name: vertex_gauge\n  objects: \n    - vertex\n  title: Vertex Gauge Metrics\n
     \ description: This pattern represents the gauge metrics for a vertex across different
-    dimensions\n  expr: |\n    sum(max($metric_name{$filters}) by ($dimension,partition_name))
-    by ($dimension, period)\n  params:\n    - name: start_time\n      required: false\n
-    \   - name: end_time\n      required: false\n  metrics:\n    - metric_name: vertex_pending_messages\n
-    \     display_name: Vertex Pending Messages\n      metric_description: This gauge
-    metric keeps track of the total number of messages that are waiting to be processed
-    over varying time frames of 1min, 5min, 15min and default period of 2min. \n      required_filters:\n
+    dimensions\n  # below expression calulates max pending messages(across replicas)
+    for each partition and then sums up pending of all partitions.\n  # This is done
+    since in versions < 1.6, we used to emit pending metric for each pod.\n  # With
+    version >= 1.6, we emit pending metric from daemon\n  expr: |\n    sum(max($metric_name{$filters})
+    by ($dimension,partition_name,period)) by ($dimension, period)\n  params:\n    -
+    name: start_time\n      required: false\n    - name: end_time\n      required:
+    false\n  metrics:\n    - metric_name: vertex_pending_messages\n      display_name:
+    Vertex Pending Messages\n      metric_description: This gauge metric keeps track
+    of the total number of messages that are waiting to be processed over varying
+    time frames of 1min, 5min, 15min and default period of 2min. \n      required_filters:\n
     \       - namespace\n        - pipeline\n        - vertex\n      dimensions:\n
     \       - name: vertex\n          # expr: optional expression for prometheus query\n
     \         # overrides the default expression\n          filters:\n            -
