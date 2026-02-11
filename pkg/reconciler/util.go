@@ -27,10 +27,6 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
-// unhealthyWaitingStatus contains the status messages for a pod in waiting state
-// which should be considered as unhealthy
-var unhealthyWaitingStatus = []string{"CrashLoopBackOff", "ImagePullBackOff"}
-
 // CheckPodsStatus checks the status by iterating over pods objects
 func CheckPodsStatus(pods *corev1.PodList) (healthy bool, reason string, message string, transientUnhealthy bool) {
 	// TODO: Need to revisit later.
@@ -69,7 +65,7 @@ func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string, isTransientUnhe
 func checkContainerStatuses(containers []corev1.ContainerStatus) (bool, string, bool) {
 	var lastRestartTime time.Time
 	for _, c := range containers {
-		if c.State.Waiting != nil && slices.Contains(unhealthyWaitingStatus, c.State.Waiting.Reason) {
+		if c.State.Waiting != nil && slices.Contains(dfv1.UnhealthyWaitingStatus, c.State.Waiting.Reason) {
 			return false, c.State.Waiting.Reason, false
 		}
 		if c.State.Terminated != nil && c.State.Terminated.Reason == "Error" {
