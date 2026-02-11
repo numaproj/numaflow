@@ -57,6 +57,7 @@ impl SourceWatermarkPublisher {
                 processor_name.clone(),
                 self.js_context.clone(),
                 std::slice::from_ref(&self.source_config),
+                true,
             )
             .await
             .expect("Failed to create publisher");
@@ -115,6 +116,7 @@ impl SourceWatermarkPublisher {
                 processor_name.clone(),
                 self.js_context.clone(),
                 &self.to_vertex_configs,
+                true,
             )
             .await
             .expect("Failed to create publisher");
@@ -137,6 +139,7 @@ impl SourceWatermarkPublisher {
                     processor_name.clone(),
                     self.js_context.clone(),
                     &self.to_vertex_configs,
+                    true,
                 )
                 .await
                 .expect("Failed to create publisher");
