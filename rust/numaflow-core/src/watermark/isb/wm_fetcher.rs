@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use tracing::info;
 
 /// Interval for logging watermark summary
-const WATERMARK_LOG_INTERVAL: Duration = Duration::from_secs(5);
+const WATERMARK_LOG_INTERVAL: Duration = Duration::from_secs(10);
 
 /// ISBWatermarkFetcher is the watermark fetcher for the incoming edges.
 pub(crate) struct ISBWatermarkFetcher {
@@ -284,7 +284,10 @@ impl ISBWatermarkFetcher {
             last_wm_parts.push(format!("{}:[{}]", edge, partition_wms.join(",")));
         }
         last_wm_parts.sort();
-        summary.push_str(&format!("last_processed_wm={{{}}}, ", last_wm_parts.join(", ")));
+        summary.push_str(&format!(
+            "last_processed_wm={{{}}}, ",
+            last_wm_parts.join(", ")
+        ));
 
         // Add processor information with timeline entries
         let mut processor_parts: Vec<String> = Vec::new();
@@ -305,15 +308,19 @@ impl ISBWatermarkFetcher {
                     "inactive"
                 };
 
-                // Get timeline head info for each partition
+                // Get complete timeline for each partition
                 let mut timeline_parts: Vec<String> = Vec::new();
                 for (partition, timeline) in &processor.timelines {
-                    let head_wm = timeline.get_head_watermark();
-                    let head_offset = timeline.get_head_offset();
-                    timeline_parts.push(format!(
-                        "p{}:(head_wm={},head_off={})",
-                        partition, head_wm, head_offset
-                    ));
+                    let entries: Vec<String> = timeline
+                        .entries()
+                        .map(|wmb| format!("(wm={},off={})", wmb.watermark, wmb.offset))
+                        .collect();
+                    let entries_str = if entries.is_empty() {
+                        "empty".to_string()
+                    } else {
+                        entries.join("->")
+                    };
+                    timeline_parts.push(format!("p{}:[{}]", partition, entries_str));
                 }
                 timeline_parts.sort();
 
