@@ -29,7 +29,7 @@ const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
   markerEnd,
 }) => {
   const edgeOffset = 50;
-  const useStraightPath = !data?.backEdge && !data?.selfEdge;
+  const useStraightPath = !data?.backEdge && !data?.selfEdge && !data?.sideInputEdge;
 
   let edgePath: string;
   let labelRenderer = "";
