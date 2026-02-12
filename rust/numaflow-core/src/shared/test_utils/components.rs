@@ -4,6 +4,7 @@
 //! boilerplate code when adding tests.
 
 use crate::mapper::map::MapHandle;
+use crate::shared::grpc;
 use crate::shared::test_utils::server;
 use crate::shared::test_utils::server::TestServerHandle;
 use crate::sinker::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
@@ -36,9 +37,9 @@ pub(crate) struct SourceTransformerTestHandle {
 /// Contains the source handle, server handle (for the source server),
 /// and an optional source transformer handle.
 pub(crate) struct SourceTestHandle {
+    pub source_transformer_test_handle: Option<SourceTransformerTestHandle>,
     pub source: Source<crate::typ::WithoutRateLimiter>,
     pub server_handle: TestServerHandle,
-    pub source_transformer_test_handle: Option<SourceTransformerTestHandle>,
 }
 
 /// A handle to a mapper component.
@@ -121,8 +122,17 @@ where
         Some(transformer_svc) => {
             let server_handle = server::start_source_transform_server(transformer_svc);
 
-            let client =
-                SourceTransformClient::new(server_handle.create_rpc_channel().await.unwrap());
+            let mut client = SourceTransformClient::new(
+                server_handle
+                    .create_rpc_channel()
+                    .await
+                    .expect("failed to create source transformer rpc channel"),
+            );
+
+            grpc::wait_until_transformer_ready(&cln_token, &mut client)
+                .await
+                .expect("failed to wait for source transformer server to be ready");
+
             let transformer = Transformer::new(
                 batch_size,
                 10,
@@ -131,7 +141,7 @@ where
                 tracker.clone(),
             )
             .await
-            .unwrap();
+            .expect("failed to create source transformer");
 
             Some(SourceTransformerTestHandle {
                 server_handle,
@@ -143,7 +153,16 @@ where
 
     // create the source
     let server_handle = server::start_source_server(source_svc);
-    let client = SourceClient::new(server_handle.create_rpc_channel().await.unwrap());
+    let mut client = SourceClient::new(
+        server_handle
+            .create_rpc_channel()
+            .await
+            .expect("failed to create source rpc channel"),
+    );
+
+    grpc::wait_until_source_ready(&cln_token, &mut client)
+        .await
+        .expect("failed to wait for source server to be ready");
 
     let (src_read, src_ack, lag_reader) = new_source(
         client,
@@ -154,7 +173,8 @@ where
     )
     .await
     .map_err(|e| panic!("failed to create source reader: {:?}", e))
-    .unwrap();
+    .expect("failed to create source");
+
     let source: Source<crate::typ::WithoutRateLimiter> = match transformer_test_handle {
         Some(ref mut source_transform) => {
             Source::new(
@@ -208,7 +228,16 @@ where
 {
     // create a mapper
     let server_handle = server::start_map_server(map_svc);
-    let client = MapClient::new(server_handle.create_rpc_channel().await.unwrap());
+    let mut client = MapClient::new(
+        server_handle
+            .create_rpc_channel()
+            .await
+            .expect("failed to create mapper rpc channel"),
+    );
+
+    grpc::wait_until_mapper_ready(&CancellationToken::new(), &mut client)
+        .await
+        .expect("failed to wait for mapper server to be ready");
 
     let mapper = MapHandle::new(
         map_mode,
@@ -220,7 +249,7 @@ where
         tracker.clone(),
     )
     .await
-    .unwrap();
+    .expect("failed to create mapper");
 
     MapperTestHandle {
         mapper,
@@ -247,7 +276,16 @@ where
 {
     // create a mapper
     let server_handle = server::start_batch_map_server(map_svc);
-    let client = MapClient::new(server_handle.create_rpc_channel().await.unwrap());
+    let mut client = MapClient::new(
+        server_handle
+            .create_rpc_channel()
+            .await
+            .expect("failed to create batch map rpc channel"),
+    );
+
+    grpc::wait_until_mapper_ready(&CancellationToken::new(), &mut client)
+        .await
+        .expect("failed to wait for batch map server to be ready");
 
     let mapper = MapHandle::new(
         map_mode,
@@ -259,7 +297,7 @@ where
         tracker.clone(),
     )
     .await
-    .unwrap();
+    .expect("failed to create batch mapper");
 
     MapperTestHandle {
         mapper,
@@ -267,6 +305,9 @@ where
     }
 }
 
+/// Create a map streamer component with the given map streamer service.
+///
+/// Initializes the mapper handle and server handle (for the map streamer server).
 /// FIXME: Allow dead code for now until tests are using it
 #[allow(dead_code)]
 pub(crate) async fn create_map_streamer<M>(
@@ -283,7 +324,16 @@ where
 {
     // create a mapper
     let server_handle = server::start_map_stream_server(map_svc);
-    let client = MapClient::new(server_handle.create_rpc_channel().await.unwrap());
+    let mut client = MapClient::new(
+        server_handle
+            .create_rpc_channel()
+            .await
+            .expect("failed to create map streamer rpc channel"),
+    );
+
+    grpc::wait_until_mapper_ready(&CancellationToken::new(), &mut client)
+        .await
+        .expect("failed to wait for map streamer server to be ready");
 
     let mapper = MapHandle::new(
         map_mode,
@@ -295,7 +345,7 @@ where
         tracker.clone(),
     )
     .await
-    .unwrap();
+    .expect("failed to create map streamer");
 
     MapperTestHandle {
         mapper,
@@ -303,6 +353,9 @@ where
     }
 }
 
+/// Create a sink component with the given sink service.
+///
+/// Initializes the sink handle and server handle (for the user defined sink servers).
 pub(crate) async fn create_sink<T>(
     sink: SinkType<T>,
     fallback: Option<SinkType<T>>,
@@ -354,18 +407,27 @@ where
     }
 }
 
-pub(crate) async fn create_ud_sink<T>(sink_svc: T) -> (SinkClientType, TestServerHandle)
+async fn create_ud_sink<T>(sink_svc: T) -> (SinkClientType, TestServerHandle)
 where
     T: sink::Sinker + Send + Sync + 'static,
 {
     // Create the sink
     let server_handle = server::start_sink_server(sink_svc);
-    let sink_client = SinkClient::new(server_handle.create_rpc_channel().await.unwrap());
+    let mut sink_client = SinkClient::new(
+        server_handle
+            .create_rpc_channel()
+            .await
+            .expect("failed to create sink client"),
+    );
+
+    grpc::wait_until_sink_ready(&CancellationToken::new(), &mut sink_client)
+        .await
+        .expect("failed to wait for sink server to be ready");
 
     (SinkClientType::UserDefined(sink_client), server_handle)
 }
 
-pub(crate) async fn create_sink_writer(
+async fn create_sink_writer(
     sink: SinkClientType,
     fallback: Option<SinkClientType>,
     on_success: Option<SinkClientType>,

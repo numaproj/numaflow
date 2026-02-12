@@ -30,7 +30,7 @@ use crate::shared::grpc::create_rpc_channel;
 /// Dropping the handle sends a shutdown signal and joins the thread.
 pub(crate) struct TestServerHandle {
     /// The UDS socket path where the server is listening.
-    pub sock_file: PathBuf,
+    sock_file: PathBuf,
     /// Channel to trigger server shutdown.
     shutdown_tx: Option<oneshot::Sender<()>>,
     /// thread handle for the server runtime.
@@ -60,7 +60,8 @@ impl TestServerHandle {
             let _ = tx.send(());
         }
         if let Some(handle) = self.thread_handle.take() {
-            println!("Joining thread");
+            let thread_name = handle.thread().name().unwrap();
+            println!("Joining thread: {}", thread_name);
             let result = handle.join();
             if let Err(e) = result {
                 println!("Thread join failed: {:?}", e);
@@ -71,7 +72,6 @@ impl TestServerHandle {
 
 impl Drop for TestServerHandle {
     fn drop(&mut self) {
-        println!("Dropping test server handle");
         self.do_shutdown();
     }
 }
@@ -96,7 +96,6 @@ where
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
 
     let sock = sock_file.clone();
-    let info = server_info_file.clone();
 
     let thread_handle = std::thread::Builder::new()
         .name(format!("{name}-server"))
@@ -105,7 +104,7 @@ where
                 .enable_all()
                 .build()
                 .expect("failed to build tokio runtime for test server")
-                .block_on(server_fn(sock, info, shutdown_rx));
+                .block_on(server_fn(sock, server_info_file, shutdown_rx));
         })
         .expect("failed to spawn test server thread");
 
@@ -120,7 +119,6 @@ where
 }
 
 /// Start a map server with the given handler.
-/// FIXME: Allow dead code for now until tests are using it
 #[allow(dead_code)]
 pub(crate) fn start_map_server<M>(handler: M) -> TestServerHandle
 where
@@ -140,7 +138,7 @@ where
 }
 
 /// Start a batch map server with the given handler.
-/// FIXME: Allow dead code for now until tests are using it
+
 #[allow(dead_code)]
 pub(crate) fn start_batch_map_server<M>(handler: M) -> TestServerHandle
 where
@@ -160,7 +158,6 @@ where
 }
 
 /// Start a map stream server with the given handler.
-/// FIXME: Allow dead code for now until tests are using it
 #[allow(dead_code)]
 pub(crate) fn start_map_stream_server<M>(handler: M) -> TestServerHandle
 where
@@ -234,7 +231,6 @@ where
 }
 
 /// Start a reduce (aligned) server with the given creator.
-/// FIXME: Allow dead code for now until tests are using it
 #[allow(dead_code)]
 pub(crate) fn start_reduce_server<C>(creator: C) -> TestServerHandle
 where
@@ -254,8 +250,6 @@ where
 }
 
 /// Start a session reduce server with the given creator.
-///
-/// FIXME: Allow dead code for now until tests are using it
 #[allow(dead_code)]
 pub(crate) fn start_session_reduce_server<C>(creator: C) -> TestServerHandle
 where
@@ -275,7 +269,6 @@ where
 }
 
 /// Start an accumulator server with the given creator.///
-/// FIXME: Allow dead code for now until tests are using it
 #[allow(dead_code)]
 pub(crate) fn start_accumulator_server<C>(creator: C) -> TestServerHandle
 where
