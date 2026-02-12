@@ -7,3 +7,8 @@ pub(crate) mod js_writer;
 /// It exposes method to read messages in the form of batches and also ack/nack
 /// the messages.
 pub(crate) mod js_reader;
+
+/// JetStream ISB Factory for creating readers and writers.
+pub(crate) mod factory;
+
+pub(crate) use factory::JetStreamFactory;

@@ -15,9 +15,17 @@ use numaflow_throttling::{
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
+/// Type configuration trait for Numaflow components.
+///
+/// This trait defines the associated types for rate limiting and ISB operations.
+/// Different implementations can provide different ISB backends (JetStream, SimpleBuffer, etc.)
+/// while keeping the rest of the pipeline code generic.
 pub(crate) trait NumaflowTypeConfig: Send + Sync + Clone + 'static {
+    /// The rate limiter type used for throttling
     type RateLimiter: RateLimiter + Clone + Sync + 'static;
+    /// The ISB reader type
     type ISBReader: ISBReader + 'static;
+    /// The ISB writer type
     type ISBWriter: ISBWriter + 'static;
 }
 

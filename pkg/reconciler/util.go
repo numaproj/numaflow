@@ -27,10 +27,6 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
-// unhealthyWaitingStatus contains the status messages for a pod in waiting state
-// which should be considered as unhealthy
-var unhealthyWaitingStatus = []string{"CrashLoopBackOff", "ImagePullBackOff"}
-
 // CheckPodsStatus checks the status by iterating over pods objects
 func CheckPodsStatus(pods *corev1.PodList) (healthy bool, reason string, message string, transientUnhealthy bool) {
 	// TODO: Need to revisit later.
@@ -51,9 +47,25 @@ func CheckPodsStatus(pods *corev1.PodList) (healthy bool, reason string, message
 // which would not end up with another reconciliation when it reaches the time limit,
 // but we have to trigger it explicitly.
 func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string, isTransientUnhealthy bool) {
+
+	// check both container and initContainer statuses
+	healthy, reason, isTransientUnhealthy = checkContainerStatuses(pod.Status.ContainerStatuses)
+	if !healthy {
+		return healthy, reason, isTransientUnhealthy
+	}
+	healthy, reason, isTransientUnhealthy = checkContainerStatuses(pod.Status.InitContainerStatuses)
+	if !healthy {
+		return healthy, reason, isTransientUnhealthy
+	}
+
+	return true, "", false
+
+}
+
+func checkContainerStatuses(containers []corev1.ContainerStatus) (bool, string, bool) {
 	var lastRestartTime time.Time
-	for _, c := range pod.Status.ContainerStatuses {
-		if c.State.Waiting != nil && slices.Contains(unhealthyWaitingStatus, c.State.Waiting.Reason) {
+	for _, c := range containers {
+		if c.State.Waiting != nil && slices.Contains(dfv1.UnhealthyWaitingStatus, c.State.Waiting.Reason) {
 			return false, c.State.Waiting.Reason, false
 		}
 		if c.State.Terminated != nil && c.State.Terminated.Reason == "Error" {
@@ -91,6 +103,11 @@ func IsPodReady(pod corev1.Pod) bool {
 		return false
 	}
 	for _, c := range pod.Status.ContainerStatuses {
+		if !c.Ready {
+			return false
+		}
+	}
+	for _, c := range pod.Status.InitContainerStatuses {
 		if !c.Ready {
 			return false
 		}

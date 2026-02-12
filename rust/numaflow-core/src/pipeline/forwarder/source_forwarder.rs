@@ -14,7 +14,7 @@ use crate::source::Source;
 use crate::tracker::Tracker;
 use crate::transformer::Transformer;
 use crate::typ::{
-    NumaflowTypeConfig, WithInMemoryRateLimiter, WithRedisRateLimiter, WithoutRateLimiter,
+    WithInMemoryRateLimiter, WithRedisRateLimiter, WithoutRateLimiter,
     build_in_memory_rate_limiter_config, build_redis_rate_limiter_config,
     should_use_redis_rate_limiter,
 };
@@ -89,20 +89,18 @@ pub(crate) async fn start_source_forwarder(
 
     let tracker = Tracker::new(serving_callback_handler, cln_token.clone());
 
-    let context = PipelineContext {
-        cln_token: cln_token.clone(),
-        js_context: &js_context,
-        config: &config,
-        tracker: tracker.clone(),
-    };
+    // Create the ISB factory from the JetStream context
+    use crate::pipeline::isb::ISBFactory;
+    use crate::pipeline::isb::jetstream::JetStreamFactory;
+    let isb_factory = JetStreamFactory::new(js_context.clone());
 
-    let writers = create_components::create_js_writers(
-        &config.to_vertex_config,
-        js_context.clone(),
-        config.isb_config.as_ref(),
-        cln_token.clone(),
-    )
-    .await?;
+    let writers = isb_factory
+        .create_writers(
+            &config.to_vertex_config,
+            config.isb_config.as_ref(),
+            cln_token.clone(),
+        )
+        .await?;
 
     // Helper macro to create writer components with specific type
     macro_rules! create_writer {
@@ -135,7 +133,14 @@ pub(crate) async fn start_source_forwarder(
                 build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
             let buffer_writer = create_writer!(WithRedisRateLimiter);
 
-            run_source_forwarder::<WithRedisRateLimiter>(
+            let context = PipelineContext::<WithRedisRateLimiter, _>::new(
+                cln_token.clone(),
+                &isb_factory,
+                &config,
+                tracker.clone(),
+            );
+
+            run_source_forwarder::<WithRedisRateLimiter, _>(
                 &context,
                 &source_config,
                 transformer,
@@ -149,7 +154,14 @@ pub(crate) async fn start_source_forwarder(
                 build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
             let buffer_writer = create_writer!(WithInMemoryRateLimiter);
 
-            run_source_forwarder::<WithInMemoryRateLimiter>(
+            let context = PipelineContext::<WithInMemoryRateLimiter, _>::new(
+                cln_token.clone(),
+                &isb_factory,
+                &config,
+                tracker.clone(),
+            );
+
+            run_source_forwarder::<WithInMemoryRateLimiter, _>(
                 &context,
                 &source_config,
                 transformer,
@@ -161,7 +173,15 @@ pub(crate) async fn start_source_forwarder(
         }
     } else {
         let buffer_writer = create_writer!(WithoutRateLimiter);
-        run_source_forwarder::<WithoutRateLimiter>(
+
+        let context = PipelineContext::<WithoutRateLimiter, _>::new(
+            cln_token.clone(),
+            &isb_factory,
+            &config,
+            tracker.clone(),
+        );
+
+        run_source_forwarder::<WithoutRateLimiter, _>(
             &context,
             &source_config,
             transformer,
@@ -176,14 +196,18 @@ pub(crate) async fn start_source_forwarder(
 }
 
 /// Starts source forwarder.
-async fn run_source_forwarder<C: NumaflowTypeConfig>(
-    context: &PipelineContext<'_>,
+async fn run_source_forwarder<C, F>(
+    context: &PipelineContext<'_, C, F>,
     source_config: &SourceVtxConfig,
     transformer: Option<Transformer>,
     source_watermark_handle: Option<SourceWatermarkHandle>,
     buffer_writer: ISBWriterOrchestrator<C>,
     rate_limiter: Option<C::RateLimiter>,
-) -> error::Result<()> {
+) -> error::Result<()>
+where
+    C: crate::typ::NumaflowTypeConfig,
+    F: crate::pipeline::isb::ISBFactory<Reader = C::ISBReader, Writer = C::ISBWriter>,
+{
     let source = create_components::create_source::<C>(
         context.config.batch_size,
         context.config.read_timeout,

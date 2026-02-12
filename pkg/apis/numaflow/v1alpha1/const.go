@@ -254,3 +254,9 @@ const (
 
 	PendingNotAvailable = int64(math.MinInt64)
 )
+
+var (
+	// unhealthyWaitingStatus contains the status messages for a pod in waiting state
+	// which should be considered as unhealthy
+	UnhealthyWaitingStatus = []string{"CrashLoopBackOff", "ImagePullBackOff"}
+)
