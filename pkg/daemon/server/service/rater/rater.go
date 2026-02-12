@@ -379,7 +379,9 @@ func (r *Rater) getPodReadCounts(vertexName, podName string, metricsData map[str
 				if counterVal == 0 && untypedVal != 0 {
 					counterVal = untypedVal
 				}
-				partitionReadCount[partitionName] = counterVal
+				// Sum the counts for the same partition, as there may be multiple metric series
+				// with the same partition_name but different values for other labels
+				partitionReadCount[partitionName] += counterVal
 			}
 		}
 		podReadCount := &PodReadCount{podName, partitionReadCount}
