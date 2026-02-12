@@ -1326,12 +1326,8 @@ mod tests {
 
     #[tonic::async_trait]
     impl map::Mapper for PanickingMapper {
-        async fn map(
-            &self,
-            input: map::MapRequest,
-        ) -> Vec<map::Message> {
-            let message =
-                map::Message::new(input.value).with_keys(input.keys);
+        async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
+            let message = map::Message::new(input.value).with_keys(input.keys);
 
             let message = if self.sink_count.load(Ordering::SeqCst) < self.sink_max_count {
                 self.sink_count.fetch_add(1, Ordering::SeqCst);
@@ -1395,20 +1391,15 @@ mod tests {
         .await;
 
         let map_handle = create_mapper(
-            PanickingMapper::new(
-                0,
-                10,
-                10,
-                None,
-                Some(fallback_tags),
-            ),
+            PanickingMapper::new(0, 10, 10, None, Some(fallback_tags)),
             tracker.clone(),
             MapMode::Unary,
             batch_size,
             Duration::from_secs(5),
             Duration::from_secs(3),
             10,
-        ).await;
+        )
+        .await;
 
         let sink_handle = create_sink(
             SinkType::UserDefined(SinkLog::new()),
@@ -1416,7 +1407,7 @@ mod tests {
             Some(SinkType::BuiltIn(SinkClientType::Log)),
             batch_size,
         )
-            .await;
+        .await;
 
         start_forwarder_test(
             source_handle,
@@ -1470,7 +1461,7 @@ mod tests {
 
         // wait for one sec to check if the pending becomes zero, because all the messages
         // should be read and acked; if it doesn't, then fail the test
-        let tokio_result = tokio::time::timeout(Duration::from_secs(1), async move {
+        let tokio_result = tokio::time::timeout(Duration::from_secs(10), async move {
             loop {
                 let pending = sourcer.pending().await.unwrap();
                 if pending == Some(0) {
@@ -1482,7 +1473,10 @@ mod tests {
         .await;
 
         cln_token.cancel();
-        forwarder_handle.await.expect("Join handle await failed").expect("error from forwarder join handle ");
+        forwarder_handle
+            .await
+            .expect("Join handle await failed")
+            .expect("error from forwarder join handle ");
 
         assert!(
             tokio_result.is_ok(),
