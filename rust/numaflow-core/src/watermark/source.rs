@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
@@ -95,6 +95,7 @@ impl SourceWatermarkState {
 
         // Publish the watermark for each partition
         for (partition, event_time) in partition_to_lowest_event_time {
+            info!(?partition, ?event_time, "Publishing source watermark");
             self.publisher
                 .publish_source_watermark(partition, event_time, false)
                 .await;
