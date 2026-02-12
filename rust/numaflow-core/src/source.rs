@@ -458,14 +458,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 };
 
                 let msgs_len = messages.len();
-                let msgs_bytes = messages.iter().map(|msg| msg.value.len()).sum();
-                Self::send_read_metrics(
-                    &pipeline_labels,
-                    mvtx_labels,
-                    read_start_time,
-                    msgs_len,
-                    msgs_bytes,
-                );
+                Self::send_read_metrics(&pipeline_labels, mvtx_labels, read_start_time, &messages);
 
                 // attempt to publish idle watermark since we are not able to read any message from
                 // the source.
@@ -701,53 +694,86 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         pipeline_labels: &Vec<(String, String)>,
         mvtx_labels: &Vec<(String, String)>,
         read_start_time: Instant,
-        n: usize,
-        msgs_bytes: usize,
+        messages: &[Message],
     ) {
+        use std::collections::HashMap;
+
+        // Group messages by partition
+        let mut partition_stats: HashMap<u16, (usize, usize)> = HashMap::new();
+        for msg in messages {
+            let partition_idx = msg.offset.partition_idx();
+            let entry = partition_stats.entry(partition_idx).or_insert((0, 0));
+            entry.0 += 1; // count
+            entry.1 += msg.value.len(); // bytes
+        }
+
+        let total_count = messages.len();
+        let read_time = read_start_time.elapsed().as_micros() as f64;
+
         if is_mono_vertex() {
-            monovertex_metrics()
-                .read_total
-                .get_or_create(mvtx_labels)
-                .inc_by(n as u64);
+            // For monovertex, emit metrics per partition
+            for (partition_idx, (count, _bytes)) in &partition_stats {
+                let mut labels = mvtx_labels.clone();
+                labels.push((
+                    PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                    partition_idx.to_string(),
+                ));
+                monovertex_metrics()
+                    .read_total
+                    .get_or_create(&labels)
+                    .inc_by(*count as u64);
+            }
+            // read_time and read_batch_size are per-read operation, not per-partition
             monovertex_metrics()
                 .read_time
                 .get_or_create(mvtx_labels)
-                .observe(read_start_time.elapsed().as_micros() as f64);
+                .observe(read_time);
             monovertex_metrics()
                 .read_batch_size
                 .get_or_create(mvtx_labels)
-                .set(n as i64);
+                .set(total_count as i64);
         } else {
+            // For pipeline, emit metrics per partition
+            for (partition_idx, (count, bytes)) in &partition_stats {
+                let mut labels = pipeline_labels.clone();
+                // Replace the partition_name label with the actual partition index
+                labels.retain(|(k, _)| k != PIPELINE_PARTITION_NAME_LABEL);
+                labels.push((
+                    PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                    partition_idx.to_string(),
+                ));
+                pipeline_metrics()
+                    .forwarder
+                    .read_total
+                    .get_or_create(&labels)
+                    .inc_by(*count as u64);
+                pipeline_metrics()
+                    .forwarder
+                    .data_read_total
+                    .get_or_create(&labels)
+                    .inc_by(*count as u64);
+                pipeline_metrics()
+                    .forwarder
+                    .read_bytes_total
+                    .get_or_create(&labels)
+                    .inc_by(*bytes as u64);
+                pipeline_metrics()
+                    .forwarder
+                    .data_read_bytes_total
+                    .get_or_create(&labels)
+                    .inc_by(*bytes as u64);
+            }
+            // read_batch_size and read_processing_time are per-read operation
             pipeline_metrics()
                 .forwarder
                 .read_batch_size
                 .get_or_create(pipeline_labels)
-                .set(n as i64);
-            pipeline_metrics()
-                .forwarder
-                .read_total
-                .get_or_create(pipeline_labels)
-                .inc_by(n as u64);
-            pipeline_metrics()
-                .forwarder
-                .data_read_total
-                .get_or_create(pipeline_labels)
-                .inc_by(n as u64);
-            pipeline_metrics()
-                .forwarder
-                .read_bytes_total
-                .get_or_create(pipeline_labels)
-                .inc_by(msgs_bytes as u64);
-            pipeline_metrics()
-                .forwarder
-                .data_read_bytes_total
-                .get_or_create(pipeline_labels)
-                .inc_by(msgs_bytes as u64);
+                .set(total_count as i64);
             pipeline_metrics()
                 .forwarder
                 .read_processing_time
                 .get_or_create(pipeline_labels)
-                .observe(read_start_time.elapsed().as_micros() as f64);
+                .observe(read_time);
         }
     }
 
