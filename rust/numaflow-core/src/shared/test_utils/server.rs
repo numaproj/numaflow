@@ -234,6 +234,7 @@ where
 }
 
 /// Start a reduce (aligned) server with the given creator.
+#[allow(dead_code)]
 pub(crate) fn start_reduce_server<C>(creator: C) -> TestServerHandle
 where
     C: numaflow::reduce::ReducerCreator + Send + Sync + 'static,
@@ -252,6 +253,7 @@ where
 }
 
 /// Start a session reduce server with the given creator.
+#[allow(dead_code)]
 pub(crate) fn start_session_reduce_server<C>(creator: C) -> TestServerHandle
 where
     C: numaflow::session_reduce::SessionReducerCreator + Send + Sync + 'static,
@@ -269,7 +271,8 @@ where
     )
 }
 
-/// Start an accumulator server with the given creator.///
+/// Start an accumulator server with the given creator.
+#[allow(dead_code)]
 pub(crate) fn start_accumulator_server<C>(creator: C) -> TestServerHandle
 where
     C: numaflow::accumulator::AccumulatorCreator + Send + Sync + 'static,
