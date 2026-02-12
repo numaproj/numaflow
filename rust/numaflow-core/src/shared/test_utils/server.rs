@@ -56,12 +56,19 @@ impl TestServerHandle {
     fn do_shutdown(&mut self) {
         if let Some(tx) = self.shutdown_tx.take() {
             // It's okay if the receiver is already gone (server exited early).
-            println!("Sending shutdown signal");
             let _ = tx.send(());
         }
         if let Some(handle) = self.thread_handle.take() {
             let thread_name = handle.thread().name().unwrap();
-            println!("Joining thread: {}", thread_name);
+            // FIXME: waiting to join the server thread can block the test thread
+            // TODO: find a way to avoid this
+            // * `handle.join()` blocks the tokio runtime thread, waiting for the source server thread to exit
+            // * The source server thread waits for the gRPC connection to close
+            // * The gRPC connection closes when `read_tx` is dropped
+            // * `read_tx` is dropped when SourceActor exits
+            // * `SourceActor` exits when all `Source.sender` clones are dropped
+            // * Some `sender` clones are held by ack tasks running on the test's tokio runtime
+            // * Those ack tasks can't run because the runtime thread is blocked by handle.join()
             let result = handle.join();
             if let Err(e) = result {
                 println!("Thread join failed: {:?}", e);

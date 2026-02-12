@@ -1097,7 +1097,7 @@ mod tests {
         .await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[should_panic]
     /// The bypass conditions are configured for fallback and on success scenarios but
     /// the sink doesn't have any fallback or on success sinks configured.
@@ -1232,7 +1232,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[should_panic]
     async fn test_source_transformer_with_bypass_panics() {
         let tracker = Tracker::new(None, CancellationToken::new());
@@ -1354,7 +1354,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[should_panic]
     async fn test_source_map_with_bypass_panics() {
         let tracker = Tracker::new(None, CancellationToken::new());
@@ -1461,7 +1461,7 @@ mod tests {
 
         // wait for one sec to check if the pending becomes zero, because all the messages
         // should be read and acked; if it doesn't, then fail the test
-        let tokio_result = tokio::time::timeout(Duration::from_secs(10), async move {
+        let tokio_result = tokio::time::timeout(Duration::from_secs(1), async move {
             loop {
                 let pending = sourcer.pending().await.unwrap();
                 if pending == Some(0) {
