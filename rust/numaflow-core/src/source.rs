@@ -9,8 +9,8 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
 use crate::message::{AckHandle, ReadAck};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
-    pipeline_metric_labels, pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, SOURCE_PARTITION_NAME_LABEL, monovertex_metrics,
+    mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::source::http::CoreHttpSource;
 use crate::tracker::Tracker;
@@ -715,7 +715,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             for (partition_idx, (count, _bytes)) in &partition_stats {
                 let mut labels = mvtx_labels.clone();
                 labels.push((
-                    PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                    SOURCE_PARTITION_NAME_LABEL.to_string(),
                     partition_idx.to_string(),
                 ));
                 monovertex_metrics()
@@ -737,9 +737,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             for (partition_idx, (count, bytes)) in &partition_stats {
                 let mut labels = pipeline_labels.clone();
                 // Replace the partition_name label with the actual partition index
-                labels.retain(|(k, _)| k != PIPELINE_PARTITION_NAME_LABEL);
                 labels.push((
-                    PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                    SOURCE_PARTITION_NAME_LABEL.to_string(),
                     partition_idx.to_string(),
                 ));
                 pipeline_metrics()
