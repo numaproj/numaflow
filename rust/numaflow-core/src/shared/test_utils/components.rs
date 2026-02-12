@@ -55,8 +55,6 @@ pub(crate) enum SinkType<T = NoOpSink> {
     /// Pass all sinkClientTypes except UserDefined
     BuiltIn(SinkClientType),
     /// Use for SinkClientType::UserDefined
-    /// FIXME: Allow dead code for now until tests are using it
-    #[allow(dead_code)]
     UserDefined(T),
 }
 
@@ -74,8 +72,6 @@ pub(crate) struct SinkTestHandle {
 ///
 /// This is used for the turbofish operator to pass a `None` transformer
 /// when a transformer svc is not provided.
-/// FIXME: Allow dead code for now until tests are using it
-#[allow(dead_code)]
 pub(crate) struct NoOpTransformer;
 
 #[tonic::async_trait]
@@ -212,8 +208,6 @@ where
 /// Create a mapper component with the given mapper service.
 ///
 /// Initializes the mapper handle and server handle (for the mapper server).
-/// FIXME: Allow dead code for now until tests are using it
-#[allow(dead_code)]
 pub(crate) async fn create_mapper<M>(
     map_svc: M,
     tracker: Tracker,
@@ -260,8 +254,6 @@ where
 /// Create a batch mapper component with the given batch mapper service.
 ///
 /// Initializes the mapper handle and server handle (for the batch mapper server).
-/// FIXME: Allow dead code for now until tests are using it
-#[allow(dead_code)]
 pub(crate) async fn create_batch_mapper<M>(
     map_svc: M,
     tracker: Tracker,
@@ -308,8 +300,6 @@ where
 /// Create a map streamer component with the given map streamer service.
 ///
 /// Initializes the mapper handle and server handle (for the map streamer server).
-/// FIXME: Allow dead code for now until tests are using it
-#[allow(dead_code)]
 pub(crate) async fn create_map_streamer<M>(
     map_svc: M,
     tracker: Tracker,

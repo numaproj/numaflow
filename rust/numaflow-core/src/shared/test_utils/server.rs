@@ -59,7 +59,6 @@ impl TestServerHandle {
             let _ = tx.send(());
         }
         if let Some(handle) = self.thread_handle.take() {
-            let thread_name = handle.thread().name().unwrap();
             // FIXME: waiting to join the server thread can block the test thread
             // TODO: find a way to avoid this
             // From claude:
@@ -127,7 +126,6 @@ where
 }
 
 /// Start a map server with the given handler.
-#[allow(dead_code)]
 pub(crate) fn start_map_server<M>(handler: M) -> TestServerHandle
 where
     M: numaflow::map::Mapper + Send + Sync + 'static,
@@ -146,8 +144,6 @@ where
 }
 
 /// Start a batch map server with the given handler.
-
-#[allow(dead_code)]
 pub(crate) fn start_batch_map_server<M>(handler: M) -> TestServerHandle
 where
     M: numaflow::batchmap::BatchMapper + Send + Sync + 'static,
@@ -166,7 +162,6 @@ where
 }
 
 /// Start a map stream server with the given handler.
-#[allow(dead_code)]
 pub(crate) fn start_map_stream_server<M>(handler: M) -> TestServerHandle
 where
     M: numaflow::mapstream::MapStreamer + Send + Sync + 'static,
@@ -239,7 +234,6 @@ where
 }
 
 /// Start a reduce (aligned) server with the given creator.
-#[allow(dead_code)]
 pub(crate) fn start_reduce_server<C>(creator: C) -> TestServerHandle
 where
     C: numaflow::reduce::ReducerCreator + Send + Sync + 'static,
@@ -258,7 +252,6 @@ where
 }
 
 /// Start a session reduce server with the given creator.
-#[allow(dead_code)]
 pub(crate) fn start_session_reduce_server<C>(creator: C) -> TestServerHandle
 where
     C: numaflow::session_reduce::SessionReducerCreator + Send + Sync + 'static,
@@ -277,7 +270,6 @@ where
 }
 
 /// Start an accumulator server with the given creator.///
-#[allow(dead_code)]
 pub(crate) fn start_accumulator_server<C>(creator: C) -> TestServerHandle
 where
     C: numaflow::accumulator::AccumulatorCreator + Send + Sync + 'static,
