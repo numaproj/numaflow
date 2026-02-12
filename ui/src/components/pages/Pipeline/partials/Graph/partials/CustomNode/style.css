@@ -95,7 +95,13 @@
   height: auto;
 }
 
-.pipeline-sink-container-row {
+.react-flow__node-input--source-with-containers {
+  min-height: 11.2rem;
+  height: auto;
+}
+
+.pipeline-sink-container-row,
+.pipeline-source-container-row {
   padding: 0.2rem 0;
 }
 
@@ -165,15 +171,15 @@
   width: 0.9rem;
 }
 
-/* Pipeline sink container icons - slightly larger for visibility */
+/* Pipeline sink/source container icons - slightly larger for visibility */
 .pipeline-sink-container-wrapper,
 .pipeline-sink-container-wrapper-small {
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  border: 1px solid #d1dee9;
-  background: #fff;
+  border: 1px solid var(--border-secondary);
+  background: var(--bg-secondary);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -201,6 +207,22 @@
 .pipeline-sink-container-img-small {
   height: 1.6rem;
   width: 1.6rem;
+}
+
+.pipeline-source-container-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border-secondary);
+  background: var(--bg-secondary);
+  height: 3.4rem;
+  width: 3.4rem;
+}
+
+.pipeline-source-container-img {
+  height: 1.9rem;
+  width: 1.9rem;
 }
 
 .node-icon {
