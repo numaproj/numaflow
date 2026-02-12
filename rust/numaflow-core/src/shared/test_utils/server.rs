@@ -62,6 +62,7 @@ impl TestServerHandle {
             let thread_name = handle.thread().name().unwrap();
             // FIXME: waiting to join the server thread can block the test thread
             // TODO: find a way to avoid this
+            // From claude:
             // * `handle.join()` blocks the tokio runtime thread, waiting for the source server thread to exit
             // * The source server thread waits for the gRPC connection to close
             // * The gRPC connection closes when `read_tx` is dropped
