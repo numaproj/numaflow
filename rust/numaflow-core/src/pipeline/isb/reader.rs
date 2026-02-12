@@ -1322,3 +1322,497 @@ mod tests {
         context.delete_stream(stream.name).await.unwrap();
     }
 }
+
+// SimpleBuffer Integration Tests
+// These tests use SimpleBuffer to test ISBReaderOrchestrator without a distributed ISB.
+#[cfg(test)]
+mod simplebuffer_tests {
+    use super::*;
+    use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
+    use numaflow_testing::simplebuffer::SimpleBuffer;
+    use std::collections::HashMap;
+    use std::sync::atomic::Ordering;
+
+    use crate::message::MessageID;
+    use bytes::Bytes;
+    use chrono::Utc;
+    use tokio::time::sleep;
+    use tokio_stream::StreamExt;
+    use tokio_util::sync::CancellationToken;
+
+    /// Helper to create ISBReaderOrchestrator with SimpleBuffer
+    async fn create_orchestrator(
+        adapter: &SimpleBufferAdapter,
+        batch_size: usize,
+        max_ack_pending: usize,
+    ) -> (
+        ISBReaderOrchestrator<WithSimpleBuffer>,
+        Tracker,
+        CancellationToken,
+    ) {
+        let stream = Stream::new("test-stream", "test", 0);
+        let cancel = CancellationToken::new();
+        let tracker = Tracker::new(None, cancel.clone());
+
+        let buf_reader_config = BufferReaderConfig {
+            streams: vec![],
+            wip_ack_interval: Duration::from_millis(10),
+            max_ack_pending,
+        };
+
+        let components = ISBReaderComponents {
+            vertex_type: "Map".to_string(),
+            stream,
+            config: buf_reader_config,
+            tracker: tracker.clone(),
+            batch_size,
+            read_timeout: Duration::from_millis(50),
+            watermark_handle: None,
+            isb_config: None,
+            cln_token: cancel.clone(),
+        };
+
+        let orchestrator: ISBReaderOrchestrator<WithSimpleBuffer> =
+            ISBReaderOrchestrator::new(components, adapter.reader(), None)
+                .await
+                .unwrap();
+
+        (orchestrator, tracker, cancel)
+    }
+
+    /// Helper to write messages to the buffer
+    async fn write_messages(adapter: &SimpleBufferAdapter, count: usize) {
+        let writer = adapter.writer();
+        for i in 0..count {
+            use crate::pipeline::isb::ISBWriter;
+            let msg = Message {
+                typ: Default::default(),
+                keys: Arc::new([format!("key-{}", i)]),
+                tags: None,
+                value: Bytes::from(format!("payload-{}", i)),
+                offset: Offset::Int(IntOffset::new(i as i64, 0)),
+                event_time: Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "test".into(),
+                    index: i as i32,
+                    offset: format!("{}", i).into(),
+                },
+                headers: Arc::new(HashMap::new()),
+                metadata: None,
+                is_late: false,
+                ack_handle: None,
+            };
+            writer.write(msg).await.expect("write should succeed");
+        }
+    }
+
+    /// Test: streaming_read happy path - read messages, ack them, verify completion
+    #[tokio::test]
+    async fn test_streaming_read_and_ack_flow() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 5).await;
+
+        let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        // Read all 5 messages
+        let mut received = Vec::new();
+        for _ in 0..5 {
+            if let Some(msg) = rx.next().await {
+                received.push(msg);
+            }
+        }
+        assert_eq!(received.len(), 5, "Should receive all 5 messages");
+
+        // Ack all messages by dropping them (default behavior is ack on drop)
+        drop(received);
+
+        // Wait for tracker to become empty (all acks processed)
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !tracker.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("Tracker should become empty after acks");
+
+        // Cancel and verify clean shutdown
+        cancel.cancel();
+        handle.await.unwrap().unwrap();
+    }
+
+    /// Test: fetch errors are handled gracefully and reading continues
+    #[tokio::test]
+    async fn test_fetch_error_recovery() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 3).await;
+
+        // Inject 2 fetch failures
+        adapter.error_injector().fail_fetches(2);
+
+        let (orchestrator, _tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        // Despite fetch failures, we should eventually get messages
+        let mut received = Vec::new();
+        let timeout_result = tokio::time::timeout(Duration::from_secs(2), async {
+            while received.len() < 3 {
+                if let Some(msg) = rx.next().await {
+                    received.push(msg);
+                }
+            }
+        })
+        .await;
+
+        assert!(
+            timeout_result.is_ok(),
+            "Should recover from fetch errors and receive messages"
+        );
+        assert_eq!(received.len(), 3);
+
+        // Ack all messages by dropping
+        drop(received);
+
+        cancel.cancel();
+        handle.await.unwrap().unwrap();
+    }
+
+    /// Test: ack retries on transient failures and eventually succeeds
+    /// Note: We only test ack retries here because nacks cause message redelivery,
+    /// which creates an infinite fetch loop with the streaming_read.
+    #[tokio::test]
+    async fn test_ack_retry_on_transient_failures() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 2).await;
+
+        let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        // Read both messages
+        let msg1 = rx.next().await.expect("Should receive first message");
+        let msg2 = rx.next().await.expect("Should receive second message");
+
+        // Inject ack failures - will retry and succeed after 2 failures
+        // With ACK_RETRY_INTERVAL=100ms, 2 failures = ~200ms of retries per message
+        adapter.error_injector().fail_acks(4); // 2 failures per message * 2 messages
+        drop(msg1);
+        drop(msg2);
+
+        // Wait for tracker to process both (ack retries should succeed)
+        // Allow 5 seconds: 4 retries * 100ms = 400ms + buffer
+        let result = tokio::time::timeout(Duration::from_secs(5), async {
+            while !tracker.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        // Cancel before checking result to ensure cleanup
+        cancel.cancel();
+
+        // Check the result
+        result.expect("Tracker should become empty after retried acks");
+
+        // Wait for handle with a timeout to avoid hanging
+        let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
+    }
+
+    /// Test: ack/nack stops immediately on OffsetNotFound (non-retryable error)
+    #[tokio::test]
+    async fn test_ack_nack_stops_on_offset_not_found() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        let reader = adapter.reader();
+        let cancel = CancellationToken::new();
+
+        // Test ack with non-existent offset
+        let missing_offset = Offset::Int(IntOffset::new(999, 0));
+        let ack_result = ISBReaderOrchestrator::<WithSimpleBuffer>::ack_with_retry(
+            &reader,
+            &missing_offset,
+            &cancel,
+        )
+        .await;
+
+        assert!(ack_result.is_err());
+        assert!(
+            matches!(ack_result, Err(Error::ISB(ISBError::OffsetNotFound(_)))),
+            "Should get OffsetNotFound error for ack"
+        );
+
+        // Test nack with non-existent offset
+        let nack_result = ISBReaderOrchestrator::<WithSimpleBuffer>::nak_with_retry(
+            &reader,
+            &missing_offset,
+            &cancel,
+        )
+        .await;
+
+        assert!(nack_result.is_err());
+        assert!(
+            matches!(nack_result, Err(Error::ISB(ISBError::OffsetNotFound(_)))),
+            "Should get OffsetNotFound error for nack"
+        );
+    }
+
+    /// Test: cancellation stops ack/nack retry loops
+    #[tokio::test]
+    async fn test_cancellation_stops_retry_loops() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 1).await;
+
+        let mut reader = adapter.reader();
+        use crate::pipeline::isb::ISBReader;
+
+        // Fetch the message to get a valid offset
+        let messages = reader.fetch(1, Duration::from_millis(100)).await.unwrap();
+        let offset = messages
+            .first()
+            .expect("should have at least one message")
+            .offset
+            .clone();
+
+        // Inject infinite ack failures
+        adapter.error_injector().fail_acks(1000);
+
+        let cancel = CancellationToken::new();
+        let cancel_clone = cancel.clone();
+
+        // Spawn ack_with_retry in background
+        let ack_handle = tokio::spawn(async move {
+            ISBReaderOrchestrator::<WithSimpleBuffer>::ack_with_retry(
+                &reader,
+                &offset,
+                &cancel_clone,
+            )
+            .await
+        });
+
+        // Give it time to start retrying
+        sleep(Duration::from_millis(50)).await;
+
+        // Cancel should stop the retry loop
+        cancel.cancel();
+
+        // Should complete quickly after cancellation
+        let result = tokio::time::timeout(Duration::from_secs(1), ack_handle)
+            .await
+            .expect("ack_with_retry should complete after cancellation")
+            .unwrap();
+
+        // Result should be an error (cancelled during retry)
+        assert!(result.is_err(), "Should error after cancellation");
+    }
+
+    /// Test: WIP failures are ignored and loop continues
+    #[tokio::test]
+    async fn test_wip_failures_are_ignored() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 1).await;
+
+        // Inject WIP failures - these should be ignored
+        adapter.error_injector().fail_wip_acks(5);
+
+        let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        // Read message
+        let msg = rx.next().await.expect("Should receive message");
+
+        // Wait a bit for WIP to be attempted (and fail)
+        sleep(Duration::from_millis(50)).await;
+
+        // Ack by dropping msg (is_failed defaults to false)
+        drop(msg);
+
+        // Tracker should become empty
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !tracker.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("Tracker should become empty despite WIP failures");
+
+        cancel.cancel();
+        handle.await.unwrap().unwrap();
+    }
+
+    /// Test: nack causes message redelivery
+    /// When a message is nacked, it goes back to Pending state in the buffer
+    /// and the streaming_read loop will refetch it.
+    #[tokio::test]
+    async fn test_nack_causes_redelivery() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 1).await;
+
+        let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 1, 100).await;
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        // Read message first time
+        let msg1 = rx.next().await.expect("Should receive message first time");
+        let payload1 = msg1.value.clone();
+
+        // Nack it by setting is_failed and dropping
+        if let Some(h) = &msg1.ack_handle {
+            h.is_failed.store(true, Ordering::Relaxed);
+        }
+        drop(msg1);
+
+        // After nacking, the message goes back to Pending state and will be refetched.
+        // The streaming_read loop immediately fetches it again, so wait for redelivery.
+        let msg2 = tokio::time::timeout(Duration::from_secs(1), rx.next())
+            .await
+            .expect("Should receive redelivered message")
+            .expect("Stream should not end");
+
+        assert_eq!(
+            msg2.value, payload1,
+            "Redelivered message should have same payload"
+        );
+
+        // Ack it this time by dropping (is_failed defaults to false)
+        drop(msg2);
+
+        // Wait for final ack
+        let result = tokio::time::timeout(Duration::from_secs(1), async {
+            while !tracker.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        cancel.cancel();
+        result.expect("Tracker should become empty after final ack");
+        let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
+    }
+
+    /// Test: cleanup waits for inflight messages before shutdown
+    #[tokio::test]
+    async fn test_cleanup_waits_for_inflight() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 3).await;
+
+        let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        // Read all messages but don't ack yet
+        let mut messages = Vec::new();
+        for _ in 0..3 {
+            if let Some(msg) = rx.next().await {
+                messages.push(msg);
+            }
+        }
+        assert_eq!(messages.len(), 3);
+
+        // Cancel while messages are inflight
+        cancel.cancel();
+
+        // Ack messages after cancellation by dropping them
+        drop(messages);
+
+        // Handle should complete (cleanup waits for inflight)
+        let result = tokio::time::timeout(Duration::from_secs(2), handle)
+            .await
+            .expect("Handle should complete after inflight messages are acked");
+
+        assert!(result.unwrap().is_ok(), "Shutdown should be clean");
+        assert!(tracker.is_empty().await.unwrap(), "Tracker should be empty");
+    }
+
+    /// Test: semaphore limits inflight messages (backpressure)
+    /// Note: We use batch_size=1 to ensure permits are acquired one at a time.
+    /// With larger batch sizes, the loop would wait for all batch_size permits at once,
+    /// which would prevent incremental permit release from unblocking the next fetch.
+    #[tokio::test]
+    async fn test_semaphore_backpressure() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 10).await;
+
+        // Set max_ack_pending to 3 with batch_size=1 - only 3 messages can be inflight
+        // batch_size=1 means we acquire 1 permit per fetch iteration
+        let (orchestrator, _tracker, cancel) = create_orchestrator(&adapter, 1, 3).await;
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        // Read 3 messages (should work)
+        let mut inflight = Vec::new();
+        for _ in 0..3 {
+            let msg = tokio::time::timeout(Duration::from_millis(500), rx.next())
+                .await
+                .expect("Should receive message within timeout")
+                .expect("Stream should not end");
+            inflight.push(msg);
+        }
+
+        // Try to read 4th message - should block because semaphore is exhausted
+        let fourth = tokio::time::timeout(Duration::from_millis(100), rx.next()).await;
+        assert!(
+            fourth.is_err(),
+            "4th message should block due to backpressure"
+        );
+
+        // Ack first message to free a permit by taking it out and dropping
+        let first_msg = inflight.remove(0);
+        drop(first_msg);
+
+        // Small delay to allow the wip_loop to complete ack and release permit
+        sleep(Duration::from_millis(100)).await;
+
+        // Now 4th message should come through
+        let fourth = tokio::time::timeout(Duration::from_millis(500), rx.next())
+            .await
+            .expect("Should receive 4th message after ack")
+            .expect("Stream should not end");
+        inflight.push(fourth);
+
+        // Cleanup - ack remaining by dropping
+        drop(inflight);
+
+        cancel.cancel();
+        let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
+    }
+
+    /// Test: multiple concurrent ack operations complete successfully
+    /// Note: This test only uses acks (not nacks) because nacks cause messages
+    /// to be redelivered, which would create an infinite fetch loop.
+    #[tokio::test]
+    async fn test_concurrent_ack_operations() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 10).await;
+
+        let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        // Read all messages
+        let mut messages = Vec::new();
+        for _ in 0..10 {
+            if let Some(msg) = rx.next().await {
+                messages.push(msg);
+            }
+        }
+        assert_eq!(messages.len(), 10);
+
+        // Drop all messages to trigger ack (is_failed defaults to false)
+        drop(messages);
+
+        // Wait for all ack operations to complete
+        let result = tokio::time::timeout(Duration::from_secs(2), async {
+            while !tracker.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        cancel.cancel();
+        result.expect("All ack operations should complete");
+        let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
+    }
+}
