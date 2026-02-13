@@ -59,8 +59,7 @@ impl TestServerHandle {
             let _ = tx.send(());
         }
         if let Some(handle) = self.thread_handle.take() {
-            // FIXME: waiting to join the server thread can block the test thread
-            // TODO: find a way to avoid this
+            // FIXME: waiting to join the server thread can block in case of single threaded tokio test runtime
             // From claude:
             // * `handle.join()` blocks the tokio runtime thread, waiting for the source server thread to exit
             // * The source server thread waits for the gRPC connection to close
@@ -68,7 +67,7 @@ impl TestServerHandle {
             // * `read_tx` is dropped when SourceActor exits
             // * `SourceActor` exits when all `Source.sender` clones are dropped
             // * Some `sender` clones are held by ack tasks running on the test's tokio runtime
-            // * Those ack tasks can't run because the runtime thread is blocked by handle.join()
+            // * Those ack tasks can't run because the runtime thread is blocked by `handle.join()`
             let result = handle.join();
             if let Err(e) = result {
                 println!("Thread join failed: {:?}", e);

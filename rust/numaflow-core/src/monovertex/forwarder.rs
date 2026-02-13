@@ -1382,7 +1382,7 @@ mod tests {
 
         // Create the source
         let source_handle = create_ud_source(
-            SimpleSource::new(10000000),
+            SimpleSource::new(100),
             None::<NoOpTransformer>,
             batch_size,
             cln_token.clone(),
