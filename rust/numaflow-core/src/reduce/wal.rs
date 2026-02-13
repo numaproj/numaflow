@@ -39,7 +39,7 @@ impl TryFrom<WalMessage> for Bytes {
                 header: Some(numaflow_pb::objects::isb::Header {
                     message_info: Some(numaflow_pb::objects::isb::MessageInfo {
                         event_time: Some(prost_timestamp_from_utc(message.event_time)),
-                        is_late: false,
+                        is_late: message.is_late,
                     }),
                     kind: message.typ.into(),
                     id: Some(message.id.into()),
@@ -83,20 +83,20 @@ impl TryFrom<Bytes> for WalMessage {
             .body
             .ok_or_else(|| Error::Other("Missing body".to_string()))?;
 
+        let message_info = header.message_info.expect("info can't be empty");
         let msg = Message {
             typ: header.kind.into(),
             keys: Arc::from(header.keys),
             tags: None,
             value: Bytes::from(body.payload),
             offset: Offset::Int(IntOffset::new(proto_read_message.read_offset, 0)),
-            event_time: header
-                .message_info
-                .expect("info can't be empty")
+            event_time: message_info
                 .event_time
                 .map(utc_from_timestamp)
                 .expect("event time should be present"),
             watermark: proto_read_message.watermark.map(utc_from_timestamp),
             id: header.id.map(Into::into).unwrap_or_default(),
+            is_late: message_info.is_late,
             ..Default::default()
         };
 

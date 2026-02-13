@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use numaflow_kafka::source::{KafkaMessage, KafkaSource, KafkaSourceConfig};
 use tracing::info;
 
-use crate::config::{get_vertex_name, get_vertex_replica};
+use crate::config::get_vertex_name;
 use crate::error::Error;
 use crate::message::{Message, MessageID, Offset, StringOffset};
 use crate::metadata::Metadata;
@@ -17,7 +17,7 @@ impl TryFrom<KafkaMessage> for Message {
     fn try_from(message: KafkaMessage) -> crate::Result<Self> {
         let offset = Offset::String(StringOffset::new(
             format!("{}:{}:{}", message.topic, message.partition, message.offset),
-            *get_vertex_replica(),
+            message.partition as u16,
         ));
 
         // Use Kafka timestamp if available, otherwise fall back to current time
@@ -188,7 +188,9 @@ mod tests {
         let message: Message = kafka_message.try_into().unwrap();
 
         assert_eq!(message.value, Bytes::from("test_value"));
-        assert_eq!(message.offset.to_string(), "test_topic:1:42-0");
+        // The offset format is "<topic>:<partition>:<offset>-<partition_idx>"
+        // where partition_idx is the Kafka partition number
+        assert_eq!(message.offset.to_string(), "test_topic:1:42-1");
         assert_eq!(message.headers.get("key"), Some(&"value".to_string()));
         // Verify that the event time is set from the Kafka timestamp
         assert_eq!(message.event_time.timestamp_millis(), 1640995200000);
@@ -211,7 +213,9 @@ mod tests {
         let after_conversion = Utc::now();
 
         assert_eq!(message.value, Bytes::from("test_value"));
-        assert_eq!(message.offset.to_string(), "test_topic:1:42-0");
+        // The offset format is "<topic>:<partition>:<offset>-<partition_idx>"
+        // where partition_idx is the Kafka partition number
+        assert_eq!(message.offset.to_string(), "test_topic:1:42-1");
         // Verify that the event time falls back to current time when no timestamp is available
         assert!(message.event_time >= before_conversion);
         assert!(message.event_time <= after_conversion);
@@ -234,7 +238,9 @@ mod tests {
         let after_conversion = Utc::now();
 
         assert_eq!(message.value, Bytes::from("test_value"));
-        assert_eq!(message.offset.to_string(), "test_topic:1:42-0");
+        // The offset format is "<topic>:<partition>:<offset>-<partition_idx>"
+        // where partition_idx is the Kafka partition number
+        assert_eq!(message.offset.to_string(), "test_topic:1:42-1");
         // Verify that the event time falls back to current time when timestamp is invalid
         assert!(message.event_time >= before_conversion);
         assert!(message.event_time <= after_conversion);
