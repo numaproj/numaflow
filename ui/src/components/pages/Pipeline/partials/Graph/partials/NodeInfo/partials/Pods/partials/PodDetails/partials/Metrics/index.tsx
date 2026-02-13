@@ -14,7 +14,6 @@ import LineChartComponent from "./partials/LineChart";
 import { useMetricsDiscoveryDataFetch } from "../../../../../../../../../../../../../utils/fetchWrappers/metricsDiscoveryDataFetch";
 import {
   dimensionReverseMap,
-  VERTEX_PENDING_MESSAGES,
   UDF_READ_PROCESSING_RATE,
   UDF_WRITE_PROCESSING_RATE,
   UDF_PROCESSING_TIME_LATENCY,
@@ -128,12 +127,6 @@ export function Metrics({
   return (
     <Box sx={{ height: "100%" }}>
       {discoveredMetrics?.data?.map((metric: any) => {
-        if (
-          type === "source" &&
-          metric?.display_name === VERTEX_PENDING_MESSAGES
-        )
-          return null;
-
         if (
           type !== "udf" &&
           [
