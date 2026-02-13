@@ -112,8 +112,8 @@ impl OffsetTimeline {
 
     /// Returns an iterator over all valid (non-default) entries in the timeline.
     /// Entries are returned from highest to lowest watermark.
-    pub(crate) fn entries(&self) -> impl Iterator<Item = &WMB> {
-        self.watermarks.iter().filter(|w| w.offset != -1)
+    pub(crate) fn entries(&self) -> VecDeque<WMB> {
+        self.watermarks.clone()
     }
 }
 

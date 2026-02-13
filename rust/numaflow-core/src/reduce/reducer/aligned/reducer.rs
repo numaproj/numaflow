@@ -470,7 +470,7 @@ impl AlignedReducer {
                                 // Handle WMB messages with idle watermarks
                                 if let MessageType::WMB = msg.typ {
                                     if let Some(idle_watermark) = msg.watermark {
-                                        info!(wm = ?idle_watermark.timestamp_millis(), "Idle watermark received for reduce");
+                                        debug!(wm = ?idle_watermark.timestamp_millis(), "Idle watermark received for reduce");
                                         // Only close windows if the idle watermark is greater than current watermark
                                         if idle_watermark > self.current_watermark {
                                             self.current_watermark = idle_watermark;

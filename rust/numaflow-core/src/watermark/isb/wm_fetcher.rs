@@ -313,6 +313,7 @@ impl ISBWatermarkFetcher {
                 for (partition, timeline) in &processor.timelines {
                     let entries: Vec<String> = timeline
                         .entries()
+                        .iter()
                         .map(|wmb| format!("(wm={},off={})", wmb.watermark, wmb.offset))
                         .collect();
                     let entries_str = if entries.is_empty() {
