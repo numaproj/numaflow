@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use tracing::info;
 
 /// Interval for logging watermark summary
-const WATERMARK_LOG_INTERVAL: Duration = Duration::from_secs(10);
+const WATERMARK_LOG_INTERVAL: Duration = Duration::from_secs(60);
 
 /// ISBWatermarkFetcher is the watermark fetcher for the incoming edges.
 pub(crate) struct ISBWatermarkFetcher {
