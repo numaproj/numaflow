@@ -9,8 +9,8 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
 use crate::message::{AckHandle, ReadAck};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
-    pipeline_metric_labels, pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, SOURCE_PARTITION_NAME_LABEL, monovertex_metrics,
+    mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::source::http::CoreHttpSource;
@@ -460,14 +460,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 };
 
                 let msgs_len = messages.len();
-                let msgs_bytes = messages.iter().map(|msg| msg.value.len()).sum();
-                Self::send_read_metrics(
-                    &pipeline_labels,
-                    mvtx_labels,
-                    read_start_time,
-                    msgs_len,
-                    msgs_bytes,
-                );
+                let read_time = read_start_time.elapsed().as_micros() as f64;
+                Self::record_batch_read_metrics(&pipeline_labels, mvtx_labels, read_time, msgs_len);
 
                 // attempt to publish idle watermark since we are not able to read any message from
                 // the source.
@@ -486,6 +480,13 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 let mut ack_handles = vec![];
                 let mut ack_batch = Vec::with_capacity(msgs_len);
                 for message in messages.iter_mut() {
+                    Self::record_partition_read_metrics(
+                        &pipeline_labels,
+                        mvtx_labels,
+                        message.offset.partition_idx(),
+                        message.value.len(),
+                    );
+
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
                     message.ack_handle = Some(Arc::new(AckHandle::new(resp_ack_tx)));
 
@@ -710,57 +711,78 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         .await;
     }
 
-    fn send_read_metrics(
+    /// Record per-batch read metrics (read_time, read_batch_size).
+    /// These metrics are recorded once per batch read operation.
+    fn record_batch_read_metrics(
         pipeline_labels: &Vec<(String, String)>,
         mvtx_labels: &Vec<(String, String)>,
-        read_start_time: Instant,
-        n: usize,
-        msgs_bytes: usize,
+        read_time: f64,
+        batch_size: usize,
     ) {
         if is_mono_vertex() {
             monovertex_metrics()
-                .read_total
-                .get_or_create(mvtx_labels)
-                .inc_by(n as u64);
-            monovertex_metrics()
                 .read_time
                 .get_or_create(mvtx_labels)
-                .observe(read_start_time.elapsed().as_micros() as f64);
+                .observe(read_time);
             monovertex_metrics()
                 .read_batch_size
                 .get_or_create(mvtx_labels)
-                .set(n as i64);
+                .set(batch_size as i64);
         } else {
             pipeline_metrics()
                 .forwarder
                 .read_batch_size
                 .get_or_create(pipeline_labels)
-                .set(n as i64);
-            pipeline_metrics()
-                .forwarder
-                .read_total
-                .get_or_create(pipeline_labels)
-                .inc_by(n as u64);
-            pipeline_metrics()
-                .forwarder
-                .data_read_total
-                .get_or_create(pipeline_labels)
-                .inc_by(n as u64);
-            pipeline_metrics()
-                .forwarder
-                .read_bytes_total
-                .get_or_create(pipeline_labels)
-                .inc_by(msgs_bytes as u64);
-            pipeline_metrics()
-                .forwarder
-                .data_read_bytes_total
-                .get_or_create(pipeline_labels)
-                .inc_by(msgs_bytes as u64);
+                .set(batch_size as i64);
             pipeline_metrics()
                 .forwarder
                 .read_processing_time
                 .get_or_create(pipeline_labels)
-                .observe(read_start_time.elapsed().as_micros() as f64);
+                .observe(read_time);
+        }
+    }
+
+    /// Record per-partition read metrics (read_total, data_read_total, read_bytes_total, etc.).
+    /// These metrics are recorded for each message, grouped by partition.
+    fn record_partition_read_metrics(
+        pipeline_labels: &Vec<(String, String)>,
+        mvtx_labels: &Vec<(String, String)>,
+        partition_idx: u16,
+        bytes: usize,
+    ) {
+        if is_mono_vertex() {
+            let mut labels = mvtx_labels.clone();
+            labels.push((
+                SOURCE_PARTITION_NAME_LABEL.to_string(),
+                partition_idx.to_string(),
+            ));
+            monovertex_metrics().read_total.get_or_create(&labels).inc();
+        } else {
+            let mut labels = pipeline_labels.clone();
+            labels.push((
+                SOURCE_PARTITION_NAME_LABEL.to_string(),
+                partition_idx.to_string(),
+            ));
+            pipeline_metrics()
+                .forwarder
+                .read_total
+                .get_or_create(&labels)
+                .inc();
+            pipeline_metrics()
+                .forwarder
+                .data_read_total
+                .get_or_create(&labels)
+                .inc();
+            pipeline_metrics()
+                .forwarder
+                .read_bytes_total
+                .get_or_create(&labels)
+                .inc_by(bytes as u64);
+            pipeline_metrics()
+                .forwarder
+                .data_read_bytes_total
+                .get_or_create(&labels)
+                .inc_by(bytes as u64);
         }
     }
 

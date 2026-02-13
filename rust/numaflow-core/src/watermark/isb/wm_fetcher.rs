@@ -11,6 +11,11 @@ use crate::error::Result;
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::wmb::{WMB, Watermark};
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
+use tracing::info;
+
+/// Interval for logging watermark summary
+const WATERMARK_LOG_INTERVAL: Duration = Duration::from_secs(60);
 
 /// ISBWatermarkFetcher is the watermark fetcher for the incoming edges.
 pub(crate) struct ISBWatermarkFetcher {
@@ -20,6 +25,8 @@ pub(crate) struct ISBWatermarkFetcher {
     /// A map of vertex to its last processed watermark for each partition. Index[0] will be 0th
     /// partition, and so forth.
     last_processed_wm: HashMap<&'static str, HashMap<u16, i64>>,
+    /// Last time the watermark summary was logged
+    last_log_time: Instant,
 }
 
 impl ISBWatermarkFetcher {
@@ -42,6 +49,7 @@ impl ISBWatermarkFetcher {
         Ok(ISBWatermarkFetcher {
             processor_managers,
             last_processed_wm,
+            last_log_time: Instant::now(),
         })
     }
 
@@ -101,7 +109,12 @@ impl ISBWatermarkFetcher {
             }
         }
         // now we computed and updated for this partition, we just need to compare across partitions.
-        self.get_watermark()
+        let watermark = self.get_watermark();
+
+        // Log summary periodically
+        self.watermark_log_summary(&watermark);
+
+        watermark
     }
 
     /// Fetches the head watermark using the watermark fetcher. This returns the minimum
@@ -236,6 +249,96 @@ impl ISBWatermarkFetcher {
             return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
         }
         Watermark::from_timestamp_millis(min_wm).expect("failed to parse time")
+    }
+
+    /// Logs a summary of the watermark state if the log interval has elapsed.
+    /// This includes fetched watermark, last processed watermarks, processors, and their timelines.
+    fn watermark_log_summary(&mut self, fetched_wm: &Watermark) {
+        if self.last_log_time.elapsed() < WATERMARK_LOG_INTERVAL {
+            return;
+        }
+        self.last_log_time = Instant::now();
+
+        let summary = self.build_summary(fetched_wm);
+        info!("{}", summary);
+    }
+
+    /// Builds a summary string of the watermark state.
+    fn build_summary(&self, fetched_wm: &Watermark) -> String {
+        let mut summary = String::new();
+
+        // Add fetched watermark
+        summary.push_str(&format!(
+            "Watermark Summary: fetched_wm={}, ",
+            fetched_wm.timestamp_millis()
+        ));
+
+        // Add last processed watermarks per edge and partition
+        let mut last_wm_parts: Vec<String> = Vec::new();
+        for (edge, partitions) in &self.last_processed_wm {
+            let mut partition_wms: Vec<String> = partitions
+                .iter()
+                .map(|(p, wm)| format!("p{}={}", p, wm))
+                .collect();
+            partition_wms.sort();
+            last_wm_parts.push(format!("{}:[{}]", edge, partition_wms.join(",")));
+        }
+        last_wm_parts.sort();
+        summary.push_str(&format!(
+            "last_processed_wm={{{}}}, ",
+            last_wm_parts.join(", ")
+        ));
+
+        // Add processor information with timeline entries
+        let mut processor_parts: Vec<String> = Vec::new();
+        for (edge, processor_manager) in &self.processor_managers {
+            let processors = processor_manager
+                .processors
+                .read()
+                .expect("failed to acquire lock");
+
+            let mut proc_infos: Vec<String> = Vec::new();
+            for (name, processor) in processors.iter() {
+                let name_str = String::from_utf8_lossy(name);
+                let status = if processor.is_active() {
+                    "active"
+                } else if processor.is_deleted() {
+                    "deleted"
+                } else {
+                    "inactive"
+                };
+
+                // Get complete timeline for each partition
+                let mut timeline_parts: Vec<String> = Vec::new();
+                for (partition, timeline) in &processor.timelines {
+                    let entries: Vec<String> = timeline
+                        .entries()
+                        .iter()
+                        .map(|wmb| format!("(wm={},off={})", wmb.watermark, wmb.offset))
+                        .collect();
+                    let entries_str = if entries.is_empty() {
+                        "empty".to_string()
+                    } else {
+                        entries.join("->")
+                    };
+                    timeline_parts.push(format!("p{}:[{}]", partition, entries_str));
+                }
+                timeline_parts.sort();
+
+                proc_infos.push(format!(
+                    "{}({})[{}]",
+                    name_str,
+                    status,
+                    timeline_parts.join(",")
+                ));
+            }
+            proc_infos.sort();
+            processor_parts.push(format!("{}:{{{}}}", edge, proc_infos.join(", ")));
+        }
+        processor_parts.sort();
+        summary.push_str(&format!("processors={{{}}}", processor_parts.join(", ")));
+
+        summary
     }
 }
 
@@ -449,6 +552,8 @@ mod tests {
 
         // Invoke fetch_watermark and verify the result
         let watermark = fetcher.fetch_watermark(12, 0);
+        fetcher.watermark_log_summary(&watermark);
+
         assert_eq!(watermark.timestamp_millis(), 150);
     }
 
