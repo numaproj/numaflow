@@ -22,10 +22,27 @@ use crate::metrics::{
 use crate::shared::grpc::prost_timestamp_from_utc;
 
 type ResponseSenderMap =
-    Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
+    HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>;
 
-type StreamResponseSenderMap =
-    Arc<Mutex<HashMap<String, (ParentMessageInfo, mpsc::Sender<Result<Message>>)>>>;
+type StreamResponseSenderMap = HashMap<String, (ParentMessageInfo, mpsc::Sender<Result<Message>>)>;
+
+#[derive(Default)]
+struct UnarySenderMapState {
+    map: ResponseSenderMap,
+    closed: bool,
+}
+
+#[derive(Default)]
+struct BatchSenderMapState {
+    map: ResponseSenderMap,
+    closed: bool,
+}
+
+#[derive(Default)]
+struct StreamSenderMapState {
+    map: StreamResponseSenderMap,
+    closed: bool,
+}
 
 struct ParentMessageInfo {
     offset: Offset,
@@ -62,7 +79,7 @@ impl From<Message> for MapRequest {
 /// and forwards the responses.
 pub(in crate::mapper) struct UserDefinedUnaryMap {
     read_tx: mpsc::Sender<MapRequest>,
-    senders: ResponseSenderMap,
+    senders: Arc<Mutex<UnarySenderMapState>>,
     task_handle: tokio::task::JoinHandle<()>,
 }
 
@@ -83,7 +100,7 @@ impl UserDefinedUnaryMap {
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
         // map to track the oneshot sender for each request along with the message info
-        let sender_map = Arc::new(Mutex::new(HashMap::new()));
+        let sender_map = Arc::new(Mutex::new(UnarySenderMapState::default()));
 
         // background task to receive responses from the server and send them to the appropriate
         // oneshot sender based on the message id
@@ -101,32 +118,40 @@ impl UserDefinedUnaryMap {
         Ok(mapper)
     }
 
+    /// Broadcasts a unary gRPC error to all pending senders and records error metrics.
+    fn broadcast_error(sender_map: &Arc<Mutex<UnarySenderMapState>>, error: tonic::Status) {
+        let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
+        sender_guard.closed = true;
+        let senders = std::mem::take(&mut sender_guard.map);
+
+        // avoid holding the lock while sending the error
+        drop(sender_guard);
+
+        for (_, (_, sender)) in senders {
+            let _ = sender.send(Err(Error::Grpc(Box::new(error.clone()))));
+            pipeline_metrics()
+                .forwarder
+                .udf_error_total
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                .inc();
+        }
+    }
+
     /// receive responses from the server and gets the corresponding oneshot response sender from the map
     /// and sends the response.
     async fn receive_unary_responses(
-        sender_map: ResponseSenderMap,
+        sender_map: Arc<Mutex<UnarySenderMapState>>,
         mut resp_stream: Streaming<MapResponse>,
     ) {
         while let Some(resp) = match resp_stream.message().await {
             Ok(message) => message,
             Err(e) => {
-                let senders = {
-                    let mut senders = sender_map.lock().expect("failed to acquire poisoned lock");
-                    senders.drain().collect::<Vec<_>>()
-                };
-
-                for (_, (_, sender)) in senders {
-                    let _ = sender.send(Err(Error::Grpc(Box::new(e.clone()))));
-                    pipeline_metrics()
-                        .forwarder
-                        .udf_error_total
-                        .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                        .inc();
-                }
+                error!(?e, "Error reading message from unary map gRPC stream");
+                Self::broadcast_error(&sender_map, e);
                 None
             }
         } {
-            process_response(&sender_map, resp).await
+            process_unary_response(&sender_map, resp).await
         }
     }
 
@@ -164,9 +189,16 @@ impl UserDefinedUnaryMap {
         }
 
         // insert the sender into the map
-        self.senders
+        let mut senders_guard = self
+            .senders
             .lock()
-            .expect("failed to acquire poisoned lock")
+            .expect("failed to acquire poisoned lock");
+        if senders_guard.closed {
+            let _ = respond_to.send(Err(Error::Mapper("mapper closed".to_string())));
+            return;
+        }
+        senders_guard
+            .map
             .insert(key.clone(), (msg_info, respond_to));
     }
 }
@@ -175,7 +207,7 @@ impl UserDefinedUnaryMap {
 /// and forwards the responses.
 pub(in crate::mapper) struct UserDefinedBatchMap {
     read_tx: mpsc::Sender<MapRequest>,
-    senders: ResponseSenderMap,
+    senders: Arc<Mutex<BatchSenderMapState>>,
     task_handle: tokio::task::JoinHandle<()>,
 }
 
@@ -196,7 +228,7 @@ impl UserDefinedBatchMap {
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
         // map to track the oneshot response sender for each request along with the message info
-        let sender_map = Arc::new(Mutex::new(HashMap::new()));
+        let sender_map = Arc::new(Mutex::new(BatchSenderMapState::default()));
 
         // background task to receive responses from the server and send them to the appropriate
         // oneshot response sender based on the id
@@ -213,30 +245,36 @@ impl UserDefinedBatchMap {
         Ok(mapper)
     }
 
+    /// Broadcasts a batch map gRPC error to all pending senders and records error metrics.
+    fn broadcast_error(sender_map: &Arc<Mutex<BatchSenderMapState>>, error: tonic::Status) {
+        let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
+        sender_guard.closed = true;
+        let senders = std::mem::take(&mut sender_guard.map);
+
+        // avoid holding the lock while sending errors
+        drop(sender_guard);
+
+        for (_, (_, sender)) in senders {
+            let _ = sender.send(Err(Error::Grpc(Box::new(error.clone()))));
+            pipeline_metrics()
+                .forwarder
+                .udf_error_total
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                .inc();
+        }
+    }
+
     /// receive responses from the server and gets the corresponding oneshot response sender from the map
     /// and sends the response.
     async fn receive_batch_responses(
-        sender_map: ResponseSenderMap,
+        sender_map: Arc<Mutex<BatchSenderMapState>>,
         mut resp_stream: Streaming<MapResponse>,
     ) {
         while let Some(resp) = match resp_stream.message().await {
             Ok(message) => message,
             Err(e) => {
-                let senders = {
-                    let mut senders = sender_map.lock().expect("failed to acquire poisoned lock");
-                    senders.drain().collect::<Vec<_>>()
-                };
-
-                for (_, (_, sender)) in senders {
-                    sender
-                        .send(Err(Error::Grpc(Box::new(e.clone()))))
-                        .expect("failed to send error response");
-                    pipeline_metrics()
-                        .forwarder
-                        .udf_error_total
-                        .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                        .inc();
-                }
+                error!(?e, "Error reading message from batch map gRPC stream");
+                Self::broadcast_error(&sender_map, e);
                 None
             }
         } {
@@ -244,6 +282,7 @@ impl UserDefinedBatchMap {
                 if !sender_map
                     .lock()
                     .expect("failed to acquire poisoned lock")
+                    .map
                     .is_empty()
                 {
                     error!("received EOT but not all responses have been received");
@@ -273,7 +312,43 @@ impl UserDefinedBatchMap {
                 continue;
             }
 
-            process_response(&sender_map, resp).await
+            Self::process_batch_response(&sender_map, resp).await
+        }
+    }
+
+    /// Processes the response from the server and sends it to the appropriate oneshot sender
+    /// based on the message id entry in the map.
+    async fn process_batch_response(
+        sender_map: &Arc<Mutex<BatchSenderMapState>>,
+        resp: MapResponse,
+    ) {
+        let msg_id = resp.id;
+
+        let sender_entry = sender_map
+            .lock()
+            .expect("failed to acquire poisoned lock")
+            .map
+            .remove(&msg_id);
+
+        if let Some((msg_info, sender)) = sender_entry {
+            let mut response_messages = vec![];
+            for (i, result) in resp.results.into_iter().enumerate() {
+                response_messages.push(UserDefinedMessage(result, &msg_info, i as i32).into());
+            }
+
+            pipeline_metrics()
+                .forwarder
+                .udf_write_total
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                .inc_by(response_messages.len() as u64);
+
+            pipeline_metrics()
+                .forwarder
+                .udf_processing_time
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                .observe(msg_info.start_time.elapsed().as_micros() as f64);
+
+            let _ = sender.send(Ok(response_messages));
         }
     }
 
@@ -311,9 +386,18 @@ impl UserDefinedBatchMap {
                 return;
             }
 
-            self.senders
+            let mut senders_guard = self
+                .senders
                 .lock()
-                .expect("failed to acquire poisoned lock")
+                .expect("failed to acquire poisoned lock");
+
+            if senders_guard.closed {
+                let _ = respond_to.send(Err(Error::Mapper("mapper closed".to_string())));
+                return;
+            }
+
+            senders_guard
+                .map
                 .insert(key.clone(), (msg_info, respond_to));
         }
 
@@ -332,12 +416,13 @@ impl UserDefinedBatchMap {
 
 /// Processes the response from the server and sends it to the appropriate oneshot sender
 /// based on the message id entry in the map.
-async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
+async fn process_unary_response(sender_map: &Arc<Mutex<UnarySenderMapState>>, resp: MapResponse) {
     let msg_id = resp.id;
 
     let sender_entry = sender_map
         .lock()
         .expect("failed to acquire poisoned lock")
+        .map
         .remove(&msg_id);
 
     if let Some((msg_info, sender)) = sender_entry {
@@ -358,9 +443,7 @@ async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
             .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
             .observe(msg_info.start_time.elapsed().as_micros() as f64);
 
-        sender
-            .send(Ok(response_messages))
-            .expect("failed to send response");
+        let _ = sender.send(Ok(response_messages));
     }
 }
 
@@ -406,7 +489,7 @@ async fn create_response_stream(
 /// UserDefinedStreamMap is a grpc client that sends stream requests to the map server
 pub(in crate::mapper) struct UserDefinedStreamMap {
     read_tx: mpsc::Sender<MapRequest>,
-    senders: StreamResponseSenderMap,
+    senders: Arc<Mutex<StreamSenderMapState>>,
     task_handle: tokio::task::JoinHandle<()>,
 }
 
@@ -427,7 +510,7 @@ impl UserDefinedStreamMap {
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
         // map to track the oneshot response sender for each request along with the message info
-        let sender_map = Arc::new(Mutex::new(HashMap::new()));
+        let sender_map = Arc::new(Mutex::new(StreamSenderMapState::default()));
 
         // background task to receive responses from the server and send them to the appropriate
         // mpsc sender based on the id
@@ -444,34 +527,45 @@ impl UserDefinedStreamMap {
         Ok(mapper)
     }
 
+    /// Broadcasts a gRPC error to all pending senders and records error metrics.
+    async fn broadcast_error(sender_map: &Arc<Mutex<StreamSenderMapState>>, error: tonic::Status) {
+        // Force dropping the sender_guard by moving it out of the scope
+        // Using `drop(sender_guard)` here doesn't satisfy the borrow checker since it assumes it is
+        // still in use across await calls for some reason.
+        let senders = {
+            let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
+            sender_guard.closed = true;
+            std::mem::take(&mut sender_guard.map)
+        };
+
+        for (_, (_, sender)) in senders {
+            let _ = sender.send(Err(Error::Grpc(Box::new(error.clone())))).await;
+            pipeline_metrics()
+                .forwarder
+                .udf_error_total
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                .inc();
+        }
+    }
+
     /// receive responses from the server and gets the corresponding oneshot sender from the map
     /// and sends the response.
     async fn receive_stream_responses(
-        sender_map: StreamResponseSenderMap,
+        sender_map: Arc<Mutex<StreamSenderMapState>>,
         mut resp_stream: Streaming<MapResponse>,
     ) {
         while let Some(resp) = match resp_stream.message().await {
             Ok(message) => message,
             Err(e) => {
-                let senders = {
-                    let mut senders = sender_map.lock().expect("failed to acquire poisoned lock");
-                    senders.drain().collect::<Vec<_>>()
-                };
-
-                for (_, (_, sender)) in senders {
-                    let _ = sender.send(Err(Error::Grpc(Box::new(e.clone())))).await;
-                    pipeline_metrics()
-                        .forwarder
-                        .udf_error_total
-                        .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                        .inc();
-                }
+                error!(?e, "Error reading message from stream map gRPC stream");
+                Self::broadcast_error(&sender_map, e).await;
                 None
             }
         } {
-            let (mut message_info, response_sender) = sender_map
+            let (message_info, response_sender) = sender_map
                 .lock()
                 .expect("failed to acquire poisoned lock")
+                .map
                 .remove(&resp.id)
                 .expect("map entry should always be present");
 
@@ -486,30 +580,59 @@ impl UserDefinedStreamMap {
                 continue;
             }
 
-            for result in resp.results.into_iter() {
-                response_sender
-                    .send(Ok(UserDefinedMessage(
-                        result,
-                        &message_info,
-                        message_info.current_index,
-                    )
-                    .into()))
-                    .await
-                    .expect("failed to send response");
-                message_info.current_index += 1;
-                pipeline_metrics()
-                    .forwarder
-                    .udf_write_total
-                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
-                    .inc();
-            }
+            Self::process_stream_response(
+                &sender_map,
+                resp.id,
+                message_info,
+                response_sender,
+                resp.results,
+            )
+            .await;
+        }
+    }
 
-            // Write the sender back to the map, because we need to send
-            // more responses for the same request
-            sender_map
-                .lock()
-                .expect("failed to acquire poisoned lock")
-                .insert(resp.id, (message_info, response_sender));
+    /// Processes stream responses and sends them to the appropriate mpsc sender
+    async fn process_stream_response(
+        sender_map: &Arc<Mutex<StreamSenderMapState>>,
+        msg_id: String,
+        mut message_info: ParentMessageInfo,
+        response_sender: mpsc::Sender<Result<Message>>,
+        results: Vec<map::map_response::Result>,
+    ) {
+        for result in results.into_iter() {
+            let _ = response_sender
+                .send(Ok(UserDefinedMessage(
+                    result,
+                    &message_info,
+                    message_info.current_index,
+                )
+                .into()))
+                .await;
+            message_info.current_index += 1;
+            pipeline_metrics()
+                .forwarder
+                .udf_write_total
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                .inc();
+        }
+
+        // move the senders_guard out of the scope to drop the guard before sending the response
+        let mapper_closed = {
+            let mut senders_guard = sender_map.lock().expect("failed to acquire poisoned lock");
+            if !senders_guard.closed {
+                // Write the sender back to the map, because we need to send
+                // more responses for the same request
+                senders_guard
+                    .map
+                    .insert(msg_id, (message_info, response_sender.clone()));
+            }
+            senders_guard.closed
+        };
+
+        if mapper_closed {
+            let _ = response_sender
+                .send(Err(Error::Mapper("mapper closed".to_string())))
+                .await;
         }
     }
 
@@ -548,10 +671,27 @@ impl UserDefinedStreamMap {
             return;
         }
 
-        self.senders
-            .lock()
-            .expect("failed to acquire poisoned lock")
-            .insert(key.clone(), (msg_info, respond_to));
+        // move the senders_guard out of the scope to drop the guard before sending the response
+        let mapper_closed = {
+            let mut senders_guard = self
+                .senders
+                .lock()
+                .expect("failed to acquire poisoned lock");
+            if !senders_guard.closed {
+                // Write the sender back to the map, because we need to send
+                // more responses for the same request
+                senders_guard
+                    .map
+                    .insert(key.clone(), (msg_info, respond_to.clone()));
+            }
+            senders_guard.closed
+        };
+
+        if mapper_closed {
+            let _ = respond_to
+                .send(Err(Error::Mapper("mapper closed".to_string())))
+                .await;
+        }
     }
 }
 
