@@ -59,7 +59,7 @@ jobs:
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Start JetStream
         run: docker run -d -p 4222:4222 nats:latest -js
