@@ -580,18 +580,17 @@ impl AlignedReducer {
 
         // Handle late messages
         if msg.is_late {
-            info!(event_time = ?msg.event_time.timestamp_millis(), watermark = ?self.current_watermark.timestamp_millis(), "Late message detected");
             if self.current_watermark.timestamp_millis() == -1 {
                 // this can happen when the pipeline is just started, and we receive a late message
                 // before we receive any watermark.
                 warn!(event_time = ?msg.event_time.timestamp_millis(), watermark = ?self.current_watermark.timestamp_millis(), "Late message detected, but watermark is -1, dropping message");
-                increment_late_message_drop_metric("late-message");
+                increment_late_message_drop_metric("no-valid-wm-late-message");
                 return;
             }
 
             // Drop the late message if it is outside the allowed lateness window.
             if msg.event_time < self.current_watermark.sub(self.allowed_lateness) {
-                info!(event_time = ?msg.event_time.timestamp_millis(), watermark = ?self.current_watermark.timestamp_millis(), "Late message detected, dropping");
+                debug!(event_time = ?msg.event_time.timestamp_millis(), watermark = ?self.current_watermark.timestamp_millis(), "Late message detected, dropping");
                 increment_late_message_drop_metric("late-message");
                 return;
             }

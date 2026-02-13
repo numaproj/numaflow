@@ -112,7 +112,7 @@ impl ISBWatermarkFetcher {
         let watermark = self.get_watermark();
 
         // Log summary periodically
-        self.maybe_log_summary(&watermark);
+        self.watermark_log_summary(&watermark);
 
         watermark
     }
@@ -253,7 +253,7 @@ impl ISBWatermarkFetcher {
 
     /// Logs a summary of the watermark state if the log interval has elapsed.
     /// This includes fetched watermark, last processed watermarks, processors, and their timelines.
-    fn maybe_log_summary(&mut self, fetched_wm: &Watermark) {
+    fn watermark_log_summary(&mut self, fetched_wm: &Watermark) {
         if self.last_log_time.elapsed() < WATERMARK_LOG_INTERVAL {
             return;
         }
@@ -552,6 +552,8 @@ mod tests {
 
         // Invoke fetch_watermark and verify the result
         let watermark = fetcher.fetch_watermark(12, 0);
+        fetcher.watermark_log_summary(&watermark);
+
         assert_eq!(watermark.timestamp_millis(), 150);
     }
 
