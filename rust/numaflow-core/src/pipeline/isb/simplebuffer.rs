@@ -83,6 +83,24 @@ impl From<SimpleBufferError> for Error {
     }
 }
 
+impl From<&Offset> for numaflow_testing::simplebuffer::Offset {
+    fn from(value: &Offset) -> Self {
+        match value {
+            Offset::Int(int_offset) => numaflow_testing::simplebuffer::Offset::new(
+                int_offset.offset,
+                int_offset.partition_idx,
+            ),
+            Offset::String(str_offset) => {
+                let seq: i64 = std::str::from_utf8(&str_offset.offset)
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0);
+                numaflow_testing::simplebuffer::Offset::new(seq, str_offset.partition_idx)
+            }
+        }
+    }
+}
+
 /// Convert [numaflow_testing::simplebuffer::Offset] to [numaflow_core::message::Offset].
 impl From<&numaflow_testing::simplebuffer::Offset> for Offset {
     fn from(value: &numaflow_testing::simplebuffer::Offset) -> Self {
@@ -125,37 +143,12 @@ impl ISBReader for SimpleReaderAdapter {
     }
 
     async fn ack(&self, offset: &Offset) -> crate::Result<()> {
-        let simple_offset = match offset {
-            Offset::Int(int_offset) => numaflow_testing::simplebuffer::Offset::new(
-                int_offset.offset,
-                int_offset.partition_idx,
-            ),
-            Offset::String(str_offset) => {
-                // For testing, we use sequence as the first part of the string
-                let seq: i64 = std::str::from_utf8(&str_offset.offset)
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(0);
-                numaflow_testing::simplebuffer::Offset::new(seq, str_offset.partition_idx)
-            }
-        };
+        let simple_offset = offset.into();
         self.inner.ack(&simple_offset).await.map_err(|e| e.into())
     }
 
     async fn nack(&self, offset: &Offset) -> crate::Result<()> {
-        let simple_offset = match offset {
-            Offset::Int(int_offset) => numaflow_testing::simplebuffer::Offset::new(
-                int_offset.offset,
-                int_offset.partition_idx,
-            ),
-            Offset::String(str_offset) => {
-                let seq: i64 = std::str::from_utf8(&str_offset.offset)
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(0);
-                numaflow_testing::simplebuffer::Offset::new(seq, str_offset.partition_idx)
-            }
-        };
+        let simple_offset = offset.into();
         self.inner.nack(&simple_offset).await.map_err(|e| e.into())
     }
 
@@ -168,19 +161,7 @@ impl ISBReader for SimpleReaderAdapter {
     }
 
     async fn mark_wip(&self, offset: &Offset) -> crate::Result<()> {
-        let simple_offset = match offset {
-            Offset::Int(int_offset) => numaflow_testing::simplebuffer::Offset::new(
-                int_offset.offset,
-                int_offset.partition_idx,
-            ),
-            Offset::String(str_offset) => {
-                let seq: i64 = std::str::from_utf8(&str_offset.offset)
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(0);
-                numaflow_testing::simplebuffer::Offset::new(seq, str_offset.partition_idx)
-            }
-        };
+        let simple_offset = offset.into();
         self.inner
             .mark_wip(&simple_offset)
             .await
@@ -266,9 +247,9 @@ impl ISBWriter for SimpleWriterAdapter {
 /// This allows testing ISBReaderOrchestrator and ISBWriterOrchestrator
 /// without requiring external infrastructure like NATS.
 #[derive(Clone)]
-#[allow(dead_code)] // Will be used when ISBReaderOrchestrator/ISBWriterOrchestrator integration tests are added
+#[cfg(test)]
 pub(crate) struct WithSimpleBuffer;
-
+#[cfg(test)]
 impl NumaflowTypeConfig for WithSimpleBuffer {
     type RateLimiter = NoOpRateLimiter;
     type ISBReader = SimpleReaderAdapter;
