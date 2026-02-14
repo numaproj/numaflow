@@ -997,3 +997,575 @@ mod tests {
         (streams, consumers)
     }
 }
+
+// SimpleBuffer Integration Tests
+// These tests use SimpleBuffer to test ISBWriterOrchestrator without a distributed ISB.
+#[cfg(test)]
+mod simplebuffer_tests {
+    use super::*;
+    use crate::config::pipeline::isb::BufferWriterConfig;
+    use crate::message::{AckHandle, IntOffset, MessageID, ReadAck};
+    use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
+    use bytes::Bytes;
+    use chrono::Utc;
+    use numaflow_testing::simplebuffer::SimpleBuffer;
+    use tokio::sync::mpsc;
+
+    /// Helper to create a test message with an ack handle
+    fn create_test_message(
+        id: i64,
+        value: &str,
+        tags: Option<Vec<&str>>,
+    ) -> (Message, tokio::sync::oneshot::Receiver<ReadAck>) {
+        let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+        let message = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec![format!("key-{}", id)]),
+            tags: tags.map(|t| Arc::from(t.into_iter().map(String::from).collect::<Vec<_>>())),
+            value: Bytes::from(value.to_string()),
+            offset: Offset::Int(IntOffset::new(id, 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "test".into(),
+                index: id as i32,
+                offset: format!("offset-{}", id).into(),
+            },
+            headers: Arc::new(HashMap::new()),
+            metadata: None,
+            is_late: false,
+            ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+        };
+        (message, ack_rx)
+    }
+
+    /// Helper to create ISBWriterOrchestrator with a single SimpleBuffer
+    fn create_single_stream_orchestrator(
+        adapter: &SimpleBufferAdapter,
+        stream_name: &'static str,
+        buffer_full_strategy: BufferFullStrategy,
+        paf_concurrency: usize,
+    ) -> (ISBWriterOrchestrator<WithSimpleBuffer>, CancellationToken) {
+        let stream = Stream::new(stream_name, "test-vertex", 0);
+        let cancel = CancellationToken::new();
+
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            buffer_full_strategy,
+            ..Default::default()
+        };
+
+        let mut writers = HashMap::new();
+        writers.insert(stream_name, adapter.writer());
+
+        let components = ISBWriterOrchestratorComponents {
+            config: vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+            }],
+            writers,
+            paf_concurrency,
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+        };
+
+        let orchestrator = ISBWriterOrchestrator::<WithSimpleBuffer>::new(components);
+        (orchestrator, cancel)
+    }
+
+    // ==================== Happy Path Tests ====================
+
+    /// Test: Single message write completes successfully
+    #[tokio::test]
+    async fn test_streaming_write_single_message() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+        drop(tx);
+
+        // Wait for ack
+        let ack = ack_rx.await.unwrap();
+        assert_eq!(ack, ReadAck::Ack);
+
+        handle.await.unwrap().unwrap();
+
+        // Verify message was written to buffer
+        assert_eq!(adapter.pending_count(), 1);
+    }
+
+    /// Test: Multiple messages write completes successfully
+    #[tokio::test]
+    async fn test_streaming_write_multiple_messages() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(20);
+        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let mut ack_rxs = vec![];
+        for i in 0..10 {
+            let (msg, ack_rx) = create_test_message(i, &format!("message-{}", i), None);
+            ack_rxs.push(ack_rx);
+            tx.send(msg).await.unwrap();
+        }
+        drop(tx);
+
+        // All messages should be acked
+        for ack_rx in ack_rxs {
+            let ack = ack_rx.await.unwrap();
+            assert_eq!(ack, ReadAck::Ack);
+        }
+
+        handle.await.unwrap().unwrap();
+        assert_eq!(adapter.pending_count(), 10);
+    }
+
+    // ==================== Buffer Full Tests ====================
+
+    /// Test: Buffer full with DiscardLatest strategy drops message
+    #[tokio::test]
+    async fn test_buffer_full_with_discard_strategy() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Force buffer full
+        adapter.error_injector().set_buffer_full(true);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::DiscardLatest,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+        drop(tx);
+
+        // Message should still be acked (dropped messages are considered processed)
+        let ack = ack_rx.await.unwrap();
+        assert_eq!(ack, ReadAck::Ack);
+
+        handle.await.unwrap().unwrap();
+
+        // No messages should be in buffer (was dropped)
+        assert_eq!(adapter.pending_count(), 0);
+    }
+
+    /// Test: Buffer full with RetryUntilSuccess strategy retries until buffer available
+    #[tokio::test]
+    async fn test_buffer_full_with_retry_strategy() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Force buffer full initially
+        adapter.error_injector().set_buffer_full(true);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+
+        // Let it retry a few times, then unblock
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        adapter.error_injector().set_buffer_full(false);
+
+        drop(tx);
+
+        // Should eventually succeed
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
+            .await
+            .expect("Should receive ack")
+            .unwrap();
+        assert_eq!(ack, ReadAck::Ack);
+
+        handle.await.unwrap().unwrap();
+        assert_eq!(adapter.pending_count(), 1);
+    }
+
+    // ==================== Write Failure Tests ====================
+
+    /// Test: Write failures are retried until success
+    #[tokio::test]
+    async fn test_write_failed_retries_until_success() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Fail first 3 writes
+        adapter.error_injector().fail_writes(3);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+        drop(tx);
+
+        // Should eventually succeed after retries
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
+            .await
+            .expect("Should receive ack")
+            .unwrap();
+        assert_eq!(ack, ReadAck::Ack);
+
+        handle.await.unwrap().unwrap();
+        assert_eq!(adapter.pending_count(), 1);
+    }
+
+    /// Test: Write failures with cancellation stops retry loop
+    #[tokio::test]
+    async fn test_write_failed_with_cancellation() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Force buffer full forever (will keep retrying)
+        adapter.error_injector().set_buffer_full(true);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+
+        // Let it try a few times
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Cancel to stop retries
+        cancel.cancel();
+        drop(tx);
+
+        // Message should be acked (we exit the loop on cancel)
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
+            .await
+            .expect("Should receive ack")
+            .unwrap();
+        assert_eq!(ack, ReadAck::Ack);
+
+        handle.await.unwrap().unwrap();
+    }
+
+    // ==================== PAF Resolution Failure Tests ====================
+
+    /// Test: PAF resolution failure triggers write_with_retry fallback
+    #[tokio::test]
+    async fn test_paf_resolution_failure_triggers_write_retry() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Fail first resolve, but write should succeed on retry
+        adapter.error_injector().fail_resolves(1);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+        drop(tx);
+
+        // Should succeed via fallback write
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
+            .await
+            .expect("Should receive ack")
+            .unwrap();
+        assert_eq!(ack, ReadAck::Ack);
+
+        handle.await.unwrap().unwrap();
+    }
+
+    /// Test: When resolve fails but is still retrying when cancellation happens,
+    /// the message still gets processed correctly.
+    ///
+    /// This tests that when PAF resolution fails and triggers write_with_retry,
+    /// if the retry eventually succeeds (as duplicate detection), the message is ACK'd.
+    /// Note: Testing the NAK path where write_with_retry fails is non-trivial with
+    /// SimpleBuffer because async_write and write share the same error injection.
+    #[tokio::test]
+    async fn test_paf_resolution_failure_with_retry_succeeds_as_duplicate() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Fail only the first resolve - this triggers write_with_retry fallback
+        // The fallback write will succeed because the message is already in the buffer
+        // (written by async_write), so it will be detected as a duplicate.
+        adapter.error_injector().fail_resolves(1);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+
+        // Message should succeed via duplicate detection in fallback write
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
+            .await
+            .expect("Should receive ack response")
+            .unwrap();
+        assert_eq!(ack, ReadAck::Ack);
+
+        cancel.cancel();
+        drop(tx);
+
+        handle.await.unwrap().unwrap();
+    }
+
+    // ==================== Dropped Message Tests ====================
+
+    /// Test: Messages with DROP tag are not written to buffer
+    #[tokio::test]
+    async fn test_dropped_message_not_written() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        // Send a message with DROP tag
+        let (msg, ack_rx) = create_test_message(1, "hello", Some(vec!["U+005C__DROP__"]));
+        tx.send(msg).await.unwrap();
+        drop(tx);
+
+        // Should be acked (drop is considered successful processing)
+        let ack = ack_rx.await.unwrap();
+        assert_eq!(ack, ReadAck::Ack);
+
+        handle.await.unwrap().unwrap();
+
+        // Message should NOT be in buffer
+        assert_eq!(adapter.pending_count(), 0);
+    }
+
+    // ==================== Duplicate Detection Tests ====================
+
+    /// Test: Duplicate messages are detected
+    #[tokio::test]
+    async fn test_duplicate_message_detection() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        // Send the same message twice (same ID)
+        let (msg1, ack_rx1) = create_test_message(1, "hello", None);
+        let (msg2, ack_rx2) = create_test_message(1, "hello", None); // Same ID!
+
+        tx.send(msg1).await.unwrap();
+        // Wait for first to complete
+        let ack1 = ack_rx1.await.unwrap();
+        assert_eq!(ack1, ReadAck::Ack);
+
+        tx.send(msg2).await.unwrap();
+        drop(tx);
+
+        // Second should also be acked (duplicate is still successful)
+        let ack2 = ack_rx2.await.unwrap();
+        assert_eq!(ack2, ReadAck::Ack);
+
+        handle.await.unwrap().unwrap();
+
+        // Only 1 message should be in buffer (duplicate was detected)
+        assert_eq!(adapter.pending_count(), 1);
+    }
+
+    // ==================== PAF Concurrency Tests ====================
+
+    /// Test: PAF concurrency limits concurrent resolutions
+    #[tokio::test]
+    async fn test_paf_concurrency_semaphore() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Add some resolve latency to make concurrency observable
+        adapter.error_injector().set_resolve_latency(50);
+
+        // Use paf_concurrency = 2 to limit concurrent resolutions
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            2,
+        );
+
+        let (tx, rx) = mpsc::channel(20);
+        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let mut ack_rxs = vec![];
+        for i in 0..5 {
+            let (msg, ack_rx) = create_test_message(i, &format!("message-{}", i), None);
+            ack_rxs.push(ack_rx);
+            tx.send(msg).await.unwrap();
+        }
+        drop(tx);
+
+        // All should eventually complete
+        for ack_rx in ack_rxs {
+            let ack = tokio::time::timeout(Duration::from_secs(5), ack_rx)
+                .await
+                .expect("Should receive ack")
+                .unwrap();
+            assert_eq!(ack, ReadAck::Ack);
+        }
+
+        handle.await.unwrap().unwrap();
+        assert_eq!(adapter.pending_count(), 5);
+    }
+
+    // ==================== Graceful Shutdown Tests ====================
+
+    /// Test: wait_for_paf_resolvers blocks until all PAF resolutions complete
+    #[tokio::test]
+    async fn test_graceful_shutdown_waits_for_paf_resolvers() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Add resolve latency to make the wait observable
+        adapter.error_injector().set_resolve_latency(100);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let mut ack_rxs = vec![];
+        for i in 0..3 {
+            let (msg, ack_rx) = create_test_message(i, &format!("message-{}", i), None);
+            ack_rxs.push(ack_rx);
+            tx.send(msg).await.unwrap();
+        }
+        drop(tx); // Close the channel to signal end of stream
+
+        // Wait for all acks
+        for ack_rx in ack_rxs {
+            let ack = tokio::time::timeout(Duration::from_secs(5), ack_rx)
+                .await
+                .expect("Should receive ack")
+                .unwrap();
+            assert_eq!(ack, ReadAck::Ack);
+        }
+
+        // Handle should complete cleanly (wait_for_paf_resolvers ensures all done)
+        tokio::time::timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("Handle should complete")
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(adapter.pending_count(), 3);
+    }
+}
