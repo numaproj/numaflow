@@ -1568,4 +1568,225 @@ mod simplebuffer_tests {
 
         assert_eq!(adapter.pending_count(), 3);
     }
+
+    // ==================== Multi-Stream Tests ====================
+
+    /// Helper to create ISBWriterOrchestrator with multiple downstream vertices.
+    /// Each vertex has its own stream with independent error injection.
+    /// This allows testing scenarios where a message is written to multiple streams
+    /// (one per downstream vertex).
+    fn create_multi_vertex_orchestrator(
+        adapters: Vec<(&'static str, &SimpleBufferAdapter)>,
+        buffer_full_strategy: BufferFullStrategy,
+        paf_concurrency: usize,
+    ) -> (ISBWriterOrchestrator<WithSimpleBuffer>, CancellationToken) {
+        let cancel = CancellationToken::new();
+
+        let mut writers = HashMap::new();
+        let mut vertex_configs = vec![];
+
+        for (idx, (stream_name, adapter)) in adapters.iter().enumerate() {
+            let vertex_name: &'static str = Box::leak(format!("vertex-{}", idx).into_boxed_str());
+            let stream = Stream::new(stream_name, vertex_name, 0);
+            writers.insert(*stream_name, adapter.writer());
+
+            let writer_config = BufferWriterConfig {
+                streams: vec![stream],
+                buffer_full_strategy: buffer_full_strategy.clone(),
+                ..Default::default()
+            };
+
+            vertex_configs.push(ToVertexConfig {
+                name: Box::leak(format!("vertex-{}", idx).into_boxed_str()),
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+            });
+        }
+
+        let components = ISBWriterOrchestratorComponents {
+            config: vertex_configs,
+            writers,
+            paf_concurrency,
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+        };
+
+        let orchestrator = ISBWriterOrchestrator::<WithSimpleBuffer>::new(components);
+        (orchestrator, cancel)
+    }
+
+    /// Test: When writing to multiple downstream vertices and one vertex's PAF resolution fails
+    /// (and retry also fails due to cancellation), the message should be NAK'd.
+    ///
+    /// This tests the `resolved_offsets.len() != n` path in resolve_and_finalize.
+    #[tokio::test]
+    async fn test_multi_vertex_partial_failure_naks_message() {
+        // Create two separate buffers with independent error injection
+        let adapter1 = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "stream-1"));
+        let adapter2 = SimpleBufferAdapter::new(SimpleBuffer::new(100, 1, "stream-2"));
+
+        // Stream 2 configuration:
+        // 1. Initial write succeeds (skip 1 write before failing)
+        // 2. Resolve fails (fail_resolves(1))
+        // 3. Retry writes fail (fail 1000 writes after skipping the first one)
+        // 4. Cancellation will cause write_with_retry to exit with error
+        adapter2.error_injector().fail_resolves(1);
+        adapter2.error_injector().skip_writes_then_fail(1, 1000);
+
+        let (orchestrator, cancel) = create_multi_vertex_orchestrator(
+            vec![("stream-1", &adapter1), ("stream-2", &adapter2)],
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+
+        // Cancel after a short delay to allow the initial write and resolve to happen,
+        // then cause the retry loop to exit with error
+        let cancel_clone = cancel.clone();
+        tokio::spawn(async move {
+            // Wait for the resolve to fail and retry to start
+            sleep(Duration::from_millis(50)).await;
+            cancel_clone.cancel();
+        });
+
+        // The message should be NAK'd because stream-2's retry fails due to cancellation
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
+            .await
+            .expect("Should receive ack response")
+            .unwrap();
+        assert_eq!(ack, ReadAck::Nak);
+
+        drop(tx);
+
+        handle.await.unwrap().unwrap();
+
+        // Stream 1 should have the message (write succeeded)
+        assert_eq!(adapter1.pending_count(), 1);
+        // Stream 2 should also have the message from initial write (before resolve failed)
+        assert_eq!(adapter2.pending_count(), 1);
+    }
+
+    /// Test: Semaphore permit is properly released even when PAF resolution fails,
+    /// allowing subsequent messages to be processed.
+    #[tokio::test]
+    async fn test_semaphore_released_on_paf_failure() {
+        let adapter1 = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "stream-1"));
+        let adapter2 = SimpleBufferAdapter::new(SimpleBuffer::new(100, 1, "stream-2"));
+
+        // First message: stream-2 will fail resolve, then retry will fail due to cancellation
+        // skip_writes_then_fail: skip 1 write (initial succeeds), then fail subsequent (retry fails)
+        adapter2.error_injector().fail_resolves(1);
+        adapter2.error_injector().skip_writes_then_fail(1, 1000);
+
+        // Use paf_concurrency = 1 to ensure sequential processing
+        let (orchestrator, cancel) = create_multi_vertex_orchestrator(
+            vec![("stream-1", &adapter1), ("stream-2", &adapter2)],
+            BufferFullStrategy::RetryUntilSuccess,
+            1,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        // Spawn a task to cancel after a short delay
+        // This allows initial write and resolve to happen, then causes retry loop to exit
+        let cancel_inner = cancel.clone();
+        tokio::spawn(async move {
+            sleep(Duration::from_millis(50)).await;
+            cancel_inner.cancel();
+        });
+
+        // Send first message (will fail on stream-2)
+        let (msg1, ack_rx1) = create_test_message(1, "first", None);
+        tx.send(msg1).await.unwrap();
+
+        // First message should be NAK'd
+        let ack1 = tokio::time::timeout(Duration::from_secs(2), ack_rx1)
+            .await
+            .expect("Should receive ack response for msg1")
+            .unwrap();
+        assert_eq!(ack1, ReadAck::Nak);
+
+        drop(tx);
+        handle.await.unwrap().unwrap();
+
+        // The key assertion: even though the first message failed,
+        // the semaphore was released (permit dropped when spawn task completed).
+        // We verify this by checking that the orchestrator completed successfully
+        // (wait_for_paf_resolvers was able to acquire all permits).
+    }
+
+    /// Test: Multiple messages with paf_concurrency=1 are processed sequentially,
+    /// and the semaphore properly gates concurrent PAF resolutions.
+    #[tokio::test]
+    async fn test_paf_concurrency_one_processes_sequentially() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Add resolve latency to make timing observable
+        adapter.error_injector().set_resolve_latency(50);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            1, // paf_concurrency = 1
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let start = std::time::Instant::now();
+
+        // Send 3 messages
+        let mut ack_rxs = vec![];
+        for i in 0..3 {
+            let (msg, ack_rx) = create_test_message(i, &format!("msg-{}", i), None);
+            ack_rxs.push(ack_rx);
+            tx.send(msg).await.unwrap();
+        }
+        drop(tx);
+
+        // All should complete
+        for ack_rx in ack_rxs {
+            let ack = tokio::time::timeout(Duration::from_secs(5), ack_rx)
+                .await
+                .expect("Should receive ack")
+                .unwrap();
+            assert_eq!(ack, ReadAck::Ack);
+        }
+
+        handle.await.unwrap().unwrap();
+
+        // With paf_concurrency=1 and 50ms resolve latency per message,
+        // 3 messages should take at least 150ms (sequential processing)
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed.as_millis() >= 150,
+            "Expected sequential processing (>=150ms), but took {}ms",
+            elapsed.as_millis()
+        );
+
+        assert_eq!(adapter.pending_count(), 3);
+    }
 }
