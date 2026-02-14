@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.7.2 (2026-02-13)
+
+ * [f107d3b3](https://github.com/numaproj/numaflow/commit/f107d3b30e2a5f9161daf1942dbf3a8fdec903fd) Update manifests to v1.7.2
+ * [a072ad0b](https://github.com/numaproj/numaflow/commit/a072ad0b75cb50507c55111a989d8a540ca35197) fix(UI): pending chart for source vertex (#3209)
+ * [7f2c9890](https://github.com/numaproj/numaflow/commit/7f2c989012b828e99a6e42fe94011a5bfde7ceb7) feat: check initContainerStatuses are in Waiting or Terminated state during health check  (#3226)
+ * [1a679c72](https://github.com/numaproj/numaflow/commit/1a679c72adafa010f0618262c30e21674a524942) fix: numa container hangs occassionally when map panics
+ * [9f9b9c60](https://github.com/numaproj/numaflow/commit/9f9b9c6041a88645e6af8f82f73c78591e395661) feat: use initContainerStatuses in health checks (#3201)
+ * [e8dfb2fe](https://github.com/numaproj/numaflow/commit/e8dfb2fe602e01d7ff17f2a8b1360c7fbeba192f) feat: SQS System Attributes and Custom Attributes Propagation (#3095)
+ * [9f875b2b](https://github.com/numaproj/numaflow/commit/9f875b2bd69af1331c9a1a1d15aea4c242775b2d) fix: Restart on non-retryable kafka source ack errors (#3194)
+ * [aec4f3a2](https://github.com/numaproj/numaflow/commit/aec4f3a2ee51893da98fdd3b333c2f4c6af256a4) fix: use vertex name as partition label for source pending metric (#3205)
+
+### Contributors
+
+ * Adarsh Jain
+ * Dillen Padhiar
+ * Mikael Sundberg
+ * Sreekanth
+ * Yashash
+ * shrivardhan
+
 ## v1.7.1 (2026-01-17)
 
  * [7c8b4926](https://github.com/numaproj/numaflow/commit/7c8b4926cbd39066136c7d95c9862e21ddaa5095) Update manifests to v1.7.1
