@@ -199,60 +199,79 @@ impl SqsSinkBuilder {
     }
 }
 
+/// Maximum number of messages per SQS SendMessageBatch request.
+/// AWS SQS has a hard limit of 10 messages per batch.
+const SQS_MAX_BATCH_SIZE: usize = 10;
+
 impl SqsSink {
     /// Sends a batch of messages to the SQS queue.
     ///
     /// Returns responses for each message, including success or failure status.
+    /// Messages are automatically chunked into batches of 10 (SQS limit).
     pub async fn sink_messages(
         &self,
         messages: Vec<SqsSinkMessage>,
     ) -> Result<Vec<SqsSinkResponse>> {
-        let mut entries = Vec::with_capacity(messages.len());
-        let mut id_correlation = HashMap::with_capacity(messages.len());
+        let mut all_responses = Vec::with_capacity(messages.len());
 
-        for (index, message) in messages.into_iter().enumerate() {
-            let original_id = message.id.clone();
-            let entry: SendMessageBatchRequestEntry =
-                BatchEntryInput { index, message }.try_into()?;
+        // Chunk messages into batches of SQS_MAX_BATCH_SIZE (10) to comply with SQS limits
+        for chunk in messages.chunks(SQS_MAX_BATCH_SIZE) {
+            let mut entries = Vec::with_capacity(chunk.len());
+            let mut id_correlation = HashMap::with_capacity(chunk.len());
 
-            id_correlation.insert(entry.id().to_string(), original_id);
-            entries.push(entry);
+            for (index, message) in chunk.iter().enumerate() {
+                let original_id = message.id.clone();
+                let entry: SendMessageBatchRequestEntry = BatchEntryInput {
+                    index,
+                    message: SqsSinkMessage {
+                        id: message.id.clone(),
+                        message_body: message.message_body.clone(),
+                        headers: message.headers.clone(),
+                    },
+                }
+                .try_into()?;
+
+                id_correlation.insert(entry.id().to_string(), original_id);
+                entries.push(entry);
+            }
+
+            // on error, we will cascade the error to numaflow core which will initiate a shutdown.
+            let output = self
+                .client
+                .send_message_batch()
+                .queue_url(self.queue_url)
+                .set_entries(Some(entries))
+                .send()
+                .await
+                .map_err(|e| SqsSinkError::from(Error::Sqs(extract_aws_error(&e))))?;
+
+            let mut responses: Vec<_> = output
+                .successful
+                .into_iter()
+                .map(|s| {
+                    SqsSinkResponse::success(
+                        id_correlation
+                            .remove(&s.id)
+                            .expect("AWS returned unknown batch ID - this should never happen"),
+                    )
+                })
+                .collect();
+
+            responses.extend(output.failed.into_iter().map(|f| {
+                SqsSinkResponse::failure(
+                    id_correlation
+                        .remove(&f.id)
+                        .expect("AWS returned unknown batch ID - this should never happen"),
+                    f.message.unwrap_or_default(),
+                    f.code,
+                    f.sender_fault,
+                )
+            }));
+
+            all_responses.extend(responses);
         }
 
-        // on error, we will cascade the error to numaflow core which will initiate a shutdown.
-        let output = self
-            .client
-            .send_message_batch()
-            .queue_url(self.queue_url)
-            .set_entries(Some(entries))
-            .send()
-            .await
-            .map_err(|e| SqsSinkError::from(Error::Sqs(extract_aws_error(&e))))?;
-
-        let mut responses: Vec<_> = output
-            .successful
-            .into_iter()
-            .map(|s| {
-                SqsSinkResponse::success(
-                    id_correlation
-                        .remove(&s.id)
-                        .expect("AWS returned unknown batch ID - this should never happen"),
-                )
-            })
-            .collect();
-
-        responses.extend(output.failed.into_iter().map(|f| {
-            SqsSinkResponse::failure(
-                id_correlation
-                    .remove(&f.id)
-                    .expect("AWS returned unknown batch ID - this should never happen"),
-                f.message.unwrap_or_default(),
-                f.code,
-                f.sender_fault,
-            )
-        }));
-
-        Ok(responses)
+        Ok(all_responses)
     }
 }
 
