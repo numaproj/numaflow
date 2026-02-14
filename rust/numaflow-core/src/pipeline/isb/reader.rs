@@ -1591,9 +1591,6 @@ mod simplebuffer_tests {
             .await
         });
 
-        // Give it time to start retrying
-        sleep(Duration::from_millis(50)).await;
-
         // Cancel should stop the retry loop
         cancel.cancel();
 
@@ -1622,9 +1619,6 @@ mod simplebuffer_tests {
 
         // Read message
         let msg = rx.next().await.expect("Should receive message");
-
-        // Wait a bit for WIP to be attempted (and fail)
-        sleep(Duration::from_millis(50)).await;
 
         // Ack by dropping msg (is_failed defaults to false)
         drop(msg);
@@ -1761,9 +1755,6 @@ mod simplebuffer_tests {
         // Ack first message to free a permit by taking it out and dropping
         let first_msg = inflight.remove(0);
         drop(first_msg);
-
-        // Small delay to allow the wip_loop to complete ack and release permit
-        sleep(Duration::from_millis(100)).await;
 
         // Now 4th message should come through
         let fourth = tokio::time::timeout(Duration::from_millis(500), rx.next())
