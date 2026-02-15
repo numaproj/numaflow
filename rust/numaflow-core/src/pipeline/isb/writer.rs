@@ -1090,7 +1090,7 @@ mod simplebuffer_tests {
         );
 
         let (tx, rx) = mpsc::channel(10);
-        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let messages_stream = ReceiverStream::new(rx);
 
         let handle = orchestrator
             .streaming_write(messages_stream, cancel.clone())
@@ -1123,7 +1123,7 @@ mod simplebuffer_tests {
         );
 
         let (tx, rx) = mpsc::channel(20);
-        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let messages_stream = ReceiverStream::new(rx);
 
         let handle = orchestrator
             .streaming_write(messages_stream, cancel.clone())
@@ -1201,7 +1201,7 @@ mod simplebuffer_tests {
         );
 
         let (tx, rx) = mpsc::channel(10);
-        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let messages_stream = ReceiverStream::new(rx);
 
         let handle = orchestrator
             .streaming_write(messages_stream, cancel.clone())
@@ -1211,8 +1211,9 @@ mod simplebuffer_tests {
         let (msg, ack_rx) = create_test_message(1, "hello", None);
         tx.send(msg).await.unwrap();
 
-        // Let it retry a few times, then unblock
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        // Let it retry a few times, then unblock (this sleep is to simulate some retries, won't
+        // affect the test outcome)
+        sleep(Duration::from_millis(50)).await;
         adapter.error_injector().set_buffer_full(false);
 
         drop(tx);
@@ -1225,6 +1226,8 @@ mod simplebuffer_tests {
         assert_eq!(ack, ReadAck::Ack);
 
         handle.await.unwrap().unwrap();
+        // So pending_count() == 1 is correct - one message is in the buffer, and no consumer has
+        // read it.
         assert_eq!(adapter.pending_count(), 1);
     }
 
@@ -1245,7 +1248,7 @@ mod simplebuffer_tests {
         );
 
         let (tx, rx) = mpsc::channel(10);
-        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let messages_stream = ReceiverStream::new(rx);
 
         let handle = orchestrator
             .streaming_write(messages_stream, cancel.clone())
@@ -1282,7 +1285,7 @@ mod simplebuffer_tests {
         );
 
         let (tx, rx) = mpsc::channel(10);
-        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let messages_stream = ReceiverStream::new(rx);
 
         let handle = orchestrator
             .streaming_write(messages_stream, cancel.clone())
@@ -1292,8 +1295,8 @@ mod simplebuffer_tests {
         let (msg, ack_rx) = create_test_message(1, "hello", None);
         tx.send(msg).await.unwrap();
 
-        // Let it try a few times
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        // Let it try a few times (doesn't affect test outcome)
+        sleep(Duration::from_millis(50)).await;
 
         // Cancel to stop retries
         cancel.cancel();
@@ -1326,7 +1329,7 @@ mod simplebuffer_tests {
         );
 
         let (tx, rx) = mpsc::channel(10);
-        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let messages_stream = ReceiverStream::new(rx);
 
         let handle = orchestrator
             .streaming_write(messages_stream, cancel.clone())
@@ -1370,7 +1373,7 @@ mod simplebuffer_tests {
         );
 
         let (tx, rx) = mpsc::channel(10);
-        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let messages_stream = ReceiverStream::new(rx);
 
         let handle = orchestrator
             .streaming_write(messages_stream, cancel.clone())
@@ -1407,7 +1410,7 @@ mod simplebuffer_tests {
         );
 
         let (tx, rx) = mpsc::channel(10);
-        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let messages_stream = ReceiverStream::new(rx);
 
         let handle = orchestrator
             .streaming_write(messages_stream, cancel.clone())
@@ -1443,7 +1446,7 @@ mod simplebuffer_tests {
         );
 
         let (tx, rx) = mpsc::channel(10);
-        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let messages_stream = ReceiverStream::new(rx);
 
         let handle = orchestrator
             .streaming_write(messages_stream, cancel.clone())
@@ -1490,7 +1493,7 @@ mod simplebuffer_tests {
         );
 
         let (tx, rx) = mpsc::channel(20);
-        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let messages_stream = ReceiverStream::new(rx);
 
         let handle = orchestrator
             .streaming_write(messages_stream, cancel.clone())
@@ -1525,7 +1528,7 @@ mod simplebuffer_tests {
     async fn test_graceful_shutdown_waits_for_paf_resolvers() {
         let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
         // Add resolve latency to make the wait observable
-        adapter.error_injector().set_resolve_latency(100);
+        adapter.error_injector().set_resolve_latency(10);
 
         let (orchestrator, cancel) = create_single_stream_orchestrator(
             &adapter,
@@ -1535,7 +1538,7 @@ mod simplebuffer_tests {
         );
 
         let (tx, rx) = mpsc::channel(10);
-        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let messages_stream = ReceiverStream::new(rx);
 
         let handle = orchestrator
             .streaming_write(messages_stream, cancel.clone())
@@ -1644,7 +1647,7 @@ mod simplebuffer_tests {
         );
 
         let (tx, rx) = mpsc::channel(10);
-        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let messages_stream = ReceiverStream::new(rx);
 
         let handle = orchestrator
             .streaming_write(messages_stream, cancel.clone())
@@ -1702,7 +1705,7 @@ mod simplebuffer_tests {
         );
 
         let (tx, rx) = mpsc::channel(10);
-        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let messages_stream = ReceiverStream::new(rx);
 
         let handle = orchestrator
             .streaming_write(messages_stream, cancel.clone())
@@ -1743,7 +1746,7 @@ mod simplebuffer_tests {
     async fn test_paf_concurrency_one_processes_sequentially() {
         let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
         // Add resolve latency to make timing observable
-        adapter.error_injector().set_resolve_latency(50);
+        adapter.error_injector().set_resolve_latency(10);
 
         let (orchestrator, cancel) = create_single_stream_orchestrator(
             &adapter,
@@ -1753,7 +1756,7 @@ mod simplebuffer_tests {
         );
 
         let (tx, rx) = mpsc::channel(10);
-        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        let messages_stream = ReceiverStream::new(rx);
 
         let handle = orchestrator
             .streaming_write(messages_stream, cancel.clone())
@@ -1782,12 +1785,12 @@ mod simplebuffer_tests {
 
         handle.await.unwrap().unwrap();
 
-        // With paf_concurrency=1 and 50ms resolve latency per message,
-        // 3 messages should take at least 150ms (sequential processing)
+        // With paf_concurrency=1 and 10ms resolve latency per message,
+        // 3 messages should take at least 30ms (sequential processing)
         let elapsed = start.elapsed();
         assert!(
-            elapsed.as_millis() >= 150,
-            "Expected sequential processing (>=150ms), but took {}ms",
+            elapsed.as_millis() >= 30,
+            "Expected sequential processing (>=30ms), but took {}ms",
             elapsed.as_millis()
         );
 
