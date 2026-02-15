@@ -16,16 +16,22 @@ use tracing::{error, warn};
 pub struct JetstreamWatcher {
     watcher: Watch,
     bucket: jetstream::kv::Store,
+    /// Optional revision to start watching from. If None, uses watch_all().
+    /// If Some(revision), uses watch_all_from_revision(revision).
+    revision: Option<u64>,
     recreate_future: Option<Pin<Box<dyn Future<Output = Watch> + Send>>>,
 }
 
 impl JetstreamWatcher {
-    /// Creates a new JetstreamWatcher.
-    pub async fn new(bucket: jetstream::kv::Store) -> Result<Self> {
-        let watcher = create_watcher(bucket.clone()).await;
+    /// Creates a new JetstreamWatcher with an optional revision.
+    /// If revision is Some, uses watch_all_from_revision(revision).
+    /// If revision is None, uses watch_all() which only watches for new changes.
+    pub async fn new(bucket: jetstream::kv::Store, revision: Option<u64>) -> Result<Self> {
+        let watcher = create_watcher(bucket.clone(), revision).await;
         Ok(Self {
             watcher,
             bucket,
+            revision,
             recreate_future: None,
         })
     }
@@ -54,7 +60,8 @@ impl futures::Stream for JetstreamWatcher {
             Poll::Ready(entry) => match entry {
                 None => {
                     warn!("Watcher stream ended unexpectedly. Recreating watcher...");
-                    self.recreate_future = Some(Box::pin(create_watcher(self.bucket.clone())));
+                    self.recreate_future =
+                        Some(Box::pin(create_watcher(self.bucket.clone(), self.revision)));
                     // now let's manually call poll_next to poll the future we just set
                     self.poll_next(cx)
                 }
@@ -62,7 +69,8 @@ impl futures::Stream for JetstreamWatcher {
                     Ok(entry) => Poll::Ready(Some(entry)),
                     Err(e) => {
                         warn!(?e, "Failed to get next entry from watcher");
-                        self.recreate_future = Some(Box::pin(create_watcher(self.bucket.clone())));
+                        self.recreate_future =
+                            Some(Box::pin(create_watcher(self.bucket.clone(), self.revision)));
                         // now let's manually call poll_next to poll the future we just set
                         self.poll_next(cx)
                     }
@@ -73,25 +81,33 @@ impl futures::Stream for JetstreamWatcher {
     }
 }
 
-/// creates a watcher for the given bucket, will retry infinitely until it succeeds
-async fn create_watcher(bucket: jetstream::kv::Store) -> Watch {
+/// Creates a watcher for the given bucket, will retry infinitely until it succeeds.
+/// If revision is Some, uses watch_all_from_revision(revision).
+/// If revision is None, uses watch_all() which only watches for new changes.
+async fn create_watcher(bucket: jetstream::kv::Store, revision: Option<u64>) -> Watch {
     const RECONNECT_INTERVAL: u64 = 1000;
     // infinite retry
     let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(usize::MAX);
 
     Retry::new(
         interval,
-        async || match bucket.watch_all_from_revision(1).await {
-            Ok(w) => Ok(w),
-            Err(e) => {
-                error!(?e, "Failed to create watcher");
-                Err(Error::Jetstream(format!("Failed to create watcher: {e}")))
+        async || {
+            let result = match revision {
+                Some(rev) => bucket.watch_all_from_revision(rev).await,
+                None => bucket.watch_all().await,
+            };
+            match result {
+                Ok(w) => Ok(w),
+                Err(e) => {
+                    error!(?e, "Failed to create watcher");
+                    Err(Error::Jetstream(format!("Failed to create watcher: {e}")))
+                }
             }
         },
         |_: &Error| true,
     )
     .await
-    .expect("Failed to create ot watcher")
+    .expect("Failed to create watcher")
 }
 
 pub async fn create_js_context(config: config::ClientConfig) -> Result<Context> {
@@ -244,8 +260,8 @@ mod tests {
             .await
             .unwrap();
 
-        // Create JetstreamWatcher
-        let mut watcher = JetstreamWatcher::new(kv_store.clone()).await.unwrap();
+        // Create JetstreamWatcher with revision 1 to watch from the beginning
+        let mut watcher = JetstreamWatcher::new(kv_store.clone(), Some(1)).await.unwrap();
 
         // Put some initial data
         kv_store.put("key1", "value1".into()).await.unwrap();
@@ -325,8 +341,11 @@ mod tests {
             .await
             .unwrap();
 
-        // Test creating a watcher directly
-        let _watcher = create_watcher(kv_store.clone()).await;
+        // Test creating a watcher directly with revision
+        let _watcher = create_watcher(kv_store.clone(), Some(1)).await;
+
+        // Test creating a watcher without revision (watch_all)
+        let _watcher_no_rev = create_watcher(kv_store.clone(), None).await;
 
         // Clean up
         let _ = js_context.delete_key_value(store_name).await;
