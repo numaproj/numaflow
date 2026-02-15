@@ -13,6 +13,8 @@ pub struct ErrorInjector {
     pub force_buffer_full: AtomicBool,
     /// Fail the next N writes.
     fail_next_writes: AtomicUsize,
+    /// Skip the first N writes before starting to fail.
+    skip_writes_before_fail: AtomicUsize,
     /// Fail the next N fetches.
     fail_next_fetches: AtomicUsize,
     /// Fail the next N acks.
@@ -38,6 +40,7 @@ impl Default for ErrorInjector {
         Self {
             force_buffer_full: AtomicBool::new(false),
             fail_next_writes: AtomicUsize::new(0),
+            skip_writes_before_fail: AtomicUsize::new(0),
             fail_next_fetches: AtomicUsize::new(0),
             fail_next_acks: AtomicUsize::new(0),
             fail_next_nacks: AtomicUsize::new(0),
@@ -65,6 +68,14 @@ impl ErrorInjector {
     /// Fail the next N write operations.
     pub fn fail_writes(&self, count: usize) {
         self.fail_next_writes.store(count, Ordering::Relaxed);
+    }
+
+    /// Skip the first `skip` writes, then fail the next `fail` writes.
+    /// This is useful for testing retry scenarios where the initial write
+    /// should succeed but subsequent retries should fail.
+    pub fn skip_writes_then_fail(&self, skip: usize, fail: usize) {
+        self.skip_writes_before_fail.store(skip, Ordering::Relaxed);
+        self.fail_next_writes.store(fail, Ordering::Relaxed);
     }
 
     /// Fail the next N fetch operations.
@@ -113,7 +124,19 @@ impl ErrorInjector {
     }
 
     /// Check and decrement the write failure counter.
+    /// If skip_writes_before_fail is set, decrements that first and returns false.
     pub(crate) fn should_fail_write(&self) -> bool {
+        // First check if we need to skip this write
+        let skip = self.skip_writes_before_fail.load(Ordering::Relaxed);
+        if skip > 0 {
+            self.skip_writes_before_fail
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |c| {
+                    if c > 0 { Some(c - 1) } else { None }
+                })
+                .ok();
+            return false;
+        }
+        // Then check if we should fail
         Self::decrement_counter(&self.fail_next_writes)
     }
 

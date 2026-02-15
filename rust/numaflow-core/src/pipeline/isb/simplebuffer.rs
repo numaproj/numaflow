@@ -55,6 +55,17 @@ impl SimpleBufferAdapter {
             inner: self.buffer.writer(),
         }
     }
+
+    /// Get the current number of pending messages in the buffer.
+    pub fn pending_count(&self) -> usize {
+        self.buffer.pending_count()
+    }
+
+    /// Get the current number of in-flight messages in the buffer.
+    #[allow(dead_code)]
+    pub fn in_flight_count(&self) -> usize {
+        self.buffer.in_flight_count()
+    }
 }
 
 /// Adapter that wraps `SimpleReader` and implements the `ISBReader` trait.
@@ -208,6 +219,16 @@ impl ISBWriter for SimpleWriterAdapter {
     type PendingWrite = PendingWrite;
 
     async fn async_write(&self, message: Message) -> Result<Self::PendingWrite, WriteError> {
+        // Check if buffer is full before attempting write.
+        // This is important because ISBWriterOrchestrator::write_to_stream expects
+        // async_write to return Err(WriteError::BufferFull) directly when the buffer
+        // is full, so it can apply the BufferFullStrategy (DiscardLatest or RetryUntilSuccess).
+        // The inner async_write embeds errors in PendingWrite which would only be
+        // discovered during resolve(), but write_to_stream needs the error immediately.
+        if self.inner.is_full() {
+            return Err(WriteError::BufferFull);
+        }
+
         let id = message.id.to_string();
         let payload = message.value;
         let headers: HashMap<String, String> = (*message.headers).clone();
