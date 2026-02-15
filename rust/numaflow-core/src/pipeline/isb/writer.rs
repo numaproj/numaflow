@@ -1630,10 +1630,12 @@ mod simplebuffer_tests {
         // Stream 2 configuration:
         // 1. Initial write succeeds (skip 1 write before failing)
         // 2. Resolve fails (fail_resolves(1))
-        // 3. Retry writes fail (fail 1000 writes after skipping the first one)
+        // 3. Retry writes fail (fail all writes after skipping the first one)
         // 4. Cancellation will cause write_with_retry to exit with error
         adapter2.error_injector().fail_resolves(1);
-        adapter2.error_injector().skip_writes_then_fail(1, 1000);
+        adapter2
+            .error_injector()
+            .skip_writes_then_fail(1, usize::MAX);
 
         let (orchestrator, cancel) = create_multi_vertex_orchestrator(
             vec![("stream-1", &adapter1), ("stream-2", &adapter2)],
@@ -1686,9 +1688,11 @@ mod simplebuffer_tests {
         let adapter2 = SimpleBufferAdapter::new(SimpleBuffer::new(100, 1, "stream-2"));
 
         // First message: stream-2 will fail resolve, then retry will fail due to cancellation
-        // skip_writes_then_fail: skip 1 write (initial succeeds), then fail subsequent (retry fails)
+        // skip_writes_then_fail: skip 1 write (initial succeeds), then fail all subsequent (retry fails)
         adapter2.error_injector().fail_resolves(1);
-        adapter2.error_injector().skip_writes_then_fail(1, 1000);
+        adapter2
+            .error_injector()
+            .skip_writes_then_fail(1, usize::MAX);
 
         // Use paf_concurrency = 1 to ensure sequential processing
         let (orchestrator, cancel) = create_multi_vertex_orchestrator(
