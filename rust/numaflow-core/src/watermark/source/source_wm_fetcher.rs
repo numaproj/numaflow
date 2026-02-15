@@ -4,18 +4,30 @@
 //! at source, we only consider the head watermark and consider the minimum watermark of all the active
 //! processors.
 
+use std::time::{Duration, Instant};
+
+use tracing::info;
+
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::wmb::Watermark;
+
+/// Interval for logging watermark summary
+const WATERMARK_LOG_INTERVAL: Duration = Duration::from_secs(60);
 
 /// SourceWatermarkFetcher is the watermark fetcher for the source.
 pub struct SourceWatermarkFetcher {
     processor_manager: ProcessorManager,
+    /// Last time the watermark summary was logged
+    last_log_time: Instant,
 }
 
 impl SourceWatermarkFetcher {
     /// Creates a new [SourceWatermarkFetcher].
     pub(crate) fn new(processor_manager: ProcessorManager) -> Self {
-        SourceWatermarkFetcher { processor_manager }
+        SourceWatermarkFetcher {
+            processor_manager,
+            last_log_time: Instant::now(),
+        }
     }
 
     /// Fetches the watermark for the source, which is the minimum watermark of all the active
@@ -47,7 +59,12 @@ impl SourceWatermarkFetcher {
             min_wm = -1;
         }
 
-        Watermark::from_timestamp_millis(min_wm).expect("Failed to parse watermark")
+        let watermark = Watermark::from_timestamp_millis(min_wm).expect("Failed to parse watermark");
+
+        // Log summary periodically
+        self.watermark_log_summary(&watermark);
+
+        watermark
     }
 
     /// Fetches the head watermark for the source, which is the minimum head watermark of all the active
@@ -84,6 +101,76 @@ impl SourceWatermarkFetcher {
         }
 
         Watermark::from_timestamp_millis(min_wm).expect("Failed to parse watermark")
+    }
+
+    /// Logs a summary of the watermark state if the log interval has elapsed.
+    /// This includes fetched watermark, processors, and their timelines.
+    fn watermark_log_summary(&mut self, fetched_wm: &Watermark) {
+        if self.last_log_time.elapsed() < WATERMARK_LOG_INTERVAL {
+            return;
+        }
+        self.last_log_time = Instant::now();
+
+        let summary = self.build_summary(fetched_wm);
+        info!("{}", summary);
+    }
+
+    /// Builds a summary string of the watermark state.
+    fn build_summary(&self, fetched_wm: &Watermark) -> String {
+        let mut summary = String::new();
+
+        // Add fetched watermark
+        summary.push_str(&format!(
+            "Source Watermark Summary: fetched_wm={}, ",
+            fetched_wm.timestamp_millis()
+        ));
+
+        // Add processor information
+        let processors = self
+            .processor_manager
+            .processors
+            .read()
+            .expect("failed to acquire lock");
+
+        let mut proc_infos: Vec<String> = Vec::new();
+        for (name, processor) in processors.iter() {
+            let name_str = String::from_utf8_lossy(name);
+            let status = if processor.is_active() {
+                "active"
+            } else if processor.is_deleted() {
+                "deleted"
+            } else {
+                "inactive"
+            };
+
+            // Get complete timeline for each partition
+            let mut timeline_parts: Vec<String> = Vec::new();
+            for (partition, timeline) in &processor.timelines {
+                let entries: Vec<String> = timeline
+                    .entries()
+                    .iter()
+                    .map(|wmb| format!("(wm={},off={})", wmb.watermark, wmb.offset))
+                    .collect();
+                let entries_str = if entries.is_empty() {
+                    "empty".to_string()
+                } else {
+                    entries.join("->")
+                };
+                timeline_parts.push(format!("p{}:[{}]", partition, entries_str));
+            }
+            timeline_parts.sort();
+
+            proc_infos.push(format!(
+                "{}({})[{}]",
+                name_str,
+                status,
+                timeline_parts.join(",")
+            ));
+        }
+        proc_infos.sort();
+        summary.push_str(&format!("processors={{{}}}", proc_infos.join(", ")));
+
+        summary
     }
 }
 
