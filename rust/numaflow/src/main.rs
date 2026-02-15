@@ -108,7 +108,7 @@ async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
         Some((cmdline::CMD_ARG_MVTX_DAEMON_SERVER, _)) => {
             info!("Starting the MonoVertex daemon server");
             match env::var(ENV_MONO_VERTEX_NAME) {
-                Ok(name) => numaflow_daemon::run_monovertex(name).await?,
+                Ok(name) => numaflow_daemon::run_monovertex(name, cln_token).await?,
                 _ => {
                     return Err(
                         format!("Environment variable {ENV_MONO_VERTEX_NAME} is not set").into(),
