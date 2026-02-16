@@ -127,13 +127,11 @@ impl ErrorInjector {
     /// If skip_writes_before_fail is set, decrements that first and returns false.
     pub(crate) fn should_fail_write(&self) -> bool {
         // First check if we need to skip this write
-        let skip = self.skip_writes_before_fail.load(Ordering::Relaxed);
-        if skip > 0 {
-            self.skip_writes_before_fail
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |c| {
-                    if c > 0 { Some(c - 1) } else { None }
-                })
-                .ok();
+        let skip = self.skip_writes_before_fail
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |c| {
+                if c > 0 { Some(c - 1) } else { None }
+            }).is_ok();
+        if skip {
             return false;
         }
         // Then check if we should fail
