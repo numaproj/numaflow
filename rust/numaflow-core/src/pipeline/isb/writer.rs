@@ -1008,9 +1008,9 @@ mod simplebuffer_tests {
     use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
     use bytes::Bytes;
     use chrono::Utc;
+    use numaflow_models::models::{ForwardConditions, TagConditions};
     use numaflow_testing::simplebuffer::SimpleBuffer;
     use tokio::sync::mpsc;
-    use numaflow_models::models::{ForwardConditions, TagConditions};
 
     /// Helper to create a test message with an ack handle
     fn create_test_message(
@@ -1594,46 +1594,50 @@ mod simplebuffer_tests {
     /// This allows testing scenarios where a message is written to multiple streams
     /// (one per downstream vertex).
     fn create_multi_vertex_orchestrator(
-    adapters: Vec<(&'static str, &SimpleBufferAdapter, Option<Box<ForwardConditions>>)>,
-    buffer_full_strategy: BufferFullStrategy,
-    paf_concurrency: usize,
-) -> (ISBWriterOrchestrator<WithSimpleBuffer>, CancellationToken) {
-    let cancel = CancellationToken::new();
+        adapters: Vec<(
+            &'static str,
+            &SimpleBufferAdapter,
+            Option<Box<ForwardConditions>>,
+        )>,
+        buffer_full_strategy: BufferFullStrategy,
+        paf_concurrency: usize,
+    ) -> (ISBWriterOrchestrator<WithSimpleBuffer>, CancellationToken) {
+        let cancel = CancellationToken::new();
 
-    let mut writers = HashMap::new();
-    let mut vertex_configs = vec![];
+        let mut writers = HashMap::new();
+        let mut vertex_configs = vec![];
 
-    for (idx, (stream_name, adapter, condition)) in adapters.iter().enumerate() {
-        let vertex_name: &'static str = Box::leak(format!("vertex-{}", idx).into_boxed_str());
-        let stream = Stream::new(stream_name, vertex_name, 0);
-        writers.insert(*stream_name, adapter.writer());
+        for (idx, (stream_name, adapter, condition)) in adapters.iter().enumerate() {
+            let vertex_name: &'static str = Box::leak(format!("vertex-{}", idx).into_boxed_str());
+            let stream = Stream::new(stream_name, vertex_name, 0);
+            writers.insert(*stream_name, adapter.writer());
 
-        let writer_config = BufferWriterConfig {
-            streams: vec![stream],
-            buffer_full_strategy: buffer_full_strategy.clone(),
-            ..Default::default()
+            let writer_config = BufferWriterConfig {
+                streams: vec![stream],
+                buffer_full_strategy: buffer_full_strategy.clone(),
+                ..Default::default()
+            };
+
+            vertex_configs.push(ToVertexConfig {
+                name: Box::leak(format!("vertex-{}", idx).into_boxed_str()),
+                partitions: 1,
+                writer_config,
+                conditions: condition.clone(),
+                to_vertex_type: VertexType::Sink,
+            });
+        }
+
+        let components = ISBWriterOrchestratorComponents {
+            config: vertex_configs,
+            writers,
+            paf_concurrency,
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
         };
 
-        vertex_configs.push(ToVertexConfig {
-            name: Box::leak(format!("vertex-{}", idx).into_boxed_str()),
-            partitions: 1,
-            writer_config,
-            conditions: condition.clone(),
-            to_vertex_type: VertexType::Sink,
-        });
+        let orchestrator = ISBWriterOrchestrator::<WithSimpleBuffer>::new(components);
+        (orchestrator, cancel)
     }
-
-    let components = ISBWriterOrchestratorComponents {
-        config: vertex_configs,
-        writers,
-        paf_concurrency,
-        watermark_handle: None,
-        vertex_type: VertexType::Source,
-    };
-
-    let orchestrator = ISBWriterOrchestrator::<WithSimpleBuffer>::new(components);
-    (orchestrator, cancel)
-}
 
     /// Test: When writing to multiple downstream vertices and one vertex's PAF resolution fails
     /// (and retry also fails due to cancellation), the message should be NAK'd.
@@ -1794,7 +1798,10 @@ mod simplebuffer_tests {
         // Use paf_concurrency = 1 to ensure sequential processing
         // This makes semaphore release critical - if not released, second message blocks forever
         let (orchestrator, cancel) = create_multi_vertex_orchestrator(
-            vec![("stream-1", &adapter1, condition1), ("stream-2", &adapter2, condition2)],
+            vec![
+                ("stream-1", &adapter1, condition1),
+                ("stream-2", &adapter2, condition2),
+            ],
             BufferFullStrategy::RetryUntilSuccess,
             1,
         );
