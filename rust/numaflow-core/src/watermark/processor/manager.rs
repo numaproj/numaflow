@@ -14,12 +14,10 @@ use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::{Error, Result};
 use crate::watermark::processor::timeline::OffsetTimeline;
 use crate::watermark::wmb::WMB;
-use async_nats::jetstream::kv::Watch;
-use backoff::retry::Retry;
-use backoff::strategy::fixed;
 use bytes::Bytes;
 use futures::{StreamExt, TryStreamExt};
 use numaflow_pb::objects::watermark::Heartbeat;
+use numaflow_shared::isb::jetstream::JetstreamWatcher;
 use prost::Message as ProtoMessage;
 use tracing::{debug, error, info, warn};
 
@@ -316,31 +314,21 @@ impl ProcessorManager {
     }
 
     /// Starts the ot watcher, to listen to the OT bucket and update the timelines for the
-    /// processors.
+    /// processors. Uses JetstreamWatcher with revision=None to only watch for new changes
+    /// (since we prepopulate the data first).
     async fn start_ot_watcher(
         ot_bucket: async_nats::jetstream::kv::Store,
         processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
         vertex_type: VertexType,
         vertex_replica: u16,
     ) {
-        let mut ot_watcher = Self::create_watcher(ot_bucket.clone()).await;
+        // Use JetstreamWatcher with revision=None to only watch for new changes
+        // (we prepopulate the data first, so we don't need historical data)
+        let mut ot_watcher = JetstreamWatcher::new(ot_bucket, None)
+            .await
+            .expect("Failed to create OT watcher");
 
-        loop {
-            let Some(val) = ot_watcher.next().await else {
-                warn!("OT watcher stopped, recreating watcher");
-                ot_watcher = Self::create_watcher(ot_bucket.clone()).await;
-                continue;
-            };
-
-            let kv = match val {
-                Ok(kv) => kv,
-                Err(e) => {
-                    warn!(error = ?e, "Failed to get next kv entry, recreating watcher");
-                    ot_watcher = Self::create_watcher(ot_bucket.clone()).await;
-                    continue;
-                }
-            };
-
+        while let Some(kv) = ot_watcher.next().await {
             match kv.operation {
                 async_nats::jetstream::kv::Operation::Put => {
                     let processor_name = Bytes::from(kv.key);
@@ -378,30 +366,21 @@ impl ProcessorManager {
     }
 
     /// Starts the hb watcher, to listen to the HB bucket, will also create the processor if it
-    /// doesn't exist.
+    /// doesn't exist. Uses JetstreamWatcher with revision=None to only watch for new changes
+    /// (since we prepopulate the data first).
     async fn start_hb_watcher(
         partitions: Vec<u16>,
         hb_bucket: async_nats::jetstream::kv::Store,
         heartbeats: Arc<RwLock<HashMap<Bytes, i64>>>,
         processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
     ) {
-        let mut hb_watcher = Self::create_watcher(hb_bucket.clone()).await;
-        loop {
-            let Some(val) = hb_watcher.next().await else {
-                warn!("HB watcher stopped, recreating watcher");
-                hb_watcher = Self::create_watcher(hb_bucket.clone()).await;
-                continue;
-            };
+        // Use JetstreamWatcher with revision=None to only watch for new changes
+        // (we prepopulate the data first, so we don't need historical data)
+        let mut hb_watcher = JetstreamWatcher::new(hb_bucket, None)
+            .await
+            .expect("Failed to create HB watcher");
 
-            let kv = match val {
-                Ok(kv) => kv,
-                Err(e) => {
-                    warn!(error = ?e, "Failed to get next kv entry, recreating watcher");
-                    hb_watcher = Self::create_watcher(hb_bucket.clone()).await;
-                    continue;
-                }
-            };
-
+        while let Some(kv) = hb_watcher.next().await {
             match kv.operation {
                 async_nats::jetstream::kv::Operation::Put => {
                     let processor_name = Bytes::from(kv.key);
@@ -457,28 +436,6 @@ impl ProcessorManager {
                 }
             }
         }
-    }
-
-    /// creates a watcher for the given bucket, will retry infinitely until it succeeds
-    // FIXME: create_watcher is not cancel safe
-    async fn create_watcher(bucket: async_nats::jetstream::kv::Store) -> Watch {
-        const RECONNECT_INTERVAL: u64 = 1000;
-        // infinite retry
-        let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(usize::MAX);
-
-        Retry::new(
-            interval,
-            async || match bucket.watch_all().await {
-                Ok(w) => Ok(w),
-                Err(e) => {
-                    error!(?e, "Failed to create watcher");
-                    Err(Error::Watermark(format!("Failed to create watcher: {e}")))
-                }
-            },
-            |_: &Error| true,
-        )
-        .await
-        .expect("Failed to create ot watcher")
     }
 
     /// Delete a processor from the processors map
