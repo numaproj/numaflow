@@ -63,7 +63,7 @@ impl SideInputSynchronizer {
             })?;
 
         let bucket_watcher =
-            numaflow_shared::isb::jetstream::JetstreamWatcher::new(bucket.clone()).await?;
+            numaflow_shared::isb::jetstream::JetstreamWatcher::new(bucket.clone(), Some(1)).await?;
 
         self.run(bucket, bucket_watcher).await;
 
