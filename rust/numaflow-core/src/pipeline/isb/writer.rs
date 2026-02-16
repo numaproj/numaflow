@@ -1310,6 +1310,7 @@ mod simplebuffer_tests {
         assert_eq!(ack, ReadAck::Ack);
 
         handle.await.unwrap().unwrap();
+        assert_eq!(adapter.pending_count(), 0);
     }
 
     // ==================== PAF Resolution Failure Tests ====================
