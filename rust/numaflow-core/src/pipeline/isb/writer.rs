@@ -1010,6 +1010,7 @@ mod simplebuffer_tests {
     use chrono::Utc;
     use numaflow_testing::simplebuffer::SimpleBuffer;
     use tokio::sync::mpsc;
+    use numaflow_models::models::{ForwardConditions, TagConditions};
 
     /// Helper to create a test message with an ack handle
     fn create_test_message(
@@ -1593,46 +1594,46 @@ mod simplebuffer_tests {
     /// This allows testing scenarios where a message is written to multiple streams
     /// (one per downstream vertex).
     fn create_multi_vertex_orchestrator(
-        adapters: Vec<(&'static str, &SimpleBufferAdapter)>,
-        buffer_full_strategy: BufferFullStrategy,
-        paf_concurrency: usize,
-    ) -> (ISBWriterOrchestrator<WithSimpleBuffer>, CancellationToken) {
-        let cancel = CancellationToken::new();
+    adapters: Vec<(&'static str, &SimpleBufferAdapter, Option<Box<ForwardConditions>>)>,
+    buffer_full_strategy: BufferFullStrategy,
+    paf_concurrency: usize,
+) -> (ISBWriterOrchestrator<WithSimpleBuffer>, CancellationToken) {
+    let cancel = CancellationToken::new();
 
-        let mut writers = HashMap::new();
-        let mut vertex_configs = vec![];
+    let mut writers = HashMap::new();
+    let mut vertex_configs = vec![];
 
-        for (idx, (stream_name, adapter)) in adapters.iter().enumerate() {
-            let vertex_name: &'static str = Box::leak(format!("vertex-{}", idx).into_boxed_str());
-            let stream = Stream::new(stream_name, vertex_name, 0);
-            writers.insert(*stream_name, adapter.writer());
+    for (idx, (stream_name, adapter, condition)) in adapters.iter().enumerate() {
+        let vertex_name: &'static str = Box::leak(format!("vertex-{}", idx).into_boxed_str());
+        let stream = Stream::new(stream_name, vertex_name, 0);
+        writers.insert(*stream_name, adapter.writer());
 
-            let writer_config = BufferWriterConfig {
-                streams: vec![stream],
-                buffer_full_strategy: buffer_full_strategy.clone(),
-                ..Default::default()
-            };
-
-            vertex_configs.push(ToVertexConfig {
-                name: Box::leak(format!("vertex-{}", idx).into_boxed_str()),
-                partitions: 1,
-                writer_config,
-                conditions: None,
-                to_vertex_type: VertexType::Sink,
-            });
-        }
-
-        let components = ISBWriterOrchestratorComponents {
-            config: vertex_configs,
-            writers,
-            paf_concurrency,
-            watermark_handle: None,
-            vertex_type: VertexType::Source,
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream],
+            buffer_full_strategy: buffer_full_strategy.clone(),
+            ..Default::default()
         };
 
-        let orchestrator = ISBWriterOrchestrator::<WithSimpleBuffer>::new(components);
-        (orchestrator, cancel)
+        vertex_configs.push(ToVertexConfig {
+            name: Box::leak(format!("vertex-{}", idx).into_boxed_str()),
+            partitions: 1,
+            writer_config,
+            conditions: condition.clone(),
+            to_vertex_type: VertexType::Sink,
+        });
     }
+
+    let components = ISBWriterOrchestratorComponents {
+        config: vertex_configs,
+        writers,
+        paf_concurrency,
+        watermark_handle: None,
+        vertex_type: VertexType::Source,
+    };
+
+    let orchestrator = ISBWriterOrchestrator::<WithSimpleBuffer>::new(components);
+    (orchestrator, cancel)
+}
 
     /// Test: When writing to multiple downstream vertices and one vertex's PAF resolution fails
     /// (and retry also fails due to cancellation), the message should be NAK'd.
@@ -1655,7 +1656,7 @@ mod simplebuffer_tests {
             .skip_writes_then_fail(1, usize::MAX);
 
         let (orchestrator, cancel) = create_multi_vertex_orchestrator(
-            vec![("stream-1", &adapter1), ("stream-2", &adapter2)],
+            vec![("stream-1", &adapter1, None), ("stream-2", &adapter2, None)],
             BufferFullStrategy::RetryUntilSuccess,
             10,
         );
@@ -1722,7 +1723,7 @@ mod simplebuffer_tests {
         // Use paf_concurrency = 1 to ensure sequential processing
         // This makes semaphore release critical - if not released, second message blocks forever
         let (orchestrator, cancel) = create_multi_vertex_orchestrator(
-            vec![("stream-1", &adapter1), ("stream-2", &adapter2)],
+            vec![("stream-1", &adapter1, None), ("stream-2", &adapter2, None)],
             BufferFullStrategy::RetryUntilSuccess,
             1,
         );
@@ -1766,5 +1767,69 @@ mod simplebuffer_tests {
         // (msg1's retry detected duplicate, so still only 1 entry per message)
         assert_eq!(adapter1.pending_count(), 2);
         assert_eq!(adapter2.pending_count(), 2);
+    }
+
+    /// Test: Conditional forwarding based on tag values.
+    ///
+    /// This test verifies that messages are forwarded to the correct streams based on tag values.
+    #[tokio::test]
+    async fn test_conditional_forwarding() {
+        let adapter1 = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "stream-1"));
+        let adapter2 = SimpleBufferAdapter::new(SimpleBuffer::new(100, 1, "stream-2"));
+
+        let condition1: Option<Box<ForwardConditions>> = Some(Box::new(ForwardConditions {
+            tags: Box::new(TagConditions {
+                operator: Some(String::from("or")),
+                values: vec![String::from("tag1")],
+            }),
+        }));
+
+        let condition2: Option<Box<ForwardConditions>> = Some(Box::new(ForwardConditions {
+            tags: Box::new(TagConditions {
+                operator: Some(String::from("or")),
+                values: vec![String::from("tag2")],
+            }),
+        }));
+
+        // Use paf_concurrency = 1 to ensure sequential processing
+        // This makes semaphore release critical - if not released, second message blocks forever
+        let (orchestrator, cancel) = create_multi_vertex_orchestrator(
+            vec![("stream-1", &adapter1, condition1), ("stream-2", &adapter2, condition2)],
+            BufferFullStrategy::RetryUntilSuccess,
+            1,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg1, ack_rx1) = create_test_message(1, "first", Some(vec!["tag1"]));
+        tx.send(msg1).await.unwrap();
+
+        let (msg2, ack_rx2) = create_test_message(2, "second", Some(vec!["tag2"]));
+        tx.send(msg2).await.unwrap();
+
+        let ack1 = tokio::time::timeout(Duration::from_secs(2), ack_rx1)
+            .await
+            .expect("Should receive ack response for msg1")
+            .unwrap();
+        assert_eq!(ack1, ReadAck::Ack);
+
+        let ack2 = tokio::time::timeout(Duration::from_secs(2), ack_rx2)
+            .await
+            .expect("Should receive ack response for msg2")
+            .unwrap();
+        assert_eq!(ack2, ReadAck::Ack);
+
+        drop(tx);
+        handle.await.unwrap().unwrap();
+
+        // Only one message should have been written to each stream
+        assert_eq!(adapter1.pending_count(), 1);
+        assert_eq!(adapter2.pending_count(), 1);
     }
 }
