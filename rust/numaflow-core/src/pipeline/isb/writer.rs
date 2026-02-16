@@ -1349,6 +1349,7 @@ mod simplebuffer_tests {
         assert_eq!(ack, ReadAck::Ack);
 
         handle.await.unwrap().unwrap();
+        assert_eq!(adapter.pending_count(), 1);
     }
 
     /// Test: When resolve fails but is still retrying when cancellation happens,
@@ -1387,14 +1388,15 @@ mod simplebuffer_tests {
         // Message should succeed via duplicate detection in fallback write
         let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
             .await
-            .expect("Should receive ack response")
-            .unwrap();
-        assert_eq!(ack, ReadAck::Ack);
+            .expect("Timeout future should not error out");
+        assert!(ack.is_ok(), "Should receive ack before timeout");
+        assert_eq!(ack.expect("Should receive an ack"), ReadAck::Ack);
 
         cancel.cancel();
         drop(tx);
 
         handle.await.unwrap().unwrap();
+        assert_eq!(adapter.pending_count(), 1);
     }
 
     // ==================== Dropped Message Tests ====================
