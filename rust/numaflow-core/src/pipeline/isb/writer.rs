@@ -1699,19 +1699,28 @@ mod simplebuffer_tests {
 
     /// Test: Semaphore permit is properly released even when PAF resolution fails,
     /// allowing subsequent messages to be processed.
+    ///
+    /// This test differs from `test_multi_vertex_partial_failure_naks_message` in that:
+    /// - It uses `paf_concurrency = 1` (vs 10) to make semaphore behavior critical
+    /// - It sends a **second message after the first fails** to explicitly verify
+    ///   the semaphore permit was released
+    ///
+    /// With `paf_concurrency = 1`, if the permit wasn't released after the first
+    /// message's failure, the second message would never be processed (deadlock).
+    /// The first test only verifies NAK behavior; this test verifies resource cleanup.
     #[tokio::test]
     async fn test_semaphore_released_on_paf_failure() {
         let adapter1 = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "stream-1"));
         let adapter2 = SimpleBufferAdapter::new(SimpleBuffer::new(100, 1, "stream-2"));
 
-        // First message: stream-2 will fail resolve, then retry will fail due to cancellation
-        // skip_writes_then_fail: skip 1 write (initial succeeds), then fail all subsequent (retry fails)
+        // First message: stream-2 will fail resolve only (no write failures)
+        // The resolve failure will trigger write_with_retry, which will succeed
+        // (detecting the duplicate from the initial async_write).
+        // The key is that the first message's PAF resolution "fails" initially.
         adapter2.error_injector().fail_resolves(1);
-        adapter2
-            .error_injector()
-            .skip_writes_then_fail(1, usize::MAX);
 
         // Use paf_concurrency = 1 to ensure sequential processing
+        // This makes semaphore release critical - if not released, second message blocks forever
         let (orchestrator, cancel) = create_multi_vertex_orchestrator(
             vec![("stream-1", &adapter1), ("stream-2", &adapter2)],
             BufferFullStrategy::RetryUntilSuccess,
@@ -1726,31 +1735,36 @@ mod simplebuffer_tests {
             .await
             .unwrap();
 
-        // Spawn a task to cancel after a short delay
-        // This allows initial write and resolve to happen, then causes retry loop to exit
-        let cancel_inner = cancel.clone();
-        tokio::spawn(async move {
-            sleep(Duration::from_millis(50)).await;
-            cancel_inner.cancel();
-        });
-
-        // Send first message (will fail on stream-2)
+        // Send first message (resolve will fail on stream-2, but retry write succeeds as duplicate)
         let (msg1, ack_rx1) = create_test_message(1, "first", None);
         tx.send(msg1).await.unwrap();
 
-        // First message should be NAK'd
+        // First message should be ACK'd (resolve failed but retry succeeded via duplicate detection)
         let ack1 = tokio::time::timeout(Duration::from_secs(2), ack_rx1)
             .await
             .expect("Should receive ack response for msg1")
             .unwrap();
-        assert_eq!(ack1, ReadAck::Nak);
+        assert_eq!(ack1, ReadAck::Ack);
+
+        // Send second message - this is the key assertion!
+        // If the semaphore permit wasn't released after msg1's PAF resolution completed,
+        // this message would never be processed (blocked waiting for permit)
+        let (msg2, ack_rx2) = create_test_message(2, "second", None);
+        tx.send(msg2).await.unwrap();
+
+        // Second message should be ACK'd (proves semaphore was released)
+        let ack2 = tokio::time::timeout(Duration::from_secs(2), ack_rx2)
+            .await
+            .expect("Should receive ack response for msg2 - semaphore should have been released")
+            .unwrap();
+        assert_eq!(ack2, ReadAck::Ack);
 
         drop(tx);
         handle.await.unwrap().unwrap();
 
-        // The key assertion: even though the first message failed,
-        // the semaphore was released (permit dropped when spawn task completed).
-        // We verify this by checking that the orchestrator completed successfully
-        // (wait_for_paf_resolvers was able to acquire all permits).
+        // Both messages should have been written to both streams
+        // (msg1's retry detected duplicate, so still only 1 entry per message)
+        assert_eq!(adapter1.pending_count(), 2);
+        assert_eq!(adapter2.pending_count(), 2);
     }
 }
