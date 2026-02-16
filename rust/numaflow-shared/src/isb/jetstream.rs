@@ -261,7 +261,9 @@ mod tests {
             .unwrap();
 
         // Create JetstreamWatcher with revision 1 to watch from the beginning
-        let mut watcher = JetstreamWatcher::new(kv_store.clone(), Some(1)).await.unwrap();
+        let mut watcher = JetstreamWatcher::new(kv_store.clone(), Some(1))
+            .await
+            .unwrap();
 
         // Put some initial data
         kv_store.put("key1", "value1".into()).await.unwrap();
