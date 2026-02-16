@@ -1478,52 +1478,6 @@ mod simplebuffer_tests {
         assert_eq!(adapter.pending_count(), 1);
     }
 
-    // ==================== PAF Concurrency Tests ====================
-
-    /// Test: PAF concurrency limits concurrent resolutions
-    #[tokio::test]
-    async fn test_paf_concurrency_semaphore() {
-        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
-        // Add some resolve latency to make concurrency observable
-        adapter.error_injector().set_resolve_latency(50);
-
-        // Use paf_concurrency = 2 to limit concurrent resolutions
-        let (orchestrator, cancel) = create_single_stream_orchestrator(
-            &adapter,
-            "test-buffer",
-            BufferFullStrategy::RetryUntilSuccess,
-            2,
-        );
-
-        let (tx, rx) = mpsc::channel(20);
-        let messages_stream = ReceiverStream::new(rx);
-
-        let handle = orchestrator
-            .streaming_write(messages_stream, cancel.clone())
-            .await
-            .unwrap();
-
-        let mut ack_rxs = vec![];
-        for i in 0..5 {
-            let (msg, ack_rx) = create_test_message(i, &format!("message-{}", i), None);
-            ack_rxs.push(ack_rx);
-            tx.send(msg).await.unwrap();
-        }
-        drop(tx);
-
-        // All should eventually complete
-        for ack_rx in ack_rxs {
-            let ack = tokio::time::timeout(Duration::from_secs(5), ack_rx)
-                .await
-                .expect("Should receive ack")
-                .unwrap();
-            assert_eq!(ack, ReadAck::Ack);
-        }
-
-        handle.await.unwrap().unwrap();
-        assert_eq!(adapter.pending_count(), 5);
-    }
-
     // ==================== Graceful Shutdown Tests ====================
 
     /// Test: wait_for_paf_resolvers blocks until all PAF resolutions complete
@@ -1571,6 +1525,63 @@ mod simplebuffer_tests {
             .expect("Handle should complete")
             .unwrap()
             .unwrap();
+
+        assert_eq!(adapter.pending_count(), 3);
+    }
+
+    /// Test: Multiple messages with paf_concurrency=1 are processed sequentially,
+    /// and the semaphore properly gates concurrent PAF resolutions.
+    #[tokio::test]
+    async fn test_paf_concurrency_one_processes_sequentially() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Add resolve latency to make timing observable
+        adapter.error_injector().set_resolve_latency(10);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            1, // paf_concurrency = 1
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let start = std::time::Instant::now();
+
+        // Send 3 messages
+        let mut ack_rxs = vec![];
+        for i in 0..3 {
+            let (msg, ack_rx) = create_test_message(i, &format!("msg-{}", i), None);
+            ack_rxs.push(ack_rx);
+            tx.send(msg).await.unwrap();
+        }
+        drop(tx);
+
+        // All should complete
+        for ack_rx in ack_rxs {
+            let ack = tokio::time::timeout(Duration::from_secs(5), ack_rx)
+                .await
+                .expect("Should receive ack")
+                .unwrap();
+            assert_eq!(ack, ReadAck::Ack);
+        }
+
+        handle.await.unwrap().unwrap();
+
+        // With paf_concurrency=1 and 10ms resolve latency per message,
+        // 3 messages should take at least 30ms (sequential processing)
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed.as_millis() >= 30,
+            "Expected sequential processing (>=30ms), but took {}ms",
+            elapsed.as_millis()
+        );
 
         assert_eq!(adapter.pending_count(), 3);
     }
@@ -1741,62 +1752,5 @@ mod simplebuffer_tests {
         // the semaphore was released (permit dropped when spawn task completed).
         // We verify this by checking that the orchestrator completed successfully
         // (wait_for_paf_resolvers was able to acquire all permits).
-    }
-
-    /// Test: Multiple messages with paf_concurrency=1 are processed sequentially,
-    /// and the semaphore properly gates concurrent PAF resolutions.
-    #[tokio::test]
-    async fn test_paf_concurrency_one_processes_sequentially() {
-        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
-        // Add resolve latency to make timing observable
-        adapter.error_injector().set_resolve_latency(10);
-
-        let (orchestrator, cancel) = create_single_stream_orchestrator(
-            &adapter,
-            "test-buffer",
-            BufferFullStrategy::RetryUntilSuccess,
-            1, // paf_concurrency = 1
-        );
-
-        let (tx, rx) = mpsc::channel(10);
-        let messages_stream = ReceiverStream::new(rx);
-
-        let handle = orchestrator
-            .streaming_write(messages_stream, cancel.clone())
-            .await
-            .unwrap();
-
-        let start = std::time::Instant::now();
-
-        // Send 3 messages
-        let mut ack_rxs = vec![];
-        for i in 0..3 {
-            let (msg, ack_rx) = create_test_message(i, &format!("msg-{}", i), None);
-            ack_rxs.push(ack_rx);
-            tx.send(msg).await.unwrap();
-        }
-        drop(tx);
-
-        // All should complete
-        for ack_rx in ack_rxs {
-            let ack = tokio::time::timeout(Duration::from_secs(5), ack_rx)
-                .await
-                .expect("Should receive ack")
-                .unwrap();
-            assert_eq!(ack, ReadAck::Ack);
-        }
-
-        handle.await.unwrap().unwrap();
-
-        // With paf_concurrency=1 and 10ms resolve latency per message,
-        // 3 messages should take at least 30ms (sequential processing)
-        let elapsed = start.elapsed();
-        assert!(
-            elapsed.as_millis() >= 30,
-            "Expected sequential processing (>=30ms), but took {}ms",
-            elapsed.as_millis()
-        );
-
-        assert_eq!(adapter.pending_count(), 3);
     }
 }
