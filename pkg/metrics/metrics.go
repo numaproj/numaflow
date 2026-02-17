@@ -6,24 +6,18 @@ import (
 )
 
 const (
-	LabelVersion            = "version"
-	LabelPlatform           = "platform"
-	LabelNamespace          = "ns"
-	LabelISBService         = "isbsvc"
-	LabelPipeline           = "pipeline"
-	LabelVertex             = "vertex"
-	LabelVertexReplicaIndex = "replica"
-	LabelVertexType         = "vertex_type"
-	LabelPartitionName      = "partition_name"
-	LabelSourcePartition    = "source_partition"
-	LabelMonoVertexName     = "mvtx_name"
-	LabelComponent          = "component"
-	LabelComponentName      = "component_name"
-	LabelSDKLanguage        = "language"
-	LabelSDKVersion         = "version"
-	LabelSDKType            = "type" // container type, e.g sourcer, sourcetransformer, sinker, etc. see serverinfo.ContainerType
-	LabelReason             = "reason"
-	LabelPeriod             = "period"
+	LabelVersion        = "version"
+	LabelPlatform       = "platform"
+	LabelNamespace      = "ns"
+	LabelISBService     = "isbsvc"
+	LabelPipeline       = "pipeline"
+	LabelVertex         = "vertex"
+	LabelVertexType     = "vertex_type"
+	LabelPartitionName  = "partition_name"
+	LabelMonoVertexName = "mvtx_name"
+	LabelComponent      = "component"
+	LabelComponentName  = "component_name"
+	LabelPeriod         = "period"
 )
 
 var (
