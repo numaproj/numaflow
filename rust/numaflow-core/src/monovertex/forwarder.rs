@@ -149,17 +149,14 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
 mod tests {
     use crate::Result;
     use crate::config::monovertex::BypassConditions;
+    use crate::mapper::test_utils::MapperTestHandle;
     use crate::monovertex::bypass_router::BypassRouterConfig;
     use crate::monovertex::forwarder::Forwarder;
-    use crate::shared::test_utils::components::{
-        MapperTestHandle, SinkTestHandle, SourceTestHandle,
-    };
-    use crate::shared::test_utils::components::{NoOpSink, NoOpTransformer, SinkType};
-    use crate::shared::test_utils::components::{
-        create_batch_mapper, create_map_streamer, create_mapper, create_sink, create_ud_source,
-    };
     use crate::sinker::sink::SinkClientType;
+    use crate::sinker::test_utils::{NoOpSink, SinkTestHandle, SinkType};
+    use crate::source::test_utils::SourceTestHandle;
     use crate::tracker::Tracker;
+    use crate::transformer::test_utils::NoOpTransformer;
     use chrono::Utc;
     use numaflow::sink::{Response, SinkRequest};
     use numaflow::source::{Message, Offset, SourceReadRequest};
@@ -266,7 +263,7 @@ mod tests {
         let batch_size = 10;
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Some(SimpleTransformer),
             batch_size,
@@ -275,7 +272,7 @@ mod tests {
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::<NoOpSink>::BuiltIn(SinkClientType::Log),
             None,
             None,
@@ -313,7 +310,7 @@ mod tests {
         let batch_size = 10;
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Some(FlatMapTransformer),
             batch_size,
@@ -322,7 +319,7 @@ mod tests {
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::<NoOpSink>::BuiltIn(SinkClientType::Log),
             None,
             None,
@@ -394,7 +391,7 @@ mod tests {
         let batch_size = 10;
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Option::<NoOpTransformer>::None,
             batch_size,
@@ -404,7 +401,7 @@ mod tests {
         .await;
 
         // create a mapper
-        let mapper_handle = create_mapper(
+        let mapper_handle = MapperTestHandle::create_mapper(
             Cat,
             tracker,
             MapMode::Unary,
@@ -415,7 +412,7 @@ mod tests {
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::<NoOpSink>::BuiltIn(SinkClientType::Log),
             None,
             None,
@@ -441,7 +438,7 @@ mod tests {
         let batch_size = 10;
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Option::<NoOpTransformer>::None,
             batch_size,
@@ -451,7 +448,7 @@ mod tests {
         .await;
 
         // create a mapper
-        let mapper_handle = create_batch_mapper(
+        let mapper_handle = MapperTestHandle::create_batch_mapper(
             Cat,
             tracker,
             MapMode::Batch,
@@ -462,7 +459,7 @@ mod tests {
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::<NoOpSink>::BuiltIn(SinkClientType::Log),
             None,
             None,
@@ -488,7 +485,7 @@ mod tests {
         let batch_size = 10;
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Option::<NoOpTransformer>::None,
             batch_size,
@@ -498,7 +495,7 @@ mod tests {
         .await;
 
         // create a mapper
-        let mapper_handle = create_map_streamer(
+        let mapper_handle = MapperTestHandle::create_map_streamer(
             Cat,
             tracker,
             MapMode::Stream,
@@ -509,7 +506,7 @@ mod tests {
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::<NoOpSink>::BuiltIn(SinkClientType::Log),
             None,
             None,
@@ -535,7 +532,7 @@ mod tests {
         let batch_size = 10;
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Some(SimpleTransformer),
             batch_size,
@@ -545,7 +542,7 @@ mod tests {
         .await;
 
         // create a mapper
-        let mapper_handle = create_mapper(
+        let mapper_handle = MapperTestHandle::create_mapper(
             Cat,
             tracker,
             MapMode::Unary,
@@ -556,7 +553,7 @@ mod tests {
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::<NoOpSink>::BuiltIn(SinkClientType::Log),
             None,
             None,
@@ -715,7 +712,7 @@ mod tests {
             BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Some(ConditionalTransformer::new(
                 0,
@@ -731,7 +728,7 @@ mod tests {
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::UserDefined(SinkLog::new()),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
@@ -928,7 +925,7 @@ mod tests {
             BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Option::<NoOpTransformer>::None,
             batch_size,
@@ -938,7 +935,7 @@ mod tests {
         .await;
 
         // create a mapper
-        let mapper_handle = create_mapper(
+        let mapper_handle = MapperTestHandle::create_mapper(
             BypassCat::new(0, 10, 10, None, Some(fallback_tags), Some(on_success_tags)),
             tracker,
             MapMode::Unary,
@@ -949,7 +946,7 @@ mod tests {
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::UserDefined(SinkLog::new()),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
@@ -993,7 +990,7 @@ mod tests {
             BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Option::<NoOpTransformer>::None,
             batch_size,
@@ -1003,7 +1000,7 @@ mod tests {
         .await;
 
         // create a mapper
-        let mapper_handle = create_batch_mapper(
+        let mapper_handle = MapperTestHandle::create_batch_mapper(
             BypassCat::new(0, 10, 10, None, Some(fallback_tags), Some(on_success_tags)),
             tracker,
             MapMode::Batch,
@@ -1014,7 +1011,7 @@ mod tests {
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::UserDefined(SinkLog::new()),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
@@ -1058,7 +1055,7 @@ mod tests {
             BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Option::<NoOpTransformer>::None,
             batch_size,
@@ -1068,7 +1065,7 @@ mod tests {
         .await;
 
         // create a mapper
-        let mapper_handle = create_map_streamer(
+        let mapper_handle = MapperTestHandle::create_map_streamer(
             BypassCat::new(0, 10, 10, None, Some(fallback_tags), Some(on_success_tags)),
             tracker,
             MapMode::Stream,
@@ -1079,7 +1076,7 @@ mod tests {
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::UserDefined(SinkLog::new()),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
@@ -1127,7 +1124,7 @@ mod tests {
             BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Option::<NoOpTransformer>::None,
             batch_size,
@@ -1137,7 +1134,7 @@ mod tests {
         .await;
 
         // create a mapper
-        let mapper_handle = create_mapper(
+        let mapper_handle = MapperTestHandle::create_mapper(
             BypassCat::new(0, 1, 1, None, Some(fallback_tags), Some(on_success_tags)),
             tracker,
             MapMode::Unary,
@@ -1148,7 +1145,7 @@ mod tests {
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::UserDefined(SinkLog::new()),
             None,
             None,
@@ -1259,7 +1256,7 @@ mod tests {
             BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Some(PanickingConditionalTransformer::new(
                 0,
@@ -1274,7 +1271,7 @@ mod tests {
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::UserDefined(SinkLog::new()),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
@@ -1381,7 +1378,7 @@ mod tests {
             BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             None::<NoOpTransformer>,
             batch_size,
@@ -1390,7 +1387,7 @@ mod tests {
         )
         .await;
 
-        let map_handle = create_mapper(
+        let map_handle = MapperTestHandle::create_mapper(
             PanickingMapper::new(0, 10, 10, None, Some(fallback_tags)),
             tracker.clone(),
             MapMode::Unary,
@@ -1401,7 +1398,7 @@ mod tests {
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::UserDefined(SinkLog::new()),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
             Some(SinkType::BuiltIn(SinkClientType::Log)),

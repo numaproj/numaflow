@@ -26,6 +26,10 @@ use crate::transformer::user_defined::UserDefinedTransformer;
 /// [User-Defined Transformer]: https://numaflow.numaproj.io/user-guide/sources/transformer/overview/#build-your-own-transformer
 pub(crate) mod user_defined;
 
+/// Test utilities for transformer.
+#[cfg(test)]
+pub(crate) mod test_utils;
+
 /// TransformerActorMessage is the message that is sent to the transformer actor.
 struct TransformerActorMessage {
     message: Message,

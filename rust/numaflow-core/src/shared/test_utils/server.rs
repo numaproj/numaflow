@@ -18,7 +18,6 @@
 use std::future::Future;
 use std::path::PathBuf;
 
-use numaflow::shared::ServerExtras;
 use tempfile::TempDir;
 use tokio::sync::oneshot;
 use tonic::transport::Channel;
@@ -114,8 +113,6 @@ where
         })
         .expect("failed to spawn test server thread");
 
-    // TODO: add checks to ensure the server is running
-
     TestServerHandle {
         sock_file,
         shutdown_tx: Some(shutdown_tx),
@@ -124,172 +121,7 @@ where
     }
 }
 
-/// Start a map server with the given handler.
-pub(crate) fn start_map_server<M>(handler: M) -> TestServerHandle
-where
-    M: numaflow::map::Mapper + Send + Sync + 'static,
-{
-    start_server(
-        &format!("map-{}", get_rand_str()),
-        |sock, info, shutdown_rx| async move {
-            numaflow::map::Server::new(handler)
-                .with_socket_file(sock)
-                .with_server_info_file(info)
-                .start_with_shutdown(shutdown_rx)
-                .await
-                .expect("map server failed");
-        },
-    )
-}
-
-/// Start a batch map server with the given handler.
-pub(crate) fn start_batch_map_server<M>(handler: M) -> TestServerHandle
-where
-    M: numaflow::batchmap::BatchMapper + Send + Sync + 'static,
-{
-    start_server(
-        &format!("batch-map-{}", get_rand_str()),
-        |sock, info, shutdown_rx| async move {
-            numaflow::batchmap::Server::new(handler)
-                .with_socket_file(sock)
-                .with_server_info_file(info)
-                .start_with_shutdown(shutdown_rx)
-                .await
-                .expect("batch map server failed");
-        },
-    )
-}
-
-/// Start a map stream server with the given handler.
-pub(crate) fn start_map_stream_server<M>(handler: M) -> TestServerHandle
-where
-    M: numaflow::mapstream::MapStreamer + Send + Sync + 'static,
-{
-    start_server(
-        &format!("map-stream-{}", get_rand_str()),
-        |sock, info, shutdown_rx| async move {
-            numaflow::mapstream::Server::new(handler)
-                .with_socket_file(sock)
-                .with_server_info_file(info)
-                .start_with_shutdown(shutdown_rx)
-                .await
-                .expect("map stream server failed");
-        },
-    )
-}
-
-/// Start a sink server with the given handler.
-pub(crate) fn start_sink_server<S>(handler: S) -> TestServerHandle
-where
-    S: numaflow::sink::Sinker + Send + Sync + 'static,
-{
-    start_server(
-        &format!("sink-{}", get_rand_str()),
-        |sock, info, shutdown_rx| async move {
-            numaflow::sink::Server::new(handler)
-                .with_socket_file(sock)
-                .with_server_info_file(info)
-                .start_with_shutdown(shutdown_rx)
-                .await
-                .expect("sink server failed");
-        },
-    )
-}
-
-/// Start a source server with the given handler.
-pub(crate) fn start_source_server<S>(handler: S) -> TestServerHandle
-where
-    S: numaflow::source::Sourcer + Send + Sync + 'static,
-{
-    start_server(
-        &format!("source-{}", get_rand_str()),
-        |sock, info, shutdown_rx| async move {
-            numaflow::source::Server::new(handler)
-                .with_socket_file(sock)
-                .with_server_info_file(info)
-                .start_with_shutdown(shutdown_rx)
-                .await
-                .expect("source server failed");
-        },
-    )
-}
-
-/// Start a source transform server with the given handler.
-pub(crate) fn start_source_transform_server<T>(handler: T) -> TestServerHandle
-where
-    T: numaflow::sourcetransform::SourceTransformer + Send + Sync + 'static,
-{
-    start_server(
-        &format!("src-transform-{}", get_rand_str()),
-        |sock, info, shutdown_rx| async move {
-            numaflow::sourcetransform::Server::new(handler)
-                .with_socket_file(sock)
-                .with_server_info_file(info)
-                .start_with_shutdown(shutdown_rx)
-                .await
-                .expect("source transform server failed");
-        },
-    )
-}
-
-/// Start a reduce (aligned) server with the given creator.
-#[allow(dead_code)]
-pub(crate) fn start_reduce_server<C>(creator: C) -> TestServerHandle
-where
-    C: numaflow::reduce::ReducerCreator + Send + Sync + 'static,
-{
-    start_server(
-        &format!("reduce-{}", get_rand_str()),
-        |sock, info, shutdown_rx| async move {
-            numaflow::reduce::Server::new(creator)
-                .with_socket_file(sock)
-                .with_server_info_file(info)
-                .start_with_shutdown(shutdown_rx)
-                .await
-                .expect("reduce server failed");
-        },
-    )
-}
-
-/// Start a session reduce server with the given creator.
-#[allow(dead_code)]
-pub(crate) fn start_session_reduce_server<C>(creator: C) -> TestServerHandle
-where
-    C: numaflow::session_reduce::SessionReducerCreator + Send + Sync + 'static,
-{
-    start_server(
-        &format!("session-reduce-{}", get_rand_str()),
-        |sock, info, shutdown_rx| async move {
-            numaflow::session_reduce::Server::new(creator)
-                .with_socket_file(sock)
-                .with_server_info_file(info)
-                .start_with_shutdown(shutdown_rx)
-                .await
-                .expect("session reduce server failed");
-        },
-    )
-}
-
-/// Start an accumulator server with the given creator.
-#[allow(dead_code)]
-pub(crate) fn start_accumulator_server<C>(creator: C) -> TestServerHandle
-where
-    C: numaflow::accumulator::AccumulatorCreator + Send + Sync + 'static,
-{
-    start_server(
-        &format!("accumulator-{}", get_rand_str()),
-        |sock, info, shutdown_rx| async move {
-            numaflow::accumulator::Server::new(creator)
-                .with_socket_file(sock)
-                .with_server_info_file(info)
-                .start_with_shutdown(shutdown_rx)
-                .await
-                .expect("accumulator server failed");
-        },
-    )
-}
-
-fn get_rand_str() -> String {
+pub(crate) fn get_rand_str() -> String {
     use rand::distr::{Alphanumeric, SampleString};
 
     Alphanumeric.sample_string(&mut rand::rng(), 10)
