@@ -146,7 +146,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
 }
 
 #[cfg(test)]
-mod  fromtests {
+mod fromtests {
     use crate::Result;
     use crate::config::monovertex::BypassConditions;
     use crate::mapper::test_utils::MapperTestHandle;
