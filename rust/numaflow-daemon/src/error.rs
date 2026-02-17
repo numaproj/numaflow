@@ -14,7 +14,4 @@ pub enum Error {
 
     #[error("Failed to parse address: {0}")]
     Address(String),
-
-    #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
 }

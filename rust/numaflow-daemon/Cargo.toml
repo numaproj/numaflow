@@ -10,18 +10,17 @@ tokio.workspace = true
 numaflow-pb.workspace = true
 rcgen.workspace = true
 time.workspace = true
-rustls.workspace = true
-http.workspace = true
-bytes.workspace = true
-tokio-stream.workspace = true
 tokio-util.workspace = true
 thiserror.workspace = true
-
-# Daemon-specific dependencies
-http-body-util = "0.1.2"
-hyper = "1.6.0"
-hyper-util = "0.1.10"
-tokio-rustls = { version = "0.26.2", default-features = false, features = ["logging", "tls12"] }
+tower.workspace = true
+axum.workspace = true
+axum-server.workspace = true
+bytes.workspace = true
+http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+hyper = "1.6"
+http-body-util = "0.1"
 
 [lints]
 workspace = true

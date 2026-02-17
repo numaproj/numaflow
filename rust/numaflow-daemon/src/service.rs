@@ -15,10 +15,11 @@ impl MonoVertexDaemonService for MvtxDaemonService {
         &self,
         _: Request<()>,
     ) -> Result<Response<GetMonoVertexMetricsResponse>, Status> {
+        tracing::info!("gRPC: GetMonoVertexMetrics called via HTTP/2");
         let mock_processing_rates = HashMap::from([
             ("default".to_string(), 67.0),
             ("1m".to_string(), 10.0),
-            ("5m".to_string(), 50.0),
+            ("5m".to_string(), 50.5),
             ("15m".to_string(), 150.0),
         ]);
 
@@ -44,6 +45,7 @@ impl MonoVertexDaemonService for MvtxDaemonService {
         &self,
         _: Request<()>,
     ) -> Result<Response<GetMonoVertexStatusResponse>, Status> {
+        tracing::info!("gRPC: GetMonoVertexStatus called via HTTP/2");
         let mock_resp = GetMonoVertexStatusResponse {
             status: Some(MonoVertexStatus {
                 status: "mock_status".to_string(),
@@ -57,8 +59,12 @@ impl MonoVertexDaemonService for MvtxDaemonService {
 
     async fn get_mono_vertex_errors(
         &self,
-        _: Request<GetMonoVertexErrorsRequest>,
+        req: Request<GetMonoVertexErrorsRequest>,
     ) -> Result<Response<GetMonoVertexErrorsResponse>, Status> {
+        tracing::info!(
+            "gRPC: GetMonoVertexErrors called via HTTP/2 for mono_vertex: {}",
+            req.get_ref().mono_vertex
+        );
         let mock_resp = GetMonoVertexErrorsResponse {
             errors: vec![ReplicaErrors {
                 replica: "mock_replica".to_string(),
@@ -87,7 +93,7 @@ mod tests {
         assert_eq!(metrics.mono_vertex, "mock_mvtx_spec");
         assert_eq!(metrics.processing_rates.get("default"), Some(&67.0));
         assert_eq!(metrics.processing_rates.get("1m"), Some(&10.0));
-        assert_eq!(metrics.processing_rates.get("5m"), Some(&50.0));
+        assert_eq!(metrics.processing_rates.get("5m"), Some(&50.5));
         assert_eq!(metrics.processing_rates.get("15m"), Some(&150.0));
 
         assert_eq!(metrics.pendings.get("default"), Some(&67));
