@@ -94,24 +94,6 @@ impl SinkTestHandle {
             ons_ud_sink_server_handle,
         }
     }
-
-    /// Start a sink server with the given handler.
-    pub(crate) fn start_sink_server<S>(handler: S) -> TestServerHandle
-    where
-        S: sink::Sinker + Send + Sync + 'static,
-    {
-        start_server(
-            &format!("sink-{}", get_rand_str()),
-            |sock, info, shutdown_rx| async move {
-                numaflow::sink::Server::new(handler)
-                    .with_socket_file(sock)
-                    .with_server_info_file(info)
-                    .start_with_shutdown(shutdown_rx)
-                    .await
-                    .expect("sink server failed");
-            },
-        )
-    }
 }
 
 async fn create_ud_sink<T>(sink_svc: T) -> (SinkClientType, TestServerHandle)
@@ -119,7 +101,7 @@ where
     T: sink::Sinker + Send + Sync + 'static,
 {
     // Create the sink
-    let server_handle = SinkTestHandle::start_sink_server(sink_svc);
+    let server_handle = start_sink_server(sink_svc);
     let mut sink_client = SinkClient::new(
         server_handle
             .create_rpc_channel()
@@ -153,4 +135,22 @@ async fn create_sink_writer(
     };
 
     sink_writer.build().await.unwrap()
+}
+
+/// Start a sink server with the given handler.
+pub(crate) fn start_sink_server<S>(handler: S) -> TestServerHandle
+where
+    S: sink::Sinker + Send + Sync + 'static,
+{
+    start_server(
+        &format!("sink-{}", get_rand_str()),
+        |sock, info, shutdown_rx| async move {
+            numaflow::sink::Server::new(handler)
+                .with_socket_file(sock)
+                .with_server_info_file(info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("sink server failed");
+        },
+    )
 }

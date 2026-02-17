@@ -14,24 +14,22 @@ pub(crate) struct SourceTransformerTestHandle {
     pub server_handle: TestServerHandle,
 }
 
-impl SourceTransformerTestHandle {
-    /// Start a source transform server with the given handler.
-    pub(crate) fn start_source_transform_server<T>(handler: T) -> TestServerHandle
-    where
-        T: SourceTransformer + Send + Sync + 'static,
-    {
-        start_server(
-            &format!("src-transform-{}", server::get_rand_str()),
-            |sock, info, shutdown_rx| async move {
-                numaflow::sourcetransform::Server::new(handler)
-                    .with_socket_file(sock)
-                    .with_server_info_file(info)
-                    .start_with_shutdown(shutdown_rx)
-                    .await
-                    .expect("source transform server failed");
-            },
-        )
-    }
+/// Start a source transform server with the given handler.
+pub(crate) fn start_source_transform_server<T>(handler: T) -> TestServerHandle
+where
+    T: SourceTransformer + Send + Sync + 'static,
+{
+    start_server(
+        &format!("src-transform-{}", server::get_rand_str()),
+        |sock, info, shutdown_rx| async move {
+            numaflow::sourcetransform::Server::new(handler)
+                .with_socket_file(sock)
+                .with_server_info_file(info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("source transform server failed");
+        },
+    )
 }
 
 /// A no-op transformer for testing.

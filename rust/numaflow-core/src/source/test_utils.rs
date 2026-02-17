@@ -5,7 +5,7 @@ use crate::source::user_defined::new_source;
 use crate::source::{Source, SourceType};
 use crate::tracker::Tracker;
 use crate::transformer::Transformer;
-use crate::transformer::test_utils::SourceTransformerTestHandle;
+use crate::transformer::test_utils::{SourceTransformerTestHandle, start_source_transform_server};
 use numaflow::shared::ServerExtras;
 use numaflow::source;
 use numaflow::sourcetransform::SourceTransformer;
@@ -43,8 +43,7 @@ impl SourceTestHandle {
         // create a transformer for this source if it is provided
         let mut transformer_test_handle = match source_transformer_svc {
             Some(transformer_svc) => {
-                let server_handle =
-                    SourceTransformerTestHandle::start_source_transform_server(transformer_svc);
+                let server_handle = start_source_transform_server(transformer_svc);
 
                 let mut client = SourceTransformClient::new(
                     server_handle
@@ -76,7 +75,7 @@ impl SourceTestHandle {
         };
 
         // create the source
-        let server_handle = SourceTestHandle::start_source_server(source_svc);
+        let server_handle = start_source_server(source_svc);
         let mut client = SourceClient::new(
             server_handle
                 .create_rpc_channel()
@@ -140,22 +139,22 @@ impl SourceTestHandle {
             source_transformer_test_handle: transformer_test_handle,
         }
     }
+}
 
-    /// Start a source server with the given handler.
-    pub(crate) fn start_source_server<S>(handler: S) -> TestServerHandle
-    where
-        S: source::Sourcer + Send + Sync + 'static,
-    {
-        start_server(
-            &format!("source-{}", server::get_rand_str()),
-            |sock, info, shutdown_rx| async move {
-                source::Server::new(handler)
-                    .with_socket_file(sock)
-                    .with_server_info_file(info)
-                    .start_with_shutdown(shutdown_rx)
-                    .await
-                    .expect("source server failed");
-            },
-        )
-    }
+/// Start a source server with the given handler.
+pub(crate) fn start_source_server<S>(handler: S) -> TestServerHandle
+where
+    S: source::Sourcer + Send + Sync + 'static,
+{
+    start_server(
+        &format!("source-{}", server::get_rand_str()),
+        |sock, info, shutdown_rx| async move {
+            source::Server::new(handler)
+                .with_socket_file(sock)
+                .with_server_info_file(info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("source server failed");
+        },
+    )
 }

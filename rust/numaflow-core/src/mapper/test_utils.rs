@@ -34,7 +34,7 @@ impl MapperTestHandle {
         M: map::Mapper + Send + Sync + 'static,
     {
         // create a mapper
-        let server_handle = MapperTestHandle::start_map_server(map_svc);
+        let server_handle = start_map_server(map_svc);
         let mut client = MapClient::new(
             server_handle
                 .create_rpc_channel()
@@ -80,7 +80,7 @@ impl MapperTestHandle {
         M: batchmap::BatchMapper + Send + Sync + 'static,
     {
         // create a mapper
-        let server_handle = MapperTestHandle::start_batch_map_server(map_svc);
+        let server_handle = start_batch_map_server(map_svc);
         let mut client = MapClient::new(
             server_handle
                 .create_rpc_channel()
@@ -126,7 +126,7 @@ impl MapperTestHandle {
         M: mapstream::MapStreamer + Send + Sync + 'static,
     {
         // create a mapper
-        let server_handle = MapperTestHandle::start_map_stream_server(map_svc);
+        let server_handle = start_map_stream_server(map_svc);
         let mut client = MapClient::new(
             server_handle
                 .create_rpc_channel()
@@ -155,58 +155,58 @@ impl MapperTestHandle {
             server_handle,
         }
     }
+}
 
-    /// Start a map server with the given handler.
-    pub(crate) fn start_map_server<M>(handler: M) -> TestServerHandle
-    where
-        M: map::Mapper + Send + Sync + 'static,
-    {
-        start_server(
-            &format!("map-{}", get_rand_str()),
-            |sock, info, shutdown_rx| async move {
-                map::Server::new(handler)
-                    .with_socket_file(sock)
-                    .with_server_info_file(info)
-                    .start_with_shutdown(shutdown_rx)
-                    .await
-                    .expect("map server failed");
-            },
-        )
-    }
+/// Start a map server with the given handler.
+pub(crate) fn start_map_server<M>(handler: M) -> TestServerHandle
+where
+    M: map::Mapper + Send + Sync + 'static,
+{
+    start_server(
+        &format!("map-{}", get_rand_str()),
+        |sock, info, shutdown_rx| async move {
+            map::Server::new(handler)
+                .with_socket_file(sock)
+                .with_server_info_file(info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("map server failed");
+        },
+    )
+}
 
-    /// Start a batch map server with the given handler.
-    pub(crate) fn start_batch_map_server<M>(handler: M) -> TestServerHandle
-    where
-        M: batchmap::BatchMapper + Send + Sync + 'static,
-    {
-        start_server(
-            &format!("batch-map-{}", get_rand_str()),
-            |sock, info, shutdown_rx| async move {
-                batchmap::Server::new(handler)
-                    .with_socket_file(sock)
-                    .with_server_info_file(info)
-                    .start_with_shutdown(shutdown_rx)
-                    .await
-                    .expect("batch map server failed");
-            },
-        )
-    }
+/// Start a batch map server with the given handler.
+pub(crate) fn start_batch_map_server<M>(handler: M) -> TestServerHandle
+where
+    M: batchmap::BatchMapper + Send + Sync + 'static,
+{
+    start_server(
+        &format!("batch-map-{}", get_rand_str()),
+        |sock, info, shutdown_rx| async move {
+            batchmap::Server::new(handler)
+                .with_socket_file(sock)
+                .with_server_info_file(info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("batch map server failed");
+        },
+    )
+}
 
-    /// Start a map stream server with the given handler.
-    pub(crate) fn start_map_stream_server<M>(handler: M) -> TestServerHandle
-    where
-        M: mapstream::MapStreamer + Send + Sync + 'static,
-    {
-        start_server(
-            &format!("map-stream-{}", get_rand_str()),
-            |sock, info, shutdown_rx| async move {
-                mapstream::Server::new(handler)
-                    .with_socket_file(sock)
-                    .with_server_info_file(info)
-                    .start_with_shutdown(shutdown_rx)
-                    .await
-                    .expect("map stream server failed");
-            },
-        )
-    }
+/// Start a map stream server with the given handler.
+pub(crate) fn start_map_stream_server<M>(handler: M) -> TestServerHandle
+where
+    M: mapstream::MapStreamer + Send + Sync + 'static,
+{
+    start_server(
+        &format!("map-stream-{}", get_rand_str()),
+        |sock, info, shutdown_rx| async move {
+            mapstream::Server::new(handler)
+                .with_socket_file(sock)
+                .with_server_info_file(info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("map stream server failed");
+        },
+    )
 }
