@@ -34,8 +34,6 @@ pub(crate) struct TestServerHandle {
     shutdown_tx: Option<oneshot::Sender<()>>,
     /// thread handle for the server runtime.
     thread_handle: Option<std::thread::JoinHandle<()>>,
-    /// Temp directory kept alive so the socket file persists.
-    _tmp_dir: TempDir,
 }
 
 impl TestServerHandle {
@@ -58,8 +56,12 @@ impl TestServerHandle {
             let _ = tx.send(());
         }
         if let Some(handle) = self.thread_handle.take() {
-            // FIXME: waiting to join the server thread can block in case of single threaded tokio test runtime
-            // From claude:
+            // Note: waiting to join the server thread can block in case of single threaded tokio
+            // test runtime, since `join()` parks the calling tokio worker thread until the server
+            // thread exits. This can create deadlock issues.
+            // Run [tokio::test] with "multi_thread" runtime flavor to avoid this issue.
+            //
+            // Example deadlock scenario observed:
             // * `handle.join()` blocks the tokio runtime thread, waiting for the source server thread to exit
             // * The source server thread waits for the gRPC connection to close
             // * The gRPC connection closes when `read_tx` is dropped
@@ -102,9 +104,22 @@ where
 
     let sock = sock_file.clone();
 
+    // Why a separate thread and runtime?
+    //
+    // Tests annotated with `#[tokio::test]` run inside a tokio runtime. If we started the
+    // gRPC server as a task, the server future and the test future would share the same tokio runtime.
+    //
+    // By spawning a new `std::thread` we get an entirely independent tokio runtime that isn't
+    // coupled to the test runtime. The server's `block_on` call blocks only this new OS thread,
+    // leaving the test runtime's threads free to drive client requests and assertions.
+    //
+    // This was done to try to mimic the production container isolation behavior for testing.
     let thread_handle = std::thread::Builder::new()
         .name(format!("{name}-server"))
         .spawn(move || {
+            // Temp directory kept alive so the socket file persists
+            // when client makes a connection.
+            let _tmp_dir = tmp_dir;
             tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
@@ -117,7 +132,6 @@ where
         sock_file,
         shutdown_tx: Some(shutdown_tx),
         thread_handle: Some(thread_handle),
-        _tmp_dir: tmp_dir,
     }
 }
 
