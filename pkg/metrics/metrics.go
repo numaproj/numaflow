@@ -15,6 +15,7 @@ const (
 	LabelVertexReplicaIndex = "replica"
 	LabelVertexType         = "vertex_type"
 	LabelPartitionName      = "partition_name"
+	LabelSourcePartition    = "source_partition"
 	LabelMonoVertexName     = "mvtx_name"
 	LabelComponent          = "component"
 	LabelComponentName      = "component_name"
