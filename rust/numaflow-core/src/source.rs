@@ -63,6 +63,8 @@ pub(crate) mod sqs;
 
 pub(crate) mod http;
 pub(crate) mod kafka;
+#[cfg(test)]
+pub(crate) mod test_utils;
 
 use crate::transformer::Transformer;
 use crate::watermark::source::SourceWatermarkHandle;
