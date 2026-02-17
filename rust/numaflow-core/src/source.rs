@@ -5,12 +5,12 @@
 //! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
-use crate::config::{get_vertex_name, is_mono_vertex};
+use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{AckHandle, ReadAck};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, SOURCE_PARTITION_NAME_LABEL, monovertex_metrics,
-    mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
+    pipeline_metric_labels, pipeline_metrics,
 };
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::source::http::CoreHttpSource;
@@ -402,12 +402,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.read_batch_size);
 
-        let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
-        pipeline_labels.push((
-            PIPELINE_PARTITION_NAME_LABEL.to_string(),
-            get_vertex_name().to_string(),
-        ));
-
+        let pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
         let mvtx_labels = mvtx_forward_metric_labels();
 
         info!(?self.read_batch_size, "Started streaming source with batch size");
@@ -750,19 +745,17 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         partition_idx: u16,
         bytes: usize,
     ) {
+        let partition_str = partition_idx.to_string();
         if is_mono_vertex() {
             let mut labels = mvtx_labels.to_owned();
             labels.push((
-                SOURCE_PARTITION_NAME_LABEL.to_string(),
-                partition_idx.to_string(),
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                partition_str,
             ));
             monovertex_metrics().read_total.get_or_create(&labels).inc();
         } else {
             let mut labels = pipeline_labels.to_owned();
-            labels.push((
-                SOURCE_PARTITION_NAME_LABEL.to_string(),
-                partition_idx.to_string(),
-            ));
+            labels.push((PIPELINE_PARTITION_NAME_LABEL.to_string(), partition_str));
             pipeline_metrics()
                 .forwarder
                 .read_total
@@ -804,26 +797,22 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 .get_or_create(mvtx_labels)
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
         } else {
-            let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
-            pipeline_labels.push((
-                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                get_vertex_name().to_string(),
-            ));
+            let pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE);
             pipeline_metrics()
                 .forwarder
                 .ack_processing_time
-                .get_or_create(&pipeline_labels)
+                .get_or_create(pipeline_labels)
                 .observe(start.elapsed().as_micros() as f64);
 
             pipeline_metrics()
                 .forwarder
                 .ack_total
-                .get_or_create(&pipeline_labels)
+                .get_or_create(pipeline_labels)
                 .inc_by(n as u64);
             pipeline_metrics()
                 .forwarder
                 .e2e_time
-                .get_or_create(&pipeline_labels)
+                .get_or_create(pipeline_labels)
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
         }
     }

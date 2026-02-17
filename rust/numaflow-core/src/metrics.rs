@@ -48,7 +48,6 @@ const REPLICA_LABEL: &str = "mvtx_replica";
 const PIPELINE_NAME_LABEL: &str = "pipeline";
 const PIPELINE_REPLICA_LABEL: &str = "replica";
 pub(crate) const PIPELINE_PARTITION_NAME_LABEL: &str = "partition_name";
-pub(crate) const SOURCE_PARTITION_NAME_LABEL: &str = "source_partition";
 const PIPELINE_VERTEX_LABEL: &str = "vertex";
 const PIPELINE_VERTEX_TYPE_LABEL: &str = "vertex_type";
 const PIPELINE_DROP_REASON_LABEL: &str = "reason";
