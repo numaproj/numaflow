@@ -45,16 +45,33 @@ pub(crate) struct Processor {
 }
 
 impl Debug for Processor {
+    /// Formats the processor as: "name(status)[p0:[entries],p1:[entries],...]"
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(
-            f,
-            "Processor: {:?}, Status: {:?}, Timelines: ",
-            self.name, self.status
-        )?;
+        let name_str = String::from_utf8_lossy(&self.name);
+        let status = match self.status {
+            Status::Active => "active",
+            Status::Deleted => "deleted",
+            Status::InActive => "inactive",
+        };
+
+        // Get complete timeline for each partition
+        let mut timeline_parts: Vec<String> = Vec::new();
         for (partition, timeline) in &self.timelines {
-            writeln!(f, "Partition {partition}: {timeline:?}")?;
+            let entries: Vec<String> = timeline
+                .entries()
+                .iter()
+                .map(|wmb| format!("(wm={},off={})", wmb.watermark, wmb.offset))
+                .collect();
+            let entries_str = if entries.is_empty() {
+                "empty".to_string()
+            } else {
+                entries.join("->")
+            };
+            timeline_parts.push(format!("p{}:[{}]", partition, entries_str));
         }
-        Ok(())
+        timeline_parts.sort();
+
+        write!(f, "{}({})[{}]", name_str, status, timeline_parts.join(","))
     }
 }
 
@@ -98,8 +115,12 @@ pub(crate) struct ProcessorManager {
 }
 
 impl Debug for ProcessorManager {
+    /// Formats as: "{proc1, proc2, ...}" where each processor uses its Debug format
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ProcessorManager: {:?}", self.processors)
+        let processors = self.processors.read().expect("failed to acquire lock");
+        let mut proc_infos: Vec<String> = processors.values().map(|p| format!("{:?}", p)).collect();
+        proc_infos.sort();
+        write!(f, "{{{}}}", proc_infos.join(", "))
     }
 }
 

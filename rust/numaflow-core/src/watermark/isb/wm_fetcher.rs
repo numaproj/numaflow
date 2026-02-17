@@ -290,51 +290,11 @@ impl ISBWatermarkFetcher {
         ));
 
         // Add processor information with timeline entries
-        let mut processor_parts: Vec<String> = Vec::new();
-        for (edge, processor_manager) in &self.processor_managers {
-            let processors = processor_manager
-                .processors
-                .read()
-                .expect("failed to acquire lock");
-
-            let mut proc_infos: Vec<String> = Vec::new();
-            for (name, processor) in processors.iter() {
-                let name_str = String::from_utf8_lossy(name);
-                let status = if processor.is_active() {
-                    "active"
-                } else if processor.is_deleted() {
-                    "deleted"
-                } else {
-                    "inactive"
-                };
-
-                // Get complete timeline for each partition
-                let mut timeline_parts: Vec<String> = Vec::new();
-                for (partition, timeline) in &processor.timelines {
-                    let entries: Vec<String> = timeline
-                        .entries()
-                        .iter()
-                        .map(|wmb| format!("(wm={},off={})", wmb.watermark, wmb.offset))
-                        .collect();
-                    let entries_str = if entries.is_empty() {
-                        "empty".to_string()
-                    } else {
-                        entries.join("->")
-                    };
-                    timeline_parts.push(format!("p{}:[{}]", partition, entries_str));
-                }
-                timeline_parts.sort();
-
-                proc_infos.push(format!(
-                    "{}({})[{}]",
-                    name_str,
-                    status,
-                    timeline_parts.join(",")
-                ));
-            }
-            proc_infos.sort();
-            processor_parts.push(format!("{}:{{{}}}", edge, proc_infos.join(", ")));
-        }
+        let mut processor_parts: Vec<String> = self
+            .processor_managers
+            .iter()
+            .map(|(edge, pm)| format!("{}:{:?}", edge, pm))
+            .collect();
         processor_parts.sort();
         summary.push_str(&format!("processors={{{}}}", processor_parts.join(", ")));
 

@@ -745,20 +745,20 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     /// Record per-partition read metrics (read_total, data_read_total, read_bytes_total, etc.).
     /// These metrics are recorded for each message, grouped by partition.
     fn record_partition_read_metrics(
-        pipeline_labels: &Vec<(String, String)>,
-        mvtx_labels: &Vec<(String, String)>,
+        pipeline_labels: &[(String, String)],
+        mvtx_labels: &[(String, String)],
         partition_idx: u16,
         bytes: usize,
     ) {
         if is_mono_vertex() {
-            let mut labels = mvtx_labels.clone();
+            let mut labels = mvtx_labels.to_owned();
             labels.push((
                 SOURCE_PARTITION_NAME_LABEL.to_string(),
                 partition_idx.to_string(),
             ));
             monovertex_metrics().read_total.get_or_create(&labels).inc();
         } else {
-            let mut labels = pipeline_labels.clone();
+            let mut labels = pipeline_labels.to_owned();
             labels.push((
                 SOURCE_PARTITION_NAME_LABEL.to_string(),
                 partition_idx.to_string(),
