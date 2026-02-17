@@ -2502,6 +2502,7 @@ dependencies = [
  "numaflow-pulsar",
  "numaflow-shared",
  "numaflow-sqs",
+ "numaflow-testing",
  "numaflow-throttling",
  "parking_lot",
  "pin-project",
