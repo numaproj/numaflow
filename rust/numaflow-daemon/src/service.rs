@@ -1,5 +1,3 @@
-//! The Tonic gRPC service implementations.
-
 use numaflow_pb::servers::mvtxdaemon::mono_vertex_daemon_service_server::MonoVertexDaemonService;
 use numaflow_pb::servers::mvtxdaemon::{
     GetMonoVertexErrorsRequest, GetMonoVertexErrorsResponse, GetMonoVertexMetricsResponse,
@@ -9,6 +7,8 @@ use std::collections::HashMap;
 use std::result::Result;
 use tonic::{Request, Response, Status};
 
+/// MvtxDaemonService is the Tonic gRPC service implementations for MonoVertex daemon server.
+/// It's the single source of truth of how MonoVertex daemon server handles requests, regardless of HTTP or gRPC.
 pub(crate) struct MvtxDaemonService;
 
 #[tonic::async_trait]

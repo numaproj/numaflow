@@ -1,5 +1,3 @@
-//! Wraps the Tonic gRPC service so its response type is compatible with Axum's `IntoResponse`.
-
 use axum::body::Body;
 use axum::response::Response;
 use http::Request;
@@ -10,6 +8,11 @@ use tower::Service;
 
 use crate::MvtxDaemonService;
 
+/// GrpcAdapter implements tower::Service such that it can serve gRPC requests.
+///
+/// It serves as a fallback service for the Axum Router.
+/// The axum router handles HTTP 1.1 requests like /api/v1/status using .route(). It's not able to recognize gRPC h2 requests.
+/// gRPC h2 requests like /mvtxdaemon.MonoVertexDaemonService/GetMonoVertexMetrics are redirected to the GrpcAdapter.
 #[derive(Clone)]
 pub(crate) struct GrpcAdapter {
     inner: MonoVertexDaemonServiceServer<MvtxDaemonService>,
