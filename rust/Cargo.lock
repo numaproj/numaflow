@@ -2540,6 +2540,7 @@ dependencies = [
  "hyper 1.6.0",
  "numaflow-pb",
  "rcgen",
+ "rustls 0.23.31",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
