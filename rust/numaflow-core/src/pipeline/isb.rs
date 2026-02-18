@@ -3,12 +3,20 @@
 //! [Vertex]: https://numaflow.numaproj.io/core-concepts/vertex/
 //! [ISB]: https://numaflow.numaproj.io/core-concepts/inter-step-buffer/
 
+use std::future::Future;
+use std::pin::Pin;
 use std::time::Duration;
 
 use async_trait::async_trait;
 
 use crate::error::Result;
 use crate::message::{Message, Offset};
+
+/// A boxed future representing a pending write operation.
+/// This is returned by `ISBWriter::async_write()` and can be awaited
+/// to get the final `WriteResult`.
+pub type PendingWrite =
+    Pin<Box<dyn Future<Output = std::result::Result<WriteResult, WriteError>> + Send + 'static>>;
 
 pub(crate) mod compression;
 pub(crate) mod error;
@@ -30,9 +38,8 @@ pub(crate) use factory::ISBFactory;
 /// internal state needed to perform these operations (e.g., JetStream needs
 /// the original message object).
 ///
-/// Implementations must be cheaply cloneable (e.g., using Arc internally).
 #[async_trait]
-pub(crate) trait ISBReader: Send + Sync + Clone {
+pub(crate) trait ISBReader: Send + Sync {
     /// Fetches a batch of messages from the ISB.
     ///
     /// This is a blocking call that waits up to `timeout` for messages.
@@ -131,50 +138,27 @@ impl WriteResult {
 ///
 /// This trait supports two write patterns:
 /// 1. **High-performance async pattern**: Use `async_write()` to get a `PendingWrite` handle
-///    immediately, then resolve it later with `resolve()`. This allows batching acknowledgments
-///    for higher throughput.
+///    immediately, then resolve it later by awaiting the future. This allows batching
+///    acknowledgments for higher throughput.
 /// 2. **Simple synchronous pattern**: Use `write()` which writes and waits for confirmation
 ///    in a single call. This is useful as a fallback when async writes fail.
 ///
-/// Both `resolve()` and `write()` return `Result<WriteResult, WriteError>` for consistency.
+/// Both patterns return `Result<WriteResult, WriteError>` for consistency.
 /// The orchestrator is responsible for retry logic and handling cancellation.
-///
-/// Implementations must be cheaply cloneable (e.g., using Arc internally).
 #[async_trait]
-pub(crate) trait ISBWriter: Send + Sync + Clone {
-    /// The pending write handle returned by `async_write()`.
-    /// For JetStream, this is `PublishAckFuture`. For simple implementations,
-    /// this can be `()` if acknowledgments are immediate.
-    type PendingWrite: Send + 'static;
-
+pub(crate) trait ISBWriter: Send + Sync {
     /// Writes a message and returns immediately with a pending write handle.
     ///
-    /// This is the high-performance write method. The returned `PendingWrite` can be
-    /// resolved later using `resolve()` to get the offset. This allows batching
-    /// multiple writes and resolving them in parallel.
+    /// This is the high-performance write method. The returned `PendingWrite` is a
+    /// boxed future that can be awaited later to get the `WriteResult`. This allows
+    /// batching multiple writes and resolving them in parallel.
     ///
     /// Returns `Err(WriteError::BufferFull)` if the buffer is full.
     /// Returns `Err(WriteError::WriteFailed)` if the publish operation fails.
     ///
     /// # Arguments
     /// * `message` - The message to write
-    async fn async_write(
-        &self,
-        message: Message,
-    ) -> std::result::Result<Self::PendingWrite, WriteError>;
-
-    /// Resolves a pending write to get the result.
-    ///
-    /// This waits for the write acknowledgment and returns a `WriteResult` containing
-    /// the offset of the written message along with additional metadata (e.g., whether
-    /// the message was a duplicate).
-    ///
-    /// # Arguments
-    /// * `pending` - The pending write handle from `async_write()`
-    async fn resolve(
-        &self,
-        pending: Self::PendingWrite,
-    ) -> std::result::Result<WriteResult, WriteError>;
+    async fn async_write(&self, message: Message) -> std::result::Result<PendingWrite, WriteError>;
 
     /// Writes a message and waits for confirmation, returning the result.
     ///

@@ -19,7 +19,7 @@ use crate::metrics::{
     pipeline_metrics,
 };
 use crate::pipeline::isb::error::ISBError;
-use crate::pipeline::isb::{ISBWriter, WriteError, WriteResult};
+use crate::pipeline::isb::{ISBWriter, PendingWrite, WriteError, WriteResult};
 use crate::shared::forward;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::WatermarkHandle;
@@ -32,15 +32,14 @@ type MetricLabels = Arc<Vec<(String, String)>>;
 type StreamMetricLabelsMap = Arc<HashMap<&'static str, MetricLabels>>;
 
 /// Result of a successful async write operation to a stream.
-/// Contains the pending write (PAF) that needs to be resolved.
-struct PendingWriteResult<C: NumaflowTypeConfig> {
+/// Contains the pending write (boxed future) that needs to be awaited.
+struct PendingWriteResult {
     stream: Stream,
-    paf: <C::ISBWriter as ISBWriter>::PendingWrite,
+    paf: PendingWrite,
     write_start: Instant,
 }
 
 /// Components needed to create an ISBWriterOrchestrator.
-#[derive(Clone)]
 pub(crate) struct ISBWriterOrchestratorComponents<C: NumaflowTypeConfig> {
     pub config: Vec<ToVertexConfig>,
     pub writers: HashMap<&'static str, C::ISBWriter>,
@@ -52,7 +51,6 @@ pub(crate) struct ISBWriterOrchestratorComponents<C: NumaflowTypeConfig> {
 /// ISBWriterOrchestrator orchestrates writing to multiple ISB streams.
 /// It manages multiple ISBWriters (one per stream), handles message routing,
 /// watermark publishing, and tracker operations.
-#[derive(Clone)]
 pub(crate) struct ISBWriterOrchestrator<C: NumaflowTypeConfig> {
     config: Arc<Vec<ToVertexConfig>>,
     /// HashMap: stream_name -> ISBWriter
@@ -64,6 +62,22 @@ pub(crate) struct ISBWriterOrchestrator<C: NumaflowTypeConfig> {
     /// Cached metric labels per stream to avoid repeated allocations
     /// HashMap: stream_name -> labels
     stream_metric_labels: StreamMetricLabelsMap,
+}
+
+/// Manual Clone implementation for ISBWriterOrchestrator.
+/// Since all fields are either Arc-wrapped or Clone types, cloning is cheap.
+impl<C: NumaflowTypeConfig> Clone for ISBWriterOrchestrator<C> {
+    fn clone(&self) -> Self {
+        Self {
+            config: Arc::clone(&self.config),
+            writers: Arc::clone(&self.writers),
+            watermark_handle: self.watermark_handle.clone(),
+            sem: Arc::clone(&self.sem),
+            paf_concurrency: self.paf_concurrency,
+            vertex_type: self.vertex_type.clone(),
+            stream_metric_labels: Arc::clone(&self.stream_metric_labels),
+        }
+    }
 }
 
 impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
@@ -151,7 +165,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
         &self,
         message: &Message,
         cln_token: CancellationToken,
-    ) -> Vec<PendingWriteResult<C>> {
+    ) -> Vec<PendingWriteResult> {
         let mut results = vec![];
 
         for vertex in &*self.config {
@@ -220,7 +234,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
         stream: &Stream,
         buffer_full_strategy: BufferFullStrategy,
         cln_token: CancellationToken,
-    ) -> Option<PendingWriteResult<C>> {
+    ) -> Option<PendingWriteResult> {
         let writer = self
             .writers
             .get(stream.name)
@@ -350,7 +364,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
     /// Spawns a background task to resolve all PAFs, publish watermarks, and update tracker.
     async fn resolve_and_finalize(
         &self,
-        write_results: Vec<PendingWriteResult<C>>,
+        write_results: Vec<PendingWriteResult>,
         message: Message,
         cln_token: CancellationToken,
     ) -> Result<()> {
@@ -397,20 +411,15 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
     /// Resolves all PAFs and returns the offsets for successful writes.
     async fn resolve_all_pafs(
         &self,
-        write_results: Vec<PendingWriteResult<C>>,
+        write_results: Vec<PendingWriteResult>,
         message: &Message,
         cln_token: CancellationToken,
     ) -> Vec<(Stream, Offset)> {
         let mut offsets = Vec::new();
 
         for write_result in write_results {
-            let writer = self
-                .writers
-                .get(write_result.stream.name)
-                .expect("writer should exist for stream");
-
-            // Try to resolve the PAF using the trait's resolve method
-            let resolve_result = match writer.resolve(write_result.paf).await {
+            // The paf is a boxed future - await it directly
+            let resolve_result = match write_result.paf.await {
                 Ok(result) => Ok(result),
                 Err(e) => {
                     error!(
@@ -419,6 +428,10 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
                     );
                     Self::publish_paf_error_metrics(write_result.stream.name, &e);
                     // Fallback to write with retry loop
+                    let writer = self
+                        .writers
+                        .get(write_result.stream.name)
+                        .expect("writer should exist for stream");
                     self.write_with_retry(writer, message.clone(), cln_token.clone())
                         .await
                 }

@@ -395,41 +395,40 @@ impl JetStreamWriter {
 
 #[async_trait::async_trait]
 impl crate::pipeline::isb::ISBWriter for JetStreamWriter {
-    type PendingWrite = PublishAckFuture;
-
     async fn async_write(
         &self,
         message: Message,
-    ) -> std::result::Result<Self::PendingWrite, crate::pipeline::isb::WriteError> {
-        // Delegate to the existing async_write method
-        self.async_write(message).await.map_err(|e| match e {
+    ) -> std::result::Result<crate::pipeline::isb::PendingWrite, crate::pipeline::isb::WriteError>
+    {
+        // Get the PAF from the inherent async_write method
+        let paf = self.async_write(message).await.map_err(|e| match e {
             WriteError::BufferFull => crate::pipeline::isb::WriteError::BufferFull,
             WriteError::WriteFailed(msg) => crate::pipeline::isb::WriteError::WriteFailed(msg),
-        })
-    }
+        })?;
 
-    async fn resolve(
-        &self,
-        pending: Self::PendingWrite,
-    ) -> std::result::Result<crate::pipeline::isb::WriteResult, crate::pipeline::isb::WriteError>
-    {
-        // Await the PAF to get the PublishAck
-        let ack = pending
-            .await
-            .map_err(|e| crate::pipeline::isb::WriteError::WriteFailed(e.to_string()))?;
+        // Capture partition for the boxed future
+        let partition = self.stream.partition;
 
-        // Convert sequence number to Offset using the stream's partition
-        let offset = crate::message::Offset::Int(crate::message::IntOffset::new(
-            ack.sequence as i64,
-            self.stream.partition,
-        ));
+        // Return a boxed future that resolves the PAF to a WriteResult
+        Ok(Box::pin(async move {
+            // Await the PAF to get the PublishAck
+            let ack = paf
+                .await
+                .map_err(|e| crate::pipeline::isb::WriteError::WriteFailed(e.to_string()))?;
 
-        // Check if this was a duplicate message
-        if ack.duplicate {
-            Ok(crate::pipeline::isb::WriteResult::duplicate(offset))
-        } else {
-            Ok(crate::pipeline::isb::WriteResult::new(offset))
-        }
+            // Convert sequence number to Offset using the captured partition
+            let offset = crate::message::Offset::Int(crate::message::IntOffset::new(
+                ack.sequence as i64,
+                partition,
+            ));
+
+            // Check if this was a duplicate message
+            if ack.duplicate {
+                Ok(crate::pipeline::isb::WriteResult::duplicate(offset))
+            } else {
+                Ok(crate::pipeline::isb::WriteResult::new(offset))
+            }
+        }))
     }
 
     async fn write(
