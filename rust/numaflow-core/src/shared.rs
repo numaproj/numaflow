@@ -10,3 +10,7 @@ pub(crate) mod create_components;
 
 /// Shared methods for forwarding messages.
 pub(crate) mod forward;
+
+/// Test server framework: helpers for spinning up numaflow SDK gRPC servers in tests.
+#[cfg(test)]
+pub(crate) mod test_utils;

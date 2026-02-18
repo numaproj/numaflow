@@ -62,8 +62,8 @@ lz4 = "1.28.1"
 async-trait = "0.1.88"
 
 [dev-dependencies]
+numaflow-testing = { path = "../numaflow-testing" }
 tempfile = "3.11.0"
-# TODO: Remove this when OnSuccess sink support is added in numaflow-rs SDK
 numaflow = "0.5.0"
 pulsar = { version = "6.3.0", default-features = false, features = ["tokio-rustls-runtime"] }
 hyper = "1.6.0"

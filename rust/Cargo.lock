@@ -2502,6 +2502,7 @@ dependencies = [
  "numaflow-pulsar",
  "numaflow-shared",
  "numaflow-sqs",
+ "numaflow-testing",
  "numaflow-throttling",
  "parking_lot",
  "pin-project",
@@ -2736,6 +2737,17 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+]
+
+[[package]]
+name = "numaflow-testing"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "chrono",
+ "parking_lot",
+ "thiserror 2.0.17",
+ "tokio",
 ]
 
 [[package]]

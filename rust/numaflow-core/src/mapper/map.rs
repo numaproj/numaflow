@@ -938,8 +938,10 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "global-state-tests")]
     struct PanicCat;
 
+    #[cfg(feature = "global-state-tests")]
     #[tonic::async_trait]
     impl map::Mapper for PanicCat {
         async fn map(&self, _input: map::MapRequest) -> Vec<map::Message> {
@@ -1036,8 +1038,10 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "global-state-tests")]
     struct PanicBatchMap;
 
+    #[cfg(feature = "global-state-tests")]
     #[tonic::async_trait]
     impl batchmap::BatchMapper for PanicBatchMap {
         async fn batchmap(
@@ -1152,8 +1156,10 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "global-state-tests")]
     struct PanicFlatmapStream;
 
+    #[cfg(feature = "global-state-tests")]
     #[tonic::async_trait]
     impl mapstream::MapStreamer for PanicFlatmapStream {
         async fn map_stream(

@@ -149,34 +149,24 @@ impl<C: crate::typ::NumaflowTypeConfig> Forwarder<C> {
 mod tests {
     use crate::Result;
     use crate::config::monovertex::BypassConditions;
-    use crate::mapper::map::MapHandle;
+    use crate::mapper::test_utils::MapperTestHandle;
     use crate::monovertex::bypass_router::BypassRouterConfig;
     use crate::monovertex::forwarder::Forwarder;
-    use crate::shared::grpc::create_rpc_channel;
-    use crate::sinker::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
-    use crate::source::user_defined::new_source;
-    use crate::source::{Source, SourceType};
+    use crate::sinker::sink::SinkClientType;
+    use crate::sinker::test_utils::{NoOpSink, SinkTestHandle, SinkType};
+    use crate::source::test_utils::SourceTestHandle;
     use crate::tracker::Tracker;
-    use crate::transformer::Transformer;
+    use crate::transformer::test_utils::NoOpTransformer;
     use chrono::Utc;
-    use numaflow::shared::ServerExtras;
     use numaflow::sink::{Response, SinkRequest};
     use numaflow::source::{Message, Offset, SourceReadRequest};
-    use numaflow::sourcetransform::{SourceTransformRequest, SourceTransformer};
     use numaflow::{batchmap, map, mapstream, sink, source, sourcetransform};
     use numaflow_models::models::{ForwardConditions, TagConditions};
-    use numaflow_pb::clients::map::map_client::MapClient;
-    use numaflow_pb::clients::sink::sink_client::SinkClient;
-    use numaflow_pb::clients::source::source_client::SourceClient;
-    use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
     use numaflow_shared::server_info::MapMode;
     use std::collections::HashSet;
-    use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
-    use tempfile::TempDir;
     use tokio::sync::mpsc::Sender;
-    use tokio::sync::oneshot;
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
 
@@ -273,7 +263,7 @@ mod tests {
         let batch_size = 10;
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Some(SimpleTransformer),
             batch_size,
@@ -282,7 +272,7 @@ mod tests {
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::<NoOpSink>::BuiltIn(SinkClientType::Log),
             None,
             None,
@@ -320,7 +310,7 @@ mod tests {
         let batch_size = 10;
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Some(FlatMapTransformer),
             batch_size,
@@ -329,7 +319,7 @@ mod tests {
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::<NoOpSink>::BuiltIn(SinkClientType::Log),
             None,
             None,
@@ -401,7 +391,7 @@ mod tests {
         let batch_size = 10;
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Option::<NoOpTransformer>::None,
             batch_size,
@@ -411,9 +401,18 @@ mod tests {
         .await;
 
         // create a mapper
-        let mapper_handle = create_mapper(Cat, tracker, MapMode::Unary, batch_size).await;
+        let mapper_handle = MapperTestHandle::create_mapper(
+            Cat,
+            tracker,
+            MapMode::Unary,
+            batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+        )
+        .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::<NoOpSink>::BuiltIn(SinkClientType::Log),
             None,
             None,
@@ -439,7 +438,7 @@ mod tests {
         let batch_size = 10;
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Option::<NoOpTransformer>::None,
             batch_size,
@@ -449,9 +448,18 @@ mod tests {
         .await;
 
         // create a mapper
-        let mapper_handle = create_batch_mapper(Cat, tracker, MapMode::Batch, batch_size).await;
+        let mapper_handle = MapperTestHandle::create_batch_mapper(
+            Cat,
+            tracker,
+            MapMode::Batch,
+            batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+        )
+        .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::<NoOpSink>::BuiltIn(SinkClientType::Log),
             None,
             None,
@@ -477,7 +485,7 @@ mod tests {
         let batch_size = 10;
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Option::<NoOpTransformer>::None,
             batch_size,
@@ -487,9 +495,18 @@ mod tests {
         .await;
 
         // create a mapper
-        let mapper_handle = create_map_streamer(Cat, tracker, MapMode::Stream, batch_size).await;
+        let mapper_handle = MapperTestHandle::create_map_streamer(
+            Cat,
+            tracker,
+            MapMode::Stream,
+            batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+        )
+        .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::<NoOpSink>::BuiltIn(SinkClientType::Log),
             None,
             None,
@@ -515,7 +532,7 @@ mod tests {
         let batch_size = 10;
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Some(SimpleTransformer),
             batch_size,
@@ -525,9 +542,18 @@ mod tests {
         .await;
 
         // create a mapper
-        let mapper_handle = create_mapper(Cat, tracker, MapMode::Unary, batch_size).await;
+        let mapper_handle = MapperTestHandle::create_mapper(
+            Cat,
+            tracker,
+            MapMode::Unary,
+            batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+        )
+        .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::<NoOpSink>::BuiltIn(SinkClientType::Log),
             None,
             None,
@@ -686,7 +712,7 @@ mod tests {
             BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Some(ConditionalTransformer::new(
                 0,
@@ -702,7 +728,7 @@ mod tests {
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::UserDefined(SinkLog::new()),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
@@ -899,7 +925,7 @@ mod tests {
             BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Option::<NoOpTransformer>::None,
             batch_size,
@@ -909,15 +935,18 @@ mod tests {
         .await;
 
         // create a mapper
-        let mapper_handle = create_mapper(
+        let mapper_handle = MapperTestHandle::create_mapper(
             BypassCat::new(0, 10, 10, None, Some(fallback_tags), Some(on_success_tags)),
             tracker,
             MapMode::Unary,
             batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::UserDefined(SinkLog::new()),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
@@ -961,7 +990,7 @@ mod tests {
             BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Option::<NoOpTransformer>::None,
             batch_size,
@@ -971,15 +1000,18 @@ mod tests {
         .await;
 
         // create a mapper
-        let mapper_handle = create_batch_mapper(
+        let mapper_handle = MapperTestHandle::create_batch_mapper(
             BypassCat::new(0, 10, 10, None, Some(fallback_tags), Some(on_success_tags)),
             tracker,
             MapMode::Batch,
             batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::UserDefined(SinkLog::new()),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
@@ -1023,7 +1055,7 @@ mod tests {
             BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Option::<NoOpTransformer>::None,
             batch_size,
@@ -1033,15 +1065,18 @@ mod tests {
         .await;
 
         // create a mapper
-        let mapper_handle = create_map_streamer(
+        let mapper_handle = MapperTestHandle::create_map_streamer(
             BypassCat::new(0, 10, 10, None, Some(fallback_tags), Some(on_success_tags)),
             tracker,
             MapMode::Stream,
             batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::UserDefined(SinkLog::new()),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
@@ -1059,7 +1094,7 @@ mod tests {
         .await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[should_panic]
     /// The bypass conditions are configured for fallback and on success scenarios but
     /// the sink doesn't have any fallback or on success sinks configured.
@@ -1089,7 +1124,7 @@ mod tests {
             BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Option::<NoOpTransformer>::None,
             batch_size,
@@ -1099,15 +1134,18 @@ mod tests {
         .await;
 
         // create a mapper
-        let mapper_handle = create_mapper(
+        let mapper_handle = MapperTestHandle::create_mapper(
             BypassCat::new(0, 1, 1, None, Some(fallback_tags), Some(on_success_tags)),
             tracker,
             MapMode::Unary,
             batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::UserDefined(SinkLog::new()),
             None,
             None,
@@ -1191,7 +1229,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[should_panic]
     async fn test_source_transformer_with_bypass_panics() {
         let tracker = Tracker::new(None, CancellationToken::new());
@@ -1218,7 +1256,7 @@ mod tests {
             BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
 
         // Create the source
-        let source_handle = create_ud_source(
+        let source_handle = SourceTestHandle::create_ud_source(
             SimpleSource::new(100),
             Some(PanickingConditionalTransformer::new(
                 0,
@@ -1233,7 +1271,7 @@ mod tests {
         )
         .await;
 
-        let sink_handle = create_sink(
+        let sink_handle = SinkTestHandle::create_sink(
             SinkType::UserDefined(SinkLog::new()),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
             Some(SinkType::BuiltIn(SinkClientType::Log)),
@@ -1251,449 +1289,131 @@ mod tests {
         .await;
     }
 
-    struct SourceTransformerTestHandle {
-        shutdown_tx: oneshot::Sender<()>,
-        transformer: Transformer,
-        handle: JoinHandle<()>,
+    struct PanickingMapper {
+        sink_max_count: usize,
+        fallback_max_count: usize,
+        on_success_max_count: usize,
+        sink_count: AtomicUsize,
+        fallback_count: AtomicUsize,
+        on_success_count: AtomicUsize,
+        sink_tags: Option<Vec<String>>,
+        fallback_tags: Option<Vec<String>>,
     }
 
-    struct SourceTestHandle {
-        shutdown_tx: oneshot::Sender<()>,
-        source: Source<crate::typ::WithoutRateLimiter>,
-        handle: JoinHandle<()>,
-        source_transformer_test_handle: Option<SourceTransformerTestHandle>,
-    }
-
-    struct MapperTestHandle {
-        shutdown_tx: oneshot::Sender<()>,
-        mapper: MapHandle,
-        handle: JoinHandle<()>,
-    }
-
-    enum SinkType<T = NoOpSink> {
-        /// Pass all sinkClientTypes except UserDefined
-        BuiltIn(SinkClientType),
-        /// Use for SinkClientType::UserDefined
-        UserDefined(T),
-    }
-
-    struct UDSinkTypeHandle {
-        shutdown_tx: oneshot::Sender<()>,
-        handle: JoinHandle<()>,
-    }
-
-    struct SinkTestHandle {
-        sink_writer: SinkWriter,
-        ud_sink_handle: Option<UDSinkTypeHandle>,
-        fb_ud_sink_handle: Option<UDSinkTypeHandle>,
-        ons_ud_sink_handle: Option<UDSinkTypeHandle>,
-    }
-
-    struct NoOpTransformer;
-
-    #[tonic::async_trait]
-    impl SourceTransformer for NoOpTransformer {
-        async fn transform(&self, input: SourceTransformRequest) -> Vec<sourcetransform::Message> {
-            vec![
-                sourcetransform::Message::new(input.value, Utc::now())
-                    .with_keys(input.keys)
-                    .with_user_metadata(input.user_metadata),
-            ]
-        }
-    }
-
-    struct NoOpSink;
-
-    #[tonic::async_trait]
-    impl sink::Sinker for NoOpSink {
-        async fn sink(&self, _input: tokio::sync::mpsc::Receiver<SinkRequest>) -> Vec<Response> {
-            vec![]
-        }
-    }
-
-    async fn create_ud_source<S, T>(
-        source_svc: S,
-        source_transformer_svc: Option<T>,
-        batch_size: usize,
-        cln_token: CancellationToken,
-        tracker: Tracker,
-    ) -> SourceTestHandle
-    where
-        T: SourceTransformer + Send + Sync + 'static,
-        S: source::Sourcer + Send + Sync + 'static,
-    {
-        // create a transformer for this source if it is provided
-        let transformer_test_handle = match source_transformer_svc {
-            Some(transformer_svc) => {
-                let (st_shutdown_tx, st_shutdown_rx) = oneshot::channel();
-                let tmp_dir = TempDir::new().unwrap();
-                let sock_file = tmp_dir.path().join("sourcetransform.sock");
-                let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
-
-                let server_info = server_info_file.clone();
-                let server_socket = sock_file.clone();
-                let handle = tokio::spawn(async move {
-                    sourcetransform::Server::new(transformer_svc)
-                        .with_socket_file(server_socket)
-                        .with_server_info_file(server_info)
-                        .start_with_shutdown(st_shutdown_rx)
-                        .await
-                        .expect("server failed");
-                });
-
-                let client =
-                    SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
-                let transformer = Transformer::new(
-                    batch_size,
-                    10,
-                    Duration::from_secs(10),
-                    client,
-                    tracker.clone(),
-                )
-                .await
-                .unwrap();
-
-                Some(SourceTransformerTestHandle {
-                    shutdown_tx: st_shutdown_tx,
-                    transformer,
-                    handle,
-                })
+    impl PanickingMapper {
+        pub(crate) fn new(
+            sink_count: usize,
+            fallback_count: usize,
+            on_success_count: usize,
+            sink_tags: Option<Vec<String>>,
+            fallback_tags: Option<Vec<String>>,
+        ) -> Self {
+            Self {
+                sink_max_count: sink_count,
+                fallback_max_count: fallback_count,
+                on_success_max_count: on_success_count,
+                sink_count: AtomicUsize::new(0),
+                fallback_count: AtomicUsize::new(0),
+                on_success_count: AtomicUsize::new(0),
+                sink_tags,
+                fallback_tags,
             }
-            None => None,
+        }
+    }
+
+    #[tonic::async_trait]
+    impl map::Mapper for PanickingMapper {
+        async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
+            let message = map::Message::new(input.value).with_keys(input.keys);
+
+            let message = if self.sink_count.load(Ordering::SeqCst) < self.sink_max_count {
+                self.sink_count.fetch_add(1, Ordering::SeqCst);
+                message.with_tags(
+                    self.sink_tags
+                        .clone()
+                        .expect("sink_tags is None when sink_max_count > 0"),
+                )
+            } else if self.fallback_count.load(Ordering::SeqCst) < self.fallback_max_count {
+                self.fallback_count.fetch_add(1, Ordering::SeqCst);
+                message.with_tags(
+                    self.fallback_tags
+                        .clone()
+                        .expect("fallback_tags is None when fallback_max_count > 0"),
+                )
+            } else if self.on_success_count.load(Ordering::SeqCst) < self.on_success_max_count {
+                self.on_success_count.fetch_add(1, Ordering::SeqCst);
+                panic!("on_success_count reached max count");
+            } else {
+                message
+            };
+
+            vec![message]
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[should_panic]
+    async fn test_source_map_with_bypass_panics() {
+        let tracker = Tracker::new(None, CancellationToken::new());
+
+        // create the source which produces x number of messages
+        let cln_token = CancellationToken::new();
+
+        // create the bypass router config to pass to the forwarder
+        let batch_size: usize = 10;
+        let fallback_tags = vec!["fallback".to_string()];
+        let on_success_tags = vec!["on_success".to_string()];
+        let conditions = BypassConditions {
+            sink: None,
+            fallback: Some(Box::new(ForwardConditions::new(TagConditions {
+                values: fallback_tags.clone(),
+                operator: Some("or".to_string()),
+            }))),
+            on_success: Some(Box::new(ForwardConditions::new(TagConditions {
+                values: on_success_tags.clone(),
+                operator: Some("or".to_string()),
+            }))),
         };
+        let bypass_router_config =
+            BypassRouterConfig::new(conditions, batch_size, Duration::from_millis(1000));
 
-        // create the source
-        let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
-        let tmp_dir = TempDir::new().unwrap();
-        let sock_file = tmp_dir.path().join("source.sock");
-        let server_info_file = tmp_dir.path().join("source-server-info");
-
-        let server_info = server_info_file.clone();
-        let server_socket = sock_file.clone();
-        let source_handle = tokio::spawn(async move {
-            // a simple source which generates total of 100 messages
-            source::Server::new(source_svc)
-                .with_socket_file(server_socket)
-                .with_server_info_file(server_info)
-                .start_with_shutdown(src_shutdown_rx)
-                .await
-                .unwrap()
-        });
-
-        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
-
-        let (src_read, src_ack, lag_reader) = new_source(
-            client,
-            5,
-            Duration::from_millis(1000),
+        // Create the source
+        let source_handle = SourceTestHandle::create_ud_source(
+            SimpleSource::new(100),
+            None::<NoOpTransformer>,
+            batch_size,
             cln_token.clone(),
-            true,
-        )
-        .await
-        .map_err(|e| panic!("failed to create source reader: {:?}", e))
-        .unwrap();
-        let source: Source<crate::typ::WithoutRateLimiter> = match transformer_test_handle {
-            Some(ref source_transform) => {
-                Source::new(
-                    5,
-                    SourceType::UserDefinedSource(
-                        Box::new(src_read),
-                        Box::new(src_ack),
-                        lag_reader,
-                    ),
-                    tracker.clone(),
-                    true,
-                    Some(source_transform.transformer.clone()),
-                    None,
-                    None,
-                )
-                .await
-            }
-            None => {
-                Source::new(
-                    5,
-                    SourceType::UserDefinedSource(
-                        Box::new(src_read),
-                        Box::new(src_ack),
-                        lag_reader,
-                    ),
-                    tracker.clone(),
-                    true,
-                    None,
-                    None,
-                    None,
-                )
-                .await
-            }
-        };
-
-        SourceTestHandle {
-            shutdown_tx: src_shutdown_tx,
-            source,
-            handle: source_handle,
-            source_transformer_test_handle: transformer_test_handle,
-        }
-    }
-
-    async fn create_mapper<M>(
-        map_svc: M,
-        tracker: Tracker,
-        map_mode: MapMode,
-        batch_size: usize,
-    ) -> MapperTestHandle
-    where
-        M: map::Mapper + Send + Sync + 'static,
-    {
-        // create a mapper
-        let (mp_shutdown_tx, mp_shutdown_rx) = oneshot::channel();
-        let tmp_dir = TempDir::new().unwrap();
-        let sock_file = tmp_dir.path().join("mapper.sock");
-        let server_info_file = tmp_dir.path().join("mapper-server-info");
-
-        let server_info = server_info_file.clone();
-        let server_socket = sock_file.clone();
-        let map_handle = tokio::spawn(async move {
-            map::Server::new(map_svc)
-                .with_socket_file(server_socket)
-                .with_server_info_file(server_info)
-                .start_with_shutdown(mp_shutdown_rx)
-                .await
-                .expect("server failed")
-        });
-
-        map_creator_util(
-            tracker,
-            map_mode,
-            batch_size,
-            mp_shutdown_tx,
-            sock_file,
-            map_handle,
-        )
-        .await
-    }
-
-    async fn create_batch_mapper<M>(
-        map_svc: M,
-        tracker: Tracker,
-        map_mode: MapMode,
-        batch_size: usize,
-    ) -> MapperTestHandle
-    where
-        M: batchmap::BatchMapper + Send + Sync + 'static,
-    {
-        // create a mapper
-        let (mp_shutdown_tx, mp_shutdown_rx) = oneshot::channel();
-        let tmp_dir = TempDir::new().unwrap();
-        let sock_file = tmp_dir.path().join("mapper.sock");
-        let server_info_file = tmp_dir.path().join("mapper-server-info");
-
-        let server_info = server_info_file.clone();
-        let server_socket = sock_file.clone();
-        let map_handle = tokio::spawn(async move {
-            batchmap::Server::new(map_svc)
-                .with_socket_file(server_socket)
-                .with_server_info_file(server_info)
-                .start_with_shutdown(mp_shutdown_rx)
-                .await
-                .expect("server failed")
-        });
-
-        map_creator_util(
-            tracker,
-            map_mode,
-            batch_size,
-            mp_shutdown_tx,
-            sock_file,
-            map_handle,
-        )
-        .await
-    }
-
-    async fn create_map_streamer<M>(
-        map_svc: M,
-        tracker: Tracker,
-        map_mode: MapMode,
-        batch_size: usize,
-    ) -> MapperTestHandle
-    where
-        M: mapstream::MapStreamer + Send + Sync + 'static,
-    {
-        // create a mapper
-        let (mp_shutdown_tx, mp_shutdown_rx) = oneshot::channel();
-        let tmp_dir = TempDir::new().unwrap();
-        let sock_file = tmp_dir.path().join("mapper.sock");
-        let server_info_file = tmp_dir.path().join("mapper-server-info");
-
-        let server_info = server_info_file.clone();
-        let server_socket = sock_file.clone();
-        let map_handle = tokio::spawn(async move {
-            mapstream::Server::new(map_svc)
-                .with_socket_file(server_socket)
-                .with_server_info_file(server_info)
-                .start_with_shutdown(mp_shutdown_rx)
-                .await
-                .expect("server failed")
-        });
-
-        map_creator_util(
-            tracker,
-            map_mode,
-            batch_size,
-            mp_shutdown_tx,
-            sock_file,
-            map_handle,
-        )
-        .await
-    }
-
-    async fn map_creator_util(
-        tracker: Tracker,
-        map_mode: MapMode,
-        batch_size: usize,
-        mp_shutdown_tx: oneshot::Sender<()>,
-        sock_file: PathBuf,
-        map_handle: JoinHandle<()>,
-    ) -> MapperTestHandle {
-        let client = MapClient::new(create_rpc_channel(sock_file).await.unwrap());
-        let mapper = MapHandle::new(
-            map_mode,
-            batch_size,
-            Duration::from_secs(10),
-            Duration::from_secs(10),
-            10,
-            client,
             tracker.clone(),
         )
-        .await
-        .unwrap();
+        .await;
 
-        MapperTestHandle {
-            shutdown_tx: mp_shutdown_tx,
-            mapper,
-            handle: map_handle,
-        }
-    }
+        let map_handle = MapperTestHandle::create_mapper(
+            PanickingMapper::new(0, 10, 10, None, Some(fallback_tags)),
+            tracker.clone(),
+            MapMode::Unary,
+            batch_size,
+            Duration::from_secs(5),
+            Duration::from_secs(3),
+            10,
+        )
+        .await;
 
-    async fn create_sink<T>(
-        sink: SinkType<T>,
-        fallback: Option<SinkType<T>>,
-        on_success: Option<SinkType<T>>,
-        batch_size: usize,
-    ) -> SinkTestHandle
-    where
-        T: sink::Sinker + Send + Sync + 'static,
-    {
-        let (sink_client_type, ud_sink_handle) = match sink {
-            SinkType::UserDefined(sink) => {
-                let (sink_client_type, sink_handle) = create_ud_sink(sink).await;
-                (
-                    sink_client_type,
-                    Some(UDSinkTypeHandle {
-                        shutdown_tx: sink_handle.shutdown_tx,
-                        handle: sink_handle.handle,
-                    }),
-                )
-            }
-            SinkType::BuiltIn(sink) => (sink, None),
-        };
-
-        let (fb_client_type, fb_ud_sink_handle) = match fallback {
-            Some(SinkType::UserDefined(fb_sink)) => {
-                let (sink_client_type, sink_handle) = create_ud_sink(fb_sink).await;
-                (
-                    Some(sink_client_type),
-                    Some(UDSinkTypeHandle {
-                        shutdown_tx: sink_handle.shutdown_tx,
-                        handle: sink_handle.handle,
-                    }),
-                )
-            }
-            Some(SinkType::BuiltIn(fb_sink)) => (Some(fb_sink), None),
-            None => (None, None),
-        };
-
-        let (ons_client_type, ons_ud_sink_handle) = match on_success {
-            Some(SinkType::UserDefined(ons_sink)) => {
-                let (sink_client_type, sink_handle) = create_ud_sink(ons_sink).await;
-                (
-                    Some(sink_client_type),
-                    Some(UDSinkTypeHandle {
-                        shutdown_tx: sink_handle.shutdown_tx,
-                        handle: sink_handle.handle,
-                    }),
-                )
-            }
-            Some(SinkType::BuiltIn(ons_sink)) => (Some(ons_sink), None),
-            None => (None, None),
-        };
-
-        let sink_writer = create_sink_writer(
-            sink_client_type,
-            fb_client_type,
-            ons_client_type,
+        let sink_handle = SinkTestHandle::create_sink(
+            SinkType::UserDefined(SinkLog::new()),
+            Some(SinkType::BuiltIn(SinkClientType::Log)),
+            Some(SinkType::BuiltIn(SinkClientType::Log)),
             batch_size,
         )
         .await;
 
-        SinkTestHandle {
-            sink_writer,
-            ud_sink_handle,
-            fb_ud_sink_handle,
-            ons_ud_sink_handle,
-        }
-    }
-
-    async fn create_ud_sink<T>(sink_svc: T) -> (SinkClientType, UDSinkTypeHandle)
-    where
-        T: sink::Sinker + Send + Sync + 'static,
-    {
-        // Create the sink
-        let (sink_shutdown_tx, sink_shutdown_rx) = oneshot::channel();
-        let tmp_dir = TempDir::new().unwrap();
-        let sock_file = tmp_dir.path().join("sink.sock");
-        let server_info_file = tmp_dir.path().join("sink-server-info");
-
-        let server_info = server_info_file.clone();
-        let server_socket = sock_file.clone();
-        let sink_handle = tokio::spawn(async move {
-            // a simple source which generates total of 100 messages
-            sink::Server::new(sink_svc)
-                .with_socket_file(server_socket)
-                .with_server_info_file(server_info)
-                .start_with_shutdown(sink_shutdown_rx)
-                .await
-                .unwrap()
-        });
-
-        let sink_client = SinkClient::new(create_rpc_channel(sock_file).await.unwrap());
-
-        let ud_sink_handle = UDSinkTypeHandle {
-            shutdown_tx: sink_shutdown_tx,
-            handle: sink_handle,
-        };
-
-        (SinkClientType::UserDefined(sink_client), ud_sink_handle)
-    }
-
-    async fn create_sink_writer(
-        sink: SinkClientType,
-        fallback: Option<SinkClientType>,
-        on_success: Option<SinkClientType>,
-        batch_size: usize,
-    ) -> SinkWriter {
-        let mut sink_writer = SinkWriterBuilder::new(batch_size, Duration::from_millis(100), sink);
-
-        sink_writer = match fallback {
-            Some(fallback) => sink_writer.fb_sink_client(fallback),
-            None => sink_writer,
-        };
-
-        sink_writer = match on_success {
-            Some(on_success) => sink_writer.on_success_sink_client(on_success),
-            None => sink_writer,
-        };
-
-        sink_writer.build().await.unwrap()
+        start_forwarder_test(
+            source_handle,
+            Some(map_handle),
+            sink_handle,
+            Some(bypass_router_config),
+            cln_token,
+        )
+        .await;
     }
 
     async fn start_forwarder_test(
@@ -1704,29 +1424,27 @@ mod tests {
         cln_token: CancellationToken,
     ) {
         let SourceTestHandle {
-            shutdown_tx: src_shutdown_tx,
+            mut source_transformer_test_handle,
             source: sourcer,
-            handle: source_handle,
-            source_transformer_test_handle: transformer_test_handle,
+            server_handle: source_server_handle,
         } = source;
 
-        let (mp_shutdown_tx, mapper, map_handle) = match mapper {
+        let (mapper, map_server_handle) = match mapper {
             Some(mapper_test_handle) => {
                 let MapperTestHandle {
-                    shutdown_tx: mp_shutdown_tx,
+                    server_handle: map_server_handle,
                     mapper,
-                    handle: map_handle,
                 } = mapper_test_handle;
-                (Some(mp_shutdown_tx), Some(mapper), Some(map_handle))
+                (Some(mapper), Some(map_server_handle))
             }
-            None => (None, None, None),
+            None => (None, None),
         };
 
         let SinkTestHandle {
             sink_writer,
-            ud_sink_handle,
-            fb_ud_sink_handle,
-            ons_ud_sink_handle,
+            ud_sink_server_handle,
+            fb_ud_sink_server_handle,
+            ons_ud_sink_server_handle,
         } = sink_writer;
 
         // create the forwarder with the source, transformer, and writer
@@ -1751,34 +1469,37 @@ mod tests {
         })
         .await;
 
+        cln_token.cancel();
+        forwarder_handle
+            .await
+            .expect("Join handle await failed")
+            .expect("error from forwarder join handle ");
+
         assert!(
             tokio_result.is_ok(),
             "Timeout occurred before pending became zero"
         );
 
-        cln_token.cancel();
-        forwarder_handle.await.unwrap().unwrap();
-        src_shutdown_tx.send(()).unwrap();
-        if let Some(source_transformer) = transformer_test_handle {
-            source_transformer.shutdown_tx.send(()).unwrap();
-            source_transformer.handle.await.unwrap();
+        if let Some(source_transformer) = source_transformer_test_handle.take() {
+            drop(source_transformer.transformer);
+            source_transformer.server_handle.shutdown();
         }
-        source_handle.await.unwrap();
-        if let Some(mp_shutdown_tx) = mp_shutdown_tx {
-            mp_shutdown_tx.send(()).unwrap();
-            map_handle.unwrap().await.unwrap();
+        source_server_handle.shutdown();
+
+        if let Some(server_handle) = map_server_handle {
+            server_handle.shutdown();
         }
-        if let Some(ud_sink_handle) = ud_sink_handle {
-            ud_sink_handle.shutdown_tx.send(()).unwrap();
-            ud_sink_handle.handle.await.unwrap();
+
+        if let Some(ud_sink_server_handle) = ud_sink_server_handle {
+            ud_sink_server_handle.shutdown();
         }
-        if let Some(fb_ud_sink_handle) = fb_ud_sink_handle {
-            fb_ud_sink_handle.shutdown_tx.send(()).unwrap();
-            fb_ud_sink_handle.handle.await.unwrap();
+
+        if let Some(fb_ud_sink_server_handle) = fb_ud_sink_server_handle {
+            fb_ud_sink_server_handle.shutdown();
         }
-        if let Some(ons_ud_sink_handle) = ons_ud_sink_handle {
-            ons_ud_sink_handle.shutdown_tx.send(()).unwrap();
-            ons_ud_sink_handle.handle.await.unwrap();
+
+        if let Some(ons_ud_sink_server_handle) = ons_ud_sink_server_handle {
+            ons_ud_sink_server_handle.shutdown();
         }
     }
 }

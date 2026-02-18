@@ -12,9 +12,15 @@ use crate::message::{Message, Offset};
 
 pub(crate) mod compression;
 pub(crate) mod error;
+pub(crate) mod factory;
 pub(crate) mod jetstream;
 pub(crate) mod reader;
 pub(crate) mod writer;
+// SimpleBuffer for integration tests
+#[cfg(test)]
+pub(crate) mod simplebuffer;
+
+pub(crate) use factory::ISBFactory;
 
 /// Trait for reading messages from an Inter Step Buffer (ISB).
 ///
