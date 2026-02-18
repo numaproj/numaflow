@@ -234,7 +234,6 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 	} else {
 		totalPending = pending.GetValue()
 	}
-	log.Infof("Keran is testing, get pending from Daemon gRPC server: %d", totalPending)
 	desired := s.desiredReplicas(ctx, monoVtx, totalRate, totalPending)
 
 	// Check if rate limiting is configured and we're hitting the limit

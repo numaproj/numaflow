@@ -1,3 +1,5 @@
+//! The Tonic gRPC service implementations.
+
 use numaflow_pb::servers::mvtxdaemon::mono_vertex_daemon_service_server::MonoVertexDaemonService;
 use numaflow_pb::servers::mvtxdaemon::{
     GetMonoVertexErrorsRequest, GetMonoVertexErrorsResponse, GetMonoVertexMetricsResponse,
@@ -15,7 +17,6 @@ impl MonoVertexDaemonService for MvtxDaemonService {
         &self,
         _: Request<()>,
     ) -> Result<Response<GetMonoVertexMetricsResponse>, Status> {
-        tracing::info!("gRPC: GetMonoVertexMetrics called via HTTP/2");
         let mock_processing_rates = HashMap::from([
             ("default".to_string(), 67.0),
             ("1m".to_string(), 10.0),
@@ -45,7 +46,6 @@ impl MonoVertexDaemonService for MvtxDaemonService {
         &self,
         _: Request<()>,
     ) -> Result<Response<GetMonoVertexStatusResponse>, Status> {
-        tracing::info!("gRPC: GetMonoVertexStatus called via HTTP/2");
         let mock_resp = GetMonoVertexStatusResponse {
             status: Some(MonoVertexStatus {
                 status: "mock_status".to_string(),
@@ -59,12 +59,8 @@ impl MonoVertexDaemonService for MvtxDaemonService {
 
     async fn get_mono_vertex_errors(
         &self,
-        req: Request<GetMonoVertexErrorsRequest>,
+        _: Request<GetMonoVertexErrorsRequest>,
     ) -> Result<Response<GetMonoVertexErrorsResponse>, Status> {
-        tracing::info!(
-            "gRPC: GetMonoVertexErrors called via HTTP/2 for mono_vertex: {}",
-            req.get_ref().mono_vertex
-        );
         let mock_resp = GetMonoVertexErrorsResponse {
             errors: vec![ReplicaErrors {
                 replica: "mock_replica".to_string(),

@@ -5,6 +5,7 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::Router;
 use axum::http::StatusCode;
@@ -33,7 +34,7 @@ const DAEMON_SERVICE_PORT: u16 = 4327;
 /// Runs the MonoVertex daemon: one port, TLS, ALPN (http/1.1 + h2).
 /// REST routes (/readyz, /livez, etc.) and gRPC are served by the same Axum + Tonic stack.
 pub async fn run_monovertex(mvtx_name: String, cln_token: CancellationToken) -> Result<()> {
-    info!("MonoVertex name is {}", mvtx_name);
+    info!("Starting daemon server for MonoVertex {}", mvtx_name);
 
     let addr: SocketAddr = format!("[::]:{}", DAEMON_SERVICE_PORT)
         .parse()
@@ -53,15 +54,19 @@ pub async fn run_monovertex(mvtx_name: String, cln_token: CancellationToken) -> 
         )
         .with_state(svc);
 
-    // Unmatched paths (e.g. /mvtxdaemon.MonoVertexDaemonService/GetMonoVertexMetrics) go to gRPC.
+    // Unmatched paths aka. gRPC requests, e.g. /mvtxdaemon.MonoVertexDaemonService/GetMonoVertexMetrics, go to gRPC.
     let app = rest_router.fallback_service(GrpcAdapter::new());
 
     let handle = Handle::new();
     let handle_clone = handle.clone();
     let shutdown_token = cln_token.clone();
+    /// Max time to wait for in-flight requests to finish before forcing shutdown.
+    /// Matches Kubernetes default termination grace period so the pod can exit before SIGKILL.
+    const GRACEFUL_SHUTDOWN_TIMEOUT_SECS: u64 = 30;
     tokio::spawn(async move {
         shutdown_token.cancelled().await;
-        handle_clone.graceful_shutdown(None);
+        info!("CancellationToken cancelled, graceful shutdown initiated");
+        handle_clone.graceful_shutdown(Some(Duration::from_secs(GRACEFUL_SHUTDOWN_TIMEOUT_SECS)));
     });
 
     axum_server::bind_rustls(addr, tls_config)

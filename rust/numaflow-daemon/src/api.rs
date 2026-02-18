@@ -1,4 +1,4 @@
-//! HTTP JSON API handlers for /api/v1/* (grpc-gateway style). Uses mock data from MvtxDaemonService.
+//! HTTP JSON API handlers for /api/v1/* (grpc-gateway style).
 
 use axum::Json;
 use axum::extract::Path;
@@ -14,15 +14,9 @@ use tonic::Request;
 
 use crate::MvtxDaemonService;
 
-/// Path params for GET /api/v1/mono-vertices/:mono_vertex/errors
-#[derive(Debug, Deserialize)]
-pub(crate) struct ErrorsPathParams {
-    pub(crate) mono_vertex: String,
-}
-
-/// GET /api/v1/metrics — returns mock metrics as JSON (grpc-gateway style).
+/// GET /api/v1/metrics — returns metrics as JSON (grpc-gateway style).
 pub(crate) async fn api_v1_metrics(State(svc): State<Arc<MvtxDaemonService>>) -> impl IntoResponse {
-    tracing::info!("REST API: GET /api/v1/metrics called via HTTP/1.1");
+    tracing::debug!("REST API: GET /api/v1/metrics called via HTTP/1.1");
     match svc.get_mono_vertex_metrics(Request::new(())).await {
         Ok(resp) => {
             let body = resp.into_inner();
@@ -45,9 +39,9 @@ pub(crate) async fn api_v1_metrics(State(svc): State<Arc<MvtxDaemonService>>) ->
     }
 }
 
-/// GET /api/v1/status — returns mock status as JSON (grpc-gateway style).
+/// GET /api/v1/status — returns status as JSON (grpc-gateway style).
 pub(crate) async fn api_v1_status(State(svc): State<Arc<MvtxDaemonService>>) -> impl IntoResponse {
-    tracing::info!("REST API: GET /api/v1/status called via HTTP/1.1");
+    tracing::debug!("REST API: GET /api/v1/status called via HTTP/1.1");
     match svc.get_mono_vertex_status(Request::new(())).await {
         Ok(resp) => {
             let body = resp.into_inner();
@@ -70,12 +64,18 @@ pub(crate) async fn api_v1_status(State(svc): State<Arc<MvtxDaemonService>>) -> 
     }
 }
 
-/// GET /api/v1/mono-vertices/:mono_vertex/errors — returns mock errors as JSON (grpc-gateway style).
+/// Path params for GET /api/v1/mono-vertices/:mono_vertex/errors
+#[derive(Debug, Deserialize)]
+pub(crate) struct ErrorsPathParams {
+    pub(crate) mono_vertex: String,
+}
+
+/// GET /api/v1/mono-vertices/:mono_vertex/errors — returns errors as JSON (grpc-gateway style).
 pub(crate) async fn api_v1_errors(
     State(svc): State<Arc<MvtxDaemonService>>,
     Path(params): Path<ErrorsPathParams>,
 ) -> impl IntoResponse {
-    tracing::info!(
+    tracing::debug!(
         "REST API: GET /api/v1/mono-vertices/{}/errors called via HTTP/1.1",
         params.mono_vertex
     );
