@@ -116,3 +116,86 @@ pub(crate) async fn api_v1_errors(
         ),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::Router;
+    use axum::body::Body;
+    use axum::routing::get;
+    use http::Request;
+    use tower::ServiceExt;
+
+    fn test_router() -> Router {
+        let svc = Arc::new(MvtxDaemonService);
+        Router::new()
+            .route("/api/v1/metrics", get(api_v1_metrics))
+            .route("/api/v1/status", get(api_v1_status))
+            .route(
+                "/api/v1/mono-vertices/{mono_vertex}/errors",
+                get(api_v1_errors),
+            )
+            .with_state(svc)
+    }
+
+    #[tokio::test]
+    async fn api_v1_metrics_returns_ok_and_json() {
+        let app = test_router();
+        let request = Request::builder()
+            .uri("/api/v1/metrics")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let metrics = json.get("metrics").and_then(|m| m.get("monoVertex"));
+        assert_eq!(
+            metrics,
+            Some(&serde_json::Value::String("mock_mvtx_spec".into()))
+        );
+    }
+
+    #[tokio::test]
+    async fn api_v1_status_returns_ok_and_json() {
+        let app = test_router();
+        let request = Request::builder()
+            .uri("/api/v1/status")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let status = json.get("status").and_then(|s| s.get("status"));
+        assert_eq!(
+            status,
+            Some(&serde_json::Value::String("mock_status".into()))
+        );
+    }
+
+    #[tokio::test]
+    async fn api_v1_errors_returns_ok_and_json() {
+        let app = test_router();
+        let request = Request::builder()
+            .uri("/api/v1/mono-vertices/my-mono-vertex/errors")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let errors = json.get("errors").and_then(|e| e.as_array()).unwrap();
+        assert_eq!(errors.len(), 1);
+        assert_eq!(
+            errors.first().unwrap().get("replica"),
+            Some(&serde_json::Value::String("mock_replica".into()))
+        );
+    }
+}

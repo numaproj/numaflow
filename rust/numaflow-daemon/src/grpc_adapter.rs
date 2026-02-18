@@ -47,3 +47,37 @@ impl Service<Request<Body>> for GrpcAdapter {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http::Method;
+
+    /// gRPC unary request: 1 byte compressed-flag (0) + 4 byte length (big-endian) + message.
+    /// For Empty, message is 0 bytes, so body = [0, 0, 0, 0, 0].
+    fn grpc_empty_body() -> Body {
+        Body::from(vec![0u8, 0, 0, 0, 0])
+    }
+
+    #[tokio::test]
+    async fn grpc_adapter_returns_ok_for_get_metrics_request() {
+        let mut adapter = GrpcAdapter::new();
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexMetrics")
+            .header("content-type", "application/grpc")
+            .body(grpc_empty_body())
+            .unwrap();
+        let result = adapter.call(request).await;
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert_eq!(response.status(), http::StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok()),
+            Some("application/grpc")
+        );
+    }
+}

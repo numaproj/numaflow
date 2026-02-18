@@ -41,3 +41,18 @@ pub(crate) async fn build_rustls_config() -> Result<RustlsConfig> {
         .await
         .map_err(|e| Error::TlsConfiguration(format!("Failed to build RustlsConfig: {}", e)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn build_rustls_config_succeeds() {
+        let result = build_rustls_config().await;
+        assert!(
+            result.is_ok(),
+            "build_rustls_config should succeed: {:?}",
+            result.err()
+        );
+    }
+}
