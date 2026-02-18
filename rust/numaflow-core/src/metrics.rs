@@ -1482,26 +1482,27 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
             },
             LagReader::ISB(readers) => {
                 for reader in readers {
+                    let reader_name = reader.name();
                     match fetch_isb_pending(reader).await {
                         Ok(pending) => {
                             if last_logged.elapsed().as_secs() >= 60 {
                                 info!(
                                     "Pending messages {:?}, partition: {}",
                                     if pending != -1 { Some(pending) } else { None },
-                                    reader.name(),
+                                    reader_name,
                                 );
                                 last_logged = std::time::Instant::now();
                             } else {
                                 debug!(
                                     "Pending messages {:?}, partition: {}",
                                     if pending != -1 { Some(pending) } else { None },
-                                    reader.name(),
+                                    reader_name,
                                 );
                             }
-                            let mut metric_labels = pipeline_metric_labels(reader.name()).clone();
+                            let mut metric_labels = pipeline_metric_labels(reader_name).clone();
                             metric_labels.push((
                                 PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                                reader.name().to_string(),
+                                reader_name.to_string(),
                             ));
                             pipeline_metrics()
                                 .pending_raw
