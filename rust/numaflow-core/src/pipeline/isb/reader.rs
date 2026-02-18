@@ -50,7 +50,7 @@ pub(crate) struct ISBReaderOrchestrator<C: NumaflowTypeConfig> {
     read_timeout: Duration,
     tracker: Tracker,
     watermark: Option<ISBWatermarkHandle>,
-    reader: Arc<tokio::sync::RwLock<C::ISBReader>>,
+    reader: Arc<C::ISBReader>,
     /// Reader name cached to avoid lock acquisition
     reader_name: &'static str,
     rate_limiter: Option<C::RateLimiter>,
@@ -59,7 +59,11 @@ pub(crate) struct ISBReaderOrchestrator<C: NumaflowTypeConfig> {
 }
 
 /// Manual Clone implementation for ISBReaderOrchestrator.
-/// Since reader is now Arc-wrapped, cloning is cheap.
+///
+/// We implement Clone manually instead of using `#[derive(Clone)]` because:
+/// - The derive macro would add `C::ISBReader: Clone` bound
+/// - But `reader: Arc<C::ISBReader>` doesn't need that - `Arc<T>` is always `Clone`
+/// - By implementing manually, we avoid requiring `ISBReader: Clone` on the trait
 impl<C: NumaflowTypeConfig> Clone for ISBReaderOrchestrator<C> {
     fn clone(&self) -> Self {
         Self {
@@ -92,7 +96,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         ));
         let metric_labels = Arc::new(labels);
 
-        // Cache reader name before wrapping in RwLock to avoid lock acquisition for name()
+        // Cache reader name for fast access
         let reader_name = reader.name();
 
         Ok(Self {
@@ -103,7 +107,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             read_timeout: components.read_timeout,
             tracker: components.tracker,
             watermark: components.watermark_handle,
-            reader: Arc::new(tokio::sync::RwLock::new(reader)),
+            reader: Arc::new(reader),
             reader_name,
             rate_limiter,
             metric_labels,
@@ -170,8 +174,8 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         Ok((ReceiverStream::new(rx), handle))
     }
 
-    pub(crate) async fn pending(&mut self) -> Result<Option<usize>> {
-        self.reader.write().await.pending().await
+    pub(crate) async fn pending(&self) -> Result<Option<usize>> {
+        self.reader.pending().await
     }
 
     pub(crate) fn name(&self) -> &'static str {
@@ -195,7 +199,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                     }
                 } => {
                     // mark_wip will be called only if interval returns
-                    let _ = params.reader.read().await.mark_wip(&params.offset).await;
+                    let _ = params.reader.mark_wip(&params.offset).await;
                 },
                 res = &mut params.ack_rx => {
                     match res.unwrap_or(ReadAck::Nak) {
@@ -228,14 +232,14 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 
     /// invokes the ack with infinite retries until the cancellation token is cancelled.
     async fn ack_with_retry(
-        reader: &Arc<tokio::sync::RwLock<C::ISBReader>>,
+        reader: &Arc<C::ISBReader>,
         offset: &Offset,
         cancel: &CancellationToken,
     ) -> Result<()> {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
         Retry::new(
             interval,
-            async || reader.read().await.ack(offset).await,
+            async || reader.ack(offset).await,
             |e: &Error| {
                 if cancel.is_cancelled() {
                     error!(
@@ -259,14 +263,14 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 
     /// invokes the nack with infinite retries until the cancellation token is cancelled.
     async fn nak_with_retry(
-        reader: &Arc<tokio::sync::RwLock<C::ISBReader>>,
+        reader: &Arc<C::ISBReader>,
         offset: &Offset,
         cancel: &CancellationToken,
     ) -> Result<()> {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
         let result = Retry::new(
             interval,
-            async || reader.read().await.nack(offset).await,
+            async || reader.nack(offset).await,
             |e: &Error| {
                 if cancel.is_cancelled() {
                     error!(
@@ -378,7 +382,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
     }
 
     /// Applies rate limiting and fetches the message batch.
-    async fn apply_rate_limiting_and_fetch(&mut self, batch_size: usize) -> Vec<Message> {
+    async fn apply_rate_limiting_and_fetch(&self, batch_size: usize) -> Vec<Message> {
         // Apply rate limiting if configured to determine effective batch size
         let effective_batch_size = match &self.rate_limiter {
             Some(rl) => {
@@ -397,8 +401,6 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         } else {
             match self
                 .reader
-                .write()
-                .await
                 .fetch(effective_batch_size, self.read_timeout)
                 .await
             {
@@ -477,7 +479,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         for mut message in batch.drain(..) {
             // Skip WMB control messages
             if let MessageType::WMB = message.typ {
-                self.reader.read().await.ack(&message.offset).await?;
+                self.reader.ack(&message.offset).await?;
                 continue;
             }
 
@@ -522,7 +524,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         ack_rx: oneshot::Receiver<ReadAck>,
     ) -> Result<()> {
         self.tracker.insert(message).await?;
-        let tick = self.reader.read().await.wip_ack_interval();
+        let tick = self.reader.wip_ack_interval();
         let params = WipParams {
             stream_name: self.stream.name,
             labels: Arc::clone(&self.metric_labels),
@@ -576,7 +578,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 struct WipParams<C: NumaflowTypeConfig> {
     stream_name: &'static str,
     labels: Arc<Vec<(String, String)>>,
-    reader: Arc<tokio::sync::RwLock<C::ISBReader>>,
+    reader: Arc<C::ISBReader>,
     offset: Offset,
     ack_rx: oneshot::Receiver<ReadAck>,
     tick: Option<Duration>,
@@ -1091,7 +1093,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
             .await
             .unwrap();
 
@@ -1128,7 +1130,7 @@ mod tests {
             .offset
             .clone();
         let cancel_token = CancellationToken::new();
-        let js_reader = Arc::new(tokio::sync::RwLock::new(js_reader));
+        let js_reader = Arc::new(js_reader);
 
         // Test nack_with_retry - should succeed
         let result = ISBReaderOrchestrator::<crate::typ::WithoutRateLimiter>::nak_with_retry(
@@ -1140,7 +1142,7 @@ mod tests {
         assert!(result.is_ok(), "nack_with_retry should succeed");
 
         // Verify message is back in pending
-        let pending = js_reader.write().await.pending().await.unwrap();
+        let pending = js_reader.pending().await.unwrap();
         assert_eq!(pending, Some(1));
 
         context.delete_stream(stream.name).await.unwrap();
@@ -1180,7 +1182,7 @@ mod tests {
         let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
             .await
             .unwrap();
-        let js_reader = Arc::new(tokio::sync::RwLock::new(js_reader));
+        let js_reader = Arc::new(js_reader);
 
         // Try to nack an offset that doesn't exist
         let missing_offset = Offset::Int(IntOffset::new(999, 0));
@@ -1238,7 +1240,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
             .await
             .unwrap();
 
@@ -1275,7 +1277,7 @@ mod tests {
             .offset
             .clone();
         let cancel_token = CancellationToken::new();
-        let js_reader = Arc::new(tokio::sync::RwLock::new(js_reader));
+        let js_reader = Arc::new(js_reader);
 
         // Test ack_with_retry - should succeed
         let result = ISBReaderOrchestrator::<crate::typ::WithoutRateLimiter>::ack_with_retry(
@@ -1287,7 +1289,7 @@ mod tests {
         assert!(result.is_ok(), "ack_with_retry should succeed");
 
         // Verify message is acked
-        let pending = js_reader.write().await.pending().await.unwrap();
+        let pending = js_reader.pending().await.unwrap();
         assert_eq!(pending, Some(0));
 
         context.delete_stream(stream.name).await.unwrap();
@@ -1327,7 +1329,7 @@ mod tests {
         let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
             .await
             .unwrap();
-        let js_reader = Arc::new(tokio::sync::RwLock::new(js_reader));
+        let js_reader = Arc::new(js_reader);
 
         // Try to ack an offset that doesn't exist
         let missing_offset = Offset::Int(IntOffset::new(999, 0));
@@ -1558,7 +1560,7 @@ mod simplebuffer_tests {
     async fn test_ack_nack_stops_on_offset_not_found() {
         let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
         let reader = adapter.reader();
-        let reader = Arc::new(tokio::sync::RwLock::new(reader));
+        let reader = Arc::new(reader);
         let cancel = CancellationToken::new();
 
         // Test ack with non-existent offset
@@ -1597,7 +1599,7 @@ mod simplebuffer_tests {
         let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
         write_messages(&adapter, 1).await;
 
-        let mut reader = adapter.reader();
+        let reader = adapter.reader();
         use crate::pipeline::isb::ISBReader;
 
         // Fetch the message to get a valid offset
@@ -1613,7 +1615,7 @@ mod simplebuffer_tests {
 
         let cancel = CancellationToken::new();
         let cancel_clone = cancel.clone();
-        let reader = Arc::new(tokio::sync::RwLock::new(reader));
+        let reader = Arc::new(reader);
 
         // Spawn ack_with_retry in background
         let ack_handle = tokio::spawn(async move {

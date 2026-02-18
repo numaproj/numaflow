@@ -74,7 +74,7 @@ impl<C: NumaflowTypeConfig> Clone for ISBWriterOrchestrator<C> {
             watermark_handle: self.watermark_handle.clone(),
             sem: Arc::clone(&self.sem),
             paf_concurrency: self.paf_concurrency,
-            vertex_type: self.vertex_type.clone(),
+            vertex_type: self.vertex_type,
             stream_metric_labels: Arc::clone(&self.stream_metric_labels),
         }
     }

@@ -47,7 +47,7 @@ pub(crate) trait ISBReader: Send + Sync {
     /// # Arguments
     /// * `max` - Maximum number of messages to fetch
     /// * `timeout` - Maximum time to wait for messages
-    async fn fetch(&mut self, max: usize, timeout: Duration) -> Result<Vec<Message>>;
+    async fn fetch(&self, max: usize, timeout: Duration) -> Result<Vec<Message>>;
 
     /// Acknowledges successful processing of a message.
     ///
@@ -62,7 +62,7 @@ pub(crate) trait ISBReader: Send + Sync {
     /// Returns the number of pending (unprocessed) messages, if available.
     ///
     /// Returns `None` if the ISB implementation doesn't support pending counts.
-    async fn pending(&mut self) -> Result<Option<usize>>;
+    async fn pending(&self) -> Result<Option<usize>>;
 
     /// Returns the name/identifier of this reader (e.g., stream name).
     fn name(&self) -> &'static str;

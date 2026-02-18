@@ -148,7 +148,7 @@ impl JetStreamReader {
     }
 
     /// Fetches messages from JetStream ISB in batches, it honors the batch size and timeout.
-    pub(crate) async fn fetch(&mut self, max: usize, timeout: Duration) -> Result<Vec<Message>> {
+    pub(crate) async fn fetch(&self, max: usize, timeout: Duration) -> Result<Vec<Message>> {
         let mut out = Vec::with_capacity(max);
         let messages = match self
             .read_consumer
@@ -256,7 +256,7 @@ impl JetStreamReader {
     }
 
     /// Returns the number of pending messages in the stream.
-    pub(crate) async fn pending(&mut self) -> Result<Option<usize>> {
+    pub(crate) async fn pending(&self) -> Result<Option<usize>> {
         let subject = format!("CONSUMER.INFO.{}.{}", self.stream.name, self.stream.name);
         let info: consumer::Info =
             self.js_context
@@ -275,7 +275,7 @@ impl JetStreamReader {
 
 #[async_trait::async_trait]
 impl crate::pipeline::isb::ISBReader for JetStreamReader {
-    async fn fetch(&mut self, max: usize, timeout: Duration) -> Result<Vec<Message>> {
+    async fn fetch(&self, max: usize, timeout: Duration) -> Result<Vec<Message>> {
         JetStreamReader::fetch(self, max, timeout).await
     }
 
@@ -287,7 +287,7 @@ impl crate::pipeline::isb::ISBReader for JetStreamReader {
         JetStreamReader::nack(self, offset).await
     }
 
-    async fn pending(&mut self) -> Result<Option<usize>> {
+    async fn pending(&self) -> Result<Option<usize>> {
         JetStreamReader::pending(self).await
     }
 
@@ -359,7 +359,7 @@ mod tests {
             },
         };
 
-        let mut js_reader = JetStreamReader::new(stream.clone(), context.clone(), Some(isb_config))
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), Some(isb_config))
             .await
             .unwrap();
 

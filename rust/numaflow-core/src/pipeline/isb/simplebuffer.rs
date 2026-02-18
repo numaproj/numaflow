@@ -145,7 +145,7 @@ fn convert_message(read_msg: ReadMessage) -> Message {
 
 #[async_trait]
 impl ISBReader for SimpleReaderAdapter {
-    async fn fetch(&mut self, max: usize, timeout: Duration) -> crate::Result<Vec<Message>> {
+    async fn fetch(&self, max: usize, timeout: Duration) -> crate::Result<Vec<Message>> {
         self.inner
             .fetch(max, timeout)
             .await
@@ -163,7 +163,7 @@ impl ISBReader for SimpleReaderAdapter {
         self.inner.nack(&simple_offset).await.map_err(|e| e.into())
     }
 
-    async fn pending(&mut self) -> crate::Result<Option<usize>> {
+    async fn pending(&self) -> crate::Result<Option<usize>> {
         self.inner.pending().await.map_err(|e| e.into())
     }
 
@@ -324,7 +324,7 @@ mod tests {
         write_message(&adapter, "msg-1", "hello").await;
         write_message(&adapter, "msg-2", "world").await;
 
-        let mut reader = adapter.reader();
+        let reader = adapter.reader();
 
         // Fetch messages
         let messages = reader
@@ -351,7 +351,7 @@ mod tests {
         let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
         write_message(&adapter, "msg-1", "hello").await;
 
-        let mut reader = adapter.reader();
+        let reader = adapter.reader();
 
         // Fetch message
         let messages = reader
@@ -386,7 +386,7 @@ mod tests {
         // Inject fetch failure
         adapter.error_injector().fail_fetches(1);
 
-        let mut reader = adapter.reader();
+        let reader = adapter.reader();
 
         // First fetch should fail
         let result = reader.fetch(10, Duration::from_millis(100)).await;
@@ -405,7 +405,7 @@ mod tests {
         let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
         write_message(&adapter, "msg-1", "hello").await;
 
-        let mut reader = adapter.reader();
+        let reader = adapter.reader();
 
         // Fetch message
         let messages = reader
@@ -471,7 +471,7 @@ mod tests {
         let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
         write_message(&adapter, "msg-1", "hello").await;
 
-        let mut reader = adapter.reader();
+        let reader = adapter.reader();
 
         // Fetch message first
         let messages = reader
