@@ -42,7 +42,6 @@ type MetricLabels = Arc<Vec<(String, String)>>;
 /// ISBReaderOrchestrator component which reads messages from ISB, assigns watermark to the messages and starts
 /// tracking them using the tracker and also listens for ack/nack from the tracker and performs the
 /// ack/nack to the ISB.
-#[derive(Clone)]
 pub(crate) struct ISBReaderOrchestrator<C: NumaflowTypeConfig> {
     vertex_type: String,
     stream: Stream,
@@ -51,10 +50,36 @@ pub(crate) struct ISBReaderOrchestrator<C: NumaflowTypeConfig> {
     read_timeout: Duration,
     tracker: Tracker,
     watermark: Option<ISBWatermarkHandle>,
-    reader: C::ISBReader,
+    reader: Arc<C::ISBReader>,
+    /// Reader name cached to avoid lock acquisition
+    reader_name: &'static str,
     rate_limiter: Option<C::RateLimiter>,
     /// Cached metric labels to avoid repeated allocations
     metric_labels: MetricLabels,
+}
+
+/// Manual Clone implementation for ISBReaderOrchestrator.
+///
+/// We implement Clone manually instead of using `#[derive(Clone)]` because:
+/// - The derive macro would add `C::ISBReader: Clone` bound
+/// - But `reader: Arc<C::ISBReader>` doesn't need that - `Arc<T>` is always `Clone`
+/// - By implementing manually, we avoid requiring `ISBReader: Clone` on the trait
+impl<C: NumaflowTypeConfig> Clone for ISBReaderOrchestrator<C> {
+    fn clone(&self) -> Self {
+        Self {
+            vertex_type: self.vertex_type.clone(),
+            stream: self.stream.clone(),
+            cfg: self.cfg.clone(),
+            batch_size: self.batch_size,
+            read_timeout: self.read_timeout,
+            tracker: self.tracker.clone(),
+            watermark: self.watermark.clone(),
+            reader: Arc::clone(&self.reader),
+            reader_name: self.reader_name,
+            rate_limiter: self.rate_limiter.clone(),
+            metric_labels: Arc::clone(&self.metric_labels),
+        }
+    }
 }
 
 impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
@@ -71,6 +96,9 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         ));
         let metric_labels = Arc::new(labels);
 
+        // Cache reader name for fast access
+        let reader_name = reader.name();
+
         Ok(Self {
             vertex_type: components.vertex_type,
             stream: components.stream,
@@ -79,7 +107,8 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             read_timeout: components.read_timeout,
             tracker: components.tracker,
             watermark: components.watermark_handle,
-            reader,
+            reader: Arc::new(reader),
+            reader_name,
             rate_limiter,
             metric_labels,
         })
@@ -145,12 +174,12 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         Ok((ReceiverStream::new(rx), handle))
     }
 
-    pub(crate) async fn pending(&mut self) -> Result<Option<usize>> {
+    pub(crate) async fn pending(&self) -> Result<Option<usize>> {
         self.reader.pending().await
     }
 
-    pub(crate) fn name(&mut self) -> &'static str {
-        self.reader.name()
+    pub(crate) fn name(&self) -> &'static str {
+        self.reader_name
     }
 
     /// Periodically mark WIP until ack/nack received, then perform final ack/nack and publish metrics.
@@ -203,7 +232,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 
     /// invokes the ack with infinite retries until the cancellation token is cancelled.
     async fn ack_with_retry(
-        reader: &C::ISBReader,
+        reader: &Arc<C::ISBReader>,
         offset: &Offset,
         cancel: &CancellationToken,
     ) -> Result<()> {
@@ -234,7 +263,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 
     /// invokes the nack with infinite retries until the cancellation token is cancelled.
     async fn nak_with_retry(
-        reader: &C::ISBReader,
+        reader: &Arc<C::ISBReader>,
         offset: &Offset,
         cancel: &CancellationToken,
     ) -> Result<()> {
@@ -353,7 +382,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
     }
 
     /// Applies rate limiting and fetches the message batch.
-    async fn apply_rate_limiting_and_fetch(&mut self, batch_size: usize) -> Vec<Message> {
+    async fn apply_rate_limiting_and_fetch(&self, batch_size: usize) -> Vec<Message> {
         // Apply rate limiting if configured to determine effective batch size
         let effective_batch_size = match &self.rate_limiter {
             Some(rl) => {
@@ -495,13 +524,14 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         ack_rx: oneshot::Receiver<ReadAck>,
     ) -> Result<()> {
         self.tracker.insert(message).await?;
+        let tick = self.reader.wip_ack_interval();
         let params = WipParams {
             stream_name: self.stream.name,
             labels: Arc::clone(&self.metric_labels),
-            reader: self.reader.clone(),
+            reader: Arc::clone(&self.reader),
             offset: message.offset.clone(),
             ack_rx,
-            tick: self.reader.wip_ack_interval(),
+            tick,
             _permit: permit,
             cancel,
             message_processing_start: processing_start,
@@ -548,7 +578,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 struct WipParams<C: NumaflowTypeConfig> {
     stream_name: &'static str,
     labels: Arc<Vec<(String, String)>>,
-    reader: C::ISBReader,
+    reader: Arc<C::ISBReader>,
     offset: Offset,
     ack_rx: oneshot::Receiver<ReadAck>,
     tick: Option<Duration>,
@@ -1063,7 +1093,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
             .await
             .unwrap();
 
@@ -1100,6 +1130,7 @@ mod tests {
             .offset
             .clone();
         let cancel_token = CancellationToken::new();
+        let js_reader = Arc::new(js_reader);
 
         // Test nack_with_retry - should succeed
         let result = ISBReaderOrchestrator::<crate::typ::WithoutRateLimiter>::nak_with_retry(
@@ -1151,6 +1182,7 @@ mod tests {
         let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
             .await
             .unwrap();
+        let js_reader = Arc::new(js_reader);
 
         // Try to nack an offset that doesn't exist
         let missing_offset = Offset::Int(IntOffset::new(999, 0));
@@ -1208,7 +1240,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
             .await
             .unwrap();
 
@@ -1245,6 +1277,7 @@ mod tests {
             .offset
             .clone();
         let cancel_token = CancellationToken::new();
+        let js_reader = Arc::new(js_reader);
 
         // Test ack_with_retry - should succeed
         let result = ISBReaderOrchestrator::<crate::typ::WithoutRateLimiter>::ack_with_retry(
@@ -1296,6 +1329,7 @@ mod tests {
         let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
             .await
             .unwrap();
+        let js_reader = Arc::new(js_reader);
 
         // Try to ack an offset that doesn't exist
         let missing_offset = Offset::Int(IntOffset::new(999, 0));
@@ -1526,6 +1560,7 @@ mod simplebuffer_tests {
     async fn test_ack_nack_stops_on_offset_not_found() {
         let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
         let reader = adapter.reader();
+        let reader = Arc::new(reader);
         let cancel = CancellationToken::new();
 
         // Test ack with non-existent offset
@@ -1564,7 +1599,7 @@ mod simplebuffer_tests {
         let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
         write_messages(&adapter, 1).await;
 
-        let mut reader = adapter.reader();
+        let reader = adapter.reader();
         use crate::pipeline::isb::ISBReader;
 
         // Fetch the message to get a valid offset
@@ -1580,6 +1615,7 @@ mod simplebuffer_tests {
 
         let cancel = CancellationToken::new();
         let cancel_clone = cancel.clone();
+        let reader = Arc::new(reader);
 
         // Spawn ack_with_retry in background
         let ack_handle = tokio::spawn(async move {

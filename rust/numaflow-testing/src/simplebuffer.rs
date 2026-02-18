@@ -168,7 +168,7 @@ mod tests {
     async fn test_basic_write_and_read() {
         let buffer = SimpleBuffer::new(10, 0, "test-buffer");
         let writer = buffer.writer();
-        let mut reader = buffer.reader();
+        let reader = buffer.reader();
 
         // Write a message
         let result = writer
@@ -194,7 +194,7 @@ mod tests {
     async fn test_nack_redelivers() {
         let buffer = SimpleBuffer::new(10, 0, "test-buffer");
         let writer = buffer.writer();
-        let mut reader = buffer.reader();
+        let reader = buffer.reader();
 
         // Write a message
         writer
@@ -300,7 +300,7 @@ mod tests {
     async fn test_fail_acks() {
         let buffer = SimpleBuffer::new(100, 0, "test-buffer");
         let writer = buffer.writer();
-        let mut reader = buffer.reader();
+        let reader = buffer.reader();
 
         writer
             .write("msg-1".to_string(), Bytes::from("hello"), HashMap::new())
@@ -350,7 +350,7 @@ mod tests {
     async fn test_mark_wip() {
         let buffer = SimpleBuffer::new(100, 0, "test-buffer");
         let writer = buffer.writer();
-        let mut reader = buffer.reader();
+        let reader = buffer.reader();
 
         writer
             .write("msg-1".to_string(), Bytes::from("hello"), HashMap::new())
@@ -383,7 +383,7 @@ mod tests {
     async fn test_pending_count() {
         let buffer = SimpleBuffer::new(100, 0, "test-buffer");
         let writer = buffer.writer();
-        let mut reader = buffer.reader();
+        let reader = buffer.reader();
 
         // Initially no pending
         assert_eq!(reader.pending().await.unwrap(), Some(0));
@@ -414,7 +414,7 @@ mod tests {
     #[tokio::test]
     async fn test_fetch_timeout() {
         let buffer = SimpleBuffer::new(100, 0, "test-buffer");
-        let mut reader = buffer.reader();
+        let reader = buffer.reader();
 
         // Fetch on empty buffer should timeout and return empty
         let messages = reader.fetch(10, Duration::from_millis(50)).await.unwrap();

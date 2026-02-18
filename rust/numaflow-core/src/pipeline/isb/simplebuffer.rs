@@ -11,15 +11,15 @@ use std::time::Duration;
 use async_trait::async_trait;
 use chrono::Utc;
 use numaflow_testing::simplebuffer::{
-    ErrorInjector, PendingWrite, ReadMessage, SimpleBuffer, SimpleBufferError, SimpleReader,
-    SimpleWriter, WriteError as SimpleWriteError,
+    ErrorInjector, ReadMessage, SimpleBuffer, SimpleBufferError, SimpleReader, SimpleWriter,
+    WriteError as SimpleWriteError,
 };
 use numaflow_throttling::NoOpRateLimiter;
 
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, Offset};
 use crate::pipeline::isb::error::ISBError;
-use crate::pipeline::isb::{ISBReader, ISBWriter, WriteError, WriteResult};
+use crate::pipeline::isb::{ISBReader, ISBWriter, PendingWrite, WriteError, WriteResult};
 use crate::typ::NumaflowTypeConfig;
 
 /// Adapter that wraps a `SimpleBuffer` and provides access to reader/writer adapters
@@ -145,7 +145,7 @@ fn convert_message(read_msg: ReadMessage) -> Message {
 
 #[async_trait]
 impl ISBReader for SimpleReaderAdapter {
-    async fn fetch(&mut self, max: usize, timeout: Duration) -> crate::Result<Vec<Message>> {
+    async fn fetch(&self, max: usize, timeout: Duration) -> crate::Result<Vec<Message>> {
         self.inner
             .fetch(max, timeout)
             .await
@@ -163,7 +163,7 @@ impl ISBReader for SimpleReaderAdapter {
         self.inner.nack(&simple_offset).await.map_err(|e| e.into())
     }
 
-    async fn pending(&mut self) -> crate::Result<Option<usize>> {
+    async fn pending(&self) -> crate::Result<Option<usize>> {
         self.inner.pending().await.map_err(|e| e.into())
     }
 
@@ -216,9 +216,7 @@ impl From<numaflow_testing::simplebuffer::WriteResult> for WriteResult {
 
 #[async_trait]
 impl ISBWriter for SimpleWriterAdapter {
-    type PendingWrite = PendingWrite;
-
-    async fn async_write(&self, message: Message) -> Result<Self::PendingWrite, WriteError> {
+    async fn async_write(&self, message: Message) -> Result<PendingWrite, WriteError> {
         // Check if buffer is full before attempting write.
         // This is important because ISBWriterOrchestrator::write_to_stream expects
         // async_write to return Err(WriteError::BufferFull) directly when the buffer
@@ -232,15 +230,20 @@ impl ISBWriter for SimpleWriterAdapter {
         let id = message.id.to_string();
         let payload = message.value;
         let headers: HashMap<String, String> = (*message.headers).clone();
-        Ok(self.inner.async_write(id, payload, headers))
-    }
+        let pending = self.inner.async_write(id, payload, headers);
 
-    async fn resolve(&self, pending: Self::PendingWrite) -> Result<WriteResult, WriteError> {
-        self.inner
-            .resolve(pending)
-            .await
-            .map(|r| r.into())
-            .map_err(|e| e.into())
+        // Clone inner writer to capture in the future for resolve() which applies latency/errors
+        let writer = self.inner.clone();
+
+        // Return a boxed future that resolves the inner pending write to WriteResult
+        // Using resolve() ensures error injection (latency, failures) is applied
+        Ok(Box::pin(async move {
+            writer
+                .resolve(pending)
+                .await
+                .map(|r| r.into())
+                .map_err(|e| e.into())
+        }))
     }
 
     async fn write(&self, message: Message) -> Result<WriteResult, WriteError> {
@@ -321,7 +324,7 @@ mod tests {
         write_message(&adapter, "msg-1", "hello").await;
         write_message(&adapter, "msg-2", "world").await;
 
-        let mut reader = adapter.reader();
+        let reader = adapter.reader();
 
         // Fetch messages
         let messages = reader
@@ -348,7 +351,7 @@ mod tests {
         let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
         write_message(&adapter, "msg-1", "hello").await;
 
-        let mut reader = adapter.reader();
+        let reader = adapter.reader();
 
         // Fetch message
         let messages = reader
@@ -383,7 +386,7 @@ mod tests {
         // Inject fetch failure
         adapter.error_injector().fail_fetches(1);
 
-        let mut reader = adapter.reader();
+        let reader = adapter.reader();
 
         // First fetch should fail
         let result = reader.fetch(10, Duration::from_millis(100)).await;
@@ -402,7 +405,7 @@ mod tests {
         let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
         write_message(&adapter, "msg-1", "hello").await;
 
-        let mut reader = adapter.reader();
+        let reader = adapter.reader();
 
         // Fetch message
         let messages = reader
@@ -468,7 +471,7 @@ mod tests {
         let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
         write_message(&adapter, "msg-1", "hello").await;
 
-        let mut reader = adapter.reader();
+        let reader = adapter.reader();
 
         // Fetch message first
         let messages = reader

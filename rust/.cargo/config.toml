@@ -6,5 +6,7 @@ clippy-ci = [
   "--exclude", "numaflow-models",
   "--no-deps",
   "--all-targets",
-  "--all-features"
+  "--all-features",
+  "--",
+  "-D", "warnings"
 ]

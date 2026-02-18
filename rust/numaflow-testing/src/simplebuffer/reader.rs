@@ -25,7 +25,7 @@ impl SimpleReader {
     ///
     /// This is a blocking call that waits up to `timeout` for messages.
     /// Returns pending messages and marks them as in-flight.
-    pub async fn fetch(&mut self, max: usize, timeout: Duration) -> Result<Vec<ReadMessage>> {
+    pub async fn fetch(&self, max: usize, timeout: Duration) -> Result<Vec<ReadMessage>> {
         // Apply artificial latency if set
         self.error_injector.apply_fetch_latency().await;
 
@@ -137,7 +137,7 @@ impl SimpleReader {
     }
 
     /// Returns the number of pending (unprocessed) messages.
-    pub async fn pending(&mut self) -> Result<Option<usize>> {
+    pub async fn pending(&self) -> Result<Option<usize>> {
         Ok(Some(self.state.read().pending_count()))
     }
 
@@ -229,7 +229,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_pending() {
-        let (mut reader, state) = create_test_reader();
+        let (reader, state) = create_test_reader();
 
         // Empty buffer
         assert_eq!(reader.pending().await.unwrap(), Some(0));
@@ -242,14 +242,14 @@ mod tests {
     #[tokio::test]
     async fn test_fetch() {
         // Empty buffer times out
-        let (mut reader, _) = create_test_reader();
+        let (reader, _) = create_test_reader();
         let start = std::time::Instant::now();
         let messages = reader.fetch(10, Duration::from_millis(50)).await.unwrap();
         assert!(messages.is_empty());
         assert!(start.elapsed() >= Duration::from_millis(50));
 
         // With messages
-        let (mut reader, state) = create_test_reader();
+        let (reader, state) = create_test_reader();
         for i in 1..=5 {
             add_slot(&state, i, MessageState::Pending);
         }
@@ -260,7 +260,7 @@ mod tests {
         assert_eq!(state.read().in_flight_count(), 5);
 
         // Fetch respects max
-        let (mut reader, state) = create_test_reader();
+        let (reader, state) = create_test_reader();
         for i in 1..=5 {
             add_slot(&state, i, MessageState::Pending);
         }
@@ -268,7 +268,7 @@ mod tests {
         assert_eq!(messages.len(), 2);
 
         // Injected failure
-        let (mut reader, _) = create_test_reader();
+        let (reader, _) = create_test_reader();
         reader.error_injector.fail_fetches(1);
         let result = reader.fetch(10, Duration::from_millis(100)).await;
         assert!(matches!(result.unwrap_err(), SimpleBufferError::Fetch(_)));
