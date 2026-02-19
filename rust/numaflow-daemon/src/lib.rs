@@ -43,19 +43,7 @@ pub async fn run_monovertex(mvtx_name: String, cln_token: CancellationToken) -> 
     let tls_config = build_rustls_config().await?;
 
     let svc = Arc::new(MvtxDaemonService);
-    let rest_router = Router::new()
-        .route("/readyz", get(|| async { StatusCode::NO_CONTENT }))
-        .route("/livez", get(|| async { StatusCode::NO_CONTENT }))
-        .route("/api/v1/metrics", get(api_v1_metrics))
-        .route("/api/v1/status", get(api_v1_status))
-        .route(
-            "/api/v1/mono-vertices/{mono_vertex}/errors",
-            get(api_v1_errors),
-        )
-        .with_state(svc);
-
-    // Unmatched paths aka. gRPC requests, e.g. /mvtxdaemon.MonoVertexDaemonService/GetMonoVertexMetrics, go to gRPC.
-    let app = rest_router.fallback_service(GrpcAdapter::new());
+    let app = make_app(svc);
 
     let handle = Handle::new();
     let handle_clone = handle.clone();
@@ -76,4 +64,75 @@ pub async fn run_monovertex(mvtx_name: String, cln_token: CancellationToken) -> 
         .map_err(|e| error::Error::NotComplete(format!("Daemon server failed: {}", e)))?;
 
     Ok(())
+}
+
+/// Builds the daemon Axum app: readyz, livez, REST API routes, and gRPC fallback.
+fn make_app(svc: Arc<MvtxDaemonService>) -> Router {
+    let rest_router = Router::new()
+        .route("/readyz", get(|| async { StatusCode::NO_CONTENT }))
+        .route("/livez", get(|| async { StatusCode::NO_CONTENT }))
+        .route("/api/v1/metrics", get(api_v1_metrics))
+        .route("/api/v1/status", get(api_v1_status))
+        .route(
+            "/api/v1/mono-vertices/{mono_vertex}/errors",
+            get(api_v1_errors),
+        )
+        .with_state(svc);
+    // Unmatched paths aka. gRPC requests go to gRPC.
+    rest_router.fallback_service(GrpcAdapter::new())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use http::{Method, Request};
+    use tower::ServiceExt;
+
+    fn app() -> Router {
+        make_app(Arc::new(MvtxDaemonService))
+    }
+
+    #[tokio::test]
+    async fn readyz_returns_no_content() {
+        let app = app();
+        let request = Request::builder()
+            .uri("/readyz")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn livez_returns_no_content() {
+        let app = app();
+        let request = Request::builder()
+            .uri("/livez")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn grpc_fallback_returns_ok_and_grpc_content_type() {
+        let app = app();
+        let body = Body::from(vec![0u8, 0, 0, 0, 0]);
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexMetrics")
+            .header("content-type", "application/grpc")
+            .body(body)
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok()),
+            Some("application/grpc")
+        );
+    }
 }
