@@ -151,11 +151,19 @@ mod tests {
             .await
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        let metrics = json.get("metrics").and_then(|m| m.get("monoVertex"));
+        let metrics = json.get("metrics").expect("metrics key");
         assert_eq!(
-            metrics,
+            metrics.get("monoVertex"),
             Some(&serde_json::Value::String("mock_mvtx_spec".into()))
         );
+        let rates = metrics.get("processingRates").and_then(|v| v.as_object()).expect("processingRates");
+        assert_eq!(rates.get("default").and_then(|v| v.as_f64()), Some(67.0));
+        assert_eq!(rates.get("1m").and_then(|v| v.as_f64()), Some(10.0));
+        assert_eq!(rates.get("5m").and_then(|v| v.as_f64()), Some(50.5));
+        assert_eq!(rates.get("15m").and_then(|v| v.as_f64()), Some(150.0));
+        let pendings = metrics.get("pendings").and_then(|v| v.as_object()).expect("pendings");
+        assert_eq!(pendings.get("default").and_then(|v| v.as_i64()), Some(67));
+        assert_eq!(pendings.get("1m").and_then(|v| v.as_i64()), Some(10));
     }
 
     #[tokio::test]
@@ -171,10 +179,18 @@ mod tests {
             .await
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        let status = json.get("status").and_then(|s| s.get("status"));
+        let status = json.get("status").expect("status key");
         assert_eq!(
-            status,
+            status.get("status"),
             Some(&serde_json::Value::String("mock_status".into()))
+        );
+        assert_eq!(
+            status.get("message"),
+            Some(&serde_json::Value::String("mock_status_message".into()))
+        );
+        assert_eq!(
+            status.get("code"),
+            Some(&serde_json::Value::String("mock_status_code".into()))
         );
     }
 
@@ -191,11 +207,30 @@ mod tests {
             .await
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        let errors = json.get("errors").and_then(|e| e.as_array()).unwrap();
+        let errors = json.get("errors").and_then(|e| e.as_array()).expect("errors array");
         assert_eq!(errors.len(), 1);
+        let first = errors.first().expect("first error");
         assert_eq!(
-            errors.first().unwrap().get("replica"),
+            first.get("replica"),
             Some(&serde_json::Value::String("mock_replica".into()))
         );
+        let container_errors = first.get("containerErrors").and_then(|c| c.as_array()).expect("containerErrors");
+        assert!(container_errors.is_empty(), "mock returns no container errors");
+    }
+
+    #[tokio::test]
+    async fn api_v1_errors_path_param_extracted() {
+        let app = test_router();
+        let request = Request::builder()
+            .uri("/api/v1/mono-vertices/any-vertex-name/errors")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json.get("errors").is_some(), "path param allows any mono_vertex");
     }
 }
