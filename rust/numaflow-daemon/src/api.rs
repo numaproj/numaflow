@@ -227,9 +227,17 @@ mod tests {
             .get("containerErrors")
             .and_then(|c| c.as_array())
             .expect("containerErrors");
-        assert!(
-            container_errors.is_empty(),
-            "mock returns no container errors"
+        assert_eq!(container_errors.len(), 1);
+        let ce = container_errors.first().expect("first container error");
+        assert_eq!(ce.get("container").and_then(|v| v.as_str()), Some("main"));
+        assert_eq!(ce.get("code").and_then(|v| v.as_str()), Some("mock_code"));
+        assert_eq!(
+            ce.get("message").and_then(|v| v.as_str()),
+            Some("mock_message")
+        );
+        assert_eq!(
+            ce.get("details").and_then(|v| v.as_str()),
+            Some("mock_details")
         );
     }
 

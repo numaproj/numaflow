@@ -1,7 +1,8 @@
 use numaflow_pb::servers::mvtxdaemon::mono_vertex_daemon_service_server::MonoVertexDaemonService;
 use numaflow_pb::servers::mvtxdaemon::{
-    GetMonoVertexErrorsRequest, GetMonoVertexErrorsResponse, GetMonoVertexMetricsResponse,
-    GetMonoVertexStatusResponse, MonoVertexMetrics, MonoVertexStatus, ReplicaErrors,
+    ContainerError, GetMonoVertexErrorsRequest, GetMonoVertexErrorsResponse,
+    GetMonoVertexMetricsResponse, GetMonoVertexStatusResponse, MonoVertexMetrics, MonoVertexStatus,
+    ReplicaErrors,
 };
 use std::collections::HashMap;
 use std::result::Result;
@@ -64,7 +65,13 @@ impl MonoVertexDaemonService for MvtxDaemonService {
         let mock_resp = GetMonoVertexErrorsResponse {
             errors: vec![ReplicaErrors {
                 replica: "mock_replica".to_string(),
-                container_errors: vec![],
+                container_errors: vec![ContainerError {
+                    container: "main".to_string(),
+                    code: "mock_code".to_string(),
+                    message: "mock_message".to_string(),
+                    details: "mock_details".to_string(),
+                    ..Default::default()
+                }],
             }],
         };
 
@@ -127,6 +134,14 @@ mod tests {
         assert_eq!(body.errors.len(), 1);
         let first = body.errors.first().expect("first error");
         assert_eq!(first.replica, "mock_replica");
-        assert!(first.container_errors.is_empty());
+        assert_eq!(first.container_errors.len(), 1);
+        let ce = first
+            .container_errors
+            .first()
+            .expect("first container error");
+        assert_eq!(ce.container, "main");
+        assert_eq!(ce.code, "mock_code");
+        assert_eq!(ce.message, "mock_message");
+        assert_eq!(ce.details, "mock_details");
     }
 }
