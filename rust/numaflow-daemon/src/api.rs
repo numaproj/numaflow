@@ -156,12 +156,18 @@ mod tests {
             metrics.get("monoVertex"),
             Some(&serde_json::Value::String("mock_mvtx_spec".into()))
         );
-        let rates = metrics.get("processingRates").and_then(|v| v.as_object()).expect("processingRates");
+        let rates = metrics
+            .get("processingRates")
+            .and_then(|v| v.as_object())
+            .expect("processingRates");
         assert_eq!(rates.get("default").and_then(|v| v.as_f64()), Some(67.0));
         assert_eq!(rates.get("1m").and_then(|v| v.as_f64()), Some(10.0));
         assert_eq!(rates.get("5m").and_then(|v| v.as_f64()), Some(50.5));
         assert_eq!(rates.get("15m").and_then(|v| v.as_f64()), Some(150.0));
-        let pendings = metrics.get("pendings").and_then(|v| v.as_object()).expect("pendings");
+        let pendings = metrics
+            .get("pendings")
+            .and_then(|v| v.as_object())
+            .expect("pendings");
         assert_eq!(pendings.get("default").and_then(|v| v.as_i64()), Some(67));
         assert_eq!(pendings.get("1m").and_then(|v| v.as_i64()), Some(10));
     }
@@ -207,15 +213,24 @@ mod tests {
             .await
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        let errors = json.get("errors").and_then(|e| e.as_array()).expect("errors array");
+        let errors = json
+            .get("errors")
+            .and_then(|e| e.as_array())
+            .expect("errors array");
         assert_eq!(errors.len(), 1);
         let first = errors.first().expect("first error");
         assert_eq!(
             first.get("replica"),
             Some(&serde_json::Value::String("mock_replica".into()))
         );
-        let container_errors = first.get("containerErrors").and_then(|c| c.as_array()).expect("containerErrors");
-        assert!(container_errors.is_empty(), "mock returns no container errors");
+        let container_errors = first
+            .get("containerErrors")
+            .and_then(|c| c.as_array())
+            .expect("containerErrors");
+        assert!(
+            container_errors.is_empty(),
+            "mock returns no container errors"
+        );
     }
 
     #[tokio::test]
@@ -231,6 +246,9 @@ mod tests {
             .await
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert!(json.get("errors").is_some(), "path param allows any mono_vertex");
+        assert!(
+            json.get("errors").is_some(),
+            "path param allows any mono_vertex"
+        );
     }
 }
