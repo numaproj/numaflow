@@ -5,12 +5,12 @@
 //! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
-use crate::config::is_mono_vertex;
+use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
 use crate::message::{AckHandle, ReadAck};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
-    pipeline_metric_labels, pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, SOURCE_PARTITION_NAME_LABEL, monovertex_metrics,
+    mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::source::http::CoreHttpSource;
@@ -402,7 +402,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.read_batch_size);
 
-        let pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
+        let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
+        pipeline_labels.push((
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            get_vertex_name().to_string(),
+        ));
         let mvtx_labels = mvtx_forward_metric_labels();
 
         info!(?self.read_batch_size, "Started streaming source with batch size");
@@ -740,22 +744,24 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     /// Record per-partition read metrics (read_total, data_read_total, read_bytes_total, etc.).
     /// These metrics are recorded for each message, grouped by partition.
     fn record_partition_read_metrics(
-        pipeline_labels: &[(String, String)],
-        mvtx_labels: &[(String, String)],
+        pipeline_labels: &Vec<(String, String)>,
+        mvtx_labels: &Vec<(String, String)>,
         partition_idx: u16,
         bytes: usize,
     ) {
-        let partition_str = partition_idx.to_string();
         if is_mono_vertex() {
-            let mut labels = mvtx_labels.to_owned();
+            let mut labels = mvtx_labels.clone();
             labels.push((
-                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                partition_str,
+                SOURCE_PARTITION_NAME_LABEL.to_string(),
+                partition_idx.to_string(),
             ));
             monovertex_metrics().read_total.get_or_create(&labels).inc();
         } else {
-            let mut labels = pipeline_labels.to_owned();
-            labels.push((PIPELINE_PARTITION_NAME_LABEL.to_string(), partition_str));
+            let mut labels = pipeline_labels.clone();
+            labels.push((
+                SOURCE_PARTITION_NAME_LABEL.to_string(),
+                partition_idx.to_string(),
+            ));
             pipeline_metrics()
                 .forwarder
                 .read_total
@@ -778,7 +784,6 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 .inc_by(bytes as u64);
         }
     }
-
     fn send_ack_metrics(e2e_start_time: Instant, n: usize, start: Instant) {
         if is_mono_vertex() {
             let mvtx_labels = mvtx_forward_metric_labels();
@@ -797,22 +802,26 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 .get_or_create(mvtx_labels)
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
         } else {
-            let pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE);
+            let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
+            pipeline_labels.push((
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ));
             pipeline_metrics()
                 .forwarder
                 .ack_processing_time
-                .get_or_create(pipeline_labels)
+                .get_or_create(&pipeline_labels)
                 .observe(start.elapsed().as_micros() as f64);
 
             pipeline_metrics()
                 .forwarder
                 .ack_total
-                .get_or_create(pipeline_labels)
+                .get_or_create(&pipeline_labels)
                 .inc_by(n as u64);
             pipeline_metrics()
                 .forwarder
                 .e2e_time
-                .get_or_create(pipeline_labels)
+                .get_or_create(&pipeline_labels)
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
         }
     }
