@@ -10,6 +10,18 @@ tokio.workspace = true
 numaflow-pb.workspace = true
 rcgen.workspace = true
 time.workspace = true
+tokio-util.workspace = true
+thiserror.workspace = true
+tower.workspace = true
+axum.workspace = true
+axum-server.workspace = true
+rustls.workspace = true
+bytes.workspace = true
+http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+hyper = "1.6.0"
+http-body-util = "0.1"
 
 [lints]
 workspace = true

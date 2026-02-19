@@ -1,138 +1,138 @@
-use numaflow_pb::servers::mvtxdaemon::mono_vertex_daemon_service_server::{
-    MonoVertexDaemonService, MonoVertexDaemonServiceServer,
-};
-use numaflow_pb::servers::mvtxdaemon::{
-    GetMonoVertexErrorsRequest, GetMonoVertexErrorsResponse, GetMonoVertexMetricsResponse,
-    GetMonoVertexStatusResponse, MonoVertexMetrics, MonoVertexStatus, ReplicaErrors,
-};
-use rcgen::{
-    CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose,
-};
-use std::collections::HashMap;
-use std::error::Error;
-use std::result::Result;
-use time::{Duration, OffsetDateTime};
-use tonic::transport::{Identity, Server, ServerTlsConfig};
-use tonic::{Request, Response, Status};
+//! MonoVertex daemon server: one TLS port serving HTTP/1.1 (REST) and gRPC (h2) via ALPN.
+//!
+//! Uses Axum for the HTTP stack and nests the Tonic gRPC service so a single
+//! `axum_server::bind_rustls` listen handles both protocols.
+
+use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::Duration;
+
+use axum::Router;
+use axum::http::StatusCode;
+use axum::routing::get;
+use axum_server::Handle;
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-#[derive(Debug, Default)]
-pub struct MvtxDaemonService;
+use crate::api::{api_v1_errors, api_v1_metrics, api_v1_status};
+use crate::grpc_adapter::GrpcAdapter;
 
-#[tonic::async_trait]
-impl MonoVertexDaemonService for MvtxDaemonService {
-    async fn get_mono_vertex_metrics(
-        &self,
-        _: Request<()>,
-    ) -> Result<Response<GetMonoVertexMetricsResponse>, Status> {
-        info!("Received GetMonoVertexMetrics");
+mod api;
+mod error;
+mod grpc_adapter;
+mod service;
+mod tls;
 
-        let mock_processing_rates = HashMap::from([
-            ("default".to_string(), 67.0),
-            ("1m".to_string(), 10.0),
-            ("5m".to_string(), 50.0),
-            ("15m".to_string(), 150.0),
-        ]);
+pub(crate) use service::MvtxDaemonService;
 
-        let mock_pendings = HashMap::from([
-            ("default".to_string(), 67),
-            ("1m".to_string(), 10),
-            ("5m".to_string(), 50),
-            ("15m".to_string(), 150),
-        ]);
+use error::Result;
+use tls::build_rustls_config;
 
-        let mock_resp = GetMonoVertexMetricsResponse {
-            metrics: Some(MonoVertexMetrics {
-                mono_vertex: "mock_mvtx_spec".to_string(),
-                processing_rates: mock_processing_rates,
-                pendings: mock_pendings,
-            }),
-        };
-
-        Ok(Response::new(mock_resp))
-    }
-
-    async fn get_mono_vertex_status(
-        &self,
-        _: Request<()>,
-    ) -> Result<Response<GetMonoVertexStatusResponse>, Status> {
-        info!("Received GetMonoVertexStatus");
-
-        let mock_resp = GetMonoVertexStatusResponse {
-            status: Some(MonoVertexStatus {
-                status: "mock_status".to_string(),
-                message: "mock_status_message".to_string(),
-                code: "mock_status_code".to_string(),
-            }),
-        };
-
-        Ok(Response::new(mock_resp))
-    }
-
-    async fn get_mono_vertex_errors(
-        &self,
-        _: Request<GetMonoVertexErrorsRequest>,
-    ) -> Result<Response<GetMonoVertexErrorsResponse>, Status> {
-        info!("Received GetMonoVertexErrors");
-
-        let mock_resp = GetMonoVertexErrorsResponse {
-            errors: vec![ReplicaErrors {
-                replica: "mock_replica".to_string(),
-                container_errors: vec![],
-            }],
-        };
-
-        Ok(Response::new(mock_resp))
-    }
-}
-
-/// Matches the DaemonServicePort in pkg/apis/numaflow/v1alpha1/const.go
+/// Daemon service port; matches `pkg/apis/numaflow/v1alpha1/const.go`.
 const DAEMON_SERVICE_PORT: u16 = 4327;
 
-pub async fn run_monovertex(mvtx_name: String) -> Result<(), Box<dyn Error>> {
-    info!("MonoVertex name is {}", mvtx_name);
+/// Runs the MonoVertex daemon: one port, TLS, ALPN (http/1.1 + h2).
+/// REST routes (/readyz, /livez, etc.) and gRPC are served by the same Axum + Tonic stack.
+pub async fn run_monovertex(mvtx_name: String, cln_token: CancellationToken) -> Result<()> {
+    info!("Starting daemon server for MonoVertex {}", mvtx_name);
 
-    let addr = format!("[::]:{}", DAEMON_SERVICE_PORT).parse()?;
+    let addr: SocketAddr = format!("[::]:{}", DAEMON_SERVICE_PORT)
+        .parse()
+        .map_err(|e: std::net::AddrParseError| error::Error::Address(e.to_string()))?;
 
-    let service = MvtxDaemonService;
-    let identity = generate_self_signed_identity()?;
-    let tls = ServerTlsConfig::new().identity(identity);
+    let tls_config = build_rustls_config().await?;
 
-    Server::builder()
-        .tls_config(tls)?
-        .add_service(MonoVertexDaemonServiceServer::new(service))
-        .serve(addr)
-        .await?;
+    let svc = Arc::new(MvtxDaemonService);
+    let app = make_app(svc);
+
+    let handle = Handle::new();
+    let handle_clone = handle.clone();
+    let shutdown_token = cln_token.clone();
+    /// Max time to wait for in-flight requests to finish before forcing shutdown.
+    /// Matches Kubernetes default termination grace period so the pod can exit before SIGKILL.
+    const GRACEFUL_SHUTDOWN_TIMEOUT_SECS: u64 = 30;
+    tokio::spawn(async move {
+        shutdown_token.cancelled().await;
+        info!("CancellationToken cancelled, graceful shutdown initiated");
+        handle_clone.graceful_shutdown(Some(Duration::from_secs(GRACEFUL_SHUTDOWN_TIMEOUT_SECS)));
+    });
+
+    axum_server::bind_rustls(addr, tls_config)
+        .handle(handle)
+        .serve(app.into_make_service())
+        .await
+        .map_err(|e| error::Error::NotComplete(format!("Daemon server failed: {}", e)))?;
 
     Ok(())
 }
 
-pub async fn run_pipeline(pipeline_name: String) -> Result<(), Box<dyn Error>> {
-    info!("Pipeline name is {}", pipeline_name);
-
-    Ok(())
+/// Builds the daemon Axum app: readyz, livez, REST API routes, and gRPC fallback.
+fn make_app(svc: Arc<MvtxDaemonService>) -> Router {
+    let rest_router = Router::new()
+        .route("/readyz", get(|| async { StatusCode::NO_CONTENT }))
+        .route("/livez", get(|| async { StatusCode::NO_CONTENT }))
+        .route("/api/v1/metrics", get(api_v1_metrics))
+        .route("/api/v1/status", get(api_v1_status))
+        .route(
+            "/api/v1/mono-vertices/{mono_vertex}/errors",
+            get(api_v1_errors),
+        )
+        .with_state(svc);
+    // Unmatched paths aka. gRPC requests go to gRPC.
+    rest_router.fallback_service(GrpcAdapter::new())
 }
 
-fn generate_self_signed_identity() -> Result<Identity, Box<dyn Error>> {
-    let mut params = CertificateParams::new(vec!["localhost".to_string()])?;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use http::{Method, Request};
+    use tower::ServiceExt;
 
-    let mut dn = DistinguishedName::new();
-    dn.push(DnType::OrganizationName, "Numaproj");
-    params.distinguished_name = dn;
+    fn app() -> Router {
+        make_app(Arc::new(MvtxDaemonService))
+    }
 
-    let not_before = OffsetDateTime::now_utc();
-    params.not_before = not_before;
-    params.not_after = not_before + Duration::days(365);
+    #[tokio::test]
+    async fn readyz_returns_no_content() {
+        let app = app();
+        let request = Request::builder()
+            .uri("/readyz")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
 
-    params.key_usages = vec![
-        KeyUsagePurpose::KeyEncipherment,
-        KeyUsagePurpose::DigitalSignature,
-    ];
+    #[tokio::test]
+    async fn livez_returns_no_content() {
+        let app = app();
+        let request = Request::builder()
+            .uri("/livez")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
 
-    params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
-
-    let signing_key = KeyPair::generate()?;
-    let cert = params.self_signed(&signing_key)?;
-
-    Ok(Identity::from_pem(cert.pem(), signing_key.serialize_pem()))
+    #[tokio::test]
+    async fn grpc_fallback_returns_ok_and_grpc_content_type() {
+        let app = app();
+        let body = Body::from(vec![0u8, 0, 0, 0, 0]);
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexMetrics")
+            .header("content-type", "application/grpc")
+            .body(body)
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok()),
+            Some("application/grpc")
+        );
+    }
 }
