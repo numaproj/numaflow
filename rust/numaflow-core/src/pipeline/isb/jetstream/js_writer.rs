@@ -393,7 +393,6 @@ impl JetStreamWriter {
     }
 }
 
-#[async_trait::async_trait]
 impl crate::pipeline::isb::ISBWriter for JetStreamWriter {
     async fn async_write(
         &self,

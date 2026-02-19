@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_trait::async_trait;
 use chrono::Utc;
 use numaflow_testing::simplebuffer::{
     ErrorInjector, ReadMessage, SimpleBuffer, SimpleBufferError, SimpleReader, SimpleWriter,
@@ -143,7 +142,6 @@ fn convert_message(read_msg: ReadMessage) -> Message {
     }
 }
 
-#[async_trait]
 impl ISBReader for SimpleReaderAdapter {
     async fn fetch(&self, max: usize, timeout: Duration) -> crate::Result<Vec<Message>> {
         self.inner
@@ -214,7 +212,6 @@ impl From<numaflow_testing::simplebuffer::WriteResult> for WriteResult {
     }
 }
 
-#[async_trait]
 impl ISBWriter for SimpleWriterAdapter {
     async fn async_write(&self, message: Message) -> Result<PendingWrite, WriteError> {
         // Check if buffer is full before attempting write.
