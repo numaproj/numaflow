@@ -273,7 +273,6 @@ impl JetStreamReader {
     }
 }
 
-#[async_trait::async_trait]
 impl crate::pipeline::isb::ISBReader for JetStreamReader {
     async fn fetch(&self, max: usize, timeout: Duration) -> Result<Vec<Message>> {
         JetStreamReader::fetch(self, max, timeout).await

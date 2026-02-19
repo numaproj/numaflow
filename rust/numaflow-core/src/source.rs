@@ -74,8 +74,10 @@ const ACK_RETRY_INTERVAL: u64 = 100;
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 
 /// Set of Read related items that has to be implemented to become a Source.
-pub(crate) trait SourceReader {
-    #[allow(dead_code)]
+/// Uses `trait_variant::make` to generate an object-safe `SourceReader` trait with `Send` bound.
+#[allow(dead_code)]
+#[trait_variant::make(SourceReader: Send)]
+pub(crate) trait LocalSourceReader {
     /// Name of the source.
     fn name(&self) -> &'static str;
 
@@ -87,13 +89,16 @@ pub(crate) trait SourceReader {
 }
 
 /// Set of Ack related items that has to be implemented to become a Source.
-pub(crate) trait SourceAcker {
+/// Uses `trait_variant::make` to generate an object-safe `SourceAcker` trait with `Send` bound.
+#[allow(dead_code)]
+#[trait_variant::make(SourceAcker: Send)]
+pub(crate) trait LocalSourceAcker {
     /// acknowledge an offset. The implementor might choose to do it in an asynchronous way.
-    async fn ack(&mut self, _: Vec<Offset>) -> Result<()>;
+    async fn ack(&mut self, offsets: Vec<Offset>) -> Result<()>;
 
     /// negatively acknowledge an offset. The implementor might choose to do it in an asynchronous way.
     /// For sources that don't support nack, this should be a no-op.
-    async fn nack(&mut self, _: Vec<Offset>) -> Result<()>;
+    async fn nack(&mut self, offsets: Vec<Offset>) -> Result<()>;
 }
 
 pub(crate) enum SourceType {

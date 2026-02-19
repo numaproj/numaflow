@@ -7,8 +7,6 @@ use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
 
-use async_trait::async_trait;
-
 use crate::error::Result;
 use crate::message::{Message, Offset};
 
@@ -38,8 +36,10 @@ pub(crate) use factory::ISBFactory;
 /// internal state needed to perform these operations (e.g., JetStream needs
 /// the original message object).
 ///
-#[async_trait]
-pub(crate) trait ISBReader: Send + Sync {
+/// Uses `trait_variant::make` to generate an object-safe `ISBReader` trait with `Send` bound.
+#[allow(dead_code)]
+#[trait_variant::make(ISBReader: Send)]
+pub(crate) trait LocalISBReader: Sync {
     /// Fetches a batch of messages from the ISB.
     ///
     /// This is a blocking call that waits up to `timeout` for messages.
@@ -71,9 +71,7 @@ pub(crate) trait ISBReader: Send + Sync {
     ///
     /// This is optional - implementations that don't support WIP can use the default
     /// implementation which does nothing.
-    async fn mark_wip(&self, _offset: &Offset) -> Result<()> {
-        Ok(())
-    }
+    async fn mark_wip(&self, offset: &Offset) -> Result<()>;
 
     /// Returns the interval at which WIP acks should be sent, if WIP is supported.
     ///
@@ -145,8 +143,11 @@ impl WriteResult {
 ///
 /// Both patterns return `Result<WriteResult, WriteError>` for consistency.
 /// The orchestrator is responsible for retry logic and handling cancellation.
-#[async_trait]
-pub(crate) trait ISBWriter: Send + Sync {
+///
+/// Uses `trait_variant::make` to generate an object-safe `ISBWriter` trait with `Send` bound.
+#[allow(dead_code)]
+#[trait_variant::make(ISBWriter: Send)]
+pub(crate) trait LocalISBWriter: Sync {
     /// Writes a message and returns immediately with a pending write handle.
     ///
     /// This is the high-performance write method. The returned `PendingWrite` is a
