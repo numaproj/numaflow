@@ -109,6 +109,12 @@ impl OffsetTimeline {
             .find(|w| w.offset < input_offset)
             .map_or(-1, |w| w.watermark)
     }
+
+    /// Returns an iterator over all valid (non-default) entries in the timeline.
+    /// Entries are returned from highest to lowest watermark.
+    pub(crate) fn entries(&self) -> VecDeque<WMB> {
+        self.watermarks.clone()
+    }
 }
 
 impl fmt::Debug for OffsetTimeline {

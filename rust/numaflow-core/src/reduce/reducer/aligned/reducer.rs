@@ -22,7 +22,7 @@ use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 const DEFAULT_KEY_FOR_NON_KEYED_STREAM: &str = "NON_KEYED_STREAM";
 
@@ -478,6 +478,7 @@ impl<C: NumaflowTypeConfig> AlignedReducer<C> {
                                 // Handle WMB messages with idle watermarks
                                 if let MessageType::WMB = msg.typ {
                                     if let Some(idle_watermark) = msg.watermark {
+                                        debug!(wm = ?idle_watermark.timestamp_millis(), "Idle watermark received for reduce");
                                         // Only close windows if the idle watermark is greater than current watermark
                                         if idle_watermark > self.current_watermark {
                                             self.current_watermark = idle_watermark;
@@ -491,11 +492,6 @@ impl<C: NumaflowTypeConfig> AlignedReducer<C> {
                                 if !keyed {
                                     msg.keys = Arc::new([DEFAULT_KEY_FOR_NON_KEYED_STREAM.to_string()]);
                                 }
-
-                                // Update the watermark - use max to ensure it never regresses
-                                self.current_watermark = self
-                                    .current_watermark
-                                    .max(msg.watermark.unwrap_or_default());
 
                                 self.assign_and_close_windows(msg, &actor_tx).await;
                             }
@@ -583,40 +579,43 @@ impl<C: NumaflowTypeConfig> AlignedReducer<C> {
         msg: Message,
         actor_tx: &mpsc::Sender<AlignedWindowMessage>,
     ) {
-        // Drop late messages
-        if msg.is_late && msg.event_time < self.current_watermark.sub(self.allowed_lateness) {
-            debug!(event_time = ?msg.event_time.timestamp_millis(), watermark = ?self.current_watermark.timestamp_millis(), "Late message detected, dropping");
-            pipeline_metrics()
-                .forwarder
-                .drop_total
-                .get_or_create(&pipeline_drop_metric_labels(
-                    get_vertex_name(),
-                    get_vertex_replica().to_string().as_str(),
-                    "late-message",
-                ))
-                .inc();
+        // Update the watermark - use max to ensure it never regresses (only after accepting the message)
+        // Use -1 as the default watermark if not present, so that we don't accidentally advance the watermark
+        self.current_watermark = self.current_watermark.max(
+            msg.watermark
+                .unwrap_or(DateTime::from_timestamp_millis(-1).expect("Invalid timestamp")),
+        );
 
-            return;
+        // Handle late messages
+        if msg.is_late {
+            if self.current_watermark.timestamp_millis() == -1 {
+                // this can happen when the pipeline is just started, and we receive a late message
+                // before we receive any watermark.
+                warn!(event_time = ?msg.event_time.timestamp_millis(), watermark = ?self.current_watermark.timestamp_millis(), "Late message detected, but watermark is -1, dropping message");
+                increment_late_message_drop_metric("no-valid-wm-late-message");
+                return;
+            }
+
+            // Drop the late message if it is outside the allowed lateness window.
+            if msg.event_time < self.current_watermark.sub(self.allowed_lateness) {
+                debug!(event_time = ?msg.event_time.timestamp_millis(), watermark = ?self.current_watermark.timestamp_millis(), "Late message detected, dropping");
+                increment_late_message_drop_metric("late-message");
+                return;
+            }
         }
 
-        // Validate message event time against current watermark
+        // Validate message event time against current watermark (must not have progressed past this message)
         if self.current_watermark > msg.event_time {
             error!(
                 current_watermark = ?self.current_watermark.timestamp_millis(),
                 message_event_time = ?msg.event_time.timestamp_millis(),
+                message_watermark = ?msg.watermark.map(|wm| wm.timestamp_millis()),
                 is_late = ?msg.is_late,
                 offset = ?msg.offset,
-                "Old message popped up, Watermark is behind the event time"
+                "Old message popped up, Watermark has progressed past event time"
             );
-            pipeline_metrics()
-                .forwarder
-                .drop_total
-                .get_or_create(&pipeline_drop_metric_labels(
-                    get_vertex_name(),
-                    get_vertex_replica().to_string().as_str(),
-                    "old-message-popped-up",
-                ))
-                .inc();
+
+            increment_late_message_drop_metric("old-message-popped-up");
             return;
         }
 
@@ -632,6 +631,19 @@ impl<C: NumaflowTypeConfig> AlignedReducer<C> {
             actor_tx.send(window_msg).await.expect("Receiver dropped");
         }
     }
+}
+
+/// Increment the late message drop metric counter.
+pub(crate) fn increment_late_message_drop_metric(reason: &str) {
+    pipeline_metrics()
+        .forwarder
+        .drop_total
+        .get_or_create(&pipeline_drop_metric_labels(
+            get_vertex_name(),
+            get_vertex_replica().to_string().as_str(),
+            reason,
+        ))
+        .inc();
 }
 
 #[cfg(test)]

@@ -27,10 +27,12 @@ import (
 	"testing"
 	"time"
 
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
@@ -554,4 +556,229 @@ func TestCalculateLookback(t *testing.T) {
 			assert.Equal(t, tt.expectedLookback, result)
 		})
 	}
+}
+
+// TestGetPodReadCounts_MultipleMetricSeries tests that getPodReadCounts correctly sums
+// multiple metric series with the same partition_name but different values for other labels
+func TestGetPodReadCounts_MultipleMetricSeries(t *testing.T) {
+	ctx := context.Background()
+	lookBackSeconds := uint32(30)
+	pipeline := &v1alpha1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pipeline",
+			Namespace: "default",
+		},
+		Spec: v1alpha1.PipelineSpec{
+			Vertices: []v1alpha1.AbstractVertex{
+				{
+					Name:  "v",
+					Scale: v1alpha1.Scale{LookbackSeconds: &lookBackSeconds},
+				},
+			},
+		},
+	}
+	r := NewRater(ctx, pipeline)
+
+	partitionLabel := metrics.LabelPartitionName
+
+	t.Run("single metric series per partition", func(t *testing.T) {
+		metricName := "forwarder_data_read_total"
+		metricType := dto.MetricType_COUNTER
+		value1 := 100.0
+		partition1 := "partition-0"
+
+		result := map[string]*dto.MetricFamily{
+			metricName: {
+				Name: &metricName,
+				Type: &metricType,
+				Metric: []*dto.Metric{
+					{
+						Label: []*dto.LabelPair{
+							{Name: &partitionLabel, Value: &partition1},
+						},
+						Counter: &dto.Counter{Value: &value1},
+					},
+				},
+			},
+		}
+
+		podReadCount := r.getPodReadCounts("v", "test-pod", result)
+		assert.NotNil(t, podReadCount)
+		assert.Equal(t, "test-pod", podReadCount.Name())
+		assert.Equal(t, 100.0, podReadCount.PartitionReadCounts()["partition-0"])
+	})
+
+	t.Run("multiple metric series with same partition but different labels", func(t *testing.T) {
+		// This tests the summing behavior when there are multiple metric series
+		// with the same partition_name but different values for other labels
+		metricName := "forwarder_data_read_total"
+		metricType := dto.MetricType_COUNTER
+		value1 := 100.0
+		value2 := 200.0
+		value3 := 50.0
+		partition1 := "partition-0"
+		bufferLabel := "buffer"
+		buffer1 := "buffer-a"
+		buffer2 := "buffer-b"
+		buffer3 := "buffer-c"
+
+		result := map[string]*dto.MetricFamily{
+			metricName: {
+				Name: &metricName,
+				Type: &metricType,
+				Metric: []*dto.Metric{
+					{
+						Label: []*dto.LabelPair{
+							{Name: &partitionLabel, Value: &partition1},
+							{Name: &bufferLabel, Value: &buffer1},
+						},
+						Counter: &dto.Counter{Value: &value1},
+					},
+					{
+						Label: []*dto.LabelPair{
+							{Name: &partitionLabel, Value: &partition1},
+							{Name: &bufferLabel, Value: &buffer2},
+						},
+						Counter: &dto.Counter{Value: &value2},
+					},
+					{
+						Label: []*dto.LabelPair{
+							{Name: &partitionLabel, Value: &partition1},
+							{Name: &bufferLabel, Value: &buffer3},
+						},
+						Counter: &dto.Counter{Value: &value3},
+					},
+				},
+			},
+		}
+
+		podReadCount := r.getPodReadCounts("v", "test-pod", result)
+		assert.NotNil(t, podReadCount)
+		assert.Equal(t, "test-pod", podReadCount.Name())
+		// Should sum all three values for partition-0: 100 + 200 + 50 = 350
+		assert.Equal(t, 350.0, podReadCount.PartitionReadCounts()["partition-0"])
+	})
+
+	t.Run("multiple partitions with multiple series each", func(t *testing.T) {
+		metricName := "forwarder_data_read_total"
+		metricType := dto.MetricType_COUNTER
+		value1 := 100.0
+		value2 := 200.0
+		value3 := 50.0
+		value4 := 75.0
+		partition1 := "partition-0"
+		partition2 := "partition-1"
+		bufferLabel := "buffer"
+		buffer1 := "buffer-a"
+		buffer2 := "buffer-b"
+
+		result := map[string]*dto.MetricFamily{
+			metricName: {
+				Name: &metricName,
+				Type: &metricType,
+				Metric: []*dto.Metric{
+					{
+						Label: []*dto.LabelPair{
+							{Name: &partitionLabel, Value: &partition1},
+							{Name: &bufferLabel, Value: &buffer1},
+						},
+						Counter: &dto.Counter{Value: &value1},
+					},
+					{
+						Label: []*dto.LabelPair{
+							{Name: &partitionLabel, Value: &partition1},
+							{Name: &bufferLabel, Value: &buffer2},
+						},
+						Counter: &dto.Counter{Value: &value2},
+					},
+					{
+						Label: []*dto.LabelPair{
+							{Name: &partitionLabel, Value: &partition2},
+							{Name: &bufferLabel, Value: &buffer1},
+						},
+						Counter: &dto.Counter{Value: &value3},
+					},
+					{
+						Label: []*dto.LabelPair{
+							{Name: &partitionLabel, Value: &partition2},
+							{Name: &bufferLabel, Value: &buffer2},
+						},
+						Counter: &dto.Counter{Value: &value4},
+					},
+				},
+			},
+		}
+
+		podReadCount := r.getPodReadCounts("v", "test-pod", result)
+		assert.NotNil(t, podReadCount)
+		assert.Equal(t, "test-pod", podReadCount.Name())
+		// partition-0: 100 + 200 = 300
+		assert.Equal(t, 300.0, podReadCount.PartitionReadCounts()["partition-0"])
+		// partition-1: 50 + 75 = 125
+		assert.Equal(t, 125.0, podReadCount.PartitionReadCounts()["partition-1"])
+	})
+
+	t.Run("untyped metric fallback", func(t *testing.T) {
+		// Test the fallback to Untyped when Counter is 0 (rust client issue)
+		metricName := "forwarder_data_read_total"
+		metricType := dto.MetricType_UNTYPED
+		counterVal := 0.0
+		untypedVal1 := 100.0
+		untypedVal2 := 200.0
+		partition1 := "partition-0"
+		bufferLabel := "buffer"
+		buffer1 := "buffer-a"
+		buffer2 := "buffer-b"
+
+		result := map[string]*dto.MetricFamily{
+			metricName: {
+				Name: &metricName,
+				Type: &metricType,
+				Metric: []*dto.Metric{
+					{
+						Label: []*dto.LabelPair{
+							{Name: &partitionLabel, Value: &partition1},
+							{Name: &bufferLabel, Value: &buffer1},
+						},
+						Counter: &dto.Counter{Value: &counterVal},
+						Untyped: &dto.Untyped{Value: &untypedVal1},
+					},
+					{
+						Label: []*dto.LabelPair{
+							{Name: &partitionLabel, Value: &partition1},
+							{Name: &bufferLabel, Value: &buffer2},
+						},
+						Counter: &dto.Counter{Value: &counterVal},
+						Untyped: &dto.Untyped{Value: &untypedVal2},
+					},
+				},
+			},
+		}
+
+		podReadCount := r.getPodReadCounts("v", "test-pod", result)
+		assert.NotNil(t, podReadCount)
+		assert.Equal(t, "test-pod", podReadCount.Name())
+		// Should use Untyped values and sum: 100 + 200 = 300
+		assert.Equal(t, 300.0, podReadCount.PartitionReadCounts()["partition-0"])
+	})
+
+	t.Run("metric not found", func(t *testing.T) {
+		result := map[string]*dto.MetricFamily{}
+		podReadCount := r.getPodReadCounts("v", "test-pod", result)
+		assert.Nil(t, podReadCount)
+	})
+
+	t.Run("empty metric list", func(t *testing.T) {
+		metricName := "forwarder_data_read_total"
+		metricType := dto.MetricType_COUNTER
+		result := map[string]*dto.MetricFamily{
+			metricName: {
+				Name:   &metricName,
+				Type:   &metricType,
+				Metric: []*dto.Metric{},
+			},
+		}
+		podReadCount := r.getPodReadCounts("v", "test-pod", result)
+		assert.Nil(t, podReadCount)
+	})
 }

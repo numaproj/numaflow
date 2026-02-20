@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	dto "github.com/prometheus/client_model/go"
+	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -104,6 +106,215 @@ func TestRater_Start(t *testing.T) {
 	podTracker := NewPodTracker(ctx, pipeline, WithRefreshInterval(time.Second*1))
 	podTracker.httpClient = &raterMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
 	r.httpClient = &raterMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
+	r.podTracker = podTracker
+
+	timer := time.NewTimer(60 * time.Second)
+	succeedChan := make(chan struct{})
+	go func() {
+		if err := r.Start(ctx); err != nil {
+			log.Fatalf("failed to start rater: %v", err)
+		}
+	}()
+	go func() {
+		for {
+			if r.GetRates()["default"].GetValue() <= 0 {
+				time.Sleep(time.Second)
+			} else {
+				succeedChan <- struct{}{}
+				break
+			}
+		}
+	}()
+	select {
+	case <-succeedChan:
+		time.Sleep(time.Second)
+		break
+	case <-timer.C:
+		t.Fatalf("timed out waiting for rate to be calculated")
+	}
+	timer.Stop()
+}
+
+// TestGetPodReadCounts_MultipleMetricSeries tests that getPodReadCounts correctly sums
+// multiple metric series with different labels (e.g., different source_partition values)
+func TestGetPodReadCounts_MultipleMetricSeries(t *testing.T) {
+	ctx := context.Background()
+	lookBackSeconds := uint32(30)
+	mv := &v1alpha1.MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-mv",
+			Namespace: "default",
+		},
+		Spec: v1alpha1.MonoVertexSpec{
+			Scale: v1alpha1.Scale{LookbackSeconds: &lookBackSeconds},
+		},
+	}
+	r := NewRater(ctx, mv)
+
+	t.Run("single metric series", func(t *testing.T) {
+		// Create a metric family with a single metric series
+		metricName := monoVtxReadMetricName
+		metricType := dto.MetricType_UNTYPED
+		value1 := 100.0
+		result := map[string]*dto.MetricFamily{
+			metricName: {
+				Name: &metricName,
+				Type: &metricType,
+				Metric: []*dto.Metric{
+					{
+						Untyped: &dto.Untyped{Value: &value1},
+					},
+				},
+			},
+		}
+
+		podMetricsCount := r.getPodReadCounts("test-pod", result)
+		assert.NotNil(t, podMetricsCount)
+		assert.Equal(t, "test-pod", podMetricsCount.Name())
+		assert.Equal(t, 100.0, podMetricsCount.ReadCount())
+	})
+
+	t.Run("multiple metric series with different labels", func(t *testing.T) {
+		// Create a metric family with multiple metric series (simulating different source_partition values)
+		metricName := monoVtxReadMetricName
+		metricType := dto.MetricType_UNTYPED
+		value1 := 100.0
+		value2 := 200.0
+		value3 := 50.0
+		labelName := "source_partition"
+		labelValue1 := "partition-0"
+		labelValue2 := "partition-1"
+		labelValue3 := "partition-2"
+
+		result := map[string]*dto.MetricFamily{
+			metricName: {
+				Name: &metricName,
+				Type: &metricType,
+				Metric: []*dto.Metric{
+					{
+						Label: []*dto.LabelPair{
+							{Name: &labelName, Value: &labelValue1},
+						},
+						Untyped: &dto.Untyped{Value: &value1},
+					},
+					{
+						Label: []*dto.LabelPair{
+							{Name: &labelName, Value: &labelValue2},
+						},
+						Untyped: &dto.Untyped{Value: &value2},
+					},
+					{
+						Label: []*dto.LabelPair{
+							{Name: &labelName, Value: &labelValue3},
+						},
+						Untyped: &dto.Untyped{Value: &value3},
+					},
+				},
+			},
+		}
+
+		podMetricsCount := r.getPodReadCounts("test-pod", result)
+		assert.NotNil(t, podMetricsCount)
+		assert.Equal(t, "test-pod", podMetricsCount.Name())
+		// Should sum all three values: 100 + 200 + 50 = 350
+		assert.Equal(t, 350.0, podMetricsCount.ReadCount())
+	})
+
+	t.Run("metric not found", func(t *testing.T) {
+		result := map[string]*dto.MetricFamily{}
+		podMetricsCount := r.getPodReadCounts("test-pod", result)
+		assert.Nil(t, podMetricsCount)
+	})
+
+	t.Run("empty metric list", func(t *testing.T) {
+		metricName := monoVtxReadMetricName
+		metricType := dto.MetricType_UNTYPED
+		result := map[string]*dto.MetricFamily{
+			metricName: {
+				Name:   &metricName,
+				Type:   &metricType,
+				Metric: []*dto.Metric{},
+			},
+		}
+		podMetricsCount := r.getPodReadCounts("test-pod", result)
+		assert.Nil(t, podMetricsCount)
+	})
+}
+
+// multiPartitionMockHttpClient is a mock HTTP client that returns metrics with multiple partitions
+type multiPartitionMockHttpClient struct {
+	podOneCount int64
+	podTwoCount int64
+	lock        *sync.RWMutex
+}
+
+func (m *multiPartitionMockHttpClient) Get(url string) (*http.Response, error) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	if url == "https://p-mv-0.p-mv-headless.default.svc:2469/metrics" {
+		m.podOneCount = m.podOneCount + 20
+		// Return metrics with multiple source_partition labels
+		resp := &http.Response{
+			StatusCode: 200,
+			Body: io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`
+# HELP monovtx_read A Counter to keep track of the total number of messages read from the source.
+# TYPE monovtx_read counter
+monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="0",source_partition="partition-0"} %d
+monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="0",source_partition="partition-1"} %d
+`, m.podOneCount, m.podOneCount*2))))}
+		return resp, nil
+	} else if url == "https://p-mv-1.p-mv-headless.default.svc:2469/metrics" {
+		m.podTwoCount = m.podTwoCount + 60
+		// Return metrics with multiple source_partition labels
+		resp := &http.Response{
+			StatusCode: 200,
+			Body: io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`
+# HELP monovtx_read A Counter to keep track of the total number of messages read from the source.
+# TYPE monovtx_read counter
+monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="1",source_partition="partition-0"} %d
+monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="1",source_partition="partition-1"} %d
+`, m.podTwoCount, m.podTwoCount*2))))}
+		return resp, nil
+	} else {
+		return nil, nil
+	}
+}
+
+func (m *multiPartitionMockHttpClient) Head(url string) (*http.Response, error) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	if url == "https://p-mv-0.p-mv-headless.default.svc:2469/metrics" {
+		return &http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(bytes.NewReader([]byte(``)))}, nil
+	} else if url == "https://p-mv-1.p-mv-headless.default.svc:2469/metrics" {
+		return &http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(bytes.NewReader([]byte(``)))}, nil
+	} else {
+		return nil, fmt.Errorf("unknown url: %s", url)
+	}
+}
+
+// TestRater_Start_MultiplePartitions tests the rater with metrics that have multiple partitions
+// This verifies that the rater correctly sums metrics from multiple series with different labels
+func TestRater_Start_MultiplePartitions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*29)
+	lookBackSeconds := uint32(30)
+	defer cancel()
+	pipeline := &v1alpha1.MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "p",
+			Namespace: "default",
+		},
+		Spec: v1alpha1.MonoVertexSpec{
+			Scale: v1alpha1.Scale{LookbackSeconds: &lookBackSeconds},
+		},
+	}
+	r := NewRater(ctx, pipeline, WithTaskInterval(1000))
+	podTracker := NewPodTracker(ctx, pipeline, WithRefreshInterval(time.Second*1))
+	podTracker.httpClient = &multiPartitionMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
+	r.httpClient = &multiPartitionMockHttpClient{podOneCount: 0, podTwoCount: 0, lock: &sync.RWMutex{}}
 	r.podTracker = podTracker
 
 	timer := time.NewTimer(60 * time.Second)
