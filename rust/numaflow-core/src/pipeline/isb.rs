@@ -5,16 +5,11 @@
 
 use std::future::Future;
 use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::Duration;
 
 use crate::error::Result;
 use crate::message::{Message, Offset};
-
-/// A boxed future representing a pending write operation.
-/// This is returned by `ISBWriter::async_write()` and can be awaited
-/// to get the final `WriteResult`.
-pub type PendingWrite =
-    Pin<Box<dyn Future<Output = std::result::Result<WriteResult, WriteError>> + Send + 'static>>;
 
 pub(crate) mod compression;
 pub(crate) mod error;
@@ -27,6 +22,49 @@ pub(crate) mod writer;
 pub(crate) mod simplebuffer;
 
 pub(crate) use factory::ISBFactory;
+pub use jetstream::js_writer::JetStreamPendingWrite;
+#[cfg(test)]
+pub(crate) use simplebuffer::SimpleBufferPendingWrite;
+
+/// A pending write operation that can be awaited to get the final `WriteResult`.
+///
+/// This enum represents pending writes from different ISB implementations.
+/// It implements `Future` directly, avoiding heap allocation that would be
+/// required by `Pin<Box<dyn Future>>`.
+///
+/// # Adding new ISB implementations
+///
+/// When adding a new ISB implementation:
+/// 1. Create a new pending write struct (e.g., `NewISBPendingWrite`)
+/// 2. Implement `Future` for it
+/// 3. Add a new variant to this enum
+/// 4. Update the `Future` impl below to handle the new variant
+///
+/// Note: If the new pending write type is NOT `Unpin`, the `self.get_mut()` call
+/// in the `Future` impl will fail to compile. In that case, you'll need to use
+/// `pin_project_lite` for safe pin projection.
+pub enum PendingWrite {
+    /// Pending write for JetStream ISB
+    JetStream(JetStreamPendingWrite),
+    /// Pending write for SimpleBuffer (testing only)
+    #[cfg(test)]
+    SimpleBuffer(SimpleBufferPendingWrite),
+}
+
+impl Future for PendingWrite {
+    type Output = std::result::Result<WriteResult, WriteError>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        // This only compiles if all variants are Unpin.
+        // If a non-Unpin variant is added, this will fail to compile,
+        // signaling that pin_project_lite needs to be used.
+        match self.get_mut() {
+            PendingWrite::JetStream(inner) => Pin::new(inner).poll(cx),
+            #[cfg(test)]
+            PendingWrite::SimpleBuffer(inner) => Pin::new(inner).poll(cx),
+        }
+    }
+}
 
 /// Trait for reading messages from an Inter Step Buffer (ISB).
 ///

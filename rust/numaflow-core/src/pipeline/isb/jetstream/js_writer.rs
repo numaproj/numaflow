@@ -16,11 +16,62 @@ use crate::Result;
 use crate::config::pipeline::isb::{BufferWriterConfig, CompressionType, Stream};
 use crate::error::Error;
 use crate::message::Message;
+use crate::message::{IntOffset, Offset};
 use crate::metrics::{
     jetstream_isb_error_metrics_labels, jetstream_isb_metrics_labels, pipeline_metrics,
 };
 use crate::pipeline::isb::compression;
 use crate::pipeline::isb::error::ISBError;
+use crate::pipeline::isb::{WriteError as ISBWriteError, WriteResult};
+use std::future::{Future, IntoFuture};
+use std::pin::Pin;
+use std::task::{Context as TaskContext, Poll};
+
+/// Pending write for JetStream.
+///
+/// This struct wraps a `PublishAckFuture` (converted to its inner future) and the
+/// partition index needed to construct the final `WriteResult`.
+///
+/// Note: `PublishAckFuture` implements `IntoFuture` (not `Future` directly), and its
+/// `into_future()` returns a boxed future. We convert it eagerly at construction time
+/// to avoid the Option overhead of lazy conversion during polling.
+pub struct JetStreamPendingWrite {
+    /// The inner future from PublishAckFuture::into_future()
+    inner: <PublishAckFuture as IntoFuture>::IntoFuture,
+    partition: u16,
+}
+
+impl JetStreamPendingWrite {
+    /// Create a new pending write from a PublishAckFuture and partition index.
+    pub(crate) fn new(paf: PublishAckFuture, partition: u16) -> Self {
+        Self {
+            inner: paf.into_future(),
+            partition,
+        }
+    }
+}
+
+impl Future for JetStreamPendingWrite {
+    type Output = std::result::Result<WriteResult, ISBWriteError>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Self::Output> {
+        // Safe because the inner type is Pin<Box<...>> which is Unpin
+        let this = self.get_mut();
+        match this.inner.as_mut().poll(cx) {
+            Poll::Ready(Ok(ack)) => {
+                let offset = Offset::Int(IntOffset::new(ack.sequence as i64, this.partition));
+                let result = if ack.duplicate {
+                    WriteResult::duplicate(offset)
+                } else {
+                    WriteResult::new(offset)
+                };
+                Poll::Ready(Ok(result))
+            }
+            Poll::Ready(Err(e)) => Poll::Ready(Err(ISBWriteError::WriteFailed(e.to_string()))),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
 
 /// Type alias for metric labels
 type MetricLabels = Arc<Vec<(String, String)>>;
@@ -405,29 +456,10 @@ impl crate::pipeline::isb::ISBWriter for JetStreamWriter {
             WriteError::WriteFailed(msg) => crate::pipeline::isb::WriteError::WriteFailed(msg),
         })?;
 
-        // Capture partition for the boxed future
-        let partition = self.stream.partition;
-
-        // Return a boxed future that resolves the PAF to a WriteResult
-        Ok(Box::pin(async move {
-            // Await the PAF to get the PublishAck
-            let ack = paf
-                .await
-                .map_err(|e| crate::pipeline::isb::WriteError::WriteFailed(e.to_string()))?;
-
-            // Convert sequence number to Offset using the captured partition
-            let offset = crate::message::Offset::Int(crate::message::IntOffset::new(
-                ack.sequence as i64,
-                partition,
-            ));
-
-            // Check if this was a duplicate message
-            if ack.duplicate {
-                Ok(crate::pipeline::isb::WriteResult::duplicate(offset))
-            } else {
-                Ok(crate::pipeline::isb::WriteResult::new(offset))
-            }
-        }))
+        // Return the zero-allocation pending write
+        Ok(crate::pipeline::isb::PendingWrite::JetStream(
+            JetStreamPendingWrite::new(paf, self.stream.partition),
+        ))
     }
 
     async fn write(
