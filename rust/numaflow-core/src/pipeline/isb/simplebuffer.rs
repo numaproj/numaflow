@@ -23,17 +23,40 @@ use crate::typ::NumaflowTypeConfig;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context as TaskContext, Poll};
+use tokio::time::Sleep;
+
+/// State machine for SimpleBufferPendingWrite.
+enum ResolveState {
+    /// Initial state - need to check if latency should be applied
+    Init,
+    /// Waiting for latency sleep to complete
+    WaitingLatency(Pin<Box<Sleep>>),
+    /// Ready to check failure and poll pending
+    Ready,
+    /// Already completed (taken)
+    Done,
+}
 
 /// Zero-allocation pending write for SimpleBuffer (testing).
 ///
-/// This struct holds the result of a write operation that can be awaited.
-/// Since SimpleBuffer is synchronous, the result is immediately available.
-/// Error injection for latency is applied at resolve time via the writer.
+/// This struct implements a state machine that handles:
+/// 1. Optional resolve latency (via error injector)
+/// 2. Resolve failure injection check
+/// 3. Polling the underlying pending write
+///
+/// This avoids boxing the entire resolve future while still supporting
+/// all error injection functionality needed for testing.
+///
+/// Note: The latency sleep is created lazily on first poll, not at creation time.
+/// This ensures that timing is measured from when resolution starts, not when
+/// the PendingWrite was created.
 pub struct SimpleBufferPendingWrite {
     /// The underlying pending write from numaflow_testing
-    pending: numaflow_testing::simplebuffer::PendingWrite,
-    /// The writer to use for resolve (applies error injection)
-    writer: SimpleWriter,
+    pending: Option<numaflow_testing::simplebuffer::PendingWrite>,
+    /// Error injector for checking failures and latency
+    error_injector: Arc<ErrorInjector>,
+    /// Current state of the resolve operation
+    state: ResolveState,
 }
 
 impl SimpleBufferPendingWrite {
@@ -42,7 +65,11 @@ impl SimpleBufferPendingWrite {
         pending: numaflow_testing::simplebuffer::PendingWrite,
         writer: SimpleWriter,
     ) -> Self {
-        Self { pending, writer }
+        Self {
+            pending: Some(pending),
+            error_injector: Arc::clone(writer.error_injector()),
+            state: ResolveState::Init,
+        }
     }
 }
 
@@ -50,17 +77,63 @@ impl Future for SimpleBufferPendingWrite {
     type Output = Result<WriteResult, WriteError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Self::Output> {
-        // SimpleBuffer's PendingWrite is immediately ready, but we need to
-        // go through resolve() for error injection. Since resolve() is async
-        // and we can't easily poll it here, we'll just poll the inner pending
-        // directly. Error injection at resolve level won't work in this path,
-        // but that's acceptable for testing as errors can be injected at
-        // async_write time instead.
         let this = self.get_mut();
-        match Pin::new(&mut this.pending).poll(cx) {
-            Poll::Ready(Ok(r)) => Poll::Ready(Ok(r.into())),
-            Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
-            Poll::Pending => Poll::Pending,
+
+        loop {
+            match &mut this.state {
+                ResolveState::Init => {
+                    // Check if we need to apply latency - lazily on first poll
+                    let latency_ms = this.error_injector.resolve_latency_ms();
+                    if latency_ms > 0 {
+                        this.state = ResolveState::WaitingLatency(Box::pin(tokio::time::sleep(
+                            std::time::Duration::from_millis(latency_ms),
+                        )));
+                        // Continue to WaitingLatency state
+                    } else {
+                        this.state = ResolveState::Ready;
+                        // Continue to Ready state
+                    }
+                }
+                ResolveState::WaitingLatency(sleep) => {
+                    // Poll the sleep future
+                    match sleep.as_mut().poll(cx) {
+                        Poll::Ready(()) => {
+                            this.state = ResolveState::Ready;
+                            // Continue to Ready state
+                        }
+                        Poll::Pending => return Poll::Pending,
+                    }
+                }
+                ResolveState::Ready => {
+                    // Check for injected resolve failure
+                    if this.error_injector.should_fail_resolve() {
+                        this.state = ResolveState::Done;
+                        return Poll::Ready(Err(WriteError::WriteFailed(
+                            "injected resolve failure".to_string(),
+                        )));
+                    }
+
+                    // Poll the pending write
+                    let pending = this
+                        .pending
+                        .as_mut()
+                        .expect("pending should exist in Ready state");
+                    match Pin::new(pending).poll(cx) {
+                        Poll::Ready(Ok(r)) => {
+                            this.state = ResolveState::Done;
+                            return Poll::Ready(Ok(r.into()));
+                        }
+                        Poll::Ready(Err(e)) => {
+                            this.state = ResolveState::Done;
+                            return Poll::Ready(Err(e.into()));
+                        }
+                        Poll::Pending => return Poll::Pending,
+                    }
+                }
+                ResolveState::Done => {
+                    panic!("SimpleBufferPendingWrite polled after completion");
+                }
+            }
         }
     }
 }

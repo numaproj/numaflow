@@ -237,6 +237,11 @@ impl SimpleWriter {
         }
         self.state.read().is_full()
     }
+
+    /// Returns a reference to the error injector.
+    pub fn error_injector(&self) -> &Arc<ErrorInjector> {
+        &self.error_injector
+    }
 }
 
 #[cfg(test)]

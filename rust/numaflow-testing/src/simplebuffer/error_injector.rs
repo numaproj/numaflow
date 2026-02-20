@@ -161,8 +161,13 @@ impl ErrorInjector {
     }
 
     /// Check and decrement the resolve failure counter.
-    pub(crate) fn should_fail_resolve(&self) -> bool {
+    pub fn should_fail_resolve(&self) -> bool {
         Self::decrement_counter(&self.fail_next_resolves)
+    }
+
+    /// Get the resolve latency in milliseconds (0 means no latency).
+    pub fn resolve_latency_ms(&self) -> u64 {
+        self.resolve_latency_ms.load(Ordering::Relaxed)
     }
 
     /// Helper to decrement a counter and return true if it was > 0.
