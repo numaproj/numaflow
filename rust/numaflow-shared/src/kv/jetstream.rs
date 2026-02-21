@@ -164,3 +164,206 @@ impl KVStorer for JetstreamKVStore {
         Ok(Box::pin(JetstreamWatchAdapter { inner: watch }))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(feature = "nats-tests")]
+    use async_nats::jetstream;
+
+    #[cfg(feature = "nats-tests")]
+    use std::sync::Arc;
+
+    /// Helper to create a test KV bucket with a unique name
+    #[cfg(feature = "nats-tests")]
+    async fn setup_test_kv(bucket_name: &str) -> (jetstream::Context, Store) {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js = jetstream::new(client);
+
+        // Delete if exists to ensure clean state
+        let _ = js.delete_key_value(bucket_name).await;
+
+        let store = js
+            .create_key_value(async_nats::jetstream::kv::Config {
+                bucket: bucket_name.to_string(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        (js, store)
+    }
+
+    /// Helper to cleanup test KV bucket
+    #[cfg(feature = "nats-tests")]
+    async fn cleanup_test_kv(js: &jetstream::Context, bucket_name: &str) {
+        let _ = js.delete_key_value(bucket_name).await;
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_kv_store_put_and_get() {
+        let bucket_name = "test-kv-put-get";
+        let (js, store) = setup_test_kv(bucket_name).await;
+
+        let kv_store = JetstreamKVStore::new(store, bucket_name);
+
+        // Test put
+        let key = "test-key";
+        let value = Bytes::from("test-value");
+        kv_store.put(key, value.clone()).await.unwrap();
+
+        // Test get
+        let result = kv_store.get(key).await.unwrap();
+        assert_eq!(result, Some(value));
+
+        // Test get non-existent key
+        let result = kv_store.get("non-existent").await.unwrap();
+        assert_eq!(result, None);
+
+        cleanup_test_kv(&js, bucket_name).await;
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_kv_store_delete() {
+        let bucket_name = "test-kv-delete";
+        let (js, store) = setup_test_kv(bucket_name).await;
+
+        let kv_store = JetstreamKVStore::new(store, bucket_name);
+
+        // Put a key
+        let key = "delete-me";
+        kv_store.put(key, Bytes::from("value")).await.unwrap();
+
+        // Verify it exists
+        assert!(kv_store.get(key).await.unwrap().is_some());
+
+        // Delete it
+        kv_store.delete_key(key).await.unwrap();
+
+        // Verify it's gone
+        assert!(kv_store.get(key).await.unwrap().is_none());
+
+        cleanup_test_kv(&js, bucket_name).await;
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_kv_store_get_all_keys() {
+        let bucket_name = "test-kv-all-keys";
+        let (js, store) = setup_test_kv(bucket_name).await;
+
+        let kv_store = JetstreamKVStore::new(store, bucket_name);
+
+        // Put multiple keys
+        kv_store.put("key1", Bytes::from("value1")).await.unwrap();
+        kv_store.put("key2", Bytes::from("value2")).await.unwrap();
+        kv_store.put("key3", Bytes::from("value3")).await.unwrap();
+
+        // Get all keys
+        let mut keys = kv_store.get_all_keys().await.unwrap();
+        keys.sort();
+
+        assert_eq!(keys, vec!["key1", "key2", "key3"]);
+
+        cleanup_test_kv(&js, bucket_name).await;
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_kv_store_name() {
+        let bucket_name = "test-kv-name";
+        let (js, store) = setup_test_kv(bucket_name).await;
+
+        let kv_store = JetstreamKVStore::new(store, bucket_name);
+        assert_eq!(kv_store.store_name(), bucket_name);
+
+        cleanup_test_kv(&js, bucket_name).await;
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_kv_store_from_context() {
+        let bucket_name = "test-kv-from-context";
+        let (js, _store) = setup_test_kv(bucket_name).await;
+
+        // Create store from context
+        let kv_store = JetstreamKVStore::from_context(&js, bucket_name)
+            .await
+            .unwrap();
+
+        // Verify it works
+        kv_store.put("test", Bytes::from("value")).await.unwrap();
+        let result = kv_store.get("test").await.unwrap();
+        assert_eq!(result, Some(Bytes::from("value")));
+
+        cleanup_test_kv(&js, bucket_name).await;
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_kv_store_as_trait_object() {
+        let bucket_name = "test-kv-trait-object";
+        let (js, store) = setup_test_kv(bucket_name).await;
+
+        // Use as Arc<dyn KVStorer>
+        let kv_store: Arc<dyn KVStorer> = Arc::new(JetstreamKVStore::new(store, bucket_name));
+
+        // Test operations via trait object
+        kv_store.put("key", Bytes::from("value")).await.unwrap();
+        let result = kv_store.get("key").await.unwrap();
+        assert_eq!(result, Some(Bytes::from("value")));
+
+        cleanup_test_kv(&js, bucket_name).await;
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_kv_watch() {
+        let bucket_name = "test-kv-watch";
+        let (js, store) = setup_test_kv(bucket_name).await;
+
+        let kv_store = JetstreamKVStore::new(store, bucket_name);
+
+        // Put initial values
+        kv_store.put("key1", Bytes::from("value1")).await.unwrap();
+
+        // Start watching from beginning
+        let mut watch = kv_store.watch(Some(1)).await.unwrap();
+
+        // Get the first entry (should be the put we just did)
+        let entry = watch.next().await.unwrap();
+        assert_eq!(entry.key(), "key1");
+        assert_eq!(entry.value(), Bytes::from("value1"));
+        assert_eq!(entry.operation(), KVWatchOp::Put);
+
+        cleanup_test_kv(&js, bucket_name).await;
+    }
+
+    #[test]
+    fn test_kv_entry_implementation() {
+        let entry = JetstreamKVEntry {
+            key: "test-key".to_string(),
+            value: Bytes::from("test-value"),
+            operation: KVWatchOp::Put,
+        };
+
+        assert_eq!(entry.key(), "test-key");
+        assert_eq!(entry.value(), Bytes::from("test-value"));
+        assert_eq!(entry.operation(), KVWatchOp::Put);
+    }
+
+    #[test]
+    fn test_kv_watch_op_clone() {
+        let op = KVWatchOp::Put;
+        assert_eq!(op.clone(), KVWatchOp::Put);
+
+        let op = KVWatchOp::Delete;
+        assert_eq!(op.clone(), KVWatchOp::Delete);
+
+        let op = KVWatchOp::Purge;
+        assert_eq!(op.clone(), KVWatchOp::Purge);
+    }
+}
