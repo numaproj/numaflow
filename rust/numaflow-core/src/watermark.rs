@@ -23,6 +23,10 @@
 //!
 //! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 
+use async_trait::async_trait;
+use numaflow_shared::kv::{KVResult, KVStorer};
+use std::sync::Arc;
+
 use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 
@@ -42,6 +46,42 @@ mod idle;
 
 /// Stores WMB related data.
 pub(crate) mod wmb;
+
+/// Watermark store implementations for pluggable storage backends.
+pub(crate) mod store;
+
+/// WatermarkStore defines a pair of heartbeat KV store and offset timeline KV store.
+///
+/// In Numaflow's watermark propagation, we use two KV buckets:
+/// - **Heartbeat (HB) bucket**: Tracks processor liveness via heartbeat timestamps
+/// - **Offset Timeline (OT) bucket**: Stores watermark-offset pairs for each processor
+///
+/// This trait abstracts the storage backend, allowing different implementations
+/// (JetStream, Redis, in-memory for testing, etc.).
+///
+/// This trait is object-safe and can be used as `Arc<dyn WatermarkStore>` for dynamic dispatch.
+#[async_trait]
+pub trait WatermarkStore: Send + Sync {
+    /// Returns the heartbeat KV store.
+    ///
+    /// The heartbeat store is used to track processor liveness. Each processor
+    /// publishes its heartbeat timestamp periodically, and watchers use this
+    /// to detect dead processors.
+    fn heartbeat_store(&self) -> Arc<dyn KVStorer>;
+
+    /// Returns the offset timeline KV store.
+    ///
+    /// The offset timeline store holds watermark-offset pairs for each processor.
+    /// This is used to determine the watermark for a given offset by looking up
+    /// the timeline entries from all active processors.
+    fn offset_timeline_store(&self) -> Arc<dyn KVStorer>;
+
+    /// Close both stores and release resources.
+    ///
+    /// This is called during graceful shutdown to clean up any resources
+    /// held by the stores.
+    async fn close(&self) -> KVResult<()>;
+}
 
 /// Watermark handle, enum to hold both edge and source watermark handles
 /// This is used to fetch and publish watermarks
