@@ -3,4 +3,5 @@
 //! The [`WatermarkStore`](super::WatermarkStore) trait is defined in the parent module.
 //! This module contains concrete implementations.
 
-pub mod jetstream;
+#![allow(dead_code)] // FIXME: remove after integration
+pub(crate) mod jetstream;

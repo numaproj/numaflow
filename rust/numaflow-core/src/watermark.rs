@@ -60,6 +60,7 @@ pub(crate) mod store;
 /// (JetStream, Redis, in-memory for testing, etc.).
 ///
 /// This trait is object-safe and can be used as `Arc<dyn WatermarkStore>` for dynamic dispatch.
+#[allow(dead_code)] // FIXME: remove after integration
 #[async_trait]
 pub trait WatermarkStore: Send + Sync {
     /// Returns the heartbeat KV store.

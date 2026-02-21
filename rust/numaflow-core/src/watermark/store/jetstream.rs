@@ -12,7 +12,7 @@ use std::sync::Arc;
 ///
 /// Wraps two JetStream KV stores (heartbeat and offset timeline) and implements
 /// [`LocalWatermarkStore`]. Use this as `Arc<dyn WatermarkStore>` for dynamic dispatch.
-pub struct JetstreamWatermarkStore {
+pub(crate) struct JetstreamWatermarkStore {
     heartbeat: Arc<dyn KVStorer>,
     offset_timeline: Arc<dyn KVStorer>,
 }
@@ -23,7 +23,7 @@ impl JetstreamWatermarkStore {
     /// # Arguments
     /// * `heartbeat` - The heartbeat KV store
     /// * `offset_timeline` - The offset timeline KV store
-    pub fn new(heartbeat: Arc<dyn KVStorer>, offset_timeline: Arc<dyn KVStorer>) -> Self {
+    pub(crate) fn new(heartbeat: Arc<dyn KVStorer>, offset_timeline: Arc<dyn KVStorer>) -> Self {
         Self {
             heartbeat,
             offset_timeline,
@@ -36,7 +36,7 @@ impl JetstreamWatermarkStore {
     /// * `js_context` - The JetStream context
     /// * `hb_bucket` - The name of the heartbeat KV bucket
     /// * `ot_bucket` - The name of the offset timeline KV bucket
-    pub async fn from_context(
+    pub(crate) async fn from_context(
         js_context: &async_nats::jetstream::Context,
         hb_bucket: &str,
         ot_bucket: &str,
@@ -57,7 +57,7 @@ impl JetstreamWatermarkStore {
     /// * `ot_store` - The offset timeline JetStream KV store handle
     /// * `hb_name` - Name for the heartbeat store
     /// * `ot_name` - Name for the offset timeline store
-    pub fn from_stores(
+    pub(crate) fn from_stores(
         hb_store: async_nats::jetstream::kv::Store,
         ot_store: async_nats::jetstream::kv::Store,
         hb_name: impl Into<String>,
