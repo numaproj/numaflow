@@ -2680,7 +2680,9 @@ name = "numaflow-shared"
 version = "0.1.0"
 dependencies = [
  "async-nats",
+ "async-trait",
  "backoff",
+ "bytes",
  "futures",
  "pep440_rs",
  "semver",
