@@ -34,22 +34,20 @@ pub enum KVWatchOp {
 
 /// A KV entry returned by watch operations.
 ///
-/// This trait is object-safe and represents a single entry from a KV watch stream.
-pub trait KVEntry: Send + Sync {
+/// Represents a single entry from a KV watch stream containing the key,
+/// value, and the operation that triggered this entry.
+#[derive(Clone, Debug)]
+pub struct KVEntry {
     /// The key that was retrieved
-    fn key(&self) -> &str;
-
+    pub key: String,
     /// The retrieved value
-    fn value(&self) -> Bytes;
-
+    pub value: Bytes,
     /// The operation that triggered this entry
-    fn operation(&self) -> KVWatchOp;
+    pub operation: KVWatchOp,
 }
 
-/// Type alias for the watch stream (object safe).
-///
-/// Returns boxed `KVEntry` trait objects for flexibility across implementations.
-pub type KVWatchStream = Pin<Box<dyn Stream<Item = Box<dyn KVEntry>> + Send>>;
+/// Type alias for the watch stream.
+pub type KVWatchStream = Pin<Box<dyn Stream<Item = KVEntry> + Send>>;
 
 /// KVStorer defines a generic key-value store interface.
 ///

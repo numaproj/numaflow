@@ -10,60 +10,32 @@ use futures::{Stream, StreamExt, TryStreamExt};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-/// JetStream KV Entry implementation.
-///
-/// Wraps a JetStream entry and implements the [`KVEntry`] trait.
-pub struct JetstreamKVEntry {
-    key: String,
-    value: Bytes,
-    operation: KVWatchOp,
-}
+/// Convert a JetStream entry to a KVEntry
+fn entry_from_jetstream(entry: Entry) -> KVEntry {
+    let operation = match entry.operation {
+        async_nats::jetstream::kv::Operation::Put => KVWatchOp::Put,
+        async_nats::jetstream::kv::Operation::Delete => KVWatchOp::Delete,
+        async_nats::jetstream::kv::Operation::Purge => KVWatchOp::Purge,
+    };
 
-impl KVEntry for JetstreamKVEntry {
-    fn key(&self) -> &str {
-        &self.key
-    }
-
-    fn value(&self) -> Bytes {
-        self.value.clone()
-    }
-
-    fn operation(&self) -> KVWatchOp {
-        self.operation.clone()
+    KVEntry {
+        key: entry.key,
+        value: entry.value,
+        operation,
     }
 }
 
-impl From<Entry> for JetstreamKVEntry {
-    fn from(entry: Entry) -> Self {
-        let operation = match entry.operation {
-            async_nats::jetstream::kv::Operation::Put => KVWatchOp::Put,
-            async_nats::jetstream::kv::Operation::Delete => KVWatchOp::Delete,
-            async_nats::jetstream::kv::Operation::Purge => KVWatchOp::Purge,
-        };
-
-        JetstreamKVEntry {
-            key: entry.key,
-            value: entry.value,
-            operation,
-        }
-    }
-}
-
-/// Wrapper stream that converts JetStream watch entries to trait objects.
-///
-/// This adapts the JetStream `Watch` stream to produce `Box<dyn KVEntry>` items.
+/// Wrapper stream that converts JetStream watch entries to KVEntry.
 struct JetstreamWatchAdapter {
     inner: async_nats::jetstream::kv::Watch,
 }
 
 impl Stream for JetstreamWatchAdapter {
-    type Item = Box<dyn KVEntry>;
+    type Item = KVEntry;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match self.inner.poll_next_unpin(cx) {
-            Poll::Ready(Some(Ok(entry))) => Poll::Ready(Some(
-                Box::new(JetstreamKVEntry::from(entry)) as Box<dyn KVEntry>,
-            )),
+            Poll::Ready(Some(Ok(entry))) => Poll::Ready(Some(entry_from_jetstream(entry))),
             Poll::Ready(Some(Err(_))) => {
                 // On error, wake to retry getting next item
                 cx.waker().wake_by_ref();
@@ -335,24 +307,24 @@ mod tests {
 
         // Get the first entry (should be the put we just did)
         let entry = watch.next().await.unwrap();
-        assert_eq!(entry.key(), "key1");
-        assert_eq!(entry.value(), Bytes::from("value1"));
-        assert_eq!(entry.operation(), KVWatchOp::Put);
+        assert_eq!(entry.key, "key1");
+        assert_eq!(entry.value, Bytes::from("value1"));
+        assert_eq!(entry.operation, KVWatchOp::Put);
 
         cleanup_test_kv(&js, bucket_name).await;
     }
 
     #[test]
-    fn test_kv_entry_implementation() {
-        let entry = JetstreamKVEntry {
+    fn test_kv_entry_struct() {
+        let entry = KVEntry {
             key: "test-key".to_string(),
             value: Bytes::from("test-value"),
             operation: KVWatchOp::Put,
         };
 
-        assert_eq!(entry.key(), "test-key");
-        assert_eq!(entry.value(), Bytes::from("test-value"));
-        assert_eq!(entry.operation(), KVWatchOp::Put);
+        assert_eq!(entry.key, "test-key");
+        assert_eq!(entry.value, Bytes::from("test-value"));
+        assert_eq!(entry.operation, KVWatchOp::Put);
     }
 
     #[test]
