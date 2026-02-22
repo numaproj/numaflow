@@ -22,7 +22,7 @@ pub type KVError = Box<dyn StdError + Send + Sync + 'static>;
 pub type KVResult<T> = Result<T, KVError>;
 
 /// Operation type for KV watch events
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum KVWatchOp {
     /// An element has been put/added into the KV store
     Put,
@@ -36,7 +36,7 @@ pub enum KVWatchOp {
 ///
 /// Represents a single entry from a KV watch stream containing the key,
 /// value, and the operation that triggered this entry.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct KVEntry {
     /// The key that was retrieved
     pub key: String,

@@ -326,16 +326,4 @@ mod tests {
         assert_eq!(entry.value, Bytes::from("test-value"));
         assert_eq!(entry.operation, KVWatchOp::Put);
     }
-
-    #[test]
-    fn test_kv_watch_op_clone() {
-        let op = KVWatchOp::Put;
-        assert_eq!(op.clone(), KVWatchOp::Put);
-
-        let op = KVWatchOp::Delete;
-        assert_eq!(op.clone(), KVWatchOp::Delete);
-
-        let op = KVWatchOp::Purge;
-        assert_eq!(op.clone(), KVWatchOp::Purge);
-    }
 }
