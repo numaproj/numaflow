@@ -65,23 +65,6 @@ impl JetstreamKVStore {
     pub fn new(store: Store, name: &'static str) -> Self {
         Self { store, name }
     }
-
-    /// Create a JetstreamKVStore from a JetStream context and bucket name.
-    ///
-    /// # Arguments
-    /// * `js_context` - The JetStream context
-    /// * `bucket_name` - The name of the KV bucket to use
-    pub async fn from_context(
-        js_context: &async_nats::jetstream::Context,
-        bucket_name: &'static str,
-    ) -> Result<Self, KVError> {
-        let store = js_context
-            .get_key_value(bucket_name)
-            .await
-            .map_err(|e| Box::new(e) as KVError)?;
-
-        Ok(Self::new(store, bucket_name))
-    }
 }
 
 #[async_trait]
