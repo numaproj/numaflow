@@ -3,6 +3,7 @@
 //! This module provides a JetStream-backed implementation of [`KVStore`].
 
 use super::{KVEntry, KVError, KVStore, KVWatchOp, KVWatchStream};
+use crate::isb::jetstream::JetstreamWatcher;
 use async_nats::jetstream::kv::{Entry, Store};
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -27,22 +28,19 @@ impl From<Entry> for KVEntry {
     }
 }
 
-/// Wrapper stream that converts JetStream watch entries to KVEntry.
-struct JetstreamWatchAdapter {
-    inner: async_nats::jetstream::kv::Watch,
+/// Resilient wrapper stream that uses JetstreamWatcher (with auto-reconnection)
+/// and converts JetStream entries to KVEntry.
+struct ResilientJetstreamWatchAdapter {
+    inner: JetstreamWatcher,
 }
 
-impl Stream for JetstreamWatchAdapter {
+impl Stream for ResilientJetstreamWatchAdapter {
     type Item = KVEntry;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // JetstreamWatcher already handles reconnection internally and returns Entry directly
         match self.inner.poll_next_unpin(cx) {
-            Poll::Ready(Some(Ok(entry))) => Poll::Ready(Some(entry.into())),
-            Poll::Ready(Some(Err(_))) => {
-                // On error, wake to retry getting next item
-                cx.waker().wake_by_ref();
-                Poll::Pending
-            }
+            Poll::Ready(Some(entry)) => Poll::Ready(Some(entry.into())),
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Pending => Poll::Pending,
         }
@@ -126,13 +124,12 @@ impl KVStore for JetstreamKVStore {
     }
 
     async fn watch(&self, revision: Option<u64>) -> Result<KVWatchStream, KVError> {
-        let watch = match revision {
-            Some(rev) => self.store.watch_all_from_revision(rev).await,
-            None => self.store.watch_all().await,
-        }
-        .map_err(|e| Box::new(e) as KVError)?;
+        // Use resilient JetstreamWatcher which handles auto-reconnection on failures
+        let watcher = JetstreamWatcher::new(self.store.clone(), revision)
+            .await
+            .map_err(|e| Box::new(e) as KVError)?;
 
-        Ok(Box::pin(JetstreamWatchAdapter { inner: watch }))
+        Ok(Box::pin(ResilientJetstreamWatchAdapter { inner: watcher }))
     }
 }
 
