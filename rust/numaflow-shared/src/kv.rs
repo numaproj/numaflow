@@ -56,7 +56,7 @@ pub trait KVStore: Send + Sync {
     /// Get all keys from the KV store.
     ///
     /// Returns a vector of all keys currently in the store.
-    async fn get_all_keys(&self) -> Result<Vec<String>, KVError>;
+    async fn keys(&self) -> Result<Vec<String>, KVError>;
 
     /// Delete a key from the KV store.
     ///

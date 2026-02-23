@@ -204,7 +204,7 @@ impl ProcessorManager {
         let mut heartbeats = HashMap::new();
 
         // Get all existing keys from the hb store and create processors
-        let hb_keys = match hb_store.get_all_keys().await {
+        let hb_keys = match hb_store.keys().await {
             Ok(keys) => keys,
             Err(e) => {
                 error!(?e, "Failed to get keys from hb store");
@@ -240,7 +240,7 @@ impl ProcessorManager {
         }
 
         // Get all existing entries from the ot store and store them in the timeline
-        let ot_keys = match ot_store.get_all_keys().await {
+        let ot_keys = match ot_store.keys().await {
             Ok(keys) => keys,
             Err(e) => {
                 warn!(error = ?e, "Failed to get keys from ot store");

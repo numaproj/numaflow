@@ -69,7 +69,7 @@ impl JetstreamKVStore {
 
 #[async_trait]
 impl KVStore for JetstreamKVStore {
-    async fn get_all_keys(&self) -> Result<Vec<String>, KVError> {
+    async fn keys(&self) -> Result<Vec<String>, KVError> {
         self.store
             .keys()
             .await
@@ -211,7 +211,7 @@ mod tests {
         kv_store.put("key3", Bytes::from("value3")).await.unwrap();
 
         // Get all keys
-        let mut keys = kv_store.get_all_keys().await.unwrap();
+        let mut keys = kv_store.keys().await.unwrap();
         keys.sort();
 
         assert_eq!(keys, vec!["key1", "key2", "key3"]);
