@@ -49,7 +49,6 @@ message Metadata {
 ```
 
 ## 3. Implementation Plan: Numaflow Core
-
 The Rust data plane (`rust/numaflow-core`) handles the heavy lifting of reading/writing to ISB and invoking UDFs.
 
 ### 3.1 Dependencies
@@ -235,4 +234,25 @@ kind: Pipeline
 The user is responsible for deploying the observability stack:
 1. **OTEL Collector**: Receives traces from Numaflow.
 2. **Backend**: Jaeger, Datadog, etc.
+
+## 7. Reliability and Failure Handling
+
+### 7.1 OTLP Endpoint Down
+Since the tracing infrastructure (OTel Collector) is separate from the pipeline, it may become unreachable. The design ensures this **does not impact the reliability or stability of the Numaflow pipeline**.
+
+*   **Behavior**: The OpenTelemetry SDK (Batch Span Processor) buffers spans in memory (default buffer size ~2048 spans).
+*   **Retries**: It attempts to export the batch in the background with exponential backoff.
+*   **Data Loss**: If the buffer fills up (because the exporter is failing consistently), **new spans are dropped**. This is intentional "lossy" behavior to prevent unbounded memory growth.
+*   **Impact**:
+    *   **Pipeline**: Continues processing messages normally. No latency or crashes.
+    *   **Observability**: Trace data will be missing for the duration of the outage.
+
+### 7.2 Sampling
+To control the volume of trace data generated and sent to the collector. It decides "Should I record this trace or not?"
+
+*   **Necessity**: For high-throughput systems, recording every trace can be expensive. Sampling allows us to record only a representative subset (e.g., 1%).
+*   **Head-Based Sampling**: The decision is made at the **Source (Head)**. If the Source decides to sample a trace (`sampled=true` in `traceparent`), all downstream components respect this and record their spans.
+*   **Configuration**: Users can configure this via standard OTel environment variables in the Pipeline spec.
+    *   `OTEL_TRACES_SAMPLER`: Strategy (e.g., `parentbased_traceidratio`).
+    *   `OTEL_TRACES_SAMPLER_ARG`: Probability (e.g., `0.1` for 10% sampling).
 
