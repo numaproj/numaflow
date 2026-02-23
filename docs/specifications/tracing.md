@@ -145,22 +145,21 @@ pub fn init_tracing(service_name: &str) -> Result<sdktrace::Tracer, Box<dyn std:
      - Write to next ISB.
 
 ### 3.5 Handling Aggregation (Reduce Vertex)
-Reduce vertices ingest multiple messages (Fan-In) and produce a single result. This requires a strategy for linking multiple parent contexts to a single resulting span.
+Reduce vertices ingest multiple messages (Fan-In) and produce a single result. This requires a strategy for linking multiple parent contexts (one from each input message) to a single resulting span.
 
-#### Option 1: Trace Links
-OpenTelemetry supports "Links" to associate a Span with multiple other Spans that are not its direct parent.
-- **Ingest**: Store the trace context of incoming messages in the window state.
-- **Aggregate**: When creating the `UDF Call` span:
-  - Set the **Parent** to the context of the *first* message in the window (or a representative message).
-  - Add **Links** for the contexts of all other messages in the window.
-- **Limit**: To prevent span bloat, limit the number of links (e.g., max 50). If more, sample (e.g., first 10, last 10, random 30).
+#### Option: Trace Links
+This approach preserves the relationship between all input messages and the aggregated result without creating a messy parent-child graph.
+- **Ingest Phase**: As messages arrive in the window, we extract their trace contexts.
+- **Aggregate Phase**: When the window closes and we create the span for the Reduce UDF execution:
+  1. **Primary Parent**: We select **one** context (e.g., from the first message) to be the direct `Parent` of the new span. This maintains the main timeline.
+  2. **Links**: We add the contexts of all *other* messages as **Span Links**. In distributed tracing visualization tools, these appear as "Related Traces" or "Links", allowing users to jump from any input message trace to the aggregated reduce trace.
+- **Limit**: To prevent span bloat in massive windows, limit the number of links (e.g., max 50). If more, sample representative links (e.g., first 10, last 10).
 
-#### Option 2: First-Wins (Simplified)
-- **Ingest**: Keep the trace context of only the *first* message that opened the window.
-- **Aggregate**: Use that single context as the Parent for the `UDF Call` span.
-- **Pros**: Zero storage overhead, simple.
-- **Cons**: Loss of lineage for other messages.
-
+### 3.6 Handling FlatMap (Fan-Out)
+When a Map vertex produces multiple output messages from a single input (1 -> N):
+- **Forking**: The trace context "forks" automatically.
+- **Implementation**: The Core injects the **same** current span context (parent) into `sys_metadata` for **every** output message.
+- **Result**: Downstream vertices will create N separate spans, all pointing back to the same parent span from the Map vertex.
 
 ## 4. Implementation Plan: Numaflow SDKs (e.g., Go/Rust/Python)
 
