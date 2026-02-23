@@ -22,6 +22,9 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
+use numaflow_shared::kv::KVStore;
+use numaflow_shared::kv::jetstream::JetstreamKVStore;
+
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::config::pipeline::{ToVertexConfig, VertexType};
@@ -270,8 +273,28 @@ impl SourceWatermarkHandle {
         config: &SourceWatermarkConfig,
         cln_token: CancellationToken,
     ) -> Result<Self> {
+        // Create KV stores for ProcessorManager
+        let ot_bucket = js_context
+            .get_key_value(config.source_bucket_config.ot_bucket)
+            .await
+            .expect("Failed to get OT bucket");
+        let ot_store: Arc<dyn KVStore> = Arc::new(JetstreamKVStore::new(
+            ot_bucket,
+            config.source_bucket_config.ot_bucket,
+        ));
+
+        let hb_bucket = js_context
+            .get_key_value(config.source_bucket_config.hb_bucket)
+            .await
+            .expect("Failed to get HB bucket");
+        let hb_store: Arc<dyn KVStore> = Arc::new(JetstreamKVStore::new(
+            hb_bucket,
+            config.source_bucket_config.hb_bucket,
+        ));
+
         let processor_manager = ProcessorManager::new(
-            js_context.clone(),
+            ot_store,
+            hb_store,
             &config.source_bucket_config,
             VertexType::Source,
             *crate::config::get_vertex_replica(),

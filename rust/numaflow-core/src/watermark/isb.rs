@@ -25,8 +25,11 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
+use numaflow_shared::kv::KVStore;
+use numaflow_shared::kv::jetstream::JetstreamKVStore;
+
 use crate::config::pipeline::isb::Stream;
-use crate::config::pipeline::watermark::EdgeWatermarkConfig;
+use crate::config::pipeline::watermark::{BucketConfig, EdgeWatermarkConfig};
 use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Result;
 use crate::message::{IntOffset, Offset};
@@ -269,8 +272,13 @@ impl ISBWatermarkHandle {
         // create a processor manager map (from_vertex -> ProcessorManager)
         let mut processor_managers = HashMap::new();
         for from_bucket_config in &config.from_vertex_config {
+            // Create KV stores for ProcessorManager
+            let (ot_store, hb_store) =
+                Self::create_single_kv_stores(&js_context, from_bucket_config).await;
+
             let processor_manager = ProcessorManager::new(
-                js_context.clone(),
+                ot_store,
+                hb_store,
                 from_bucket_config,
                 vertex_type,
                 vertex_replica,
@@ -281,14 +289,18 @@ impl ISBWatermarkHandle {
         let fetcher =
             ISBWatermarkFetcher::new(processor_managers, &config.from_vertex_config).await?;
 
+        // Create KV stores for the publisher
+        let (ot_stores, hb_stores) =
+            Self::create_kv_stores(&js_context, &config.to_vertex_config).await;
+
         let processor_name = format!("{vertex_name}-{vertex_replica}");
         let publisher = ISBWatermarkPublisher::new(
             processor_name,
-            js_context.clone(),
+            ot_stores,
+            hb_stores,
             &config.to_vertex_config,
             false,
-        )
-        .await?;
+        );
 
         let idle_manager =
             ISBIdleDetector::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
@@ -377,6 +389,61 @@ impl ISBWatermarkHandle {
         // Acquire lock, perform operation, and release immediately
         let mut state = self.state.lock().await;
         state.publish_idle_watermark().await;
+    }
+
+    /// Helper to create KV stores for a single bucket config.
+    /// Returns (ot_store, hb_store) tuple.
+    async fn create_single_kv_stores(
+        js_context: &async_nats::jetstream::Context,
+        bucket_config: &BucketConfig,
+    ) -> (Arc<dyn KVStore>, Arc<dyn KVStore>) {
+        let ot_bucket = js_context
+            .get_key_value(bucket_config.ot_bucket)
+            .await
+            .expect("Failed to get OT bucket");
+        let ot_store: Arc<dyn KVStore> =
+            Arc::new(JetstreamKVStore::new(ot_bucket, bucket_config.ot_bucket));
+
+        let hb_bucket = js_context
+            .get_key_value(bucket_config.hb_bucket)
+            .await
+            .expect("Failed to get HB bucket");
+        let hb_store: Arc<dyn KVStore> =
+            Arc::new(JetstreamKVStore::new(hb_bucket, bucket_config.hb_bucket));
+
+        (ot_store, hb_store)
+    }
+
+    /// Helper to create KV stores from bucket configs using the JetStream context.
+    /// Returns (ot_stores, hb_stores) tuple.
+    async fn create_kv_stores(
+        js_context: &async_nats::jetstream::Context,
+        bucket_configs: &[BucketConfig],
+    ) -> (
+        HashMap<&'static str, Arc<dyn KVStore>>,
+        Vec<Arc<dyn KVStore>>,
+    ) {
+        let mut ot_stores: HashMap<&'static str, Arc<dyn KVStore>> = HashMap::new();
+        let mut hb_stores: Vec<Arc<dyn KVStore>> = Vec::new();
+
+        for config in bucket_configs {
+            let ot_bucket = js_context
+                .get_key_value(config.ot_bucket)
+                .await
+                .expect("Failed to get OT bucket");
+            ot_stores.insert(
+                config.vertex,
+                Arc::new(JetstreamKVStore::new(ot_bucket, config.ot_bucket)),
+            );
+
+            let hb_bucket = js_context
+                .get_key_value(config.hb_bucket)
+                .await
+                .expect("Failed to get HB bucket");
+            hb_stores.push(Arc::new(JetstreamKVStore::new(hb_bucket, config.hb_bucket)));
+        }
+
+        (ot_stores, hb_stores)
     }
 }
 
