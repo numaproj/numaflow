@@ -4,16 +4,17 @@
 //! appropriate OT bucket based on stream information provided. It makes sure we always publish m
 //! increasing watermark.
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::time::{Instant, UNIX_EPOCH};
 
 use bytes::{Bytes, BytesMut};
+use numaflow_shared::kv::KVStore;
 use prost::Message;
 use tracing::{debug, error, info, warn};
 
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
-use crate::error::{Error, Result};
 use crate::watermark::wmb::WMB;
 
 /// Interval at which the pod sends heartbeats.
@@ -59,8 +60,8 @@ pub(crate) struct ISBWatermarkPublisher {
     hb_handle: tokio::task::JoinHandle<()>,
     /// last published watermark for each vertex and partition.
     last_published_wm: HashMap<&'static str, HashMap<u16, LastPublishedState>>,
-    /// map of vertex to its ot bucket.
-    ot_buckets: HashMap<&'static str, async_nats::jetstream::kv::Store>,
+    /// map of vertex to its ot bucket (using generic KVStore trait).
+    ot_stores: HashMap<&'static str, Arc<dyn KVStore>>,
     /// whether this publisher is for a source vertex (data can be out of order).
     is_source: bool,
 }
@@ -73,34 +74,25 @@ impl Drop for ISBWatermarkPublisher {
 
 impl ISBWatermarkPublisher {
     /// Creates a new ISBWatermarkPublisher.
-    /// If `is_source` is true, watermark regression warnings will be suppressed since
-    /// source data can be out of order.
-    pub(crate) async fn new(
+    ///
+    /// # Arguments
+    /// * `processor_name` - Name of the processor publishing watermarks
+    /// * `ot_stores` - Map of vertex name to its OT (offset-timeline) KV store
+    /// * `hb_stores` - List of heartbeat KV stores for each downstream vertex
+    /// * `bucket_configs` - Configuration for each bucket (used to initialize partition state)
+    /// * `is_source` - If true, watermark regression warnings will be suppressed since
+    ///   source data can be out of order.
+    pub(crate) fn new(
         processor_name: String,
-        js_context: async_nats::jetstream::Context,
+        ot_stores: HashMap<&'static str, Arc<dyn KVStore>>,
+        hb_stores: Vec<Arc<dyn KVStore>>,
         bucket_configs: &[BucketConfig],
         is_source: bool,
-    ) -> Result<Self> {
-        let mut ot_buckets = HashMap::new();
-        let mut hb_buckets = Vec::with_capacity(bucket_configs.len());
+    ) -> Self {
         let mut last_published_wm = HashMap::new();
 
-        // create ot and hb buckets
+        // Initialize partition state from bucket configs
         for config in bucket_configs {
-            let js_context = js_context.clone();
-            let ot_bucket = js_context
-                .get_key_value(config.ot_bucket)
-                .await
-                .map_err(|e| Error::Watermark(e.to_string()))?;
-
-            let hb_bucket = js_context
-                .get_key_value(config.hb_bucket)
-                .await
-                .map_err(|e| Error::Watermark(e.to_string()))?;
-
-            ot_buckets.insert(config.vertex, ot_bucket);
-            hb_buckets.push(hb_bucket);
-
             let partition_state = HashMap::from_iter(config.partitions.iter().map(|partition| {
                 (
                     *partition,
@@ -115,22 +107,19 @@ impl ISBWatermarkPublisher {
         }
 
         // start publishing heartbeats
-        let hb_handle = tokio::spawn(Self::start_heartbeat(processor_name.clone(), hb_buckets));
+        let hb_handle = tokio::spawn(Self::start_heartbeat(processor_name.clone(), hb_stores));
 
-        Ok(ISBWatermarkPublisher {
+        ISBWatermarkPublisher {
             processor_name,
             hb_handle,
             last_published_wm,
-            ot_buckets,
+            ot_stores,
             is_source,
-        })
+        }
     }
 
-    /// start_heartbeat starts publishing heartbeats to the hb buckets
-    async fn start_heartbeat(
-        processor_name: String,
-        hb_buckets: Vec<async_nats::jetstream::kv::Store>,
-    ) {
+    /// start_heartbeat starts publishing heartbeats to the hb stores
+    async fn start_heartbeat(processor_name: String, hb_stores: Vec<Arc<dyn KVStore>>) {
         let mut interval =
             tokio::time::interval(Duration::from_secs(DEFAULT_POD_HEARTBEAT_INTERVAL as u64));
         info!(processor = ?processor_name, "Started publishing heartbeat");
@@ -146,14 +135,14 @@ impl ISBWatermarkPublisher {
 
             let bytes = Bytes::from(heartbeat.encode_to_vec());
 
-            for hb_bucket in hb_buckets.iter() {
+            for hb_store in hb_stores.iter() {
                 debug!(heartbeat = ?heartbeat.heartbeat, processor = ?processor_name,
                     "Publishing heartbeat",
                 );
-                hb_bucket
-                    .put(processor_name.clone(), bytes.clone())
+                hb_store
+                    .put(&processor_name, bytes.clone())
                     .await
-                    .map_err(|e| error!(?e, "Failed to write heartbeat to hb bucket"))
+                    .map_err(|e| error!(?e, "Failed to write heartbeat to hb store"))
                     .ok();
             }
         }
@@ -217,8 +206,8 @@ impl ISBWatermarkPublisher {
             return;
         }
 
-        // Publish the watermark to the OT bucket
-        let ot_bucket = self.ot_buckets.get(stream.vertex).expect("Invalid vertex");
+        // Publish the watermark to the OT store
+        let ot_store = self.ot_stores.get(stream.vertex).expect("Invalid vertex");
         let wmb_bytes: BytesMut = WMB {
             idle,
             offset,
@@ -230,10 +219,10 @@ impl ISBWatermarkPublisher {
 
         // ot writes can fail when isb is not healthy, we can ignore failures
         // since subsequent writes will go through
-        ot_bucket
-            .put(self.processor_name.clone(), wmb_bytes.freeze())
+        ot_store
+            .put(&self.processor_name, wmb_bytes.freeze())
             .await
-            .map_err(|e| warn!(?e, "Failed to write wmb to ot bucket (ignoring)"))
+            .map_err(|e| warn!(?e, "Failed to write wmb to ot store (ignoring)"))
             .ok();
 
         // reset the last published time
@@ -243,6 +232,9 @@ impl ISBWatermarkPublisher {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
 
@@ -250,6 +242,40 @@ mod tests {
     use crate::config::pipeline::watermark::BucketConfig;
     use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
     use crate::watermark::wmb::WMB;
+    use numaflow_shared::kv::KVStore;
+    use numaflow_shared::kv::jetstream::JetstreamKVStore;
+
+    /// Helper to create KV stores from bucket configs for testing
+    #[cfg(feature = "nats-tests")]
+    async fn create_test_kv_stores(
+        js_context: &async_nats::jetstream::Context,
+        bucket_configs: &[BucketConfig],
+    ) -> (
+        HashMap<&'static str, Arc<dyn KVStore>>,
+        Vec<Arc<dyn KVStore>>,
+    ) {
+        let mut ot_stores: HashMap<&'static str, Arc<dyn KVStore>> = HashMap::new();
+        let mut hb_stores: Vec<Arc<dyn KVStore>> = Vec::new();
+
+        for config in bucket_configs {
+            let ot_bucket = js_context
+                .get_key_value(config.ot_bucket)
+                .await
+                .expect("Failed to get OT bucket");
+            ot_stores.insert(
+                config.vertex,
+                Arc::new(JetstreamKVStore::new(ot_bucket, config.ot_bucket)),
+            );
+
+            let hb_bucket = js_context
+                .get_key_value(config.hb_bucket)
+                .await
+                .expect("Failed to get HB bucket");
+            hb_stores.push(Arc::new(JetstreamKVStore::new(hb_bucket, config.hb_bucket)));
+        }
+
+        (ot_stores, hb_stores)
+    }
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -286,14 +312,15 @@ mod tests {
             .await
             .unwrap();
 
+        let (ot_stores, hb_stores) = create_test_kv_stores(&js_context, &bucket_configs).await;
+
         let mut publisher = ISBWatermarkPublisher::new(
             "processor1".to_string(),
-            js_context.clone(),
+            ot_stores,
+            hb_stores,
             &bucket_configs,
             false,
-        )
-        .await
-        .expect("Failed to create publisher");
+        );
 
         let stream_partition_0 = Stream {
             name: "v1-0",
@@ -432,14 +459,15 @@ mod tests {
             .await
             .unwrap();
 
+        let (ot_stores, hb_stores) = create_test_kv_stores(&js_context, &bucket_configs).await;
+
         let mut publisher = ISBWatermarkPublisher::new(
             "processor1".to_string(),
-            js_context.clone(),
+            ot_stores,
+            hb_stores,
             &bucket_configs,
             false,
-        )
-        .await
-        .expect("Failed to create publisher");
+        );
 
         let stream1 = Stream {
             name: "v1-0",
@@ -541,14 +569,15 @@ mod tests {
             .await
             .unwrap();
 
+        let (ot_stores, hb_stores) = create_test_kv_stores(&js_context, &bucket_configs).await;
+
         let mut publisher = ISBWatermarkPublisher::new(
             "processor1".to_string(),
-            js_context.clone(),
+            ot_stores,
+            hb_stores,
             &bucket_configs,
             false,
-        )
-        .await
-        .expect("Failed to create publisher");
+        );
 
         let stream = Stream {
             name: "v1-0",
