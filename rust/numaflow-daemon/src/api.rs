@@ -21,13 +21,26 @@ pub(crate) async fn api_v1_metrics(State(svc): State<Arc<MvtxDaemonService>>) ->
         Ok(resp) => {
             let body = resp.into_inner();
             let json = match &body.metrics {
-                Some(m) => serde_json::json!({
-                    "metrics": {
-                        "monoVertex": m.mono_vertex,
-                        "processingRates": m.processing_rates,
-                        "pendings": m.pendings,
-                    }
-                }),
+                Some(m) => {
+                    // grpc-gateway JSONPb expects DoubleValue/Int64Value wrapper format: {"value": N}
+                    let processing_rates: std::collections::HashMap<String, serde_json::Value> = m
+                        .processing_rates
+                        .iter()
+                        .map(|(k, v)| (k.clone(), serde_json::json!({ "value": v })))
+                        .collect();
+                    let pendings: std::collections::HashMap<String, serde_json::Value> = m
+                        .pendings
+                        .iter()
+                        .map(|(k, v)| (k.clone(), serde_json::json!({ "value": v })))
+                        .collect();
+                    serde_json::json!({
+                        "metrics": {
+                            "monoVertex": m.mono_vertex,
+                            "processingRates": processing_rates,
+                            "pendings": pendings,
+                        }
+                    })
+                }
                 None => serde_json::json!({}),
             };
             (StatusCode::OK, Json(json))
@@ -93,8 +106,14 @@ pub(crate) async fn api_v1_errors(
                         .container_errors
                         .iter()
                         .map(|ce| {
+                            let timestamp = ce.timestamp.as_ref().map(|ts| {
+                                chrono::DateTime::from_timestamp(ts.seconds, ts.nanos as u32)
+                                    .map(|dt| dt.to_rfc3339())
+                                    .unwrap_or_else(|| "1970-01-01T00:00:00Z".to_string())
+                            });
                             serde_json::json!({
                                 "container": ce.container,
+                                "timestamp": timestamp,
                                 "code": ce.code,
                                 "message": ce.message,
                                 "details": ce.details,
@@ -160,16 +179,34 @@ mod tests {
             .get("processingRates")
             .and_then(|v| v.as_object())
             .expect("processingRates");
-        assert_eq!(rates.get("default").and_then(|v| v.as_f64()), Some(67.0));
-        assert_eq!(rates.get("1m").and_then(|v| v.as_f64()), Some(10.0));
-        assert_eq!(rates.get("5m").and_then(|v| v.as_f64()), Some(50.5));
-        assert_eq!(rates.get("15m").and_then(|v| v.as_f64()), Some(150.0));
+        assert_eq!(
+            rates.get("default").and_then(|v| v.get("value")).and_then(|v| v.as_f64()),
+            Some(67.0)
+        );
+        assert_eq!(
+            rates.get("1m").and_then(|v| v.get("value")).and_then(|v| v.as_f64()),
+            Some(10.0)
+        );
+        assert_eq!(
+            rates.get("5m").and_then(|v| v.get("value")).and_then(|v| v.as_f64()),
+            Some(50.5)
+        );
+        assert_eq!(
+            rates.get("15m").and_then(|v| v.get("value")).and_then(|v| v.as_f64()),
+            Some(150.0)
+        );
         let pendings = metrics
             .get("pendings")
             .and_then(|v| v.as_object())
             .expect("pendings");
-        assert_eq!(pendings.get("default").and_then(|v| v.as_i64()), Some(67));
-        assert_eq!(pendings.get("1m").and_then(|v| v.as_i64()), Some(10));
+        assert_eq!(
+            pendings.get("default").and_then(|v| v.get("value")).and_then(|v| v.as_i64()),
+            Some(67)
+        );
+        assert_eq!(
+            pendings.get("1m").and_then(|v| v.get("value")).and_then(|v| v.as_i64()),
+            Some(10)
+        );
     }
 
     #[tokio::test]
@@ -239,6 +276,8 @@ mod tests {
             ce.get("details").and_then(|v| v.as_str()),
             Some("mock_details")
         );
+        // timestamp is optional; mock has None so it serializes as null
+        assert!(ce.get("timestamp").is_some());
     }
 
     #[tokio::test]

@@ -1,14 +1,22 @@
 //! TLS configuration for the daemon server.
 
+use std::sync::Arc;
+
 use crate::error::{Error, Result};
 use axum_server::tls_rustls::RustlsConfig;
 use rcgen::{
     CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose,
 };
+use rustls::server::ServerConfig;
+use rustls_pemfile::{certs, private_key};
+use std::io::Cursor;
 use time::{Duration, OffsetDateTime};
 
+/// ALPN protocols: h2 for gRPC, http/1.1 for REST. Matches Go server NextProtos.
+const ALPN_PROTOCOLS: &[&[u8]] = &[b"h2", b"http/1.1"];
+
 /// Builds a self-signed TLS config for the daemon (same port for HTTP/1.1 and gRPC over h2).
-/// ALPN is handled by the server stack; both protocols are advertised.
+/// ALPN is set to ["h2", "http/1.1"] to match the Go daemon server.
 pub(crate) async fn build_rustls_config() -> Result<RustlsConfig> {
     let mut params = CertificateParams::new(vec!["localhost".to_string()]).map_err(|e| {
         Error::TlsConfiguration(format!("Failed to create certificate parameters: {}", e))
@@ -37,9 +45,21 @@ pub(crate) async fn build_rustls_config() -> Result<RustlsConfig> {
     let cert_pem = cert.pem();
     let key_pem = signing_key.serialize_pem();
 
-    RustlsConfig::from_pem(cert_pem.into(), key_pem.into())
-        .await
-        .map_err(|e| Error::TlsConfiguration(format!("Failed to build RustlsConfig: {}", e)))
+    let certs: Vec<_> = certs(&mut Cursor::new(cert_pem.as_bytes()))
+        .collect::<std::result::Result<Vec<_>, std::io::Error>>()
+        .map_err(|e| Error::TlsConfiguration(format!("Failed to parse certificate PEM: {}", e)))?;
+    let key = private_key(&mut Cursor::new(key_pem.as_bytes()))
+        .map_err(|e| Error::TlsConfiguration(format!("Failed to parse key PEM: {}", e)))?
+        .ok_or_else(|| Error::TlsConfiguration("No private key found in PEM".to_string()))?;
+
+    let mut server_config = ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(certs, key)
+        .map_err(|e| Error::TlsConfiguration(format!("Failed to build ServerConfig: {}", e)))?;
+
+    server_config.alpn_protocols = ALPN_PROTOCOLS.iter().map(|p| p.to_vec()).collect();
+
+    Ok(RustlsConfig::from_config(Arc::new(server_config)))
 }
 
 #[cfg(test)]
