@@ -22,6 +22,7 @@ http.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
+prost-types.workspace = true
 hyper = "1.6.0"
 http-body-util = "0.1"
 

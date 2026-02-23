@@ -173,26 +173,38 @@ mod tests {
         let metrics = json.get("metrics").expect("metrics key");
         assert_eq!(
             metrics.get("monoVertex"),
-            Some(&serde_json::Value::String("mock_mvtx_spec".into()))
+            Some(&serde_json::Value::String("simple-mono-vertex".into()))
         );
         let rates = metrics
             .get("processingRates")
             .and_then(|v| v.as_object())
             .expect("processingRates");
         assert_eq!(
-            rates.get("default").and_then(|v| v.get("value")).and_then(|v| v.as_f64()),
+            rates
+                .get("default")
+                .and_then(|v| v.get("value"))
+                .and_then(|v| v.as_f64()),
             Some(67.0)
         );
         assert_eq!(
-            rates.get("1m").and_then(|v| v.get("value")).and_then(|v| v.as_f64()),
+            rates
+                .get("1m")
+                .and_then(|v| v.get("value"))
+                .and_then(|v| v.as_f64()),
             Some(10.0)
         );
         assert_eq!(
-            rates.get("5m").and_then(|v| v.get("value")).and_then(|v| v.as_f64()),
+            rates
+                .get("5m")
+                .and_then(|v| v.get("value"))
+                .and_then(|v| v.as_f64()),
             Some(50.5)
         );
         assert_eq!(
-            rates.get("15m").and_then(|v| v.get("value")).and_then(|v| v.as_f64()),
+            rates
+                .get("15m")
+                .and_then(|v| v.get("value"))
+                .and_then(|v| v.as_f64()),
             Some(150.0)
         );
         let pendings = metrics
@@ -200,11 +212,17 @@ mod tests {
             .and_then(|v| v.as_object())
             .expect("pendings");
         assert_eq!(
-            pendings.get("default").and_then(|v| v.get("value")).and_then(|v| v.as_i64()),
+            pendings
+                .get("default")
+                .and_then(|v| v.get("value"))
+                .and_then(|v| v.as_i64()),
             Some(67)
         );
         assert_eq!(
-            pendings.get("1m").and_then(|v| v.get("value")).and_then(|v| v.as_i64()),
+            pendings
+                .get("1m")
+                .and_then(|v| v.get("value"))
+                .and_then(|v| v.as_i64()),
             Some(10)
         );
     }
@@ -225,15 +243,15 @@ mod tests {
         let status = json.get("status").expect("status key");
         assert_eq!(
             status.get("status"),
-            Some(&serde_json::Value::String("mock_status".into()))
+            Some(&serde_json::Value::String("healthy".into()))
         );
         assert_eq!(
             status.get("message"),
-            Some(&serde_json::Value::String("mock_status_message".into()))
+            Some(&serde_json::Value::String("MonoVertex data flow is healthy".into()))
         );
         assert_eq!(
             status.get("code"),
-            Some(&serde_json::Value::String("mock_status_code".into()))
+            Some(&serde_json::Value::String("D1".into()))
         );
     }
 

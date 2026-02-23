@@ -2541,6 +2541,7 @@ dependencies = [
  "http-body-util",
  "hyper 1.6.0",
  "numaflow-pb",
+ "prost-types 0.14.1",
  "rcgen",
  "rustls 0.23.31",
  "rustls-pemfile 2.2.0",
