@@ -9,6 +9,9 @@ bytes.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
 parking_lot.workspace = true
+async-trait = "0.1.88"
+futures.workspace = true
+numaflow-shared = { path = "../numaflow-shared" }
 
 [lints]
 workspace = true

@@ -19,7 +19,7 @@ pub mod jetstream;
 pub type KVError = Box<dyn StdError + Send + Sync + 'static>;
 
 /// Operation type for KV watch events
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KVWatchOp {
     /// An element has been put/added into the KV store
     Put,
