@@ -185,7 +185,6 @@ mod tests {
             .get("processingRates")
             .and_then(|v| v.as_object())
             .expect("processingRates");
-        // ProtoJSON: DoubleValue uses raw number
         assert_eq!(rates.get("default").and_then(|v| v.as_f64()), Some(67.0));
         assert_eq!(rates.get("1m").and_then(|v| v.as_f64()), Some(10.0));
         assert_eq!(rates.get("5m").and_then(|v| v.as_f64()), Some(50.5));
@@ -194,7 +193,6 @@ mod tests {
             .get("pendings")
             .and_then(|v| v.as_object())
             .expect("pendings");
-        // ProtoJSON: Int64Value uses raw string
         assert_eq!(
             pendings
                 .get("default")
@@ -280,8 +278,12 @@ mod tests {
             ce.get("details").and_then(|v| v.as_str()),
             Some("mock_details")
         );
-        // timestamp is optional; mock has None so it serializes as null
-        assert!(ce.get("timestamp").is_some());
+        let ts = ce.get("timestamp").and_then(|v| v.as_str()).expect("timestamp");
+        assert!(
+            chrono::DateTime::parse_from_rfc3339(ts).is_ok(),
+            "timestamp should be RFC3339: {:?}",
+            ts
+        );
     }
 
     #[tokio::test]
