@@ -61,7 +61,7 @@ The reader maintains a bounded number of in-flight messages using a semaphore. T
 
 1. **Constant throughput** - Always `batch_size` messages being processed
 2. **Backpressure** - Prevents unbounded memory growth
-3. **Graceful shutdown** - Wait for all permits to return before exiting
+3. **Graceful shutdown** - Waits for all the messages to be processed before exiting
 
 ```mermaid
 sequenceDiagram
@@ -126,7 +126,7 @@ flowchart TB
     
     subgraph "2. Process Phase"
         D --> E[Send to Processor Channel]
-        E --> F[Map/Reduce/Sink Processing]
+        E --> F[Map/Reduce Processing]
     end
     
     subgraph "3. Write Phase"
