@@ -37,8 +37,8 @@ impl MonoVertexDaemonService for MvtxDaemonService {
             ("15m".to_string(), 150),
         ]);
 
-        let mono_vertex = env::var(ENV_MONO_VERTEX_NAME)
-            .unwrap_or_else(|_| "simple-mono-vertex".to_string());
+        let mono_vertex =
+            env::var(ENV_MONO_VERTEX_NAME).unwrap_or_else(|_| "simple-mono-vertex".to_string());
         let mock_resp = GetMonoVertexMetricsResponse {
             metrics: Some(MonoVertexMetrics {
                 mono_vertex,

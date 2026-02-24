@@ -22,16 +22,16 @@ pub(crate) async fn api_v1_metrics(State(svc): State<Arc<MvtxDaemonService>>) ->
             let body = resp.into_inner();
             let json = match &body.metrics {
                 Some(m) => {
-                    // grpc-gateway JSONPb expects DoubleValue/Int64Value wrapper format: {"value": N}
+                    // ProtoJSON: wrapper types use same representation as wrapped primitive (DoubleValue=number, Int64Value=string)
                     let processing_rates: std::collections::HashMap<String, serde_json::Value> = m
                         .processing_rates
                         .iter()
-                        .map(|(k, v)| (k.clone(), serde_json::json!({ "value": v })))
+                        .map(|(k, v)| (k.clone(), serde_json::json!(*v)))
                         .collect();
                     let pendings: std::collections::HashMap<String, serde_json::Value> = m
                         .pendings
                         .iter()
-                        .map(|(k, v)| (k.clone(), serde_json::json!({ "value": v })))
+                        .map(|(k, v)| (k.clone(), serde_json::Value::String(v.to_string())))
                         .collect();
                     serde_json::json!({
                         "metrics": {
@@ -211,18 +211,21 @@ mod tests {
             .get("pendings")
             .and_then(|v| v.as_object())
             .expect("pendings");
+        // Int64Value uses string in proto3 JSON
         assert_eq!(
             pendings
                 .get("default")
                 .and_then(|v| v.get("value"))
-                .and_then(|v| v.as_i64()),
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse::<i64>().ok()),
             Some(67)
         );
         assert_eq!(
             pendings
                 .get("1m")
                 .and_then(|v| v.get("value"))
-                .and_then(|v| v.as_i64()),
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse::<i64>().ok()),
             Some(10)
         );
     }
@@ -247,7 +250,9 @@ mod tests {
         );
         assert_eq!(
             status.get("message"),
-            Some(&serde_json::Value::String("MonoVertex data flow is healthy".into()))
+            Some(&serde_json::Value::String(
+                "MonoVertex data flow is healthy".into()
+            ))
         );
         assert_eq!(
             status.get("code"),
