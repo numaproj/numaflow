@@ -111,7 +111,7 @@ pub struct SimpleKVStore {
     /// Shared KV state.
     state: Arc<RwLock<KVState>>,
     /// Store name.
-    name: String,
+    name: &'static str,
     /// Error injector for testing.
     error_injector: Arc<KVErrorInjector>,
     /// Broadcast sender for watch updates.
@@ -132,7 +132,7 @@ impl SimpleKVStore {
     ///
     /// # Arguments
     /// * `name` - Name of the store (used as identifier).
-    pub fn new(name: impl Into<String>) -> Self {
+    pub fn new(name: &'static str) -> Self {
         Self::with_config(name, 1000)
     }
 
@@ -141,11 +141,11 @@ impl SimpleKVStore {
     /// # Arguments
     /// * `name` - Name of the store.
     /// * `max_history_size` - Maximum history entries to keep (0 = unlimited).
-    pub fn with_config(name: impl Into<String>, max_history_size: usize) -> Self {
+    pub fn with_config(name: &'static str, max_history_size: usize) -> Self {
         let (watch_sender, _) = broadcast::channel(1024);
         Self {
             state: Arc::new(RwLock::new(KVState::new(max_history_size))),
-            name: name.into(),
+            name,
             error_injector: Arc::new(KVErrorInjector::new()),
             watch_sender,
         }
@@ -175,13 +175,15 @@ impl SimpleKVStore {
 
     /// Clear all data in the store and emit a purge event.
     pub fn purge(&self) {
-        let mut state = self.state.write();
-        state.data.clear();
-        state.record_history(String::new(), Bytes::new(), KVWatchOp::Purge);
+        let entry = {
+            let mut state = self.state.write();
+            state.data.clear();
+            state.record_history(String::new(), Bytes::new(), KVWatchOp::Purge);
 
-        // Notify watchers
-        let entry = state.history.last().cloned();
-        drop(state);
+            // Notify watchers
+            state.history.last().cloned()
+        };
+
         if let Some(entry) = entry {
             let _ = self.watch_sender.send(entry);
         }
@@ -216,13 +218,15 @@ impl KVStore for SimpleKVStore {
             )));
         }
 
-        let mut state = self.state.write();
-        state.data.remove(key);
-        state.record_history(key.to_string(), Bytes::new(), KVWatchOp::Delete);
+        let entry = {
+            let mut state = self.state.write();
+            state.data.remove(key);
+            state.record_history(key.to_string(), Bytes::new(), KVWatchOp::Delete);
 
-        // Notify watchers
-        let entry = state.history.last().cloned();
-        drop(state);
+            // Notify watchers
+            state.history.last().cloned()
+        };
+
         if let Some(entry) = entry {
             let _ = self.watch_sender.send(entry);
         }

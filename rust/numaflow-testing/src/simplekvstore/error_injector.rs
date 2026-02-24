@@ -63,8 +63,6 @@ impl KVErrorInjector {
         Self::default()
     }
 
-    // === Failure injection setters ===
-
     /// Fail the next N keys operations.
     pub fn fail_keys(&self, count: usize) {
         self.fail_next_keys.store(count, Ordering::Relaxed);
@@ -114,8 +112,6 @@ impl KVErrorInjector {
         self.watch_close_sender.subscribe()
     }
 
-    // === Latency injection setters ===
-
     /// Set artificial keys operation latency.
     pub fn set_keys_latency(&self, ms: u64) {
         self.keys_latency_ms.store(ms, Ordering::Relaxed);
@@ -135,8 +131,6 @@ impl KVErrorInjector {
     pub fn set_delete_latency(&self, ms: u64) {
         self.delete_latency_ms.store(ms, Ordering::Relaxed);
     }
-
-    // === Internal check methods ===
 
     /// Check and decrement the keys failure counter.
     pub(crate) fn should_fail_keys(&self) -> bool {
@@ -186,8 +180,6 @@ impl KVErrorInjector {
         }
         false
     }
-
-    // === Latency application methods ===
 
     /// Apply keys latency if set.
     pub(crate) async fn apply_keys_latency(&self) {

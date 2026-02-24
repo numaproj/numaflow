@@ -42,4 +42,3 @@ mod store;
 pub use error::{Result, SimpleKVStoreError};
 pub use error_injector::KVErrorInjector;
 pub use store::{KVHistoryEntry, KVState, SimpleKVStore};
-
