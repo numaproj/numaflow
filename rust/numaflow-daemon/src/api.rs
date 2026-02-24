@@ -22,12 +22,15 @@ pub(crate) async fn api_v1_metrics(State(svc): State<Arc<MvtxDaemonService>>) ->
             let body = resp.into_inner();
             let json = match &body.metrics {
                 Some(m) => {
-                    // ProtoJSON: wrapper types use same representation as wrapped primitive (DoubleValue=number, Int64Value=string)
+                    // Converting the data to ProtoJSON.
+                    // https://protobuf.dev/programming-guides/json/
+                    // f64 is represented as serde_json::Value::Number.
                     let processing_rates: std::collections::HashMap<String, serde_json::Value> = m
                         .processing_rates
                         .iter()
                         .map(|(k, v)| (k.clone(), serde_json::json!(*v)))
                         .collect();
+                    // i64 is represented as serde_json::Value::String.
                     let pendings: std::collections::HashMap<String, serde_json::Value> = m
                         .pendings
                         .iter()
@@ -106,6 +109,9 @@ pub(crate) async fn api_v1_errors(
                         .container_errors
                         .iter()
                         .map(|ce| {
+                            // Converting the data to ProtoJSON.
+                            // https://protobuf.dev/programming-guides/json/
+                            // timestamp uses RFC 3339 and represented as String.
                             let timestamp = ce.timestamp.as_ref().map(|ts| {
                                 chrono::DateTime::from_timestamp(ts.seconds, ts.nanos as u32)
                                     .map(|dt| dt.to_rfc3339())

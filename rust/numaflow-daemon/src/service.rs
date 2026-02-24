@@ -11,6 +11,9 @@ use std::result::Result;
 use tonic::{Request, Response, Status};
 
 /// Env var set by daemon deployment; matches pkg/apis/numaflow/v1alpha1/const.go EnvMonoVertexName.
+/// This is a temporary solution to get the MonoVertex name.
+/// On golang mvtx daemon end, we load the entire NUMAFLOW_MONO_VERTEX_OBJECT to get the name.
+/// TODO - switch to the full CR when we need more informations.
 const ENV_MONO_VERTEX_NAME: &str = "NUMAFLOW_MONO_VERTEX_NAME";
 
 /// MvtxDaemonService is the Tonic gRPC service implementations for MonoVertex daemon server.
