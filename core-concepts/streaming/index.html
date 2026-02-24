@@ -8,19 +8,19 @@
       
       
       
-      <link rel="icon" href="../../../assets/numaproj.svg">
+      <link rel="icon" href="../../assets/numaproj.svg">
       <meta name="generator" content="mkdocs-1.3.0, mkdocs-material-8.3.9">
     
     
       
-        <title>User-defined Sources - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>Streaming Architecture - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.1d29e8d0.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.1d29e8d0.min.css">
       
         
-        <link rel="stylesheet" href="../../../assets/stylesheets/palette.cbb835fc.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.cbb835fc.min.css">
         
       
       
@@ -36,7 +36,7 @@
       
     
     
-    <script>__md_scope=new URL("../../..",location),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
   
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#user-defined-sources" class="md-skip">
+        <a href="#streaming-dataflow-in-numaflow" class="md-skip">
           Skip to content
         </a>
       
@@ -90,9 +90,9 @@
 
 <header class="md-header md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-header__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
+    <a href="../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-header__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
       
-  <img src="../../../assets/logo.png" alt="logo">
+  <img src="../../assets/logo.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              User-defined Sources
+              Streaming Architecture
             
           </span>
         </div>
@@ -199,7 +199,7 @@
 
 
   <li class="md-tabs__item">
-    <a href="../../.." class="md-tabs__link">
+    <a href="../.." class="md-tabs__link">
       Home
     </a>
   </li>
@@ -214,7 +214,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../../quick-start/" class="md-tabs__link">
+      <a href="../../quick-start/" class="md-tabs__link">
         Getting Started
       </a>
     </li>
@@ -237,7 +237,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../../core-concepts/overview/" class="md-tabs__link md-tabs__link--active">
+      <a href="../overview/" class="md-tabs__link md-tabs__link--active">
         User Guide
       </a>
     </li>
@@ -255,7 +255,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../../operations/releases/" class="md-tabs__link">
+      <a href="../../operations/releases/" class="md-tabs__link">
         Operator Manual
       </a>
     </li>
@@ -271,7 +271,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../../development/development/" class="md-tabs__link">
+      <a href="../../development/development/" class="md-tabs__link">
         Contributor Guide
       </a>
     </li>
@@ -317,9 +317,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-nav__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
+    <a href="../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-nav__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
       
-  <img src="../../../assets/logo.png" alt="logo">
+  <img src="../../assets/logo.png" alt="logo">
 
     </a>
     Numaflow - Data/streaming processing platform on Kubernetes
@@ -347,7 +347,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../.." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         Home
       </a>
     </li>
@@ -388,7 +388,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../quick-start/" class="md-nav__link">
+      <a href="../../quick-start/" class="md-nav__link">
         Quick Start
       </a>
     </li>
@@ -436,12 +436,14 @@
               
   
   
+    
+  
   
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_1" type="checkbox" id="__nav_3_1" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_1" type="checkbox" id="__nav_3_1" checked>
       
       
       
@@ -455,167 +457,6 @@
         <label class="md-nav__title" for="__nav_3_1">
           <span class="md-nav__icon md-icon"></span>
           Core Concepts
-        </label>
-        <ul class="md-nav__list" data-md-scrollfix>
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../core-concepts/overview/" class="md-nav__link">
-        Overview
-      </a>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../core-concepts/pipeline/" class="md-nav__link">
-        Pipeline
-      </a>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../core-concepts/monovertex/" class="md-nav__link">
-        MonoVertex
-      </a>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../core-concepts/serving/" class="md-nav__link">
-        ServingPipeline
-      </a>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../core-concepts/vertex/" class="md-nav__link">
-        Vertex
-      </a>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../core-concepts/inter-step-buffer/" class="md-nav__link">
-        Inter-Step Buffer
-      </a>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../core-concepts/inter-step-buffer-service/" class="md-nav__link">
-        Inter-Step Buffer Service
-      </a>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../core-concepts/streaming/" class="md-nav__link">
-        Streaming Architecture
-      </a>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../core-concepts/watermarks/" class="md-nav__link">
-        Watermarks
-      </a>
-    </li>
-  
-
-            
-          
-        </ul>
-      </nav>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-    
-  
-  
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
-      
-      
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2" type="checkbox" id="__nav_3_2" checked>
-      
-      
-      
-      
-        <label class="md-nav__link" for="__nav_3_2">
-          Sources
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <nav class="md-nav" aria-label="Sources" data-md-level="2">
-        <label class="md-nav__title" for="__nav_3_2">
-          <span class="md-nav__icon md-icon"></span>
-          Sources
         </label>
         <ul class="md-nav__list" data-md-scrollfix>
           
@@ -639,8 +480,8 @@
   
   
     <li class="md-nav__item">
-      <a href="../generator/" class="md-nav__link">
-        Generator Source
+      <a href="../pipeline/" class="md-nav__link">
+        Pipeline
       </a>
     </li>
   
@@ -653,8 +494,8 @@
   
   
     <li class="md-nav__item">
-      <a href="../http/" class="md-nav__link">
-        HTTP Source
+      <a href="../monovertex/" class="md-nav__link">
+        MonoVertex
       </a>
     </li>
   
@@ -667,8 +508,8 @@
   
   
     <li class="md-nav__item">
-      <a href="../kafka/" class="md-nav__link">
-        Kafka Source
+      <a href="../serving/" class="md-nav__link">
+        ServingPipeline
       </a>
     </li>
   
@@ -681,8 +522,8 @@
   
   
     <li class="md-nav__item">
-      <a href="../pulsar/" class="md-nav__link">
-        Pulsar Source
+      <a href="../vertex/" class="md-nav__link">
+        Vertex
       </a>
     </li>
   
@@ -695,8 +536,8 @@
   
   
     <li class="md-nav__item">
-      <a href="../nats/" class="md-nav__link">
-        Nats Source
+      <a href="../inter-step-buffer/" class="md-nav__link">
+        Inter-Step Buffer
       </a>
     </li>
   
@@ -709,22 +550,8 @@
   
   
     <li class="md-nav__item">
-      <a href="../jetstream/" class="md-nav__link">
-        Jetstream Source
-      </a>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../sqs/" class="md-nav__link">
-        SQS Source
+      <a href="../inter-step-buffer-service/" class="md-nav__link">
+        Inter-Step Buffer Service
       </a>
     </li>
   
@@ -747,12 +574,12 @@
       
       
         <label class="md-nav__link md-nav__link--active" for="__toc">
-          User-defined Sources
+          Streaming Architecture
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <a href="./" class="md-nav__link md-nav__link--active">
-        User-defined Sources
+        Streaming Architecture
       </a>
       
         
@@ -771,23 +598,199 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#build-your-own-user-defined-sources" class="md-nav__link">
-    Build Your Own User-defined Sources
+  <a href="#overview" class="md-nav__link">
+    Overview
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#available-environment-variables" class="md-nav__link">
-    Available Environment Variables
+  <a href="#core-components" class="md-nav__link">
+    Core Components
   </a>
+  
+    <nav class="md-nav" aria-label="Core Components">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#isb-reader" class="md-nav__link">
+    ISB Reader
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#isb-writer" class="md-nav__link">
+    ISB Writer
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tracker" class="md-nav__link">
+    Tracker
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#watermark-computation" class="md-nav__link">
+    Watermark Computation
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#user-defined-sources-contributed-from-the-open-source-community" class="md-nav__link">
-    User-defined sources contributed from the open source community
+  <a href="#maintaining-active-work-with-semaphores" class="md-nav__link">
+    Maintaining Active Work with Semaphores
   </a>
+  
+    <nav class="md-nav" aria-label="Maintaining Active Work with Semaphores">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    How It Works
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#message-lifecycle" class="md-nav__link">
+    Message Lifecycle
+  </a>
+  
+    <nav class="md-nav" aria-label="Message Lifecycle">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-points" class="md-nav__link">
+    Key Points
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#offset-tracking-for-reduce-correctness" class="md-nav__link">
+    Offset Tracking for Reduce Correctness
+  </a>
+  
+    <nav class="md-nav" aria-label="Offset Tracking for Reduce Correctness">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-btreemap" class="md-nav__link">
+    Why BTreeMap?
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-lowest-watermark-guarantee" class="md-nav__link">
+    The Lowest Watermark Guarantee
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-this-matters-for-reduce" class="md-nav__link">
+    Why This Matters for Reduce
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#watermark-publishing" class="md-nav__link">
+    Watermark Publishing
+  </a>
+  
+    <nav class="md-nav" aria-label="Watermark Publishing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#computing-the-watermark" class="md-nav__link">
+    Computing the Watermark
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-mapsink-vertices" class="md-nav__link">
+    For Map/Sink Vertices
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-reduce-vertices" class="md-nav__link">
+    For Reduce Vertices
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#idle-watermark-handling" class="md-nav__link">
+    Idle Watermark Handling
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#streaming-flow-patterns" class="md-nav__link">
+    Streaming Flow Patterns
+  </a>
+  
+    <nav class="md-nav" aria-label="Streaming Flow Patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#map-forwarder" class="md-nav__link">
+    Map Forwarder
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reduce-forwarder" class="md-nav__link">
+    Reduce Forwarder
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    Summary
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -795,6 +798,179 @@
   
 </nav>
       
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../watermarks/" class="md-nav__link">
+        Watermarks
+      </a>
+    </li>
+  
+
+            
+          
+        </ul>
+      </nav>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+      
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2" type="checkbox" id="__nav_3_2" >
+      
+      
+      
+      
+        <label class="md-nav__link" for="__nav_3_2">
+          Sources
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <nav class="md-nav" aria-label="Sources" data-md-level="2">
+        <label class="md-nav__title" for="__nav_3_2">
+          <span class="md-nav__icon md-icon"></span>
+          Sources
+        </label>
+        <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/overview/" class="md-nav__link">
+        Overview
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/generator/" class="md-nav__link">
+        Generator Source
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/http/" class="md-nav__link">
+        HTTP Source
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/kafka/" class="md-nav__link">
+        Kafka Source
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/pulsar/" class="md-nav__link">
+        Pulsar Source
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/nats/" class="md-nav__link">
+        Nats Source
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/jetstream/" class="md-nav__link">
+        Jetstream Source
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/sqs/" class="md-nav__link">
+        SQS Source
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/user-defined-sources/" class="md-nav__link">
+        User-defined Sources
+      </a>
     </li>
   
 
@@ -832,7 +1008,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../transformer/overview/" class="md-nav__link">
+      <a href="../../user-guide/sources/transformer/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -872,7 +1048,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../transformer/builtin-transformers/" class="md-nav__link">
+      <a href="../../user-guide/sources/transformer/builtin-transformers/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -886,7 +1062,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../transformer/builtin-transformers/filter/" class="md-nav__link">
+      <a href="../../user-guide/sources/transformer/builtin-transformers/filter/" class="md-nav__link">
         Filter
       </a>
     </li>
@@ -900,7 +1076,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../transformer/builtin-transformers/event-time-extractor/" class="md-nav__link">
+      <a href="../../user-guide/sources/transformer/builtin-transformers/event-time-extractor/" class="md-nav__link">
         Event Time Extractor
       </a>
     </li>
@@ -914,7 +1090,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../transformer/builtin-transformers/time-extraction-filter/" class="md-nav__link">
+      <a href="../../user-guide/sources/transformer/builtin-transformers/time-extraction-filter/" class="md-nav__link">
         Event Time Extraction Filter
       </a>
     </li>
@@ -975,7 +1151,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sinks/overview/" class="md-nav__link">
+      <a href="../../user-guide/sinks/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -989,7 +1165,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sinks/kafka/" class="md-nav__link">
+      <a href="../../user-guide/sinks/kafka/" class="md-nav__link">
         Kafka Sink
       </a>
     </li>
@@ -1003,7 +1179,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sinks/log/" class="md-nav__link">
+      <a href="../../user-guide/sinks/log/" class="md-nav__link">
         Log Sink
       </a>
     </li>
@@ -1017,7 +1193,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sinks/blackhole/" class="md-nav__link">
+      <a href="../../user-guide/sinks/blackhole/" class="md-nav__link">
         Blackhole Sink
       </a>
     </li>
@@ -1031,7 +1207,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sinks/sqs/" class="md-nav__link">
+      <a href="../../user-guide/sinks/sqs/" class="md-nav__link">
         SQS Sink
       </a>
     </li>
@@ -1045,7 +1221,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sinks/user-defined-sinks/" class="md-nav__link">
+      <a href="../../user-guide/sinks/user-defined-sinks/" class="md-nav__link">
         User-defined Sinks
       </a>
     </li>
@@ -1059,7 +1235,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sinks/fallback/" class="md-nav__link">
+      <a href="../../user-guide/sinks/fallback/" class="md-nav__link">
         Fallback Sink
       </a>
     </li>
@@ -1073,7 +1249,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sinks/on-success/" class="md-nav__link">
+      <a href="../../user-guide/sinks/on-success/" class="md-nav__link">
         OnSuccess Sink
       </a>
     </li>
@@ -1087,7 +1263,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sinks/retry-strategy/" class="md-nav__link">
+      <a href="../../user-guide/sinks/retry-strategy/" class="md-nav__link">
         Retry Strategy
       </a>
     </li>
@@ -1134,7 +1310,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/user-defined-functions/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/user-defined-functions/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1174,7 +1350,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/map/map/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/map/map/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1214,7 +1390,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/map/builtin-functions/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/map/builtin-functions/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1228,7 +1404,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/map/builtin-functions/cat/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/map/builtin-functions/cat/" class="md-nav__link">
         Cat
       </a>
     </li>
@@ -1242,7 +1418,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/map/builtin-functions/filter/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/map/builtin-functions/filter/" class="md-nav__link">
         Filter
       </a>
     </li>
@@ -1263,7 +1439,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/map/examples/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/map/examples/" class="md-nav__link">
         Examples
       </a>
     </li>
@@ -1310,7 +1486,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/reduce/reduce/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/reduce/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1350,7 +1526,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/reduce/windowing/windowing/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/windowing/windowing/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1364,7 +1540,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/reduce/windowing/fixed/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/windowing/fixed/" class="md-nav__link">
         Fixed
       </a>
     </li>
@@ -1378,7 +1554,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/reduce/windowing/sliding/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/windowing/sliding/" class="md-nav__link">
         Sliding
       </a>
     </li>
@@ -1392,7 +1568,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/reduce/windowing/session/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/windowing/session/" class="md-nav__link">
         Session
       </a>
     </li>
@@ -1406,7 +1582,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/reduce/windowing/accumulator/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/windowing/accumulator/" class="md-nav__link">
         Accumulator
       </a>
     </li>
@@ -1427,7 +1603,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/reduce/examples/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/examples/" class="md-nav__link">
         Examples
       </a>
     </li>
@@ -1481,7 +1657,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sdks/overview/" class="md-nav__link">
+      <a href="../../user-guide/sdks/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1495,7 +1671,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sdks/compatibility/" class="md-nav__link">
+      <a href="../../user-guide/sdks/compatibility/" class="md-nav__link">
         Compatibility
       </a>
     </li>
@@ -1509,7 +1685,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sdks/features/" class="md-nav__link">
+      <a href="../../user-guide/sdks/features/" class="md-nav__link">
         Features
       </a>
     </li>
@@ -1556,7 +1732,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../core-concepts/message-headers/" class="md-nav__link">
+      <a href="../message-headers/" class="md-nav__link">
         Message Headers
       </a>
     </li>
@@ -1570,7 +1746,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/pipeline-tuning/" class="md-nav__link">
+      <a href="../../user-guide/reference/pipeline-tuning/" class="md-nav__link">
         Pipeline Tuning
       </a>
     </li>
@@ -1584,7 +1760,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/autoscaling/" class="md-nav__link">
+      <a href="../../user-guide/reference/autoscaling/" class="md-nav__link">
         Autoscaling
       </a>
     </li>
@@ -1598,7 +1774,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/conditional-forwarding/" class="md-nav__link">
+      <a href="../../user-guide/reference/conditional-forwarding/" class="md-nav__link">
         Conditional Forwarding
       </a>
     </li>
@@ -1612,7 +1788,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/pipeline-operations/" class="md-nav__link">
+      <a href="../../user-guide/reference/pipeline-operations/" class="md-nav__link">
         Pipeline Operations
       </a>
     </li>
@@ -1626,7 +1802,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/gpu/" class="md-nav__link">
+      <a href="../../user-guide/reference/gpu/" class="md-nav__link">
         Configuring GPU
       </a>
     </li>
@@ -1640,7 +1816,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/join-vertex/" class="md-nav__link">
+      <a href="../../user-guide/reference/join-vertex/" class="md-nav__link">
         Joins and Cycles
       </a>
     </li>
@@ -1654,7 +1830,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/multi-partition/" class="md-nav__link">
+      <a href="../../user-guide/reference/multi-partition/" class="md-nav__link">
         Multi-partitioned Edges
       </a>
     </li>
@@ -1668,7 +1844,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/side-inputs/" class="md-nav__link">
+      <a href="../../user-guide/reference/side-inputs/" class="md-nav__link">
         Side Inputs
       </a>
     </li>
@@ -1682,7 +1858,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/mvtx-tuning/" class="md-nav__link">
+      <a href="../../user-guide/reference/mvtx-tuning/" class="md-nav__link">
         MonoVertex Tuning
       </a>
     </li>
@@ -1696,7 +1872,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/mvtx-operations/" class="md-nav__link">
+      <a href="../../user-guide/reference/mvtx-operations/" class="md-nav__link">
         MonoVertex Operations
       </a>
     </li>
@@ -1710,7 +1886,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/distributed-throttling/" class="md-nav__link">
+      <a href="../../user-guide/reference/distributed-throttling/" class="md-nav__link">
         Distributed Throttling
       </a>
     </li>
@@ -1724,7 +1900,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/monovertex-bypass/" class="md-nav__link">
+      <a href="../../user-guide/reference/monovertex-bypass/" class="md-nav__link">
         MonoVertex Bypass Routing
       </a>
     </li>
@@ -1764,7 +1940,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/pod-specifications/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/pod-specifications/" class="md-nav__link">
         Pod Specifications
       </a>
     </li>
@@ -1778,7 +1954,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/container-resources/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/container-resources/" class="md-nav__link">
         Container Resources
       </a>
     </li>
@@ -1792,7 +1968,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/volumes/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/volumes/" class="md-nav__link">
         Volumes
       </a>
     </li>
@@ -1806,7 +1982,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/environment-variables/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/environment-variables/" class="md-nav__link">
         Environment Variables
       </a>
     </li>
@@ -1820,7 +1996,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/labels-and-annotations/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/labels-and-annotations/" class="md-nav__link">
         Labels And Annotations
       </a>
     </li>
@@ -1834,7 +2010,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/init-containers/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/init-containers/" class="md-nav__link">
         Init Containers
       </a>
     </li>
@@ -1848,7 +2024,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/sidecar-containers/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/sidecar-containers/" class="md-nav__link">
         Sidecar Containers
       </a>
     </li>
@@ -1862,7 +2038,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/liveness-and-readiness/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/liveness-and-readiness/" class="md-nav__link">
         Liveness and Readiness
       </a>
     </li>
@@ -1876,7 +2052,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/pipeline-customization/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/pipeline-customization/" class="md-nav__link">
         Pipeline Customization
       </a>
     </li>
@@ -1890,7 +2066,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/dra/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/dra/" class="md-nav__link">
         Dynamic Resource Allocation
       </a>
     </li>
@@ -1904,7 +2080,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/istio/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/istio/" class="md-nav__link">
         Running on Istio
       </a>
     </li>
@@ -1918,7 +2094,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/max-message-size/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/max-message-size/" class="md-nav__link">
         Maximum Message Size
       </a>
     </li>
@@ -1932,7 +2108,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/update-strategy/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/update-strategy/" class="md-nav__link">
         Update Strategy
       </a>
     </li>
@@ -1953,7 +2129,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/kustomize/kustomize/" class="md-nav__link">
+      <a href="../../user-guide/reference/kustomize/kustomize/" class="md-nav__link">
         Kustomize Integration
       </a>
     </li>
@@ -1967,7 +2143,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../APIs/" class="md-nav__link">
+      <a href="../../APIs/" class="md-nav__link">
         APIs
       </a>
     </li>
@@ -2014,7 +2190,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../use-cases/overview/" class="md-nav__link">
+      <a href="../../user-guide/use-cases/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -2028,7 +2204,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../use-cases/monitoring-and-observability/" class="md-nav__link">
+      <a href="../../user-guide/use-cases/monitoring-and-observability/" class="md-nav__link">
         Monitoring and Observability
       </a>
     </li>
@@ -2075,7 +2251,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../UI/overview/" class="md-nav__link">
+      <a href="../../user-guide/UI/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -2089,7 +2265,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../UI/errors/" class="md-nav__link">
+      <a href="../../user-guide/UI/errors/" class="md-nav__link">
         Errors
       </a>
     </li>
@@ -2103,7 +2279,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../UI/logs/" class="md-nav__link">
+      <a href="../../user-guide/UI/logs/" class="md-nav__link">
         Logs
       </a>
     </li>
@@ -2117,7 +2293,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../UI/metrics-tab/" class="md-nav__link">
+      <a href="../../user-guide/UI/metrics-tab/" class="md-nav__link">
         Metrics
       </a>
     </li>
@@ -2131,7 +2307,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../UI/pods-view/" class="md-nav__link">
+      <a href="../../user-guide/UI/pods-view/" class="md-nav__link">
         Pods View
       </a>
     </li>
@@ -2152,7 +2328,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../FAQ/" class="md-nav__link">
+      <a href="../../user-guide/FAQ/" class="md-nav__link">
         FAQs
       </a>
     </li>
@@ -2200,7 +2376,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/releases/" class="md-nav__link">
+      <a href="../../operations/releases/" class="md-nav__link">
         Releases ⧉
       </a>
     </li>
@@ -2214,7 +2390,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/installation/" class="md-nav__link">
+      <a href="../../operations/installation/" class="md-nav__link">
         Installation
       </a>
     </li>
@@ -2228,7 +2404,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/validating-webhook/" class="md-nav__link">
+      <a href="../../operations/validating-webhook/" class="md-nav__link">
         Validating Webhook
       </a>
     </li>
@@ -2268,7 +2444,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/controller-configmap/" class="md-nav__link">
+      <a href="../../operations/controller-configmap/" class="md-nav__link">
         Controller Configuration
       </a>
     </li>
@@ -2308,7 +2484,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/ui/ui-access-path/" class="md-nav__link">
+      <a href="../../operations/ui/ui-access-path/" class="md-nav__link">
         Access Path
       </a>
     </li>
@@ -2348,7 +2524,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/ui/authn/authentication/" class="md-nav__link">
+      <a href="../../operations/ui/authn/authentication/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -2362,7 +2538,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/ui/authn/dex/" class="md-nav__link">
+      <a href="../../operations/ui/authn/dex/" class="md-nav__link">
         SSO with Dex
       </a>
     </li>
@@ -2376,7 +2552,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/ui/authn/local-users/" class="md-nav__link">
+      <a href="../../operations/ui/authn/local-users/" class="md-nav__link">
         Local Users
       </a>
     </li>
@@ -2397,7 +2573,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/ui/authz/rbac/" class="md-nav__link">
+      <a href="../../operations/ui/authz/rbac/" class="md-nav__link">
         Authorization
       </a>
     </li>
@@ -2418,7 +2594,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/metrics/metrics/" class="md-nav__link">
+      <a href="../../operations/metrics/metrics/" class="md-nav__link">
         Metrics
       </a>
     </li>
@@ -2432,7 +2608,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/grafana/" class="md-nav__link">
+      <a href="../../operations/grafana/" class="md-nav__link">
         Grafana
       </a>
     </li>
@@ -2453,7 +2629,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/security/" class="md-nav__link">
+      <a href="../../operations/security/" class="md-nav__link">
         Security
       </a>
     </li>
@@ -2501,7 +2677,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../development/development/" class="md-nav__link">
+      <a href="../../development/development/" class="md-nav__link">
         Development
       </a>
     </li>
@@ -2541,7 +2717,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specifications/overview/" class="md-nav__link">
+      <a href="../../specifications/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -2555,7 +2731,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specifications/controllers/" class="md-nav__link">
+      <a href="../../specifications/controllers/" class="md-nav__link">
         Controllers
       </a>
     </li>
@@ -2569,7 +2745,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specifications/autoscaling/" class="md-nav__link">
+      <a href="../../specifications/autoscaling/" class="md-nav__link">
         Autoscaling
       </a>
     </li>
@@ -2583,7 +2759,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specifications/edges-buffers-buckets/" class="md-nav__link">
+      <a href="../../specifications/edges-buffers-buckets/" class="md-nav__link">
         Edges, Buffers and Buckets
       </a>
     </li>
@@ -2597,7 +2773,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specifications/side-inputs/" class="md-nav__link">
+      <a href="../../specifications/side-inputs/" class="md-nav__link">
         Side Inputs
       </a>
     </li>
@@ -2611,7 +2787,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specifications/authorization/" class="md-nav__link">
+      <a href="../../specifications/authorization/" class="md-nav__link">
         UI Authorization
       </a>
     </li>
@@ -2632,7 +2808,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../development/debugging/" class="md-nav__link">
+      <a href="../../development/debugging/" class="md-nav__link">
         How To Debug
       </a>
     </li>
@@ -2646,7 +2822,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../development/static-code-analysis/" class="md-nav__link">
+      <a href="../../development/static-code-analysis/" class="md-nav__link">
         Static Code Analysis
       </a>
     </li>
@@ -2660,7 +2836,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../development/releasing/" class="md-nav__link">
+      <a href="../../development/releasing/" class="md-nav__link">
         How To Release
       </a>
     </li>
@@ -2716,23 +2892,199 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#build-your-own-user-defined-sources" class="md-nav__link">
-    Build Your Own User-defined Sources
+  <a href="#overview" class="md-nav__link">
+    Overview
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#available-environment-variables" class="md-nav__link">
-    Available Environment Variables
+  <a href="#core-components" class="md-nav__link">
+    Core Components
   </a>
+  
+    <nav class="md-nav" aria-label="Core Components">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#isb-reader" class="md-nav__link">
+    ISB Reader
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#isb-writer" class="md-nav__link">
+    ISB Writer
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tracker" class="md-nav__link">
+    Tracker
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#watermark-computation" class="md-nav__link">
+    Watermark Computation
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#user-defined-sources-contributed-from-the-open-source-community" class="md-nav__link">
-    User-defined sources contributed from the open source community
+  <a href="#maintaining-active-work-with-semaphores" class="md-nav__link">
+    Maintaining Active Work with Semaphores
   </a>
+  
+    <nav class="md-nav" aria-label="Maintaining Active Work with Semaphores">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    How It Works
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#message-lifecycle" class="md-nav__link">
+    Message Lifecycle
+  </a>
+  
+    <nav class="md-nav" aria-label="Message Lifecycle">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-points" class="md-nav__link">
+    Key Points
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#offset-tracking-for-reduce-correctness" class="md-nav__link">
+    Offset Tracking for Reduce Correctness
+  </a>
+  
+    <nav class="md-nav" aria-label="Offset Tracking for Reduce Correctness">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-btreemap" class="md-nav__link">
+    Why BTreeMap?
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-lowest-watermark-guarantee" class="md-nav__link">
+    The Lowest Watermark Guarantee
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-this-matters-for-reduce" class="md-nav__link">
+    Why This Matters for Reduce
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#watermark-publishing" class="md-nav__link">
+    Watermark Publishing
+  </a>
+  
+    <nav class="md-nav" aria-label="Watermark Publishing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#computing-the-watermark" class="md-nav__link">
+    Computing the Watermark
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-mapsink-vertices" class="md-nav__link">
+    For Map/Sink Vertices
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-reduce-vertices" class="md-nav__link">
+    For Reduce Vertices
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#idle-watermark-handling" class="md-nav__link">
+    Idle Watermark Handling
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#streaming-flow-patterns" class="md-nav__link">
+    Streaming Flow Patterns
+  </a>
+  
+    <nav class="md-nav" aria-label="Streaming Flow Patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#map-forwarder" class="md-nav__link">
+    Map Forwarder
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reduce-forwarder" class="md-nav__link">
+    Reduce Forwarder
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    Summary
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2748,44 +3100,293 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/sources/user-defined-sources.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/core-concepts/streaming.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="user-defined-sources">User-defined Sources<a class="headerlink" href="#user-defined-sources" title="Permanent link">&para;</a></h1>
-<p>A <code>Pipeline</code> may have multiple Sources, those sources could either be a pre-defined source such as <code>kafka</code>, <code>http</code>, etc., or a <code>user-defined source</code>.</p>
-<p>With no source data transformer, A pre-defined source vertex runs single-container pods; a user-defined source runs two-container pods.</p>
-<h2 id="build-your-own-user-defined-sources">Build Your Own User-defined Sources<a class="headerlink" href="#build-your-own-user-defined-sources" title="Permanent link">&para;</a></h2>
-<p>You can build your own user-defined sources in multiple languages.</p>
-<p>Check the links below to see the examples for different languages.</p>
+<h1 id="streaming-dataflow-in-numaflow">Streaming Dataflow in Numaflow<a class="headerlink" href="#streaming-dataflow-in-numaflow" title="Permanent link">&para;</a></h1>
+<p>This document explains how Numaflow's Rust data-plane moves data in a streaming fashion, ensuring at-least-once semantics 
+and correct <a href="../watermarks/">watermark</a> propagation for reduce operations. You can read why we changed to streaming in 
+our <a href="https://blog.numaproj.io/rewriting-numaflows-data-plane-a-foundation-for-the-future-a64fd2470cf0">blog post</a>.</p>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>Numaflow processes data as a continuous stream rather than discrete batches (a major change in 1.6). 
+The key design principles are:</p>
+<ol>
+<li><strong>Always maintain active work</strong> - Keep <code>batch_size</code> messages in-flight at all times for maximum throughput and reduce 
+   tail latency.</li>
+<li><strong>Track the smallest offset</strong> - Never advance watermarks past unprocessed data, ensuring reduce correctness (oldest work
+   yet to be completed)</li>
+<li><strong>Backpressure via semaphores</strong> - Prevent memory exhaustion while maximizing parallelism (throttling read if 
+   processing or write is pending)</li>
+</ol>
+<pre class="mermaid"><code>flowchart LR
+    subgraph "Vertex N"
+        ISB_R[ISB Reader] --&gt; Processor
+        Processor --&gt; ISB_W[ISB Writer]
+    end
+
+    subgraph "Vertex N+1"
+        ISB_R2[ISB Reader] --&gt; Processor2[Processor]
+    end
+
+    ISB_W --&gt;|ISB Edge| ISB_R2
+
+    style ISB_R fill:#4a9eff,color:#fff
+    style ISB_W fill:#4a9eff,color:#fff
+    style Processor fill:#10b981,color:#fff
+    style ISB_R2 fill:#4a9eff,color:#fff
+    style Processor2 fill:#10b981,color:#fff</code></pre>
+<h2 id="core-components">Core Components<a class="headerlink" href="#core-components" title="Permanent link">&para;</a></h2>
+<h3 id="isb-reader">ISB Reader<a class="headerlink" href="#isb-reader" title="Permanent link">&para;</a></h3>
+<p>Reads messages from the Inter-Step Buffer (e.g., JetStream), enriches them with watermarks, and tracks them until fully 
+processed, and written/forwarded to the next Vertex.</p>
+<h3 id="isb-writer">ISB Writer<a class="headerlink" href="#isb-writer" title="Permanent link">&para;</a></h3>
+<p>Writes processed messages to downstream ISB streams, handles routing based on tags/conditions, and publishes watermarks.</p>
+<h3 id="tracker">Tracker<a class="headerlink" href="#tracker" title="Permanent link">&para;</a></h3>
+<p>Maintains a sorted map (BTreeMap) of all in-flight messages per partition. Used to:</p>
 <ul>
-<li><a href="https://github.com/numaproj/numaflow-go/tree/main/examples/sourcer/simple_source/">Golang</a></li>
-<li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/source/simple/">Java</a></li>
-<li><a href="https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/source/simple_source">Python</a></li>
+<li>Track message completion for ACK/NACK</li>
+<li>Compute the lowest watermark among all in-flight messages</li>
+<li>Handle serving callbacks</li>
 </ul>
-<p>After building a docker image for the written user-defined source, specify the image as below in the vertex spec.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">input</span>
-<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">udsource</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">container</span><span class="p">:</span>
-<span class="w">            </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-source:latest</span>
+<h3 id="watermark-computation">Watermark Computation<a class="headerlink" href="#watermark-computation" title="Permanent link">&para;</a></h3>
+<p>Ensures temporal correctness by tracking event-time progress and publishing watermarks to downstream vertices.</p>
+<h2 id="maintaining-active-work-with-semaphores">Maintaining Active Work with Semaphores<a class="headerlink" href="#maintaining-active-work-with-semaphores" title="Permanent link">&para;</a></h2>
+<p>The reader maintains a bounded number of in-flight messages using a semaphore. This provides:</p>
+<ol>
+<li><strong>Constant throughput</strong> - Always <code>batch_size</code> messages being processed</li>
+<li><strong>Backpressure</strong> - Prevents unbounded memory growth</li>
+<li><strong>Graceful shutdown</strong> - Waits for all the messages to be processed before exiting</li>
+</ol>
+<pre class="mermaid"><code>sequenceDiagram
+    participant Sem as Semaphore&lt;br/&gt;(max_ack_pending)
+    participant Reader as ISB Reader
+    participant Processor as Processor
+    participant Writer as ISB Writer
+
+    Note over Sem: Initial permits = max_ack_pending
+
+    Reader-&gt;&gt;Sem: acquire_many(batch_size)
+    Sem--&gt;&gt;Reader: permits granted
+    Reader-&gt;&gt;Reader: fetch messages from ISB
+
+    loop For each message
+        Reader-&gt;&gt;Processor: send message (with 1 permit)
+        Processor-&gt;&gt;Writer: processed message
+        Writer-&gt;&gt;Writer: write to downstream ISB
+        Writer--&gt;&gt;Sem: release 1 permit (on ACK)
+    end
+
+    Note over Sem: Permits returned = ready for next batch</code></pre>
+<h3 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Reader acquires permits</strong> - before fetching messages (<code>acquire_many(batch_size)</code>)</li>
+<li><strong>Each message carries a permit</strong> - split from the batch permit</li>
+<li><strong>Permit released on ACK</strong> - when downstream confirms receipt</li>
+<li><strong>Backpressure automatic</strong> - if processing is slow, reader blocks on permit acquisition</li>
+</ol>
+<div class="highlight"><pre><span></span><code><span class="c1">// Semaphore controls max in-flight messages</span>
+<span class="kd">let</span><span class="w"> </span><span class="n">semaphore</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Arc</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="n">Semaphore</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="n">max_ack_pending</span><span class="p">));</span>
+
+<span class="k">loop</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// Block until we can process more messages</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">permits</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">semaphore</span><span class="p">.</span><span class="n">acquire_many_owned</span><span class="p">(</span><span class="n">batch_size</span><span class="p">).</span><span class="k">await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="w">    </span><span class="c1">// Fetch and process batch</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">batch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">fetch_messages</span><span class="p">(</span><span class="n">batch_size</span><span class="p">).</span><span class="k">await</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">message</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">batch</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// Each message gets 1 permit, released on ACK</span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">permit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">permits</span><span class="p">.</span><span class="n">split</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+<span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">process_message</span><span class="p">(</span><span class="n">message</span><span class="p">,</span><span class="w"> </span><span class="n">permit</span><span class="p">).</span><span class="k">await</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
 </code></pre></div>
-<h2 id="available-environment-variables">Available Environment Variables<a class="headerlink" href="#available-environment-variables" title="Permanent link">&para;</a></h2>
-<p>Some environment variables are available in the user-defined source container:</p>
+<h2 id="message-lifecycle">Message Lifecycle<a class="headerlink" href="#message-lifecycle" title="Permanent link">&para;</a></h2>
+<p>A message flows through several stages from read to acknowledgment:</p>
+<pre class="mermaid"><code>flowchart TB
+    subgraph "1. Read Phase"
+        A[Fetch from ISB/Source] --&gt; B[Enrich with Watermark]
+        B --&gt; C[Insert into Tracker]
+        C --&gt; D[Spawn WIP Loop]
+    end
+
+    subgraph "2. Process Phase"
+        D --&gt; E[Send to Processor Channel]
+        E --&gt; F[Map/Reduce Processing]
+    end
+
+    subgraph "3. Write Phase"
+        F --&gt; G[Route to Target Streams]
+        G --&gt; H[Write to Downstream ISB/Sink]
+        H --&gt; I[Await Write Confirmation]
+    end
+
+    subgraph "4. Completion Phase"
+        I --&gt; J[Send ACK/NACK via AckHandle]
+        J --&gt; K[ACK/NACK to ISB/Source]
+        K --&gt; L[Delete from Tracker]
+        L --&gt; M[Release Semaphore Permit]
+    end
+
+    style A fill:#4a9eff,color:#fff
+    style F fill:#10b981,color:#fff
+    style H fill:#f59e0b,color:#fff
+    style K fill:#ef4444,color:#fff</code></pre>
+<h3 id="key-points">Key Points<a class="headerlink" href="#key-points" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Watermark enriched at read time</strong> - Each message gets the watermark for its offset</li>
+<li><strong>Tracker insertion before processing</strong> - Ensures we never lose track of a message</li>
+<li><strong>WIP (Work-In-Progress) loop</strong> - Periodically marks message as still being processed</li>
+<li><strong>ACK/NACK triggers cleanup</strong> - Removes from tracker and releases permit</li>
+</ol>
+<h2 id="offset-tracking-for-reduce-correctness">Offset Tracking for Reduce Correctness<a class="headerlink" href="#offset-tracking-for-reduce-correctness" title="Permanent link">&para;</a></h2>
+<p>The Tracker maintains a <strong>BTreeMap</strong> of offsets per partition. This sorted structure is critical for watermark correctness:</p>
+<pre class="mermaid"><code>flowchart TB
+    subgraph "Tracker State (per partition)"
+        direction LR
+        subgraph BTreeMap["BTreeMap&amp;lt;Offset, TrackerEntry&amp;gt;"]
+            O1["Offset: 100&lt;br/&gt;WM: 1000"] 
+            O2["Offset: 105&lt;br/&gt;WM: 1050"]
+            O3["Offset: 110&lt;br/&gt;WM: 1100"]
+            O4["Offset: 115&lt;br/&gt;WM: 1150"]
+        end
+    end
+
+    O1 --&gt;|"first_key_value()"| LW[Lowest Watermark: 1000]
+
+    style O1 fill:#ef4444,color:#fff
+    style LW fill:#ef4444,color:#fff
+    style O2 fill:#4a9eff,color:#fff
+    style O3 fill:#4a9eff,color:#fff
+    style O4 fill:#4a9eff,color:#fff</code></pre>
+<h3 id="why-btreemap">Why BTreeMap?<a class="headerlink" href="#why-btreemap" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Sorted by offset</strong> - Oldest message is always <code>first_key_value()</code></li>
+<li><strong>O(log n) operations</strong> - Efficient insert/delete</li>
+<li><strong>Minimum watermark</strong> - The first entry's watermark is the oldest in-flight</li>
+</ol>
+<h3 id="the-lowest-watermark-guarantee">The Lowest Watermark Guarantee<a class="headerlink" href="#the-lowest-watermark-guarantee" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="sd">/// Returns the lowest watermark among all tracked offsets.</span>
+<span class="k">pub</span><span class="w"> </span><span class="k">async</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">lowest_watermark</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">)</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="nc">DateTime</span><span class="o">&lt;</span><span class="n">Utc</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">state</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">state</span><span class="p">.</span><span class="n">read</span><span class="p">().</span><span class="k">await</span><span class="p">;</span>
+<span class="w">    </span><span class="n">state</span><span class="p">.</span><span class="n">entries</span>
+<span class="w">        </span><span class="p">.</span><span class="n">values</span><span class="p">()</span>
+<span class="w">        </span><span class="p">.</span><span class="n">filter_map</span><span class="p">(</span><span class="o">|</span><span class="n">partition_entries</span><span class="o">|</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">partition_entries</span>
+<span class="w">                </span><span class="p">.</span><span class="n">first_key_value</span><span class="p">()</span><span class="w">  </span><span class="c1">// Oldest offset per partition</span>
+<span class="w">                </span><span class="p">.</span><span class="n">and_then</span><span class="p">(</span><span class="o">|</span><span class="p">(</span><span class="n">_</span><span class="p">,</span><span class="w"> </span><span class="n">entry</span><span class="p">)</span><span class="o">|</span><span class="w"> </span><span class="n">entry</span><span class="p">.</span><span class="n">watermark</span><span class="p">)</span>
+<span class="w">        </span><span class="p">})</span>
+<span class="w">        </span><span class="p">.</span><span class="n">min</span><span class="p">()</span><span class="w">  </span><span class="c1">// Minimum across all partitions</span>
+<span class="p">}</span>
+</code></pre></div>
+<h3 id="why-this-matters-for-reduce">Why This Matters for Reduce<a class="headerlink" href="#why-this-matters-for-reduce" title="Permanent link">&para;</a></h3>
+<p>Reduce operations group data by time windows. If we wrongly advance the watermark past unprocessed data, we will
+wrongly invoke close-of-book (COB) for windows, which will lead to incorrect results, like:</p>
+<ol>
+<li><strong>Windows close prematurely</strong> - Data arrives after window is closed</li>
+<li><strong>Late data is dropped</strong> - Correctness is violated</li>
+<li><strong>Results are wrong</strong> - Aggregations miss data</li>
+</ol>
+<p>By always publishing the <strong>lowest watermark</strong> among in-flight messages:</p>
+<pre class="mermaid"><code>flowchart LR
+    subgraph "In-Flight Messages"
+        M1["Msg 1&lt;br/&gt;WM: 1000"]
+        M2["Msg 2&lt;br/&gt;WM: 1200"]
+        M3["Msg 3&lt;br/&gt;WM: 1100"]
+    end
+
+    M1 &amp; M2 &amp; M3 --&gt; MIN["min() = 1000"]
+    MIN --&gt; PUB["Published WM: 1000"]
+
+    subgraph "Downstream Reduce"
+        W1["Window [0-1000]&lt;br/&gt;Safe to close (COB)"]
+        W2["Window [1000-2000]&lt;br/&gt;Keep open"]
+    end
+
+    PUB --&gt; W1 &amp; W2
+
+    style M1 fill:#ef4444,color:#fff
+    style MIN fill:#ef4444,color:#fff
+    style PUB fill:#ef4444,color:#fff
+    style W1 fill:#10b981,color:#fff
+    style W2 fill:#f59e0b,color:#fff</code></pre>
+<p><strong>The watermark is a promise</strong>: "No more data with <code>event-time &lt; watermark</code> will arrive."</p>
+<h2 id="watermark-publishing">Watermark Publishing<a class="headerlink" href="#watermark-publishing" title="Permanent link">&para;</a></h2>
+<p>Watermarks are published to downstream vertices via OT (Offset-Timeline) stores in JetStream KV.</p>
+<h3 id="computing-the-watermark">Computing the Watermark<a class="headerlink" href="#computing-the-watermark" title="Permanent link">&para;</a></h3>
+<p>The watermark to publish depends on the vertex type:</p>
+<pre class="mermaid"><code>flowchart TB
+    START[Compute Watermark] --&gt; CHECK{Window Manager&lt;br/&gt;Configured?}
+
+    CHECK --&gt;|Yes - Reduce Vertex| WM_WIN["oldest_window_end_time - 1ms"]
+    CHECK --&gt;|No - Map/Sink| WM_TRACK["tracker.lowest_watermark()"]
+
+    WM_WIN --&gt; COMPARE["min(window_wm, latest_fetched_wm)"]
+    WM_TRACK --&gt; PUBLISH
+    COMPARE --&gt; PUBLISH[Publish to OT Store]
+
+    style START fill:#4a9eff,color:#fff
+    style PUBLISH fill:#10b981,color:#fff</code></pre>
+<h3 id="for-mapsink-vertices">For Map/Sink Vertices<a class="headerlink" href="#for-mapsink-vertices" title="Permanent link">&para;</a></h3>
+<p>Use the tracker's lowest watermark - the minimum watermark among all in-flight messages.</p>
+<h3 id="for-reduce-vertices">For Reduce Vertices<a class="headerlink" href="#for-reduce-vertices" title="Permanent link">&para;</a></h3>
+<p>Use the oldest open window's <code>end time - 1ms</code>. This ensures:</p>
 <ul>
-<li><code>NUMAFLOW_NAMESPACE</code> - Namespace.</li>
-<li><code>NUMAFLOW_POD</code> - Pod name.</li>
-<li><code>NUMAFLOW_REPLICA</code> - Replica index.</li>
-<li><code>NUMAFLOW_PIPELINE_NAME</code> - Name of the pipeline.</li>
-<li><code>NUMAFLOW_VERTEX_NAME</code> - Name of the vertex.</li>
+<li>Windows aren't closed until all their data is processed</li>
+<li>Late data within allowed lateness is handled correctly</li>
 </ul>
-<h2 id="user-defined-sources-contributed-from-the-open-source-community">User-defined sources contributed from the open source community<a class="headerlink" href="#user-defined-sources-contributed-from-the-open-source-community" title="Permanent link">&para;</a></h2>
-<p>If you're looking for examples and usages contributed by the open source community, head over to <a href="https://github.com/orgs/numaproj-contrib/repositories">the numaproj-contrib repositories</a>.</p>
-<p>These user-defined sources like AWS SQS, GCP Pub/Sub, provide valuable insights and guidance on how to use and write a user-defined source.</p>
+<h3 id="idle-watermark-handling">Idle Watermark Handling<a class="headerlink" href="#idle-watermark-handling" title="Permanent link">&para;</a></h3>
+<p>When no data is flowing, we still need to advance watermarks:</p>
+<ol>
+<li><strong>Detect idle state</strong> - No messages read for a period</li>
+<li><strong>Fetch head WMB</strong> - Get the latest watermark marker from upstream</li>
+<li><strong>Publish idle watermark</strong> - Allow downstream to make progress</li>
+</ol>
+<h2 id="streaming-flow-patterns">Streaming Flow Patterns<a class="headerlink" href="#streaming-flow-patterns" title="Permanent link">&para;</a></h2>
+<h3 id="map-forwarder">Map Forwarder<a class="headerlink" href="#map-forwarder" title="Permanent link">&para;</a></h3>
+<pre class="mermaid"><code>flowchart LR
+    subgraph "Map Vertex"
+        R[ISB Reader] --&gt;|ReceiverStream| M[Mapper]
+        M --&gt;|ReceiverStream| W[ISB Writer]
+    end
+
+    R -.-&gt;|"streaming_read()"| STREAM1[Message Stream]
+    M -.-&gt;|"streaming_map()"| STREAM2[Mapped Stream]
+    W -.-&gt;|"streaming_write()"| DONE[Complete]
+
+    style R fill:#4a9eff,color:#fff
+    style M fill:#10b981,color:#fff
+    style W fill:#f59e0b,color:#fff</code></pre>
+<p>All components are connected via Tokio channels <a href="https://docs.rs/tokio-stream/latest/tokio_stream/wrappers/struct.ReceiverStream.html"><code>ReceiverStream</code></a>, 
+enabling true streaming without batch boundaries.</p>
+<h3 id="reduce-forwarder">Reduce Forwarder<a class="headerlink" href="#reduce-forwarder" title="Permanent link">&para;</a></h3>
+<pre class="mermaid"><code>flowchart LR
+    subgraph "Reduce Vertex"
+        R[ISB Reader] --&gt; PBQ[Persistent&lt;br/&gt;Bounded Queue]
+        PBQ --&gt; RED[Reducer]
+        PBQ --&gt; WAL[WAL]
+        RED --&gt; W[ISB Writer]
+    end
+
+    RED -.-&gt;|"Keyed Windowing"| WINDOWS["Window 1&lt;br/&gt;Window 2&lt;br/&gt;Window N"]
+
+    style R fill:#4a9eff,color:#fff
+    style PBQ fill:#8b5cf6,color:#fff
+    style WAL fill:#ef4444,color:#fff
+    style RED fill:#10b981,color:#fff
+    style W fill:#f59e0b,color:#fff</code></pre>
+<h3 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h3>
+<p>The streaming architecture ensures that:</p>
+<ol>
+<li><strong>Throughput is maximized</strong> - Always <code>batch_size</code> messages in flight</li>
+<li><strong>Memory is bounded</strong> - Semaphore prevents unbounded growth</li>
+<li><strong>Reduce is correct</strong> - Watermarks never advance past unprocessed data</li>
+<li><strong>Recovery is possible</strong> - Tracker + WIP loop enables at-least-once or "almost" exactly-once</li>
+<li><strong>WAL</strong> - WAL is used for recovery in case of pod restarts for Reduce vertices.</li>
+</ol>
 
               
             </article>
@@ -2808,7 +3409,7 @@
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../sqs/" class="md-footer__link md-footer__link--prev" aria-label="Previous: SQS Source" rel="prev">
+        <a href="../inter-step-buffer-service/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Inter-Step Buffer Service" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -2817,20 +3418,20 @@
               <span class="md-footer__direction">
                 Previous
               </span>
-              SQS Source
+              Inter-Step Buffer Service
             </div>
           </div>
         </a>
       
       
         
-        <a href="../transformer/overview/" class="md-footer__link md-footer__link--next" aria-label="Next: Overview" rel="next">
+        <a href="../watermarks/" class="md-footer__link md-footer__link--next" aria-label="Next: Watermarks" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              Overview
+              Watermarks
             </div>
           </div>
           <div class="md-footer__button md-icon">
@@ -2860,10 +3461,10 @@
     <div class="md-dialog" data-md-component="dialog">
       <div class="md-dialog__inner md-typeset"></div>
     </div>
-    <script id="__config" type="application/json">{"base": "../../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.top", "content.tabs.link"], "search": "../../../assets/javascripts/workers/search.b97dbffb.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version.title": "Select version"}}</script>
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.top", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.b97dbffb.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version.title": "Select version"}}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.6c7ad80a.min.js"></script>
+      <script src="../../assets/javascripts/bundle.6c7ad80a.min.js"></script>
       
     
   </body>
