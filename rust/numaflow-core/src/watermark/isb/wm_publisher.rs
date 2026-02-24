@@ -19,6 +19,9 @@ use crate::watermark::wmb::WMB;
 /// Interval at which the pod sends heartbeats.
 const DEFAULT_POD_HEARTBEAT_INTERVAL: u16 = 5;
 
+/// Interval for logging watermark publish summary
+const WATERMARK_LOG_INTERVAL: Duration = Duration::from_secs(60);
+
 /// LastPublishedState is the state of the last published watermark and offset
 /// for a partition.
 #[derive(Clone, Debug)]
@@ -63,6 +66,8 @@ pub(crate) struct ISBWatermarkPublisher {
     ot_buckets: HashMap<&'static str, async_nats::jetstream::kv::Store>,
     /// whether this publisher is for a source vertex (data can be out of order).
     is_source: bool,
+    /// Last time the watermark summary was logged
+    last_log_time: Instant,
 }
 
 impl Drop for ISBWatermarkPublisher {
@@ -123,6 +128,7 @@ impl ISBWatermarkPublisher {
             last_published_wm,
             ot_buckets,
             is_source,
+            last_log_time: Instant::now(),
         })
     }
 
@@ -240,6 +246,49 @@ impl ISBWatermarkPublisher {
 
         // reset the last published time
         last_state.last_published_time = Instant::now();
+
+        // Log summary periodically
+        self.watermark_log_summary(stream, watermark);
+    }
+
+    /// Logs a summary of the watermark publish state if the log interval has elapsed.
+    fn watermark_log_summary(&mut self, stream: &Stream, published_wm: i64) {
+        if self.last_log_time.elapsed() < WATERMARK_LOG_INTERVAL {
+            return;
+        }
+        self.last_log_time = Instant::now();
+
+        let summary = self.build_summary(stream, published_wm);
+        info!("{}", summary);
+    }
+
+    /// Builds a summary string of the watermark publish state.
+    fn build_summary(&self, stream: &Stream, published_wm: i64) -> String {
+        let mut summary = String::new();
+
+        // Add published watermark info
+        summary.push_str(&format!(
+            "ISB Publish Summary: processor={}, stream={}, published_wm={}, ",
+            self.processor_name, stream.name, published_wm
+        ));
+
+        // Add last published watermarks per vertex and partition
+        let mut last_wm_parts: Vec<String> = Vec::new();
+        for (vertex, partitions) in &self.last_published_wm {
+            let mut partition_wms: Vec<String> = partitions
+                .iter()
+                .map(|(p, state)| format!("p{}={{offset={},wm={}}}", p, state.offset, state.watermark))
+                .collect();
+            partition_wms.sort();
+            last_wm_parts.push(format!("{}:[{}]", vertex, partition_wms.join(",")));
+        }
+        last_wm_parts.sort();
+        summary.push_str(&format!(
+            "last_published={{{}}}",
+            last_wm_parts.join(", ")
+        ));
+
+        summary
     }
 }
 

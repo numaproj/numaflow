@@ -3,7 +3,7 @@
 //! the watermark to the ISB. Unlike other vertices we don't use pod as the processing entity for publishing
 //! watermark we use the partition(watermark originates here).
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use tracing::info;
@@ -13,6 +13,9 @@ use crate::config::pipeline::watermark::BucketConfig;
 use crate::error;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
 
+/// Interval for logging watermark publish summary
+const WATERMARK_LOG_INTERVAL: Duration = Duration::from_secs(60);
+
 /// SourcePublisher is the watermark publisher for the source vertex.
 pub(crate) struct SourceWatermarkPublisher {
     js_context: async_nats::jetstream::Context,
@@ -20,6 +23,14 @@ pub(crate) struct SourceWatermarkPublisher {
     source_config: BucketConfig,
     to_vertex_configs: Vec<BucketConfig>,
     publishers: HashMap<String, ISBWatermarkPublisher>,
+    /// Last time the watermark summary was logged for source watermark
+    last_source_log_time: Instant,
+    /// Last time the watermark summary was logged for ISB watermark
+    last_isb_log_time: Instant,
+    /// Last published source watermarks per partition
+    last_source_wm: HashMap<u16, i64>,
+    /// Last published ISB watermarks per partition and stream
+    last_isb_wm: HashMap<u16, HashMap<String, i64>>,
 }
 
 impl SourceWatermarkPublisher {
@@ -36,6 +47,10 @@ impl SourceWatermarkPublisher {
             source_config,
             to_vertex_configs,
             publishers: HashMap::new(),
+            last_source_log_time: Instant::now(),
+            last_isb_log_time: Instant::now(),
+            last_source_wm: HashMap::new(),
+            last_isb_wm: HashMap::new(),
         })
     }
 
@@ -93,6 +108,10 @@ impl SourceWatermarkPublisher {
                 idle,
             )
             .await;
+
+        // Track and log summary periodically
+        self.last_source_wm.insert(partition, watermark);
+        self.source_watermark_log_summary(partition, watermark);
     }
 
     /// Publishes the ISB watermark for the input partition. It internally uses ISB publisher with
@@ -128,6 +147,13 @@ impl SourceWatermarkPublisher {
             .expect("Publisher not found")
             .publish_watermark(stream, offset, watermark, idle)
             .await;
+
+        // Track and log summary periodically
+        self.last_isb_wm
+            .entry(input_partition)
+            .or_default()
+            .insert(stream.name.to_string(), watermark);
+        self.isb_watermark_log_summary(input_partition, stream, watermark);
     }
 
     /// Initializes the active partitions by creating a publisher for each partition.
@@ -146,6 +172,76 @@ impl SourceWatermarkPublisher {
                 self.publishers.insert(processor_name.clone(), publisher);
             }
         }
+    }
+
+    /// Logs a summary of the source watermark publish state if the log interval has elapsed.
+    fn source_watermark_log_summary(&mut self, partition: u16, published_wm: i64) {
+        if self.last_source_log_time.elapsed() < WATERMARK_LOG_INTERVAL {
+            return;
+        }
+        self.last_source_log_time = Instant::now();
+
+        let summary = self.build_source_summary(partition, published_wm);
+        info!("{}", summary);
+    }
+
+    /// Builds a summary string of the source watermark publish state.
+    fn build_source_summary(&self, partition: u16, published_wm: i64) -> String {
+        let mut summary = String::new();
+
+        // Add published watermark info
+        summary.push_str(&format!(
+            "Source Publish Summary: vertex={}, partition={}, published_wm={}, ",
+            self.source_config.vertex, partition, published_wm
+        ));
+
+        // Add last published watermarks per partition
+        let mut partition_wms: Vec<String> = self
+            .last_source_wm
+            .iter()
+            .map(|(p, wm)| format!("p{}={}", p, wm))
+            .collect();
+        partition_wms.sort();
+        summary.push_str(&format!("last_published=[{}]", partition_wms.join(",")));
+
+        summary
+    }
+
+    /// Logs a summary of the ISB watermark publish state if the log interval has elapsed.
+    fn isb_watermark_log_summary(&mut self, partition: u16, stream: &Stream, published_wm: i64) {
+        if self.last_isb_log_time.elapsed() < WATERMARK_LOG_INTERVAL {
+            return;
+        }
+        self.last_isb_log_time = Instant::now();
+
+        let summary = self.build_isb_summary(partition, stream, published_wm);
+        info!("{}", summary);
+    }
+
+    /// Builds a summary string of the ISB watermark publish state.
+    fn build_isb_summary(&self, partition: u16, stream: &Stream, published_wm: i64) -> String {
+        let mut summary = String::new();
+
+        // Add published watermark info
+        summary.push_str(&format!(
+            "Source ISB Publish Summary: vertex={}, partition={}, stream={}, published_wm={}, ",
+            self.source_config.vertex, partition, stream.name, published_wm
+        ));
+
+        // Add last published watermarks per partition and stream
+        let mut partition_parts: Vec<String> = Vec::new();
+        for (p, streams) in &self.last_isb_wm {
+            let mut stream_wms: Vec<String> = streams
+                .iter()
+                .map(|(s, wm)| format!("{}={}", s, wm))
+                .collect();
+            stream_wms.sort();
+            partition_parts.push(format!("p{}:{{{}}}", p, stream_wms.join(",")));
+        }
+        partition_parts.sort();
+        summary.push_str(&format!("last_published=[{}]", partition_parts.join(", ")));
+
+        summary
     }
 }
 
