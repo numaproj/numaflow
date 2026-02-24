@@ -270,7 +270,7 @@ impl KVStore for SimpleKVStore {
     }
 
     fn name(&self) -> &str {
-        &self.name
+        self.name
     }
 
     async fn watch(&self, revision: Option<u64>) -> Result<KVWatchStream, KVError> {
@@ -374,8 +374,9 @@ impl Stream for SimpleKVWatchStream {
                 self.closed = true;
                 return Poll::Ready(None);
             }
-            Err(broadcast::error::TryRecvError::Empty)
-            | Err(broadcast::error::TryRecvError::Lagged(_)) => {
+            Err(
+                broadcast::error::TryRecvError::Empty | broadcast::error::TryRecvError::Lagged(_),
+            ) => {
                 // No close signal, continue
             }
         }
@@ -387,8 +388,8 @@ impl Stream for SimpleKVWatchStream {
         }
 
         // First, replay history
-        if self.history_index < self.history.len() {
-            let entry = (&self.history[self.history_index]).into();
+        if let Some(history_entry) = self.history.get(self.history_index) {
+            let entry = history_entry.into();
             self.history_index += 1;
             self.items_emitted += 1;
             return Poll::Ready(Some(entry));
@@ -643,6 +644,6 @@ mod tests {
         // Adding 4th should trim oldest
         state.record_history("k4".to_string(), Bytes::from("v4"), KVWatchOp::Put);
         assert_eq!(state.history.len(), 3);
-        assert_eq!(state.history[0].key, "k2");
+        assert_eq!(state.history.first().map(|e| e.key.as_str()), Some("k2"));
     }
 }
