@@ -8,8 +8,8 @@ use rcgen::{
     CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair, KeyUsagePurpose,
 };
 use rustls::server::ServerConfig;
-use rustls_pemfile::{certs, private_key};
-use std::io::Cursor;
+use rustls_pki_types::pem::PemObject;
+use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use time::{Duration, OffsetDateTime};
 
 /// ALPN protocols: h2 for gRPC, http/1.1 for REST. Matches Go server NextProtos.
@@ -45,12 +45,11 @@ pub(crate) async fn build_rustls_config() -> Result<RustlsConfig> {
     let cert_pem = cert.pem();
     let key_pem = signing_key.serialize_pem();
 
-    let certs: Vec<_> = certs(&mut Cursor::new(cert_pem.as_bytes()))
-        .collect::<std::result::Result<Vec<_>, std::io::Error>>()
+    let cert = CertificateDer::from_pem_slice(cert_pem.as_bytes())
         .map_err(|e| Error::TlsConfiguration(format!("Failed to parse certificate PEM: {}", e)))?;
-    let key = private_key(&mut Cursor::new(key_pem.as_bytes()))
-        .map_err(|e| Error::TlsConfiguration(format!("Failed to parse key PEM: {}", e)))?
-        .ok_or_else(|| Error::TlsConfiguration("No private key found in PEM".to_string()))?;
+    let certs = vec![cert];
+    let key = PrivateKeyDer::from_pem_slice(key_pem.as_bytes())
+        .map_err(|e| Error::TlsConfiguration(format!("Failed to parse key PEM: {}", e)))?;
 
     let mut server_config = ServerConfig::builder()
         .with_no_client_auth()

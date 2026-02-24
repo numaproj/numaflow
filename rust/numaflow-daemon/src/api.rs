@@ -185,43 +185,19 @@ mod tests {
             .get("processingRates")
             .and_then(|v| v.as_object())
             .expect("processingRates");
-        assert_eq!(
-            rates
-                .get("default")
-                .and_then(|v| v.get("value"))
-                .and_then(|v| v.as_f64()),
-            Some(67.0)
-        );
-        assert_eq!(
-            rates
-                .get("1m")
-                .and_then(|v| v.get("value"))
-                .and_then(|v| v.as_f64()),
-            Some(10.0)
-        );
-        assert_eq!(
-            rates
-                .get("5m")
-                .and_then(|v| v.get("value"))
-                .and_then(|v| v.as_f64()),
-            Some(50.5)
-        );
-        assert_eq!(
-            rates
-                .get("15m")
-                .and_then(|v| v.get("value"))
-                .and_then(|v| v.as_f64()),
-            Some(150.0)
-        );
+        // ProtoJSON: DoubleValue uses raw number
+        assert_eq!(rates.get("default").and_then(|v| v.as_f64()), Some(67.0));
+        assert_eq!(rates.get("1m").and_then(|v| v.as_f64()), Some(10.0));
+        assert_eq!(rates.get("5m").and_then(|v| v.as_f64()), Some(50.5));
+        assert_eq!(rates.get("15m").and_then(|v| v.as_f64()), Some(150.0));
         let pendings = metrics
             .get("pendings")
             .and_then(|v| v.as_object())
             .expect("pendings");
-        // Int64Value uses string in proto3 JSON
+        // ProtoJSON: Int64Value uses raw string
         assert_eq!(
             pendings
                 .get("default")
-                .and_then(|v| v.get("value"))
                 .and_then(|v| v.as_str())
                 .and_then(|s| s.parse::<i64>().ok()),
             Some(67)
@@ -229,7 +205,6 @@ mod tests {
         assert_eq!(
             pendings
                 .get("1m")
-                .and_then(|v| v.get("value"))
                 .and_then(|v| v.as_str())
                 .and_then(|s| s.parse::<i64>().ok()),
             Some(10)
