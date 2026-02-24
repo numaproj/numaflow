@@ -31,8 +31,10 @@ impl SourceWatermarkFetcher {
     /// processors.
     pub(crate) fn fetch_source_watermark(&mut self) -> Watermark {
         let mut min_wm = i64::MAX;
+        let mut active_count = 0;
+        let mut processor_wms: Vec<(String, i64)> = Vec::new();
 
-        for (_, processor) in self
+        for (name, processor) in self
             .processor_manager
             .processors
             .read()
@@ -43,6 +45,7 @@ impl SourceWatermarkFetcher {
             if !processor.is_active() {
                 continue;
             }
+            active_count += 1;
 
             // Only consider the head watermark of the processor (source has only partition 0).
             // Skip processors that don't have partition 0 (e.g. from prepopulate with different config).
@@ -50,6 +53,7 @@ impl SourceWatermarkFetcher {
                 continue;
             };
             let head_wm = timeline.get_head_watermark();
+            processor_wms.push((String::from_utf8_lossy(name).to_string(), head_wm));
 
             // Skip uninitialized watermarks (-1) to avoid using them as the minimum.
             // This matches the Go implementation behavior where -1 indicates no valid watermark yet.
@@ -64,6 +68,14 @@ impl SourceWatermarkFetcher {
 
         let watermark =
             Watermark::from_timestamp_millis(min_wm).expect("Failed to parse watermark");
+
+        // Log every fetch for debugging
+        info!(
+            wm = min_wm,
+            active_processors = active_count,
+            processor_wms = ?processor_wms,
+            "source_wm_fetch"
+        );
 
         // Log summary periodically
         self.watermark_log_summary(&watermark);

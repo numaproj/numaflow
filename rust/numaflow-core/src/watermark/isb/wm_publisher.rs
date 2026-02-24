@@ -184,7 +184,7 @@ impl ISBWatermarkPublisher {
             .get_mut(&stream.partition)
             .expect("should have partition");
 
-        info!(offset = offset, watermark = watermark, last_state_offset = last_state.offset, last_state_watermark = last_state.watermark, "Publishing watermark");
+        info!(offset = offset, watermark = watermark, last_state_offset = last_state.offset, last_state_watermark = last_state.watermark, stream = ?stream, "Publishing watermark");
 
         // Offset smaller than last published: out-of-order completion (e.g. offset 5 acked after 10).
         // Do not publish and do not raise last_state.watermark — we didn't publish this (offset, wm),
@@ -192,7 +192,13 @@ impl ISBWatermarkPublisher {
         // Tracker uses BTreeMap by offset so its lowest_watermark does not regress; the only way we
         // see a high watermark with a low offset here is out-of-order ack. Just advance stored offset.
         if offset < last_state.offset {
-            info!(offset = offset, watermark = watermark, last_state_offset = last_state.offset, last_state_watermark = last_state.watermark, "Out-of-order completion, skipping publish");
+            info!(
+                offset = offset,
+                watermark = watermark,
+                last_state_offset = last_state.offset,
+                last_state_watermark = last_state.watermark,
+                "Out-of-order completion, skipping publish"
+            );
             last_state.offset = last_state.offset.max(offset);
             return;
         }
@@ -207,7 +213,13 @@ impl ISBWatermarkPublisher {
         // We should've published watermark for offset 3605646 and skipped publishing for offset 3605637
         // if watermark cannot be computed, still we should publish the last known valid WM for the latest offset
         if watermark == last_state.watermark || watermark == -1 {
-            info!(offset = offset, watermark = watermark, last_state_offset = last_state.offset, last_state_watermark = last_state.watermark, "Same watermark or watermark cannot be computed, skipping publish");
+            info!(
+                offset = offset,
+                watermark = watermark,
+                last_state_offset = last_state.offset,
+                last_state_watermark = last_state.watermark,
+                "Same watermark or watermark cannot be computed, skipping publish"
+            );
             last_state.offset = last_state.offset.max(offset);
             return;
         }
@@ -290,16 +302,15 @@ impl ISBWatermarkPublisher {
         for (vertex, partitions) in &self.last_published_wm {
             let mut partition_wms: Vec<String> = partitions
                 .iter()
-                .map(|(p, state)| format!("p{}={{offset={},wm={}}}", p, state.offset, state.watermark))
+                .map(|(p, state)| {
+                    format!("p{}={{offset={},wm={}}}", p, state.offset, state.watermark)
+                })
                 .collect();
             partition_wms.sort();
             last_wm_parts.push(format!("{}:[{}]", vertex, partition_wms.join(",")));
         }
         last_wm_parts.sort();
-        summary.push_str(&format!(
-            "last_published={{{}}}",
-            last_wm_parts.join(", ")
-        ));
+        summary.push_str(&format!("last_published={{{}}}", last_wm_parts.join(", ")));
 
         summary
     }

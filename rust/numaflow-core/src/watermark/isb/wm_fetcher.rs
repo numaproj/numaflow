@@ -55,10 +55,13 @@ impl ISBWatermarkFetcher {
 
     /// Fetches the watermark for the given offset and partition.
     pub(crate) fn fetch_watermark(&mut self, offset: i64, partition_idx: u16) -> Watermark {
+        let mut processor_wms: Vec<(&str, Vec<(String, i64)>)> = Vec::new();
+
         // Iterate over all the processor managers and get the smallest watermark. (join case)
         for (edge, processor_manager) in self.processor_managers.iter() {
             let mut epoch = i64::MAX;
             let mut processors_to_delete = Vec::new();
+            let mut edge_processor_wms: Vec<(String, i64)> = Vec::new();
 
             // iterate over all the processors and get the smallest watermark
             processor_manager
@@ -70,6 +73,8 @@ impl ISBWatermarkFetcher {
                     // we only need to consider the timeline for the requested partition
                     if let Some(timeline) = processor.timelines.get(&partition_idx) {
                         let t = timeline.get_event_time(offset);
+                        edge_processor_wms
+                            .push((String::from_utf8_lossy(name).to_string(), t));
                         if t < epoch {
                             epoch = t;
                         }
@@ -92,6 +97,8 @@ impl ISBWatermarkFetcher {
                     }
                 });
 
+            processor_wms.push((edge, edge_processor_wms));
+
             // delete the processors that are inactive
             for name in processors_to_delete {
                 processor_manager.delete_processor(&name);
@@ -110,6 +117,15 @@ impl ISBWatermarkFetcher {
         }
         // now we computed and updated for this partition, we just need to compare across partitions.
         let watermark = self.get_watermark();
+
+        // Log every fetch for debugging
+        info!(
+            offset = offset,
+            partition = partition_idx,
+            wm = watermark.timestamp_millis(),
+            processor_wms = ?processor_wms,
+            "isb_wm_fetch"
+        );
 
         // Log summary periodically
         self.watermark_log_summary(&watermark);
