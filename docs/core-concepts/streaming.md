@@ -48,7 +48,7 @@ Writes processed messages to downstream ISB streams, handles routing based on ta
 ### Tracker
 Maintains a sorted map (BTreeMap) of all in-flight messages per partition. Used to:
 
-- Track message completion for ACK/NAK
+- Track message completion for ACK/NACK
 - Compute the lowest watermark among all in-flight messages
 - Handle serving callbacks
 
@@ -207,7 +207,7 @@ pub async fn lowest_watermark(&self) -> DateTime<Utc> {
 ### Why This Matters for Reduce
 
 Reduce operations group data by time windows. If we wrongly advance the watermark past unprocessed data, we will
-wrongly invoke close-of-book (COB) for windows and will lead to incorrect results, like:
+wrongly invoke close-of-book (COB) for windows, which will lead to incorrect results, like:
 
 1. **Windows close prematurely** - Data arrives after window is closed
 2. **Late data is dropped** - Correctness is violated
