@@ -44,10 +44,16 @@ impl SourceWatermarkFetcher {
                 continue;
             }
 
-            // only consider the head watermark of the processor (source has only partition 0)
-            let head_wm = processor.timelines.get(&0).unwrap().get_head_watermark();
+            // Only consider the head watermark of the processor (source has only partition 0).
+            // Skip processors that don't have partition 0 (e.g. from prepopulate with different config).
+            let Some(timeline) = processor.timelines.get(&0) else {
+                continue;
+            };
+            let head_wm = timeline.get_head_watermark();
 
-            if head_wm < min_wm {
+            // Skip uninitialized watermarks (-1) to avoid using them as the minimum.
+            // This matches the Go implementation behavior where -1 indicates no valid watermark yet.
+            if head_wm != -1 && head_wm < min_wm {
                 min_wm = head_wm;
             }
         }

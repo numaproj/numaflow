@@ -712,12 +712,18 @@ impl UnalignedReducer {
         msg: Message,
         actor_tx: &mpsc::Sender<UnalignedWindowMessage>,
     ) {
-        // Update the watermark - use max to ensure it never regresses (only after accepting the message)
-        // Use -1 as the default watermark if not present, so that we don't accidentally advance the watermark
-        self.current_watermark = self.current_watermark.max(
-            msg.watermark
-                .unwrap_or(DateTime::from_timestamp_millis(-1).expect("Invalid timestamp")),
-        );
+        let msg_watermark = msg
+            .watermark
+            .unwrap_or(DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"));
+
+        // Only advance watermark when this message is "on time" (event_time >= current_watermark).
+        // This avoids advancing from out-of-order messages in streaming, which would cause
+        // legitimate earlier messages to be dropped as "old message popped up".
+        if self.current_watermark.timestamp_millis() == -1
+            || msg.event_time >= self.current_watermark
+        {
+            self.current_watermark = self.current_watermark.max(msg_watermark);
+        }
 
         // Handle late messages
         if msg.is_late {
@@ -737,17 +743,21 @@ impl UnalignedReducer {
             }
         }
 
-        // Validate message event time against current watermark (must not have progressed past this message)
+        // Message is behind current watermark (e.g. reordered in streaming). Allow if within
+        // allowed lateness; otherwise drop to avoid processing stale data.
         if self.current_watermark > msg.event_time {
-            error!(
-                current_watermark = ?self.current_watermark.timestamp_millis(),
-                message_event_time = ?msg.event_time.timestamp_millis(),
-                is_late = ?msg.is_late,
-                offset = ?msg.offset,
-                "Old message popped up, Watermark has progressed past event time"
-            );
-            increment_late_message_drop_metric("old-message-popped-up");
-            return;
+            if msg.event_time < self.current_watermark.sub(self.allowed_lateness) {
+                error!(
+                    current_watermark = ?self.current_watermark.timestamp_millis(),
+                    message_event_time = ?msg.event_time.timestamp_millis(),
+                    is_late = ?msg.is_late,
+                    offset = ?msg.offset,
+                    "Old message popped up, Watermark has progressed past event time"
+                );
+                increment_late_message_drop_metric("old-message-popped-up");
+                return;
+            }
+            // Within allowed lateness: treat as reordered, process without advancing watermark.
         }
 
         // Close windows based on current watermark

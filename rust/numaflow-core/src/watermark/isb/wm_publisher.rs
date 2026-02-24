@@ -78,8 +78,10 @@ impl Drop for ISBWatermarkPublisher {
 
 impl ISBWatermarkPublisher {
     /// Creates a new ISBWatermarkPublisher.
-    /// If `is_source` is true, watermark regression warnings will be suppressed since
-    /// source data can be out of order.
+    /// When a lower watermark is published than the last one (regression), we skip publishing and
+    /// advance the stored offset so progress isn't blocked. Regression is expected in streaming
+    /// when writes complete out of order (e.g. map vertex). `is_source` is used for other
+    /// behavior (e.g. future source-specific handling).
     pub(crate) async fn new(
         processor_name: String,
         js_context: async_nats::jetstream::Context,
@@ -182,13 +184,16 @@ impl ISBWatermarkPublisher {
             .get_mut(&stream.partition)
             .expect("should have partition");
 
-        // we can avoid publishing the watermark if the offset is smaller than the last published offset
-        // since we do unordered writes to ISB, the offsets can be out of order even though the watermark
-        // is monotonically increasing.
-        // NOTE: in idling case since we reuse the control message offset, we can have the same offset
-        // with larger watermark (we should publish it).
+        info!(offset = offset, watermark = watermark, last_state_offset = last_state.offset, last_state_watermark = last_state.watermark, "Publishing watermark");
+
+        // Offset smaller than last published: out-of-order completion (e.g. offset 5 acked after 10).
+        // Do not publish and do not raise last_state.watermark — we didn't publish this (offset, wm),
+        // so absorbing a high watermark here would block all later publishes as "regression".
+        // Tracker uses BTreeMap by offset so its lowest_watermark does not regress; the only way we
+        // see a high watermark with a low offset here is out-of-order ack. Just advance stored offset.
         if offset < last_state.offset {
-            last_state.watermark = last_state.watermark.max(watermark);
+            info!(offset = offset, watermark = watermark, last_state_offset = last_state.offset, last_state_watermark = last_state.watermark, "Out-of-order completion, skipping publish");
+            last_state.offset = last_state.offset.max(offset);
             return;
         }
 
@@ -202,16 +207,24 @@ impl ISBWatermarkPublisher {
         // We should've published watermark for offset 3605646 and skipped publishing for offset 3605637
         // if watermark cannot be computed, still we should publish the last known valid WM for the latest offset
         if watermark == last_state.watermark || watermark == -1 {
+            info!(offset = offset, watermark = watermark, last_state_offset = last_state.offset, last_state_watermark = last_state.watermark, "Same watermark or watermark cannot be computed, skipping publish");
             last_state.offset = last_state.offset.max(offset);
             return;
         }
 
-        // Skip publishing if watermark regression is detected.
-        // For source publishers, we silently skip without logging since data can be out of order.
+        // Skip publishing if watermark regression is detected (new watermark lower than last published).
+        // This is expected in streaming when writes complete out of order: we may ack a higher-offset
+        // message first, then try to publish for a lower-offset message whose watermark is below what
+        // we already published. For source we already skip silently; for map/reduce we skip without
+        // warning since this is normal. Still advance last_state.offset so progress isn't blocked.
         if watermark < last_state.watermark {
-            if !self.is_source {
-                warn!(?watermark, ?last_state.watermark, "Watermark regression detected, skipping publish");
-            }
+            warn!(
+                offset = offset,
+                watermark = watermark,
+                last_state_watermark = last_state.watermark,
+                "Watermark regression detected, skipping publish",
+            );
+            last_state.offset = last_state.offset.max(offset);
             return;
         }
 

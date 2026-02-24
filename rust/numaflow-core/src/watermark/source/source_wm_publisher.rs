@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use chrono::Utc;
 use tracing::info;
 
+use crate::config::get_pipeline_name;
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error;
@@ -66,6 +67,8 @@ impl SourceWatermarkPublisher {
         // the processing entity is the partition itself. We create a publisher for each partition
         // and publish the watermark to it.
         let processor_name = format!("source-{}-{}", self.source_config.vertex, partition);
+
+        info!(processor = ?processor_name, partition = ?partition, watermark = ?watermark, idle = ?idle, "Publishing source watermark");
         // create a publisher if not exists
         if !self.publishers.contains_key(&processor_name) {
             let publisher = ISBWatermarkPublisher::new(
