@@ -1,18 +1,20 @@
 # Streaming Dataflow in Numaflow
 
 This document explains how Numaflow's Rust data-plane moves data in a streaming fashion, ensuring at-least-once semantics 
-and correct [watermark](watermarks.md) propagation for reduce operations.
+and correct [watermark](watermarks.md) propagation for reduce operations. You can read why we changed to streaming in 
+our [blog post](https://blog.numaproj.io/rewriting-numaflows-data-plane-a-foundation-for-the-future-a64fd2470cf0).
 
 ## Overview
 
-Numaflow processes data as a continuous stream rather than discrete batches. The key design principles are:
+Numaflow processes data as a continuous stream rather than discrete batches (a major change in 1.6). 
+The key design principles are:
 
-1. **Always maintain active work** - Keep `batch_size` messages in-flight at all times for maximum throughput and improve 
+1. **Always maintain active work** - Keep `batch_size` messages in-flight at all times for maximum throughput and reduce 
    tail latency.
 2. **Track the smallest offset** - Never advance watermarks past unprocessed data, ensuring reduce correctness (oldest work
    yet to be completed)
-3. **Backpressure via semaphores** - Prevent memory exhaustion while maximizing parallelism (throttling read if write is 
-   pending)
+3. **Backpressure via semaphores** - Prevent memory exhaustion while maximizing parallelism (throttling read if 
+   processing or write is pending)
 
 ```mermaid
 flowchart LR
@@ -25,7 +27,7 @@ flowchart LR
         ISB_R2[ISB Reader] --> Processor2[Processor]
     end
     
-    ISB_W -->|JetStream| ISB_R2
+    ISB_W -->|ISB Edge| ISB_R2
     
     style ISB_R fill:#4a9eff,color:#fff
     style ISB_W fill:#4a9eff,color:#fff
@@ -36,10 +38,11 @@ flowchart LR
 
 ## Core Components
 
-### ISB Reader Orchestrator
-Reads messages from the Inter-Step Buffer (e.g., JetStream), enriches them with watermarks, and tracks them until fully processed.
+### ISB Reader
+Reads messages from the Inter-Step Buffer (e.g., JetStream), enriches them with watermarks, and tracks them until fully 
+processed, and written/forwarded to the next Vertex.
 
-### ISB Writer Orchestrator  
+### ISB Writer  
 Writes processed messages to downstream ISB streams, handles routing based on tags/conditions, and publishes watermarks.
 
 ### Tracker
@@ -49,7 +52,7 @@ Maintains a sorted map (BTreeMap) of all in-flight messages per partition. Used 
 - Compute the lowest watermark among all in-flight messages
 - Handle serving callbacks
 
-### Watermark System
+### Watermark Computation
 Ensures temporal correctness by tracking event-time progress and publishing watermarks to downstream vertices.
 
 ## Maintaining Active Work with Semaphores
@@ -85,7 +88,7 @@ sequenceDiagram
 
 ### How It Works
 
-1. **Reader acquires permits** before fetching messages (`acquire_many(batch_size)`)
+1. **Reader acquires permits** - before fetching messages (`acquire_many(batch_size)`)
 2. **Each message carries a permit** - split from the batch permit
 3. **Permit released on ACK** - when downstream confirms receipt
 4. **Backpressure automatic** - if processing is slow, reader blocks on permit acquisition
@@ -203,9 +206,10 @@ pub async fn lowest_watermark(&self) -> DateTime<Utc> {
 
 ### Why This Matters for Reduce
 
-Reduce operations group data by time windows. If we advance the watermark past unprocessed data:
+Reduce operations group data by time windows. If we wrongly advance the watermark past unprocessed data, we will
+wrongly invoke close-of-book (COB) for windows and will lead to incorrect results, like:
 
-1. **Windows close prematurely** - Data arrives after window is closed (Close of Book)
+1. **Windows close prematurely** - Data arrives after window is closed
 2. **Late data is dropped** - Correctness is violated
 3. **Results are wrong** - Aggregations miss data
 
@@ -223,7 +227,7 @@ flowchart LR
     MIN --> PUB["Published WM: 1000"]
     
     subgraph "Downstream Reduce"
-        W1["Window [0-1000]<br/>Safe to close"]
+        W1["Window [0-1000]<br/>Safe to close (COB)"]
         W2["Window [1000-2000]<br/>Keep open"]
     end
     
@@ -323,12 +327,6 @@ flowchart LR
     style W fill:#f59e0b,color:#fff
 ```
 
-The Persistent Bounded Queue (PBQ) provides:
-
-- **Keyed routing** - Messages grouped by key
-- **Window management** - Aligned/unaligned windowing
-- **Persistence** - WAL for recovery
-
 ### Summary
 
 The streaming architecture ensures that:
@@ -337,4 +335,4 @@ The streaming architecture ensures that:
 2. **Memory is bounded** - Semaphore prevents unbounded growth
 3. **Reduce is correct** - Watermarks never advance past unprocessed data
 4. **Recovery is possible** - Tracker + WIP loop enables at-least-once or "almost" exactly-once
-5. **WAL** - WAL is used for recovery in case of pod restarts for Reduce vertices. 
+5. **WAL** - WAL is used for recovery in case of pod restarts for Reduce vertices.
