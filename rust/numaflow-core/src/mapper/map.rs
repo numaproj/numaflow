@@ -583,7 +583,12 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
+    use crate::mapper::test_utils::MapperTestHandle;
     use crate::message::ReadAck;
+    use crate::sinker::sink::SinkClientType;
+    use crate::sinker::test_utils::{NoOpSink, SinkTestHandle, SinkType};
+    use crate::source::test_utils::SourceTestHandle;
+    use crate::transformer::test_utils::NoOpTransformer;
     use crate::{
         Result,
         message::{MessageID, Offset, StringOffset},
@@ -595,11 +600,6 @@ mod tests {
     use tempfile::TempDir;
     use tokio::sync::mpsc::Sender;
     use tokio::sync::oneshot;
-    use crate::mapper::test_utils::MapperTestHandle;
-    use crate::sinker::sink::SinkClientType;
-    use crate::sinker::test_utils::{NoOpSink, SinkTestHandle, SinkType};
-    use crate::source::test_utils::SourceTestHandle;
-    use crate::transformer::test_utils::NoOpTransformer;
 
     struct SimpleMapper;
 
@@ -1479,7 +1479,8 @@ mod tests {
             result
                 .unwrap_err()
                 .to_string()
-                .contains("PanicFlatmapStream panicked!"), "something something"
+                .contains("PanicFlatmapStream panicked!"),
+            "something something"
         );
         for ack_rx in ack_rxs {
             let ack = ack_rx.await.unwrap();
