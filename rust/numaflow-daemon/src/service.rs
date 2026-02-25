@@ -4,9 +4,17 @@ use numaflow_pb::servers::mvtxdaemon::{
     GetMonoVertexMetricsResponse, GetMonoVertexStatusResponse, MonoVertexMetrics, MonoVertexStatus,
     ReplicaErrors,
 };
+use prost_types::Timestamp;
 use std::collections::HashMap;
+use std::env;
 use std::result::Result;
 use tonic::{Request, Response, Status};
+
+/// Env var set by daemon deployment; matches pkg/apis/numaflow/v1alpha1/const.go EnvMonoVertexName.
+/// This is a temporary solution to get the MonoVertex name.
+/// On golang mvtx daemon end, we load the entire NUMAFLOW_MONO_VERTEX_OBJECT to get the name.
+/// TODO - switch to the full CR when we need more informations.
+const ENV_MONO_VERTEX_NAME: &str = "NUMAFLOW_MONO_VERTEX_NAME";
 
 /// MvtxDaemonService is the Tonic gRPC service implementations for MonoVertex daemon server.
 /// It's the single source of truth of how MonoVertex daemon server handles requests, regardless of HTTP or gRPC.
@@ -32,9 +40,11 @@ impl MonoVertexDaemonService for MvtxDaemonService {
             ("15m".to_string(), 150),
         ]);
 
+        let mono_vertex =
+            env::var(ENV_MONO_VERTEX_NAME).unwrap_or_else(|_| "simple-mono-vertex".to_string());
         let mock_resp = GetMonoVertexMetricsResponse {
             metrics: Some(MonoVertexMetrics {
-                mono_vertex: "mock_mvtx_spec".to_string(),
+                mono_vertex,
                 processing_rates: mock_processing_rates,
                 pendings: mock_pendings,
             }),
@@ -49,9 +59,9 @@ impl MonoVertexDaemonService for MvtxDaemonService {
     ) -> Result<Response<GetMonoVertexStatusResponse>, Status> {
         let mock_resp = GetMonoVertexStatusResponse {
             status: Some(MonoVertexStatus {
-                status: "mock_status".to_string(),
-                message: "mock_status_message".to_string(),
-                code: "mock_status_code".to_string(),
+                status: "healthy".to_string(),
+                message: "MonoVertex data flow is healthy".to_string(),
+                code: "D1".to_string(),
             }),
         };
 
@@ -62,15 +72,20 @@ impl MonoVertexDaemonService for MvtxDaemonService {
         &self,
         _: Request<GetMonoVertexErrorsRequest>,
     ) -> Result<Response<GetMonoVertexErrorsResponse>, Status> {
+        let now = chrono::Utc::now();
+        let timestamp = Some(Timestamp {
+            seconds: now.timestamp(),
+            nanos: now.timestamp_subsec_nanos() as i32,
+        });
         let mock_resp = GetMonoVertexErrorsResponse {
             errors: vec![ReplicaErrors {
                 replica: "mock_replica".to_string(),
                 container_errors: vec![ContainerError {
                     container: "main".to_string(),
+                    timestamp,
                     code: "mock_code".to_string(),
                     message: "mock_message".to_string(),
                     details: "mock_details".to_string(),
-                    ..Default::default()
                 }],
             }],
         };
@@ -93,7 +108,7 @@ mod tests {
         let body = resp.into_inner();
         let metrics = body.metrics.expect("metrics payload");
 
-        assert_eq!(metrics.mono_vertex, "mock_mvtx_spec");
+        assert_eq!(metrics.mono_vertex, "simple-mono-vertex");
         assert_eq!(metrics.processing_rates.get("default"), Some(&67.0));
         assert_eq!(metrics.processing_rates.get("1m"), Some(&10.0));
         assert_eq!(metrics.processing_rates.get("5m"), Some(&50.5));
@@ -115,9 +130,9 @@ mod tests {
         let body = resp.into_inner();
         let status = body.status.expect("status payload");
 
-        assert_eq!(status.status, "mock_status");
-        assert_eq!(status.message, "mock_status_message");
-        assert_eq!(status.code, "mock_status_code");
+        assert_eq!(status.status, "healthy");
+        assert_eq!(status.message, "MonoVertex data flow is healthy");
+        assert_eq!(status.code, "D1");
     }
 
     #[tokio::test]
