@@ -57,7 +57,7 @@ use std::time::Duration;
 use crate::message::Message;
 use crate::reduce::error::{Error, ReduceResult};
 use crate::reduce::reducer::aligned::windower::{
-    AlignedWindowMessage, AlignedWindowOperation, Window, truncate_to_duration, window_pnf_slot,
+    AlignedWindowMessage, AlignedWindowOperation, Window, truncate_to_duration, window_to_pnf_slot,
 };
 use crate::shared::grpc::utc_from_timestamp;
 use chrono::{DateTime, TimeZone, Utc};
@@ -192,7 +192,7 @@ impl SlidingWindowManager {
 
         for window in windows_to_close {
             result.push(AlignedWindowMessage {
-                pnf_slot: window_pnf_slot(&window),
+                pnf_slot: window_to_pnf_slot(&window),
                 operation: AlignedWindowOperation::Close { window },
             });
         }
@@ -348,7 +348,7 @@ impl SlidingWindowManager {
                         message: msg.clone(),
                         window: window.clone(),
                     },
-                    pnf_slot: window_pnf_slot(window),
+                    pnf_slot: window_to_pnf_slot(window),
                 });
             } else if window.end_time.timestamp_millis()
                 > self.max_deleted_window_end_time.load(Ordering::Relaxed)
@@ -364,7 +364,7 @@ impl SlidingWindowManager {
                         message: msg.clone(),
                         window: window.clone(),
                     },
-                    pnf_slot: window_pnf_slot(window),
+                    pnf_slot: window_to_pnf_slot(window),
                 });
             }
         }
