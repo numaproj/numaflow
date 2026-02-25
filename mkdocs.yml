@@ -31,7 +31,11 @@ extra:
 markdown_extensions:
   - codehilite
   - admonition
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.details
   - toc:
       permalink: true
@@ -50,6 +54,7 @@ nav:
           - core-concepts/vertex.md
           - core-concepts/inter-step-buffer.md
           - core-concepts/inter-step-buffer-service.md
+          - "Streaming Architecture": core-concepts/streaming.md
           - core-concepts/watermarks.md
       - Sources:
           - Overview: "user-guide/sources/overview.md"
