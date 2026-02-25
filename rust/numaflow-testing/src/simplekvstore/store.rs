@@ -321,8 +321,6 @@ struct SimpleKVWatchStream {
     error_injector: Arc<KVErrorInjector>,
     /// Whether the stream is closed.
     closed: bool,
-    /// Pending receive future.
-    pending_recv: Option<Pin<Box<dyn std::future::Future<Output = RecvResult> + Send + 'static>>>,
 }
 
 /// Result type for receive operation.
@@ -345,7 +343,6 @@ impl SimpleKVWatchStream {
             items_emitted: 0,
             error_injector,
             closed: false,
-            pending_recv: None,
         }
     }
 }
