@@ -278,7 +278,10 @@ mod tests {
             ce.get("details").and_then(|v| v.as_str()),
             Some("mock_details")
         );
-        let ts = ce.get("timestamp").and_then(|v| v.as_str()).expect("timestamp");
+        let ts = ce
+            .get("timestamp")
+            .and_then(|v| v.as_str())
+            .expect("timestamp");
         assert!(
             chrono::DateTime::parse_from_rfc3339(ts).is_ok(),
             "timestamp should be RFC3339: {:?}",
