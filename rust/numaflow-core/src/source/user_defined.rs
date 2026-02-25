@@ -325,6 +325,7 @@ impl SourceAcker for UserDefinedSourceAck {
         let ack_offsets: Result<Vec<source::Offset>> =
             offsets.into_iter().map(TryInto::try_into).collect();
 
+        // Sending can only fail if the channel is closed (receiver is dropped, which happens when gRPC stream is closed)
         self.ack_tx
             .send(AckRequest {
                 request: Some(source::ack_request::Request {
@@ -333,7 +334,7 @@ impl SourceAcker for UserDefinedSourceAck {
                 handshake: None,
             })
             .await
-            .map_err(|e| Error::Source(e.to_string()))?;
+            .map_err(|e| Error::NonRetryable(e.to_string()))?;
 
         self.ack_resp_stream
             .message()
