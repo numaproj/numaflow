@@ -16,7 +16,6 @@ tower.workspace = true
 axum.workspace = true
 axum-server.workspace = true
 rustls.workspace = true
-rustls-pki-types = "1.11"
 bytes.workspace = true
 http.workspace = true
 serde.workspace = true
@@ -25,6 +24,7 @@ chrono.workspace = true
 prost-types.workspace = true
 hyper = "1.6.0"
 http-body-util = "0.1"
+rustls-pki-types = "1.11"
 
 [lints]
 workspace = true
