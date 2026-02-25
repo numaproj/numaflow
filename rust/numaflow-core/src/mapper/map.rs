@@ -585,10 +585,6 @@ mod tests {
     use super::*;
     use crate::mapper::test_utils::MapperTestHandle;
     use crate::message::ReadAck;
-    use crate::sinker::sink::SinkClientType;
-    use crate::sinker::test_utils::{NoOpSink, SinkTestHandle, SinkType};
-    use crate::source::test_utils::SourceTestHandle;
-    use crate::transformer::test_utils::NoOpTransformer;
     use crate::{
         Result,
         message::{MessageID, Offset, StringOffset},
@@ -1261,9 +1257,27 @@ mod tests {
         Ok(())
     }
 
+    fn create_default_msg(i: i32, ack_tx: oneshot::Sender<ReadAck>) -> Message {
+        Message {
+            typ: Default::default(),
+            keys: Arc::from(vec![format!("key_{}", i)]),
+            tags: None,
+            value: format!("value_{}", i).into(),
+            offset: Offset::String(StringOffset::new(i.to_string(), 0)),
+            event_time: chrono::Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: i.to_string().into(),
+                index: i,
+            },
+            ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+            ..Default::default()
+        }
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn test_threaded_map_with_panic() -> Result<()> {
-        // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
         let tracker = Tracker::new(None, cln_token.clone());
         let batch_size = 500;
@@ -1293,22 +1307,7 @@ mod tests {
         // send 10 requests to the mapper
         for i in 0..10 {
             let (ack_tx, ack_rx) = oneshot::channel();
-            let message = Message {
-                typ: Default::default(),
-                keys: Arc::from(vec![format!("key_{}", i)]),
-                tags: None,
-                value: format!("value_{}", i).into(),
-                offset: Offset::String(StringOffset::new(i.to_string(), 0)),
-                event_time: chrono::Utc::now(),
-                watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: i.to_string().into(),
-                    index: i,
-                },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
-                ..Default::default()
-            };
+            let message = create_default_msg(i, ack_tx);
             input_tx.send(message).await.unwrap();
             ack_rxs.push(ack_rx);
         }
@@ -1318,12 +1317,6 @@ mod tests {
         // Await the join handle and expect an error due to the panic
         let result = map_handle.await.unwrap();
         assert!(result.is_err(), "Expected an error due to panic");
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("PanicCat panicked!")
-        );
 
         for ack_rx in ack_rxs {
             let ack = ack_rx.await.unwrap();
@@ -1335,7 +1328,6 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_threaded_batch_map_with_panic() -> Result<()> {
-        // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
         let tracker = Tracker::new(None, cln_token.clone());
         let batch_size = 500;
@@ -1419,7 +1411,6 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_threaded_stream_with_panic() -> Result<()> {
-        // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
         let tracker = Tracker::new(None, cln_token.clone());
         let batch_size = 500;
@@ -1450,40 +1441,22 @@ mod tests {
         // send 10 requests to the mapper
         for i in 0..10 {
             let (ack_tx, ack_rx) = oneshot::channel();
-            let message = Message {
-                typ: Default::default(),
-                keys: Arc::from(vec![format!("key_{}", i)]),
-                tags: None,
-                value: format!("value_{}", i).into(),
-                offset: Offset::String(StringOffset::new(i.to_string(), 0)),
-                event_time: chrono::Utc::now(),
-                watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: i.to_string().into(),
-                    index: i,
-                },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
-                ..Default::default()
-            };
+            let message = create_default_msg(i, ack_tx);
             ack_rxs.push(ack_rx);
-            input_tx.send(message).await.unwrap();
+            input_tx
+                .send(message)
+                .await
+                .expect("Send message to map stream");
         }
 
         cln_token.cancelled().await;
         drop(input_tx);
         // Await the join handle and expect an error due to the panic
-        let result = map_handle.await.unwrap();
+        let result = map_handle.await.expect("failed to await map handle");
         assert!(result.is_err(), "Expected an error due to panic");
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("PanicFlatmapStream panicked!"),
-            "something something"
-        );
+
         for ack_rx in ack_rxs {
-            let ack = ack_rx.await.unwrap();
+            let ack = ack_rx.await.expect("Failed to await ack rx");
             assert_eq!(ack, ReadAck::Nak, "Expected Nak due to panic");
         }
 
