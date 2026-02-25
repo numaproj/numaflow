@@ -3,6 +3,7 @@
 //! the watermark to the ISB. Unlike other vertices we don't use pod as the processing entity for publishing
 //! watermark we use the partition(watermark originates here).
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Utc;
@@ -12,6 +13,8 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
+use numaflow_shared::kv::KVStore;
+use numaflow_shared::kv::jetstream::JetstreamKVStore;
 
 /// SourcePublisher is the watermark publisher for the source vertex.
 pub(crate) struct SourceWatermarkPublisher {
@@ -39,6 +42,38 @@ impl SourceWatermarkPublisher {
         })
     }
 
+    /// Helper to create KV stores from bucket configs using the JetStream context.
+    /// Returns (ot_stores, hb_stores) tuple.
+    async fn create_kv_stores(
+        js_context: &async_nats::jetstream::Context,
+        bucket_configs: &[BucketConfig],
+    ) -> (
+        HashMap<&'static str, Arc<dyn KVStore>>,
+        Vec<Arc<dyn KVStore>>,
+    ) {
+        let mut ot_stores: HashMap<&'static str, Arc<dyn KVStore>> = HashMap::new();
+        let mut hb_stores: Vec<Arc<dyn KVStore>> = Vec::new();
+
+        for config in bucket_configs {
+            let ot_bucket = js_context
+                .get_key_value(config.ot_bucket)
+                .await
+                .expect("Failed to get OT bucket");
+            ot_stores.insert(
+                config.vertex,
+                Arc::new(JetstreamKVStore::new(ot_bucket, config.ot_bucket)),
+            );
+
+            let hb_bucket = js_context
+                .get_key_value(config.hb_bucket)
+                .await
+                .expect("Failed to get HB bucket");
+            hb_stores.push(Arc::new(JetstreamKVStore::new(hb_bucket, config.hb_bucket)));
+        }
+
+        (ot_stores, hb_stores)
+    }
+
     /// Publishes the source watermark for the input partition. It internally uses edge publisher
     /// with processor set to the input partition and source OT.
     pub(crate) async fn publish_source_watermark(
@@ -53,14 +88,17 @@ impl SourceWatermarkPublisher {
         let processor_name = format!("source-{}-{}", self.source_config.vertex, partition);
         // create a publisher if not exists
         if !self.publishers.contains_key(&processor_name) {
+            let (ot_stores, hb_stores) =
+                Self::create_kv_stores(&self.js_context, std::slice::from_ref(&self.source_config))
+                    .await;
+
             let publisher = ISBWatermarkPublisher::new(
                 processor_name.clone(),
-                self.js_context.clone(),
+                ot_stores,
+                hb_stores,
                 std::slice::from_ref(&self.source_config),
                 true,
-            )
-            .await
-            .expect("Failed to create publisher");
+            );
             info!(processor = ?processor_name, partition = ?partition,
                 "Creating new publisher for source"
             );
@@ -112,14 +150,16 @@ impl SourceWatermarkPublisher {
             info!(processor = ?processor_name, partition = ?input_partition,
                 "Creating new publisher for ISB"
             );
+            let (ot_stores, hb_stores) =
+                Self::create_kv_stores(&self.js_context, &self.to_vertex_configs).await;
+
             let publisher = ISBWatermarkPublisher::new(
                 processor_name.clone(),
-                self.js_context.clone(),
+                ot_stores,
+                hb_stores,
                 &self.to_vertex_configs,
                 true,
-            )
-            .await
-            .expect("Failed to create publisher");
+            );
             self.publishers.insert(processor_name.clone(), publisher);
         }
 
@@ -135,14 +175,16 @@ impl SourceWatermarkPublisher {
         for partition in active_partitions {
             let processor_name = format!("{}-{}", self.source_config.vertex, partition);
             if !self.publishers.contains_key(&processor_name) {
+                let (ot_stores, hb_stores) =
+                    Self::create_kv_stores(&self.js_context, &self.to_vertex_configs).await;
+
                 let publisher = ISBWatermarkPublisher::new(
                     processor_name.clone(),
-                    self.js_context.clone(),
+                    ot_stores,
+                    hb_stores,
                     &self.to_vertex_configs,
                     true,
-                )
-                .await
-                .expect("Failed to create publisher");
+                );
                 self.publishers.insert(processor_name.clone(), publisher);
             }
         }
