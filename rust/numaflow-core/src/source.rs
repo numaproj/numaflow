@@ -72,6 +72,7 @@ use crate::watermark::source::SourceWatermarkHandle;
 const MAX_ACK_PENDING: usize = 10000;
 const ACK_RETRY_INTERVAL: u64 = 100;
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
+const NACK_RETRY_ATTEMPTS: usize = 1200; // 100ms apart, total=2 minutes
 
 /// Set of Read related items that has to be implemented to become a Source.
 /// Uses `trait_variant::make` to generate an object-safe `SourceReader` trait with `Send` bound.
@@ -695,7 +696,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         offsets: Vec<Offset>,
         cancel_token: &CancellationToken,
     ) {
-        let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
+        // In practice, this retry should exit early since it is invoked during ISB/map/sink errors, which results in CancellationToken cancellation
+        let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(NACK_RETRY_ATTEMPTS);
         let _ = Retry::new(
             interval,
             async || {
