@@ -2748,8 +2748,11 @@ dependencies = [
 name = "numaflow-testing"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "bytes",
  "chrono",
+ "futures",
+ "numaflow-shared",
  "parking_lot",
  "thiserror 2.0.17",
  "tokio",
