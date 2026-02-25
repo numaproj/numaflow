@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.7.3 (2026-02-22)
+
+ * [90a31118](https://github.com/numaproj/numaflow/commit/90a31118d901a7ce067d5f33774a33b942fa325f) Update manifests to v1.7.3
+ * [9252e08a](https://github.com/numaproj/numaflow/commit/9252e08ad7d2d9e67036f9dfa6050f0cdceb0554) fix: sum of rate metrics across all partitions (#3243)
+
+### Contributors
+
+ * Yashash
+ * Yashash Lokesh
+
 ## v1.7.2 (2026-02-13)
 
  * [f107d3b3](https://github.com/numaproj/numaflow/commit/f107d3b30e2a5f9161daf1942dbf3a8fdec903fd) Update manifests to v1.7.2

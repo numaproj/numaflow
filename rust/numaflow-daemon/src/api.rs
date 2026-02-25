@@ -21,13 +21,29 @@ pub(crate) async fn api_v1_metrics(State(svc): State<Arc<MvtxDaemonService>>) ->
         Ok(resp) => {
             let body = resp.into_inner();
             let json = match &body.metrics {
-                Some(m) => serde_json::json!({
-                    "metrics": {
-                        "monoVertex": m.mono_vertex,
-                        "processingRates": m.processing_rates,
-                        "pendings": m.pendings,
-                    }
-                }),
+                Some(m) => {
+                    // Converting the data to ProtoJSON.
+                    // https://protobuf.dev/programming-guides/json/
+                    // f64 is represented as serde_json::Value::Number.
+                    let processing_rates: std::collections::HashMap<String, serde_json::Value> = m
+                        .processing_rates
+                        .iter()
+                        .map(|(k, v)| (k.clone(), serde_json::json!(*v)))
+                        .collect();
+                    // i64 is represented as serde_json::Value::String.
+                    let pendings: std::collections::HashMap<String, serde_json::Value> = m
+                        .pendings
+                        .iter()
+                        .map(|(k, v)| (k.clone(), serde_json::Value::String(v.to_string())))
+                        .collect();
+                    serde_json::json!({
+                        "metrics": {
+                            "monoVertex": m.mono_vertex,
+                            "processingRates": processing_rates,
+                            "pendings": pendings,
+                        }
+                    })
+                }
                 None => serde_json::json!({}),
             };
             (StatusCode::OK, Json(json))
@@ -93,8 +109,17 @@ pub(crate) async fn api_v1_errors(
                         .container_errors
                         .iter()
                         .map(|ce| {
+                            // Converting the data to ProtoJSON.
+                            // https://protobuf.dev/programming-guides/json/
+                            // timestamp uses RFC 3339 and represented as String.
+                            let timestamp = ce.timestamp.as_ref().map(|ts| {
+                                chrono::DateTime::from_timestamp(ts.seconds, ts.nanos as u32)
+                                    .map(|dt| dt.to_rfc3339())
+                                    .unwrap_or_else(|| "1970-01-01T00:00:00Z".to_string())
+                            });
                             serde_json::json!({
                                 "container": ce.container,
+                                "timestamp": timestamp,
                                 "code": ce.code,
                                 "message": ce.message,
                                 "details": ce.details,
@@ -154,7 +179,7 @@ mod tests {
         let metrics = json.get("metrics").expect("metrics key");
         assert_eq!(
             metrics.get("monoVertex"),
-            Some(&serde_json::Value::String("mock_mvtx_spec".into()))
+            Some(&serde_json::Value::String("simple-mono-vertex".into()))
         );
         let rates = metrics
             .get("processingRates")
@@ -168,8 +193,20 @@ mod tests {
             .get("pendings")
             .and_then(|v| v.as_object())
             .expect("pendings");
-        assert_eq!(pendings.get("default").and_then(|v| v.as_i64()), Some(67));
-        assert_eq!(pendings.get("1m").and_then(|v| v.as_i64()), Some(10));
+        assert_eq!(
+            pendings
+                .get("default")
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse::<i64>().ok()),
+            Some(67)
+        );
+        assert_eq!(
+            pendings
+                .get("1m")
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse::<i64>().ok()),
+            Some(10)
+        );
     }
 
     #[tokio::test]
@@ -188,15 +225,17 @@ mod tests {
         let status = json.get("status").expect("status key");
         assert_eq!(
             status.get("status"),
-            Some(&serde_json::Value::String("mock_status".into()))
+            Some(&serde_json::Value::String("healthy".into()))
         );
         assert_eq!(
             status.get("message"),
-            Some(&serde_json::Value::String("mock_status_message".into()))
+            Some(&serde_json::Value::String(
+                "MonoVertex data flow is healthy".into()
+            ))
         );
         assert_eq!(
             status.get("code"),
-            Some(&serde_json::Value::String("mock_status_code".into()))
+            Some(&serde_json::Value::String("D1".into()))
         );
     }
 
@@ -238,6 +277,15 @@ mod tests {
         assert_eq!(
             ce.get("details").and_then(|v| v.as_str()),
             Some("mock_details")
+        );
+        let ts = ce
+            .get("timestamp")
+            .and_then(|v| v.as_str())
+            .expect("timestamp");
+        assert!(
+            chrono::DateTime::parse_from_rfc3339(ts).is_ok(),
+            "timestamp should be RFC3339: {:?}",
+            ts
         );
     }
 
