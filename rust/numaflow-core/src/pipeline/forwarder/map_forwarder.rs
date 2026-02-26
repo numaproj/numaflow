@@ -421,7 +421,7 @@ mod simplebuffer_tests {
 
     // End-to-end test for map forwarder using SimpleBuffer.
     // Reads from a SimpleBuffer-backed ISB, maps through a cat UDF, and writes
-    // to another SimpleBuffer-backed ISB. No external infrastructure required.
+    // to another SimpleBuffer-backed ISB
     #[tokio::test(flavor = "multi_thread")]
     async fn test_map_forwarder_with_single_stream() {
         const MESSAGE_COUNT: usize = 10;
