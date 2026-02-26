@@ -121,9 +121,9 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
                 return;
             }
 
-            // oldest window is used to determine the GC event in case of sliding windows, unlike fixed
-            // messages can be part of multiple windows in sliding, so we can only gc the messages
-            // that are less than the oldest window's start time.
+            // oldest window is used to determine the GC event in case of sliding windows, unlike
+            // fixed windows, messages can be part of multiple windows in sliding, so we can only gc
+            // the messages that are less than the oldest window's start time.
             let oldest_window = self
                 .window_manager
                 .oldest_window()
