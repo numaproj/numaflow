@@ -392,10 +392,10 @@ use std::io::ErrorKind;
 fn has_io_kind_in_chain(err: &(dyn StdError + 'static), kinds: &[ErrorKind]) -> bool {
     let mut current: Option<&(dyn StdError + 'static)> = Some(err);
     while let Some(e) = current {
-        if let Some(ioe) = e.downcast_ref::<std::io::Error>() {
-            if kinds.contains(&ioe.kind()) {
-                return true;
-            }
+        if let Some(ioe) = e.downcast_ref::<std::io::Error>()
+            && kinds.contains(&ioe.kind())
+        {
+            return true;
         }
         current = e.source();
     }
@@ -447,11 +447,29 @@ mod tests {
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;
     use std::collections::{HashMap, HashSet};
+    use std::io::ErrorKind;
     use tokio::sync::mpsc::Sender;
 
     use super::*;
     use crate::message::IntOffset;
     use crate::shared::grpc::{create_rpc_channel, prost_timestamp_from_utc};
+
+    #[test]
+    fn test_has_io_kind_in_chain_direct_match() {
+        let err = std::io::Error::new(ErrorKind::BrokenPipe, "broken pipe");
+        assert!(has_io_kind_in_chain(&err, &[ErrorKind::BrokenPipe]));
+        assert!(has_io_kind_in_chain(
+            &err,
+            &[ErrorKind::ConnectionReset, ErrorKind::BrokenPipe]
+        ));
+    }
+
+    #[test]
+    fn test_has_io_kind_in_chain_direct_no_match() {
+        let err = std::io::Error::new(ErrorKind::BrokenPipe, "broken pipe");
+        assert!(!has_io_kind_in_chain(&err, &[ErrorKind::ConnectionReset]));
+        assert!(!has_io_kind_in_chain(&err, &[]));
+    }
 
     struct SimpleSource {
         num: usize,
