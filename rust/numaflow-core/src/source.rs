@@ -420,7 +420,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         let handle = tokio::spawn(async move {
             // this semaphore is used only if read-ahead is disabled. we hold this semaphore to
             // make sure we can read only if the current inflight ones are ack'ed. If read ahead
-            // is disabled you can have upto (max_ack_pending / read_batch_size) ack tasks. We
+            // is enabled you can have upto (max_ack_pending / read_batch_size) ack tasks. We
             // divide by read_batch_size because we do batch acking in source.
             let max_ack_tasks = match &self.read_ahead {
                 true => MAX_ACK_PENDING / self.read_batch_size,
