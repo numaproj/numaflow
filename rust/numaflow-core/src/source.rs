@@ -652,7 +652,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             Self::ack_with_retry(source_handle.clone(), offsets_to_ack, &cancel_token).await?;
         }
         if !offsets_to_nack.is_empty() {
-            Self::nack_with_retry(source_handle, offsets_to_nack, &cancel_token).await;
+            Self::nack_with_retry(source_handle, offsets_to_nack, &cancel_token).await?;
         }
         Self::send_ack_metrics(e2e_start_time, n, start);
 
@@ -669,17 +669,17 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         Retry::new(
             interval,
             async || Self::ack(source_handle.clone(), offsets.clone()).await,
-            |e: &Error| {
-                error!(?e, "Failed to send ack to source, retrying...");
+            |error: &Error| {
+                error!(?error, "Failed to send ack to source, retrying...");
                 // Don't retry non-retryable errors
-                if matches!(e, Error::NonRetryable(_)) {
-                    error!(?e, "Non retryable error, stopping the ack retry loop");
+                if matches!(error, Error::NonRetryable(_)) {
+                    error!(?error, "Non retryable error, stopping the ack retry loop");
                     return false;
                 }
                 // Don't retry if cancelled
                 if cancel_token.is_cancelled() {
                     error!(
-                        ?e,
+                        ?error,
                         "Cancellation token received, stopping the ack retry loop"
                     );
                     return false;
@@ -695,28 +695,31 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         source_handle: mpsc::Sender<ActorMessage>,
         offsets: Vec<Offset>,
         cancel_token: &CancellationToken,
-    ) {
+    ) -> Result<()> {
         // In practice, this retry should exit early since it is invoked during ISB/map/sink errors, which results in CancellationToken cancellation
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(NACK_RETRY_ATTEMPTS);
         let _ = Retry::new(
             interval,
-            async || {
-                let result = Self::nack(source_handle.clone(), offsets.clone()).await;
-                if result.is_err() {
-                    error!(?result, "Failed to send nack to source, retrying...");
-                    if cancel_token.is_cancelled() {
-                        error!(
-                            ?result,
-                            "Cancellation token received, stopping the nack retry loop"
-                        );
-                        return Ok(());
-                    }
+            async || Self::nack(source_handle.clone(), offsets.clone()).await,
+            |error: &Error| {
+                error!(?error, "Failed to send nack to source, retrying...");
+                // Don't retry non-retryable errors
+                if matches!(error, Error::NonRetryable(_)) {
+                    error!(?error, "Non retryable error, stopping the NACK retry loop");
+                    return false;
                 }
-                result
+                if cancel_token.is_cancelled() {
+                    error!(
+                        ?error,
+                        "Cancellation token received, stopping the NACK retry loop"
+                    );
+                    return false;
+                }
+                true
             },
-            |_: &Error| !cancel_token.is_cancelled(),
         )
         .await;
+        Ok(())
     }
 
     /// Record per-batch read metrics (read_time, read_batch_size).
