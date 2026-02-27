@@ -1102,6 +1102,29 @@ The strategy to use to replace existing pods with new ones.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>ordered</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Ordered"> Ordered </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Ordered enables ordered processing for this vertex, overrides
+pipeline-level setting. When enabled, messages will be processed in
+order based on their event time. Note: Reduce vertices ignore this
+setting as they are already partitioned.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -7559,6 +7582,72 @@ OnFailureRetryStrategy (<code>string</code> alias)
 
 </p>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.Ordered">
+
+Ordered
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>)
+</p>
+
+<p>
+
+<p>
+
+Ordered defines the ordered processing configuration.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>enabled</code></br> <em> bool </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Enabled toggles ordered processing.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.PBQStorage">
 
 PBQStorage
@@ -8003,6 +8092,28 @@ InterStepBuffer configuration specific to this pipeline.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>ordered</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Ordered"> Ordered </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Ordered enables ordered processing for the entire pipeline. When
+enabled, messages will be processed in order based on their event time.
+This can be overridden at the vertex level.
+</p>
+
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -8422,6 +8533,28 @@ InterStepBuffer </a> </em>
 <p>
 
 InterStepBuffer configuration specific to this pipeline.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>ordered</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Ordered"> Ordered </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Ordered enables ordered processing for the entire pipeline. When
+enabled, messages will be processed in order based on their event time.
+This can be overridden at the vertex level.
 </p>
 
 </td>

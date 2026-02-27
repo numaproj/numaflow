@@ -214,6 +214,11 @@ func (p Pipeline) HasSideInputs() bool {
 	return len(p.Spec.SideInputs) > 0
 }
 
+// IsOrderedProcessingEnabled returns true if ordered processing is enabled at the pipeline level.
+func (p Pipeline) IsOrderedProcessingEnabled() bool {
+	return p.Spec.Ordered.IsEnabled()
+}
+
 func (p Pipeline) GetDaemonServiceName() string {
 	return fmt.Sprintf("%s-daemon-svc", p.Name)
 }
@@ -511,6 +516,11 @@ type PipelineSpec struct {
 	// InterStepBuffer configuration specific to this pipeline.
 	// +optional
 	InterStepBuffer *InterStepBuffer `json:"interStepBuffer,omitempty" protobuf:"bytes,9,opt,name=interStepBuffer"`
+	// Ordered enables ordered processing for the entire pipeline.
+	// When enabled, messages will be processed in order based on their event time.
+	// This can be overridden at the vertex level.
+	// +optional
+	Ordered *Ordered `json:"ordered,omitempty" protobuf:"bytes,10,opt,name=ordered"`
 }
 
 // InterStepBuffer configuration specifically for the pipeline.
@@ -518,6 +528,19 @@ type InterStepBuffer struct {
 	// Compression is the compression settings for the InterStepBufferService
 	// +optional
 	Compression *Compression `json:"compression,omitempty" protobuf:"bytes,2,opt,name=compression"`
+}
+
+// Ordered defines the ordered processing configuration.
+type Ordered struct {
+	// Enabled toggles ordered processing.
+	// +kubebuilder:default=false
+	// +optional
+	Enabled bool `json:"enabled,omitempty" protobuf:"bytes,1,opt,name=enabled"`
+}
+
+// IsEnabled returns true if ordered processing is enabled.
+func (o *Ordered) IsEnabled() bool {
+	return o != nil && o.Enabled
 }
 
 // Compression is the compression settings for the messages in the InterStepBuffer

@@ -1347,3 +1347,158 @@ func TestIsValidSinkRetryStrategy(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateOrderedProcessing(t *testing.T) {
+	tests := []struct {
+		name    string
+		pl      dfv1.Pipeline
+		wantErr bool
+	}{
+		{
+			name: "pipeline with ordered enabled",
+			pl: dfv1.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pl",
+					Namespace: "test-ns",
+				},
+				Spec: dfv1.PipelineSpec{
+					Ordered: &dfv1.Ordered{Enabled: true},
+					Vertices: []dfv1.AbstractVertex{
+						{
+							Name:   "input",
+							Source: &dfv1.Source{Generator: &dfv1.GeneratorSource{}},
+						},
+						{
+							Name: "output",
+							Sink: &dfv1.Sink{
+								AbstractSink: dfv1.AbstractSink{Log: &dfv1.Log{}},
+							},
+						},
+					},
+					Edges: []dfv1.Edge{
+						{From: "input", To: "output"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "pipeline with ordered disabled",
+			pl: dfv1.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pl",
+					Namespace: "test-ns",
+				},
+				Spec: dfv1.PipelineSpec{
+					Ordered: &dfv1.Ordered{Enabled: false},
+					Vertices: []dfv1.AbstractVertex{
+						{
+							Name:   "input",
+							Source: &dfv1.Source{Generator: &dfv1.GeneratorSource{}},
+						},
+						{
+							Name: "output",
+							Sink: &dfv1.Sink{
+								AbstractSink: dfv1.AbstractSink{Log: &dfv1.Log{}},
+							},
+						},
+					},
+					Edges: []dfv1.Edge{
+						{From: "input", To: "output"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "vertex with ordered override",
+			pl: dfv1.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pl",
+					Namespace: "test-ns",
+				},
+				Spec: dfv1.PipelineSpec{
+					Ordered: &dfv1.Ordered{Enabled: true},
+					Vertices: []dfv1.AbstractVertex{
+						{
+							Name:   "input",
+							Source: &dfv1.Source{Generator: &dfv1.GeneratorSource{}},
+						},
+						{
+							Name:    "process",
+							Ordered: &dfv1.Ordered{Enabled: false},
+							UDF: &dfv1.UDF{
+								Container: &dfv1.Container{Image: "my-image"},
+							},
+						},
+						{
+							Name: "output",
+							Sink: &dfv1.Sink{
+								AbstractSink: dfv1.AbstractSink{Log: &dfv1.Log{}},
+							},
+						},
+					},
+					Edges: []dfv1.Edge{
+						{From: "input", To: "process"},
+						{From: "process", To: "output"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "reduce vertex with ordered config (should be ignored)",
+			pl: dfv1.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pl",
+					Namespace: "test-ns",
+				},
+				Spec: dfv1.PipelineSpec{
+					Ordered: &dfv1.Ordered{Enabled: true},
+					Vertices: []dfv1.AbstractVertex{
+						{
+							Name:   "input",
+							Source: &dfv1.Source{Generator: &dfv1.GeneratorSource{}},
+						},
+						{
+							Name:    "reduce",
+							Ordered: &dfv1.Ordered{Enabled: true},
+							UDF: &dfv1.UDF{
+								Container: &dfv1.Container{Image: "my-image"},
+								GroupBy: &dfv1.GroupBy{
+									Window: dfv1.Window{
+										Fixed: &dfv1.FixedWindow{Length: &metav1.Duration{Duration: time.Minute}},
+									},
+									Keyed: true,
+									Storage: &dfv1.PBQStorage{
+										PersistentVolumeClaim: &dfv1.PersistenceStrategy{},
+									},
+								},
+							},
+						},
+						{
+							Name: "output",
+							Sink: &dfv1.Sink{
+								AbstractSink: dfv1.AbstractSink{Log: &dfv1.Log{}},
+							},
+						},
+					},
+					Edges: []dfv1.Edge{
+						{From: "input", To: "reduce"},
+						{From: "reduce", To: "output"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateOrderedProcessing(tt.pl)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateOrderedProcessing() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
