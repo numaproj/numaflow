@@ -418,9 +418,13 @@ impl SourceWatermarkHandle {
     }
 
     /// Initializes the active partitions by creating a publisher for each partition.
+    /// Also sets the processor count (total number of partitions) for watermark stability.
     pub(crate) async fn initialize_active_partitions(&self, partitions: Vec<u16>) {
         // Acquire lock, perform operation, and release immediately
         let mut state = self.state.lock().await;
+        // Set the processor count based on the number of partitions
+        let partition_count = partitions.len() as u32;
+        state.publisher.set_processor_count(partition_count);
         state
             .publisher
             .initialize_active_partitions(partitions)
@@ -857,6 +861,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: Utc::now().timestamp_millis(),
+                processor_count: None,
             }
             .try_into()
             .unwrap();
@@ -1021,6 +1026,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: Utc::now().timestamp_millis(),
+                processor_count: None,
             }
             .try_into()
             .unwrap();
@@ -1104,6 +1110,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: current_time,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 70000,
@@ -1111,6 +1118,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: current_time,
+            processor_count: None,
         };
 
         // Publish WMB entries to the OT bucket with a processor name

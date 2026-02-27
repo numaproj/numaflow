@@ -163,6 +163,7 @@ impl ProcessorManager {
         let processors_map =
             Self::prepopulate_processors(&ot_store, bucket_config, vertex_type, vertex_replica)
                 .await;
+
         // point to populated data
         let processors = Arc::new(RwLock::new(processors_map));
 
@@ -178,9 +179,8 @@ impl ProcessorManager {
 
         // start the processor refresher, to update the status of the processors
         // based on the last hb_time from WMB.
-        let refresh_handle = tokio::spawn(Self::start_refreshing_processors(Arc::clone(
-            &processors,
-        )));
+        let refresh_handle =
+            tokio::spawn(Self::start_refreshing_processors(Arc::clone(&processors)));
 
         Ok(ProcessorManager {
             processors,
@@ -453,6 +453,7 @@ mod tests {
                     idle: false,
                     partition: 0,
                     hb_time: current_hb_time(),
+                    processor_count: None,
                 }
                 .try_into()
                 .unwrap();
@@ -542,6 +543,7 @@ mod tests {
                             idle: false,
                             partition: 0,
                             hb_time: current_hb_time(),
+                            processor_count: None,
                         }
                         .try_into()
                         .unwrap();
@@ -640,6 +642,7 @@ mod tests {
                 idle: false,
                 partition: 0, // Should be filtered out (replica is 1)
                 hb_time: current_hb_time(),
+                processor_count: None,
             },
             WMB {
                 watermark: 200,
@@ -647,6 +650,7 @@ mod tests {
                 idle: false,
                 partition: 1, // Should be accepted (matches replica 1)
                 hb_time: current_hb_time(),
+                processor_count: None,
             },
             WMB {
                 watermark: 300,
@@ -654,6 +658,7 @@ mod tests {
                 idle: false,
                 partition: 2, // Should be filtered out (replica is 1)
                 hb_time: current_hb_time(),
+                processor_count: None,
             },
         ];
 

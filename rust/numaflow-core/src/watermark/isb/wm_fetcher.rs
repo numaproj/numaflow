@@ -329,6 +329,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 200,
@@ -336,6 +337,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb3 = WMB {
             watermark: 300,
@@ -343,6 +345,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -401,6 +404,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 150,
@@ -408,6 +412,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 200,
@@ -415,6 +420,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 250,
@@ -422,6 +428,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2 = vec![
@@ -431,6 +438,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 160,
@@ -438,6 +446,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 210,
@@ -445,6 +454,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 260,
@@ -452,6 +462,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs3 = vec![
@@ -461,6 +472,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 170,
@@ -468,6 +480,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 220,
@@ -475,6 +488,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 270,
@@ -482,6 +496,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
 
@@ -556,6 +571,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 150,
@@ -563,6 +579,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 200,
@@ -570,6 +587,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 250,
@@ -577,6 +595,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs1_p1 = vec![
@@ -586,6 +605,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 160,
@@ -593,6 +613,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 210,
@@ -600,6 +621,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 260,
@@ -607,6 +629,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p0 = vec![
@@ -616,6 +639,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 170,
@@ -623,6 +647,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 220,
@@ -630,6 +655,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 270,
@@ -637,6 +663,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p1 = vec![
@@ -646,6 +673,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 180,
@@ -653,6 +681,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 230,
@@ -660,6 +689,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 280,
@@ -667,6 +697,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs3_p0 = vec![
@@ -676,6 +707,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 190,
@@ -683,6 +715,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 240,
@@ -690,6 +723,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 290,
@@ -697,6 +731,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs3_p1 = vec![
@@ -706,6 +741,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 200,
@@ -713,6 +749,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 250,
@@ -720,6 +757,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 300,
@@ -727,6 +765,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
 
@@ -814,6 +853,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 150,
@@ -821,6 +861,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs1_p1_edge1 = vec![
@@ -830,6 +871,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 160,
@@ -837,6 +879,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p0_edge1 = vec![
@@ -846,6 +889,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 170,
@@ -853,6 +897,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p1_edge1 = vec![
@@ -862,6 +907,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 180,
@@ -869,6 +915,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
 
@@ -921,6 +968,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 190,
@@ -928,6 +976,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs1_p1_edge2 = vec![
@@ -937,6 +986,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 200,
@@ -944,6 +994,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p0_edge2 = vec![
@@ -953,6 +1004,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 210,
@@ -960,6 +1012,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p1_edge2 = vec![
@@ -969,6 +1022,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 220,
@@ -976,6 +1030,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
 
@@ -1051,6 +1106,7 @@ mod tests {
             idle: true,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 200,
@@ -1058,6 +1114,7 @@ mod tests {
             idle: true,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -1111,6 +1168,7 @@ mod tests {
             idle: true,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 200,
@@ -1118,6 +1176,7 @@ mod tests {
             idle: false, // Not idle
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -1172,6 +1231,7 @@ mod tests {
                 idle: true,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 150,
@@ -1179,6 +1239,7 @@ mod tests {
                 idle: true,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p0 = vec![
@@ -1188,6 +1249,7 @@ mod tests {
                 idle: true,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 160,
@@ -1195,6 +1257,7 @@ mod tests {
                 idle: false, // Not idle
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
 
@@ -1258,6 +1321,7 @@ mod tests {
                 idle: true,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 200, // This will be the head for processor1
@@ -1265,6 +1329,7 @@ mod tests {
                 idle: true,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2 = vec![
@@ -1274,6 +1339,7 @@ mod tests {
                 idle: true,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 180, // This will be the head for processor2
@@ -1281,6 +1347,7 @@ mod tests {
                 idle: true,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
 
@@ -1342,6 +1409,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 200,
@@ -1349,6 +1417,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb3 = WMB {
             watermark: 300,
@@ -1356,6 +1425,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -1413,6 +1483,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 150,
@@ -1420,6 +1491,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs1_p1 = vec![
@@ -1429,6 +1501,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 160,
@@ -1436,6 +1509,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p0 = vec![
@@ -1445,6 +1519,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 170,
@@ -1452,6 +1527,7 @@ mod tests {
                 idle: false,
                 partition: 0,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p1 = vec![
@@ -1461,6 +1537,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 180,
@@ -1468,6 +1545,7 @@ mod tests {
                 idle: false,
                 partition: 1,
                 hb_time: 0,
+                processor_count: None,
             },
         ];
 
@@ -1538,6 +1616,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb_edge2 = WMB {
             watermark: 150,
@@ -1545,6 +1624,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline1_edge1.put(wmb_edge1);
@@ -1617,6 +1697,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb_edge2 = WMB {
             watermark: 150,
@@ -1624,6 +1705,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline1_edge1.put(wmb_edge1);

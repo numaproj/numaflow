@@ -26,6 +26,10 @@ pub(crate) struct SourceWatermarkPublisher {
     source_config: BucketConfig,
     to_vertex_configs: Vec<BucketConfig>,
     publishers: HashMap<String, ISBWatermarkPublisher>,
+    /// Total number of source partitions (processors) for this source.
+    /// This is included in every published WMB to help the fetcher determine
+    /// when all processors have reported.
+    processor_count: Option<u32>,
 }
 
 impl SourceWatermarkPublisher {
@@ -42,7 +46,14 @@ impl SourceWatermarkPublisher {
             source_config,
             to_vertex_configs,
             publishers: HashMap::new(),
+            processor_count: None,
         })
+    }
+
+    /// Sets the total processor count (number of source partitions).
+    /// This count is included in every published WMB.
+    pub(crate) fn set_processor_count(&mut self, count: u32) {
+        self.processor_count = Some(count);
     }
 
     /// Helper to create OT KV stores from bucket configs using the JetStream context.
@@ -106,7 +117,7 @@ impl SourceWatermarkPublisher {
         self.publishers
             .get_mut(&processor_name)
             .expect("Publisher not found")
-            .publish_watermark(
+            .publish_watermark_with_processor_count(
                 &Stream {
                     name: "source",
                     vertex: self.source_config.vertex,
@@ -121,6 +132,7 @@ impl SourceWatermarkPublisher {
                 Utc::now().timestamp_micros(), // we don't care about the offsets
                 watermark,
                 idle,
+                self.processor_count,
             )
             .await;
     }
@@ -142,8 +154,7 @@ impl SourceWatermarkPublisher {
             info!(processor = ?processor_name, partition = ?input_partition,
                 "Creating new publisher for ISB"
             );
-            let ot_stores =
-                Self::create_ot_stores(&self.js_context, &self.to_vertex_configs).await;
+            let ot_stores = Self::create_ot_stores(&self.js_context, &self.to_vertex_configs).await;
 
             let publisher = ISBWatermarkPublisher::new(
                 processor_name.clone(),

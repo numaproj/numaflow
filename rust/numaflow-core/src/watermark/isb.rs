@@ -275,13 +275,9 @@ impl ISBWatermarkHandle {
             // Create KV store for ProcessorManager (hb_time is now embedded in WMB)
             let ot_store = Self::create_ot_store(&js_context, from_bucket_config).await;
 
-            let processor_manager = ProcessorManager::new(
-                ot_store,
-                from_bucket_config,
-                vertex_type,
-                vertex_replica,
-            )
-            .await?;
+            let processor_manager =
+                ProcessorManager::new(ot_store, from_bucket_config, vertex_type, vertex_replica)
+                    .await?;
             processor_managers.insert(from_bucket_config.vertex, processor_manager);
         }
         let fetcher =
@@ -291,12 +287,8 @@ impl ISBWatermarkHandle {
         let ot_stores = Self::create_ot_stores(&js_context, &config.to_vertex_config).await;
 
         let processor_name = format!("{vertex_name}-{vertex_replica}");
-        let publisher = ISBWatermarkPublisher::new(
-            processor_name,
-            ot_stores,
-            &config.to_vertex_config,
-            false,
-        );
+        let publisher =
+            ISBWatermarkPublisher::new(processor_name, ot_stores, &config.to_vertex_config, false);
 
         let idle_manager =
             ISBIdleDetector::new(idle_timeout, to_vertex_configs, js_context.clone()).await;

@@ -141,6 +141,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 200,
@@ -148,6 +149,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb3 = WMB {
             watermark: 250,
@@ -155,6 +157,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb4 = WMB {
             watermark: 250,
@@ -162,6 +165,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb5 = WMB {
             watermark: 300,
@@ -169,6 +173,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -200,6 +205,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 100,
@@ -207,6 +213,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb3 = WMB {
             watermark: 200,
@@ -214,6 +221,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb4 = WMB {
             watermark: 250,
@@ -221,6 +229,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb5 = WMB {
             watermark: 250,
@@ -228,6 +237,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb6 = WMB {
             watermark: 300,
@@ -235,6 +245,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -267,6 +278,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 100,
@@ -274,6 +286,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb3 = WMB {
             watermark: 100,
@@ -281,6 +294,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb4 = WMB {
             watermark: 100,
@@ -288,6 +302,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb5 = WMB {
             watermark: 100,
@@ -295,6 +310,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -328,6 +344,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 200,
@@ -335,6 +352,7 @@ mod tests {
             idle: false,
             partition: 1,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb3 = WMB {
             watermark: 150,
@@ -342,6 +360,7 @@ mod tests {
             idle: true,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -361,6 +380,7 @@ mod tests {
             idle: true,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline.put(idle_wmb);
@@ -377,6 +397,7 @@ mod tests {
             idle: true,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline.put(idle_wmb);

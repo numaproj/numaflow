@@ -133,6 +133,20 @@ impl ISBWatermarkPublisher {
         watermark: i64,
         idle: bool,
     ) {
+        self.publish_watermark_with_processor_count(stream, offset, watermark, idle, None)
+            .await;
+    }
+
+    /// publish_watermark_with_processor_count publishes the watermark with an optional processor count.
+    /// This is used by source watermark publishers to include the total partition count in the WMB.
+    pub(crate) async fn publish_watermark_with_processor_count(
+        &mut self,
+        stream: &Stream,
+        offset: i64,
+        watermark: i64,
+        idle: bool,
+        processor_count: Option<u32>,
+    ) {
         let last_state = self
             .last_published_wm
             .get_mut(stream.vertex)
@@ -206,6 +220,7 @@ impl ISBWatermarkPublisher {
             watermark: publish_watermark,
             partition: stream.partition,
             hb_time: Self::current_hb_time(),
+            processor_count,
         }
         .try_into()
         .expect("Failed to convert WMB to bytes");
@@ -287,12 +302,8 @@ mod tests {
 
         let ot_stores = create_test_ot_stores(&js_context, &bucket_configs).await;
 
-        let mut publisher = ISBWatermarkPublisher::new(
-            "processor1".to_string(),
-            ot_stores,
-            &bucket_configs,
-            false,
-        );
+        let mut publisher =
+            ISBWatermarkPublisher::new("processor1".to_string(), ot_stores, &bucket_configs, false);
 
         let stream_partition_0 = Stream {
             name: "v1-0",
@@ -411,12 +422,8 @@ mod tests {
 
         let ot_stores = create_test_ot_stores(&js_context, &bucket_configs).await;
 
-        let mut publisher = ISBWatermarkPublisher::new(
-            "processor1".to_string(),
-            ot_stores,
-            &bucket_configs,
-            false,
-        );
+        let mut publisher =
+            ISBWatermarkPublisher::new("processor1".to_string(), ot_stores, &bucket_configs, false);
 
         let stream1 = Stream {
             name: "v1-0",
@@ -506,12 +513,8 @@ mod tests {
 
         let ot_stores = create_test_ot_stores(&js_context, &bucket_configs).await;
 
-        let mut publisher = ISBWatermarkPublisher::new(
-            "processor1".to_string(),
-            ot_stores,
-            &bucket_configs,
-            false,
-        );
+        let mut publisher =
+            ISBWatermarkPublisher::new("processor1".to_string(), ot_stores, &bucket_configs, false);
 
         let stream = Stream {
             name: "v1-0",

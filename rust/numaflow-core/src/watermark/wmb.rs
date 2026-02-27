@@ -16,6 +16,10 @@ pub(crate) struct WMB {
     pub(crate) partition: u16,
     /// Heartbeat timestamp (epoch milliseconds) to track processor liveness.
     pub(crate) hb_time: i64,
+    /// Optional expected processor count for source watermarks.
+    /// When set, the fetcher will wait until this many processors are active before
+    /// computing a valid watermark.
+    pub(crate) processor_count: Option<u32>,
 }
 
 impl Default for WMB {
@@ -26,6 +30,7 @@ impl Default for WMB {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         }
     }
 }
@@ -47,6 +52,7 @@ impl TryFrom<Bytes> for WMB {
             watermark: proto_wmb.watermark,
             partition: proto_wmb.partition as u16,
             hb_time: proto_wmb.hb_time,
+            processor_count: proto_wmb.processor_count.map(|c| c as u32),
         })
     }
 }
@@ -62,6 +68,7 @@ impl TryFrom<WMB> for BytesMut {
             watermark: wmb.watermark,
             partition: wmb.partition as i32,
             hb_time: wmb.hb_time,
+            processor_count: wmb.processor_count.map(|c| c as i32),
         };
 
         let mut bytes = BytesMut::with_capacity(proto_wmb.encoded_len());

@@ -24,6 +24,12 @@ pub struct Wmb {
     /// This eliminates the need for a separate heartbeat store.
     #[prost(int64, tag = "5")]
     pub hb_time: i64,
+    /// Optional expected processor count for source watermarks.
+    /// When set, the fetcher will wait until this many processors are active before
+    /// computing a valid watermark. This prevents incorrect watermark computation
+    /// during startup or partition rebalancing.
+    #[prost(int32, optional, tag = "6")]
+    pub processor_count: ::core::option::Option<i32>,
 }
 /// Heartbeat is used to track the active processors
 /// Deprecated: hb_time is now embedded in WMB. Kept for backward compatibility during rolling upgrades.

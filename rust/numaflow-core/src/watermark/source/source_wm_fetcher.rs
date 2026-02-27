@@ -29,26 +29,61 @@ impl SourceWatermarkFetcher {
 
     /// Fetches the watermark for the source, which is the minimum watermark of all the active
     /// processors.
+    ///
+    /// The expected processor count is dynamically determined by taking the maximum
+    /// `processor_count` value from the head WMBs of all active processors. If we don't
+    /// have enough active processors, returns -1 to indicate the watermark cannot be
+    /// computed yet. This ensures watermark stability during startup and rebalancing.
     pub(crate) fn fetch_source_watermark(&mut self) -> Watermark {
         let mut min_wm = i64::MAX;
+        let mut active_processor_count = 0u32;
+        let mut max_expected_count: Option<u32> = None;
 
-        for (_, processor) in self
+        let processors = self
             .processor_manager
             .processors
             .read()
-            .expect("failed to acquire lock")
-            .iter()
-        {
+            .expect("failed to acquire lock");
+
+        for (_, processor) in processors.iter() {
             // We only consider active processors.
             if !processor.is_active() {
                 continue;
             }
 
-            // only consider the head watermark of the processor (source has only partition 0)
-            let head_wm = processor.timelines.get(&0).unwrap().get_head_watermark();
+            active_processor_count += 1;
 
-            if head_wm < min_wm {
-                min_wm = head_wm;
+            // only consider the head watermark of the processor (source has only partition 0)
+            if let Some(timeline) = processor.timelines.get(&0) {
+                let head_wm = timeline.get_head_watermark();
+
+                if head_wm < min_wm {
+                    min_wm = head_wm;
+                }
+
+                // Get the processor_count from the head WMB and track the maximum
+                // This is the source of truth for expected processor count
+                if let Some(head_wmb) = timeline.get_head_wmb() {
+                    if let Some(count) = head_wmb.processor_count {
+                        max_expected_count =
+                            Some(max_expected_count.map_or(count, |c| c.max(count)));
+                    }
+                }
+            }
+        }
+
+        // Drop the lock
+        drop(processors);
+
+        // Check if we have enough active processors based on the max processor_count
+        // seen in the WMBs (be conservative)
+        if let Some(expected) = max_expected_count {
+            if active_processor_count < expected {
+                // Not enough processors reporting yet, return -1
+                let watermark =
+                    Watermark::from_timestamp_millis(-1).expect("Failed to parse watermark");
+                self.watermark_log_summary(&watermark);
+                return watermark;
             }
         }
 
@@ -150,6 +185,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 200,
@@ -157,6 +193,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb3 = WMB {
             watermark: 300,
@@ -164,6 +201,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -201,6 +239,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 200,
@@ -208,6 +247,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb3 = WMB {
             watermark: 323,
@@ -215,6 +255,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline1.put(wmb1);
@@ -234,6 +275,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb5 = WMB {
             watermark: 250,
@@ -241,6 +283,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb6 = WMB {
             watermark: 350,
@@ -248,6 +291,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline2.put(wmb4);
@@ -286,6 +330,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 200,
@@ -293,6 +338,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb3 = WMB {
             watermark: 300,
@@ -300,6 +346,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -337,6 +384,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 200,
@@ -344,6 +392,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb3 = WMB {
             watermark: 323,
@@ -351,6 +400,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline1.put(wmb1);
@@ -370,6 +420,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb5 = WMB {
             watermark: 250,
@@ -377,6 +428,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
         let wmb6 = WMB {
             watermark: 350,
@@ -384,6 +436,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline2.put(wmb4);
@@ -422,6 +475,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline1.put(wmb1);
@@ -438,6 +492,7 @@ mod tests {
             idle: false,
             partition: 0,
             hb_time: 0,
+            processor_count: None,
         };
 
         timeline2.put(wmb2);
