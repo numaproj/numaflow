@@ -3,7 +3,7 @@
 //! field embedded in the WMB, eliminating the need for a separate heartbeat bucket.
 //!
 //! The refresher task periodically checks the hb_time of each processor and marks them as inactive or deleted
-//! if they haven't published a WMB within the expected interval.
+//! if they haven't published a WMB within the configured delay interval.
 
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
@@ -23,7 +23,9 @@ use crate::error::Result;
 use crate::watermark::processor::timeline::OffsetTimeline;
 use crate::watermark::wmb::WMB;
 
-const DEFAULT_PROCESSOR_REFRESH_RATE: u16 = 5;
+/// Default interval for processor refresh and liveness checking.
+/// Used for both the refresh loop interval and the liveness threshold.
+const DEFAULT_PROCESSOR_REFRESH_RATE: Duration = Duration::from_secs(5);
 
 /// Status of a processor.
 #[derive(Clone, Debug, PartialEq)]
@@ -175,11 +177,10 @@ impl ProcessorManager {
         ));
 
         // start the processor refresher, to update the status of the processors
-        // based on the last hb_time from WMB
-        let refresh_handle = tokio::spawn(Self::start_refreshing_processors(
-            DEFAULT_PROCESSOR_REFRESH_RATE,
-            Arc::clone(&processors),
-        ));
+        // based on the last hb_time from WMB.
+        let refresh_handle = tokio::spawn(Self::start_refreshing_processors(Arc::clone(
+            &processors,
+        )));
 
         Ok(ProcessorManager {
             processors,
@@ -249,26 +250,26 @@ impl ProcessorManager {
     }
 
     /// Starts refreshing the processors status based on the last hb_time from WMB.
-    /// If the last hb_time is more than 10 times the refreshing rate, the processor is marked as deleted.
-    async fn start_refreshing_processors(
-        refreshing_processors_rate: u16,
-        processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
-    ) {
-        let mut interval =
-            tokio::time::interval(Duration::from_secs(refreshing_processors_rate as u64));
+    /// Uses DEFAULT_PROCESSOR_REFRESH_RATE for both the refresh interval and liveness checking:
+    /// - If hb_time is older than 10x refresh rate, processor is marked as Deleted
+    /// - If hb_time is older than refresh rate, processor is marked as InActive
+    /// - Otherwise, processor is Active
+    async fn start_refreshing_processors(processors: Arc<RwLock<HashMap<Bytes, Processor>>>) {
+        let refresh_rate_millis = DEFAULT_PROCESSOR_REFRESH_RATE.as_millis() as i64;
+        let mut interval = tokio::time::interval(DEFAULT_PROCESSOR_REFRESH_RATE);
         loop {
             interval.tick().await;
             let current_time = SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap()
-                .as_secs() as i64;
+                .as_millis() as i64;
 
             let mut processors = processors.write().expect("failed to acquire lock");
 
             for processor in processors.values_mut() {
                 let status = match current_time - processor.last_hb_time {
-                    diff if diff > 10 * refreshing_processors_rate as i64 => Status::Deleted,
-                    diff if diff > refreshing_processors_rate as i64 => Status::InActive,
+                    diff if diff > 10 * refresh_rate_millis => Status::Deleted,
+                    diff if diff > refresh_rate_millis => Status::InActive,
                     _ => Status::Active,
                 };
                 processor.set_status(status);

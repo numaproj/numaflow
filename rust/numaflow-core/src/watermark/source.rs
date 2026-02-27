@@ -856,7 +856,7 @@ mod tests {
                 offset: i,
                 idle: false,
                 partition: 0,
-                hb_time: Utc::now().timestamp(),
+                hb_time: Utc::now().timestamp_millis(),
             }
             .try_into()
             .unwrap();
@@ -1020,7 +1020,7 @@ mod tests {
                 offset: i,
                 idle: false,
                 partition: 0,
-                hb_time: Utc::now().timestamp(),
+                hb_time: Utc::now().timestamp_millis(),
             }
             .try_into()
             .unwrap();
@@ -1095,7 +1095,7 @@ mod tests {
         // Publish some WMB entries to the source OT bucket to simulate source processors
         let ot_bucket = js_context.get_key_value(ot_bucket_name).await.unwrap();
 
-        let current_time = chrono::Utc::now().timestamp();
+        let current_time = chrono::Utc::now().timestamp_millis();
 
         // Create WMB entries that will be read by the ProcessorManager (with embedded hb_time)
         let wmb1 = WMB {

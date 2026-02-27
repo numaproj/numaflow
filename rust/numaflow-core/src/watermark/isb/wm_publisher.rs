@@ -3,8 +3,8 @@
 //! stream information provided. It makes sure we always publish monotonically increasing watermark.
 //!
 //! Heartbeat is now embedded in the WMB (hb_time field), eliminating the need for a separate
-//! heartbeat store. The publisher ensures that WMBs are published periodically even when the
-//! watermark hasn't changed, to maintain processor liveness detection.
+//! heartbeat store. The publisher ensures that WMBs are published periodically (based on the
+//! configured delay) even when the watermark hasn't changed, to maintain processor liveness detection.
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -17,10 +17,6 @@ use tracing::{info, warn};
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::watermark::wmb::WMB;
-
-/// Interval at which the pod sends heartbeats (in seconds).
-/// WMBs will be published at least this often to maintain liveness.
-const DEFAULT_POD_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 
 /// LastPublishedState is the state of the last published watermark and offset
 /// for a partition.
@@ -54,8 +50,14 @@ impl LastPublishedState {
     }
 
     /// Check if heartbeat interval has elapsed and we need to publish for liveness.
+    /// Uses the configured delay as the heartbeat interval.
     fn needs_heartbeat(&self) -> bool {
-        self.last_published_time.elapsed() >= DEFAULT_POD_HEARTBEAT_INTERVAL
+        if let Some(delay) = self.delay {
+            self.last_published_time.elapsed() >= delay
+        } else {
+            // If no delay is configured, always allow publishing
+            true
+        }
     }
 }
 
@@ -114,12 +116,12 @@ impl ISBWatermarkPublisher {
         }
     }
 
-    /// Returns the current epoch time in seconds for hb_time.
+    /// Returns the current epoch time in milliseconds for hb_time.
     fn current_hb_time() -> i64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("Failed to get duration since epoch")
-            .as_secs() as i64
+            .as_millis() as i64
     }
 
     /// publish_watermark publishes the watermark for the given offset and the stream.

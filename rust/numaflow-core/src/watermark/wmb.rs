@@ -14,7 +14,7 @@ pub(crate) struct WMB {
     pub(crate) offset: i64,
     pub(crate) watermark: i64,
     pub(crate) partition: u16,
-    /// Heartbeat timestamp (epoch seconds) to track processor liveness.
+    /// Heartbeat timestamp (epoch milliseconds) to track processor liveness.
     pub(crate) hb_time: i64,
 }
 
