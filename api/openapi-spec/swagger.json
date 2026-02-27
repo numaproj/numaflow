@@ -19696,6 +19696,10 @@
             "type": "string"
           }
         },
+        "ordered": {
+          "description": "Ordered enables ordered processing for this vertex, overrides pipeline-level setting. When enabled, messages will be processed in order based on their event time. Note: Reduce vertices ignore this setting as they are already partitioned.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Ordered"
+        },
         "partitions": {
           "description": "Number of partitions of the vertex owned buffers. It applies to udf and sink vertices only.",
           "type": "integer",
@@ -21424,6 +21428,16 @@
       "description": "NoStore means there will be no persistence storage and there will be data loss during pod restarts. Use this option only if you do not care about correctness (e.g., approx statistics pipeline like sampling rate, etc.).",
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.Ordered": {
+      "description": "Ordered defines the ordered processing configuration.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Enabled toggles ordered processing.",
+          "type": "boolean"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.PBQStorage": {
       "description": "PBQStorage defines the persistence configuration for a vertex.",
       "type": "object",
@@ -21560,6 +21574,10 @@
         "limits": {
           "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, they could be overridden by each vertex's settings",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PipelineLimits"
+        },
+        "ordered": {
+          "description": "Ordered enables ordered processing for the entire pipeline. When enabled, messages will be processed in order based on their event time. This can be overridden at the vertex level.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Ordered"
         },
         "sideInputs": {
           "description": "SideInputs defines the Side Inputs of a pipeline.",
@@ -22975,6 +22993,10 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "ordered": {
+          "description": "Ordered enables ordered processing for this vertex, overrides pipeline-level setting. When enabled, messages will be processed in order based on their event time. Note: Reduce vertices ignore this setting as they are already partitioned.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Ordered"
         },
         "partitions": {
           "description": "Number of partitions of the vertex owned buffers. It applies to udf and sink vertices only.",

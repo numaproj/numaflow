@@ -261,6 +261,12 @@ message AbstractVertex {
   // +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
   // +optional
   optional UpdateStrategy updateStrategy = 16;
+
+  // Ordered enables ordered processing for this vertex, overrides pipeline-level setting.
+  // When enabled, messages will be processed in order based on their event time.
+  // Note: Reduce vertices ignore this setting as they are already partitioned.
+  // +optional
+  optional Ordered ordered = 17;
 }
 
 // AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should
@@ -1200,6 +1206,14 @@ message NatsSource {
 message NoStore {
 }
 
+// Ordered defines the ordered processing configuration.
+message Ordered {
+  // Enabled toggles ordered processing.
+  // +kubebuilder:default=false
+  // +optional
+  optional bool enabled = 1;
+}
+
 // PBQStorage defines the persistence configuration for a vertex.
 message PBQStorage {
   // +optional
@@ -1331,6 +1345,12 @@ message PipelineSpec {
   // InterStepBuffer configuration specific to this pipeline.
   // +optional
   optional InterStepBuffer interStepBuffer = 9;
+
+  // Ordered enables ordered processing for the entire pipeline.
+  // When enabled, messages will be processed in order based on their event time.
+  // This can be overridden at the vertex level.
+  // +optional
+  optional Ordered ordered = 10;
 }
 
 message PipelineStatus {

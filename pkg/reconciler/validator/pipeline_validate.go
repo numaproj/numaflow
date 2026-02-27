@@ -175,6 +175,10 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return err
 	}
 
+	if err := validateOrderedProcessing(*pl); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -764,6 +768,20 @@ func validateSQSSink(sqs dfv1.SqsSink) error {
 	if err := validateAWSAssumeRole(sqs.AssumeRole); err != nil {
 		return fmt.Errorf("invalid assume role configuration: %w", err)
 	}
+
+	return nil
+}
+
+// validateOrderedProcessing validates the ordered processing configuration.
+// The ordered configuration is simple (just a boolean), so minimal validation is needed.
+// Note: Reduce vertices ignore the ordered setting as they are already partitioned.
+func validateOrderedProcessing(pl dfv1.Pipeline) error {
+	// Pipeline-level validation: the Ordered struct is optional and contains only a boolean,
+	// so no additional validation is needed beyond what the API server enforces.
+
+	// Vertex-level validation: ensure vertex-level ordered config is valid.
+	// Since it's just a boolean field, no additional validation is needed.
+	// Reduce vertices will ignore this setting (handled in GetEffectiveOrderedConfig).
 
 	return nil
 }
