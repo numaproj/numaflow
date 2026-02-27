@@ -1110,7 +1110,6 @@ mod tests {
                     vertex: "input-vertex",
                     partitions: vec![0],
                     ot_bucket,
-                    hb_bucket,
                     delay: Some(Duration::from_millis(100)),
                 }],
                 to_vertex_config: vec![],

@@ -1,20 +1,21 @@
-//! Manages the processors and their lifecycle. It will keep track of all the active processor by listening
-//! to the heartbeat bucket and update their offset timelines by listening to the ot bucket. It will also
-//! refresh the active processors if they are not active for a certain time.
+//! Manages the processors and their lifecycle. It will keep track of all the active processors by listening
+//! to the OT bucket and update their offset timelines. Processor liveness is now determined by the hb_time
+//! field embedded in the WMB, eliminating the need for a separate heartbeat bucket.
+//!
+//! The refresher task periodically checks the hb_time of each processor and marks them as inactive or deleted
+//! if they haven't published a WMB within the expected interval.
 
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::sync::RwLock;
+use std::time::Duration;
 use std::time::SystemTime;
-use std::time::{Duration, UNIX_EPOCH};
 
 use bytes::Bytes;
 use futures::StreamExt;
-use numaflow_pb::objects::watermark::Heartbeat;
 use numaflow_shared::kv::{KVStore, KVWatchOp};
-use prost::Message as ProtoMessage;
-use tracing::{debug, error, info, warn};
+use tracing::{info, warn};
 
 use crate::config::pipeline::VertexType;
 use crate::config::pipeline::watermark::BucketConfig;
@@ -41,6 +42,9 @@ pub(crate) struct Processor {
     pub(crate) status: Status,
     /// OffsetTimeline for each partition.
     pub(crate) timelines: HashMap<u16, OffsetTimeline>,
+    /// Last heartbeat time (epoch seconds) extracted from the most recent WMB.
+    /// Used to determine processor liveness.
+    pub(crate) last_hb_time: i64,
 }
 
 impl Debug for Processor {
@@ -75,7 +79,7 @@ impl Debug for Processor {
 }
 
 impl Processor {
-    pub(crate) fn new(name: Bytes, status: Status, partitions: &[u16]) -> Self {
+    pub(crate) fn new(name: Bytes, status: Status, partitions: &[u16], hb_time: i64) -> Self {
         let mut timelines = HashMap::new();
         for &partition in partitions {
             timelines.insert(partition, OffsetTimeline::new(10));
@@ -84,12 +88,18 @@ impl Processor {
             name,
             status,
             timelines,
+            last_hb_time: hb_time,
         }
     }
 
     /// Set the status of the processor.
     pub(crate) fn set_status(&mut self, status: Status) {
         self.status = status;
+    }
+
+    /// Update the last heartbeat time.
+    pub(crate) fn update_hb_time(&mut self, hb_time: i64) {
+        self.last_hb_time = hb_time;
     }
 
     /// Check if the processor is active.
@@ -109,7 +119,7 @@ impl Processor {
 pub(crate) struct ProcessorManager {
     /// Mapping of processor name to processor
     pub(crate) processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
-    /// Handles of ot listener, hb listener and processor refresher tasks
+    /// Handles of ot listener and processor refresher tasks
     pub(crate) handles: Vec<tokio::task::JoinHandle<()>>,
 }
 
@@ -133,135 +143,88 @@ impl Drop for ProcessorManager {
 
 impl ProcessorManager {
     /// Creates a new ProcessorManager. It prepopulates the processor-map with previous data
-    /// fetched from the OT and HB stores.
+    /// fetched from the OT store. Processor liveness is determined by the hb_time field
+    /// embedded in the WMB, eliminating the need for a separate heartbeat store.
     ///
     /// # Arguments
-    /// * `ot_store` - The offset-timeline KV store for tracking watermark entries
-    /// * `hb_store` - The heartbeat KV store for tracking processor liveness
+    /// * `ot_store` - The offset-timeline KV store for tracking watermark entries and processor liveness
     /// * `bucket_config` - Configuration for the bucket (partitions, etc.)
     /// * `vertex_type` - Type of vertex (Source, Sink, MapUDF, ReduceUDF)
     /// * `vertex_replica` - Replica number of this vertex
     pub(crate) async fn new(
         ot_store: Arc<dyn KVStore>,
-        hb_store: Arc<dyn KVStore>,
         bucket_config: &BucketConfig,
         vertex_type: VertexType,
         vertex_replica: u16,
     ) -> Result<Self> {
-        // fetch old data
-        let (processors_map, heartbeats_map) = Self::prepopulate_processors(
-            &hb_store,
-            &ot_store,
-            bucket_config,
-            vertex_type,
-            vertex_replica,
-        )
-        .await;
+        // fetch old data from OT store (hb_time is now embedded in WMB)
+        let processors_map =
+            Self::prepopulate_processors(&ot_store, bucket_config, vertex_type, vertex_replica)
+                .await;
         // point to populated data
         let processors = Arc::new(RwLock::new(processors_map));
-        let heartbeats = Arc::new(RwLock::new(heartbeats_map));
 
         // start the ot watcher, to listen to the OT store and update the timelines
+        // This also handles processor creation and hb_time updates
         let ot_handle = tokio::spawn(Self::start_ot_watcher(
             Arc::clone(&ot_store),
             Arc::clone(&processors),
+            bucket_config.partitions.clone(),
             vertex_type,
             vertex_replica,
         ));
 
-        // start the hb watcher, to listen to the HB store and update the list of
-        // active processors
-        let hb_handle = tokio::spawn(Self::start_hb_watcher(
-            bucket_config.partitions.clone(),
-            Arc::clone(&hb_store),
-            Arc::clone(&heartbeats),
-            Arc::clone(&processors),
-        ));
-
         // start the processor refresher, to update the status of the processors
-        // based on the last heartbeat
+        // based on the last hb_time from WMB
         let refresh_handle = tokio::spawn(Self::start_refreshing_processors(
             DEFAULT_PROCESSOR_REFRESH_RATE,
             Arc::clone(&processors),
-            Arc::clone(&heartbeats),
         ));
 
         Ok(ProcessorManager {
             processors,
-            handles: vec![ot_handle, hb_handle, refresh_handle],
+            handles: vec![ot_handle, refresh_handle],
         })
     }
 
-    /// Prepopulate processors and timelines from the hb and ot stores.
+    /// Prepopulate processors and timelines from the OT store.
+    /// Processor liveness is determined by the hb_time field embedded in the WMB.
     async fn prepopulate_processors(
-        hb_store: &Arc<dyn KVStore>,
         ot_store: &Arc<dyn KVStore>,
         bucket_config: &BucketConfig,
         vertex_type: VertexType,
         vertex_replica: u16,
-    ) -> (HashMap<Bytes, Processor>, HashMap<Bytes, i64>) {
-        let mut processors = HashMap::new();
-        let mut heartbeats = HashMap::new();
+    ) -> HashMap<Bytes, Processor> {
+        let mut processors: HashMap<Bytes, Processor> = HashMap::new();
 
-        // Get all existing keys from the hb store and create processors
-        let hb_keys = match hb_store.keys().await {
-            Ok(keys) => keys,
-            Err(e) => {
-                error!(?e, "Failed to get keys from hb store");
-                Vec::new()
-            }
-        };
-
-        for key in hb_keys {
-            let processor_name = Bytes::from(key.clone());
-            let processor = Processor::new(
-                processor_name.clone(),
-                Status::Active,
-                &bucket_config.partitions,
-            );
-            processors.insert(processor_name.clone(), processor);
-
-            let Ok(Some(value)) = hb_store.get(&key).await else {
-                continue;
-            };
-
-            // heartbeat decode can fail when users update the golang based runtime to rust without
-            // recreating the pipeline, we will use the current time as the heartbeat, we can remove
-            // the default once we stop supporting the golang based runtime
-            let hb = numaflow_pb::objects::watermark::Heartbeat::decode(value)
-                .unwrap_or(Heartbeat {
-                    heartbeat: SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .expect("Failed to get duration since epoch")
-                        .as_secs() as i64,
-                })
-                .heartbeat;
-            heartbeats.insert(processor_name, hb);
-        }
-
-        // Get all existing entries from the ot store and store them in the timeline
-        let ot_keys = match ot_store.keys().await {
-            Ok(keys) => keys,
-            Err(e) => {
-                warn!(error = ?e, "Failed to get keys from ot store");
-                Vec::new()
-            }
-        };
+        // Get all existing entries from the ot store
+        let ot_keys = ot_store.keys().await.unwrap_or_else(|e| {
+            warn!(error = ?e, "Failed to get keys from ot store");
+            Vec::new()
+        });
 
         for ot_key in ot_keys {
             let processor_name = Bytes::from(ot_key.clone());
-            let processor = match processors.get_mut(&processor_name) {
-                Some(processor) => processor,
-                None => {
-                    warn!(?processor_name, "Processor not found, skipping");
-                    continue;
-                }
-            };
 
             let Ok(Some(ot_value)) = ot_store.get(&ot_key).await else {
                 continue;
             };
             let wmb: WMB = ot_value.try_into().expect("Failed to decode WMB");
+
+            // Get or create the processor
+            let processor = processors.entry(processor_name.clone()).or_insert_with(|| {
+                Processor::new(
+                    processor_name.clone(),
+                    Status::Active,
+                    &bucket_config.partitions,
+                    wmb.hb_time,
+                )
+            });
+
+            // Update hb_time if this WMB has a more recent one
+            if wmb.hb_time > processor.last_hb_time {
+                processor.update_hb_time(wmb.hb_time);
+            }
 
             match vertex_type {
                 VertexType::Source | VertexType::Sink | VertexType::MapUDF => {
@@ -282,15 +245,14 @@ impl ProcessorManager {
             }
         }
 
-        (processors, heartbeats)
+        processors
     }
 
-    /// Starts refreshing the processors status based on the last heartbeat, if the last heartbeat
-    /// is more than 10 times the refreshing rate, the processor is marked as deleted
+    /// Starts refreshing the processors status based on the last hb_time from WMB.
+    /// If the last hb_time is more than 10 times the refreshing rate, the processor is marked as deleted.
     async fn start_refreshing_processors(
         refreshing_processors_rate: u16,
         processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
-        heartbeats: Arc<RwLock<HashMap<Bytes, i64>>>,
     ) {
         let mut interval =
             tokio::time::interval(Duration::from_secs(refreshing_processors_rate as u64));
@@ -301,28 +263,27 @@ impl ProcessorManager {
                 .unwrap()
                 .as_secs() as i64;
 
-            let heartbeats = heartbeats.read().expect("failed to acquire lock");
             let mut processors = processors.write().expect("failed to acquire lock");
 
-            heartbeats.iter().for_each(|(p_name, &p_time)| {
-                if let Some(p) = processors.get_mut(p_name) {
-                    let status = match current_time - p_time {
-                        diff if diff > 10 * refreshing_processors_rate as i64 => Status::Deleted,
-                        diff if diff > refreshing_processors_rate as i64 => Status::InActive,
-                        _ => Status::Active,
-                    };
-                    p.set_status(status);
-                }
-            });
+            for processor in processors.values_mut() {
+                let status = match current_time - processor.last_hb_time {
+                    diff if diff > 10 * refreshing_processors_rate as i64 => Status::Deleted,
+                    diff if diff > refreshing_processors_rate as i64 => Status::InActive,
+                    _ => Status::Active,
+                };
+                processor.set_status(status);
+            }
         }
     }
 
     /// Starts the ot watcher, to listen to the OT store and update the timelines for the
-    /// processors. Uses KVStore::watch() with revision=None to only watch for new changes
+    /// processors. Also handles processor creation and hb_time updates from the WMB.
+    /// Uses KVStore::watch() with revision=None to only watch for new changes
     /// (since we prepopulate the data first).
     async fn start_ot_watcher(
         ot_store: Arc<dyn KVStore>,
         processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
+        partitions: Vec<u16>,
         vertex_type: VertexType,
         vertex_replica: u16,
     ) {
@@ -340,9 +301,32 @@ impl ProcessorManager {
                     let wmb: WMB = kv.value.try_into().expect("Failed to decode WMB");
 
                     let mut processors = processors.write().expect("failed to acquire lock");
-                    let Some(processor) = processors.get_mut(&processor_name) else {
-                        continue;
+
+                    // Get or create the processor
+                    let processor = if let Some(processor) = processors.get_mut(&processor_name) {
+                        processor
+                    } else {
+                        // Processor doesn't exist, create it
+                        info!(processor = ?processor_name, "Processor not found, adding it");
+                        let new_processor = Processor::new(
+                            processor_name.clone(),
+                            Status::Active,
+                            &partitions,
+                            wmb.hb_time,
+                        );
+                        processors.insert(processor_name.clone(), new_processor);
+                        processors.get_mut(&processor_name).unwrap()
                     };
+
+                    // Update hb_time if this WMB has a more recent one
+                    if wmb.hb_time > processor.last_hb_time {
+                        processor.update_hb_time(wmb.hb_time);
+                    }
+
+                    // If processor was inactive, mark it as active since we received a WMB
+                    if !processor.is_active() && !processor.is_deleted() {
+                        processor.set_status(Status::Active);
+                    }
 
                     match vertex_type {
                         VertexType::Source | VertexType::Sink | VertexType::MapUDF => {
@@ -362,80 +346,18 @@ impl ProcessorManager {
                         }
                     }
                 }
-                KVWatchOp::Delete | KVWatchOp::Purge => {
-                    // we don't care about delete or purge operations
-                }
-            }
-        }
-    }
-
-    /// Starts the hb watcher, to listen to the HB store, will also create the processor if it
-    /// doesn't exist. Uses KVStore::watch() with revision=None to only watch for new changes
-    /// (since we prepopulate the data first).
-    async fn start_hb_watcher(
-        partitions: Vec<u16>,
-        hb_store: Arc<dyn KVStore>,
-        heartbeats: Arc<RwLock<HashMap<Bytes, i64>>>,
-        processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
-    ) {
-        // Use watch with revision=None to only watch for new changes
-        // (we prepopulate the data first, so we don't need historical data)
-        let mut hb_watcher = hb_store
-            .watch(None)
-            .await
-            .expect("Failed to create HB watcher");
-
-        while let Some(kv) = hb_watcher.next().await {
-            match kv.operation {
-                KVWatchOp::Put => {
+                KVWatchOp::Delete => {
+                    // When a processor's OT entry is deleted, mark it as deleted
                     let processor_name = Bytes::from(kv.key);
-                    let hb = numaflow_pb::objects::watermark::Heartbeat::decode(kv.value)
-                        .expect("Failed to decode heartbeat")
-                        .heartbeat;
-                    heartbeats
-                        .write()
-                        .expect("failed to acquire lock")
-                        .insert(processor_name.clone(), hb);
-
-                    debug!(hb = ?hb, processor = ?processor_name, "Received heartbeat from watcher");
-                    // if the processor is not in the processors map, add it
-                    // or if processor status is not active, set it to active
                     let mut processors = processors.write().expect("failed to acquire lock");
                     if let Some(processor) = processors.get_mut(&processor_name) {
-                        if !processor.is_active() {
-                            processor.set_status(Status::Active);
-                        }
-                    } else {
-                        info!(processor = ?processor_name, "Processor not found, adding it");
-                        let processor = Processor::new(processor_name, Status::Active, &partitions);
-                        processors.insert(processor.name.clone(), processor);
-                    }
-                }
-                KVWatchOp::Delete => {
-                    let processor_name = Bytes::from(kv.key);
-                    heartbeats
-                        .write()
-                        .expect("failed to acquire lock")
-                        .remove(&processor_name);
-
-                    // update the processor status to deleted
-                    if let Some(processor) = processors
-                        .write()
-                        .expect("failed to acquire lock")
-                        .get_mut(&processor_name)
-                    {
                         processor.set_status(Status::Deleted);
                     }
                 }
                 KVWatchOp::Purge => {
-                    heartbeats.write().expect("failed to acquire lock").clear();
-
-                    // update the processor status to deleted
-                    for (_, processor) in processors
-                        .write()
-                        .expect("failed to acquire lock")
-                        .iter_mut()
-                    {
+                    // When the bucket is purged, mark all processors as deleted
+                    let mut processors = processors.write().expect("failed to acquire lock");
+                    for processor in processors.values_mut() {
                         processor.set_status(Status::Deleted);
                     }
                 }
@@ -452,12 +374,13 @@ impl ProcessorManager {
 
 #[cfg(test)]
 mod tests {
+    use std::time::UNIX_EPOCH;
+
     use async_nats::jetstream;
     use async_nats::jetstream::context::Context;
     use async_nats::jetstream::kv::Config;
     use async_nats::jetstream::kv::Store;
     use bytes::{Bytes, BytesMut};
-    use prost::Message;
 
     use numaflow_shared::kv::jetstream::JetstreamKVStore;
 
@@ -478,70 +401,49 @@ mod tests {
         .unwrap()
     }
 
-    /// Create KV stores wrapped in JetstreamKVStore for ProcessorManager
+    /// Create OT KV store wrapped in JetstreamKVStore for ProcessorManager
     #[cfg(feature = "nats-tests")]
-    fn create_kv_stores(
-        ot_bucket: Store,
-        hb_bucket: Store,
-        ot_bucket_name: &'static str,
-        hb_bucket_name: &'static str,
-    ) -> (Arc<dyn KVStore>, Arc<dyn KVStore>) {
-        (
-            Arc::new(JetstreamKVStore::new(ot_bucket, ot_bucket_name)),
-            Arc::new(JetstreamKVStore::new(hb_bucket, hb_bucket_name)),
-        )
+    fn create_ot_store(ot_bucket: Store, ot_bucket_name: &'static str) -> Arc<dyn KVStore> {
+        Arc::new(JetstreamKVStore::new(ot_bucket, ot_bucket_name))
+    }
+
+    /// Helper to get current time as epoch seconds
+    #[allow(dead_code)]
+    fn current_hb_time() -> i64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Failed to get duration since epoch")
+            .as_secs() as i64
     }
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
-    async fn test_processor_manager_tracks_heartbeats_and_wmbs() {
+    async fn test_processor_manager_tracks_wmbs() {
         let js_context = setup_nats().await;
-        let ot_bucket_name = "test_processor_manager_tracks_heartbeats_and_wmbs_OT";
-        let hb_bucket_name = "test_processor_manager_tracks_heartbeats_and_wmbs_PROCESSORS";
+        let ot_bucket_name = "test_processor_manager_tracks_wmbs_OT";
 
         let _ = js_context.delete_key_value(ot_bucket_name).await;
-        let _ = js_context.delete_key_value(hb_bucket_name).await;
 
         let ot_bucket = create_kv_bucket(&js_context, ot_bucket_name).await;
-        let hb_bucket = create_kv_bucket(&js_context, hb_bucket_name).await;
 
-        // Create wrapped KV stores for ProcessorManager
-        let (ot_store, hb_store) = create_kv_stores(
-            ot_bucket.clone(),
-            hb_bucket.clone(),
-            ot_bucket_name,
-            hb_bucket_name,
-        );
+        // Create wrapped KV store for ProcessorManager
+        let ot_store = create_ot_store(ot_bucket.clone(), ot_bucket_name);
 
         let bucket_config = BucketConfig {
             vertex: "test",
             ot_bucket: ot_bucket_name,
-            hb_bucket: hb_bucket_name,
             partitions: vec![0],
             delay: None,
         };
 
         let processor_manager =
-            ProcessorManager::new(ot_store, hb_store, &bucket_config, VertexType::MapUDF, 0)
+            ProcessorManager::new(ot_store, &bucket_config, VertexType::MapUDF, 0)
                 .await
                 .unwrap();
 
         let processor_name = Bytes::from("processor1");
 
-        // Spawn a task to keep publishing heartbeats
-        let hb_task = tokio::spawn(async move {
-            loop {
-                let heartbeat = Heartbeat { heartbeat: 100 };
-                let mut bytes = BytesMut::new();
-                heartbeat
-                    .encode(&mut bytes)
-                    .expect("Failed to encode heartbeat");
-                hb_bucket.put("processor1", bytes.freeze()).await.unwrap();
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-        });
-
-        // Spawn a task to keep publishing WMBs
+        // Spawn a task to keep publishing WMBs with hb_time
         let ot_task = tokio::spawn(async move {
             loop {
                 let wmb_bytes: BytesMut = WMB {
@@ -549,6 +451,7 @@ mod tests {
                     offset: 1,
                     idle: false,
                     partition: 0,
+                    hb_time: current_hb_time(),
                 }
                 .try_into()
                 .unwrap();
@@ -589,8 +492,7 @@ mod tests {
             }
         }
 
-        // Abort the tasks
-        hb_task.abort();
+        // Abort the task
         ot_task.abort();
     }
 
@@ -598,33 +500,24 @@ mod tests {
     #[tokio::test]
     async fn test_processor_manager_tracks_multiple_processors() {
         let js_context = setup_nats().await;
-        let ot_bucket_name = "test_processor_manager_multi_ot_bucket";
-        let hb_bucket_name = "test_processor_manager_multi_hb_bucket";
+        let ot_bucket_name = "test_processor_manager_multi_ot_bucket_v2";
 
         let _ = js_context.delete_key_value(ot_bucket_name).await;
-        let _ = js_context.delete_key_value(hb_bucket_name).await;
 
         let ot_bucket = create_kv_bucket(&js_context, ot_bucket_name).await;
-        let hb_bucket = create_kv_bucket(&js_context, hb_bucket_name).await;
 
-        // Create wrapped KV stores for ProcessorManager
-        let (ot_store, hb_store) = create_kv_stores(
-            ot_bucket.clone(),
-            hb_bucket.clone(),
-            ot_bucket_name,
-            hb_bucket_name,
-        );
+        // Create wrapped KV store for ProcessorManager
+        let ot_store = create_ot_store(ot_bucket.clone(), ot_bucket_name);
 
         let bucket_config = BucketConfig {
             vertex: "test",
             ot_bucket: ot_bucket_name,
-            hb_bucket: hb_bucket_name,
             partitions: vec![0],
             delay: None,
         };
 
         let processor_manager =
-            ProcessorManager::new(ot_store, hb_store, &bucket_config, VertexType::MapUDF, 0)
+            ProcessorManager::new(ot_store, &bucket_config, VertexType::MapUDF, 0)
                 .await
                 .unwrap();
 
@@ -634,32 +527,7 @@ mod tests {
             Bytes::from("processor3"),
         ];
 
-        // Spawn tasks to keep publishing heartbeats and WMBs for each processor
-        let hb_tasks: Vec<_> = processor_names
-            .iter()
-            .map(|processor_name| {
-                let hb_bucket = hb_bucket.clone();
-                let processor_name = processor_name.clone();
-                tokio::spawn(async move {
-                    loop {
-                        let heartbeat = Heartbeat { heartbeat: 100 };
-                        let mut bytes = BytesMut::new();
-                        heartbeat
-                            .encode(&mut bytes)
-                            .expect("Failed to encode heartbeat");
-                        hb_bucket
-                            .put(
-                                String::from_utf8(processor_name.to_vec()).unwrap(),
-                                bytes.freeze(),
-                            )
-                            .await
-                            .unwrap();
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                    }
-                })
-            })
-            .collect();
-
+        // Spawn tasks to keep publishing WMBs for each processor
         let ot_tasks: Vec<_> = processor_names
             .iter()
             .map(|processor_name| {
@@ -672,6 +540,7 @@ mod tests {
                             offset: 1,
                             idle: false,
                             partition: 0,
+                            hb_time: current_hb_time(),
                         }
                         .try_into()
                         .unwrap();
@@ -725,9 +594,6 @@ mod tests {
             }
         }
         // Abort the tasks
-        for hb_task in hb_tasks {
-            hb_task.abort();
-        }
         for ot_task in ot_tasks {
             ot_task.abort();
         }
@@ -737,35 +603,25 @@ mod tests {
     #[tokio::test]
     async fn test_reduce_udf_partition_filtering() {
         let js_context = setup_nats().await;
-        let ot_bucket_name = "test_reduce_udf_filtering_ot_bucket";
-        let hb_bucket_name = "test_reduce_udf_filtering_hb_bucket";
+        let ot_bucket_name = "test_reduce_udf_filtering_ot_bucket_v2";
 
         let _ = js_context.delete_key_value(ot_bucket_name).await;
-        let _ = js_context.delete_key_value(hb_bucket_name).await;
 
         let ot_bucket = create_kv_bucket(&js_context, ot_bucket_name).await;
-        let hb_bucket = create_kv_bucket(&js_context, hb_bucket_name).await;
 
-        // Create wrapped KV stores for ProcessorManager
-        let (ot_store, hb_store) = create_kv_stores(
-            ot_bucket.clone(),
-            hb_bucket.clone(),
-            ot_bucket_name,
-            hb_bucket_name,
-        );
+        // Create wrapped KV store for ProcessorManager
+        let ot_store = create_ot_store(ot_bucket.clone(), ot_bucket_name);
 
         let bucket_config = BucketConfig {
             vertex: "test",
             ot_bucket: ot_bucket_name,
-            hb_bucket: hb_bucket_name,
-            partitions: vec![1], // For reduce UDF, WMBs are stored in timeline 0
+            partitions: vec![1], // For reduce UDF, WMBs are stored in timeline 1
             delay: None,
         };
 
         // Create processor manager for reduce UDF with replica 1
         let processor_manager = ProcessorManager::new(
             ot_store,
-            hb_store,
             &bucket_config,
             VertexType::ReduceUDF,
             1, // vertex replica 1
@@ -775,59 +631,28 @@ mod tests {
 
         let processor_name = Bytes::from("test_processor");
 
-        // Spawn a task to keep publishing heartbeats
-        let hb_task = tokio::spawn(async move {
-            loop {
-                let heartbeat = Heartbeat { heartbeat: 100 };
-                let mut bytes = BytesMut::new();
-                heartbeat
-                    .encode(&mut bytes)
-                    .expect("Failed to encode heartbeat");
-                hb_bucket
-                    .put("test_processor", bytes.freeze())
-                    .await
-                    .unwrap();
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-        });
-
-        // Wait for processor to be added and then publish WMBs
-        let start_time = tokio::time::Instant::now();
-        loop {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-            let processors = processor_manager
-                .processors
-                .read()
-                .expect("failed to acquire lock");
-
-            if processors.contains_key(&processor_name) {
-                break;
-            }
-
-            if start_time.elapsed() > Duration::from_secs(1) {
-                panic!("Test failed: Processor was not added within 1 second");
-            }
-        }
-
-        // Publish WMBs for different partitions
+        // Publish WMBs for different partitions - the first one will create the processor
         let wmbs = vec![
             WMB {
                 watermark: 100,
                 offset: 1,
                 idle: false,
                 partition: 0, // Should be filtered out (replica is 1)
+                hb_time: current_hb_time(),
             },
             WMB {
                 watermark: 200,
                 offset: 2,
                 idle: false,
                 partition: 1, // Should be accepted (matches replica 1)
+                hb_time: current_hb_time(),
             },
             WMB {
                 watermark: 300,
                 offset: 3,
                 idle: false,
                 partition: 2, // Should be filtered out (replica is 1)
+                hb_time: current_hb_time(),
             },
         ];
 
@@ -840,6 +665,8 @@ mod tests {
                 )
                 .await
                 .unwrap();
+            // Small delay to ensure ordering
+            tokio::time::sleep(Duration::from_millis(10)).await;
         }
 
         // Wait for WMBs to be processed and verify the correct one is stored
@@ -858,8 +685,8 @@ mod tests {
                 && head_wmb.partition == 1
             {
                 // Also check that other timelines don't have the filtered WMBs
-                let timeline_1_wmb = processor.timelines.get(&0);
-                assert!(timeline_1_wmb.is_none());
+                let timeline_0_wmb = processor.timelines.get(&0);
+                assert!(timeline_0_wmb.is_none());
 
                 let timeline_2_wmb = processor.timelines.get(&2);
                 assert!(timeline_2_wmb.is_none());
@@ -882,21 +709,20 @@ mod tests {
             .expect("Processor should exist");
 
         // For reduce UDF, WMBs should be stored in timeline 1 because that is replica
-        let timeline_0 = processor
+        let timeline_1 = processor
             .timelines
             .get(&1)
             .expect("Expected timeline 1 to exist");
-        let head_wmb = timeline_0
+        let head_wmb = timeline_1
             .get_head_wmb()
-            .expect("Should have a WMB in timeline 0");
+            .expect("Should have a WMB in timeline 1");
 
         // Should only have the WMB with partition 1 (watermark 200)
         assert_eq!(head_wmb.watermark, 200);
         assert_eq!(head_wmb.partition, 1);
         assert_eq!(head_wmb.offset, 2);
 
-        // For reduce UDF, we should only have timeline 0, and WMBs are stored in timeline 0
-        // Since this test uses partitions: vec![0], there should only be one timeline with key 0
+        // For reduce UDF, we should only have timeline 1
         assert_eq!(
             processor.timelines.len(),
             1,
@@ -906,7 +732,5 @@ mod tests {
             processor.timelines.contains_key(&1),
             "Timeline should exist for partition 1"
         );
-
-        hb_task.abort();
     }
 }

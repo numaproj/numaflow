@@ -273,7 +273,7 @@ impl SourceWatermarkHandle {
         config: &SourceWatermarkConfig,
         cln_token: CancellationToken,
     ) -> Result<Self> {
-        // Create KV stores for ProcessorManager
+        // Create KV store for ProcessorManager (hb_time is now embedded in WMB)
         let ot_bucket = js_context
             .get_key_value(config.source_bucket_config.ot_bucket)
             .await
@@ -283,18 +283,8 @@ impl SourceWatermarkHandle {
             config.source_bucket_config.ot_bucket,
         ));
 
-        let hb_bucket = js_context
-            .get_key_value(config.source_bucket_config.hb_bucket)
-            .await
-            .expect("Failed to get HB bucket");
-        let hb_store: Arc<dyn KVStore> = Arc::new(JetstreamKVStore::new(
-            hb_bucket,
-            config.source_bucket_config.hb_bucket,
-        ));
-
         let processor_manager = ProcessorManager::new(
             ot_store,
-            hb_store,
             &config.source_bucket_config,
             VertexType::Source,
             *crate::config::get_vertex_replica(),
@@ -445,8 +435,6 @@ mod tests {
     use async_nats::jetstream::stream;
     use bytes::BytesMut;
     use chrono::{DateTime, Utc};
-    use numaflow_pb::objects::watermark::Heartbeat;
-    use prost::Message as _;
     use tokio::time::sleep;
 
     use super::*;
@@ -471,7 +459,6 @@ mod tests {
                 vertex: "source_vertex",
                 partitions: vec![0], // partitions is always vec![0] for source
                 ot_bucket: ot_bucket_name,
-                hb_bucket: hb_bucket_name,
                 delay: None,
             },
             to_vertex_bucket_config: vec![],
@@ -602,14 +589,12 @@ mod tests {
                 vertex: "source_vertex",
                 partitions: vec![0, 1],
                 ot_bucket: source_ot_bucket_name,
-                hb_bucket: source_hb_bucket_name,
                 delay: None,
             },
             to_vertex_bucket_config: vec![BucketConfig {
                 vertex: "edge_vertex",
                 partitions: vec![0, 1],
                 ot_bucket: edge_ot_bucket_name,
-                hb_bucket: edge_hb_bucket_name,
                 delay: None,
             }],
             idle_config: None,
@@ -785,7 +770,6 @@ mod tests {
             vertex: "v1",
             partitions: vec![0],
             ot_bucket: ot_bucket_name,
-            hb_bucket: hb_bucket_name,
             delay: None,
         };
 
@@ -793,7 +777,6 @@ mod tests {
             vertex: "edge_vertex",
             partitions: vec![0],
             ot_bucket: to_vertex_ot_bucket_name,
-            hb_bucket: to_vertex_hb_bucket_name,
             delay: None,
         };
 
@@ -802,13 +785,7 @@ mod tests {
             .delete_key_value(ot_bucket_name.to_string())
             .await;
         let _ = js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await;
-        let _ = js_context
             .delete_key_value(to_vertex_ot_bucket_name.to_string())
-            .await;
-        let _ = js_context
-            .delete_key_value(to_vertex_hb_bucket_name.to_string())
             .await;
 
         // create key value stores
@@ -867,15 +844,11 @@ mod tests {
         .await
         .expect("Failed to create SourceWatermarkHandle");
 
-        // get ot and hb buckets for source and publish some wmb and heartbeats
+        // get ot bucket for source and publish some wmb entries (with embedded hb_time)
         let ot_bucket = js_context
             .get_key_value(ot_bucket_name)
             .await
             .expect("Failed to get ot bucket");
-        let hb_bucket = js_context
-            .get_key_value(hb_bucket_name)
-            .await
-            .expect("Failed to get hb bucket");
 
         for i in 1..11 {
             let wmb: BytesMut = WMB {
@@ -883,6 +856,7 @@ mod tests {
                 offset: i,
                 idle: false,
                 partition: 0,
+                hb_time: Utc::now().timestamp(),
             }
             .try_into()
             .unwrap();
@@ -890,19 +864,6 @@ mod tests {
                 .put("source-v1-0", wmb.freeze())
                 .await
                 .expect("Failed to put wmb");
-
-            let heartbeat = Heartbeat {
-                heartbeat: Utc::now().timestamp_millis(),
-            };
-            let mut bytes = BytesMut::new();
-            heartbeat
-                .encode(&mut bytes)
-                .expect("Failed to encode heartbeat");
-
-            hb_bucket
-                .put("source-v1-0", bytes.freeze())
-                .await
-                .expect("Failed to put hb");
             sleep(Duration::from_millis(3)).await;
         }
 
@@ -944,10 +905,7 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let ot_bucket_name = "test_publish_source_isb_idle_watermark_OT";
-        let hb_bucket_name = "test_publish_source_isb_idle_watermark_PROCESSORS";
         let to_vertex_ot_bucket_name = "test_publish_source_isb_idle_watermark_TO_VERTEX_OT";
-        let to_vertex_hb_bucket_name =
-            "test_publish_source_isb_idle_watermark_TO_VERTEX_PROCESSORS";
 
         let to_vertex_configs = vec![ToVertexConfig {
             name: "edge_vertex",
@@ -979,7 +937,6 @@ mod tests {
             vertex: "v1",
             partitions: vec![0],
             ot_bucket: ot_bucket_name,
-            hb_bucket: hb_bucket_name,
             delay: None,
         };
 
@@ -987,7 +944,6 @@ mod tests {
             vertex: "edge_vertex",
             partitions: vec![0],
             ot_bucket: to_vertex_ot_bucket_name,
-            hb_bucket: to_vertex_hb_bucket_name,
             delay: None,
         };
 
@@ -995,13 +951,7 @@ mod tests {
             .delete_key_value(ot_bucket_name.to_string())
             .await;
         let _ = js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await;
-        let _ = js_context
             .delete_key_value(to_vertex_ot_bucket_name.to_string())
-            .await;
-        let _ = js_context
-            .delete_key_value(to_vertex_hb_bucket_name.to_string())
             .await;
 
         // create key value stores
@@ -1015,23 +965,7 @@ mod tests {
             .unwrap();
         js_context
             .create_key_value(Config {
-                bucket: hb_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        js_context
-            .create_key_value(Config {
                 bucket: to_vertex_ot_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        js_context
-            .create_key_value(Config {
-                bucket: to_vertex_hb_bucket_name.to_string(),
                 history: 1,
                 ..Default::default()
             })
@@ -1074,15 +1008,11 @@ mod tests {
             .generate_and_publish_source_watermark(&messages)
             .await;
 
-        // get ot and hb buckets for source and publish some wmb and heartbeats
+        // get ot bucket for source and publish some wmb entries (with embedded hb_time)
         let ot_bucket = js_context
             .get_key_value(ot_bucket_name)
             .await
             .expect("Failed to get ot bucket");
-        let hb_bucket = js_context
-            .get_key_value(hb_bucket_name)
-            .await
-            .expect("Failed to get hb bucket");
 
         for i in 1..10 {
             let wmb: BytesMut = WMB {
@@ -1090,6 +1020,7 @@ mod tests {
                 offset: i,
                 idle: false,
                 partition: 0,
+                hb_time: Utc::now().timestamp(),
             }
             .try_into()
             .unwrap();
@@ -1097,19 +1028,6 @@ mod tests {
                 .put("source-v1-0", wmb.freeze())
                 .await
                 .expect("Failed to put wmb");
-
-            let heartbeat = Heartbeat {
-                heartbeat: Utc::now().timestamp_millis(),
-            };
-            let mut bytes = BytesMut::new();
-            heartbeat
-                .encode(&mut bytes)
-                .expect("Failed to encode heartbeat");
-
-            hb_bucket
-                .put("source-v1-0", bytes.freeze())
-                .await
-                .expect("Failed to put hb");
             sleep(Duration::from_millis(3)).await;
         }
 
@@ -1153,7 +1071,6 @@ mod tests {
                 vertex: "source_vertex",
                 partitions: vec![0],
                 ot_bucket: ot_bucket_name,
-                hb_bucket: hb_bucket_name,
                 delay: None,
             },
             to_vertex_bucket_config: vec![],
@@ -1163,9 +1080,6 @@ mod tests {
         // delete the stores first
         let _ = js_context
             .delete_key_value(ot_bucket_name.to_string())
-            .await;
-        let _ = js_context
-            .delete_key_value(hb_bucket_name.to_string())
             .await;
 
         // create key value stores
@@ -1178,30 +1092,25 @@ mod tests {
             .await
             .unwrap();
 
-        js_context
-            .create_key_value(Config {
-                bucket: hb_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
         // Publish some WMB entries to the source OT bucket to simulate source processors
         let ot_bucket = js_context.get_key_value(ot_bucket_name).await.unwrap();
 
-        // Create WMB entries that will be read by the ProcessorManager
+        let current_time = chrono::Utc::now().timestamp();
+
+        // Create WMB entries that will be read by the ProcessorManager (with embedded hb_time)
         let wmb1 = WMB {
             watermark: 60000,
             offset: 1,
             idle: false,
             partition: 0,
+            hb_time: current_time,
         };
         let wmb2 = WMB {
             watermark: 70000,
             offset: 2,
             idle: false,
             partition: 0,
+            hb_time: current_time,
         };
 
         // Publish WMB entries to the OT bucket with a processor name
@@ -1214,14 +1123,6 @@ mod tests {
             .unwrap();
         ot_bucket
             .put(processor_name, wmb2_bytes.freeze())
-            .await
-            .unwrap();
-
-        // Also publish a heartbeat to the HB bucket to mark the processor as active
-        let hb_bucket = js_context.get_key_value(hb_bucket_name).await.unwrap();
-        let current_time = chrono::Utc::now().timestamp_millis();
-        hb_bucket
-            .put(processor_name, current_time.to_string().into())
             .await
             .unwrap();
 

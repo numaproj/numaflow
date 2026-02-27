@@ -140,30 +140,35 @@ mod tests {
             offset: 1,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb2 = WMB {
             watermark: 200,
             offset: 2,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb3 = WMB {
             watermark: 250,
             offset: 3,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb4 = WMB {
             watermark: 250,
             offset: 4,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb5 = WMB {
             watermark: 300,
             offset: 5,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
 
         timeline.put(wmb1);
@@ -194,36 +199,42 @@ mod tests {
             offset: 62,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb2 = WMB {
             watermark: 100,
             offset: 65,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb3 = WMB {
             watermark: 200,
             offset: 63, // out of order should not be considered
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb4 = WMB {
             watermark: 250,
             offset: 70,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb5 = WMB {
             watermark: 250,
             offset: 80,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb6 = WMB {
             watermark: 300,
             offset: 86,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
 
         timeline.put(wmb1);
@@ -255,30 +266,35 @@ mod tests {
             offset: 1,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb2 = WMB {
             watermark: 100,
             offset: 2,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb3 = WMB {
             watermark: 100,
             offset: 3,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb4 = WMB {
             watermark: 100,
             offset: 4,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb5 = WMB {
             watermark: 100,
             offset: 5,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
 
         timeline.put(wmb1);
@@ -311,18 +327,21 @@ mod tests {
             offset: 1,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb2 = WMB {
             watermark: 200,
             offset: 2,
             idle: false,
             partition: 1,
+            hb_time: 0,
         };
         let wmb3 = WMB {
             watermark: 150,
             offset: 3,
             idle: true,
             partition: 0,
+            hb_time: 0,
         };
 
         timeline.put(wmb1);
@@ -341,6 +360,7 @@ mod tests {
             offset: 4,
             idle: true,
             partition: 0,
+            hb_time: 0,
         };
 
         timeline.put(idle_wmb);
@@ -356,6 +376,7 @@ mod tests {
             offset: 5,
             idle: true,
             partition: 0,
+            hb_time: 0,
         };
 
         timeline.put(idle_wmb);

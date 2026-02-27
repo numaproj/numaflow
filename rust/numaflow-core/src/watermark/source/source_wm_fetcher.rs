@@ -140,7 +140,7 @@ mod tests {
     async fn test_source_watermark_fetcher_single_processor() {
         // Create a ProcessorManager with a single Processor and a single OffsetTimeline
         let processor_name = Bytes::from("processor1");
-        let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0]);
+        let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0], 0);
         let mut timeline = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
@@ -149,18 +149,21 @@ mod tests {
             offset: 19723492734,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb2 = WMB {
             watermark: 200,
             offset: 19723492735,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb3 = WMB {
             watermark: 300,
             offset: 19723492736,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
 
         timeline.put(wmb1);
@@ -188,7 +191,7 @@ mod tests {
     async fn test_source_watermark_fetcher_multi_processors() {
         // Create a ProcessorManager with multiple Processors and a single OffsetTimeline
         let processor_name1 = Bytes::from("processor1");
-        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0]);
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0], 0);
         let mut timeline1 = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
@@ -197,18 +200,21 @@ mod tests {
             offset: 19723492734,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb2 = WMB {
             watermark: 200,
             offset: 19723492735,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb3 = WMB {
             watermark: 323,
             offset: 19723492736,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
 
         timeline1.put(wmb1);
@@ -218,7 +224,7 @@ mod tests {
         processor1.timelines.insert(0, timeline1);
 
         let processor_name2 = Bytes::from("processor2");
-        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0]);
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0], 0);
         let mut timeline2 = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
@@ -227,18 +233,21 @@ mod tests {
             offset: 19723492734,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb5 = WMB {
             watermark: 250,
             offset: 19723492735,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb6 = WMB {
             watermark: 350,
             offset: 19723492736,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
 
         timeline2.put(wmb4);
@@ -267,7 +276,7 @@ mod tests {
     async fn test_source_watermark_fetcher_fetch_head_watermark_single_processor() {
         // Create a ProcessorManager with a single Processor and a single OffsetTimeline
         let processor_name = Bytes::from("processor1");
-        let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0]);
+        let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0], 0);
         let mut timeline = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
@@ -276,18 +285,21 @@ mod tests {
             offset: 19723492734,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb2 = WMB {
             watermark: 200,
             offset: 19723492735,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb3 = WMB {
             watermark: 300,
             offset: 19723492736,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
 
         timeline.put(wmb1);
@@ -315,7 +327,7 @@ mod tests {
     async fn test_source_watermark_fetcher_fetch_head_watermark_multi_processors() {
         // Create a ProcessorManager with multiple Processors and a single OffsetTimeline
         let processor_name1 = Bytes::from("processor1");
-        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0]);
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0], 0);
         let mut timeline1 = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
@@ -324,18 +336,21 @@ mod tests {
             offset: 19723492734,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb2 = WMB {
             watermark: 200,
             offset: 19723492735,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb3 = WMB {
             watermark: 323,
             offset: 19723492736,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
 
         timeline1.put(wmb1);
@@ -345,7 +360,7 @@ mod tests {
         processor1.timelines.insert(0, timeline1);
 
         let processor_name2 = Bytes::from("processor2");
-        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0]);
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0], 0);
         let mut timeline2 = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
@@ -354,18 +369,21 @@ mod tests {
             offset: 19723492734,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb5 = WMB {
             watermark: 250,
             offset: 19723492735,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
         let wmb6 = WMB {
             watermark: 350,
             offset: 19723492736,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
 
         timeline2.put(wmb4);
@@ -394,7 +412,7 @@ mod tests {
     async fn test_source_watermark_fetcher_fetch_head_watermark_inactive_processor() {
         // Create a ProcessorManager with one active and one inactive processor
         let processor_name1 = Bytes::from("processor1");
-        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0]);
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0], 0);
         let mut timeline1 = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
@@ -403,13 +421,14 @@ mod tests {
             offset: 19723492734,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
 
         timeline1.put(wmb1);
         processor1.timelines.insert(0, timeline1);
 
         let processor_name2 = Bytes::from("processor2");
-        let mut processor2 = Processor::new(processor_name2.clone(), Status::InActive, &[0]);
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::InActive, &[0], 0);
         let mut timeline2 = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries (should be ignored)
@@ -418,6 +437,7 @@ mod tests {
             offset: 19723492734,
             idle: false,
             partition: 0,
+            hb_time: 0,
         };
 
         timeline2.put(wmb2);

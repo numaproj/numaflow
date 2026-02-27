@@ -48,13 +48,6 @@ impl WatermarkConfig {
                 )
                 .into_boxed_str(),
             ),
-            hb_bucket: Box::leak(
-                format!(
-                    "{}-{}-{}-{}_PROCESSORS",
-                    namespace, pipeline_name, vertex_name, &to.name
-                )
-                .into_boxed_str(),
-            ),
             delay: Some(Duration::from_millis(delay_in_millis)),
         };
 
@@ -70,13 +63,6 @@ impl WatermarkConfig {
                     )
                     .into_boxed_str(),
                 ),
-                hb_bucket: Box::leak(
-                    format!(
-                        "{}-{}-{}-{}_PROCESSORS",
-                        namespace, pipeline_name, &from.name, vertex_name
-                    )
-                    .into_boxed_str(),
-                ),
                 delay: Some(Duration::from_millis(delay_in_millis)),
             };
 
@@ -88,10 +74,6 @@ impl WatermarkConfig {
                     partitions: vec![0], // source will have only one partition
                     ot_bucket: Box::leak(
                         format!("{namespace}-{pipeline_name}-{vertex_name}_SOURCE_OT")
-                            .into_boxed_str(),
-                    ),
-                    hb_bucket: Box::leak(
-                        format!("{namespace}-{pipeline_name}-{vertex_name}_SOURCE_PROCESSORS")
                             .into_boxed_str(),
                     ),
                     delay: Some(Duration::from_millis(delay_in_millis)),
@@ -167,14 +149,14 @@ impl Default for IdleConfig {
 }
 
 /// Watermark movements are captured via a Key/Value bucket.
+/// Heartbeat is now embedded in WMB (hb_time field), so no separate heartbeat bucket is needed.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct BucketConfig {
     pub(crate) vertex: &'static str,
     pub(crate) partitions: Vec<u16>,
-    /// Offset Timeline (OT) bucket.
+    /// Offset Timeline (OT) bucket. Also serves as the source of truth for processor liveness
+    /// via the hb_time field in WMB.
     pub(crate) ot_bucket: &'static str,
-    /// Heartbeat bucket for processor heartbeats.
-    pub(crate) hb_bucket: &'static str,
     /// Optional delay to publish watermark, to reduce the number of writes to the kv bucket.
     pub(crate) delay: Option<Duration>,
 }

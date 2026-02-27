@@ -38,9 +38,14 @@ message WMB {
 
   // Partition to identify the partition to which the watermark belongs.
   int32 partition = 4;
+
+  // Heartbeat timestamp (epoch seconds) to track processor liveness.
+  // This eliminates the need for a separate heartbeat store.
+  int64 hb_time = 5;
 }
 
 // Heartbeat is used to track the active processors
+// Deprecated: hb_time is now embedded in WMB. Kept for backward compatibility during rolling upgrades.
 message Heartbeat {
   // Heartbeat(current time in millis) published by the active processors.
   int64 heartbeat = 1;

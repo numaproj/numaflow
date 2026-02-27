@@ -20,8 +20,13 @@ pub struct Wmb {
     /// Partition to identify the partition to which the watermark belongs.
     #[prost(int32, tag = "4")]
     pub partition: i32,
+    /// Heartbeat timestamp (epoch seconds) to track processor liveness.
+    /// This eliminates the need for a separate heartbeat store.
+    #[prost(int64, tag = "5")]
+    pub hb_time: i64,
 }
 /// Heartbeat is used to track the active processors
+/// Deprecated: hb_time is now embedded in WMB. Kept for backward compatibility during rolling upgrades.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Heartbeat {
     /// Heartbeat(current time in millis) published by the active processors.

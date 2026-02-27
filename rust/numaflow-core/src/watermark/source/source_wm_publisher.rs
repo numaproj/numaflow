@@ -2,6 +2,9 @@
 //! the watermark across the source partitions. Since we write the messages to the ISB, we will also publish
 //! the watermark to the ISB. Unlike other vertices we don't use pod as the processing entity for publishing
 //! watermark we use the partition(watermark originates here).
+//!
+//! Heartbeat is now embedded in the WMB (hb_time field), eliminating the need for a separate
+//! heartbeat store.
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -42,17 +45,13 @@ impl SourceWatermarkPublisher {
         })
     }
 
-    /// Helper to create KV stores from bucket configs using the JetStream context.
-    /// Returns (ot_stores, hb_stores) tuple.
-    async fn create_kv_stores(
+    /// Helper to create OT KV stores from bucket configs using the JetStream context.
+    /// Heartbeat is now embedded in WMB, so no separate hb_stores are needed.
+    async fn create_ot_stores(
         js_context: &async_nats::jetstream::Context,
         bucket_configs: &[BucketConfig],
-    ) -> (
-        HashMap<&'static str, Arc<dyn KVStore>>,
-        Vec<Arc<dyn KVStore>>,
-    ) {
+    ) -> HashMap<&'static str, Arc<dyn KVStore>> {
         let mut ot_stores: HashMap<&'static str, Arc<dyn KVStore>> = HashMap::new();
-        let mut hb_stores: Vec<Arc<dyn KVStore>> = Vec::new();
 
         for config in bucket_configs {
             let ot_bucket = js_context
@@ -63,15 +62,9 @@ impl SourceWatermarkPublisher {
                 config.vertex,
                 Arc::new(JetstreamKVStore::new(ot_bucket, config.ot_bucket)),
             );
-
-            let hb_bucket = js_context
-                .get_key_value(config.hb_bucket)
-                .await
-                .expect("Failed to get HB bucket");
-            hb_stores.push(Arc::new(JetstreamKVStore::new(hb_bucket, config.hb_bucket)));
         }
 
-        (ot_stores, hb_stores)
+        ot_stores
     }
 
     /// Publishes the source watermark for the input partition. It internally uses edge publisher
@@ -88,14 +81,13 @@ impl SourceWatermarkPublisher {
         let processor_name = format!("source-{}-{}", self.source_config.vertex, partition);
         // create a publisher if not exists
         if !self.publishers.contains_key(&processor_name) {
-            let (ot_stores, hb_stores) =
-                Self::create_kv_stores(&self.js_context, std::slice::from_ref(&self.source_config))
+            let ot_stores =
+                Self::create_ot_stores(&self.js_context, std::slice::from_ref(&self.source_config))
                     .await;
 
             let publisher = ISBWatermarkPublisher::new(
                 processor_name.clone(),
                 ot_stores,
-                hb_stores,
                 std::slice::from_ref(&self.source_config),
                 true,
             );
@@ -150,13 +142,12 @@ impl SourceWatermarkPublisher {
             info!(processor = ?processor_name, partition = ?input_partition,
                 "Creating new publisher for ISB"
             );
-            let (ot_stores, hb_stores) =
-                Self::create_kv_stores(&self.js_context, &self.to_vertex_configs).await;
+            let ot_stores =
+                Self::create_ot_stores(&self.js_context, &self.to_vertex_configs).await;
 
             let publisher = ISBWatermarkPublisher::new(
                 processor_name.clone(),
                 ot_stores,
-                hb_stores,
                 &self.to_vertex_configs,
                 true,
             );
@@ -175,13 +166,12 @@ impl SourceWatermarkPublisher {
         for partition in active_partitions {
             let processor_name = format!("{}-{}", self.source_config.vertex, partition);
             if !self.publishers.contains_key(&processor_name) {
-                let (ot_stores, hb_stores) =
-                    Self::create_kv_stores(&self.js_context, &self.to_vertex_configs).await;
+                let ot_stores =
+                    Self::create_ot_stores(&self.js_context, &self.to_vertex_configs).await;
 
                 let publisher = ISBWatermarkPublisher::new(
                     processor_name.clone(),
                     ot_stores,
-                    hb_stores,
                     &self.to_vertex_configs,
                     true,
                 );
@@ -209,13 +199,11 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let ot_bucket_name = "source_watermark_OT";
-        let hb_bucket_name = "source_watermark_PROCESSORS";
 
         let source_config = BucketConfig {
             vertex: "source_vertex",
             partitions: vec![0, 1],
             ot_bucket: ot_bucket_name,
-            hb_bucket: hb_bucket_name,
             delay: None,
         };
 
@@ -223,15 +211,6 @@ mod tests {
         js_context
             .create_key_value(Config {
                 bucket: ot_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        js_context
-            .create_key_value(Config {
-                bucket: hb_bucket_name.to_string(),
                 history: 1,
                 ..Default::default()
             })
@@ -265,12 +244,10 @@ mod tests {
 
         let wmb: WMB = wmb.unwrap().try_into().unwrap();
         assert_eq!(wmb.watermark, 100);
+        // Verify hb_time is set
+        assert!(wmb.hb_time > 0);
 
         // delete the stores
-        js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await
-            .unwrap();
         js_context
             .delete_key_value(ot_bucket_name.to_string())
             .await
@@ -284,15 +261,12 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let source_ot_bucket_name = "source_edge_watermark_source_OT";
-        let source_hb_bucket_name = "source_edge_watermark_source_PROCESSORS";
         let edge_ot_bucket_name = "source_edge_watermark_edge_OT";
-        let edge_hb_bucket_name = "source_edge_watermark_edge_PROCESSORS";
 
         let source_config = BucketConfig {
             vertex: "source_vertex",
             partitions: vec![0, 1],
             ot_bucket: source_ot_bucket_name,
-            hb_bucket: source_hb_bucket_name,
             delay: None,
         };
 
@@ -300,7 +274,6 @@ mod tests {
             vertex: "edge_vertex",
             partitions: vec![0, 1],
             ot_bucket: edge_ot_bucket_name,
-            hb_bucket: edge_hb_bucket_name,
             delay: None,
         };
 
@@ -313,27 +286,11 @@ mod tests {
             })
             .await
             .unwrap();
-        js_context
-            .create_key_value(Config {
-                bucket: source_hb_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
 
         // create key value stores for edge
         js_context
             .create_key_value(Config {
                 bucket: edge_ot_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        js_context
-            .create_key_value(Config {
-                bucket: edge_hb_bucket_name.to_string(),
                 history: 1,
                 ..Default::default()
             })
@@ -374,18 +331,12 @@ mod tests {
         let wmb: WMB = wmb.unwrap().try_into().unwrap();
         assert_eq!(wmb.offset, 1);
         assert_eq!(wmb.watermark, 200);
+        // Verify hb_time is set
+        assert!(wmb.hb_time > 0);
 
         // delete the stores
         js_context
-            .delete_key_value(source_hb_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
             .delete_key_value(source_ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(edge_hb_bucket_name.to_string())
             .await
             .unwrap();
         js_context
@@ -401,13 +352,11 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let ot_bucket_name = "source_watermark_idle_OT";
-        let hb_bucket_name = "source_watermark_idle_PROCESSORS";
 
         let source_config = BucketConfig {
             vertex: "source_vertex",
             partitions: vec![0, 1],
             ot_bucket: ot_bucket_name,
-            hb_bucket: hb_bucket_name,
             delay: None,
         };
 
@@ -415,15 +364,6 @@ mod tests {
         js_context
             .create_key_value(Config {
                 bucket: ot_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        js_context
-            .create_key_value(Config {
-                bucket: hb_bucket_name.to_string(),
                 history: 1,
                 ..Default::default()
             })
@@ -458,12 +398,10 @@ mod tests {
         let wmb: WMB = wmb.unwrap().try_into().unwrap();
         assert_eq!(wmb.watermark, 100);
         assert!(wmb.idle);
+        // Verify hb_time is set
+        assert!(wmb.hb_time > 0);
 
         // delete the stores
-        js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await
-            .unwrap();
         js_context
             .delete_key_value(ot_bucket_name.to_string())
             .await
@@ -477,15 +415,12 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let source_ot_bucket_name = "source_edge_watermark_idle_source_OT";
-        let source_hb_bucket_name = "source_edge_watermark_idle_source_PROCESSORS";
         let edge_ot_bucket_name = "source_edge_watermark_idle_edge_OT";
-        let edge_hb_bucket_name = "source_edge_watermark_idle_edge_PROCESSORS";
 
         let source_config = BucketConfig {
             vertex: "source_vertex",
             partitions: vec![0, 1],
             ot_bucket: source_ot_bucket_name,
-            hb_bucket: source_hb_bucket_name,
             delay: None,
         };
 
@@ -493,7 +428,6 @@ mod tests {
             vertex: "edge_vertex",
             partitions: vec![0, 1],
             ot_bucket: edge_ot_bucket_name,
-            hb_bucket: edge_hb_bucket_name,
             delay: None,
         };
 
@@ -506,27 +440,11 @@ mod tests {
             })
             .await
             .unwrap();
-        js_context
-            .create_key_value(Config {
-                bucket: source_hb_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
 
         // create key value stores for edge
         js_context
             .create_key_value(Config {
                 bucket: edge_ot_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        js_context
-            .create_key_value(Config {
-                bucket: edge_hb_bucket_name.to_string(),
                 history: 1,
                 ..Default::default()
             })
@@ -568,18 +486,12 @@ mod tests {
         assert_eq!(wmb.offset, 1);
         assert_eq!(wmb.watermark, 200);
         assert!(wmb.idle);
+        // Verify hb_time is set
+        assert!(wmb.hb_time > 0);
 
         // delete the stores
         js_context
-            .delete_key_value(source_hb_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
             .delete_key_value(source_ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(edge_hb_bucket_name.to_string())
             .await
             .unwrap();
         js_context

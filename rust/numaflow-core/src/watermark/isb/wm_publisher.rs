@@ -1,24 +1,26 @@
 //! Publishes watermark of the messages written to ISB. Each publisher is mapped to a processing entity
-//! which could be a pod or a partition, it also creates a background task to publish heartbeats for the
-//! downstream vertices, to indicate the liveliness of the processor. It publishes watermark to the
-//! appropriate OT bucket based on stream information provided. It makes sure we always publish m
-//! increasing watermark.
+//! which could be a pod or a partition. It publishes watermark to the appropriate OT bucket based on
+//! stream information provided. It makes sure we always publish monotonically increasing watermark.
+//!
+//! Heartbeat is now embedded in the WMB (hb_time field), eliminating the need for a separate
+//! heartbeat store. The publisher ensures that WMBs are published periodically even when the
+//! watermark hasn't changed, to maintain processor liveness detection.
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::time::{Instant, UNIX_EPOCH};
 
-use bytes::{Bytes, BytesMut};
+use bytes::BytesMut;
 use numaflow_shared::kv::KVStore;
-use prost::Message;
-use tracing::{debug, error, info, warn};
+use tracing::{info, warn};
 
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::watermark::wmb::WMB;
 
-/// Interval at which the pod sends heartbeats.
-const DEFAULT_POD_HEARTBEAT_INTERVAL: u16 = 5;
+/// Interval at which the pod sends heartbeats (in seconds).
+/// WMBs will be published at least this often to maintain liveness.
+const DEFAULT_POD_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 
 /// LastPublishedState is the state of the last published watermark and offset
 /// for a partition.
@@ -50,14 +52,18 @@ impl LastPublishedState {
         }
         true
     }
+
+    /// Check if heartbeat interval has elapsed and we need to publish for liveness.
+    fn needs_heartbeat(&self) -> bool {
+        self.last_published_time.elapsed() >= DEFAULT_POD_HEARTBEAT_INTERVAL
+    }
 }
 
 /// ISBWatermarkPublisher is the watermark publisher for the outgoing edges.
+/// Heartbeat is now embedded in WMB (hb_time field), so no separate heartbeat publishing is needed.
 pub(crate) struct ISBWatermarkPublisher {
     /// name of the processor(node) that is publishing the watermark.
     processor_name: String,
-    /// handle to the heartbeat publishing task.
-    hb_handle: tokio::task::JoinHandle<()>,
     /// last published watermark for each vertex and partition.
     last_published_wm: HashMap<&'static str, HashMap<u16, LastPublishedState>>,
     /// map of vertex to its ot bucket (using generic KVStore trait).
@@ -66,26 +72,18 @@ pub(crate) struct ISBWatermarkPublisher {
     is_source: bool,
 }
 
-impl Drop for ISBWatermarkPublisher {
-    fn drop(&mut self) {
-        self.hb_handle.abort();
-    }
-}
-
 impl ISBWatermarkPublisher {
     /// Creates a new ISBWatermarkPublisher.
     ///
     /// # Arguments
     /// * `processor_name` - Name of the processor publishing watermarks
     /// * `ot_stores` - Map of vertex name to its OT (offset-timeline) KV store
-    /// * `hb_stores` - List of heartbeat KV stores for each downstream vertex
     /// * `bucket_configs` - Configuration for each bucket (used to initialize partition state)
     /// * `is_source` - If true, watermark regression warnings will be suppressed since
     ///   source data can be out of order.
     pub(crate) fn new(
         processor_name: String,
         ot_stores: HashMap<&'static str, Arc<dyn KVStore>>,
-        hb_stores: Vec<Arc<dyn KVStore>>,
         bucket_configs: &[BucketConfig],
         is_source: bool,
     ) -> Self {
@@ -106,49 +104,26 @@ impl ISBWatermarkPublisher {
             last_published_wm.insert(config.vertex, partition_state);
         }
 
-        // start publishing heartbeats
-        let hb_handle = tokio::spawn(Self::start_heartbeat(processor_name.clone(), hb_stores));
+        info!(processor = ?processor_name, "Created ISBWatermarkPublisher with embedded heartbeat");
 
         ISBWatermarkPublisher {
             processor_name,
-            hb_handle,
             last_published_wm,
             ot_stores,
             is_source,
         }
     }
 
-    /// start_heartbeat starts publishing heartbeats to the hb stores
-    async fn start_heartbeat(processor_name: String, hb_stores: Vec<Arc<dyn KVStore>>) {
-        let mut interval =
-            tokio::time::interval(Duration::from_secs(DEFAULT_POD_HEARTBEAT_INTERVAL as u64));
-        info!(processor = ?processor_name, "Started publishing heartbeat");
-
-        loop {
-            interval.tick().await;
-            let heartbeat = numaflow_pb::objects::watermark::Heartbeat {
-                heartbeat: SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("Failed to get duration since epoch")
-                    .as_secs() as i64,
-            };
-
-            let bytes = Bytes::from(heartbeat.encode_to_vec());
-
-            for hb_store in hb_stores.iter() {
-                debug!(heartbeat = ?heartbeat.heartbeat, processor = ?processor_name,
-                    "Publishing heartbeat",
-                );
-                hb_store
-                    .put(&processor_name, bytes.clone())
-                    .await
-                    .map_err(|e| error!(?e, "Failed to write heartbeat to hb store"))
-                    .ok();
-            }
-        }
+    /// Returns the current epoch time in seconds for hb_time.
+    fn current_hb_time() -> i64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Failed to get duration since epoch")
+            .as_secs() as i64
     }
 
     /// publish_watermark publishes the watermark for the given offset and the stream.
+    /// The WMB now includes hb_time for processor liveness tracking.
     pub(crate) async fn publish_watermark(
         &mut self,
         stream: &Stream,
@@ -173,6 +148,10 @@ impl ISBWatermarkPublisher {
             return;
         }
 
+        // Check if we need to publish for heartbeat even if watermark hasn't changed.
+        // This ensures processor liveness is maintained.
+        let needs_heartbeat = last_state.needs_heartbeat();
+
         // If the watermark is same as the last published watermark update the last published offset
         // to the largest offset otherwise the watermark will regress between the offsets.
         //
@@ -182,37 +161,49 @@ impl ISBWatermarkPublisher {
         // Actual published watermark offset=3605637 watermark=1750758998480
         // We should've published watermark for offset 3605646 and skipped publishing for offset 3605637
         // if watermark cannot be computed, still we should publish the last known valid WM for the latest offset
-        if watermark == last_state.watermark || watermark == -1 {
+        if (watermark == last_state.watermark || watermark == -1) && !needs_heartbeat {
             last_state.offset = last_state.offset.max(offset);
             return;
         }
 
-        // Skip publishing if watermark regression is detected.
+        // Skip publishing if watermark regression is detected (unless we need heartbeat).
         // For source publishers, we silently skip without logging since data can be out of order.
-        if watermark < last_state.watermark {
+        if watermark < last_state.watermark && !needs_heartbeat {
             if !self.is_source {
                 warn!(?watermark, ?last_state.watermark, "Watermark regression detected, skipping publish");
             }
             return;
         }
 
-        // valid offset and watermark, we can update the state
-        last_state.offset = offset;
-        last_state.watermark = watermark;
+        // Determine the watermark and offset to publish
+        let (publish_watermark, publish_offset) = if watermark > last_state.watermark {
+            // New watermark is higher, use it
+            (watermark, offset)
+        } else {
+            // Publishing for heartbeat with same or lower watermark, use last known good values
+            (last_state.watermark, last_state.offset.max(offset))
+        };
 
-        // Update state but skip publishing if delay hasn't passed
+        // valid offset and watermark, we can update the state
+        last_state.offset = publish_offset;
+        if publish_watermark > last_state.watermark {
+            last_state.watermark = publish_watermark;
+        }
+
+        // Update state but skip publishing if delay hasn't passed (unless we need heartbeat)
         // (users can configure delay to reduce the number of writes to the ot bucket)
-        if !last_state.should_publish() {
+        if !last_state.should_publish() && !needs_heartbeat {
             return;
         }
 
-        // Publish the watermark to the OT store
+        // Publish the watermark to the OT store with embedded hb_time
         let ot_store = self.ot_stores.get(stream.vertex).expect("Invalid vertex");
         let wmb_bytes: BytesMut = WMB {
             idle,
-            offset,
-            watermark,
+            offset: publish_offset,
+            watermark: publish_watermark,
             partition: stream.partition,
+            hb_time: Self::current_hb_time(),
         }
         .try_into()
         .expect("Failed to convert WMB to bytes");
@@ -245,17 +236,13 @@ mod tests {
     use numaflow_shared::kv::KVStore;
     use numaflow_shared::kv::jetstream::JetstreamKVStore;
 
-    /// Helper to create KV stores from bucket configs for testing
+    /// Helper to create OT KV stores from bucket configs for testing
     #[cfg(feature = "nats-tests")]
-    async fn create_test_kv_stores(
+    async fn create_test_ot_stores(
         js_context: &async_nats::jetstream::Context,
         bucket_configs: &[BucketConfig],
-    ) -> (
-        HashMap<&'static str, Arc<dyn KVStore>>,
-        Vec<Arc<dyn KVStore>>,
-    ) {
+    ) -> HashMap<&'static str, Arc<dyn KVStore>> {
         let mut ot_stores: HashMap<&'static str, Arc<dyn KVStore>> = HashMap::new();
-        let mut hb_stores: Vec<Arc<dyn KVStore>> = Vec::new();
 
         for config in bucket_configs {
             let ot_bucket = js_context
@@ -266,15 +253,9 @@ mod tests {
                 config.vertex,
                 Arc::new(JetstreamKVStore::new(ot_bucket, config.ot_bucket)),
             );
-
-            let hb_bucket = js_context
-                .get_key_value(config.hb_bucket)
-                .await
-                .expect("Failed to get HB bucket");
-            hb_stores.push(Arc::new(JetstreamKVStore::new(hb_bucket, config.hb_bucket)));
         }
 
-        (ot_stores, hb_stores)
+        ot_stores
     }
 
     #[cfg(feature = "nats-tests")]
@@ -284,13 +265,11 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let ot_bucket_name = "isb_publisher_one_edge_OT";
-        let hb_bucket_name = "isb_publisher_one_edge_PROCESSORS";
 
         let bucket_configs = vec![BucketConfig {
             vertex: "v1",
             partitions: vec![0, 1],
             ot_bucket: ot_bucket_name,
-            hb_bucket: hb_bucket_name,
             delay: None,
         }];
 
@@ -303,21 +282,12 @@ mod tests {
             })
             .await
             .unwrap();
-        js_context
-            .create_key_value(Config {
-                bucket: hb_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
 
-        let (ot_stores, hb_stores) = create_test_kv_stores(&js_context, &bucket_configs).await;
+        let ot_stores = create_test_ot_stores(&js_context, &bucket_configs).await;
 
         let mut publisher = ISBWatermarkPublisher::new(
             "processor1".to_string(),
             ot_stores,
-            hb_stores,
             &bucket_configs,
             false,
         );
@@ -353,6 +323,8 @@ mod tests {
         let wmb: WMB = wmb.unwrap().try_into().unwrap();
         assert_eq!(wmb.offset, 1);
         assert_eq!(wmb.watermark, 100);
+        // Verify hb_time is set
+        assert!(wmb.hb_time > 0);
 
         // Try publishing a smaller watermark for the same partition, it should not be published
         publisher
@@ -386,10 +358,6 @@ mod tests {
 
         // delete the stores
         js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
             .delete_key_value(ot_bucket_name.to_string())
             .await
             .unwrap();
@@ -402,23 +370,19 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let ot_bucket_name_v1 = "isb_publisher_multi_edges_v1_OT";
-        let hb_bucket_name_v1 = "isb_publisher_multi_edges_v1_PROCESSORS";
         let ot_bucket_name_v2 = "isb_publisher_multi_edges_v2_OT";
-        let hb_bucket_name_v2 = "isb_publisher_multi_edges_v2_PROCESSORS";
 
         let bucket_configs = vec![
             BucketConfig {
                 vertex: "v1",
                 partitions: vec![0],
                 ot_bucket: ot_bucket_name_v1,
-                hb_bucket: hb_bucket_name_v1,
                 delay: None,
             },
             BucketConfig {
                 vertex: "v2",
                 partitions: vec![0],
                 ot_bucket: ot_bucket_name_v2,
-                hb_bucket: hb_bucket_name_v2,
                 delay: None,
             },
         ];
@@ -427,14 +391,6 @@ mod tests {
         js_context
             .create_key_value(Config {
                 bucket: ot_bucket_name_v1.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        js_context
-            .create_key_value(Config {
-                bucket: hb_bucket_name_v1.to_string(),
                 history: 1,
                 ..Default::default()
             })
@@ -450,21 +406,12 @@ mod tests {
             })
             .await
             .unwrap();
-        js_context
-            .create_key_value(Config {
-                bucket: hb_bucket_name_v2.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
 
-        let (ot_stores, hb_stores) = create_test_kv_stores(&js_context, &bucket_configs).await;
+        let ot_stores = create_test_ot_stores(&js_context, &bucket_configs).await;
 
         let mut publisher = ISBWatermarkPublisher::new(
             "processor1".to_string(),
             ot_stores,
-            hb_stores,
             &bucket_configs,
             false,
         );
@@ -504,6 +451,8 @@ mod tests {
         let wmb_v1: WMB = wmb_v1.unwrap().try_into().unwrap();
         assert_eq!(wmb_v1.offset, 1);
         assert_eq!(wmb_v1.watermark, 100);
+        // Verify hb_time is set
+        assert!(wmb_v1.hb_time > 0);
 
         let wmb_v2 = ot_bucket_v2
             .get("processor1")
@@ -514,18 +463,12 @@ mod tests {
         let wmb_v2: WMB = wmb_v2.unwrap().try_into().unwrap();
         assert_eq!(wmb_v2.offset, 1);
         assert_eq!(wmb_v2.watermark, 200);
+        // Verify hb_time is set
+        assert!(wmb_v2.hb_time > 0);
 
         // delete the stores
         js_context
-            .delete_key_value(hb_bucket_name_v1.to_string())
-            .await
-            .unwrap();
-        js_context
             .delete_key_value(ot_bucket_name_v1.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(hb_bucket_name_v2.to_string())
             .await
             .unwrap();
         js_context
@@ -541,13 +484,11 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let ot_bucket_name = "isb_publisher_idle_flag_OT";
-        let hb_bucket_name = "isb_publisher_idle_flag_PROCESSORS";
 
         let bucket_configs = vec![BucketConfig {
             vertex: "v1",
             partitions: vec![0],
             ot_bucket: ot_bucket_name,
-            hb_bucket: hb_bucket_name,
             delay: None,
         }];
 
@@ -560,21 +501,12 @@ mod tests {
             })
             .await
             .unwrap();
-        js_context
-            .create_key_value(Config {
-                bucket: hb_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
 
-        let (ot_stores, hb_stores) = create_test_kv_stores(&js_context, &bucket_configs).await;
+        let ot_stores = create_test_ot_stores(&js_context, &bucket_configs).await;
 
         let mut publisher = ISBWatermarkPublisher::new(
             "processor1".to_string(),
             ot_stores,
-            hb_stores,
             &bucket_configs,
             false,
         );
@@ -603,12 +535,10 @@ mod tests {
         assert_eq!(wmb.offset, 1);
         assert_eq!(wmb.watermark, 100);
         assert!(wmb.idle);
+        // Verify hb_time is set
+        assert!(wmb.hb_time > 0);
 
         // delete the stores
-        js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await
-            .unwrap();
         js_context
             .delete_key_value(ot_bucket_name.to_string())
             .await
