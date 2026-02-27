@@ -57,10 +57,6 @@ type BufferInfo struct {
 	TotalMessages   int64
 }
 
-func JetStreamProcessorKVName(bucketName string) string {
-	return fmt.Sprintf("%s_PROCESSORS", bucketName)
-}
-
 func JetStreamOTKVName(bucketName string) string {
 	return fmt.Sprintf("%s_OT", bucketName)
 }

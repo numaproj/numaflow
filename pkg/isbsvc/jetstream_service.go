@@ -232,25 +232,6 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 				return fmt.Errorf("failed to create offset timeline KV %q, %w", otKVName, err)
 			}
 		}
-		// Create processor KV
-		procKVName := JetStreamProcessorKVName(bucket)
-		if _, err := jss.js.KeyValue(procKVName); err != nil {
-			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", procKVName, err)
-			}
-			if _, err := jss.js.CreateKeyValue(&nats.KeyValueConfig{
-				Bucket:       procKVName,
-				MaxValueSize: v.GetInt32("procBucket.maxValueSize"),
-				History:      uint8(v.GetUint("procBucket.history")),
-				TTL:          v.GetDuration("procBucket.ttl"),
-				MaxBytes:     v.GetInt64("procBucket.maxBytes"),
-				Storage:      nats.StorageType(v.GetInt("procBucket.storage")),
-				Replicas:     v.GetInt("procBucket.replicas"),
-				Placement:    nil,
-			}); err != nil {
-				return fmt.Errorf("failed to create processor KV %q, %w", procKVName, err)
-			}
-		}
 	}
 	return nil
 }
@@ -273,11 +254,6 @@ func (jss *jetStreamSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, b
 			return fmt.Errorf("failed to delete offset timeline KV %q, %w", otKVName, err)
 		}
 		log.Infow("Succeeded to delete an offset timeline KV", zap.String("kvName", otKVName))
-		procKVName := JetStreamProcessorKVName(bucket)
-		if err := jss.js.DeleteKeyValue(procKVName); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-			return fmt.Errorf("failed to delete processor KV %q, %w", procKVName, err)
-		}
-		log.Infow("Succeeded to delete a processor KV", zap.String("kvName", procKVName))
 	}
 
 	if sideInputsStore != "" {
@@ -322,11 +298,6 @@ func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers,
 		otKVName := JetStreamOTKVName(bucket)
 		if _, err := jss.js.KeyValue(otKVName); err != nil {
 			return fmt.Errorf("failed to query OT KV %q, %w", otKVName, err)
-		}
-
-		procKVName := JetStreamProcessorKVName(bucket)
-		if _, err := jss.js.KeyValue(procKVName); err != nil {
-			return fmt.Errorf("failed to query processor KV %q, %w", procKVName, err)
 		}
 	}
 	if sideInputsStore != "" {
