@@ -378,10 +378,10 @@ mod simple_buffer_tests {
     use crate::config::pipeline::{ToVertexConfig, VertexType};
     use crate::mapper::test_utils::MapperTestHandle;
     use crate::message::{IntOffset, Message, MessageID, Offset};
-    use crate::pipeline::isb::ISBWriter;
     use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};
     use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
     use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
+    use crate::pipeline::isb::{ISBReader, ISBWriter};
     use crate::tracker::Tracker;
 
     struct SimpleCat;
@@ -513,7 +513,7 @@ mod simple_buffer_tests {
         let forwarder_handle = tokio::spawn(async move { forwarder.start(forwarder_cln).await });
 
         // Wait until all messages appear in the output buffer
-        let result = tokio::time::timeout(Duration::from_secs(10), async {
+        let result = tokio::time::timeout(Duration::from_secs(3), async {
             loop {
                 if output_adapter.pending_count() >= MESSAGE_COUNT {
                     break;
@@ -631,7 +631,7 @@ mod simple_buffer_tests {
         let forwarder_handle = tokio::spawn(async move { forwarder.start(forwarder_cln).await });
 
         // Wait until all messages appear in the output buffer
-        let result = tokio::time::timeout(Duration::from_secs(10), async {
+        let result = tokio::time::timeout(Duration::from_secs(3), async {
             loop {
                 if simple_buffer.pending_count() >= MESSAGE_COUNT {
                     break;
@@ -661,10 +661,10 @@ mod simple_buffer_tests {
 
     // End-to-end test for map forwarder using SimpleBuffer.
     // Reads from an ISB backed by multiple SimpleBuffers, maps through a cat UDF, and writes
-    // to the SAME ISB
+    // to an ISB backed by a different set of SimpleBuffers
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_map_forwarder_with_multi_stream_same_isb() {
-        const MESSAGE_COUNT: usize = 10;
+    async fn test_map_forwarder_with_multi_streams() {
+        const MESSAGE_COUNT: usize = 1000;
 
         let cln_token = CancellationToken::new();
         let tracker = Tracker::new(None, cln_token.clone());
@@ -685,18 +685,18 @@ mod simple_buffer_tests {
         )
         .await;
 
-        let simple_buffers = vec![
-            SimpleBufferAdapter::new(SimpleBuffer::new(1000, 0, "simple-buffer-0")),
-            SimpleBufferAdapter::new(SimpleBuffer::new(1000, 1, "simple-buffer-1")),
-            SimpleBufferAdapter::new(SimpleBuffer::new(1000, 2, "simple-buffer-2")),
-            SimpleBufferAdapter::new(SimpleBuffer::new(1000, 3, "simple-buffer-3")),
-            SimpleBufferAdapter::new(SimpleBuffer::new(1000, 4, "simple-buffer-4")),
+        let output_simple_buffers = vec![
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 0, "output-simple-buffer-0")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 1, "output-simple-buffer-1")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 2, "output-simple-buffer-2")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 3, "output-simple-buffer-3")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 4, "output-simple-buffer-4")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 5, "output-simple-buffer-5")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 6, "output-simple-buffer-6")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 7, "output-simple-buffer-7")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 8, "output-simple-buffer-8")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 9, "output-simple-buffer-9")),
         ];
-
-        // Write all the messages to the input buffer so that mapper can read these
-        for simple_buffer in &simple_buffers {
-            write_test_messages(simple_buffer, MESSAGE_COUNT).await;
-        }
 
         let output_streams = vec![
             Stream::new("default-test-forwarder-for-map-vertex-out-0", "test", 0),
@@ -704,6 +704,11 @@ mod simple_buffer_tests {
             Stream::new("default-test-forwarder-for-map-vertex-out-2", "test", 2),
             Stream::new("default-test-forwarder-for-map-vertex-out-3", "test", 3),
             Stream::new("default-test-forwarder-for-map-vertex-out-4", "test", 4),
+            Stream::new("default-test-forwarder-for-map-vertex-out-5", "test", 5),
+            Stream::new("default-test-forwarder-for-map-vertex-out-6", "test", 6),
+            Stream::new("default-test-forwarder-for-map-vertex-out-7", "test", 7),
+            Stream::new("default-test-forwarder-for-map-vertex-out-8", "test", 8),
+            Stream::new("default-test-forwarder-for-map-vertex-out-9", "test", 9),
         ];
 
         let mut writers = HashMap::new();
@@ -712,15 +717,16 @@ mod simple_buffer_tests {
             buffer_full_strategy: RetryUntilSuccess,
             ..Default::default()
         };
+
         // ISB Writer Orchestrator
         for (i, output_stream) in (&output_streams).iter().enumerate() {
-            writers.insert(output_stream.name, simple_buffers[i].writer());
+            writers.insert(output_stream.name, output_simple_buffers[i].writer());
         }
 
         let writer_components = ISBWriterOrchestratorComponents::<WithSimpleBuffer> {
             config: vec![ToVertexConfig {
                 name: "test-out",
-                partitions: 5,
+                partitions: 10,
                 writer_config,
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
@@ -733,6 +739,24 @@ mod simple_buffer_tests {
 
         let isb_writer = ISBWriterOrchestrator::<WithSimpleBuffer>::new(writer_components);
 
+        let input_simple_buffers = vec![
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 0, "input-simple-buffer-0")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 1, "input-simple-buffer-1")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 2, "input-simple-buffer-2")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 3, "input-simple-buffer-3")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 4, "input-simple-buffer-4")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 5, "input-simple-buffer-5")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 6, "input-simple-buffer-6")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 7, "input-simple-buffer-7")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 8, "input-simple-buffer-8")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 9, "input-simple-buffer-9")),
+        ];
+
+        // Write all the messages to the input buffer so that mapper can read these
+        for simple_buffer in &input_simple_buffers {
+            write_test_messages(simple_buffer, MESSAGE_COUNT).await;
+        }
+
         // Unique names for the streams we use in this test
         let input_streams = vec![
             Stream::new("default-test-forwarder-for-map-vertex-in-0", "test", 0),
@@ -740,6 +764,11 @@ mod simple_buffer_tests {
             Stream::new("default-test-forwarder-for-map-vertex-in-2", "test", 2),
             Stream::new("default-test-forwarder-for-map-vertex-in-3", "test", 3),
             Stream::new("default-test-forwarder-for-map-vertex-in-4", "test", 4),
+            Stream::new("default-test-forwarder-for-map-vertex-in-5", "test", 5),
+            Stream::new("default-test-forwarder-for-map-vertex-in-6", "test", 6),
+            Stream::new("default-test-forwarder-for-map-vertex-in-7", "test", 7),
+            Stream::new("default-test-forwarder-for-map-vertex-in-8", "test", 8),
+            Stream::new("default-test-forwarder-for-map-vertex-in-9", "test", 9),
         ];
 
         let buf_reader_config = BufferReaderConfig {
@@ -764,10 +793,13 @@ mod simple_buffer_tests {
                 cln_token: cln_token.clone(),
             };
 
-            let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> =
-                ISBReaderOrchestrator::new(reader_components, simple_buffers[i].reader(), None)
-                    .await
-                    .unwrap();
+            let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> = ISBReaderOrchestrator::new(
+                reader_components,
+                input_simple_buffers[i].reader(),
+                None,
+            )
+            .await
+            .unwrap();
 
             // Create and start the MapForwarder
             let forwarder = MapForwarder::<WithSimpleBuffer>::new(
@@ -783,11 +815,11 @@ mod simple_buffer_tests {
             forwarder_handles.push(forwarder_handle);
         }
 
-        // Wait until all messages appear in the output buffer
-        let result = tokio::time::timeout(Duration::from_secs(10), async {
-            for simple_buffer in &simple_buffers {
+        // Wait until all messages exit the input buffer
+        let input_result = tokio::time::timeout(Duration::from_secs(10), async {
+            for simple_buffer in &input_simple_buffers {
                 loop {
-                    if simple_buffer.pending_count() >= MESSAGE_COUNT {
+                    if simple_buffer.pending_count() == 0 {
                         break;
                     }
                     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -796,20 +828,48 @@ mod simple_buffer_tests {
         })
         .await;
 
-        for simple_buffer in simple_buffers {
-            assert!(
-                result.is_ok(),
-                "Timed out waiting for messages in output buffer. Got {} of {}",
-                simple_buffer.pending_count(),
-                MESSAGE_COUNT,
-            );
+        assert!(
+            input_result.is_ok(),
+            "Timed out waiting for messages to exit input buffers."
+        );
 
+        // Ensure that all the messages have left the input buffers
+        for simple_buffer in input_simple_buffers {
             assert_eq!(
                 simple_buffer.pending_count(),
-                MESSAGE_COUNT,
+                0,
                 "All messages should be forwarded to the output buffer"
             );
         }
+
+        let output_buffer_count = output_simple_buffers.len();
+        let output_result = tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                // Ensure that all the messages have reached output buffers.
+                // Each buffer may have different number of messages, so check the total count
+                let mut total_output_messages = 0;
+
+                for simple_buffer in &output_simple_buffers {
+                    println!(
+                        "Output buffer pending count: {}, {}",
+                        simple_buffer.pending_count(),
+                        simple_buffer.writer().name()
+                    );
+                    total_output_messages += simple_buffer.pending_count();
+                }
+
+                if total_output_messages == MESSAGE_COUNT * output_buffer_count {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await;
+
+        assert!(
+            output_result.is_ok(),
+            "All messages should be forwarded to the output buffer"
+        );
 
         // Shutdown
         cln_token.cancel();
