@@ -773,15 +773,42 @@ func validateSQSSink(sqs dfv1.SqsSink) error {
 }
 
 // validateOrderedProcessing validates the ordered processing configuration.
-// The ordered configuration is simple (just a boolean), so minimal validation is needed.
-// Note: Reduce vertices ignore the ordered setting as they are already partitioned.
+// For map and sink vertices with ordered processing enabled:
+// - Partitions must be set
+// - Scale config (min/max) must not be set by user
+// Note: Source vertices are always ordered, and reduce vertices are already partitioned,
+// so ordered processing only applies to map and sink vertices.
 func validateOrderedProcessing(pl dfv1.Pipeline) error {
-	// Pipeline-level validation: the Ordered struct is optional and contains only a boolean,
-	// so no additional validation is needed beyond what the API server enforces.
+	// Iterate through all vertices to validate ordered processing configuration
+	for _, v := range pl.Spec.Vertices {
+		// Get the effective ordered config for this vertex
+		orderedEnabled := v.GetEffectiveOrderedConfig(pl.Spec.Ordered)
 
-	// Vertex-level validation: ensure vertex-level ordered config is valid.
-	// Since it's just a boolean field, no additional validation is needed.
-	// Reduce vertices will ignore this setting (handled in GetEffectiveOrderedConfig).
+		// Skip if ordered processing is not enabled
+		if !orderedEnabled {
+			continue
+		}
+
+		// Skip source and reduce vertices - ordered processing only applies to map and sink
+		// Source vertices are always ordered by nature
+		// Reduce vertices are already partitioned and ordered
+		if v.IsASource() || v.IsReduceUDF() {
+			continue
+		}
+
+		// For map and sink vertices with ordered processing enabled:
+
+		// 1. Partitions must be set
+		if v.Partitions == nil || *v.Partitions <= 0 {
+			return fmt.Errorf("vertex %q: partitions must be set and greater than 0 when ordered processing is enabled", v.Name)
+		}
+
+		// 2. Scale config (min/max) must not be set by user
+		// Users should not configure autoscaling for ordered processing vertices
+		if v.Scale.Min != nil || v.Scale.Max != nil {
+			return fmt.Errorf("vertex %q: scale (min/max) should not be set when ordered processing is enabled. Replicas will be fixed to partition count", v.Name)
+		}
+	}
 
 	return nil
 }
