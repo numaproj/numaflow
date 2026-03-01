@@ -774,7 +774,6 @@ func validateSQSSink(sqs dfv1.SqsSink) error {
 
 // validateOrderedProcessing validates the ordered processing configuration.
 // For map and sink vertices with ordered processing enabled:
-// - Partitions must be set
 // - Scale config (min/max) must not be set by user
 // Note: Source vertices are always ordered, and reduce vertices are already partitioned,
 // so ordered processing only applies to map and sink vertices.
@@ -797,13 +796,7 @@ func validateOrderedProcessing(pl dfv1.Pipeline) error {
 		}
 
 		// For map and sink vertices with ordered processing enabled:
-
-		// 1. Partitions must be set
-		if v.Partitions == nil || *v.Partitions <= 0 {
-			return fmt.Errorf("vertex %q: partitions must be set and greater than 0 when ordered processing is enabled", v.Name)
-		}
-
-		// 2. Scale config (min/max) must not be set by user
+		// Scale config (min/max) must not be set by user
 		// Users should not configure autoscaling for ordered processing vertices
 		if v.Scale.Min != nil || v.Scale.Max != nil {
 			return fmt.Errorf("vertex %q: scale (min/max) should not be set when ordered processing is enabled. Replicas will be fixed to partition count", v.Name)

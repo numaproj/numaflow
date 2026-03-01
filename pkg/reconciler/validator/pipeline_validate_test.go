@@ -1495,7 +1495,7 @@ func TestValidateOrderedProcessing(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "map vertex with ordered but no partitions - should fail",
+			name: "map vertex with ordered but no partitions - should succeed (defaults to 1)",
 			pl: dfv1.Pipeline{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pl",
@@ -1527,10 +1527,10 @@ func TestValidateOrderedProcessing(t *testing.T) {
 					},
 				},
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 		{
-			name: "sink vertex with ordered but no partitions - should fail",
+			name: "sink vertex with ordered but no partitions - should succeed (defaults to 1)",
 			pl: dfv1.Pipeline{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pl",
@@ -1555,7 +1555,7 @@ func TestValidateOrderedProcessing(t *testing.T) {
 					},
 				},
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name: "map vertex with ordered and partitions - should succeed",
