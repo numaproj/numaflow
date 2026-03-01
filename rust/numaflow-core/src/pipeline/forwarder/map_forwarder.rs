@@ -368,9 +368,14 @@ mod simple_buffer_tests {
 
     use bytes::Bytes;
     use chrono::Utc;
-    use numaflow::map;
+    use numaflow::batchmap::{BatchResponse, Datum};
+    use numaflow::mapstream::MapStreamRequest;
+    use numaflow::{batchmap, map, mapstream};
     use numaflow_shared::server_info::MapMode;
     use numaflow_testing::simplebuffer::SimpleBuffer;
+    use tokio::sync::mpsc;
+    use tokio::sync::mpsc::{Receiver, Sender};
+    use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
 
     use crate::config::pipeline::isb::BufferFullStrategy::RetryUntilSuccess;
@@ -390,6 +395,29 @@ mod simple_buffer_tests {
     impl map::Mapper for SimpleCat {
         async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
             vec![map::Message::new(input.value).with_keys(input.keys)]
+        }
+    }
+
+    #[tonic::async_trait]
+    impl batchmap::BatchMapper for SimpleCat {
+        async fn batchmap(&self, input: Receiver<Datum>) -> Vec<BatchResponse> {
+            let mut batch_responses = vec![];
+            let mut input = input;
+            while let Some(datum) = input.recv().await {
+                let mut message = BatchResponse::from_id(datum.id);
+                message.append(batchmap::Message::new(datum.value).with_keys(datum.keys));
+                batch_responses.push(message);
+            }
+            batch_responses
+        }
+    }
+
+    #[tonic::async_trait]
+    impl mapstream::MapStreamer for SimpleCat {
+        async fn map_stream(&self, input: MapStreamRequest, tx: Sender<mapstream::Message>) {
+            let mut input = input;
+            let message = mapstream::Message::new(input.value).with_keys(input.keys);
+            tx.send(message).await.expect("send should succeed");
         }
     }
 
@@ -662,28 +690,19 @@ mod simple_buffer_tests {
     // End-to-end test for map forwarder using SimpleBuffer.
     // Reads from an ISB backed by multiple SimpleBuffers, maps through a cat UDF, and writes
     // to an ISB backed by a different set of SimpleBuffers
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_map_forwarder_with_multi_streams() {
+    async fn test_map_forwarder_with_multi_streams(
+        mapper_test_handle: MapperTestHandle,
+        tracker: Tracker,
+        batch_size: usize,
+        cln_token: CancellationToken,
+    ) {
         const MESSAGE_COUNT: usize = 1000;
-
-        let cln_token = CancellationToken::new();
-        let tracker = Tracker::new(None, cln_token.clone());
-        let batch_size = 500;
 
         // Mapper
         let MapperTestHandle {
             mapper,
             server_handle: _server_handle,
-        } = MapperTestHandle::create_mapper(
-            SimpleCat,
-            tracker.clone(),
-            MapMode::Unary,
-            batch_size,
-            Duration::from_secs(10),
-            Duration::from_secs(10),
-            10,
-        )
-        .await;
+        } = mapper_test_handle;
 
         let output_simple_buffers = vec![
             SimpleBufferAdapter::new(SimpleBuffer::new(10000, 0, "output-simple-buffer-0")),
@@ -850,11 +869,6 @@ mod simple_buffer_tests {
                 let mut total_output_messages = 0;
 
                 for simple_buffer in &output_simple_buffers {
-                    println!(
-                        "Output buffer pending count: {}, {}",
-                        simple_buffer.pending_count(),
-                        simple_buffer.writer().name()
-                    );
                     total_output_messages += simple_buffer.pending_count();
                 }
 
@@ -871,10 +885,111 @@ mod simple_buffer_tests {
             "All messages should be forwarded to the output buffer"
         );
 
-        // Shutdown
         cln_token.cancel();
         for forwarder_handle in forwarder_handles {
             forwarder_handle.abort();
+        }
+    }
+
+    // Test all map types with multi streams test scenario
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_all_map_types_multi_stream() {
+        let batch_size = 500;
+
+        // Test unary map
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let mapper_test_handle = MapperTestHandle::create_mapper(
+            SimpleCat,
+            tracker.clone(),
+            MapMode::Unary,
+            batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+        )
+        .await;
+
+        test_map_forwarder_with_multi_streams(
+            mapper_test_handle,
+            tracker,
+            batch_size,
+            cln_token.clone(),
+        )
+        .await;
+
+        // Test batch map
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let mapper_test_handle = MapperTestHandle::create_batch_mapper(
+            SimpleCat,
+            tracker.clone(),
+            MapMode::Batch,
+            batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+        )
+        .await;
+
+        test_map_forwarder_with_multi_streams(
+            mapper_test_handle,
+            tracker,
+            batch_size,
+            cln_token.clone(),
+        )
+        .await;
+
+        // Test map streamer
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let mapper_test_handle = MapperTestHandle::create_map_streamer(
+            SimpleCat,
+            tracker.clone(),
+            MapMode::Stream,
+            batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+        )
+        .await;
+
+        test_map_forwarder_with_multi_streams(
+            mapper_test_handle,
+            tracker,
+            batch_size,
+            cln_token.clone(),
+        )
+        .await;
+    }
+
+    struct PanicMap;
+
+    #[tonic::async_trait]
+    impl map::Mapper for PanicMap {
+        async fn map(&self, _input: map::MapRequest) -> Vec<map::Message> {
+            panic!("PanicCat panicked!");
+        }
+    }
+
+    #[tonic::async_trait]
+    impl batchmap::BatchMapper for PanicMap {
+        async fn batchmap(
+            &self,
+            _input: mpsc::Receiver<batchmap::Datum>,
+        ) -> Vec<batchmap::BatchResponse> {
+            panic!("PanicBatchMap panicked!");
+        }
+    }
+
+    #[tonic::async_trait]
+    impl mapstream::MapStreamer for PanicMap {
+        async fn map_stream(
+            &self,
+            _input: mapstream::MapStreamRequest,
+            _tx: Sender<mapstream::Message>,
+        ) {
+            panic!("Streaming map panicked!");
         }
     }
 }
