@@ -900,7 +900,12 @@ mod simple_buffer_tests {
 
         cln_token.cancel();
         for forwarder_handle in forwarder_handles {
-            forwarder_handle.abort();
+            let forwarder_result =
+                tokio::time::timeout(Duration::from_secs(1), forwarder_handle).await;
+            assert!(
+                forwarder_result.is_ok(),
+                "Forwarder should have completed successfully after cancellation"
+            );
         }
     }
 
@@ -1105,7 +1110,11 @@ mod simple_buffer_tests {
 
         // Shutdown
         cln_token.cancel();
-        forwarder_handle.abort();
+        let forwarder_result = tokio::time::timeout(Duration::from_secs(2), forwarder_handle).await;
+        assert!(
+            forwarder_result.is_ok(),
+            "Forwarder should have completed successfully after cancellation"
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]
