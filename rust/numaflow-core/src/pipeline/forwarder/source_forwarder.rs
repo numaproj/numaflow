@@ -253,6 +253,514 @@ where
 }
 
 #[cfg(test)]
+mod simple_buffer_tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::collections::HashSet;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    use chrono::Utc;
+    use numaflow::source;
+    use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow::sourcetransform;
+    use numaflow_testing::simplebuffer::SimpleBuffer;
+    use tokio::sync::mpsc::Sender;
+    use tokio_util::sync::CancellationToken;
+
+    use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
+    use crate::config::pipeline::{ToVertexConfig, VertexType};
+    use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
+    use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
+    use crate::shared::grpc;
+    use crate::source::test_utils::start_source_server;
+    use crate::source::user_defined::new_source;
+    use crate::source::{Source, SourceType};
+    use crate::tracker::Tracker;
+    use crate::transformer::Transformer;
+    use crate::transformer::test_utils::start_source_transform_server;
+    use numaflow_pb::clients::source::source_client::SourceClient;
+    use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+
+    /// A simple source that generates a fixed number of messages.
+    struct SimpleSource {
+        num: usize,
+        sent_count: AtomicUsize,
+        yet_to_ack: std::sync::RwLock<HashSet<String>>,
+    }
+
+    impl SimpleSource {
+        fn new(num: usize) -> Self {
+            Self {
+                num,
+                sent_count: AtomicUsize::new(0),
+                yet_to_ack: std::sync::RwLock::new(HashSet::new()),
+            }
+        }
+    }
+
+    #[tonic::async_trait]
+    impl source::Sourcer for SimpleSource {
+        async fn read(&self, request: SourceReadRequest, transmitter: Sender<Message>) {
+            let event_time = Utc::now();
+            let mut message_offsets = Vec::with_capacity(request.count);
+
+            for i in 0..request.count {
+                if self.sent_count.load(Ordering::SeqCst) >= self.num {
+                    return;
+                }
+
+                let offset = format!("{}-{}", event_time.timestamp_nanos_opt().unwrap(), i);
+                transmitter
+                    .send(Message {
+                        value: b"hello".to_vec(),
+                        event_time,
+                        offset: Offset {
+                            offset: offset.clone().into_bytes(),
+                            partition_id: 0,
+                        },
+                        keys: vec![],
+                        headers: Default::default(),
+                        user_metadata: None,
+                    })
+                    .await
+                    .unwrap();
+                message_offsets.push(offset);
+                self.sent_count.fetch_add(1, Ordering::SeqCst);
+            }
+            self.yet_to_ack.write().unwrap().extend(message_offsets);
+        }
+
+        async fn ack(&self, offsets: Vec<Offset>) {
+            for offset in offsets {
+                self.yet_to_ack
+                    .write()
+                    .unwrap()
+                    .remove(&String::from_utf8(offset.offset).unwrap());
+            }
+        }
+
+        async fn nack(&self, _offsets: Vec<Offset>) {}
+
+        async fn pending(&self) -> Option<usize> {
+            Some(
+                self.num - self.sent_count.load(Ordering::SeqCst)
+                    + self.yet_to_ack.read().unwrap().len(),
+            )
+        }
+
+        async fn partitions(&self) -> Option<Vec<i32>> {
+            Some(vec![0])
+        }
+    }
+
+    /// Helper to create a Source from a UD source service.
+    async fn create_source(
+        source_svc: impl source::Sourcer + Send + Sync + 'static,
+        batch_size: usize,
+        transformer: Option<Transformer>,
+        cln_token: CancellationToken,
+        tracker: Tracker,
+    ) -> (
+        Source<WithSimpleBuffer>,
+        crate::shared::test_utils::server::TestServerHandle,
+    ) {
+        let server_handle = start_source_server(source_svc);
+        let mut client = SourceClient::new(
+            server_handle
+                .create_rpc_channel()
+                .await
+                .expect("failed to create source rpc channel"),
+        );
+
+        grpc::wait_until_source_ready(&cln_token, &mut client)
+            .await
+            .expect("failed to wait for source server to be ready");
+
+        let (src_read, src_ack, lag_reader) = new_source(
+            client,
+            batch_size,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
+
+        let source: Source<WithSimpleBuffer> = Source::new(
+            batch_size,
+            SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
+            tracker,
+            true,
+            transformer,
+            None,
+            None,
+        )
+        .await;
+
+        (source, server_handle)
+    }
+
+    /// Helper to create an ISBWriterOrchestrator from output adapters.
+    fn create_writer_orchestrator(
+        output_adapters: &[(&'static str, &SimpleBufferAdapter)],
+        streams: &[Stream],
+    ) -> ISBWriterOrchestrator<WithSimpleBuffer> {
+        let mut writers = HashMap::new();
+        for (name, adapter) in output_adapters {
+            writers.insert(*name, adapter.writer());
+        }
+
+        let writer_config = BufferWriterConfig {
+            streams: streams.to_vec(),
+            ..Default::default()
+        };
+
+        let writer_components = ISBWriterOrchestratorComponents {
+            config: vec![ToVertexConfig {
+                partitions: streams.len() as u16,
+                writer_config,
+                conditions: None,
+                name: "test-out",
+                to_vertex_type: VertexType::Sink,
+            }],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+        };
+
+        ISBWriterOrchestrator::new(writer_components)
+    }
+
+    // Test source forwarder with a single output stream using SimpleBuffer.
+    // Reads from a UD source and writes to a SimpleBuffer-backed ISB for verification.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_source_forwarder_with_single_stream() {
+        const MESSAGE_COUNT: usize = 100;
+
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let batch_size = 10;
+
+        // Create the UD source
+        let (source, _server_handle) = create_source(
+            SimpleSource::new(MESSAGE_COUNT),
+            batch_size,
+            None,
+            cln_token.clone(),
+            tracker.clone(),
+        )
+        .await;
+
+        // Output buffer for verification
+        let output_stream = Stream::new("src-fwd-out-0", "test-out", 0);
+        let output_name: &'static str = output_stream.name;
+        let output_adapter = SimpleBufferAdapter::new(SimpleBuffer::new(10000, 0, output_name));
+
+        // Create ISBWriterOrchestrator
+        let writer =
+            create_writer_orchestrator(&[(output_name, &output_adapter)], &[output_stream]);
+
+        // Create and start the SourceForwarder
+        let forwarder = SourceForwarder::<WithSimpleBuffer>::new(source.clone(), writer);
+        let forwarder_cln = cln_token.clone();
+        let forwarder_handle = tokio::spawn(async move { forwarder.start(forwarder_cln).await });
+
+        // Wait until all messages are produced and acked by the source
+        let result = tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                let pending = source.pending().await.unwrap_or(Some(MESSAGE_COUNT));
+                if pending == Some(0) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "Timed out waiting for source pending to reach zero"
+        );
+
+        // Wait until all messages appear in the output buffer
+        let output_result = tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if output_adapter.pending_count() >= MESSAGE_COUNT {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await;
+
+        assert!(
+            output_result.is_ok(),
+            "Timed out waiting for messages in output buffer. Got {} of {}",
+            output_adapter.pending_count(),
+            MESSAGE_COUNT,
+        );
+
+        assert_eq!(
+            output_adapter.pending_count(),
+            MESSAGE_COUNT,
+            "All messages should be forwarded to the output buffer"
+        );
+
+        // Shutdown
+        cln_token.cancel();
+        let forwarder_result = tokio::time::timeout(Duration::from_secs(2), forwarder_handle).await;
+        assert!(
+            forwarder_result.is_ok(),
+            "Forwarder task should complete gracefully"
+        );
+    }
+
+    // Test source forwarder with multiple output streams using SimpleBuffer.
+    // Reads from a UD source and writes to multiple SimpleBuffer-backed ISB partitions.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_source_forwarder_with_multi_streams() {
+        const MESSAGE_COUNT: usize = 100;
+        const NUM_PARTITIONS: usize = 5;
+
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let batch_size = 10;
+
+        // Create the UD source
+        let (source, _server_handle) = create_source(
+            SimpleSource::new(MESSAGE_COUNT),
+            batch_size,
+            None,
+            cln_token.clone(),
+            tracker.clone(),
+        )
+        .await;
+
+        // Create output buffers and streams
+        let output_adapters: Vec<(&'static str, SimpleBufferAdapter)> = (0..NUM_PARTITIONS)
+            .map(|i| {
+                let name: &'static str =
+                    Box::leak(format!("src-fwd-multi-out-{}", i).into_boxed_str());
+                (
+                    name,
+                    SimpleBufferAdapter::new(SimpleBuffer::new(10000, i as u16, name)),
+                )
+            })
+            .collect();
+
+        let output_streams: Vec<Stream> = output_adapters
+            .iter()
+            .enumerate()
+            .map(|(i, (name, _))| Stream::new(name, "test-out", i as u16))
+            .collect();
+
+        // Build adapter refs for the orchestrator helper
+        let adapter_refs: Vec<(&'static str, &SimpleBufferAdapter)> = output_adapters
+            .iter()
+            .map(|(name, adapter)| (*name, adapter))
+            .collect();
+
+        let writer = create_writer_orchestrator(&adapter_refs, &output_streams);
+
+        // Create and start the SourceForwarder
+        let forwarder = SourceForwarder::<WithSimpleBuffer>::new(source.clone(), writer);
+        let forwarder_cln = cln_token.clone();
+        let forwarder_handle = tokio::spawn(async move { forwarder.start(forwarder_cln).await });
+
+        // Wait until all messages are produced and acked by the source
+        let result = tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                let pending = source.pending().await.unwrap_or(Some(MESSAGE_COUNT));
+                if pending == Some(0) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "Timed out waiting for source pending to reach zero"
+        );
+
+        // Wait until total messages across all output buffers reach expected count
+        let output_result = tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                let total: usize = output_adapters
+                    .iter()
+                    .map(|(_, adapter)| adapter.pending_count())
+                    .sum();
+                if total >= MESSAGE_COUNT {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await;
+
+        let total: usize = output_adapters
+            .iter()
+            .map(|(_, adapter)| adapter.pending_count())
+            .sum();
+
+        assert!(
+            output_result.is_ok(),
+            "Timed out waiting for messages in output buffers. Got {} of {}",
+            total,
+            MESSAGE_COUNT,
+        );
+
+        assert_eq!(
+            total, MESSAGE_COUNT,
+            "All messages should be distributed across output buffers"
+        );
+
+        // Verify messages are distributed (round-robin) across partitions
+        for (name, adapter) in &output_adapters {
+            assert!(
+                adapter.pending_count() > 0,
+                "Output buffer {} should have received some messages",
+                name
+            );
+        }
+
+        // Shutdown
+        cln_token.cancel();
+        let forwarder_result = tokio::time::timeout(Duration::from_secs(2), forwarder_handle).await;
+        assert!(
+            forwarder_result.is_ok(),
+            "Forwarder task should complete gracefully"
+        );
+    }
+
+    /// A simple transformer that passes through messages with modified keys.
+    struct SimpleTransformer;
+
+    #[tonic::async_trait]
+    impl sourcetransform::SourceTransformer for SimpleTransformer {
+        async fn transform(
+            &self,
+            input: sourcetransform::SourceTransformRequest,
+        ) -> Vec<sourcetransform::Message> {
+            let message = sourcetransform::Message::new(input.value, Utc::now())
+                .with_keys(vec!["transformed".to_string()]);
+            vec![message]
+        }
+    }
+
+    // Test source forwarder with a transformer using SimpleBuffer.
+    // Reads from a UD source, applies a transformer, and writes to a SimpleBuffer-backed ISB.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_source_forwarder_with_transformer() {
+        const MESSAGE_COUNT: usize = 50;
+
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let batch_size = 10;
+
+        // Create the transformer
+        let st_server_handle = start_source_transform_server(SimpleTransformer);
+        let mut st_client = SourceTransformClient::new(
+            st_server_handle
+                .create_rpc_channel()
+                .await
+                .expect("failed to create source transformer rpc channel"),
+        );
+
+        grpc::wait_until_transformer_ready(&cln_token, &mut st_client)
+            .await
+            .expect("failed to wait for source transformer server to be ready");
+
+        let transformer = Transformer::new(
+            batch_size,
+            10,
+            Duration::from_secs(10),
+            st_client,
+            tracker.clone(),
+        )
+        .await
+        .expect("failed to create source transformer");
+
+        // Create the UD source with transformer
+        let (source, _server_handle) = create_source(
+            SimpleSource::new(MESSAGE_COUNT),
+            batch_size,
+            Some(transformer),
+            cln_token.clone(),
+            tracker.clone(),
+        )
+        .await;
+
+        // Output buffer for verification
+        let output_stream = Stream::new("src-fwd-xfm-out-0", "test-out", 0);
+        let output_name: &'static str = output_stream.name;
+        let output_adapter = SimpleBufferAdapter::new(SimpleBuffer::new(10000, 0, output_name));
+
+        // Create ISBWriterOrchestrator
+        let writer =
+            create_writer_orchestrator(&[(output_name, &output_adapter)], &[output_stream]);
+
+        // Create and start the SourceForwarder
+        let forwarder = SourceForwarder::<WithSimpleBuffer>::new(source.clone(), writer);
+        let forwarder_cln = cln_token.clone();
+        let forwarder_handle = tokio::spawn(async move { forwarder.start(forwarder_cln).await });
+
+        // Wait until all messages are produced and acked by the source
+        let result = tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                let pending = source.pending().await.unwrap_or(Some(MESSAGE_COUNT));
+                if pending == Some(0) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "Timed out waiting for source pending to reach zero"
+        );
+
+        // Wait until all messages appear in the output buffer
+        let output_result = tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if output_adapter.pending_count() >= MESSAGE_COUNT {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await;
+
+        assert!(
+            output_result.is_ok(),
+            "Timed out waiting for messages in output buffer. Got {} of {}",
+            output_adapter.pending_count(),
+            MESSAGE_COUNT,
+        );
+
+        assert_eq!(
+            output_adapter.pending_count(),
+            MESSAGE_COUNT,
+            "All messages should be forwarded through transformer to output buffer"
+        );
+
+        // Shutdown
+        cln_token.cancel();
+        let forwarder_result = tokio::time::timeout(Duration::from_secs(2), forwarder_handle).await;
+        assert!(
+            forwarder_result.is_ok(),
+            "Forwarder task should complete gracefully"
+        );
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
