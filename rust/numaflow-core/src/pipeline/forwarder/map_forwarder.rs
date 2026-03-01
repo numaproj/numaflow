@@ -360,6 +360,800 @@ where
 }
 
 #[cfg(test)]
+mod simple_buffer_tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use bytes::Bytes;
+    use chrono::Utc;
+    use numaflow::batchmap::{BatchResponse, Datum};
+    use numaflow::mapstream::MapStreamRequest;
+    use numaflow::{batchmap, map, mapstream};
+    use numaflow_shared::server_info::MapMode;
+    use numaflow_testing::simplebuffer::SimpleBuffer;
+    use tokio::sync::mpsc;
+    use tokio::sync::mpsc::{Receiver, Sender};
+    use tokio_util::sync::CancellationToken;
+
+    use crate::config::pipeline::isb::BufferFullStrategy::RetryUntilSuccess;
+    use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig, Stream};
+    use crate::config::pipeline::{ToVertexConfig, VertexType};
+    use crate::mapper::test_utils::MapperTestHandle;
+    use crate::message::{IntOffset, Message, MessageID, Offset};
+    use crate::pipeline::isb::ISBWriter;
+    use crate::pipeline::isb::reader::{ISBReaderComponents, ISBReaderOrchestrator};
+    use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
+    use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
+    use crate::tracker::Tracker;
+
+    struct SimpleCat;
+
+    #[tonic::async_trait]
+    impl map::Mapper for SimpleCat {
+        async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
+            vec![map::Message::new(input.value).with_keys(input.keys)]
+        }
+    }
+
+    #[tonic::async_trait]
+    impl batchmap::BatchMapper for SimpleCat {
+        async fn batchmap(&self, input: Receiver<Datum>) -> Vec<BatchResponse> {
+            let mut batch_responses = vec![];
+            let mut input = input;
+            while let Some(datum) = input.recv().await {
+                let mut message = BatchResponse::from_id(datum.id);
+                message.append(batchmap::Message::new(datum.value).with_keys(datum.keys));
+                batch_responses.push(message);
+            }
+            batch_responses
+        }
+    }
+
+    #[tonic::async_trait]
+    impl mapstream::MapStreamer for SimpleCat {
+        async fn map_stream(&self, input: MapStreamRequest, tx: Sender<mapstream::Message>) {
+            let message = mapstream::Message::new(input.value).with_keys(input.keys);
+            tx.send(message).await.expect("send should succeed");
+        }
+    }
+
+    /// Helper to create and write test messages into a SimpleBufferAdapter via its ISBWriter.
+    async fn write_test_messages(adapter: &SimpleBufferAdapter, count: usize) {
+        let writer = adapter.writer();
+        for i in 0..count {
+            let msg = Message {
+                typ: Default::default(),
+                keys: Arc::from(vec![format!("key-{}", i)]),
+                tags: None,
+                value: Bytes::from(format!("payload-{}", i)),
+                offset: Offset::Int(IntOffset::new(i as i64, 0)),
+                event_time: Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "test-in".into(),
+                    index: i as i32,
+                    offset: format!("{}", i).into(),
+                },
+                headers: Arc::new(HashMap::new()),
+                metadata: None,
+                is_late: false,
+                // ack handle is anyways gonna be overridden during isb read processing
+                ack_handle: None,
+            };
+            writer.write(msg).await.expect("write should succeed");
+        }
+    }
+
+    // End-to-end test for map forwarder using SimpleBuffer.
+    // Reads from a SimpleBuffer-backed ISB, maps through a cat UDF, and writes
+    // to a DIFFERENT SimpleBuffer-backed ISB
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_map_forwarder_with_single_stream_different_isb() {
+        const MESSAGE_COUNT: usize = 10;
+
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let batch_size = 500;
+
+        // Input buffer
+        let input_adapter = SimpleBufferAdapter::new(SimpleBuffer::new(1000, 0, "input-buffer"));
+
+        // Write all the messages to the input buffer so that mapper can read these
+        write_test_messages(&input_adapter, MESSAGE_COUNT).await;
+
+        // Output buffer
+        let output_adapter = SimpleBufferAdapter::new(SimpleBuffer::new(1000, 0, "output-buffer"));
+
+        // ISB Reader Orchestrator
+        let input_stream = Stream::new("input-buffer", "test-in", 0);
+        let buf_reader_config = BufferReaderConfig {
+            streams: vec![input_stream.clone()],
+            wip_ack_interval: Duration::from_millis(10),
+            ..Default::default()
+        };
+
+        let reader_components = ISBReaderComponents {
+            vertex_type: "Map".to_string(),
+            stream: input_stream,
+            config: buf_reader_config,
+            tracker: tracker.clone(),
+            batch_size,
+            read_timeout: Duration::from_millis(500),
+            watermark_handle: None,
+            isb_config: None,
+            cln_token: cln_token.clone(),
+        };
+
+        let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> =
+            ISBReaderOrchestrator::new(reader_components, input_adapter.reader(), None)
+                .await
+                .unwrap();
+
+        // ISB Writer Orchestrator
+        let output_stream = Stream::new("output-buffer", "test-out", 0);
+        let writer_config = BufferWriterConfig {
+            streams: vec![output_stream.clone()],
+            buffer_full_strategy: RetryUntilSuccess,
+            ..Default::default()
+        };
+
+        let mut writers = HashMap::new();
+        writers.insert(output_stream.name, output_adapter.writer());
+
+        let writer_components = ISBWriterOrchestratorComponents::<WithSimpleBuffer> {
+            config: vec![ToVertexConfig {
+                name: "test-out",
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+            }],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::MapUDF,
+        };
+
+        let isb_writer = ISBWriterOrchestrator::<WithSimpleBuffer>::new(writer_components);
+
+        // Mapper
+        let MapperTestHandle {
+            mapper,
+            server_handle: _server_handle,
+        } = MapperTestHandle::create_mapper(
+            SimpleCat,
+            tracker.clone(),
+            MapMode::Unary,
+            batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+        )
+        .await;
+
+        // Create and start the MapForwarder
+        let forwarder = MapForwarder::<WithSimpleBuffer>::new(isb_reader, mapper, isb_writer).await;
+
+        let forwarder_cln = cln_token.clone();
+        let forwarder_handle = tokio::spawn(async move { forwarder.start(forwarder_cln).await });
+
+        // Wait until all messages appear in the output buffer
+        let result = tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                if output_adapter.pending_count() >= MESSAGE_COUNT {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "Timed out waiting for messages in output buffer. Got {} of {}",
+            output_adapter.pending_count(),
+            MESSAGE_COUNT,
+        );
+
+        assert_eq!(
+            output_adapter.pending_count(),
+            MESSAGE_COUNT,
+            "All messages should be forwarded to the output buffer"
+        );
+
+        // Shutdown
+        cln_token.cancel();
+        forwarder_handle.abort();
+    }
+
+    // End-to-end test for map forwarder using SimpleBuffer.
+    // Reads from a SimpleBuffer-backed ISB, maps through a cat UDF, and writes
+    // to the SAME SimpleBuffer-backed ISB
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_map_forwarder_with_single_stream_same_isb() {
+        const MESSAGE_COUNT: usize = 10;
+
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let batch_size = 500;
+
+        let simple_buffer = SimpleBufferAdapter::new(SimpleBuffer::new(1000, 0, "simple-buffer"));
+
+        // Write all the messages to the input buffer so that mapper can read these
+        write_test_messages(&simple_buffer, MESSAGE_COUNT).await;
+
+        // ISB Reader Orchestrator
+        let input_stream = Stream::new("input-buffer", "test-in", 0);
+        let buf_reader_config = BufferReaderConfig {
+            streams: vec![input_stream.clone()],
+            wip_ack_interval: Duration::from_millis(10),
+            ..Default::default()
+        };
+
+        let reader_components = ISBReaderComponents {
+            vertex_type: "Map".to_string(),
+            stream: input_stream,
+            config: buf_reader_config,
+            tracker: tracker.clone(),
+            batch_size,
+            read_timeout: Duration::from_millis(500),
+            watermark_handle: None,
+            isb_config: None,
+            cln_token: cln_token.clone(),
+        };
+
+        let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> =
+            ISBReaderOrchestrator::new(reader_components, simple_buffer.reader(), None)
+                .await
+                .unwrap();
+
+        // ISB Writer Orchestrator
+        let output_stream = Stream::new("output-buffer", "test-out", 0);
+        let writer_config = BufferWriterConfig {
+            streams: vec![output_stream.clone()],
+            buffer_full_strategy: RetryUntilSuccess,
+            ..Default::default()
+        };
+
+        let mut writers = HashMap::new();
+        writers.insert(output_stream.name, simple_buffer.writer());
+
+        let writer_components = ISBWriterOrchestratorComponents::<WithSimpleBuffer> {
+            config: vec![ToVertexConfig {
+                name: "test-out",
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+            }],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::MapUDF,
+        };
+
+        let isb_writer = ISBWriterOrchestrator::<WithSimpleBuffer>::new(writer_components);
+
+        // Mapper
+        let MapperTestHandle {
+            mapper,
+            server_handle: _server_handle,
+        } = MapperTestHandle::create_mapper(
+            SimpleCat,
+            tracker.clone(),
+            MapMode::Unary,
+            batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+        )
+        .await;
+
+        // Create and start the MapForwarder
+        let forwarder = MapForwarder::<WithSimpleBuffer>::new(isb_reader, mapper, isb_writer).await;
+
+        let forwarder_cln = cln_token.clone();
+        let forwarder_handle = tokio::spawn(async move { forwarder.start(forwarder_cln).await });
+
+        // Wait until all messages appear in the output buffer
+        let result = tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                if simple_buffer.pending_count() >= MESSAGE_COUNT {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "Timed out waiting for messages in output buffer. Got {} of {}",
+            simple_buffer.pending_count(),
+            MESSAGE_COUNT,
+        );
+
+        assert_eq!(
+            simple_buffer.pending_count(),
+            MESSAGE_COUNT,
+            "All messages should be forwarded to the output buffer"
+        );
+
+        // Shutdown
+        cln_token.cancel();
+        forwarder_handle.abort();
+    }
+
+    // End-to-end test for map forwarder using SimpleBuffer.
+    // Reads from an ISB backed by multiple SimpleBuffers, maps through a cat UDF, and writes
+    // to an ISB backed by a different set of SimpleBuffers
+    async fn test_map_forwarder_with_multi_streams(
+        mapper_test_handle: MapperTestHandle,
+        tracker: Tracker,
+        batch_size: usize,
+        cln_token: CancellationToken,
+    ) {
+        const MESSAGE_COUNT: usize = 1000;
+
+        // Mapper
+        let MapperTestHandle {
+            mapper,
+            server_handle: _server_handle,
+        } = mapper_test_handle;
+
+        let output_simple_buffers = vec![
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 0, "output-simple-buffer-0")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 1, "output-simple-buffer-1")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 2, "output-simple-buffer-2")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 3, "output-simple-buffer-3")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 4, "output-simple-buffer-4")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 5, "output-simple-buffer-5")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 6, "output-simple-buffer-6")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 7, "output-simple-buffer-7")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 8, "output-simple-buffer-8")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 9, "output-simple-buffer-9")),
+        ];
+
+        let output_streams = vec![
+            Stream::new("default-test-forwarder-for-map-vertex-out-0", "test", 0),
+            Stream::new("default-test-forwarder-for-map-vertex-out-1", "test", 1),
+            Stream::new("default-test-forwarder-for-map-vertex-out-2", "test", 2),
+            Stream::new("default-test-forwarder-for-map-vertex-out-3", "test", 3),
+            Stream::new("default-test-forwarder-for-map-vertex-out-4", "test", 4),
+            Stream::new("default-test-forwarder-for-map-vertex-out-5", "test", 5),
+            Stream::new("default-test-forwarder-for-map-vertex-out-6", "test", 6),
+            Stream::new("default-test-forwarder-for-map-vertex-out-7", "test", 7),
+            Stream::new("default-test-forwarder-for-map-vertex-out-8", "test", 8),
+            Stream::new("default-test-forwarder-for-map-vertex-out-9", "test", 9),
+        ];
+
+        let mut writers = HashMap::new();
+        let writer_config = BufferWriterConfig {
+            streams: output_streams.clone(),
+            buffer_full_strategy: RetryUntilSuccess,
+            ..Default::default()
+        };
+
+        // ISB Writer Orchestrator
+        for (i, output_stream) in output_streams.iter().enumerate() {
+            writers.insert(
+                output_stream.name,
+                output_simple_buffers
+                    .get(i)
+                    .expect("Invalid output stream index")
+                    .writer(),
+            );
+        }
+
+        let writer_components = ISBWriterOrchestratorComponents::<WithSimpleBuffer> {
+            config: vec![ToVertexConfig {
+                name: "test-out",
+                partitions: 10,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+            }],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::MapUDF,
+        };
+
+        let isb_writer = ISBWriterOrchestrator::<WithSimpleBuffer>::new(writer_components);
+
+        let input_simple_buffers = vec![
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 0, "input-simple-buffer-0")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 1, "input-simple-buffer-1")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 2, "input-simple-buffer-2")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 3, "input-simple-buffer-3")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 4, "input-simple-buffer-4")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 5, "input-simple-buffer-5")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 6, "input-simple-buffer-6")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 7, "input-simple-buffer-7")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 8, "input-simple-buffer-8")),
+            SimpleBufferAdapter::new(SimpleBuffer::new(10000, 9, "input-simple-buffer-9")),
+        ];
+
+        // Write all the messages to the input buffer so that mapper can read these
+        for simple_buffer in &input_simple_buffers {
+            write_test_messages(simple_buffer, MESSAGE_COUNT).await
+        }
+
+        // Unique names for the streams we use in this test
+        let input_streams = vec![
+            Stream::new("default-test-forwarder-for-map-vertex-in-0", "test", 0),
+            Stream::new("default-test-forwarder-for-map-vertex-in-1", "test", 1),
+            Stream::new("default-test-forwarder-for-map-vertex-in-2", "test", 2),
+            Stream::new("default-test-forwarder-for-map-vertex-in-3", "test", 3),
+            Stream::new("default-test-forwarder-for-map-vertex-in-4", "test", 4),
+            Stream::new("default-test-forwarder-for-map-vertex-in-5", "test", 5),
+            Stream::new("default-test-forwarder-for-map-vertex-in-6", "test", 6),
+            Stream::new("default-test-forwarder-for-map-vertex-in-7", "test", 7),
+            Stream::new("default-test-forwarder-for-map-vertex-in-8", "test", 8),
+            Stream::new("default-test-forwarder-for-map-vertex-in-9", "test", 9),
+        ];
+
+        let buf_reader_config = BufferReaderConfig {
+            streams: input_streams.clone(),
+            wip_ack_interval: Duration::from_millis(10),
+            ..Default::default()
+        };
+
+        let mut forwarder_handles = vec![];
+        for (i, input_stream) in input_streams.iter().enumerate() {
+            // ISB Reader Orchestrator
+
+            let reader_components = ISBReaderComponents {
+                vertex_type: "Map".to_string(),
+                stream: input_stream.clone(),
+                config: buf_reader_config.clone(),
+                tracker: tracker.clone(),
+                batch_size,
+                read_timeout: Duration::from_millis(500),
+                watermark_handle: None,
+                isb_config: None,
+                cln_token: cln_token.clone(),
+            };
+
+            let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> = ISBReaderOrchestrator::new(
+                reader_components,
+                input_simple_buffers
+                    .get(i)
+                    .expect("Invalid input stream index")
+                    .reader(),
+                None,
+            )
+            .await
+            .unwrap();
+
+            // Create and start the MapForwarder
+            let forwarder = MapForwarder::<WithSimpleBuffer>::new(
+                isb_reader,
+                mapper.clone(),
+                isb_writer.clone(),
+            )
+            .await;
+
+            let forwarder_cln = cln_token.clone();
+            let forwarder_handle =
+                tokio::spawn(async move { forwarder.start(forwarder_cln).await });
+            forwarder_handles.push(forwarder_handle);
+        }
+
+        // Wait until all messages exit the input buffer
+        let input_result = tokio::time::timeout(Duration::from_secs(10), async {
+            for simple_buffer in &input_simple_buffers {
+                loop {
+                    if simple_buffer.pending_count() == 0 {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+            }
+        })
+        .await;
+
+        assert!(
+            input_result.is_ok(),
+            "Timed out waiting for messages to exit input buffers."
+        );
+
+        // Ensure that all the messages have left the input buffers
+        for simple_buffer in input_simple_buffers {
+            assert_eq!(
+                simple_buffer.pending_count(),
+                0,
+                "All messages should be forwarded to the output buffer"
+            );
+        }
+
+        let output_buffer_count = output_simple_buffers.len();
+        let output_result = tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                // Ensure that all the messages have reached output buffers.
+                // Each buffer may have different number of messages, so check the total count
+                let mut total_output_messages = 0;
+
+                for simple_buffer in &output_simple_buffers {
+                    total_output_messages += simple_buffer.pending_count();
+                }
+
+                if total_output_messages == MESSAGE_COUNT * output_buffer_count {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await;
+
+        assert!(
+            output_result.is_ok(),
+            "All messages should be forwarded to the output buffer"
+        );
+
+        cln_token.cancel();
+        for forwarder_handle in forwarder_handles {
+            forwarder_handle.abort();
+        }
+    }
+
+    // Test all map types with multi streams test scenario
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_all_map_types_multi_stream() {
+        let batch_size = 500;
+
+        // Test unary map
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let mapper_test_handle = MapperTestHandle::create_mapper(
+            SimpleCat,
+            tracker.clone(),
+            MapMode::Unary,
+            batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+        )
+        .await;
+
+        test_map_forwarder_with_multi_streams(
+            mapper_test_handle,
+            tracker,
+            batch_size,
+            cln_token.clone(),
+        )
+        .await;
+
+        // Test batch map
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let mapper_test_handle = MapperTestHandle::create_batch_mapper(
+            SimpleCat,
+            tracker.clone(),
+            MapMode::Batch,
+            batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+        )
+        .await;
+
+        test_map_forwarder_with_multi_streams(
+            mapper_test_handle,
+            tracker,
+            batch_size,
+            cln_token.clone(),
+        )
+        .await;
+
+        // Test map streamer
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let mapper_test_handle = MapperTestHandle::create_map_streamer(
+            SimpleCat,
+            tracker.clone(),
+            MapMode::Stream,
+            batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+        )
+        .await;
+
+        test_map_forwarder_with_multi_streams(
+            mapper_test_handle,
+            tracker,
+            batch_size,
+            cln_token.clone(),
+        )
+        .await;
+    }
+
+    struct PanicMap;
+
+    #[tonic::async_trait]
+    impl map::Mapper for PanicMap {
+        async fn map(&self, _input: map::MapRequest) -> Vec<map::Message> {
+            panic!("PanicMap panicked!");
+        }
+    }
+
+    #[tonic::async_trait]
+    impl batchmap::BatchMapper for PanicMap {
+        async fn batchmap(
+            &self,
+            _input: mpsc::Receiver<batchmap::Datum>,
+        ) -> Vec<batchmap::BatchResponse> {
+            panic!("Batch PanicMap panicked!");
+        }
+    }
+
+    #[tonic::async_trait]
+    impl mapstream::MapStreamer for PanicMap {
+        async fn map_stream(
+            &self,
+            _input: mapstream::MapStreamRequest,
+            _tx: Sender<mapstream::Message>,
+        ) {
+            panic!("Streaming PanicMap panicked!");
+        }
+    }
+
+    //#[tokio::test(flavor = "multi_thread")]
+    async fn test_panic_map_forwarder_with_simple_buffer(
+        mapper_test_handle: MapperTestHandle,
+        tracker: Tracker,
+        batch_size: usize,
+        cln_token: CancellationToken,
+    ) {
+        const MESSAGE_COUNT: usize = 10;
+
+        // Input buffer
+        let input_adapter = SimpleBufferAdapter::new(SimpleBuffer::new(1000, 0, "input-buffer"));
+
+        // Write all the messages to the input buffer so that mapper can read these
+        write_test_messages(&input_adapter, MESSAGE_COUNT).await;
+
+        // Output buffer
+        let output_adapter = SimpleBufferAdapter::new(SimpleBuffer::new(1000, 0, "output-buffer"));
+
+        // ISB Reader Orchestrator
+        let input_stream = Stream::new("input-buffer", "test-in", 0);
+        let buf_reader_config = BufferReaderConfig {
+            streams: vec![input_stream.clone()],
+            wip_ack_interval: Duration::from_millis(10),
+            ..Default::default()
+        };
+
+        let reader_components = ISBReaderComponents {
+            vertex_type: "Map".to_string(),
+            stream: input_stream,
+            config: buf_reader_config,
+            tracker: tracker.clone(),
+            batch_size,
+            read_timeout: Duration::from_millis(500),
+            watermark_handle: None,
+            isb_config: None,
+            cln_token: cln_token.clone(),
+        };
+
+        let isb_reader: ISBReaderOrchestrator<WithSimpleBuffer> =
+            ISBReaderOrchestrator::new(reader_components, input_adapter.reader(), None)
+                .await
+                .unwrap();
+
+        // ISB Writer Orchestrator
+        let output_stream = Stream::new("output-buffer", "test-out", 0);
+        let writer_config = BufferWriterConfig {
+            streams: vec![output_stream.clone()],
+            buffer_full_strategy: RetryUntilSuccess,
+            ..Default::default()
+        };
+
+        let mut writers = HashMap::new();
+        writers.insert(output_stream.name, output_adapter.writer());
+
+        let writer_components = ISBWriterOrchestratorComponents::<WithSimpleBuffer> {
+            config: vec![ToVertexConfig {
+                name: "test-out",
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+            }],
+            writers,
+            paf_concurrency: 100,
+            watermark_handle: None,
+            vertex_type: VertexType::MapUDF,
+        };
+
+        let isb_writer = ISBWriterOrchestrator::<WithSimpleBuffer>::new(writer_components);
+
+        // Mapper
+        let MapperTestHandle {
+            mapper,
+            server_handle: _server_handle,
+        } = mapper_test_handle;
+
+        // Create and start the MapForwarder
+        let forwarder = MapForwarder::<WithSimpleBuffer>::new(isb_reader, mapper, isb_writer).await;
+
+        let forwarder_cln = cln_token.clone();
+        let forwarder_handle = tokio::spawn(async move { forwarder.start(forwarder_cln).await });
+
+        // Wait for the forwarder to start
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        assert_eq!(
+            input_adapter.pending_count() + input_adapter.in_flight_count(),
+            MESSAGE_COUNT,
+            "All messages should be forwarded to the output buffer"
+        );
+
+        assert_eq!(
+            output_adapter.pending_count() + output_adapter.in_flight_count(),
+            0,
+            "All messages should be forwarded to the output buffer"
+        );
+
+        // Shutdown
+        cln_token.cancel();
+        forwarder_handle.abort();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_all_map_types_for_panic() {
+        let batch_size = 500;
+
+        // Test unary map
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let mapper_test_handle = MapperTestHandle::create_mapper(
+            PanicMap,
+            tracker.clone(),
+            MapMode::Unary,
+            batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+        )
+        .await;
+
+        test_panic_map_forwarder_with_simple_buffer(
+            mapper_test_handle,
+            tracker,
+            batch_size,
+            cln_token,
+        )
+        .await;
+
+        // Test map streamer
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let mapper_test_handle = MapperTestHandle::create_map_streamer(
+            PanicMap,
+            tracker.clone(),
+            MapMode::Stream,
+            batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+        )
+        .await;
+
+        test_panic_map_forwarder_with_simple_buffer(
+            mapper_test_handle,
+            tracker,
+            batch_size,
+            cln_token.clone(),
+        )
+        .await;
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
