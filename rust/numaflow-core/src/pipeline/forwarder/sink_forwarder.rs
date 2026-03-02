@@ -570,7 +570,7 @@ mod simple_buffer_tests {
             ..Default::default()
         };
 
-        // Create one SinkWriter + SinkForwarder per stream (matching production pattern)
+        // Create one SinkWriter + SinkForwarder per stream
         let mut forwarder_handles = vec![];
         let mut _server_handles = vec![];
         for (i, input_stream) in input_streams.iter().enumerate() {
