@@ -132,6 +132,13 @@ impl BufferState {
             .count()
     }
 
+    pub(crate) fn acked_count(&self) -> usize {
+        self.slots
+            .iter()
+            .filter(|s| s.state == MessageState::Acked)
+            .count()
+    }
+
     /// Reclaim acked slots from the front of the buffer.
     pub(crate) fn reclaim_acked(&mut self) {
         while let Some(front) = self.slots.front() {

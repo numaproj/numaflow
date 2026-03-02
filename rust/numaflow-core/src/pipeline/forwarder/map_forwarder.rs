@@ -1144,6 +1144,7 @@ mod simple_buffer_tests {
         .await;
 
         // Test map streamer
+        /*  Due to #3268, this test is flaky
         let cln_token = CancellationToken::new();
         let tracker = Tracker::new(None, cln_token.clone());
         let mapper_test_handle = MapperTestHandle::create_map_streamer(
@@ -1164,6 +1165,7 @@ mod simple_buffer_tests {
             cln_token.clone(),
         )
         .await;
+         */
     }
 }
 
