@@ -425,10 +425,7 @@ impl SourceWatermarkHandle {
         // Set the processor count based on the number of partitions
         let partition_count = partitions.len() as u32;
         state.publisher.set_processor_count(partition_count);
-        state
-            .publisher
-            .initialize_active_partitions(partitions)
-            .await;
+        state.publisher.initialize_active_partitions(partitions);
     }
 }
 

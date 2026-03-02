@@ -21,7 +21,6 @@ use numaflow_shared::kv::jetstream::JetstreamKVStore;
 
 /// SourcePublisher is the watermark publisher for the source vertex.
 pub(crate) struct SourceWatermarkPublisher {
-    js_context: async_nats::jetstream::Context,
     max_delay: Duration,
     source_config: BucketConfig,
     to_vertex_configs: Vec<BucketConfig>,
@@ -30,6 +29,10 @@ pub(crate) struct SourceWatermarkPublisher {
     /// This is included in every published WMB to help the fetcher determine
     /// when all processors have reported.
     processor_count: Option<u32>,
+    /// Pre-created OT stores for source watermark publishers
+    source_ot_stores: HashMap<&'static str, Arc<dyn KVStore>>,
+    /// Pre-created OT stores for ISB watermark publishers
+    isb_ot_stores: HashMap<&'static str, Arc<dyn KVStore>>,
 }
 
 impl SourceWatermarkPublisher {
@@ -40,13 +43,19 @@ impl SourceWatermarkPublisher {
         source_config: BucketConfig,
         to_vertex_configs: Vec<BucketConfig>,
     ) -> error::Result<Self> {
+        // Create OT stores once during initialization
+        let source_ot_stores =
+            Self::create_ot_stores(&js_context, std::slice::from_ref(&source_config)).await;
+        let isb_ot_stores = Self::create_ot_stores(&js_context, &to_vertex_configs).await;
+
         Ok(SourceWatermarkPublisher {
-            js_context,
             max_delay,
             source_config,
             to_vertex_configs,
             publishers: HashMap::new(),
             processor_count: None,
+            source_ot_stores,
+            isb_ot_stores,
         })
     }
 
@@ -90,15 +99,11 @@ impl SourceWatermarkPublisher {
         // the processing entity is the partition itself. We create a publisher for each partition
         // and publish the watermark to it.
         let processor_name = format!("source-{}-{}", self.source_config.vertex, partition);
-        // create a publisher if not exists
+        // create a publisher if not exists (lazy initialization for partitions not known at startup)
         if !self.publishers.contains_key(&processor_name) {
-            let ot_stores =
-                Self::create_ot_stores(&self.js_context, std::slice::from_ref(&self.source_config))
-                    .await;
-
             let publisher = ISBWatermarkPublisher::new(
                 processor_name.clone(),
-                ot_stores,
+                self.source_ot_stores.clone(),
                 std::slice::from_ref(&self.source_config),
                 true,
             );
@@ -150,15 +155,14 @@ impl SourceWatermarkPublisher {
         let processor_name = format!("{}-{}", self.source_config.vertex, input_partition);
         // In source, since we do partition-based watermark publishing rather than pod-based, we
         // create a publisher for each partition and publish the watermark to it.
+        // (lazy initialization for partitions not known at startup)
         if !self.publishers.contains_key(&processor_name) {
             info!(processor = ?processor_name, partition = ?input_partition,
                 "Creating new publisher for ISB"
             );
-            let ot_stores = Self::create_ot_stores(&self.js_context, &self.to_vertex_configs).await;
-
             let publisher = ISBWatermarkPublisher::new(
                 processor_name.clone(),
-                ot_stores,
+                self.isb_ot_stores.clone(),
                 &self.to_vertex_configs,
                 true,
             );
@@ -172,21 +176,40 @@ impl SourceWatermarkPublisher {
             .await;
     }
 
-    /// Initializes the active partitions by creating a publisher for each partition.
-    pub(crate) async fn initialize_active_partitions(&mut self, active_partitions: Vec<u16>) {
-        for partition in active_partitions {
-            let processor_name = format!("{}-{}", self.source_config.vertex, partition);
-            if !self.publishers.contains_key(&processor_name) {
-                let ot_stores =
-                    Self::create_ot_stores(&self.js_context, &self.to_vertex_configs).await;
-
+    /// Initializes the active partitions by creating publishers for each partition.
+    /// This creates both source watermark publishers (with `source-` prefix) and
+    /// ISB watermark publishers for all partitions upfront.
+    pub(crate) fn initialize_active_partitions(&mut self, active_partitions: Vec<u16>) {
+        for partition in &active_partitions {
+            // Create source watermark publisher (used by publish_source_watermark)
+            let source_processor_name =
+                format!("source-{}-{}", self.source_config.vertex, partition);
+            if !self.publishers.contains_key(&source_processor_name) {
                 let publisher = ISBWatermarkPublisher::new(
-                    processor_name.clone(),
-                    ot_stores,
+                    source_processor_name.clone(),
+                    self.source_ot_stores.clone(),
+                    std::slice::from_ref(&self.source_config),
+                    true,
+                );
+                info!(processor = ?source_processor_name, partition = ?partition,
+                    "Creating new publisher for source"
+                );
+                self.publishers.insert(source_processor_name, publisher);
+            }
+
+            // Create ISB watermark publisher (used by publish_isb_watermark)
+            let isb_processor_name = format!("{}-{}", self.source_config.vertex, partition);
+            if !self.publishers.contains_key(&isb_processor_name) {
+                let publisher = ISBWatermarkPublisher::new(
+                    isb_processor_name.clone(),
+                    self.isb_ot_stores.clone(),
                     &self.to_vertex_configs,
                     true,
                 );
-                self.publishers.insert(processor_name.clone(), publisher);
+                info!(processor = ?isb_processor_name, partition = ?partition,
+                    "Creating new publisher for ISB"
+                );
+                self.publishers.insert(isb_processor_name, publisher);
             }
         }
     }
