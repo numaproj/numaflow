@@ -119,7 +119,12 @@ pub async fn start_map_forwarder(
         .ok_or_else(|| Error::Config("No from vertex config found".to_string()))?
         .reader_config;
 
-    let from_partitions: Vec<u16> = (0..reader_config.streams.len() as u16).collect();
+    // If ordered processing is enabled, only read from the partition matching replica ID
+    let from_partitions: Vec<u16> = if config.ordered_processing_enabled {
+        vec![config.replica]
+    } else {
+        (0..reader_config.streams.len() as u16).collect()
+    };
 
     let tracker = Tracker::new(serving_callback_handler.clone(), cln_token.clone());
     let watermark_handle = create_components::create_edge_watermark_handle(
@@ -277,7 +282,25 @@ where
     let mut isb_lag_readers: Vec<ISBReaderOrchestrator<C>> = vec![];
     let mut mapper_handle = None;
 
-    for stream in reader_config.streams.clone() {
+    // If ordered processing is enabled, only read from the stream matching replica ID
+    let streams_to_read = if context.config.ordered_processing_enabled {
+        vec![
+            reader_config
+                .streams
+                .get(context.config.replica as usize)
+                .cloned()
+                .ok_or_else(|| {
+                    Error::Config(format!(
+                        "No stream found for replica {} in ordered processing mode",
+                        context.config.replica
+                    ))
+                })?,
+        ]
+    } else {
+        reader_config.streams.clone()
+    };
+
+    for stream in streams_to_read {
         info!("Creating buffer reader for stream {:?}", stream);
 
         let mapper = create_components::create_mapper(

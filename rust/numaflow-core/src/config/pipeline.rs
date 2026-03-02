@@ -78,6 +78,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) callback_config: Option<ServingCallbackConfig>,
     pub(crate) isb_config: Option<isb::ISBConfig>,
     pub(crate) rate_limit: Option<RateLimitConfig>,
+    pub(crate) ordered_processing_enabled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -109,6 +110,7 @@ impl Default for PipelineConfig {
             callback_config: None,
             isb_config: None,
             rate_limit: None,
+            ordered_processing_enabled: false,
         }
     }
 }
@@ -579,6 +581,25 @@ impl PipelineConfig {
             });
         }
 
+        // Determine if ordered processing is enabled for this vertex
+        // Logic follows Go's GetEffectiveOrderedConfig():
+        // - Source vertices are always ordered (no partitions to read from)
+        // - Reduce vertices always return false (already partitioned by replica ID)
+        // - For Map/Sink vertices, use vertex-level ordered config if present
+        // Note: Pipeline-level config would be resolved by the controller before
+        // setting the vertex spec, so we only need to check vertex-level here
+        let ordered_processing_enabled =
+            if vertex_type == VertexType::Source || vertex_type == VertexType::ReduceUDF {
+                false
+            } else {
+                vertex_obj
+                    .spec
+                    .ordered
+                    .as_ref()
+                    .and_then(|o| o.enabled)
+                    .unwrap_or(false)
+            };
+
         let watermark_config = if vertex_obj
             .spec
             .watermark
@@ -599,6 +620,7 @@ impl PipelineConfig {
                 &from_vertex_config,
                 &to_vertex_config,
                 delay_in_millis,
+                ordered_processing_enabled,
             )
         } else {
             None
@@ -690,6 +712,7 @@ impl PipelineConfig {
             callback_config,
             isb_config,
             rate_limit,
+            ordered_processing_enabled,
         })
     }
 }
@@ -731,6 +754,7 @@ mod tests {
             callback_config: None,
             isb_config: None,
             rate_limit: None,
+            ordered_processing_enabled: false,
         };
 
         let config = PipelineConfig::default();
