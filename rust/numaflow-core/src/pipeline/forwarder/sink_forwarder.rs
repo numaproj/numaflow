@@ -100,18 +100,17 @@ pub async fn start_sink_forwarder(
         None
     };
 
-    let reader_config = &config
+    let from_vertex_config = config
         .from_vertex_config
         .first()
-        .ok_or_else(|| Error::Config("No from vertex config found".to_string()))?
-        .reader_config;
+        .ok_or_else(|| Error::Config("No from vertex config found".to_string()))?;
 
-    // If ordered processing is enabled, only read from the partition matching replica ID
-    let from_partitions: Vec<u16> = if config.ordered_processing_enabled {
-        vec![config.replica]
-    } else {
-        (0..reader_config.streams.len() as u16).collect()
-    };
+    let reader_config = &from_vertex_config.reader_config;
+
+    // Extract partition indices from the streams in the reader config
+    // When ordered processing is enabled, this will contain only the replica's partition
+    // When disabled, this will contain all partitions
+    let from_partitions: Vec<u16> = reader_config.streams.iter().map(|s| s.partition).collect();
 
     let tracker = Tracker::new(serving_callback_handler.clone(), cln_token.clone());
     let watermark_handle = create_components::create_edge_watermark_handle(
@@ -255,25 +254,8 @@ where
     let mut isb_lag_readers: Vec<ISBReaderOrchestrator<C>> = vec![];
     let mut first_sink_writer = None;
 
-    // If ordered processing is enabled, only read from the stream matching replica ID
-    let streams_to_read = if context.config.ordered_processing_enabled {
-        vec![
-            reader_config
-                .streams
-                .get(context.config.replica as usize)
-                .cloned()
-                .ok_or_else(|| {
-                    Error::Config(format!(
-                        "No stream found for replica {} in ordered processing mode",
-                        context.config.replica
-                    ))
-                })?,
-        ]
-    } else {
-        reader_config.streams.clone()
-    };
-
-    for stream in streams_to_read {
+    // The streams are already filtered based on ordered processing at config creation time
+    for stream in &reader_config.streams {
         info!(
             "Creating sink writer and buffer reader for stream {:?}",
             stream
@@ -296,7 +278,7 @@ where
         }
 
         let reader_components = ISBReaderComponents::new::<C, F>(
-            stream,
+            stream.clone(),
             reader_config.clone(),
             watermark_handle.clone(),
             context,

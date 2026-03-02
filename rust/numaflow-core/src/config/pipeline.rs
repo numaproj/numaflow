@@ -511,21 +511,51 @@ impl PipelineConfig {
             })
             .unwrap_or(DEFAULT_MAX_ACK_PENDING);
 
+        // Determine if ordered processing is enabled for this vertex
+        // Logic follows Go's GetEffectiveOrderedConfig():
+        // - Source vertices are always ordered (no partitions to read from)
+        // - Reduce vertices always return false (already partitioned by replica ID)
+        // - For Map/Sink vertices, use vertex-level ordered config if present
+        // Note: Pipeline-level config would be resolved by the controller before
+        // setting the vertex spec, so we only need to check vertex-level here
+        let ordered_processing_enabled =
+            if vertex_type == VertexType::Source || vertex_type == VertexType::ReduceUDF {
+                false
+            } else {
+                vertex_obj
+                    .spec
+                    .ordered
+                    .as_ref()
+                    .and_then(|o| o.enabled)
+                    .unwrap_or(false)
+            };
+
         let mut from_vertex_config = vec![];
         for edge in from_edges {
             let partition_count = edge.to_vertex_partition_count.unwrap_or_default() as u16;
             let from_partition_count = edge.from_vertex_partition_count.unwrap_or_default() as u16;
 
-            let streams: Vec<Stream> = (0..partition_count)
-                .map(|i| {
-                    let ns: &'static str = Box::leak(namespace.clone().into_boxed_str());
-                    let pl: &'static str = Box::leak(pipeline_name.clone().into_boxed_str());
-                    let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
-                    let name: &'static str =
-                        Box::leak(format!("{ns}-{pl}-{to}-{i}").into_boxed_str());
-                    Stream::new(name, to, i)
-                })
-                .collect();
+            // If ordered processing is enabled, only create the stream for the partition matching replica ID
+            // Otherwise, create streams for all partitions
+            let streams: Vec<Stream> = if ordered_processing_enabled {
+                let i = *replica;
+                let ns: &'static str = Box::leak(namespace.clone().into_boxed_str());
+                let pl: &'static str = Box::leak(pipeline_name.clone().into_boxed_str());
+                let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
+                let name: &'static str = Box::leak(format!("{ns}-{pl}-{to}-{i}").into_boxed_str());
+                vec![Stream::new(name, to, i)]
+            } else {
+                (0..partition_count)
+                    .map(|i| {
+                        let ns: &'static str = Box::leak(namespace.clone().into_boxed_str());
+                        let pl: &'static str = Box::leak(pipeline_name.clone().into_boxed_str());
+                        let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
+                        let name: &'static str =
+                            Box::leak(format!("{ns}-{pl}-{to}-{i}").into_boxed_str());
+                        Stream::new(name, to, i)
+                    })
+                    .collect()
+            };
 
             from_vertex_config.push(FromVertexConfig {
                 name: Box::leak(edge.from.clone().into_boxed_str()),
@@ -581,25 +611,6 @@ impl PipelineConfig {
                 to_vertex_type: VertexType::from_str(&edge.to_vertex_type)?,
             });
         }
-
-        // Determine if ordered processing is enabled for this vertex
-        // Logic follows Go's GetEffectiveOrderedConfig():
-        // - Source vertices are always ordered (no partitions to read from)
-        // - Reduce vertices always return false (already partitioned by replica ID)
-        // - For Map/Sink vertices, use vertex-level ordered config if present
-        // Note: Pipeline-level config would be resolved by the controller before
-        // setting the vertex spec, so we only need to check vertex-level here
-        let ordered_processing_enabled =
-            if vertex_type == VertexType::Source || vertex_type == VertexType::ReduceUDF {
-                false
-            } else {
-                vertex_obj
-                    .spec
-                    .ordered
-                    .as_ref()
-                    .and_then(|o| o.enabled)
-                    .unwrap_or(false)
-            };
 
         let watermark_config = if vertex_obj
             .spec
