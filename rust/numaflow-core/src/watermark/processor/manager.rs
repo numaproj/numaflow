@@ -301,8 +301,9 @@ impl ProcessorManager {
                     let processor_name = Bytes::from(kv.key);
                     let wmb: WMB = kv.value.try_into().expect("Failed to decode WMB");
 
-                    let mut processors = processors.write().expect("failed to acquire lock");
+                    info!(processor = ?processor_name, wmb = ?wmb, "Received OT event");
 
+                    let mut processors = processors.write().expect("failed to acquire lock");
                     // Get or create the processor
                     let processor = if let Some(processor) = processors.get_mut(&processor_name) {
                         processor
