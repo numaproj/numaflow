@@ -272,15 +272,9 @@ mod simple_buffer_tests {
     use crate::config::pipeline::{ToVertexConfig, VertexType};
     use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
     use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
-    use crate::shared::grpc;
-    use crate::source::test_utils::start_source_server;
-    use crate::source::user_defined::new_source;
-    use crate::source::{Source, SourceType};
+    use crate::source::test_utils;
     use crate::tracker::Tracker;
-    use crate::transformer::Transformer;
-    use crate::transformer::test_utils::start_source_transform_server;
-    use numaflow_pb::clients::source::source_client::SourceClient;
-    use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+    use crate::transformer::test_utils::NoOpTransformer;
 
     /// A simple source that generates a fixed number of messages.
     struct SimpleSource {
@@ -354,54 +348,6 @@ mod simple_buffer_tests {
         }
     }
 
-    /// Helper to create a Source from a UD source service.
-    async fn create_source(
-        source_svc: impl source::Sourcer + Send + Sync + 'static,
-        batch_size: usize,
-        transformer: Option<Transformer>,
-        cln_token: CancellationToken,
-        tracker: Tracker,
-    ) -> (
-        Source<WithSimpleBuffer>,
-        crate::shared::test_utils::server::TestServerHandle,
-    ) {
-        let server_handle = start_source_server(source_svc);
-        let mut client = SourceClient::new(
-            server_handle
-                .create_rpc_channel()
-                .await
-                .expect("failed to create source rpc channel"),
-        );
-
-        grpc::wait_until_source_ready(&cln_token, &mut client)
-            .await
-            .expect("failed to wait for source server to be ready");
-
-        let (src_read, src_ack, lag_reader) = new_source(
-            client,
-            batch_size,
-            Duration::from_millis(1000),
-            cln_token.clone(),
-            true,
-        )
-        .await
-        .map_err(|e| panic!("failed to create source reader: {:?}", e))
-        .unwrap();
-
-        let source: Source<WithSimpleBuffer> = Source::new(
-            batch_size,
-            SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
-            tracker,
-            true,
-            transformer,
-            None,
-            None,
-        )
-        .await;
-
-        (source, server_handle)
-    }
-
     /// Helper to create an ISBWriterOrchestrator from output adapters.
     fn create_writer_orchestrator(
         output_adapters: &[(&'static str, &SimpleBufferAdapter)],
@@ -445,10 +391,14 @@ mod simple_buffer_tests {
         let batch_size = 10;
 
         // Create the UD source
-        let (source, _server_handle) = create_source(
+        let test_utils::SourceTestHandle {
+            source_transformer_test_handle: _st_server_handle,
+            source,
+            server_handle: _src_server_handle,
+        } = test_utils::SourceTestHandle::create_ud_source(
             SimpleSource::new(MESSAGE_COUNT),
+            None::<NoOpTransformer>,
             batch_size,
-            None,
             cln_token.clone(),
             tracker.clone(),
         )
@@ -530,10 +480,14 @@ mod simple_buffer_tests {
         let batch_size = 10;
 
         // Create the UD source
-        let (source, _server_handle) = create_source(
+        let test_utils::SourceTestHandle {
+            source_transformer_test_handle: _st_test_handle,
+            source,
+            server_handle: _src_server_handle,
+        } = test_utils::SourceTestHandle::create_ud_source(
             SimpleSource::new(MESSAGE_COUNT),
+            None::<NoOpTransformer>,
             batch_size,
-            None,
             cln_token.clone(),
             tracker.clone(),
         )
@@ -662,34 +616,15 @@ mod simple_buffer_tests {
         let tracker = Tracker::new(None, cln_token.clone());
         let batch_size = 10;
 
-        // Create the transformer
-        let st_server_handle = start_source_transform_server(SimpleTransformer);
-        let mut st_client = SourceTransformClient::new(
-            st_server_handle
-                .create_rpc_channel()
-                .await
-                .expect("failed to create source transformer rpc channel"),
-        );
-
-        grpc::wait_until_transformer_ready(&cln_token, &mut st_client)
-            .await
-            .expect("failed to wait for source transformer server to be ready");
-
-        let transformer = Transformer::new(
-            batch_size,
-            10,
-            Duration::from_secs(10),
-            st_client,
-            tracker.clone(),
-        )
-        .await
-        .expect("failed to create source transformer");
-
         // Create the UD source with transformer
-        let (source, _server_handle) = create_source(
+        let test_utils::SourceTestHandle {
+            source_transformer_test_handle: _st_test_handle,
+            source,
+            server_handle: _src_server_handle,
+        } = test_utils::SourceTestHandle::create_ud_source(
             SimpleSource::new(MESSAGE_COUNT),
+            Some(SimpleTransformer),
             batch_size,
-            Some(transformer),
             cln_token.clone(),
             tracker.clone(),
         )
