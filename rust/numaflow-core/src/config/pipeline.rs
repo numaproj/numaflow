@@ -514,6 +514,7 @@ impl PipelineConfig {
         let mut from_vertex_config = vec![];
         for edge in from_edges {
             let partition_count = edge.to_vertex_partition_count.unwrap_or_default() as u16;
+            let from_partition_count = edge.from_vertex_partition_count.unwrap_or_default() as u16;
 
             let streams: Vec<Stream> = (0..partition_count)
                 .map(|i| {
@@ -533,7 +534,7 @@ impl PipelineConfig {
                     max_ack_pending,
                     ..Default::default()
                 },
-                partitions: partition_count,
+                partitions: from_partition_count,
             });
         }
 
@@ -1229,5 +1230,209 @@ mod tests {
             pipeline_config.graceful_shutdown_time,
             Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS)
         );
+    }
+
+    #[test]
+    fn test_ordered_processing_always_disabled_for_source_and_reduce() {
+        // Test that Source and Reduce vertices always have ordered_processing_enabled = false
+        // even when ordered.enabled is set to true
+        let test_cases = vec![
+            (
+                "Source vertex",
+                r#"{
+                    "metadata": {"name": "test-source", "namespace": "default", "creationTimestamp": null},
+                    "spec": {
+                        "name": "in",
+                        "source": {"generator": {"rpu": 100000, "duration": "1s", "msgSize": 8}},
+                        "ordered": {"enabled": true},
+                        "pipelineName": "test-pipeline",
+                        "interStepBufferServiceName": "",
+                        "replicas": 0,
+                        "toEdges": []
+                    },
+                    "status": {"phase": "", "replicas": 0, "desiredReplicas": 0, "lastScaledAt": null}
+                }"#,
+                VertexType::Source,
+            ),
+            (
+                "Reduce vertex",
+                r#"{
+                    "metadata": {"name": "test-reduce", "namespace": "default", "creationTimestamp": null},
+                    "spec": {
+                        "name": "reduce-vertex",
+                        "udf": {
+                            "container": {"image": "test-image"},
+                            "groupBy": {
+                                "window": {"fixed": {"length": "60s"}},
+                                "keyed": true,
+                                "storage": {"persistentVolumeClaim": {"volumeSize": "10Gi", "accessMode": "ReadWriteOnce"}}
+                            }
+                        },
+                        "ordered": {"enabled": true},
+                        "pipelineName": "test-pipeline",
+                        "interStepBufferServiceName": "",
+                        "replicas": 0,
+                        "fromEdges": [{
+                            "from": "in", "to": "reduce-vertex",
+                            "fromVertexType": "Source", "fromVertexPartitionCount": 2,
+                            "toVertexType": "ReduceUDF", "toVertexPartitionCount": 2
+                        }],
+                        "toEdges": []
+                    },
+                    "status": {"phase": "", "replicas": 0, "desiredReplicas": 0, "lastScaledAt": null}
+                }"#,
+                VertexType::ReduceUDF,
+            ),
+        ];
+
+        for (name, pipeline_cfg, expected_vertex_type) in test_cases {
+            let pipeline_cfg_base64 = BASE64_STANDARD.encode(pipeline_cfg);
+            let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+            let pipeline_config =
+                PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+            assert!(
+                !pipeline_config.ordered_processing_enabled,
+                "{} should have ordered_processing_enabled = false",
+                name
+            );
+            assert_eq!(
+                pipeline_config.vertex_type, expected_vertex_type,
+                "{} vertex type mismatch",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn test_ordered_processing_for_map_vertices() {
+        // Test that Map vertices respect the ordered.enabled flag
+        let test_cases = vec![
+            (
+                "Map with ordered enabled",
+                r#","ordered": {"enabled": true}"#,
+                true,
+            ),
+            ("Map without ordered flag", "", false),
+        ];
+
+        for (name, ordered_field, expected_enabled) in test_cases {
+            let ordered_suffix = if ordered_field.is_empty() {
+                ",".to_string()
+            } else {
+                format!("{},", ordered_field)
+            };
+
+            let pipeline_cfg = format!(
+                r#"{{
+                    "metadata": {{"name": "test-map", "namespace": "default", "creationTimestamp": null}},
+                    "spec": {{
+                        "name": "map-vertex",
+                        "udf": {{"container": {{"image": "test-image"}}}}{}
+                        "pipelineName": "test-pipeline",
+                        "interStepBufferServiceName": "",
+                        "replicas": 0,
+                        "fromEdges": [{{
+                            "from": "in", "to": "map-vertex",
+                            "fromVertexType": "Source", "fromVertexPartitionCount": 3,
+                            "toVertexType": "MapUDF", "toVertexPartitionCount": 1
+                        }}],
+                        "toEdges": []
+                    }},
+                    "status": {{"phase": "", "replicas": 0, "desiredReplicas": 0, "lastScaledAt": null}}
+                }}"#,
+                ordered_suffix
+            );
+
+            let pipeline_cfg_base64 = BASE64_STANDARD.encode(&pipeline_cfg);
+            let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+            let pipeline_config =
+                PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+            assert_eq!(
+                pipeline_config.ordered_processing_enabled, expected_enabled,
+                "{} failed",
+                name
+            );
+            assert_eq!(pipeline_config.vertex_type, VertexType::MapUDF);
+        }
+    }
+
+    #[test]
+    fn test_ordered_processing_for_sink_vertices() {
+        // Test that Sink vertices respect the ordered.enabled flag and watermark config is correct
+        let test_cases = vec![
+            (
+                "Sink with ordered enabled",
+                r#","ordered": {"enabled": true}"#,
+                true,
+                vec![0], // Only partition 0 when ordered processing is enabled
+            ),
+            (
+                "Sink without ordered flag",
+                "",
+                false,
+                vec![0, 1, 2], // All partitions when ordered processing is disabled
+            ),
+        ];
+
+        for (name, ordered_field, expected_enabled, expected_partitions) in test_cases {
+            let ordered_suffix = if ordered_field.is_empty() {
+                ",".to_string()
+            } else {
+                format!("{},", ordered_field)
+            };
+
+            let pipeline_cfg = format!(
+                r#"{{
+                    "metadata": {{"name": "test-sink", "namespace": "default", "creationTimestamp": null}},
+                    "spec": {{
+                        "name": "out",
+                        "sink": {{"log": {{}}}}{}
+                        "limits": {{"readBatchSize": 500, "readTimeout": "1s"}},
+                        "pipelineName": "test-pipeline",
+                        "interStepBufferServiceName": "",
+                        "replicas": 0,
+                        "fromEdges": [{{
+                            "from": "in", "to": "out",
+                            "fromVertexType": "Source", "fromVertexPartitionCount": 3,
+                            "toVertexType": "Sink", "toVertexPartitionCount": 1
+                        }}],
+                        "watermark": {{"maxDelay": "0s"}}
+                    }},
+                    "status": {{"phase": "", "replicas": 0, "desiredReplicas": 0, "lastScaledAt": null}}
+                }}"#,
+                ordered_suffix
+            );
+
+            let pipeline_cfg_base64 = BASE64_STANDARD.encode(&pipeline_cfg);
+            let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+            let pipeline_config =
+                PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+            assert_eq!(
+                pipeline_config.ordered_processing_enabled, expected_enabled,
+                "{} failed",
+                name
+            );
+            assert_eq!(pipeline_config.vertex_type, VertexType::Sink);
+
+            // Verify watermark config has the expected partitions
+            if let Some(WatermarkConfig::Edge(edge_config)) = &pipeline_config.watermark_config {
+                assert_eq!(edge_config.from_vertex_config.len(), 1);
+                let partitions = &edge_config
+                    .from_vertex_config
+                    .first()
+                    .expect("Expected at least one from_vertex_config")
+                    .partitions;
+                assert_eq!(
+                    partitions, &expected_partitions,
+                    "{} watermark partitions mismatch",
+                    name
+                );
+            } else {
+                panic!("Expected Edge watermark config for {}", name);
+            }
+        }
     }
 }
