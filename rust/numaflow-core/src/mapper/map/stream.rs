@@ -136,7 +136,21 @@ impl MapStreamTask {
                     let _ = self.shared_ctx.error_tx.send(e).await;
                     return;
                 }
-                None => break,
+                None => {
+                    // Channel closed. If no results were ever sent (current_index == 0),
+                    // this means the UDF stream may have closed unexpectedly (e.g., panic or gRPC
+                    // stream error where the sender was dropped without delivering an error).
+                    // Mark the message as failed so that it gets nacked.
+                    if parent_info.current_index == 0 {
+                        parent_info
+                            .ack_handle
+                            .as_ref()
+                            .expect("ack handle should be present")
+                            .is_failed
+                            .store(true, Ordering::Relaxed);
+                    }
+                    break;
+                }
             }
         }
     }
