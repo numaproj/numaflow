@@ -507,6 +507,7 @@ mod tests {
                 conditions: None,
                 name: "test-vertex",
                 to_vertex_type: VertexType::MapUDF,
+                ordered_processing_enabled: false,
             }],
             writers,
             paf_concurrency: 100,
@@ -623,6 +624,7 @@ mod tests {
                 },
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
             }],
             vertex_type: VertexType::Source,
             vertex_config: VertexConfig::Source(SourceVtxConfig {
