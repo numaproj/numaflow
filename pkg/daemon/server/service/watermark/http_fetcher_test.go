@@ -308,3 +308,51 @@ func createTestPipeline() *v1alpha1.Pipeline {
 		},
 	}
 }
+
+// TestHTTPWatermarkFetcher_OrderedProcessing tests the fetching strategy for ordered processing
+func TestHTTPWatermarkFetcher_OrderedProcessing(t *testing.T) {
+	ctx := context.Background()
+
+	// Test: non-reduce without ordered fetches from single pod, reduce fetches from all pods
+	pipeline := createTestPipeline()
+	mapVertex := pipeline.GetVertex("map")
+	reduceVertex := pipeline.GetVertex("reduce")
+
+	assert.False(t, mapVertex.IsReduceUDF() || mapVertex.GetEffectiveOrderedConfig(pipeline.Spec.Ordered),
+		"Non-reduce without ordered should fetch from single pod")
+	assert.True(t, reduceVertex.IsReduceUDF(),
+		"Reduce vertex should fetch from all pods")
+
+	// Test: pipeline-level ordered processing enables all-pods fetch
+	pipelineOrdered := &v1alpha1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
+		Spec: v1alpha1.PipelineSpec{
+			Ordered:  &v1alpha1.Ordered{Enabled: true},
+			Vertices: []v1alpha1.AbstractVertex{{Name: "v", UDF: &v1alpha1.UDF{}}},
+		},
+	}
+	vtx := pipelineOrdered.GetVertex("v")
+	assert.True(t, vtx.GetEffectiveOrderedConfig(pipelineOrdered.Spec.Ordered),
+		"Pipeline-level ordered should enable all-pods fetch")
+
+	// Test: vertex-level ordered processing override
+	pipelineVertexOrdered := &v1alpha1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
+		Spec: v1alpha1.PipelineSpec{
+			Vertices: []v1alpha1.AbstractVertex{
+				{Name: "ordered", UDF: &v1alpha1.UDF{}, Ordered: &v1alpha1.Ordered{Enabled: true}},
+				{Name: "not-ordered", UDF: &v1alpha1.UDF{}},
+			},
+		},
+	}
+	assert.True(t, pipelineVertexOrdered.GetVertex("ordered").GetEffectiveOrderedConfig(nil),
+		"Vertex with ordered enabled should fetch from all pods")
+	assert.False(t, pipelineVertexOrdered.GetVertex("not-ordered").GetEffectiveOrderedConfig(nil),
+		"Vertex without ordered should fetch from single pod")
+
+	// Verify fetcher creation works with ordered pipeline
+	edge := v1alpha1.Edge{From: "source", To: "map"}
+	fetcher := NewHTTPWatermarkFetcher(ctx, pipeline, edge)
+	defer fetcher.Stop()
+	assert.NotNil(t, fetcher)
+}
