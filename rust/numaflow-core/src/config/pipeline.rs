@@ -278,6 +278,10 @@ pub(crate) struct ToVertexConfig {
     pub(crate) writer_config: BufferWriterConfig,
     pub(crate) conditions: Option<Box<ForwardConditions>>,
     pub(crate) to_vertex_type: VertexType,
+    /// Whether ordered processing is enabled for this vertex.
+    /// When enabled, messages are shuffled based on keys instead of offset
+    /// to ensure messages with the same keys land on the same partition.
+    pub(crate) ordered_processing_enabled: bool,
 }
 
 impl PipelineConfig {
@@ -609,6 +613,7 @@ impl PipelineConfig {
                 },
                 conditions: edge.conditions,
                 to_vertex_type: VertexType::from_str(&edge.to_vertex_type)?,
+                ordered_processing_enabled,
             });
         }
 
@@ -1026,6 +1031,7 @@ mod tests {
                 },
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
             }],
             vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: SourceConfig {
@@ -1083,6 +1089,7 @@ mod tests {
                 },
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
             }],
             vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: SourceConfig {
