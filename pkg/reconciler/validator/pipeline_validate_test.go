@@ -1347,3 +1347,358 @@ func TestIsValidSinkRetryStrategy(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateOrderedProcessing(t *testing.T) {
+	tests := []struct {
+		name    string
+		pl      dfv1.Pipeline
+		wantErr bool
+	}{
+		{
+			name: "pipeline with ordered enabled",
+			pl: dfv1.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pl",
+					Namespace: "test-ns",
+				},
+				Spec: dfv1.PipelineSpec{
+					Ordered: &dfv1.Ordered{Enabled: true},
+					Vertices: []dfv1.AbstractVertex{
+						{
+							Name:   "input",
+							Source: &dfv1.Source{Generator: &dfv1.GeneratorSource{}},
+						},
+						{
+							Name:       "output",
+							Partitions: ptr.To[int32](2),
+							Sink: &dfv1.Sink{
+								AbstractSink: dfv1.AbstractSink{Log: &dfv1.Log{}},
+							},
+						},
+					},
+					Edges: []dfv1.Edge{
+						{From: "input", To: "output"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "pipeline with ordered disabled",
+			pl: dfv1.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pl",
+					Namespace: "test-ns",
+				},
+				Spec: dfv1.PipelineSpec{
+					Ordered: &dfv1.Ordered{Enabled: false},
+					Vertices: []dfv1.AbstractVertex{
+						{
+							Name:   "input",
+							Source: &dfv1.Source{Generator: &dfv1.GeneratorSource{}},
+						},
+						{
+							Name: "output",
+							Sink: &dfv1.Sink{
+								AbstractSink: dfv1.AbstractSink{Log: &dfv1.Log{}},
+							},
+						},
+					},
+					Edges: []dfv1.Edge{
+						{From: "input", To: "output"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "vertex with ordered override",
+			pl: dfv1.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pl",
+					Namespace: "test-ns",
+				},
+				Spec: dfv1.PipelineSpec{
+					Ordered: &dfv1.Ordered{Enabled: true},
+					Vertices: []dfv1.AbstractVertex{
+						{
+							Name:   "input",
+							Source: &dfv1.Source{Generator: &dfv1.GeneratorSource{}},
+						},
+						{
+							Name:    "process",
+							Ordered: &dfv1.Ordered{Enabled: false},
+							UDF: &dfv1.UDF{
+								Container: &dfv1.Container{Image: "my-image"},
+							},
+						},
+						{
+							Name:       "output",
+							Partitions: ptr.To[int32](2),
+							Sink: &dfv1.Sink{
+								AbstractSink: dfv1.AbstractSink{Log: &dfv1.Log{}},
+							},
+						},
+					},
+					Edges: []dfv1.Edge{
+						{From: "input", To: "process"},
+						{From: "process", To: "output"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "reduce vertex with ordered config (should be ignored)",
+			pl: dfv1.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pl",
+					Namespace: "test-ns",
+				},
+				Spec: dfv1.PipelineSpec{
+					Ordered: &dfv1.Ordered{Enabled: true},
+					Vertices: []dfv1.AbstractVertex{
+						{
+							Name:   "input",
+							Source: &dfv1.Source{Generator: &dfv1.GeneratorSource{}},
+						},
+						{
+							Name:    "reduce",
+							Ordered: &dfv1.Ordered{Enabled: true},
+							UDF: &dfv1.UDF{
+								Container: &dfv1.Container{Image: "my-image"},
+								GroupBy: &dfv1.GroupBy{
+									Window: dfv1.Window{
+										Fixed: &dfv1.FixedWindow{Length: &metav1.Duration{Duration: time.Minute}},
+									},
+									Keyed: true,
+									Storage: &dfv1.PBQStorage{
+										PersistentVolumeClaim: &dfv1.PersistenceStrategy{},
+									},
+								},
+							},
+						},
+						{
+							Name:       "output",
+							Partitions: ptr.To[int32](2),
+							Sink: &dfv1.Sink{
+								AbstractSink: dfv1.AbstractSink{Log: &dfv1.Log{}},
+							},
+						},
+					},
+					Edges: []dfv1.Edge{
+						{From: "input", To: "reduce"},
+						{From: "reduce", To: "output"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "map vertex with ordered but no partitions - should succeed (defaults to 1)",
+			pl: dfv1.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pl",
+					Namespace: "test-ns",
+				},
+				Spec: dfv1.PipelineSpec{
+					Ordered: &dfv1.Ordered{Enabled: true},
+					Vertices: []dfv1.AbstractVertex{
+						{
+							Name:   "input",
+							Source: &dfv1.Source{Generator: &dfv1.GeneratorSource{}},
+						},
+						{
+							Name: "process",
+							UDF: &dfv1.UDF{
+								Container: &dfv1.Container{Image: "my-image"},
+							},
+						},
+						{
+							Name: "output",
+							Sink: &dfv1.Sink{
+								AbstractSink: dfv1.AbstractSink{Log: &dfv1.Log{}},
+							},
+						},
+					},
+					Edges: []dfv1.Edge{
+						{From: "input", To: "process"},
+						{From: "process", To: "output"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "sink vertex with ordered but no partitions - should succeed (defaults to 1)",
+			pl: dfv1.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pl",
+					Namespace: "test-ns",
+				},
+				Spec: dfv1.PipelineSpec{
+					Vertices: []dfv1.AbstractVertex{
+						{
+							Name:   "input",
+							Source: &dfv1.Source{Generator: &dfv1.GeneratorSource{}},
+						},
+						{
+							Name:    "output",
+							Ordered: &dfv1.Ordered{Enabled: true},
+							Sink: &dfv1.Sink{
+								AbstractSink: dfv1.AbstractSink{Log: &dfv1.Log{}},
+							},
+						},
+					},
+					Edges: []dfv1.Edge{
+						{From: "input", To: "output"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "map vertex with ordered and partitions - should succeed",
+			pl: dfv1.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pl",
+					Namespace: "test-ns",
+				},
+				Spec: dfv1.PipelineSpec{
+					Ordered: &dfv1.Ordered{Enabled: true},
+					Vertices: []dfv1.AbstractVertex{
+						{
+							Name:   "input",
+							Source: &dfv1.Source{Generator: &dfv1.GeneratorSource{}},
+						},
+						{
+							Name:       "process",
+							Partitions: ptr.To[int32](3),
+							UDF: &dfv1.UDF{
+								Container: &dfv1.Container{Image: "my-image"},
+							},
+						},
+						{
+							Name:       "output",
+							Partitions: ptr.To[int32](2),
+							Sink: &dfv1.Sink{
+								AbstractSink: dfv1.AbstractSink{Log: &dfv1.Log{}},
+							},
+						},
+					},
+					Edges: []dfv1.Edge{
+						{From: "input", To: "process"},
+						{From: "process", To: "output"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "sink vertex with ordered and partitions - should succeed",
+			pl: dfv1.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pl",
+					Namespace: "test-ns",
+				},
+				Spec: dfv1.PipelineSpec{
+					Vertices: []dfv1.AbstractVertex{
+						{
+							Name:   "input",
+							Source: &dfv1.Source{Generator: &dfv1.GeneratorSource{}},
+						},
+						{
+							Name:       "output",
+							Ordered:    &dfv1.Ordered{Enabled: true},
+							Partitions: ptr.To[int32](2),
+							Sink: &dfv1.Sink{
+								AbstractSink: dfv1.AbstractSink{Log: &dfv1.Log{}},
+							},
+						},
+					},
+					Edges: []dfv1.Edge{
+						{From: "input", To: "output"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "map vertex with ordered, partitions, and scale config - should fail",
+			pl: dfv1.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pl",
+					Namespace: "test-ns",
+				},
+				Spec: dfv1.PipelineSpec{
+					Ordered: &dfv1.Ordered{Enabled: true},
+					Vertices: []dfv1.AbstractVertex{
+						{
+							Name:   "input",
+							Source: &dfv1.Source{Generator: &dfv1.GeneratorSource{}},
+						},
+						{
+							Name:       "process",
+							Partitions: ptr.To[int32](3),
+							Scale: dfv1.Scale{
+								Min: ptr.To[int32](1),
+								Max: ptr.To[int32](5),
+							},
+							UDF: &dfv1.UDF{
+								Container: &dfv1.Container{Image: "my-image"},
+							},
+						},
+						{
+							Name: "output",
+							Sink: &dfv1.Sink{
+								AbstractSink: dfv1.AbstractSink{Log: &dfv1.Log{}},
+							},
+						},
+					},
+					Edges: []dfv1.Edge{
+						{From: "input", To: "process"},
+						{From: "process", To: "output"},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "source vertex with ordered config - should be ignored (always ordered)",
+			pl: dfv1.Pipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pl",
+					Namespace: "test-ns",
+				},
+				Spec: dfv1.PipelineSpec{
+					Vertices: []dfv1.AbstractVertex{
+						{
+							Name:    "input",
+							Ordered: &dfv1.Ordered{Enabled: true},
+							Source:  &dfv1.Source{Generator: &dfv1.GeneratorSource{}},
+						},
+						{
+							Name: "output",
+							Sink: &dfv1.Sink{
+								AbstractSink: dfv1.AbstractSink{Log: &dfv1.Log{}},
+							},
+						},
+					},
+					Edges: []dfv1.Edge{
+						{From: "input", To: "output"},
+					},
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateOrderedProcessing(tt.pl)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateOrderedProcessing() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

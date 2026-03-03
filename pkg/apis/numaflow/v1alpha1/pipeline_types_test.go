@@ -585,3 +585,75 @@ func TestPipelineStatus_IsHealthy(t *testing.T) {
 		})
 	}
 }
+
+func TestPipeline_IsOrderedProcessingEnabled(t *testing.T) {
+	tests := []struct {
+		name     string
+		pipeline Pipeline
+		want     bool
+	}{
+		{
+			name: "ordered enabled",
+			pipeline: Pipeline{
+				Spec: PipelineSpec{
+					Ordered: &Ordered{Enabled: true},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "ordered disabled",
+			pipeline: Pipeline{
+				Spec: PipelineSpec{
+					Ordered: &Ordered{Enabled: false},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "ordered not set",
+			pipeline: Pipeline{
+				Spec: PipelineSpec{},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.pipeline.IsOrderedProcessingEnabled()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestOrdered_IsEnabled(t *testing.T) {
+	tests := []struct {
+		name    string
+		ordered *Ordered
+		want    bool
+	}{
+		{
+			name:    "enabled",
+			ordered: &Ordered{Enabled: true},
+			want:    true,
+		},
+		{
+			name:    "disabled",
+			ordered: &Ordered{Enabled: false},
+			want:    false,
+		},
+		{
+			name:    "nil",
+			ordered: nil,
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.ordered.IsEnabled()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

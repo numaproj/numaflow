@@ -2495,6 +2495,12 @@ spec:
                 additionalProperties:
                   type: string
                 type: object
+              ordered:
+                properties:
+                  enabled:
+                    default: false
+                    type: boolean
+                type: object
               partitions:
                 format: int32
                 type: integer

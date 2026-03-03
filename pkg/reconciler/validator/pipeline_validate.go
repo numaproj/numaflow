@@ -175,6 +175,10 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return err
 	}
 
+	if err := validateOrderedProcessing(*pl); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -763,6 +767,40 @@ func validateSQSSink(sqs dfv1.SqsSink) error {
 	// Validate assume role if present
 	if err := validateAWSAssumeRole(sqs.AssumeRole); err != nil {
 		return fmt.Errorf("invalid assume role configuration: %w", err)
+	}
+
+	return nil
+}
+
+// validateOrderedProcessing validates the ordered processing configuration.
+// For map and sink vertices with ordered processing enabled:
+// - Scale config (min/max) must not be set by user
+// Note: Source vertices are always ordered, and reduce vertices are already partitioned,
+// so ordered processing only applies to map and sink vertices.
+func validateOrderedProcessing(pl dfv1.Pipeline) error {
+	// Iterate through all vertices to validate ordered processing configuration
+	for _, v := range pl.Spec.Vertices {
+		// Get the effective ordered config for this vertex
+		orderedEnabled := v.GetEffectiveOrderedConfig(pl.Spec.Ordered)
+
+		// Skip if ordered processing is not enabled
+		if !orderedEnabled {
+			continue
+		}
+
+		// Skip source and reduce vertices - ordered processing only applies to map and sink
+		// Source vertices are always ordered by nature
+		// Reduce vertices are already partitioned and ordered
+		if v.IsASource() || v.IsReduceUDF() {
+			continue
+		}
+
+		// For map and sink vertices with ordered processing enabled:
+		// Scale config (min/max) must not be set by user
+		// Users should not configure autoscaling for ordered processing vertices
+		if v.Scale.Min != nil || v.Scale.Max != nil {
+			return fmt.Errorf("vertex %q: scale (min/max) should not be set when ordered processing is enabled. Replicas will be fixed to partition count", v.Name)
+		}
 	}
 
 	return nil
