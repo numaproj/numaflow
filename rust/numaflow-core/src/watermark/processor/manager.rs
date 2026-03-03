@@ -267,12 +267,26 @@ impl ProcessorManager {
             let mut processors = processors.write().expect("failed to acquire lock");
 
             for processor in processors.values_mut() {
-                let status = match current_time - processor.last_hb_time {
-                    diff if diff > 10 * refresh_rate_millis => Status::Deleted,
-                    diff if diff > refresh_rate_millis => Status::InActive,
+                let diff = current_time - processor.last_hb_time;
+                let new_status = match diff {
+                    d if d > 10 * refresh_rate_millis => Status::Deleted,
+                    d if d > refresh_rate_millis => Status::InActive,
                     _ => Status::Active,
                 };
-                processor.set_status(status);
+                // Log when status changes to inactive or deleted
+                if new_status != processor.status
+                    && (new_status == Status::InActive || new_status == Status::Deleted)
+                {
+                    info!(
+                        processor = ?String::from_utf8_lossy(&processor.name),
+                        old_status = ?processor.status,
+                        new_status = ?new_status,
+                        hb_behind_ms = diff,
+                        last_hb = processor.last_hb_time,
+                        "Processor status change"
+                    );
+                }
+                processor.set_status(new_status);
             }
         }
     }
