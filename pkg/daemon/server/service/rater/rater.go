@@ -171,7 +171,15 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int, times
 	isReduce := vtx.IsReduceUDF()
 	// Check if ordered processing is enabled for the vertex
 	// When ordered processing is enabled, each pod handles a specific partition (1:1 mapping like reduce)
-	isOrderedProcessing := vtx.GetEffectiveOrderedConfig(r.pipeline.Spec.Ordered)
+	// Compute effective ordered config: vertex-level takes precedence over pipeline-level
+	var isOrderedProcessing bool
+	if !isReduce {
+		if vtx.Ordered != nil {
+			isOrderedProcessing = vtx.Ordered.Enabled
+		} else if r.pipeline.Spec.Ordered != nil {
+			isOrderedProcessing = r.pipeline.Spec.Ordered.Enabled
+		}
+	}
 	if err != nil {
 		return err
 	}

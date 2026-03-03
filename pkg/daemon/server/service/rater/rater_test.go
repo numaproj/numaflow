@@ -789,9 +789,23 @@ func TestRater_OrderedProcessing(t *testing.T) {
 	ctx := context.Background()
 	lookBackSeconds := uint32(30)
 
+	// Helper to compute effective ordered config (mirrors the logic in rater.go)
+	computeEffectiveOrdered := func(vtx *v1alpha1.AbstractVertex, pipelineOrdered *v1alpha1.Ordered) bool {
+		if vtx.IsReduceUDF() {
+			return false
+		}
+		if vtx.Ordered != nil {
+			return vtx.Ordered.Enabled
+		}
+		if pipelineOrdered != nil {
+			return pipelineOrdered.Enabled
+		}
+		return false
+	}
+
 	// Helper to check if pending should be maintained based on the condition in monitorOnePod
 	shouldMaintainPending := func(vtx *v1alpha1.AbstractVertex, pipelineOrdered *v1alpha1.Ordered, replica int) bool {
-		return vtx.IsReduceUDF() || vtx.GetEffectiveOrderedConfig(pipelineOrdered) || replica == 0
+		return vtx.IsReduceUDF() || computeEffectiveOrdered(vtx, pipelineOrdered) || replica == 0
 	}
 
 	// Test reduce vertex maintains pending for all replicas
@@ -846,7 +860,7 @@ func TestRater_OrderedProcessing(t *testing.T) {
 	}
 	vtx := reduceWithOrderedP.GetVertex("v")
 	assert.True(t, vtx.IsReduceUDF(), "Should be reduce vertex")
-	assert.False(t, vtx.GetEffectiveOrderedConfig(reduceWithOrderedP.Spec.Ordered), "Reduce should ignore ordered config")
+	assert.False(t, vtx.GetEffectiveOrderedConfig(), "Reduce should ignore ordered config")
 
 	// Verify rater creation works
 	r := NewRater(ctx, orderedP)

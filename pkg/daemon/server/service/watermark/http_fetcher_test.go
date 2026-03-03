@@ -318,24 +318,12 @@ func TestHTTPWatermarkFetcher_OrderedProcessing(t *testing.T) {
 	mapVertex := pipeline.GetVertex("map")
 	reduceVertex := pipeline.GetVertex("reduce")
 
-	assert.False(t, mapVertex.IsReduceUDF() || mapVertex.GetEffectiveOrderedConfig(pipeline.Spec.Ordered),
+	assert.False(t, mapVertex.IsReduceUDF() || mapVertex.GetEffectiveOrderedConfig(),
 		"Non-reduce without ordered should fetch from single pod")
 	assert.True(t, reduceVertex.IsReduceUDF(),
 		"Reduce vertex should fetch from all pods")
 
-	// Test: pipeline-level ordered processing enables all-pods fetch
-	pipelineOrdered := &v1alpha1.Pipeline{
-		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
-		Spec: v1alpha1.PipelineSpec{
-			Ordered:  &v1alpha1.Ordered{Enabled: true},
-			Vertices: []v1alpha1.AbstractVertex{{Name: "v", UDF: &v1alpha1.UDF{}}},
-		},
-	}
-	vtx := pipelineOrdered.GetVertex("v")
-	assert.True(t, vtx.GetEffectiveOrderedConfig(pipelineOrdered.Spec.Ordered),
-		"Pipeline-level ordered should enable all-pods fetch")
-
-	// Test: vertex-level ordered processing override
+	// Test: vertex-level ordered processing
 	pipelineVertexOrdered := &v1alpha1.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
 		Spec: v1alpha1.PipelineSpec{
@@ -345,9 +333,9 @@ func TestHTTPWatermarkFetcher_OrderedProcessing(t *testing.T) {
 			},
 		},
 	}
-	assert.True(t, pipelineVertexOrdered.GetVertex("ordered").GetEffectiveOrderedConfig(nil),
+	assert.True(t, pipelineVertexOrdered.GetVertex("ordered").GetEffectiveOrderedConfig(),
 		"Vertex with ordered enabled should fetch from all pods")
-	assert.False(t, pipelineVertexOrdered.GetVertex("not-ordered").GetEffectiveOrderedConfig(nil),
+	assert.False(t, pipelineVertexOrdered.GetVertex("not-ordered").GetEffectiveOrderedConfig(),
 		"Vertex without ordered should fetch from single pod")
 
 	// Verify fetcher creation works with ordered pipeline
