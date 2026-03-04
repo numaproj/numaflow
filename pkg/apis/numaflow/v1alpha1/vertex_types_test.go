@@ -887,7 +887,7 @@ func Test_VertexStatus_IsHealthy(t *testing.T) {
 	}
 }
 
-func TestAbstractVertex_GetEffectiveOrderedConfig(t *testing.T) {
+func TestAbstractVertex_IsOrdered(t *testing.T) {
 	tests := []struct {
 		name   string
 		vertex AbstractVertex
@@ -962,7 +962,7 @@ func TestAbstractVertex_GetEffectiveOrderedConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.vertex.GetEffectiveOrderedConfig()
+			got := tt.vertex.IsOrdered()
 			assert.Equal(t, tt.want, got)
 		})
 	}

@@ -318,7 +318,7 @@ func TestHTTPWatermarkFetcher_OrderedProcessing(t *testing.T) {
 	mapVertex := pipeline.GetVertex("map")
 	reduceVertex := pipeline.GetVertex("reduce")
 
-	assert.False(t, mapVertex.IsReduceUDF() || mapVertex.GetEffectiveOrderedConfig(),
+	assert.False(t, mapVertex.IsReduceUDF() || mapVertex.IsOrdered(),
 		"Non-reduce without ordered should fetch from single pod")
 	assert.True(t, reduceVertex.IsReduceUDF(),
 		"Reduce vertex should fetch from all pods")
@@ -333,9 +333,9 @@ func TestHTTPWatermarkFetcher_OrderedProcessing(t *testing.T) {
 			},
 		},
 	}
-	assert.True(t, pipelineVertexOrdered.GetVertex("ordered").GetEffectiveOrderedConfig(),
+	assert.True(t, pipelineVertexOrdered.GetVertex("ordered").IsOrdered(),
 		"Vertex with ordered enabled should fetch from all pods")
-	assert.False(t, pipelineVertexOrdered.GetVertex("not-ordered").GetEffectiveOrderedConfig(),
+	assert.False(t, pipelineVertexOrdered.GetVertex("not-ordered").IsOrdered(),
 		"Vertex without ordered should fetch from single pod")
 
 	// Verify fetcher creation works with ordered pipeline

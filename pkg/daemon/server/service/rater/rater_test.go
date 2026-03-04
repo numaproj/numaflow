@@ -860,7 +860,7 @@ func TestRater_OrderedProcessing(t *testing.T) {
 	}
 	vtx := reduceWithOrderedP.GetVertex("v")
 	assert.True(t, vtx.IsReduceUDF(), "Should be reduce vertex")
-	assert.False(t, vtx.GetEffectiveOrderedConfig(), "Reduce should ignore ordered config")
+	assert.False(t, vtx.IsOrdered(), "Reduce should ignore ordered config")
 
 	// Verify rater creation works
 	r := NewRater(ctx, orderedP)

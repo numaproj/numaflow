@@ -667,7 +667,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 			// Reduce vertices always use partition count for replicas
 			partitions := pl.NumOfPartitions(v.Name)
 			replicas = int32(partitions)
-		} else if vCopy.GetEffectiveOrderedConfig() && (vCopy.IsMapUDF() || vCopy.IsASink()) {
+		} else if vCopy.IsOrdered() && (vCopy.IsMapUDF() || vCopy.IsASink()) {
 			// For map and sink vertices with ordered processing enabled, set replicas to partition count
 			// This ensures each partition is processed by exactly one pod for ordered processing
 			// Note: Source vertices are always ordered, reduce vertices are already handled above
