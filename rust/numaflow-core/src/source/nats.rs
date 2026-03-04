@@ -58,7 +58,10 @@ impl SourceReader for NatsSource {
     }
 
     async fn partitions(&mut self) -> crate::Result<super::SourcePartitions> {
-        Ok(super::SourcePartitions::new(vec![*get_vertex_replica()], None))
+        Ok(super::SourcePartitions::new(
+            vec![*get_vertex_replica()],
+            None,
+        ))
     }
 }
 

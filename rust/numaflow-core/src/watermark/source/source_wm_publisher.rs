@@ -179,7 +179,25 @@ impl SourceWatermarkPublisher {
     /// Initializes the active partitions by creating publishers for each partition.
     /// This creates both source watermark publishers (with `source-` prefix) and
     /// ISB watermark publishers for all partitions upfront.
+    /// Also removes publishers for partitions that are no longer active to handle
+    /// dynamic partition changes (e.g., Kafka rebalancing).
     pub(crate) fn initialize_active_partitions(&mut self, active_partitions: Vec<u16>) {
+        // Build the set of valid publisher names for the new partitions
+        let mut valid_publisher_names: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for partition in &active_partitions {
+            valid_publisher_names.insert(format!(
+                "source-{}-{}",
+                self.source_config.vertex, partition
+            ));
+            valid_publisher_names.insert(format!("{}-{}", self.source_config.vertex, partition));
+        }
+
+        // Remove publishers for partitions that are no longer active
+        self.publishers
+            .retain(|name, _| valid_publisher_names.contains(name));
+
+        // Add publishers for new partitions
         for partition in &active_partitions {
             // Create source watermark publisher (used by publish_source_watermark)
             let source_processor_name =

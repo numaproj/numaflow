@@ -70,7 +70,10 @@ impl SourceReader for JetstreamSource {
     }
 
     async fn partitions(&mut self) -> Result<super::SourcePartitions> {
-        Ok(super::SourcePartitions::new(vec![*get_vertex_replica()], None))
+        Ok(super::SourcePartitions::new(
+            vec![*get_vertex_replica()],
+            None,
+        ))
     }
 }
 

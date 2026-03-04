@@ -379,7 +379,10 @@ impl source::SourceReader for GeneratorRead {
     }
 
     async fn partitions(&mut self) -> crate::error::Result<source::SourcePartitions> {
-        Ok(source::SourcePartitions::new(vec![*get_vertex_replica()], None))
+        Ok(source::SourcePartitions::new(
+            vec![*get_vertex_replica()],
+            None,
+        ))
     }
 }
 

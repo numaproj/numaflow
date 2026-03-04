@@ -149,7 +149,7 @@ impl ISBWatermarkState {
         // barrier offset which can be used safely to publish the idle watermark.
 
         // Identify the streams that are idle and publish the idle watermark
-        let idle_streams = self.idle_manager.fetch_idle_streams().await;
+        let idle_streams = self.idle_manager.fetch_streams_needing_publish().await;
         for stream in idle_streams.iter() {
             if let Ok(offset) = self.idle_manager.fetch_idle_offset(stream).await {
                 // publish the watermark

@@ -111,6 +111,7 @@ impl SourceTestHandle {
                     true,
                     source_transform.transformer.take(),
                     None,
+                    cln_token.clone(),
                     None,
                 )
                 .await
@@ -127,6 +128,7 @@ impl SourceTestHandle {
                     true,
                     None,
                     None,
+                    cln_token.clone(),
                     None,
                 )
                 .await

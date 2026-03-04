@@ -429,6 +429,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
+                cln_token,
                 rate_limiter,
             )
             .await)
@@ -449,6 +450,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
+                cln_token,
                 rate_limiter,
             )
             .await)
@@ -469,6 +471,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
+                cln_token,
                 rate_limiter,
             )
             .await)
@@ -488,6 +491,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
+                cln_token,
                 rate_limiter,
             )
             .await)
@@ -507,6 +511,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
+                cln_token,
                 rate_limiter,
             )
             .await)
@@ -522,6 +527,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
+                cln_token,
                 rate_limiter,
             )
             .await)
@@ -537,6 +543,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
+                cln_token,
                 rate_limiter,
             )
             .await)
@@ -562,6 +569,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
+                cln_token,
                 rate_limiter,
             )
             .await)

@@ -27,15 +27,22 @@ impl WatermarkConfig {
             .and_then(|w| w.max_delay.map(|x| Duration::from(x).as_millis() as u64))
             .unwrap_or(0);
 
+        // Always create IdleConfig with default heartbeat interval (100ms).
+        // User's idle_source config (if provided) overrides threshold and increment_by
+        // for actual idle detection (when to mark as idle and increment watermark).
         let idle_config = watermark_spec
             .as_ref()
             .and_then(|w| w.idle_source.as_ref())
             .map(|idle| IdleConfig {
                 increment_by: idle.increment_by.map(Duration::from).unwrap_or_default(),
-                step_interval: idle.step_interval.map(Duration::from).unwrap_or_default(),
+                step_interval: idle
+                    .step_interval
+                    .map(Duration::from)
+                    .unwrap_or(DEFAULT_HEARTBEAT_INTERVAL),
                 threshold: idle.threshold.map(Duration::from).unwrap_or_default(),
                 init_source_delay: idle.init_source_delay.map(Duration::from),
-            });
+            })
+            .unwrap_or_default();
 
         // Helper function to create bucket config for to_vertex
         let create_to_vertex_bucket_config = |to: &ToVertexConfig| BucketConfig {
@@ -124,16 +131,30 @@ pub(crate) struct SourceWatermarkConfig {
     pub(crate) max_delay: Duration,
     pub(crate) source_bucket_config: BucketConfig,
     pub(crate) to_vertex_bucket_config: Vec<BucketConfig>,
-    pub(crate) idle_config: Option<IdleConfig>,
+    /// Idle config is always present (with default 100ms heartbeat interval).
+    /// User's idle_source config overrides threshold/increment_by for actual idle detection.
+    pub(crate) idle_config: IdleConfig,
 }
+
+/// Default heartbeat interval for publishing watermarks to signal liveness.
+/// This is independent of user's idle configuration.
+pub(crate) const DEFAULT_HEARTBEAT_INTERVAL: Duration = Duration::from_millis(100);
 
 /// Idle configuration for detecting idleness when there is no data
 /// from source and publish the Watermark.
+///
+/// Note: `step_interval` (heartbeat interval) defaults to 100ms and is always active.
+/// The `threshold` and `increment_by` are only used when the user explicitly configures
+/// idle detection - they control when to mark a partition as "idle" and increment the watermark.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct IdleConfig {
+    /// How much to increment the watermark when partition is idle
     pub(crate) increment_by: Duration,
+    /// How often to publish heartbeat watermarks (default 100ms)
     pub(crate) step_interval: Duration,
+    /// How long without data before marking partition as idle
     pub(crate) threshold: Duration,
+    /// Delay before starting idle detection for new partitions
     pub(crate) init_source_delay: Option<Duration>,
 }
 
@@ -141,7 +162,7 @@ impl Default for IdleConfig {
     fn default() -> Self {
         IdleConfig {
             increment_by: Duration::from_millis(0),
-            step_interval: Duration::from_millis(0),
+            step_interval: DEFAULT_HEARTBEAT_INTERVAL,
             threshold: Duration::from_millis(0),
             init_source_delay: None,
         }

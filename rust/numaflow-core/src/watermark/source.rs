@@ -49,8 +49,14 @@ struct SourceWatermarkState {
     publisher: SourceWatermarkPublisher,
     fetcher: SourceWatermarkFetcher,
     isb_idle_manager: ISBIdleDetector,
-    source_idle_manager: Option<SourceIdleDetector>,
+    /// Source idle detector is always present (with default 100ms heartbeat interval).
+    /// It handles both heartbeat publishing and idle detection (if user configured).
+    source_idle_manager: SourceIdleDetector,
+    /// Cache of partitions that have been active during the current interval.
+    /// Used for ISB idle watermark publishing.
     active_input_partitions: HashMap<u16, bool>,
+    /// Total partitions in the source.
+    total_partitions: Option<u32>,
 }
 
 impl SourceWatermarkState {
@@ -59,7 +65,7 @@ impl SourceWatermarkState {
         publisher: SourceWatermarkPublisher,
         fetcher: SourceWatermarkFetcher,
         isb_idle_manager: ISBIdleDetector,
-        source_idle_manager: Option<SourceIdleDetector>,
+        source_idle_manager: SourceIdleDetector,
     ) -> Self {
         Self {
             publisher,
@@ -67,7 +73,13 @@ impl SourceWatermarkState {
             isb_idle_manager,
             source_idle_manager,
             active_input_partitions: HashMap::new(),
+            total_partitions: None,
         }
+    }
+
+    /// Sets the initialized partitions for source idle watermark publishing.
+    fn set_total_partitions(&mut self, partitions: u32) {
+        self.total_partitions = Some(partitions);
     }
 
     /// Handles generating and publishing source watermark with computation
@@ -104,11 +116,9 @@ impl SourceWatermarkState {
 
             // cache the active input partitions, we need it for publishing isb idle watermark
             self.active_input_partitions.insert(partition, true);
-        }
 
-        // Reset the source idle manager
-        if let Some(source_idle_manager) = &mut self.source_idle_manager {
-            source_idle_manager.reset();
+            // Reset the source idle manager for this partition
+            self.source_idle_manager.reset(partition);
         }
 
         Ok(())
@@ -141,56 +151,64 @@ impl SourceWatermarkState {
         Ok(())
     }
 
-    /// Handles publishing source idle watermark with computation
-    async fn publish_source_idle_watermark(&mut self, partitions: Vec<u16>) -> Result<()> {
-        // First check if source idle manager exists and if source is idling
-        let is_source_idling = if let Some(source_idle_manager) = &self.source_idle_manager {
-            source_idle_manager.is_source_idling()
-        } else {
-            return Ok(());
-        };
-
-        if !is_source_idling {
+    /// Publishes source watermark for partitions that need it (step interval has passed).
+    /// Watermarks serve as heartbeats for downstream vertices via hb_time in WMB.
+    /// Each partition is tracked independently:
+    /// - If partition is idle: watermark value is incremented, idle=true
+    /// - If partition is not idle: watermark value stays the same, idle=false
+    async fn publish_source_idle_watermark(&mut self) -> Result<()> {
+        // Get partitions that need watermark publishing (step interval passed)
+        let partitions_needing_publish = self.source_idle_manager.partitions_needing_publish();
+        if partitions_needing_publish.is_empty() {
             return Ok(());
         }
 
-        // Fetch the source watermark first
+        // Fetch the current source watermark (may be -1 if no data yet, but we still
+        // publish to update hb_time which signals liveness to downstream vertices)
         let compute_wm = self.fetcher.fetch_source_watermark();
 
-        // Now get the idle watermark
-        let idle_wm = if let Some(source_idle_manager) = &mut self.source_idle_manager {
-            source_idle_manager.update_and_fetch_idle_wm(compute_wm.timestamp_millis())
-        } else {
-            return Ok(());
-        };
+        // Process each partition that needs publishing
+        for partition in partitions_needing_publish {
+            // Check if this partition is truly idle (threshold passed)
+            let is_idle = self.source_idle_manager.is_partition_idle(partition);
 
-        // publish the idle watermark for the given partitions
-        for partition in partitions.iter() {
+            // Compute the watermark value for this partition
+            let wm_value = self
+                .source_idle_manager
+                .compute_watermark(partition, compute_wm.timestamp_millis());
+
+            // Publish source watermark for this partition
             self.publisher
-                .publish_source_watermark(*partition, idle_wm, true)
+                .publish_source_watermark(partition, wm_value, is_idle)
                 .await;
         }
 
-        // since isb will also be idling since we are not reading any data
-        // we need to propagate idle watermarks to ISB
-        let compute_wm = self.fetcher.fetch_source_watermark();
-        if compute_wm.timestamp_millis() == -1 {
-            return Ok(());
-        }
+        Ok(())
+    }
 
-        // all the isb partitions will be idling because the source is idling, fetch the idle offset
-        // for each vertex and partition and publish the idle watermark
-        let vertex_streams = self.isb_idle_manager.fetch_all_streams().await;
-        for stream in vertex_streams.iter() {
+    /// Publishes ISB watermark for streams that need it (step interval passed).
+    /// Watermarks serve as heartbeats for downstream vertices via hb_time in WMB.
+    /// This is called for ISB streams that haven't received data recently.
+    async fn publish_isb_idle_watermark(&mut self) -> Result<()> {
+        // Fetch the current source watermark (may be -1 if no data yet, but we still
+        // publish to update hb_time which signals liveness to downstream vertices)
+        let compute_wm = self.fetcher.fetch_source_watermark();
+
+        // Fetch streams where step interval has passed since last publish
+        let streams_needing_publish = self.isb_idle_manager.fetch_streams_needing_publish().await;
+
+        for stream in streams_needing_publish.iter() {
             let offset = self
                 .isb_idle_manager
                 .fetch_idle_offset(stream)
                 .await
                 .unwrap_or(-1);
-            for idle_partition in partitions.iter() {
+
+            for partition in self.active_input_partitions.keys() {
+                // Publish watermark - hb_time is updated automatically
                 self.publisher
                     .publish_isb_watermark(
-                        *idle_partition,
+                        *partition,
                         stream,
                         offset,
                         compute_wm.timestamp_millis(),
@@ -199,7 +217,6 @@ impl SourceWatermarkState {
                     .await;
             }
 
-            // mark the vertex and partition as idle, since we published the idle watermark
             self.isb_idle_manager
                 .update_idle_metadata(stream, offset)
                 .await;
@@ -208,50 +225,15 @@ impl SourceWatermarkState {
         Ok(())
     }
 
-    /// Handles publishing ISB idle watermark with computation
-    async fn publish_isb_idle_watermark(&mut self) -> Result<()> {
-        // if source is idling, we can avoid publishing the idle watermark since we publish
-        // the idle watermark for all the downstream partitions in the source idling control flow
-        if let Some(source_idle_manager) = &self.source_idle_manager
-            && source_idle_manager.is_source_idling()
-        {
-            return Ok(());
-        }
+    /// Publishes idle watermarks for both source and ISB.
+    /// This is called by the background task to handle both source and ISB idle watermark publishing.
+    /// Watermarks serve as heartbeats for downstream vertices via hb_time in WMB.
+    async fn publish_idle_watermarks(&mut self) -> Result<()> {
+        // First, publish source idle watermark (if source idle manager is configured)
+        self.publish_source_idle_watermark().await?;
 
-        // fetch the source watermark, identify the idle partitions and publish the idle watermark
-        let compute_wm = self.fetcher.fetch_source_watermark();
-        if compute_wm.timestamp_millis() == -1 {
-            return Ok(());
-        }
-
-        // we should only publish to active input partitions, because we consider input-partitions as
-        // the processing entity while publishing watermark inside source
-        let idle_streams = self.isb_idle_manager.fetch_idle_streams().await;
-        for stream in idle_streams.iter() {
-            let offset = self
-                .isb_idle_manager
-                .fetch_idle_offset(stream)
-                .await
-                .unwrap_or(-1);
-            let active_input_partitions: Vec<u16> =
-                self.active_input_partitions.keys().cloned().collect();
-            for partition in active_input_partitions {
-                self.publisher
-                    .publish_isb_watermark(
-                        partition,
-                        stream,
-                        offset,
-                        compute_wm.timestamp_millis(),
-                        true,
-                    )
-                    .await;
-            }
-            self.isb_idle_manager
-                .update_idle_metadata(stream, offset)
-                .await;
-        }
-        // clear the cache since we published the idle watermarks
-        self.active_input_partitions.clear();
+        // Then, publish ISB idle watermark for streams that need it
+        self.publish_isb_idle_watermark().await?;
 
         Ok(())
     }
@@ -300,10 +282,8 @@ impl SourceWatermarkHandle {
         )
         .await?;
 
-        let source_idle_manager = config
-            .idle_config
-            .as_ref()
-            .map(|idle_config| SourceIdleDetector::new(idle_config.clone()));
+        // Source idle manager is always created with the idle config (which has default 100ms heartbeat)
+        let source_idle_manager = SourceIdleDetector::new(config.idle_config.clone());
 
         let isb_idle_manager =
             ISBIdleDetector::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
@@ -323,7 +303,8 @@ impl SourceWatermarkHandle {
                 loop {
                     tokio::select! {
                         _ = interval_ticker.tick() => {
-                            source_watermark_handle.publish_isb_idle_watermark().await;
+                            // Publish both source and ISB idle watermarks
+                            source_watermark_handle.publish_idle_watermarks().await;
                         }
                         _ = cln_token.cancelled() => {
                             break;
@@ -391,29 +372,18 @@ impl SourceWatermarkHandle {
         state.fetcher.fetch_head_watermark(partition_idx)
     }
 
-    /// Publishes the source idle watermark for the given partitions.
-    pub(crate) async fn publish_source_idle_watermark(&self, partitions: Vec<u16>) {
+    /// Publishes idle watermarks for both source and ISB.
+    /// This is called by the background task to handle both source and ISB idle watermark publishing.
+    /// Watermarks serve as heartbeats for downstream vertices via hb_time in WMB.
+    async fn publish_idle_watermarks(&self) {
         // Acquire lock, perform operation, and release immediately
         let result = {
             let mut state = self.state.lock().await;
-            state.publish_source_idle_watermark(partitions).await
+            state.publish_idle_watermarks().await
         };
 
         if let Err(e) = result {
-            warn!(?e, "Failed to publish source idle watermark");
-        }
-    }
-
-    /// Publishes the ISB idle watermark.
-    pub(crate) async fn publish_isb_idle_watermark(&self) {
-        // Acquire lock, perform operation, and release immediately
-        let result = {
-            let mut state = self.state.lock().await;
-            state.publish_isb_idle_watermark().await
-        };
-
-        if let Err(e) = result {
-            warn!(?e, "Failed to publish ISB idle watermark");
+            warn!(?e, "Failed to publish idle watermarks");
         }
     }
 
@@ -430,11 +400,26 @@ impl SourceWatermarkHandle {
         partitions: Vec<u16>,
         total_partitions: Option<u32>,
     ) {
-        // Acquire lock, perform operation, and release immediately
         let mut state = self.state.lock().await;
-        // Set the processor count: use total_partitions if provided, otherwise use active partitions count
-        let partition_count = total_partitions.unwrap_or(partitions.len() as u32);
-        state.publisher.set_processor_count(partition_count);
+        total_partitions.map(|p| {
+            state.set_total_partitions(p);
+            state.publisher.set_processor_count(p);
+        });
+
+        // Initialize the source idle manager with the partitions for per-partition tracking
+        // This also removes partitions that are no longer active
+        state.source_idle_manager.initialize_partitions(&partitions);
+
+        // Replace active_input_partitions with the new set of partitions
+        // This handles dynamic partition changes (e.g., Kafka rebalancing)
+        let new_partitions: std::collections::HashSet<u16> = partitions.iter().copied().collect();
+        state
+            .active_input_partitions
+            .retain(|partition, _| new_partitions.contains(partition));
+        for partition in &partitions {
+            state.active_input_partitions.insert(*partition, true);
+        }
+
         state.publisher.initialize_active_partitions(partitions);
     }
 }
@@ -473,7 +458,7 @@ mod tests {
                 delay: None,
             },
             to_vertex_bucket_config: vec![],
-            idle_config: None,
+            idle_config: IdleConfig::default(),
         };
 
         // create key value stores
@@ -608,7 +593,7 @@ mod tests {
                 ot_bucket: edge_ot_bucket_name,
                 delay: None,
             }],
-            idle_config: None,
+            idle_config: IdleConfig::default(),
         };
 
         // create key value stores for source
@@ -848,7 +833,7 @@ mod tests {
                 max_delay: Default::default(),
                 source_bucket_config,
                 to_vertex_bucket_config: vec![to_vertex_bucket_config],
-                idle_config: Some(source_idle_config),
+                idle_config: source_idle_config,
             },
             CancellationToken::new(),
         )
@@ -879,11 +864,14 @@ mod tests {
             sleep(Duration::from_millis(3)).await;
         }
 
+        // Initialize the partitions so the background task can use them
+        handle.initialize_active_partitions(vec![0], None).await;
+
         // sleep so that the idle condition is met
         tokio::time::sleep(Duration::from_millis(20)).await;
 
-        // Invoke publish_source_idle_watermark
-        handle.publish_source_idle_watermark(vec![0]).await;
+        // Invoke publish_idle_watermarks (which calls both source and ISB idle watermark publishing)
+        handle.publish_idle_watermarks().await;
 
         // Check if the idle watermark is published
         let ot_bucket = js_context
@@ -999,7 +987,7 @@ mod tests {
                 max_delay: Default::default(),
                 source_bucket_config,
                 to_vertex_bucket_config: vec![to_vertex_bucket_config],
-                idle_config: Some(source_idle_config),
+                idle_config: source_idle_config,
             },
             CancellationToken::new(),
         )
@@ -1087,7 +1075,7 @@ mod tests {
                 delay: None,
             },
             to_vertex_bucket_config: vec![],
-            idle_config: None,
+            idle_config: IdleConfig::default(),
         };
 
         // delete the stores first

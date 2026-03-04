@@ -253,6 +253,9 @@ pub(crate) struct Source<C: crate::typ::NumaflowTypeConfig> {
     rate_limiter: Option<C::RateLimiter>,
 }
 
+/// Interval for refreshing source partitions (10 seconds)
+const PARTITION_REFRESH_INTERVAL: Duration = Duration::from_secs(10);
+
 impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     /// Create a new StreamingSource. It starts the read and ack actors in the background.
     pub(crate) async fn new(
@@ -262,6 +265,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         read_ahead: bool,
         transformer: Option<Transformer>,
         watermark_handle: Option<SourceWatermarkHandle>,
+        cln_token: CancellationToken,
         rate_limiter: Option<C::RateLimiter>,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(batch_size);
@@ -336,9 +340,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
         // initialize the active partitions in the watermark actor to indicate the partitions to which
         // the watermark should be published.
-        let source_partitions = Self::partitions(sender.clone())
-            .await
-            .unwrap_or_default();
+        let source_partitions = Self::partitions(sender.clone()).await.unwrap_or_default();
         if let Some(watermark_handle) = &watermark_handle {
             watermark_handle
                 .initialize_active_partitions(
@@ -346,6 +348,32 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     source_partitions.total_partitions,
                 )
                 .await;
+        }
+
+        // Start a background task to periodically refresh partitions from the source.
+        // This handles dynamic partition changes (e.g., Kafka partition rebalancing).
+        if let Some(wm_handle) = watermark_handle.clone() {
+            let source_sender = sender.clone();
+            tokio::spawn(async move {
+                let mut interval_ticker = tokio::time::interval(PARTITION_REFRESH_INTERVAL);
+                loop {
+                    tokio::select! {
+                        _ = interval_ticker.tick() => {
+                            if let Ok(partitions) = Self::partitions(source_sender.clone()).await {
+                                wm_handle
+                                    .initialize_active_partitions(
+                                        partitions.active_partitions,
+                                        partitions.total_partitions,
+                                    )
+                                    .await;
+                            }
+                        }
+                        _ = cln_token.cancelled() => {
+                            break;
+                        }
+                    }
+                }
+            });
         }
 
         Self {
@@ -497,21 +525,6 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 let msgs_len = messages.len();
                 let read_time = read_start_time.elapsed().as_micros() as f64;
                 Self::record_batch_read_metrics(&pipeline_labels, mvtx_labels, read_time, msgs_len);
-
-                // attempt to publish idle watermark since we are not able to read any message from
-                // the source.
-                if msgs_len == 0
-                    && let Some(watermark_handle) = self.watermark_handle.as_mut()
-                {
-                    watermark_handle
-                        .publish_source_idle_watermark(
-                            Self::partitions(self.sender.clone())
-                                .await
-                                .unwrap_or_default()
-                                .active_partitions,
-                        )
-                        .await;
-                }
 
                 let mut ack_handles = vec![];
                 let mut ack_batch = Vec::with_capacity(msgs_len);
@@ -1052,6 +1065,7 @@ mod tests {
             true,
             None,
             None,
+            cln_token.clone(),
             None,
         )
         .await;

@@ -103,7 +103,10 @@ impl source::SourceReader for KafkaSource {
         // For Kafka, total_partitions equals the number of active partitions since
         // Kafka returns all partitions for the topic(s)
         let total_partitions = Some(active_partitions.len() as u32);
-        Ok(source::SourcePartitions::new(active_partitions, total_partitions))
+        Ok(source::SourcePartitions::new(
+            active_partitions,
+            total_partitions,
+        ))
     }
 }
 

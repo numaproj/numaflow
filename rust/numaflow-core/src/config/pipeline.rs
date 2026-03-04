@@ -705,7 +705,7 @@ mod tests {
     use crate::config::components::source::{GeneratorConfig, SourceType};
     use crate::config::pipeline::map::{MapType, UserDefinedConfig};
     use crate::config::pipeline::watermark::{
-        BucketConfig, EdgeWatermarkConfig, SourceWatermarkConfig,
+        BucketConfig, EdgeWatermarkConfig, IdleConfig, SourceWatermarkConfig,
     };
 
     #[test]
@@ -1076,7 +1076,7 @@ mod tests {
                     ot_bucket: "default-simple-pipeline-in-out_OT",
                     delay: Some(Duration::from_millis(100)),
                 }],
-                idle_config: None,
+                idle_config: IdleConfig::default(),
             })),
             ..Default::default()
         };
