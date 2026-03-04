@@ -73,6 +73,29 @@ const MAX_ACK_PENDING: usize = 10000;
 const ACK_RETRY_INTERVAL: u64 = 100;
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 
+/// Represents the partition information returned by a source.
+/// Contains both the active partitions being processed and optionally the total number of partitions.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct SourcePartitions {
+    /// The list of active partitions being processed by this source instance.
+    pub active_partitions: Vec<u16>,
+    /// The total number of partitions in the source (if known).
+    /// This is used for watermark stability to know when all processors have reported.
+    /// Sources that don't support partitions (e.g., generator, HTTP) should set this to None.
+    pub total_partitions: Option<u32>,
+}
+
+impl SourcePartitions {
+    /// Creates a new SourcePartitions with the given active partitions and optional total partitions.
+    /// Sources that don't support partitions should pass `None` for `total_partitions`.
+    pub fn new(active_partitions: Vec<u16>, total_partitions: Option<u32>) -> Self {
+        Self {
+            active_partitions,
+            total_partitions,
+        }
+    }
+}
+
 /// Set of Read related items that has to be implemented to become a Source.
 /// Uses `trait_variant::make` to generate an object-safe `SourceReader` trait with `Send` bound.
 #[allow(dead_code)]
@@ -84,8 +107,9 @@ pub(crate) trait LocalSourceReader {
     /// Read messages from the source. Returns None when the stream has ended.
     async fn read(&mut self) -> Option<Result<Vec<Message>>>;
 
-    /// number of partitions processed by this source.
-    async fn partitions(&mut self) -> Result<Vec<u16>>;
+    /// Returns partition information for this source, including active partitions
+    /// and optionally the total number of partitions.
+    async fn partitions(&mut self) -> Result<SourcePartitions>;
 }
 
 /// Set of Ack related items that has to be implemented to become a Source.
@@ -140,7 +164,7 @@ enum ActorMessage {
         respond_to: oneshot::Sender<Result<Option<usize>>>,
     },
     Partitions {
-        respond_to: oneshot::Sender<Result<Vec<u16>>>,
+        respond_to: oneshot::Sender<Result<SourcePartitions>>,
     },
 }
 
@@ -312,10 +336,15 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
         // initialize the active partitions in the watermark actor to indicate the partitions to which
         // the watermark should be published.
-        let active_partitions = Self::partitions(sender.clone()).await.unwrap_or_default();
+        let source_partitions = Self::partitions(sender.clone())
+            .await
+            .unwrap_or_default();
         if let Some(watermark_handle) = &watermark_handle {
             watermark_handle
-                .initialize_active_partitions(active_partitions)
+                .initialize_active_partitions(
+                    source_partitions.active_partitions,
+                    source_partitions.total_partitions,
+                )
                 .await;
         }
 
@@ -389,7 +418,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     }
 
     /// get the source partitions from which the source is reading from.
-    async fn partitions(source_handle: mpsc::Sender<ActorMessage>) -> Result<Vec<u16>> {
+    async fn partitions(source_handle: mpsc::Sender<ActorMessage>) -> Result<SourcePartitions> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Partitions { respond_to: sender };
         // Ignore send errors. If send fails, so does the recv.await below. There's no reason
@@ -478,7 +507,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         .publish_source_idle_watermark(
                             Self::partitions(self.sender.clone())
                                 .await
-                                .unwrap_or_default(),
+                                .unwrap_or_default()
+                                .active_partitions,
                         )
                         .await;
                 }
@@ -1060,10 +1090,11 @@ mod tests {
 
         assert!(x.is_ok(), "Timeout occurred before pending became 50");
 
-        let partitions = Source::<crate::typ::WithoutRateLimiter>::partitions(sender.clone())
-            .await
-            .unwrap();
-        assert_eq!(partitions, vec![1, 2]);
+        let source_partitions =
+            Source::<crate::typ::WithoutRateLimiter>::partitions(sender.clone())
+                .await
+                .unwrap();
+        assert_eq!(source_partitions.active_partitions, vec![1, 2]);
 
         for message in messages.into_iter() {
             // set failed to true so that the message is nacked

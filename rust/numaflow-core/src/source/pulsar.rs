@@ -80,8 +80,11 @@ impl source::SourceReader for PulsarSource {
         }
     }
 
-    async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
-        Ok(self.partitions_vec())
+    async fn partitions(&mut self) -> crate::error::Result<source::SourcePartitions> {
+        let partitions = self.partitions_vec();
+        // For Pulsar, total_partitions equals the number of active partitions
+        let total_partitions = Some(partitions.len() as u32);
+        Ok(source::SourcePartitions::new(partitions, total_partitions))
     }
 }
 

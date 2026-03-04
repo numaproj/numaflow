@@ -97,9 +97,13 @@ impl source::SourceReader for KafkaSource {
         }
     }
 
-    async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
+    async fn partitions(&mut self) -> crate::error::Result<source::SourcePartitions> {
         let partitions = self.partitions_info().await?;
-        Ok(partitions.into_iter().map(|p| p as u16).collect())
+        let active_partitions: Vec<u16> = partitions.iter().map(|p| *p as u16).collect();
+        // For Kafka, total_partitions equals the number of active partitions since
+        // Kafka returns all partitions for the topic(s)
+        let total_partitions = Some(active_partitions.len() as u32);
+        Ok(source::SourcePartitions::new(active_partitions, total_partitions))
     }
 }
 
@@ -282,7 +286,9 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(source.partitions().await.unwrap(), vec![0]);
+        let source_partitions = source.partitions().await.unwrap();
+        assert_eq!(source_partitions.active_partitions, vec![0]);
+        assert_eq!(source_partitions.total_partitions, Some(1));
 
         // Test SourceReader::read
         let messages = source.read().await.unwrap().unwrap();

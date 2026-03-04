@@ -419,11 +419,21 @@ impl SourceWatermarkHandle {
 
     /// Initializes the active partitions by creating a publisher for each partition.
     /// Also sets the processor count (total number of partitions) for watermark stability.
-    pub(crate) async fn initialize_active_partitions(&self, partitions: Vec<u16>) {
+    ///
+    /// # Arguments
+    /// * `partitions` - The list of active partitions being processed by this source instance.
+    /// * `total_partitions` - The total number of partitions in the source (if known).
+    ///   If provided, this is used as the processor count for watermark stability.
+    ///   If None, the processor count is derived from the number of active partitions.
+    pub(crate) async fn initialize_active_partitions(
+        &self,
+        partitions: Vec<u16>,
+        total_partitions: Option<u32>,
+    ) {
         // Acquire lock, perform operation, and release immediately
         let mut state = self.state.lock().await;
-        // Set the processor count based on the number of partitions
-        let partition_count = partitions.len() as u32;
+        // Set the processor count: use total_partitions if provided, otherwise use active partitions count
+        let partition_count = total_partitions.unwrap_or(partitions.len() as u32);
         state.publisher.set_processor_count(partition_count);
         state.publisher.initialize_active_partitions(partitions);
     }

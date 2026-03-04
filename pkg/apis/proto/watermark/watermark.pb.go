@@ -52,9 +52,16 @@ type WMB struct {
 	// increasing.
 	Watermark int64 `protobuf:"varint,3,opt,name=watermark,proto3" json:"watermark,omitempty"`
 	// Partition to identify the partition to which the watermark belongs.
-	Partition     int32 `protobuf:"varint,4,opt,name=partition,proto3" json:"partition,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Partition int32 `protobuf:"varint,4,opt,name=partition,proto3" json:"partition,omitempty"`
+	// Heartbeat timestamp (epoch seconds) to track processor liveness.
+	// This eliminates the need for a separate heartbeat store.
+	HbTime int64 `protobuf:"varint,5,opt,name=hb_time,json=hbTime,proto3" json:"hb_time,omitempty"`
+	// Optional expected processor count for source watermarks.
+	// When set, the fetcher will wait until this many processors are active before
+	// computing a valid watermark.
+	ProcessorCount *int32 `protobuf:"varint,6,opt,name=processor_count,json=processorCount,proto3,oneof" json:"processor_count,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *WMB) Reset() {
@@ -115,7 +122,22 @@ func (x *WMB) GetPartition() int32 {
 	return 0
 }
 
+func (x *WMB) GetHbTime() int64 {
+	if x != nil {
+		return x.HbTime
+	}
+	return 0
+}
+
+func (x *WMB) GetProcessorCount() int32 {
+	if x != nil && x.ProcessorCount != nil {
+		return *x.ProcessorCount
+	}
+	return 0
+}
+
 // Heartbeat is used to track the active processors
+// Deprecated: hb_time is now embedded in WMB. Kept for backward compatibility during rolling upgrades.
 type Heartbeat struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Heartbeat(current time in millis) published by the active processors.
@@ -165,12 +187,15 @@ var File_pkg_apis_proto_watermark_watermark_proto protoreflect.FileDescriptor
 
 const file_pkg_apis_proto_watermark_watermark_proto_rawDesc = "" +
 	"\n" +
-	"(pkg/apis/proto/watermark/watermark.proto\x12\twatermark\"m\n" +
+	"(pkg/apis/proto/watermark/watermark.proto\x12\twatermark\"\xc8\x01\n" +
 	"\x03WMB\x12\x12\n" +
 	"\x04idle\x18\x01 \x01(\bR\x04idle\x12\x16\n" +
 	"\x06offset\x18\x02 \x01(\x03R\x06offset\x12\x1c\n" +
 	"\twatermark\x18\x03 \x01(\x03R\twatermark\x12\x1c\n" +
-	"\tpartition\x18\x04 \x01(\x05R\tpartition\")\n" +
+	"\tpartition\x18\x04 \x01(\x05R\tpartition\x12\x17\n" +
+	"\ahb_time\x18\x05 \x01(\x03R\x06hbTime\x12,\n" +
+	"\x0fprocessor_count\x18\x06 \x01(\x05H\x00R\x0eprocessorCount\x88\x01\x01B\x12\n" +
+	"\x10_processor_count\")\n" +
 	"\tHeartbeat\x12\x1c\n" +
 	"\theartbeat\x18\x01 \x01(\x03R\theartbeatB1Z/github.com/numaproj/numaflow/pkg/apis/proto/isbb\x06proto3"
 
@@ -204,6 +229,7 @@ func file_pkg_apis_proto_watermark_watermark_proto_init() {
 	if File_pkg_apis_proto_watermark_watermark_proto != nil {
 		return
 	}
+	file_pkg_apis_proto_watermark_watermark_proto_msgTypes[0].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
