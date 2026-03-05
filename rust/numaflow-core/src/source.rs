@@ -338,20 +338,9 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             }
         };
 
-        // initialize the active partitions in the watermark actor to indicate the partitions to which
-        // the watermark should be published.
-        let source_partitions = Self::partitions(sender.clone()).await.unwrap_or_default();
-        if let Some(watermark_handle) = &watermark_handle {
-            watermark_handle
-                .initialize_active_partitions(
-                    source_partitions.active_partitions,
-                    source_partitions.total_partitions,
-                )
-                .await;
-        }
-
         // Start a background task to periodically refresh partitions from the source.
         // This handles dynamic partition changes (e.g., Kafka partition rebalancing).
+        // The interval ticks immediately on first call, so this also initializes the active partitions.
         if let Some(wm_handle) = watermark_handle.clone() {
             let source_sender = sender.clone();
             tokio::spawn(async move {

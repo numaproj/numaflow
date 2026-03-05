@@ -98,14 +98,15 @@ impl source::SourceReader for KafkaSource {
     }
 
     async fn partitions(&mut self) -> crate::error::Result<source::SourcePartitions> {
-        let partitions = self.partitions_info().await?;
-        let active_partitions: Vec<u16> = partitions.iter().map(|p| *p as u16).collect();
-        // For Kafka, total_partitions equals the number of active partitions since
-        // Kafka returns all partitions for the topic(s)
-        let total_partitions = Some(active_partitions.len() as u32);
+        let partitions_info = self.partitions_info().await?;
+        let active_partitions: Vec<u16> = partitions_info
+            .active_partitions
+            .iter()
+            .map(|p| *p as u16)
+            .collect();
         Ok(source::SourcePartitions::new(
             active_partitions,
-            total_partitions,
+            Some(partitions_info.total_partitions),
         ))
     }
 }

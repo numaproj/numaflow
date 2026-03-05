@@ -43,9 +43,7 @@ impl WatermarkConfig {
             })
             .unwrap_or_default();
 
-        // Use the step_interval from idle_config for all bucket delays.
-        // This ensures consistent timing for watermark publishing and liveness signals.
-        let heartbeat_delay = Some(idle_config.step_interval);
+        let wmb_publish_delay = Some(idle_config.step_interval);
 
         // Helper function to create bucket config for to_vertex
         let create_to_vertex_bucket_config = |to: &ToVertexConfig| BucketConfig {
@@ -58,7 +56,7 @@ impl WatermarkConfig {
                 )
                 .into_boxed_str(),
             ),
-            delay: heartbeat_delay,
+            delay: wmb_publish_delay,
         };
 
         // Helper function to create bucket config for from_vertex
@@ -73,7 +71,7 @@ impl WatermarkConfig {
                     )
                     .into_boxed_str(),
                 ),
-                delay: heartbeat_delay,
+                delay: wmb_publish_delay,
             };
 
         match vertex {
@@ -86,7 +84,7 @@ impl WatermarkConfig {
                         format!("{namespace}-{pipeline_name}-{vertex_name}_SOURCE_OT")
                             .into_boxed_str(),
                     ),
-                    delay: heartbeat_delay,
+                    delay: wmb_publish_delay,
                 },
                 to_vertex_bucket_config: to_vertex_config
                     .iter()
@@ -139,8 +137,7 @@ pub(crate) struct SourceWatermarkConfig {
     pub(crate) idle_config: IdleConfig,
 }
 
-/// Default delay for publishing WMB (Watermark Message Block) to signal liveness.
-/// This is used as the default step_interval for idle detection and bucket delay.
+/// Default delay for publishing WMB to progress watermark.
 pub(crate) const DEFAULT_WMB_DELAY: Duration = Duration::from_millis(100);
 
 /// Idle configuration for detecting idleness when there is no data
