@@ -583,8 +583,6 @@ impl PipelineConfig {
             .clone()
             .is_none_or(|w| !w.disabled.unwrap_or(false))
         {
-            // Watermark delay is now derived from idle_config.step_interval (default 100ms)
-            // which is the unified heartbeat interval for all watermark publishing.
             WatermarkConfig::new(
                 vertex_obj.spec.watermark.clone(),
                 &namespace,

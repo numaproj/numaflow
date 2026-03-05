@@ -291,7 +291,7 @@ impl ISBWatermarkHandle {
         let fetcher =
             ISBWatermarkFetcher::new(processor_managers, &config.from_vertex_config).await?;
 
-        // Create KV stores for the publisher (only OT stores needed now)
+        // Create KV stores for the publisher
         let ot_stores = Self::create_ot_stores(&js_context, &config.to_vertex_config).await;
 
         let processor_name = format!("{vertex_name}-{vertex_replica}");
@@ -388,7 +388,6 @@ impl ISBWatermarkHandle {
     }
 
     /// Helper to create OT KV store for a single bucket config.
-    /// Heartbeat is now embedded in WMB (hb_time field), so no separate HB store is needed.
     async fn create_ot_store(
         js_context: &async_nats::jetstream::Context,
         bucket_config: &BucketConfig,
