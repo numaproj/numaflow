@@ -135,6 +135,11 @@ impl SimpleBuffer {
         self.state.read().in_flight_count()
     }
 
+    /// Get the current number of acked messages.
+    pub fn acked_count(&self) -> usize {
+        self.state.read().acked_count()
+    }
+
     /// Get the current buffer usage as a fraction.
     pub fn usage(&self) -> f64 {
         self.state.read().usage()
