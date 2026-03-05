@@ -33,6 +33,10 @@ pub(crate) struct SourceWatermarkPublisher {
     source_ot_stores: HashMap<&'static str, Arc<dyn KVStore>>,
     /// Pre-created OT stores for ISB watermark publishers
     isb_ot_stores: HashMap<&'static str, Arc<dyn KVStore>>,
+    /// WMB delay for publishing watermarks (default 100ms).
+    /// This is used as the delay for the ISB publisher to ensure liveness signals.
+    #[allow(dead_code)]
+    wmb_delay: Duration,
 }
 
 impl SourceWatermarkPublisher {
@@ -42,6 +46,7 @@ impl SourceWatermarkPublisher {
         max_delay: Duration,
         source_config: BucketConfig,
         to_vertex_configs: Vec<BucketConfig>,
+        wmb_delay: Duration,
     ) -> error::Result<Self> {
         // Create OT stores once during initialization
         let source_ot_stores =
@@ -56,6 +61,7 @@ impl SourceWatermarkPublisher {
             processor_count: None,
             source_ot_stores,
             isb_ot_stores,
+            wmb_delay,
         })
     }
 
@@ -274,6 +280,7 @@ mod tests {
             Duration::from_secs(0),
             source_config.clone(),
             vec![],
+            Duration::from_millis(100), // wmb_delay
         )
         .await
         .expect("Failed to create source publisher");
@@ -354,6 +361,7 @@ mod tests {
             Duration::from_secs(0),
             source_config.clone(),
             vec![edge_config.clone()],
+            Duration::from_millis(100), // wmb_delay
         )
         .await
         .expect("Failed to create source publisher");
@@ -427,6 +435,7 @@ mod tests {
             Duration::from_secs(0),
             source_config.clone(),
             vec![],
+            Duration::from_millis(100), // wmb_delay
         )
         .await
         .expect("Failed to create source publisher");
@@ -508,6 +517,7 @@ mod tests {
             Duration::from_secs(0),
             source_config.clone(),
             vec![edge_config.clone()],
+            Duration::from_millis(100), // wmb_delay
         )
         .await
         .expect("Failed to create source publisher");

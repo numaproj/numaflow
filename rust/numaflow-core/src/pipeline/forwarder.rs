@@ -68,10 +68,10 @@ pub(crate) async fn start_forwarder(
             info!("Starting source forwarder");
 
             // create watermark handle, if watermark is enabled
+            // Uses idle_config.step_interval (default 100ms) as the unified heartbeat interval
             let source_watermark_handle = match &config.watermark_config {
                 Some(WatermarkConfig::Source(source_config)) => Some(
                     SourceWatermarkHandle::new(
-                        config.read_timeout,
                         js_context.clone(),
                         &config.to_vertex_config,
                         source_config,

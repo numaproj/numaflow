@@ -816,7 +816,8 @@ pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> Result<String, St
     Ok(val.trim().into())
 }
 
-/// Creates an ISBWatermarkHandle if watermark is enabled in the configuration
+/// Creates an ISBWatermarkHandle if watermark is enabled in the configuration.
+/// Uses the WMB delay from the bucket config (default 100ms from DEFAULT_WMB_DELAY).
 pub async fn create_edge_watermark_handle(
     config: &PipelineConfig,
     js_context: &Context,
@@ -831,7 +832,6 @@ pub async fn create_edge_watermark_handle(
                 config.vertex_name,
                 config.replica,
                 config.vertex_type,
-                2 * config.read_timeout,
                 js_context.clone(),
                 edge_config,
                 &config.to_vertex_config,

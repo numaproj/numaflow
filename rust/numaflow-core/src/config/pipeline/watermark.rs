@@ -20,14 +20,13 @@ impl WatermarkConfig {
         vertex: &VertexConfig,
         from_vertex_config: &[FromVertexConfig],
         to_vertex_config: &[ToVertexConfig],
-        delay_in_millis: u64,
     ) -> Option<WatermarkConfig> {
         let max_delay = watermark_spec
             .as_ref()
             .and_then(|w| w.max_delay.map(|x| Duration::from(x).as_millis() as u64))
             .unwrap_or(0);
 
-        // Always create IdleConfig with default heartbeat interval (100ms).
+        // Always create IdleConfig with default WMB delay (100ms).
         // User's idle_source config (if provided) overrides threshold and increment_by
         // for actual idle detection (when to mark as idle and increment watermark).
         let idle_config = watermark_spec
@@ -38,11 +37,15 @@ impl WatermarkConfig {
                 step_interval: idle
                     .step_interval
                     .map(Duration::from)
-                    .unwrap_or(DEFAULT_HEARTBEAT_INTERVAL),
+                    .unwrap_or(DEFAULT_WMB_DELAY),
                 threshold: idle.threshold.map(Duration::from).unwrap_or_default(),
                 init_source_delay: idle.init_source_delay.map(Duration::from),
             })
             .unwrap_or_default();
+
+        // Use the step_interval from idle_config for all bucket delays.
+        // This ensures consistent timing for watermark publishing and liveness signals.
+        let heartbeat_delay = Some(idle_config.step_interval);
 
         // Helper function to create bucket config for to_vertex
         let create_to_vertex_bucket_config = |to: &ToVertexConfig| BucketConfig {
@@ -55,7 +58,7 @@ impl WatermarkConfig {
                 )
                 .into_boxed_str(),
             ),
-            delay: Some(Duration::from_millis(delay_in_millis)),
+            delay: heartbeat_delay,
         };
 
         // Helper function to create bucket config for from_vertex
@@ -70,7 +73,7 @@ impl WatermarkConfig {
                     )
                     .into_boxed_str(),
                 ),
-                delay: Some(Duration::from_millis(delay_in_millis)),
+                delay: heartbeat_delay,
             };
 
         match vertex {
@@ -83,7 +86,7 @@ impl WatermarkConfig {
                         format!("{namespace}-{pipeline_name}-{vertex_name}_SOURCE_OT")
                             .into_boxed_str(),
                     ),
-                    delay: Some(Duration::from_millis(delay_in_millis)),
+                    delay: heartbeat_delay,
                 },
                 to_vertex_bucket_config: to_vertex_config
                     .iter()
@@ -136,21 +139,21 @@ pub(crate) struct SourceWatermarkConfig {
     pub(crate) idle_config: IdleConfig,
 }
 
-/// Default heartbeat interval for publishing watermarks to signal liveness.
-/// This is independent of user's idle configuration.
-pub(crate) const DEFAULT_HEARTBEAT_INTERVAL: Duration = Duration::from_millis(100);
+/// Default delay for publishing WMB (Watermark Message Block) to signal liveness.
+/// This is used as the default step_interval for idle detection and bucket delay.
+pub(crate) const DEFAULT_WMB_DELAY: Duration = Duration::from_millis(100);
 
 /// Idle configuration for detecting idleness when there is no data
 /// from source and publish the Watermark.
 ///
-/// Note: `step_interval` (heartbeat interval) defaults to 100ms and is always active.
+/// Note: `step_interval` defaults to 100ms (DEFAULT_WMB_DELAY) and is always active.
 /// The `threshold` and `increment_by` are only used when the user explicitly configures
 /// idle detection - they control when to mark a partition as "idle" and increment the watermark.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct IdleConfig {
     /// How much to increment the watermark when partition is idle
     pub(crate) increment_by: Duration,
-    /// How often to publish heartbeat watermarks (default 100ms)
+    /// How often to publish WMB (default 100ms)
     pub(crate) step_interval: Duration,
     /// How long without data before marking partition as idle
     pub(crate) threshold: Duration,
@@ -162,7 +165,7 @@ impl Default for IdleConfig {
     fn default() -> Self {
         IdleConfig {
             increment_by: Duration::from_millis(0),
-            step_interval: DEFAULT_HEARTBEAT_INTERVAL,
+            step_interval: DEFAULT_WMB_DELAY,
             threshold: Duration::from_millis(0),
             init_source_delay: None,
         }

@@ -17,7 +17,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
@@ -248,13 +247,17 @@ pub(crate) struct SourceWatermarkHandle {
 
 impl SourceWatermarkHandle {
     /// Creates a new SourceWatermarkHandle.
+    /// Uses `idle_config.step_interval` (default 100ms) as the WMB delay for all
+    /// watermark publishing - both source and ISB idle detection.
     pub(crate) async fn new(
-        idle_timeout: Duration,
         js_context: async_nats::jetstream::Context,
         to_vertex_configs: &[ToVertexConfig],
         config: &SourceWatermarkConfig,
         cln_token: CancellationToken,
     ) -> Result<Self> {
+        // Use step_interval from idle_config as the unified WMB delay
+        let wmb_delay = config.idle_config.step_interval;
+
         // Create KV store for ProcessorManager (hb_time is now embedded in WMB)
         let ot_bucket = js_context
             .get_key_value(config.source_bucket_config.ot_bucket)
@@ -279,14 +282,16 @@ impl SourceWatermarkHandle {
             config.max_delay,
             config.source_bucket_config.clone(),
             config.to_vertex_bucket_config.clone(),
+            wmb_delay,
         )
         .await?;
 
-        // Source idle manager is always created with the idle config (which has default 100ms heartbeat)
+        // Source idle manager is always created with the idle config (which has default 100ms WMB delay)
         let source_idle_manager = SourceIdleDetector::new(config.idle_config.clone());
 
+        // Use the same WMB delay for ISB idle detection
         let isb_idle_manager =
-            ISBIdleDetector::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
+            ISBIdleDetector::new(wmb_delay, to_vertex_configs, js_context.clone()).await;
 
         let state =
             SourceWatermarkState::new(publisher, fetcher, isb_idle_manager, source_idle_manager);
@@ -295,10 +300,10 @@ impl SourceWatermarkHandle {
             state: Arc::new(Mutex::new(state)),
         };
 
-        // start a task to keep publishing idle watermarks every idle_timeout duration
+        // start a task to keep publishing idle watermarks every wmb_delay
         tokio::spawn({
             let source_watermark_handle = source_watermark_handle.clone();
-            let mut interval_ticker = tokio::time::interval(idle_timeout);
+            let mut interval_ticker = tokio::time::interval(wmb_delay);
             async move {
                 loop {
                     tokio::select! {
@@ -426,6 +431,8 @@ impl SourceWatermarkHandle {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
     use async_nats::jetstream::stream;
@@ -481,7 +488,6 @@ mod tests {
             .unwrap();
 
         let handle = SourceWatermarkHandle::new(
-            Duration::from_millis(100),
             js_context.clone(),
             Default::default(),
             &source_config,
@@ -633,7 +639,6 @@ mod tests {
             .unwrap();
 
         let handle = SourceWatermarkHandle::new(
-            Duration::from_millis(100),
             js_context.clone(),
             &[ToVertexConfig {
                 name: "edge_vertex",
@@ -826,7 +831,6 @@ mod tests {
         };
 
         let handle = SourceWatermarkHandle::new(
-            Duration::from_millis(10),
             js_context.clone(),
             &to_vertex_configs,
             &SourceWatermarkConfig {
@@ -980,7 +984,6 @@ mod tests {
         };
 
         let handle = SourceWatermarkHandle::new(
-            Duration::from_millis(3),
             js_context.clone(),
             &to_vertex_configs,
             &SourceWatermarkConfig {
@@ -1130,7 +1133,6 @@ mod tests {
             .unwrap();
 
         let handle = SourceWatermarkHandle::new(
-            Duration::from_millis(100),
             js_context.clone(),
             Default::default(),
             &source_config,

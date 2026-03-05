@@ -38,7 +38,6 @@ const DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS: u64 = 20; // time we will wait for UD
 const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
-const ENV_NUMAFLOW_WATERMARK_DELAY: &str = "NUMAFLOW_WATERMARK_DELAY_IN_MS";
 const ENV_WRITE_CONCURRENCY_SIZE: &str = "WRITE_CONCURRENCY_SIZE";
 const ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS: &str = "NUMAFLOW_GRACEFUL_TIMEOUT_SECS";
 const ENV_MAX_ACK_PENDING: &str = "MAX_ACK_PENDING";
@@ -49,7 +48,6 @@ pub(crate) const DEFAULT_STREAM_MAP_SOCKET: &str = "/var/run/numaflow/mapstream.
 const DEFAULT_MAP_SERVER_INFO_FILE: &str = "/var/run/numaflow/mapper-server-info";
 const DEFAULT_SERVING_STORE_SOCKET: &str = "/var/run/numaflow/serving.sock";
 const DEFAULT_SERVING_STORE_SERVER_INFO_FILE: &str = "/var/run/numaflow/serving-server-info";
-const DEFAULT_WATERMARK_DELAY_IN_MILLIS: u64 = 100;
 pub(crate) const VERTEX_TYPE_SOURCE: &str = "Source";
 pub(crate) const VERTEX_TYPE_SINK: &str = "Sink";
 pub(crate) const VERTEX_TYPE_MAP_UDF: &str = "MapUDF";
@@ -585,11 +583,8 @@ impl PipelineConfig {
             .clone()
             .is_none_or(|w| !w.disabled.unwrap_or(false))
         {
-            let delay_in_millis = env_vars
-                .get(ENV_NUMAFLOW_WATERMARK_DELAY)
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(DEFAULT_WATERMARK_DELAY_IN_MILLIS);
-
+            // Watermark delay is now derived from idle_config.step_interval (default 100ms)
+            // which is the unified heartbeat interval for all watermark publishing.
             WatermarkConfig::new(
                 vertex_obj.spec.watermark.clone(),
                 &namespace,
@@ -598,7 +593,6 @@ impl PipelineConfig {
                 &vertex,
                 &from_vertex_config,
                 &to_vertex_config,
-                delay_in_millis,
             )
         } else {
             None
