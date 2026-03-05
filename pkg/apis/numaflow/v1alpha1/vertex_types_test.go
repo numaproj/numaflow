@@ -887,69 +887,37 @@ func Test_VertexStatus_IsHealthy(t *testing.T) {
 	}
 }
 
-func TestAbstractVertex_GetEffectiveOrderedConfig(t *testing.T) {
+func TestAbstractVertex_IsOrdered(t *testing.T) {
 	tests := []struct {
-		name            string
-		vertex          AbstractVertex
-		pipelineOrdered *Ordered
-		want            bool
+		name   string
+		vertex AbstractVertex
+		want   bool
 	}{
 		{
-			name: "vertex ordered enabled, pipeline ordered enabled",
+			name: "vertex ordered enabled",
 			vertex: AbstractVertex{
 				Name:    "test",
 				Ordered: &Ordered{Enabled: true},
 				UDF:     &UDF{Container: &Container{Image: "test"}},
 			},
-			pipelineOrdered: &Ordered{Enabled: true},
-			want:            true,
+			want: true,
 		},
 		{
-			name: "vertex ordered disabled, pipeline ordered enabled",
+			name: "vertex ordered disabled",
 			vertex: AbstractVertex{
 				Name:    "test",
 				Ordered: &Ordered{Enabled: false},
 				UDF:     &UDF{Container: &Container{Image: "test"}},
 			},
-			pipelineOrdered: &Ordered{Enabled: true},
-			want:            false,
+			want: false,
 		},
 		{
-			name: "vertex ordered enabled, pipeline ordered disabled",
-			vertex: AbstractVertex{
-				Name:    "test",
-				Ordered: &Ordered{Enabled: true},
-				UDF:     &UDF{Container: &Container{Image: "test"}},
-			},
-			pipelineOrdered: &Ordered{Enabled: false},
-			want:            true,
-		},
-		{
-			name: "vertex ordered not set, pipeline ordered enabled",
+			name: "vertex ordered not set - returns false",
 			vertex: AbstractVertex{
 				Name: "test",
 				UDF:  &UDF{Container: &Container{Image: "test"}},
 			},
-			pipelineOrdered: &Ordered{Enabled: true},
-			want:            true,
-		},
-		{
-			name: "vertex ordered not set, pipeline ordered disabled",
-			vertex: AbstractVertex{
-				Name: "test",
-				UDF:  &UDF{Container: &Container{Image: "test"}},
-			},
-			pipelineOrdered: &Ordered{Enabled: false},
-			want:            false,
-		},
-		{
-			name: "vertex ordered not set, pipeline ordered not set",
-			vertex: AbstractVertex{
-				Name: "test",
-				UDF:  &UDF{Container: &Container{Image: "test"}},
-			},
-			pipelineOrdered: nil,
-			want:            false,
+			want: false,
 		},
 		{
 			name: "reduce vertex with ordered enabled - should return false",
@@ -969,11 +937,10 @@ func TestAbstractVertex_GetEffectiveOrderedConfig(t *testing.T) {
 					},
 				},
 			},
-			pipelineOrdered: &Ordered{Enabled: true},
-			want:            false,
+			want: false,
 		},
 		{
-			name: "reduce vertex without ordered config, pipeline ordered enabled - should return false",
+			name: "reduce vertex without ordered config - should return false",
 			vertex: AbstractVertex{
 				Name: "test",
 				UDF: &UDF{
@@ -989,14 +956,13 @@ func TestAbstractVertex_GetEffectiveOrderedConfig(t *testing.T) {
 					},
 				},
 			},
-			pipelineOrdered: &Ordered{Enabled: true},
-			want:            false,
+			want: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.vertex.GetEffectiveOrderedConfig(tt.pipelineOrdered)
+			got := tt.vertex.IsOrdered()
 			assert.Equal(t, tt.want, got)
 		})
 	}
