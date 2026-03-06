@@ -97,7 +97,6 @@ func (r *jetStreamInstaller) Install(ctx context.Context) (*dfv1.BufferServiceCo
 	if r.isbSvc.Spec.JetStream.GetReplicas() < 3 {
 		// Replica can not > 1 with non-cluster mode
 		v.Set("otbucket.replicas", 1)
-		v.Set("procbucket.replicas", 1)
 		v.Set("stream.replicas", 1)
 	}
 	b, err := yaml.Marshal(v.AllSettings())

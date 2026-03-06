@@ -319,7 +319,7 @@ mod tests {
     async fn test_fetch_watermark_single_edge_single_processor_single_partition() {
         // Create a ProcessorManager with a single Processor and a single OffsetTimeline
         let processor_name = Bytes::from("processor1");
-        let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0]);
+        let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0], 0);
         let mut timeline = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
@@ -328,18 +328,24 @@ mod tests {
             offset: 1,
             idle: false,
             partition: 0,
+            hb_time: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 200,
             offset: 2,
             idle: false,
             partition: 0,
+            hb_time: 0,
+            processor_count: None,
         };
         let wmb3 = WMB {
             watermark: 300,
             offset: 3,
             idle: false,
             partition: 0,
+            hb_time: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -362,7 +368,6 @@ mod tests {
         let bucket_config = BucketConfig {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
-            hb_bucket: "hb_bucket",
             partitions: vec![0],
             delay: None,
         };
@@ -383,9 +388,9 @@ mod tests {
         let processor_name2 = Bytes::from("processor2");
         let processor_name3 = Bytes::from("processor3");
 
-        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0]);
-        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0]);
-        let mut processor3 = Processor::new(processor_name3.clone(), Status::Active, &[0]);
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0], 0);
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0], 0);
+        let mut processor3 = Processor::new(processor_name3.clone(), Status::Active, &[0], 0);
 
         let mut timeline1 = OffsetTimeline::new(10);
         let mut timeline2 = OffsetTimeline::new(10);
@@ -398,24 +403,32 @@ mod tests {
                 offset: 5,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 150,
                 offset: 10,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 200,
                 offset: 15,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 250,
                 offset: 20,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2 = vec![
@@ -424,24 +437,32 @@ mod tests {
                 offset: 3,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 160,
                 offset: 8,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 210,
                 offset: 13,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 260,
                 offset: 18,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs3 = vec![
@@ -450,24 +471,32 @@ mod tests {
                 offset: 2,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 170,
                 offset: 7,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 220,
                 offset: 12,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 270,
                 offset: 17,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
 
@@ -501,7 +530,6 @@ mod tests {
         let bucket_config = BucketConfig {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
-            hb_bucket: "hb_bucket",
             partitions: vec![0],
             delay: None,
         };
@@ -524,9 +552,9 @@ mod tests {
         let processor_name2 = Bytes::from("processor2");
         let processor_name3 = Bytes::from("processor3");
 
-        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0, 1]);
-        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0, 1]);
-        let mut processor3 = Processor::new(processor_name3.clone(), Status::Active, &[0, 1]);
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0, 1], 0);
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0, 1], 0);
+        let mut processor3 = Processor::new(processor_name3.clone(), Status::Active, &[0, 1], 0);
 
         let mut timeline1_p0 = OffsetTimeline::new(10);
         let mut timeline1_p1 = OffsetTimeline::new(10);
@@ -542,24 +570,32 @@ mod tests {
                 offset: 6,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 150,
                 offset: 10,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 200,
                 offset: 15,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 250,
                 offset: 20,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs1_p1 = vec![
@@ -568,24 +604,32 @@ mod tests {
                 offset: 25,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 160,
                 offset: 30,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 210,
                 offset: 35,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 260,
                 offset: 40,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p0 = vec![
@@ -594,24 +638,32 @@ mod tests {
                 offset: 3,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 170,
                 offset: 8,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 220,
                 offset: 13,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 270,
                 offset: 18,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p1 = vec![
@@ -620,24 +672,32 @@ mod tests {
                 offset: 23,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 180,
                 offset: 28,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 230,
                 offset: 33,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 280,
                 offset: 38,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs3_p0 = vec![
@@ -646,24 +706,32 @@ mod tests {
                 offset: 2,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 190,
                 offset: 7,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 240,
                 offset: 12,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 290,
                 offset: 17,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs3_p1 = vec![
@@ -672,24 +740,32 @@ mod tests {
                 offset: 22,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 200,
                 offset: 27,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 250,
                 offset: 32,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 300,
                 offset: 37,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
 
@@ -735,7 +811,6 @@ mod tests {
         let bucket_config = BucketConfig {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
-            hb_bucket: "hb_bucket",
             partitions: vec![0, 1],
             delay: None,
         };
@@ -761,9 +836,9 @@ mod tests {
         let processor_name2_edge1 = Bytes::from("processor2_edge1");
 
         let mut processor1_edge1 =
-            Processor::new(processor_name1_edge1.clone(), Status::Active, &[0, 1]);
+            Processor::new(processor_name1_edge1.clone(), Status::Active, &[0, 1], 0);
         let mut processor2_edge1 =
-            Processor::new(processor_name2_edge1.clone(), Status::Active, &[0, 1]);
+            Processor::new(processor_name2_edge1.clone(), Status::Active, &[0, 1], 0);
 
         let mut timeline1_p0_edge1 = OffsetTimeline::new(10);
         let mut timeline1_p1_edge1 = OffsetTimeline::new(10);
@@ -777,12 +852,16 @@ mod tests {
                 offset: 6,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 150,
                 offset: 10,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs1_p1_edge1 = vec![
@@ -791,12 +870,16 @@ mod tests {
                 offset: 25,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 160,
                 offset: 30,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p0_edge1 = vec![
@@ -805,12 +888,16 @@ mod tests {
                 offset: 3,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 170,
                 offset: 8,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p1_edge1 = vec![
@@ -819,12 +906,16 @@ mod tests {
                 offset: 23,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 180,
                 offset: 28,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
 
@@ -860,9 +951,9 @@ mod tests {
         let processor_name2_edge2 = Bytes::from("processor2_edge2");
 
         let mut processor1_edge2 =
-            Processor::new(processor_name1_edge2.clone(), Status::Active, &[0, 1]);
+            Processor::new(processor_name1_edge2.clone(), Status::Active, &[0, 1], 0);
         let mut processor2_edge2 =
-            Processor::new(processor_name2_edge2.clone(), Status::Active, &[0, 1]);
+            Processor::new(processor_name2_edge2.clone(), Status::Active, &[0, 1], 0);
 
         let mut timeline1_p0_edge2 = OffsetTimeline::new(10);
         let mut timeline1_p1_edge2 = OffsetTimeline::new(10);
@@ -876,12 +967,16 @@ mod tests {
                 offset: 2,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 190,
                 offset: 7,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs1_p1_edge2 = vec![
@@ -890,12 +985,16 @@ mod tests {
                 offset: 22,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 200,
                 offset: 27,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p0_edge2 = vec![
@@ -904,12 +1003,16 @@ mod tests {
                 offset: 4,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 210,
                 offset: 9,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p1_edge2 = vec![
@@ -918,12 +1021,16 @@ mod tests {
                 offset: 24,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 220,
                 offset: 29,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
 
@@ -961,14 +1068,12 @@ mod tests {
         let bucket_config1 = BucketConfig {
             vertex: "edge1",
             ot_bucket: "ot_bucket1",
-            hb_bucket: "hb_bucket1",
             partitions: vec![0, 1],
             delay: None,
         };
         let bucket_config2 = BucketConfig {
             vertex: "edge2",
             ot_bucket: "ot_bucket2",
-            hb_bucket: "hb_bucket2",
             partitions: vec![0, 1],
             delay: None,
         };
@@ -991,7 +1096,7 @@ mod tests {
     async fn test_fetch_head_idle_wmb_single_partition() {
         // Create a ProcessorManager with a single Processor and a single OffsetTimeline
         let processor_name = Bytes::from("processor1");
-        let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0]);
+        let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0], 0);
         let mut timeline = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
@@ -1000,12 +1105,16 @@ mod tests {
             offset: 1,
             idle: true,
             partition: 0,
+            hb_time: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 200,
             offset: 2,
             idle: true,
             partition: 0,
+            hb_time: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -1027,7 +1136,6 @@ mod tests {
         let bucket_config = BucketConfig {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
-            hb_bucket: "hb_bucket",
             partitions: vec![0],
             delay: None,
         };
@@ -1050,7 +1158,7 @@ mod tests {
     async fn test_fetch_head_idle_wmb_not_idle() {
         // Create a ProcessorManager with a single Processor and a single OffsetTimeline
         let processor_name = Bytes::from("processor1");
-        let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0]);
+        let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0], 0);
         let mut timeline = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries (one not idle)
@@ -1059,12 +1167,16 @@ mod tests {
             offset: 1,
             idle: true,
             partition: 0,
+            hb_time: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 200,
             offset: 2,
             idle: false, // Not idle
             partition: 0,
+            hb_time: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -1086,7 +1198,6 @@ mod tests {
         let bucket_config = BucketConfig {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
-            hb_bucket: "hb_bucket",
             partitions: vec![0],
             delay: None,
         };
@@ -1106,8 +1217,8 @@ mod tests {
         let processor_name1 = Bytes::from("processor1");
         let processor_name2 = Bytes::from("processor2");
 
-        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0]);
-        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0]);
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0], 0);
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0], 0);
 
         let mut timeline1_p0 = OffsetTimeline::new(10);
         let mut timeline2_p0 = OffsetTimeline::new(10);
@@ -1119,12 +1230,16 @@ mod tests {
                 offset: 6,
                 idle: true,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 150,
                 offset: 10,
                 idle: true,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p0 = vec![
@@ -1133,12 +1248,16 @@ mod tests {
                 offset: 25,
                 idle: true,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 160,
                 offset: 30,
                 idle: false, // Not idle
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
 
@@ -1167,7 +1286,6 @@ mod tests {
         let bucket_config = BucketConfig {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
-            hb_bucket: "hb_bucket",
             partitions: vec![0],
             delay: None,
         };
@@ -1187,8 +1305,8 @@ mod tests {
         let processor_name1 = Bytes::from("processor1");
         let processor_name2 = Bytes::from("processor2");
 
-        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0]);
-        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0]);
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0], 0);
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0], 0);
 
         let mut timeline1 = OffsetTimeline::new(10);
         let mut timeline2 = OffsetTimeline::new(10);
@@ -1202,12 +1320,16 @@ mod tests {
                 offset: 3,
                 idle: true,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 200, // This will be the head for processor1
                 offset: 10,
                 idle: true,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2 = vec![
@@ -1216,12 +1338,16 @@ mod tests {
                 offset: 5,
                 idle: true,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 180, // This will be the head for processor2
                 offset: 8,
                 idle: true,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
 
@@ -1250,7 +1376,6 @@ mod tests {
         let bucket_config = BucketConfig {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
-            hb_bucket: "hb_bucket",
             partitions: vec![0],
             delay: None,
         };
@@ -1274,7 +1399,7 @@ mod tests {
     async fn test_fetch_head_watermark_single_edge_single_processor_single_partition() {
         // Create a ProcessorManager with a single Processor and a single OffsetTimeline
         let processor_name = Bytes::from("processor1");
-        let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0]);
+        let mut processor = Processor::new(processor_name.clone(), Status::Active, &[0], 0);
         let mut timeline = OffsetTimeline::new(10);
 
         // Populate the OffsetTimeline with sorted WMB entries
@@ -1283,18 +1408,24 @@ mod tests {
             offset: 1,
             idle: false,
             partition: 0,
+            hb_time: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 200,
             offset: 2,
             idle: false,
             partition: 0,
+            hb_time: 0,
+            processor_count: None,
         };
         let wmb3 = WMB {
             watermark: 300,
             offset: 3,
             idle: false,
             partition: 0,
+            hb_time: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -1317,7 +1448,6 @@ mod tests {
         let bucket_config = BucketConfig {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
-            hb_bucket: "hb_bucket",
             partitions: vec![0],
             delay: None,
         };
@@ -1337,8 +1467,8 @@ mod tests {
         let processor_name1 = Bytes::from("processor1");
         let processor_name2 = Bytes::from("processor2");
 
-        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0, 1]);
-        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0, 1]);
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0, 1], 0);
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0, 1], 0);
 
         let mut timeline1_p0 = OffsetTimeline::new(10);
         let mut timeline1_p1 = OffsetTimeline::new(10);
@@ -1352,12 +1482,16 @@ mod tests {
                 offset: 6,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 150,
                 offset: 10,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs1_p1 = vec![
@@ -1366,12 +1500,16 @@ mod tests {
                 offset: 25,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 160,
                 offset: 30,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p0 = vec![
@@ -1380,12 +1518,16 @@ mod tests {
                 offset: 3,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 170,
                 offset: 8,
                 idle: false,
                 partition: 0,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
         let wmbs2_p1 = vec![
@@ -1394,12 +1536,16 @@ mod tests {
                 offset: 23,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
             WMB {
                 watermark: 180,
                 offset: 28,
                 idle: false,
                 partition: 1,
+                hb_time: 0,
+                processor_count: None,
             },
         ];
 
@@ -1436,7 +1582,6 @@ mod tests {
         let bucket_config = BucketConfig {
             vertex: "from_vtx",
             ot_bucket: "ot_bucket",
-            hb_bucket: "hb_bucket",
             partitions: vec![0, 1],
             delay: None,
         };
@@ -1457,9 +1602,9 @@ mod tests {
         let processor_name1_edge2 = Bytes::from("processor1_edge2");
 
         let mut processor1_edge1 =
-            Processor::new(processor_name1_edge1.clone(), Status::Active, &[0]);
+            Processor::new(processor_name1_edge1.clone(), Status::Active, &[0], 0);
         let mut processor1_edge2 =
-            Processor::new(processor_name1_edge2.clone(), Status::Active, &[0]);
+            Processor::new(processor_name1_edge2.clone(), Status::Active, &[0], 0);
 
         let mut timeline1_edge1 = OffsetTimeline::new(10);
         let mut timeline1_edge2 = OffsetTimeline::new(10);
@@ -1470,12 +1615,16 @@ mod tests {
             offset: 10,
             idle: false,
             partition: 0,
+            hb_time: 0,
+            processor_count: None,
         };
         let wmb_edge2 = WMB {
             watermark: 150,
             offset: 5,
             idle: false,
             partition: 0,
+            hb_time: 0,
+            processor_count: None,
         };
 
         timeline1_edge1.put(wmb_edge1);
@@ -1507,14 +1656,12 @@ mod tests {
         let bucket_config1 = BucketConfig {
             vertex: "edge1",
             ot_bucket: "ot_bucket1",
-            hb_bucket: "hb_bucket1",
             partitions: vec![0],
             delay: None,
         };
         let bucket_config2 = BucketConfig {
             vertex: "edge2",
             ot_bucket: "ot_bucket2",
-            hb_bucket: "hb_bucket2",
             partitions: vec![0],
             delay: None,
         };
@@ -1536,9 +1683,9 @@ mod tests {
         let processor_name1_edge2 = Bytes::from("processor1_edge2");
 
         let mut processor1_edge1 =
-            Processor::new(processor_name1_edge1.clone(), Status::Active, &[0]);
+            Processor::new(processor_name1_edge1.clone(), Status::Active, &[0], 0);
         let mut processor1_edge2 =
-            Processor::new(processor_name1_edge2.clone(), Status::Active, &[0]);
+            Processor::new(processor_name1_edge2.clone(), Status::Active, &[0], 0);
 
         let mut timeline1_edge1 = OffsetTimeline::new(10);
         let mut timeline1_edge2 = OffsetTimeline::new(10);
@@ -1549,12 +1696,16 @@ mod tests {
             offset: 10,
             idle: false,
             partition: 0,
+            hb_time: 0,
+            processor_count: None,
         };
         let wmb_edge2 = WMB {
             watermark: 150,
             offset: 5,
             idle: false,
             partition: 0,
+            hb_time: 0,
+            processor_count: None,
         };
 
         timeline1_edge1.put(wmb_edge1);
@@ -1586,14 +1737,12 @@ mod tests {
         let bucket_config1 = BucketConfig {
             vertex: "edge1",
             ot_bucket: "ot_bucket1",
-            hb_bucket: "hb_bucket1",
             partitions: vec![0],
             delay: None,
         };
         let bucket_config2 = BucketConfig {
             vertex: "edge2",
             ot_bucket: "ot_bucket2",
-            hb_bucket: "hb_bucket2",
             partitions: vec![0],
             delay: None,
         };
