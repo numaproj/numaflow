@@ -236,15 +236,13 @@ impl MapHandle {
                 Some(error) = ctx.error_rx.recv() => {
                     error!(?error, "error received while performing map operation");
 
-                    if self.final_result.is_ok() {
+                    // Store only the first Grpc error (root cause). Ignore Mapper errors (like "mapper closed") which are consequences.
+                    if matches!(error, Error::Grpc(_)) && self.final_result.is_ok() {
                         // cancel the token to let the upstream know that we are shutting down so
                         // that they stop sending new messages.
                         ctx.cln_token.cancel();
                         self.final_result = Err(error);
                         self.shutting_down_on_err = true;
-                    } else {
-                        // store the error so that latest error will be propagated to the UI.
-                        self.final_result = Err(error);
                     }
                 },
                 read_msg = input_stream.next() => {
