@@ -258,7 +258,7 @@ impl SourceWatermarkHandle {
         // Use step_interval from idle_config as the unified WMB delay
         let wmb_delay = config.idle_config.step_interval;
 
-        // Create KV store for ProcessorManager (hb_time is now embedded in WMB)
+        // Create KV store for ProcessorManager
         let ot_bucket = js_context
             .get_key_value(config.source_bucket_config.ot_bucket)
             .await

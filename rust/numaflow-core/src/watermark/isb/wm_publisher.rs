@@ -49,9 +49,9 @@ impl LastPublishedState {
         true
     }
 
-    /// Check if heartbeat interval has elapsed and we need to publish for liveness.
-    /// Uses the configured delay as the heartbeat interval.
-    fn needs_heartbeat(&self) -> bool {
+    /// Checks if we have not published for the configured delay. We need to publish for heartbeat even if
+    /// watermark hasn't changed to maintain liveness.
+    fn needs_publish(&self) -> bool {
         if let Some(delay) = self.delay {
             self.last_published_time.elapsed() >= delay
         } else {
@@ -166,7 +166,7 @@ impl ISBWatermarkPublisher {
 
         // Check if we need to publish for heartbeat even if watermark hasn't changed.
         // This ensures processor liveness is maintained.
-        let needs_heartbeat = last_state.needs_heartbeat();
+        let needs_heartbeat = last_state.needs_publish();
 
         // If the watermark is same as the last published watermark update the last published offset
         // to the largest offset otherwise the watermark will regress between the offsets.

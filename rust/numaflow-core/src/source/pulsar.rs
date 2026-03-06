@@ -82,9 +82,10 @@ impl source::SourceReader for PulsarSource {
 
     async fn partitions(&mut self) -> crate::error::Result<source::SourcePartitions> {
         let partitions = self.partitions_vec();
-        // For Pulsar, total_partitions equals the number of active partitions
-        let total_partitions = Some(partitions.len() as u32);
-        Ok(source::SourcePartitions::new(partitions, total_partitions))
+        // For Pulsar with shared subscriptions, there's no partition assignment like Kafka.
+        // Each vertex replica is treated as a separate "partition" for watermark purposes.
+        // total_partitions is None because we don't know the total replica count at runtime.
+        Ok(source::SourcePartitions::new(partitions, None))
     }
 }
 

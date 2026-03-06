@@ -280,7 +280,7 @@ impl ISBWatermarkHandle {
         // create a processor manager map (from_vertex -> ProcessorManager)
         let mut processor_managers = HashMap::new();
         for from_bucket_config in &config.from_vertex_config {
-            // Create KV store for ProcessorManager (hb_time is now embedded in WMB)
+            // Create KV store for ProcessorManager
             let ot_store = Self::create_ot_store(&js_context, from_bucket_config).await;
 
             let processor_manager =
@@ -400,7 +400,6 @@ impl ISBWatermarkHandle {
     }
 
     /// Helper to create OT KV stores from bucket configs using the JetStream context.
-    /// Heartbeat is now embedded in WMB (hb_time field), so no separate HB stores are needed.
     async fn create_ot_stores(
         js_context: &async_nats::jetstream::Context,
         bucket_configs: &[BucketConfig],

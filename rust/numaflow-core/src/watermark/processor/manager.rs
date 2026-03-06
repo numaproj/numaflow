@@ -159,7 +159,7 @@ impl ProcessorManager {
         vertex_type: VertexType,
         vertex_replica: u16,
     ) -> Result<Self> {
-        // fetch old data from OT store (hb_time is now embedded in WMB)
+        // fetch old data from OT store
         let processors_map =
             Self::prepopulate_processors(&ot_store, bucket_config, vertex_type, vertex_replica)
                 .await;
