@@ -886,3 +886,84 @@ func Test_VertexStatus_IsHealthy(t *testing.T) {
 		})
 	}
 }
+
+func TestAbstractVertex_IsOrdered(t *testing.T) {
+	tests := []struct {
+		name   string
+		vertex AbstractVertex
+		want   bool
+	}{
+		{
+			name: "vertex ordered enabled",
+			vertex: AbstractVertex{
+				Name:    "test",
+				Ordered: &Ordered{Enabled: true},
+				UDF:     &UDF{Container: &Container{Image: "test"}},
+			},
+			want: true,
+		},
+		{
+			name: "vertex ordered disabled",
+			vertex: AbstractVertex{
+				Name:    "test",
+				Ordered: &Ordered{Enabled: false},
+				UDF:     &UDF{Container: &Container{Image: "test"}},
+			},
+			want: false,
+		},
+		{
+			name: "vertex ordered not set - returns false",
+			vertex: AbstractVertex{
+				Name: "test",
+				UDF:  &UDF{Container: &Container{Image: "test"}},
+			},
+			want: false,
+		},
+		{
+			name: "reduce vertex with ordered enabled - should return false",
+			vertex: AbstractVertex{
+				Name:    "test",
+				Ordered: &Ordered{Enabled: true},
+				UDF: &UDF{
+					Container: &Container{Image: "test"},
+					GroupBy: &GroupBy{
+						Window: Window{
+							Fixed: &FixedWindow{Length: &metav1.Duration{Duration: 60000000000}},
+						},
+						Keyed: true,
+						Storage: &PBQStorage{
+							PersistentVolumeClaim: &PersistenceStrategy{},
+						},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "reduce vertex without ordered config - should return false",
+			vertex: AbstractVertex{
+				Name: "test",
+				UDF: &UDF{
+					Container: &Container{Image: "test"},
+					GroupBy: &GroupBy{
+						Window: Window{
+							Fixed: &FixedWindow{Length: &metav1.Duration{Duration: 60000000000}},
+						},
+						Keyed: true,
+						Storage: &PBQStorage{
+							PersistentVolumeClaim: &PersistenceStrategy{},
+						},
+					},
+				},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.vertex.IsOrdered()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

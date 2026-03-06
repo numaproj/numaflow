@@ -367,6 +367,12 @@ spec:
                         default: 1s
                         type: string
                     type: object
+                  ordered:
+                    properties:
+                      enabled:
+                        default: false
+                        type: boolean
+                    type: object
                   sideInputs:
                     items:
                       properties:
@@ -7462,6 +7468,12 @@ spec:
                         nodeSelector:
                           additionalProperties:
                             type: string
+                          type: object
+                        ordered:
+                          properties:
+                            enabled:
+                              default: false
+                              type: boolean
                           type: object
                         partitions:
                           format: int32

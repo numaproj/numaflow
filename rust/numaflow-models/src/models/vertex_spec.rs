@@ -64,6 +64,8 @@ pub struct VertexSpec {
     /// NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
     #[serde(rename = "nodeSelector", skip_serializing_if = "Option::is_none")]
     pub node_selector: Option<::std::collections::HashMap<String, String>>,
+    #[serde(rename = "ordered", skip_serializing_if = "Option::is_none")]
+    pub ordered: Option<Box<crate::models::Ordered>>,
     /// Number of partitions of the vertex owned buffers. It applies to udf and sink vertices only.
     #[serde(rename = "partitions", skip_serializing_if = "Option::is_none")]
     pub partitions: Option<i32>,
@@ -139,6 +141,7 @@ impl VertexSpec {
             metadata: None,
             name,
             node_selector: None,
+            ordered: None,
             partitions: None,
             pipeline_name,
             priority: None,

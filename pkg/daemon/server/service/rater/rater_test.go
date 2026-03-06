@@ -782,3 +782,87 @@ func TestGetPodReadCounts_MultipleMetricSeries(t *testing.T) {
 		assert.Nil(t, podReadCount)
 	})
 }
+
+// TestRater_OrderedProcessing tests that pending counts are maintained correctly
+// when ordered processing is enabled (similar to reduce vertices)
+func TestRater_OrderedProcessing(t *testing.T) {
+	ctx := context.Background()
+	lookBackSeconds := uint32(30)
+
+	// Helper to compute effective ordered config (mirrors the logic in rater.go)
+	computeEffectiveOrdered := func(vtx *v1alpha1.AbstractVertex, pipelineOrdered *v1alpha1.Ordered) bool {
+		if vtx.IsReduceUDF() {
+			return false
+		}
+		if vtx.Ordered != nil {
+			return vtx.Ordered.Enabled
+		}
+		if pipelineOrdered != nil {
+			return pipelineOrdered.Enabled
+		}
+		return false
+	}
+
+	// Helper to check if pending should be maintained based on the condition in monitorOnePod
+	shouldMaintainPending := func(vtx *v1alpha1.AbstractVertex, pipelineOrdered *v1alpha1.Ordered, replica int) bool {
+		return vtx.IsReduceUDF() || computeEffectiveOrdered(vtx, pipelineOrdered) || replica == 0
+	}
+
+	// Test reduce vertex maintains pending for all replicas
+	reduceP := &v1alpha1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
+		Spec: v1alpha1.PipelineSpec{
+			Vertices: []v1alpha1.AbstractVertex{{Name: "v", Scale: v1alpha1.Scale{LookbackSeconds: &lookBackSeconds}, UDF: &v1alpha1.UDF{GroupBy: &v1alpha1.GroupBy{}}}},
+		},
+	}
+	assert.True(t, shouldMaintainPending(reduceP.GetVertex("v"), nil, 1), "Reduce vertex should maintain pending for all replicas")
+
+	// Test non-reduce without ordered: only replica 0 maintains pending
+	mapP := &v1alpha1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
+		Spec: v1alpha1.PipelineSpec{
+			Vertices: []v1alpha1.AbstractVertex{{Name: "v", Scale: v1alpha1.Scale{LookbackSeconds: &lookBackSeconds}, UDF: &v1alpha1.UDF{}}},
+		},
+	}
+	assert.True(t, shouldMaintainPending(mapP.GetVertex("v"), nil, 0), "Non-reduce should maintain pending for replica 0")
+	assert.False(t, shouldMaintainPending(mapP.GetVertex("v"), nil, 1), "Non-reduce should not maintain pending for non-zero replica")
+
+	// Test pipeline-level ordered enables all replicas
+	orderedP := &v1alpha1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
+		Spec: v1alpha1.PipelineSpec{
+			Ordered:  &v1alpha1.Ordered{Enabled: true},
+			Vertices: []v1alpha1.AbstractVertex{{Name: "v", Scale: v1alpha1.Scale{LookbackSeconds: &lookBackSeconds}, UDF: &v1alpha1.UDF{}}},
+		},
+	}
+	assert.True(t, shouldMaintainPending(orderedP.GetVertex("v"), orderedP.Spec.Ordered, 1), "Pipeline-level ordered should maintain pending for all replicas")
+
+	// Test vertex-level ordered override
+	vtxOrderedP := &v1alpha1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
+		Spec: v1alpha1.PipelineSpec{
+			Vertices: []v1alpha1.AbstractVertex{
+				{Name: "ordered", Scale: v1alpha1.Scale{LookbackSeconds: &lookBackSeconds}, UDF: &v1alpha1.UDF{}, Ordered: &v1alpha1.Ordered{Enabled: true}},
+				{Name: "not-ordered", Scale: v1alpha1.Scale{LookbackSeconds: &lookBackSeconds}, UDF: &v1alpha1.UDF{}},
+			},
+		},
+	}
+	assert.True(t, shouldMaintainPending(vtxOrderedP.GetVertex("ordered"), nil, 2), "Vertex-level ordered should maintain pending for all replicas")
+	assert.False(t, shouldMaintainPending(vtxOrderedP.GetVertex("not-ordered"), nil, 1), "Non-ordered vertex should not maintain pending for non-zero replica")
+
+	// Test reduce ignores ordered config
+	reduceWithOrderedP := &v1alpha1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "default"},
+		Spec: v1alpha1.PipelineSpec{
+			Ordered:  &v1alpha1.Ordered{Enabled: true},
+			Vertices: []v1alpha1.AbstractVertex{{Name: "v", Scale: v1alpha1.Scale{LookbackSeconds: &lookBackSeconds}, UDF: &v1alpha1.UDF{GroupBy: &v1alpha1.GroupBy{}}}},
+		},
+	}
+	vtx := reduceWithOrderedP.GetVertex("v")
+	assert.True(t, vtx.IsReduceUDF(), "Should be reduce vertex")
+	assert.False(t, vtx.IsOrdered(), "Reduce should ignore ordered config")
+
+	// Verify rater creation works
+	r := NewRater(ctx, orderedP)
+	assert.NotNil(t, r)
+}

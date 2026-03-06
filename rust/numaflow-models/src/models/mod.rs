@@ -112,6 +112,8 @@ pub mod nats_source;
 pub use self::nats_source::NatsSource;
 pub mod no_store;
 pub use self::no_store::NoStore;
+pub mod ordered;
+pub use self::ordered::Ordered;
 pub mod pbq_storage;
 pub use self::pbq_storage::PbqStorage;
 pub mod persistence_strategy;

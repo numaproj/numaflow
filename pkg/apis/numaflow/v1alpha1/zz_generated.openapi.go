@@ -83,6 +83,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsAuth":                         schema_pkg_apis_numaflow_v1alpha1_NatsAuth(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource":                       schema_pkg_apis_numaflow_v1alpha1_NatsSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NoStore":                          schema_pkg_apis_numaflow_v1alpha1_NoStore(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ordered":                          schema_pkg_apis_numaflow_v1alpha1_Ordered(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PBQStorage":                       schema_pkg_apis_numaflow_v1alpha1_PBQStorage(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy":              schema_pkg_apis_numaflow_v1alpha1_PersistenceStrategy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Pipeline":                         schema_pkg_apis_numaflow_v1alpha1_Pipeline(ref),
@@ -697,12 +698,18 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy"),
 						},
 					},
+					"ordered": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Ordered enables ordered processing for this vertex, overrides pipeline-level setting. When enabled, messages will be processed in order based on their event time. Note: Reduce vertices ignore this setting as they are already partitioned.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ordered"),
+						},
+					},
 				},
 				Required: []string{"name"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ordered", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
 	}
 }
 
@@ -3764,6 +3771,26 @@ func schema_pkg_apis_numaflow_v1alpha1_NoStore(ref common.ReferenceCallback) com
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_Ordered(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Ordered defines the ordered processing configuration.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"enabled": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Enabled toggles ordered processing.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_PBQStorage(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -4063,11 +4090,17 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref common.ReferenceCallback
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer"),
 						},
 					},
+					"ordered": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Ordered enables ordered processing for the entire pipeline. When enabled, messages will be processed in order based on their event time. This can be overridden at the vertex level.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ordered"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ordered", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"},
 	}
 }
 
@@ -6730,6 +6763,12 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy"),
 						},
 					},
+					"ordered": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Ordered enables ordered processing for this vertex, overrides pipeline-level setting. When enabled, messages will be processed in order based on their event time. Note: Reduce vertices ignore this setting as they are already partitioned.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ordered"),
+						},
+					},
 					"pipelineName": {
 						SchemaProps: spec.SchemaProps{
 							Default: "",
@@ -6801,7 +6840,7 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ordered", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
 	}
 }
 
