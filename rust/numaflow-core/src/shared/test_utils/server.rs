@@ -59,16 +59,6 @@ impl TestServerHandle {
             // Note: waiting to join the server thread can block in case of single threaded tokio
             // test runtime, since `join()` parks the calling tokio worker thread until the server
             // thread exits. This can create deadlock issues.
-            // Run [tokio::test] with "multi_thread" runtime flavor to avoid this issue.
-            //
-            // Example deadlock scenario observed:
-            // * `handle.join()` blocks the tokio runtime thread, waiting for the source server thread to exit
-            // * The source server thread waits for the gRPC connection to close
-            // * The gRPC connection closes when `read_tx` is dropped
-            // * `read_tx` is dropped when SourceActor exits
-            // * `SourceActor` exits when all `Source.sender` clones are dropped
-            // * Some `sender` clones are held by ack tasks running on the test's tokio runtime
-            // * Those ack tasks can't run because the runtime thread is blocked by `handle.join()`
             let result = handle.join();
             if let Err(e) = result {
                 println!("Thread join failed: {:?}", e);
@@ -120,7 +110,7 @@ where
             // Temp directory kept alive so the socket file persists
             // when client makes a connection.
             let _tmp_dir = tmp_dir;
-            tokio::runtime::Builder::new_multi_thread()
+            tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .expect("failed to build tokio runtime for test server")
