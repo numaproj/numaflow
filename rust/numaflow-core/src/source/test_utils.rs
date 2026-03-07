@@ -170,8 +170,7 @@ impl SourceTestHandle {
             .timeout(Duration::from_millis(100))
             .build();
 
-        let http_source =
-            numaflow_http::HttpSourceHandle::new(http_source_config, cln_token).await;
+        let http_source = numaflow_http::HttpSourceHandle::new(http_source_config, cln_token).await;
         let core_http_source = CoreHttpSource::new(batch_size, http_source);
 
         let source = Source::new(
