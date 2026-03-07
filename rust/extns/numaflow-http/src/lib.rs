@@ -288,7 +288,18 @@ impl HttpSourceActor {
     }
 
     async fn pending(&self) -> Option<usize> {
-        Some(self.server_rx.len())
+        if !self.server_rx.is_empty() {
+            info!(
+                "Pending messages in HTTP Internal Channel: {}",
+                self.server_rx.len()
+            );
+        }
+
+        // we have to always return None because, if we return Some, the autoscaler will scale up thinking
+        // there are pending messages and will start autoscaling.
+        // Pending should only be supported for sources which are not bounded like kafka, jetstream
+        // pulsar, sqs, etc.
+        None
     }
 
     async fn read(&mut self, count: usize) -> Option<Result<Vec<HttpMessage>>> {
