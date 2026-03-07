@@ -166,7 +166,7 @@ mod tests {
     use std::collections::HashSet;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
-    use tokio::sync::mpsc::Sender;
+    use tokio::sync::mpsc::{Receiver, Sender};
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
 
@@ -555,6 +555,68 @@ mod tests {
 
         let sink_handle = SinkTestHandle::create_sink(
             SinkType::<NoOpSink>::BuiltIn(SinkClientType::Log),
+            None,
+            None,
+            batch_size,
+        )
+        .await;
+
+        start_forwarder_test(
+            source_handle,
+            Some(mapper_handle),
+            sink_handle,
+            None,
+            cln_token,
+        )
+        .await;
+    }
+
+    struct PanicSink;
+
+    #[tonic::async_trait]
+    impl sink::Sinker for PanicSink {
+        async fn sink(&self, mut input: Receiver<sink::SinkRequest>) -> Vec<sink::Response> {
+            if input.recv().await.is_some() {
+                panic!("This sink can't receive messages, received one, so panicking now");
+            }
+            vec![]
+        }
+    }
+
+    /// A test where the sink panics leading to none of the messages being processed.
+    /// The panic should happen because the sourcer.pending() never returned zero and
+    /// the surrounding check timed out.
+    #[tokio::test]
+    #[should_panic]
+    async fn test_map_sink_panic() {
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let batch_size = 10;
+
+        // Use the built-in HTTP source — no separate gRPC source server is spawned.
+        let source_handle = SourceTestHandle::create_http_source(
+            batch_size,
+            batch_size * 2,
+            100,
+            tracker.clone(),
+            cln_token.clone(),
+        )
+        .await;
+
+        // create a mapper
+        let mapper_handle = MapperTestHandle::create_mapper(
+            Cat,
+            tracker,
+            MapMode::Unary,
+            batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+        )
+        .await;
+
+        let sink_handle = SinkTestHandle::create_sink(
+            SinkType::UserDefined(PanicSink),
             None,
             None,
             batch_size,
@@ -1470,10 +1532,9 @@ mod tests {
         .await;
 
         cln_token.cancel();
-        forwarder_handle
+        let tokio_result = forwarder_handle
             .await
-            .expect("Join handle await failed")
-            .expect("error from forwarder join handle ");
+            .expect("Join handle await failed");
 
         assert!(
             tokio_result.is_ok(),
@@ -1484,7 +1545,9 @@ mod tests {
             drop(source_transformer.transformer);
             source_transformer.server_handle.shutdown();
         }
-        source_server_handle.shutdown();
+        if source_server_handle.is_some() {
+            source_server_handle.unwrap().shutdown();
+        }
 
         if let Some(server_handle) = map_server_handle {
             server_handle.shutdown();
