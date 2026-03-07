@@ -584,11 +584,11 @@ mod tests {
     }
 
     /// A test where the sink panics leading to none of the messages being processed.
-    /// The panic should happen because the sourcer.pending() never returned zero and
-    /// the surrounding check timed out.
+    /// The panic happens here because the forwarder returned an error.
     #[tokio::test]
     #[should_panic]
     async fn test_map_sink_panic() {
+        tracing_subscriber::fmt::init();
         let cln_token = CancellationToken::new();
         let tracker = Tracker::new(None, cln_token.clone());
         let batch_size = 10;
@@ -1528,7 +1528,10 @@ mod tests {
         .await;
 
         cln_token.cancel();
-        let _ = forwarder_handle.await.expect("Join handle await failed");
+        forwarder_handle
+            .await
+            .expect("Join handle await failed")
+            .expect("Forwarder failed");
 
         assert!(
             tokio_result.is_ok(),

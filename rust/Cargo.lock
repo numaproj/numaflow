@@ -2526,6 +2526,7 @@ dependencies = [
  "tonic",
  "tower",
  "tracing",
+ "tracing-subscriber",
  "trait-variant",
  "zstd",
 ]
