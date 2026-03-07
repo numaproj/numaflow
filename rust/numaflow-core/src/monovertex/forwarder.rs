@@ -1516,7 +1516,7 @@ mod tests {
 
         // wait for one sec to check if the pending becomes zero, because all the messages
         // should be read and acked; if it doesn't, then fail the test
-        let _tokio_result = tokio::time::timeout(Duration::from_secs(1), async move {
+        let tokio_result = tokio::time::timeout(Duration::from_secs(1), async move {
             loop {
                 let pending = sourcer.pending().await.unwrap();
                 if pending == Some(0) {
@@ -1528,7 +1528,7 @@ mod tests {
         .await;
 
         cln_token.cancel();
-        let tokio_result = forwarder_handle.await.expect("Join handle await failed");
+        let _ = forwarder_handle.await.expect("Join handle await failed");
 
         assert!(
             tokio_result.is_ok(),
