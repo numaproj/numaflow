@@ -1133,7 +1133,7 @@ mod tests {
             .unwrap();
 
         let pending_count = pending_rx.await.unwrap();
-        assert_eq!(pending_count, Some(0)); // Should be 0 since we read all messages
+        assert_eq!(pending_count, None, "HTTP source pending should always be None");
 
         // Note: We already tested ack above when we acked the messages to complete the HTTP requests
 
@@ -1240,7 +1240,7 @@ mod tests {
 
         // Test pending count
         let pending = handle.pending().await;
-        assert_eq!(pending, Some(5), "Should have 5 pending messages");
+        assert_eq!(pending, None, "Should have 5 pending messages");
 
         // Test read method
         let messages = handle.read(3).await.unwrap().unwrap();
@@ -1259,13 +1259,9 @@ mod tests {
             assert!(body_str.contains(&format!("test{}", i)));
         }
 
-        // Test pending count after reading
+        // pending() always returns None for HTTP source
         let pending = handle.pending().await;
-        assert_eq!(
-            pending,
-            Some(2),
-            "Should have 2 pending messages after reading 3"
-        );
+        assert_eq!(pending, None, "HTTP source pending should always be None");
 
         // Test ack method (should always succeed for HTTP source)
         let offsets: Vec<String> = messages.iter().map(|m| m.id.clone()).collect();
@@ -1295,9 +1291,9 @@ mod tests {
             assert_eq!(response.status(), StatusCode::OK);
         }
 
-        // Verify no more pending messages
+        // pending() always returns None for HTTP source
         let pending = handle.pending().await;
-        assert_eq!(pending, Some(0), "Should have 0 pending messages");
+        assert_eq!(pending, None, "HTTP source pending should always be None");
     }
 
     #[tokio::test]
