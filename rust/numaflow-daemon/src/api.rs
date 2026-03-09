@@ -152,7 +152,16 @@ mod tests {
     use tower::ServiceExt;
 
     fn test_router() -> Router {
-        let svc = Arc::new(MvtxDaemonService);
+        use crate::runtime::RuntimeCache;
+        let runtime = Arc::new(RuntimeCache::new(
+            "simple-mono-vertex".to_string(),
+            "default".to_string(),
+            2,
+        ));
+        let svc = Arc::new(MvtxDaemonService::new(
+            "simple-mono-vertex".to_string(),
+            runtime,
+        ));
         Router::new()
             .route("/api/v1/metrics", get(api_v1_metrics))
             .route("/api/v1/status", get(api_v1_status))
@@ -185,10 +194,9 @@ mod tests {
             .get("processingRates")
             .and_then(|v| v.as_object())
             .expect("processingRates");
-        assert_eq!(rates.get("default").and_then(|v| v.as_f64()), Some(67.0));
-        assert_eq!(rates.get("1m").and_then(|v| v.as_f64()), Some(10.0));
-        assert_eq!(rates.get("5m").and_then(|v| v.as_f64()), Some(50.5));
-        assert_eq!(rates.get("15m").and_then(|v| v.as_f64()), Some(150.0));
+        // -1.0 is the "no data yet" sentinel for all windows.
+        assert_eq!(rates.get("default").and_then(|v| v.as_f64()), Some(-1.0));
+        assert_eq!(rates.get("1m").and_then(|v| v.as_f64()), Some(-1.0));
         let pendings = metrics
             .get("pendings")
             .and_then(|v| v.as_object())
@@ -198,14 +206,14 @@ mod tests {
                 .get("default")
                 .and_then(|v| v.as_str())
                 .and_then(|s| s.parse::<i64>().ok()),
-            Some(67)
+            Some(-1)
         );
         assert_eq!(
             pendings
                 .get("1m")
                 .and_then(|v| v.as_str())
                 .and_then(|s| s.parse::<i64>().ok()),
-            Some(10)
+            Some(-1)
         );
     }
 
@@ -223,19 +231,14 @@ mod tests {
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let status = json.get("status").expect("status key");
+        // Until the rater is implemented, status is "unknown" (D4).
         assert_eq!(
             status.get("status"),
-            Some(&serde_json::Value::String("healthy".into()))
-        );
-        assert_eq!(
-            status.get("message"),
-            Some(&serde_json::Value::String(
-                "MonoVertex data flow is healthy".into()
-            ))
+            Some(&serde_json::Value::String("unknown".into()))
         );
         assert_eq!(
             status.get("code"),
-            Some(&serde_json::Value::String("D1".into()))
+            Some(&serde_json::Value::String("D4".into()))
         );
     }
 
@@ -252,41 +255,12 @@ mod tests {
             .await
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        // Cache is empty until the background task fetches from pods.
         let errors = json
             .get("errors")
             .and_then(|e| e.as_array())
             .expect("errors array");
-        assert_eq!(errors.len(), 1);
-        let first = errors.first().expect("first error");
-        assert_eq!(
-            first.get("replica"),
-            Some(&serde_json::Value::String("mock_replica".into()))
-        );
-        let container_errors = first
-            .get("containerErrors")
-            .and_then(|c| c.as_array())
-            .expect("containerErrors");
-        assert_eq!(container_errors.len(), 1);
-        let ce = container_errors.first().expect("first container error");
-        assert_eq!(ce.get("container").and_then(|v| v.as_str()), Some("main"));
-        assert_eq!(ce.get("code").and_then(|v| v.as_str()), Some("mock_code"));
-        assert_eq!(
-            ce.get("message").and_then(|v| v.as_str()),
-            Some("mock_message")
-        );
-        assert_eq!(
-            ce.get("details").and_then(|v| v.as_str()),
-            Some("mock_details")
-        );
-        let ts = ce
-            .get("timestamp")
-            .and_then(|v| v.as_str())
-            .expect("timestamp");
-        assert!(
-            chrono::DateTime::parse_from_rfc3339(ts).is_ok(),
-            "timestamp should be RFC3339: {:?}",
-            ts
-        );
+        assert!(errors.is_empty());
     }
 
     #[tokio::test]

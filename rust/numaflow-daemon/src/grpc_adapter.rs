@@ -19,9 +19,9 @@ pub(crate) struct GrpcAdapter {
 }
 
 impl GrpcAdapter {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(svc: MvtxDaemonService) -> Self {
         Self {
-            inner: MonoVertexDaemonServiceServer::new(MvtxDaemonService),
+            inner: MonoVertexDaemonServiceServer::new(svc),
         }
     }
 }
@@ -54,7 +54,19 @@ impl Service<Request<Body>> for GrpcAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::RuntimeCache;
     use http::Method;
+    use std::sync::Arc;
+
+    fn make_adapter() -> GrpcAdapter {
+        let runtime = Arc::new(RuntimeCache::new(
+            "test-mvtx".to_string(),
+            "default".to_string(),
+            2,
+        ));
+        let svc = MvtxDaemonService::new("test-mvtx".to_string(), runtime);
+        GrpcAdapter::new(svc)
+    }
 
     /// gRPC unary request: 1 byte compressed-flag (0) + 4 byte length (big-endian) + message.
     /// For Empty, message is 0 bytes, so body = [0, 0, 0, 0, 0].
@@ -64,7 +76,7 @@ mod tests {
 
     #[tokio::test]
     async fn grpc_adapter_returns_ok_for_get_metrics_request() {
-        let mut adapter = GrpcAdapter::new();
+        let mut adapter = make_adapter();
         let request = Request::builder()
             .method(Method::POST)
             .uri("/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexMetrics")
