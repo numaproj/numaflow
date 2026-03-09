@@ -272,11 +272,6 @@ mod tests {
             }
         });
 
-        // wait for all requests to be received by polling read with a timeout
-        // pending() always returns None for HTTP source,
-        // so we use a sleep to wait for the server to receive all requests
-        sleep(Duration::from_millis(500)).await;
-
         // Test partitions
         let partitions = core_http_source.partitions().await.unwrap();
         assert_eq!(partitions.len(), 1, "Should have 1 partition");
