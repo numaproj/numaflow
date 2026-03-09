@@ -1133,7 +1133,10 @@ mod tests {
             .unwrap();
 
         let pending_count = pending_rx.await.unwrap();
-        assert_eq!(pending_count, None, "HTTP source pending should always be None");
+        assert_eq!(
+            pending_count, None,
+            "HTTP source pending should always be None"
+        );
 
         // Note: We already tested ack above when we acked the messages to complete the HTTP requests
 
