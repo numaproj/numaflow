@@ -146,6 +146,12 @@ const (
 	EnvReadBatchSize                    = "NUMAFLOW_READ_BATCH_SIZE"
 	EnvReadTimeoutMs                    = "NUMAFLOW_READ_TIMEOUT_MS"
 
+	// OTLP tracing (pipeline-level; set from Pipeline.spec.tracing)
+	EnvOTELExporterOTLPEndpoint       = "OTEL_EXPORTER_OTLP_ENDPOINT"
+	EnvOTELExporterOTLPTracesEndpoint = "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"
+	EnvOTELServiceName                = "OTEL_SERVICE_NAME"
+	DefaultOTELServiceName             = "numaflow-core"
+
 	NumaflowRustBinary          = "/bin/numaflow-rs"
 	PathVarRun                  = "/var/run/numaflow"
 	VertexMetricsPort           = 2469

@@ -130,6 +130,8 @@ pub async fn run() -> Result<()> {
 
     let env_vars: HashMap<String, String> = std::env::vars().collect();
     let settings = Settings::load(env_vars)?;
+    // Ensure W3C trace context propagator is set for extract/inject (e.g. when OTLP is enabled in binary).
+    crate::shared::otel::ensure_propagator();
     let crd_type = settings.custom_resource_type.clone();
 
     match crd_type {

@@ -538,6 +538,7 @@ func (r *vertexReconciler) createOrUpdateServices(ctx context.Context, vertex *d
 
 func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, isbSvcConfig dfv1.BufferServiceConfig, replicaIndex int) (*corev1.PodSpec, error) {
 	isbSvcType, envs := sharedutil.GetIsbSvcEnvVars(isbSvcConfig)
+	envs = append(envs, pl.Spec.GetOTLPEnvVars()...)
 	podSpec, err := vertex.GetPodSpec(dfv1.GetVertexPodSpecReq{
 		ISBSvcType:          isbSvcType,
 		Image:               r.image,

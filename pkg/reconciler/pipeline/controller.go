@@ -463,6 +463,7 @@ func (r *pipelineReconciler) createOrUpdateDaemonDeployment(ctx context.Context,
 	log := logging.FromContext(ctx)
 	isbSvcType, envs := sharedutil.GetIsbSvcEnvVars(isbSvcConfig)
 	envs = append(envs, corev1.EnvVar{Name: dfv1.EnvPipelineName, Value: pl.Name})
+	envs = append(envs, pl.Spec.GetOTLPEnvVars()...)
 
 	req := dfv1.GetDaemonDeploymentReq{
 		ISBSvcType:       isbSvcType,

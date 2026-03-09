@@ -7,6 +7,7 @@ use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
 use crate::message::Message;
 use crate::monovertex::bypass_router::MvtxBypassRouter;
+use crate::shared::otel;
 use crate::tracker::Tracker;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use std::collections::HashMap;
@@ -18,7 +19,8 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
-use tracing::error;
+use tracing::{Instrument, error};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 /// Type alias for the batch response - raw results from the UDF
 pub(in crate::mapper) type BatchMapResponse = Vec<map::map_response::Result>;
@@ -54,6 +56,26 @@ impl MapBatchTask {
     /// Executes the batch map operation.
     /// Returns an error if any message in the batch fails to be processed.
     pub async fn execute(self) -> Result<()> {
+        let batch_span = tracing::info_span!(
+            "numaflow.batch_map",
+            otel.kind = "INTERNAL",
+            messaging.operation = "batch_map",
+            messaging.batch_size = self.batch.len(),
+        );
+        // Link to the first message's parent context for continuity.
+        if let Some(parent_cx) = self
+            .batch
+            .first()
+            .and_then(|m| m.metadata.as_deref())
+            .map(otel::extract_trace_context)
+        {
+            batch_span.set_parent(parent_cx);
+        }
+
+        self.execute_inner().instrument(batch_span).await
+    }
+
+    async fn execute_inner(self) -> Result<()> {
         // Store parent message info for each message before sending to UDF
         let parent_infos: Vec<ParentMessageInfo> = self.batch.iter().map(|m| m.into()).collect();
 
@@ -71,12 +93,18 @@ impl MapBatchTask {
         for (result, parent_info) in results.into_iter().zip(parent_infos.into_iter()) {
             match result {
                 Ok(results) => {
-                    // Convert raw results to Messages using parent info
+                    // Convert raw results to Messages using parent info,
+                    // injecting trace context into each outgoing message.
                     let mapped_messages: Vec<Message> = results
                         .into_iter()
                         .enumerate()
                         .map(|(i, result)| {
-                            UserDefinedMessage(result, &parent_info, i as i32).into()
+                            let mut msg: Message =
+                                UserDefinedMessage(result, &parent_info, i as i32).into();
+                            if let Some(ref mut metadata) = msg.metadata {
+                                otel::inject_trace_context(Arc::make_mut(metadata));
+                            }
+                            msg
                         })
                         .collect();
 

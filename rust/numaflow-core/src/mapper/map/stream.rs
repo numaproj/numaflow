@@ -6,6 +6,7 @@ use std::sync::atomic::Ordering;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::Message;
+use crate::shared::otel;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{OwnedSemaphorePermit, mpsc};
 use tokio_stream::StreamExt;
@@ -13,7 +14,8 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
-use tracing::{error, warn};
+use tracing::{Instrument, error, warn};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use super::{
     ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
@@ -59,11 +61,28 @@ impl MapStreamTask {
 
     /// Executes the stream map operation.
     async fn execute(self) {
+        let parent_cx = self
+            .message
+            .metadata
+            .as_deref()
+            .map(otel::extract_trace_context)
+            .unwrap_or_else(opentelemetry::Context::current);
+        let stream_span = tracing::info_span!(
+            "numaflow.stream_map",
+            otel.kind = "INTERNAL",
+            messaging.operation = "stream_map",
+            offset = %self.message.offset,
+        );
+        stream_span.set_parent(parent_cx);
+
+        self.execute_inner().instrument(stream_span).await;
+    }
+
+    async fn execute_inner(self) {
         // Hold the permit until the task completes
         let _permit = self.permit;
 
         // Store parent message info before sending to UDF
-        // parent_info contains offset, so we don't need to clone it separately
         let mut parent_info: ParentMessageInfo = (&self.message).into();
 
         let request: MapRequest = self.message.into();
@@ -90,10 +109,13 @@ impl MapStreamTask {
                 Some(Ok(results)) => {
                     // Convert raw results to Messages using parent info
                     for result in results {
-                        let mapped_message: Message =
+                        let mut mapped_message: Message =
                             UserDefinedMessage(result, &parent_info, parent_info.current_index)
                                 .into();
                         parent_info.current_index += 1;
+                        if let Some(ref mut metadata) = mapped_message.metadata {
+                            otel::inject_trace_context(Arc::make_mut(metadata));
+                        }
 
                         update_udf_write_only_metric(self.shared_ctx.is_mono_vertex);
 

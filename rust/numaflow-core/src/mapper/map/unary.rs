@@ -6,6 +6,7 @@ use std::sync::atomic::Ordering;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::Message;
+use crate::shared::otel;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
 use tokio_stream::StreamExt;
@@ -13,7 +14,8 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
-use tracing::{error, warn};
+use tracing::{Instrument, error, warn};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use super::{
     ParentMessageInfo, SharedMapTaskContext, UserDefinedMessage, create_response_stream,
@@ -60,11 +62,31 @@ impl MapUnaryTask {
 
     /// Executes the unary map operation.
     async fn execute(self) {
+        // Extract trace context from the incoming message metadata so this span
+        // becomes a child of the upstream producer/source span.
+        let parent_cx = self
+            .message
+            .metadata
+            .as_deref()
+            .map(otel::extract_trace_context)
+            .unwrap_or_else(opentelemetry::Context::current);
+
+        let map_span = tracing::info_span!(
+            "numaflow.map",
+            otel.kind = "INTERNAL",
+            messaging.operation = "map",
+            offset = %self.message.offset,
+        );
+        map_span.set_parent(parent_cx);
+
+        self.execute_inner().instrument(map_span).await;
+    }
+
+    async fn execute_inner(self) {
         // Hold the permit until the task completes
         let _permit = self.permit;
 
         // Store parent message info before sending to UDF
-        // parent_info contains offset, so we don't need to clone it separately
         let parent_info: ParentMessageInfo = (&self.message).into();
 
         let request: MapRequest = self.message.into();
@@ -91,11 +113,16 @@ impl MapUnaryTask {
         };
 
         // Convert raw results to Messages using parent info
-        // Pre-allocate with exact capacity to avoid reallocations
         let results_len = results.len();
         let mut mapped_messages: Vec<Message> = Vec::with_capacity(results_len);
         for (i, result) in results.into_iter().enumerate() {
-            mapped_messages.push(UserDefinedMessage(result, &parent_info, i as i32).into());
+            let mut msg: Message = UserDefinedMessage(result, &parent_info, i as i32).into();
+            // Inject the current span's trace context into outgoing message metadata
+            // so downstream vertices can continue the trace.
+            if let Some(ref mut metadata) = msg.metadata {
+                otel::inject_trace_context(Arc::make_mut(metadata));
+            }
+            mapped_messages.push(msg);
         }
 
         update_udf_write_metric(

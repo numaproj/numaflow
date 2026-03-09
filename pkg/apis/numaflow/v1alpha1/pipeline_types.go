@@ -246,6 +246,7 @@ func (p Pipeline) GetSideInputsManagerDeployments(req GetSideInputDeploymentReq)
 		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
 		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 	}
+	commonEnvVars = append(commonEnvVars, p.Spec.GetOTLPEnvVars()...)
 	deployments := []*appv1.Deployment{}
 	for _, sideInput := range p.Spec.SideInputs {
 		deployment, err := sideInput.getManagerDeploymentObj(p, req)
@@ -521,6 +522,20 @@ type PipelineSpec struct {
 	// This can be overridden at the vertex level.
 	// +optional
 	Ordered *Ordered `json:"ordered,omitempty" protobuf:"bytes,10,opt,name=ordered"`
+	// Tracing configures OpenTelemetry OTLP export for the pipeline. When set, all vertex and daemon
+	// containers receive OTEL_* env vars so the Rust runtime can export spans to the given endpoint.
+	// +optional
+	Tracing *Tracing `json:"tracing,omitempty" protobuf:"bytes,11,opt,name=tracing"`
+}
+
+// Tracing configures pipeline-level OpenTelemetry OTLP tracing.
+type Tracing struct {
+	// OTLPEndpoint is the OTLP gRPC endpoint (e.g. http://collector:4317). Sets
+	// OTEL_EXPORTER_OTLP_TRACES_ENDPOINT and OTEL_EXPORTER_OTLP_ENDPOINT in all vertex/daemon containers.
+	OTLPEndpoint string `json:"otlpEndpoint,omitempty" protobuf:"bytes,1,opt,name=otlpEndpoint"`
+	// ServiceName is the service name for spans (default: numaflow-core). Sets OTEL_SERVICE_NAME.
+	// +optional
+	ServiceName string `json:"serviceName,omitempty" protobuf:"bytes,2,opt,name=serviceName"`
 }
 
 // InterStepBuffer configuration specifically for the pipeline.
@@ -593,6 +608,24 @@ func (pipeline PipelineSpec) GetSinksByName() map[string]*AbstractVertex {
 	return pipeline.GetMatchingVertices(func(v AbstractVertex) bool {
 		return v.IsASink()
 	})
+}
+
+// GetOTLPEnvVars returns env vars for OTLP tracing when spec.tracing is set. Used at pipeline level
+// so all vertex and daemon containers receive the same OTEL_* settings.
+func (pipeline PipelineSpec) GetOTLPEnvVars() []corev1.EnvVar {
+	if pipeline.Tracing == nil || pipeline.Tracing.OTLPEndpoint == "" {
+		return nil
+	}
+	envs := []corev1.EnvVar{
+		{Name: EnvOTELExporterOTLPTracesEndpoint, Value: pipeline.Tracing.OTLPEndpoint},
+		{Name: EnvOTELExporterOTLPEndpoint, Value: pipeline.Tracing.OTLPEndpoint},
+	}
+	svcName := pipeline.Tracing.ServiceName
+	if svcName == "" {
+		svcName = DefaultOTELServiceName
+	}
+	envs = append(envs, corev1.EnvVar{Name: EnvOTELServiceName, Value: svcName})
+	return envs
 }
 
 type Watermark struct {

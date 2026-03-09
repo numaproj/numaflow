@@ -22,6 +22,11 @@ tracing.workspace = true
 rustls.workspace = true
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt", "json"] }
 clap = "4.5.40"
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
+opentelemetry-otlp.workspace = true
+tracing-opentelemetry.workspace = true
+tonic.workspace = true
 
 [build-dependencies]
 chrono.workspace = true

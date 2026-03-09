@@ -573,6 +573,21 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     }
                 }
 
+                // Inject trace context into each outgoing message so downstream
+                // vertices (map/sink) can continue the trace.
+                for message in messages.iter_mut() {
+                    let source_span = tracing::info_span!(
+                        "numaflow.source.read",
+                        otel.kind = "PRODUCER",
+                        messaging.operation = "source_read",
+                        offset = %message.offset,
+                    );
+                    let _guard = source_span.enter();
+                    if let Some(ref mut metadata) = message.metadata {
+                        crate::shared::otel::inject_trace_context(Arc::make_mut(metadata));
+                    }
+                }
+
                 // write the messages to downstream.
                 for message in messages {
                     let bypassed = if let Some(ref bypass_router) = bypass_router {

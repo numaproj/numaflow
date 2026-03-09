@@ -24,7 +24,8 @@ use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
-use tracing::{error, info};
+use tracing::{error, info, Instrument};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::config::monovertex::BypassConditions;
 use crate::sinker::builder::HealthCheckClients;
@@ -286,6 +287,30 @@ impl SinkWriter {
             return Ok(());
         }
 
+        // Extract trace context from the first message of the batch to link the sink span.
+        let parent_cx = messages
+            .first()
+            .and_then(|m| m.metadata.as_deref())
+            .map(crate::shared::otel::extract_trace_context)
+            .unwrap_or_else(opentelemetry::Context::current);
+        let sink_span = tracing::info_span!(
+            "numaflow.sink.write",
+            otel.kind = "CLIENT",
+            messaging.operation = "sink",
+            messaging.batch_size = messages.len(),
+        );
+        sink_span.set_parent(parent_cx);
+
+        self.write_to_sink_inner(messages, cln_token)
+            .instrument(sink_span)
+            .await
+    }
+
+    async fn write_to_sink_inner(
+        &mut self,
+        messages: Vec<Message>,
+        cln_token: CancellationToken,
+    ) -> Result<()> {
         let write_start_time = time::Instant::now();
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();
