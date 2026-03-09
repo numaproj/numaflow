@@ -45,6 +45,7 @@ impl TestServerHandle {
         create_rpc_channel(self.sock_file.clone()).await
     }
 
+    #[allow(dead_code)]
     /// Explicitly shut down the server and wait for the thread to finish.
     pub fn shutdown(mut self) {
         self.do_shutdown();

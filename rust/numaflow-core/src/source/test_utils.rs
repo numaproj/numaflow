@@ -44,10 +44,10 @@ impl SourceTestHandle {
         // create a transformer for this source if it is provided
         let mut transformer_test_handle = match source_transformer_svc {
             Some(transformer_svc) => {
-                let server_handle = start_source_transform_server(transformer_svc);
+                let _server_handle = start_source_transform_server(transformer_svc);
 
                 let mut client = SourceTransformClient::new(
-                    server_handle
+                    _server_handle
                         .create_rpc_channel()
                         .await
                         .expect("failed to create source transformer rpc channel"),
@@ -68,7 +68,7 @@ impl SourceTestHandle {
                 .expect("failed to create source transformer");
 
                 Some(SourceTransformerTestHandle {
-                    server_handle,
+                    _server_handle,
                     transformer: Some(transformer),
                 })
             }

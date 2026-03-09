@@ -1482,12 +1482,12 @@ mod tests {
         cln_token: CancellationToken,
     ) {
         let SourceTestHandle {
-            mut source_transformer_test_handle,
+            source_transformer_test_handle: _source_transformer_test_handle,
             source: sourcer,
-            server_handle: source_server_handle,
+            server_handle: _source_server_handle,
         } = source;
 
-        let (mapper, map_server_handle) = match mapper {
+        let (mapper, _map_server_handle) = match mapper {
             Some(mapper_test_handle) => {
                 let MapperTestHandle {
                     server_handle: map_server_handle,
@@ -1500,9 +1500,9 @@ mod tests {
 
         let SinkTestHandle {
             sink_writer,
-            ud_sink_server_handle,
-            fb_ud_sink_server_handle,
-            ons_ud_sink_server_handle,
+            ud_sink_server_handle: _ud_sink_server_handle,
+            fb_ud_sink_server_handle: _fb_ud_sink_server_handle,
+            ons_ud_sink_server_handle: _ons_ud_sink_server_handle,
         } = sink_writer;
 
         // create the forwarder with the source, transformer, and writer
@@ -1537,29 +1537,5 @@ mod tests {
             tokio_result.is_ok(),
             "Timeout occurred before pending became zero"
         );
-
-        if let Some(source_transformer) = source_transformer_test_handle.take() {
-            drop(source_transformer.transformer);
-            source_transformer.server_handle.shutdown();
-        }
-        if let Some(server_handle) = source_server_handle {
-            server_handle.shutdown();
-        }
-
-        if let Some(server_handle) = map_server_handle {
-            server_handle.shutdown();
-        }
-
-        if let Some(ud_sink_server_handle) = ud_sink_server_handle {
-            ud_sink_server_handle.shutdown();
-        }
-
-        if let Some(fb_ud_sink_server_handle) = fb_ud_sink_server_handle {
-            fb_ud_sink_server_handle.shutdown();
-        }
-
-        if let Some(ons_ud_sink_server_handle) = ons_ud_sink_server_handle {
-            ons_ud_sink_server_handle.shutdown();
-        }
     }
 }
