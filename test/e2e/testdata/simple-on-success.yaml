@@ -27,7 +27,7 @@ spec:
         onSuccess:
           udsink:
             container:
-              image: quay.io/numaio/numaflow-rs/redis-sink:stable
+              image: quay.io/numaio/numaflow-rs/redis-sink:test
               imagePullPolicy: IfNotPresent
               env:
                 - name: SINK_HASH_KEY
