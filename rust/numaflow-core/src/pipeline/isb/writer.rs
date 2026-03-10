@@ -204,13 +204,21 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
     }
 
     /// Determines the target stream for a message based on vertex configuration.
+    /// When `ordered_processing_enabled` is true and the target vertex is Map or Sink,
+    /// uses keys for shuffling to ensure messages with the same keys land on the same partition.
     fn determine_target_stream(message: &Message, vertex: &ToVertexConfig) -> Stream {
-        // If the to_vertex is a reduce vertex, use the keys as the shuffle key
+        // Determine the shuffle key based on vertex type and ordered processing setting
         let shuffle_key = match vertex.to_vertex_type {
-            VertexType::MapUDF | VertexType::Sink | VertexType::Source => {
-                String::from_utf8_lossy(&message.id.offset).to_string()
-            }
+            // For ReduceUDF, always use keys for shuffling (existing behavior)
             VertexType::ReduceUDF => message.keys.join(":"),
+            // For Map/Sink/Source, use keys if ordered processing is enabled, otherwise use offset
+            VertexType::MapUDF | VertexType::Sink | VertexType::Source => {
+                if vertex.ordered_processing_enabled {
+                    message.keys.join(":")
+                } else {
+                    String::from_utf8_lossy(&message.id.offset).to_string()
+                }
+            }
         };
 
         // Determine partition
@@ -636,6 +644,7 @@ mod tests {
                     writer_config,
                     conditions: None,
                     to_vertex_type: VertexType::Sink,
+                    ordered_processing_enabled: false,
                 }],
                 writers,
                 paf_concurrency: 100,
@@ -746,6 +755,7 @@ mod tests {
                     writer_config,
                     conditions: None,
                     to_vertex_type: VertexType::Sink,
+                    ordered_processing_enabled: false,
                 }],
                 writers,
                 paf_concurrency: 100,
@@ -890,6 +900,7 @@ mod tests {
                             }),
                         })),
                         to_vertex_type: VertexType::Sink,
+                        ordered_processing_enabled: false,
                     },
                     ToVertexConfig {
                         name: "vertex2",
@@ -902,6 +913,7 @@ mod tests {
                             }),
                         })),
                         to_vertex_type: VertexType::Sink,
+                        ordered_processing_enabled: false,
                     },
                     ToVertexConfig {
                         name: "vertex3",
@@ -909,6 +921,7 @@ mod tests {
                         writer_config: vertex3_writer_config,
                         conditions: None, // No conditions, always forward
                         to_vertex_type: VertexType::Sink,
+                        ordered_processing_enabled: false,
                     },
                 ],
                 writers,
@@ -1079,6 +1092,7 @@ mod simplebuffer_tests {
                 writer_config,
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
             }],
             writers,
             paf_concurrency,
@@ -1637,6 +1651,7 @@ mod simplebuffer_tests {
                 writer_config,
                 conditions: condition.clone(),
                 to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
             });
         }
 

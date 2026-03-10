@@ -654,23 +654,17 @@ func (av AbstractVertex) GetPartitionCount() int {
 	return int(*av.Partitions)
 }
 
-// GetEffectiveOrderedConfig returns the effective ordered processing configuration for this vertex.
-// Vertex-level config overrides pipeline-level config.
+// IsOrdered returns whether ordered processing is enabled for this vertex.
+// The ordered config should already be resolved by the controller (merging pipeline-level and vertex-level).
 // Reduce vertices always return false as they are already partitioned.
-func (av AbstractVertex) GetEffectiveOrderedConfig(pipelineOrdered *Ordered) bool {
+func (av AbstractVertex) IsOrdered() bool {
 	// Reduce vertices are already partitioned, ignore ordered config
 	if av.IsReduceUDF() {
 		return false
 	}
 
-	// Vertex-level config takes precedence
 	if av.Ordered != nil {
 		return av.Ordered.Enabled
-	}
-
-	// Fall back to pipeline-level config
-	if pipelineOrdered != nil {
-		return pipelineOrdered.Enabled
 	}
 
 	return false

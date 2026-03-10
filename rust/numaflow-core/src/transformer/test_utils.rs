@@ -11,7 +11,7 @@ use numaflow::sourcetransform::{SourceTransformRequest, SourceTransformer};
 /// Contains the transformer handle and server handle (for the transformer server).
 pub(crate) struct SourceTransformerTestHandle {
     pub transformer: Option<Transformer>,
-    pub server_handle: TestServerHandle,
+    pub _server_handle: TestServerHandle,
 }
 
 /// Start a source transform server with the given handler.
