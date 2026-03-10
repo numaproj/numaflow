@@ -383,6 +383,9 @@ mod simple_buffer_tests {
 
     // Test source forwarder with a single output stream using SimpleBuffer.
     // Reads from a UD source and writes to a SimpleBuffer-backed ISB for verification.
+    //
+    // We need to use multi_thread flavor here because we see the familiar deadlock
+    // behavior from source component on single thread due to lack of structured concurrency.
     #[tokio::test(flavor = "multi_thread")]
     async fn test_source_forwarder_with_single_stream() {
         const MESSAGE_COUNT: usize = 100;
@@ -471,6 +474,9 @@ mod simple_buffer_tests {
 
     // Test source forwarder with multiple output streams using SimpleBuffer.
     // Reads from a UD source and writes to multiple SimpleBuffer-backed ISB partitions.
+    //
+    // We need to use multi_thread flavor here because we see the familiar deadlock
+    // behavior from source component on single thread due to lack of structured concurrency.
     #[tokio::test(flavor = "multi_thread")]
     async fn test_source_forwarder_with_multi_streams() {
         const MESSAGE_COUNT: usize = 100;
@@ -609,6 +615,9 @@ mod simple_buffer_tests {
 
     // Test source forwarder with a transformer using SimpleBuffer.
     // Reads from a UD source, applies a transformer, and writes to a SimpleBuffer-backed ISB.
+    //
+    // We need to use multi_thread flavor here because we see the familiar deadlock
+    // behavior from source component on single thread due to lack of structured concurrency.
     #[tokio::test(flavor = "multi_thread")]
     async fn test_source_forwarder_with_transformer() {
         const MESSAGE_COUNT: usize = 50;
