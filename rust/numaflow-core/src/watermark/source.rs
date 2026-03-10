@@ -151,7 +151,7 @@ impl SourceWatermarkState {
     }
 
     /// Publishes source watermark for partitions that need it (step interval has passed).
-    /// Watermarks serve as heartbeats for downstream vertices via hb_time in WMB.
+    /// Watermarks serve as heartbeats for downstream vertices via KV entry timestamps.
     /// Each partition is tracked independently:
     /// - If partition is idle: watermark value is incremented, idle=true
     /// - If partition is not idle: watermark value stays the same, idle=false
@@ -163,7 +163,7 @@ impl SourceWatermarkState {
         }
 
         // Fetch the current source watermark (may be -1 if no data yet, but we still
-        // publish to update hb_time which signals liveness to downstream vertices)
+        // publish to update KV entry timestamp which signals liveness to downstream vertices)
         let compute_wm = self.fetcher.fetch_source_watermark();
 
         // Process each partition that needs publishing
@@ -186,11 +186,11 @@ impl SourceWatermarkState {
     }
 
     /// Publishes ISB watermark for streams that need it (step interval passed).
-    /// Watermarks serve as heartbeats for downstream vertices via hb_time in WMB.
+    /// Watermarks serve as heartbeats for downstream vertices via KV entry timestamps.
     /// This is called for ISB streams that haven't received data recently.
     async fn publish_isb_idle_watermark(&mut self) -> Result<()> {
         // Fetch the current source watermark (may be -1 if no data yet, but we still
-        // publish to update hb_time which signals liveness to downstream vertices)
+        // publish to update KV entry timestamp which signals liveness to downstream vertices)
         let compute_wm = self.fetcher.fetch_source_watermark();
 
         // Fetch streams where step interval has passed since last publish
@@ -204,7 +204,7 @@ impl SourceWatermarkState {
                 .unwrap_or(-1);
 
             for partition in self.active_input_partitions.keys() {
-                // Publish watermark - hb_time is updated automatically
+                // Publish watermark - KV entry timestamp is updated automatically
                 self.publisher
                     .publish_isb_watermark(
                         *partition,
@@ -226,7 +226,7 @@ impl SourceWatermarkState {
 
     /// Publishes idle watermarks for both source and ISB.
     /// This is called by the background task to handle both source and ISB idle watermark publishing.
-    /// Watermarks serve as heartbeats for downstream vertices via hb_time in WMB.
+    /// Watermarks serve as heartbeats for downstream vertices via KV entry timestamps.
     async fn publish_idle_watermarks(&mut self) -> Result<()> {
         // First, publish source idle watermark (if source idle manager is configured)
         self.publish_source_idle_watermark().await?;
@@ -379,7 +379,7 @@ impl SourceWatermarkHandle {
 
     /// Publishes idle watermarks for both source and ISB.
     /// This is called by the background task to handle both source and ISB idle watermark publishing.
-    /// Watermarks serve as heartbeats for downstream vertices via hb_time in WMB.
+    /// Watermarks serve as heartbeats for downstream vertices via KV entry timestamps.
     async fn publish_idle_watermarks(&self) {
         // Acquire lock, perform operation, and release immediately
         let result = {
@@ -437,7 +437,7 @@ mod tests {
     use async_nats::jetstream::kv::Config;
     use async_nats::jetstream::stream;
     use bytes::BytesMut;
-    use chrono::{DateTime, Utc};
+    use chrono::DateTime;
     use tokio::time::sleep;
 
     use super::*;
@@ -846,7 +846,7 @@ mod tests {
         .await
         .expect("Failed to create SourceWatermarkHandle");
 
-        // get ot bucket for source and publish some wmb entries (with embedded hb_time)
+        // get ot bucket for source and publish some wmb entries
         let ot_bucket = js_context
             .get_key_value(ot_bucket_name)
             .await
@@ -858,7 +858,6 @@ mod tests {
                 offset: i,
                 idle: false,
                 partition: 0,
-                hb_time: Utc::now().timestamp_millis(),
                 processor_count: None,
             }
             .try_into()
@@ -1014,7 +1013,7 @@ mod tests {
             .generate_and_publish_source_watermark(&messages)
             .await;
 
-        // get ot bucket for source and publish some wmb entries (with embedded hb_time)
+        // get ot bucket for source and publish some wmb entries
         let ot_bucket = js_context
             .get_key_value(ot_bucket_name)
             .await
@@ -1026,7 +1025,6 @@ mod tests {
                 offset: i,
                 idle: false,
                 partition: 0,
-                hb_time: Utc::now().timestamp_millis(),
                 processor_count: None,
             }
             .try_into()
@@ -1102,15 +1100,12 @@ mod tests {
         // Publish some WMB entries to the source OT bucket to simulate source processors
         let ot_bucket = js_context.get_key_value(ot_bucket_name).await.unwrap();
 
-        let current_time = chrono::Utc::now().timestamp_millis();
-
-        // Create WMB entries that will be read by the ProcessorManager (with embedded hb_time)
+        // Create WMB entries that will be read by the ProcessorManager
         let wmb1 = WMB {
             watermark: 60000,
             offset: 1,
             idle: false,
             partition: 0,
-            hb_time: current_time,
             processor_count: None,
         };
         let wmb2 = WMB {
@@ -1118,7 +1113,6 @@ mod tests {
             offset: 2,
             idle: false,
             partition: 0,
-            hb_time: current_time,
             processor_count: None,
         };
 

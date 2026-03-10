@@ -20,9 +20,6 @@ pub struct Wmb {
     /// Partition to identify the partition to which the watermark belongs.
     #[prost(int32, tag = "4")]
     pub partition: i32,
-    /// Heartbeat timestamp (epoch seconds) to track processor liveness.
-    #[prost(int64, tag = "5")]
-    pub hb_time: i64,
     /// Optional expected processor count for source watermarks.
     /// When set, the fetcher will wait until this many processors are active before
     /// computing a valid watermark.

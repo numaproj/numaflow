@@ -3,8 +3,8 @@
 //! the watermark to the ISB. Unlike other vertices we don't use pod as the processing entity for publishing
 //! watermark we use the partition(watermark originates here).
 //!
-//! Heartbeat is now embedded in the WMB (hb_time field), eliminating the need for a separate
-//! heartbeat store.
+//! Processor liveness is tracked via the KV store's entry creation timestamp, eliminating the need
+//! for a separate heartbeat store.
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -303,8 +303,6 @@ mod tests {
 
         let wmb: WMB = wmb.unwrap().try_into().unwrap();
         assert_eq!(wmb.watermark, 100);
-        // Verify hb_time is set
-        assert!(wmb.hb_time > 0);
 
         // delete the stores
         js_context
@@ -391,8 +389,6 @@ mod tests {
         let wmb: WMB = wmb.unwrap().try_into().unwrap();
         assert_eq!(wmb.offset, 1);
         assert_eq!(wmb.watermark, 200);
-        // Verify hb_time is set
-        assert!(wmb.hb_time > 0);
 
         // delete the stores
         js_context
@@ -459,8 +455,6 @@ mod tests {
         let wmb: WMB = wmb.unwrap().try_into().unwrap();
         assert_eq!(wmb.watermark, 100);
         assert!(wmb.idle);
-        // Verify hb_time is set
-        assert!(wmb.hb_time > 0);
 
         // delete the stores
         js_context
@@ -548,8 +542,6 @@ mod tests {
         assert_eq!(wmb.offset, 1);
         assert_eq!(wmb.watermark, 200);
         assert!(wmb.idle);
-        // Verify hb_time is set
-        assert!(wmb.hb_time > 0);
 
         // delete the stores
         js_context

@@ -184,7 +184,6 @@ mod tests {
             offset: 19723492734,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb2 = WMB {
@@ -192,7 +191,6 @@ mod tests {
             offset: 19723492735,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb3 = WMB {
@@ -200,7 +198,6 @@ mod tests {
             offset: 19723492736,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
@@ -238,7 +235,6 @@ mod tests {
             offset: 19723492734,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb2 = WMB {
@@ -246,7 +242,6 @@ mod tests {
             offset: 19723492735,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb3 = WMB {
@@ -254,7 +249,6 @@ mod tests {
             offset: 19723492736,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
@@ -274,7 +268,6 @@ mod tests {
             offset: 19723492734,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb5 = WMB {
@@ -282,7 +275,6 @@ mod tests {
             offset: 19723492735,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb6 = WMB {
@@ -290,7 +282,6 @@ mod tests {
             offset: 19723492736,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
@@ -329,7 +320,6 @@ mod tests {
             offset: 19723492734,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb2 = WMB {
@@ -337,7 +327,6 @@ mod tests {
             offset: 19723492735,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb3 = WMB {
@@ -345,7 +334,6 @@ mod tests {
             offset: 19723492736,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
@@ -383,7 +371,6 @@ mod tests {
             offset: 19723492734,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb2 = WMB {
@@ -391,7 +378,6 @@ mod tests {
             offset: 19723492735,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb3 = WMB {
@@ -399,7 +385,6 @@ mod tests {
             offset: 19723492736,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
@@ -419,7 +404,6 @@ mod tests {
             offset: 19723492734,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb5 = WMB {
@@ -427,7 +411,6 @@ mod tests {
             offset: 19723492735,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb6 = WMB {
@@ -435,7 +418,6 @@ mod tests {
             offset: 19723492736,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
@@ -474,7 +456,6 @@ mod tests {
             offset: 19723492734,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
@@ -491,7 +472,6 @@ mod tests {
             offset: 19723492734,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 

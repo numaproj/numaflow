@@ -20,10 +20,14 @@ impl From<Entry> for KVEntry {
             async_nats::jetstream::kv::Operation::Purge => KVWatchOp::Purge,
         };
 
+        // Convert OffsetDateTime to epoch milliseconds
+        let created = (value.created.unix_timestamp_nanos() / 1_000_000) as i64;
+
         KVEntry {
             key: value.key,
             value: value.value,
             operation,
+            created,
         }
     }
 }
@@ -293,10 +297,12 @@ mod tests {
             key: "test-key".to_string(),
             value: Bytes::from("test-value"),
             operation: KVWatchOp::Put,
+            created: 1234567890000,
         };
 
         assert_eq!(entry.key, "test-key");
         assert_eq!(entry.value, Bytes::from("test-value"));
         assert_eq!(entry.operation, KVWatchOp::Put);
+        assert_eq!(entry.created, 1234567890000);
     }
 }

@@ -1,9 +1,9 @@
 //! Manages the processors and their lifecycle. It will keep track of all the active processors by listening
-//! to the OT bucket and update their offset timelines. Processor liveness is now determined by the hb_time
-//! field embedded in the WMB, eliminating the need for a separate heartbeat bucket.
+//! to the OT bucket and update their offset timelines. Processor liveness is determined by the KV store's
+//! entry creation timestamp (available via KVEntry.created), eliminating the need for a separate heartbeat bucket.
 //!
-//! The refresher task periodically checks the hb_time of each processor and marks them as inactive or deleted
-//! if they haven't published a WMB within the configured delay interval.
+//! The refresher task periodically checks the last seen timestamp of each processor and marks them as inactive
+//! or deleted if they haven't published a WMB within the configured delay interval.
 
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Duration;
 use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use bytes::Bytes;
 use futures::StreamExt;
@@ -44,9 +45,9 @@ pub(crate) struct Processor {
     pub(crate) status: Status,
     /// OffsetTimeline for each partition.
     pub(crate) timelines: HashMap<u16, OffsetTimeline>,
-    /// Last heartbeat time (epoch seconds) extracted from the most recent WMB.
+    /// Last seen time (epoch milliseconds) from the KV store's entry creation timestamp.
     /// Used to determine processor liveness.
-    pub(crate) last_hb_time: i64,
+    pub(crate) last_seen_time: i64,
 }
 
 impl Debug for Processor {
@@ -81,7 +82,12 @@ impl Debug for Processor {
 }
 
 impl Processor {
-    pub(crate) fn new(name: Bytes, status: Status, partitions: &[u16], hb_time: i64) -> Self {
+    pub(crate) fn new(
+        name: Bytes,
+        status: Status,
+        partitions: &[u16],
+        last_seen_time: i64,
+    ) -> Self {
         let mut timelines = HashMap::new();
         for &partition in partitions {
             timelines.insert(partition, OffsetTimeline::new(10));
@@ -90,7 +96,7 @@ impl Processor {
             name,
             status,
             timelines,
-            last_hb_time: hb_time,
+            last_seen_time,
         }
     }
 
@@ -99,9 +105,9 @@ impl Processor {
         self.status = status;
     }
 
-    /// Update the last heartbeat time.
-    pub(crate) fn update_hb_time(&mut self, hb_time: i64) {
-        self.last_hb_time = hb_time;
+    /// Update the last seen time (from KV store entry creation timestamp).
+    pub(crate) fn update_last_seen_time(&mut self, last_seen_time: i64) {
+        self.last_seen_time = last_seen_time;
     }
 
     /// Check if the processor is active.
@@ -145,8 +151,8 @@ impl Drop for ProcessorManager {
 
 impl ProcessorManager {
     /// Creates a new ProcessorManager. It prepopulates the processor-map with previous data
-    /// fetched from the OT store. Processor liveness is determined by the hb_time field
-    /// embedded in the WMB, eliminating the need for a separate heartbeat store.
+    /// fetched from the OT store. Processor liveness is determined by the KV store's entry
+    /// creation timestamp, eliminating the need for a separate heartbeat store.
     ///
     /// # Arguments
     /// * `ot_store` - The offset-timeline KV store for tracking watermark entries and processor liveness
@@ -168,7 +174,7 @@ impl ProcessorManager {
         let processors = Arc::new(RwLock::new(processors_map));
 
         // start the ot watcher, to listen to the OT store and update the timelines
-        // This also handles processor creation and hb_time updates
+        // This also handles processor creation and last_seen_time updates from KVEntry.created
         let ot_handle = tokio::spawn(Self::start_ot_watcher(
             Arc::clone(&ot_store),
             Arc::clone(&processors),
@@ -178,7 +184,7 @@ impl ProcessorManager {
         ));
 
         // start the processor refresher, to update the status of the processors
-        // based on the last hb_time from WMB.
+        // based on the last_seen_time from KV store entry timestamps.
         let refresh_handle =
             tokio::spawn(Self::start_refreshing_processors(Arc::clone(&processors)));
 
@@ -188,8 +194,8 @@ impl ProcessorManager {
         })
     }
 
-    /// Prepopulate processors and timelines from the OT store.
-    /// Processor liveness is determined by the hb_time field embedded in the WMB.
+    /// Prepopulate processors and timelines from the OT store using watch with revision 1.
+    /// This allows us to get the entry creation timestamps for processor liveness tracking.
     async fn prepopulate_processors(
         ot_store: &Arc<dyn KVStore>,
         bucket_config: &BucketConfig,
@@ -198,33 +204,94 @@ impl ProcessorManager {
     ) -> HashMap<Bytes, Processor> {
         let mut processors: HashMap<Bytes, Processor> = HashMap::new();
 
-        // Get all existing entries from the ot store
+        // Get all keys first to know how many entries to expect
         let ot_keys = ot_store.keys().await.unwrap_or_else(|e| {
             warn!(error = ?e, "Failed to get keys from ot store");
             Vec::new()
         });
 
-        for ot_key in ot_keys {
-            let processor_name = Bytes::from(ot_key.clone());
+        if ot_keys.is_empty() {
+            return processors;
+        }
 
-            let Ok(Some(ot_value)) = ot_store.get(&ot_key).await else {
-                continue;
+        // Use watch with revision 1 to get all historical entries with their timestamps
+        let mut watcher = match ot_store.watch(Some(1)).await {
+            Ok(w) => w,
+            Err(e) => {
+                warn!(error = ?e, "Failed to create watcher for prepopulation, using current time");
+                // Fallback: use get() and current time as last_seen_time
+                let current_time = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("Time went backwards")
+                    .as_millis() as i64;
+
+                for ot_key in ot_keys {
+                    let processor_name = Bytes::from(ot_key.clone());
+                    let Ok(Some(ot_value)) = ot_store.get(&ot_key).await else {
+                        continue;
+                    };
+                    let wmb: WMB = ot_value.try_into().expect("Failed to decode WMB");
+
+                    let processor = processors.entry(processor_name.clone()).or_insert_with(|| {
+                        Processor::new(
+                            processor_name.clone(),
+                            Status::Active,
+                            &bucket_config.partitions,
+                            current_time,
+                        )
+                    });
+
+                    match vertex_type {
+                        VertexType::Source | VertexType::Sink | VertexType::MapUDF => {
+                            if let Some(timeline) = processor.timelines.get_mut(&wmb.partition) {
+                                timeline.put(wmb);
+                            }
+                        }
+                        VertexType::ReduceUDF => {
+                            if wmb.partition != vertex_replica {
+                                continue;
+                            }
+                            if let Some(timeline) = processor.timelines.get_mut(&vertex_replica) {
+                                timeline.put(wmb);
+                            }
+                        }
+                    }
+                }
+                return processors;
+            }
+        };
+
+        // Read entries from the watcher until we've seen all keys
+        let mut seen_keys = std::collections::HashSet::new();
+        let expected_count = ot_keys.len();
+
+        while seen_keys.len() < expected_count {
+            let Some(kv) = watcher.next().await else {
+                break;
             };
-            let wmb: WMB = ot_value.try_into().expect("Failed to decode WMB");
 
-            // Get or create the processor
+            if kv.operation != KVWatchOp::Put {
+                continue;
+            }
+
+            let processor_name = Bytes::from(kv.key.clone());
+            seen_keys.insert(kv.key.clone());
+
+            let wmb: WMB = kv.value.try_into().expect("Failed to decode WMB");
+
+            // Get or create the processor with the entry's creation timestamp
             let processor = processors.entry(processor_name.clone()).or_insert_with(|| {
                 Processor::new(
                     processor_name.clone(),
                     Status::Active,
                     &bucket_config.partitions,
-                    wmb.hb_time,
+                    kv.created,
                 )
             });
 
-            // Update hb_time if this WMB has a more recent one
-            if wmb.hb_time > processor.last_hb_time {
-                processor.update_hb_time(wmb.hb_time);
+            // Update last_seen_time if this entry is more recent
+            if kv.created > processor.last_seen_time {
+                processor.update_last_seen_time(kv.created);
             }
 
             match vertex_type {
@@ -249,10 +316,10 @@ impl ProcessorManager {
         processors
     }
 
-    /// Starts refreshing the processors status based on the last hb_time from WMB.
+    /// Starts refreshing the processors status based on the last_seen_time from KV entry timestamps.
     /// Uses DEFAULT_PROCESSOR_REFRESH_RATE for both the refresh interval and liveness checking:
-    /// - If hb_time is older than 10x refresh rate, processor is marked as Deleted
-    /// - If hb_time is older than refresh rate, processor is marked as InActive
+    /// - If last_seen_time is older than 10x refresh rate, processor is marked as Deleted
+    /// - If last_seen_time is older than refresh rate, processor is marked as InActive
     /// - Otherwise, processor is Active
     async fn start_refreshing_processors(processors: Arc<RwLock<HashMap<Bytes, Processor>>>) {
         let refresh_rate_millis = DEFAULT_PROCESSOR_REFRESH_RATE.as_millis() as i64;
@@ -260,14 +327,14 @@ impl ProcessorManager {
         loop {
             interval.tick().await;
             let current_time = SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
+                .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_millis() as i64;
 
             let mut processors = processors.write().expect("failed to acquire lock");
 
             for processor in processors.values_mut() {
-                let diff = current_time - processor.last_hb_time;
+                let diff = current_time - processor.last_seen_time;
                 let new_status = match diff {
                     d if d > 10 * refresh_rate_millis => Status::Deleted,
                     d if d > refresh_rate_millis => Status::InActive,
@@ -281,8 +348,8 @@ impl ProcessorManager {
                         processor = ?String::from_utf8_lossy(&processor.name),
                         old_status = ?processor.status,
                         new_status = ?new_status,
-                        hb_behind_ms = diff,
-                        last_hb = processor.last_hb_time,
+                        behind_ms = diff,
+                        last_seen = processor.last_seen_time,
                         "Processor status change"
                     );
                 }
@@ -292,7 +359,7 @@ impl ProcessorManager {
     }
 
     /// Starts the ot watcher, to listen to the OT store and update the timelines for the
-    /// processors. Also handles processor creation and hb_time updates from the WMB.
+    /// processors. Also handles processor creation and last_seen_time updates from KVEntry.created.
     /// Uses KVStore::watch() with revision=None to only watch for new changes
     /// (since we prepopulate the data first).
     async fn start_ot_watcher(
@@ -318,25 +385,25 @@ impl ProcessorManager {
                     info!(processor = ?processor_name, wmb = ?wmb, "Received OT event");
 
                     let mut processors = processors.write().expect("failed to acquire lock");
-                    // Get or create the processor
+                    // Get or create the processor using KV entry's creation timestamp
                     let processor = if let Some(processor) = processors.get_mut(&processor_name) {
                         processor
                     } else {
-                        // Processor doesn't exist, create it
+                        // Processor doesn't exist, create it with the KV entry's timestamp
                         info!(processor = ?processor_name, "Processor not found, adding it");
                         let new_processor = Processor::new(
                             processor_name.clone(),
                             Status::Active,
                             &partitions,
-                            wmb.hb_time,
+                            kv.created,
                         );
                         processors.insert(processor_name.clone(), new_processor);
                         processors.get_mut(&processor_name).unwrap()
                     };
 
-                    // Update hb_time if this WMB has a more recent one
-                    if wmb.hb_time > processor.last_hb_time {
-                        processor.update_hb_time(wmb.hb_time);
+                    // Update last_seen_time if this entry is more recent
+                    if kv.created > processor.last_seen_time {
+                        processor.update_last_seen_time(kv.created);
                     }
 
                     // If processor was inactive, mark it as active since we received a WMB
@@ -390,8 +457,6 @@ impl ProcessorManager {
 
 #[cfg(test)]
 mod tests {
-    use std::time::UNIX_EPOCH;
-
     use async_nats::jetstream;
     use async_nats::jetstream::context::Context;
     use async_nats::jetstream::kv::Config;
@@ -423,15 +488,6 @@ mod tests {
         Arc::new(JetstreamKVStore::new(ot_bucket, ot_bucket_name))
     }
 
-    /// Helper to get current time as epoch seconds
-    #[allow(dead_code)]
-    fn current_hb_time() -> i64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Failed to get duration since epoch")
-            .as_secs() as i64
-    }
-
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_processor_manager_tracks_wmbs() {
@@ -459,7 +515,7 @@ mod tests {
 
         let processor_name = Bytes::from("processor1");
 
-        // Spawn a task to keep publishing WMBs with hb_time
+        // Spawn a task to keep publishing WMBs (liveness is tracked via KV entry timestamp)
         let ot_task = tokio::spawn(async move {
             loop {
                 let wmb_bytes: BytesMut = WMB {
@@ -467,7 +523,6 @@ mod tests {
                     offset: 1,
                     idle: false,
                     partition: 0,
-                    hb_time: current_hb_time(),
                     processor_count: None,
                 }
                 .try_into()
@@ -544,7 +599,7 @@ mod tests {
             Bytes::from("processor3"),
         ];
 
-        // Spawn tasks to keep publishing WMBs for each processor
+        // Spawn tasks to keep publishing WMBs for each processor (liveness via KV entry timestamp)
         let ot_tasks: Vec<_> = processor_names
             .iter()
             .map(|processor_name| {
@@ -557,7 +612,6 @@ mod tests {
                             offset: 1,
                             idle: false,
                             partition: 0,
-                            hb_time: current_hb_time(),
                             processor_count: None,
                         }
                         .try_into()
@@ -656,7 +710,6 @@ mod tests {
                 offset: 1,
                 idle: false,
                 partition: 0, // Should be filtered out (replica is 1)
-                hb_time: current_hb_time(),
                 processor_count: None,
             },
             WMB {
@@ -664,7 +717,6 @@ mod tests {
                 offset: 2,
                 idle: false,
                 partition: 1, // Should be accepted (matches replica 1)
-                hb_time: current_hb_time(),
                 processor_count: None,
             },
             WMB {
@@ -672,7 +724,6 @@ mod tests {
                 offset: 3,
                 idle: false,
                 partition: 2, // Should be filtered out (replica is 1)
-                hb_time: current_hb_time(),
                 processor_count: None,
             },
         ];

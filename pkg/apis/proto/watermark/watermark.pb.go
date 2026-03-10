@@ -53,8 +53,6 @@ type WMB struct {
 	Watermark int64 `protobuf:"varint,3,opt,name=watermark,proto3" json:"watermark,omitempty"`
 	// Partition to identify the partition to which the watermark belongs.
 	Partition int32 `protobuf:"varint,4,opt,name=partition,proto3" json:"partition,omitempty"`
-	// Heartbeat timestamp (epoch seconds) to track processor liveness.
-	HbTime int64 `protobuf:"varint,5,opt,name=hb_time,json=hbTime,proto3" json:"hb_time,omitempty"`
 	// Optional expected processor count for source watermarks.
 	// When set, the fetcher will wait until this many processors are active before
 	// computing a valid watermark.
@@ -121,13 +119,6 @@ func (x *WMB) GetPartition() int32 {
 	return 0
 }
 
-func (x *WMB) GetHbTime() int64 {
-	if x != nil {
-		return x.HbTime
-	}
-	return 0
-}
-
 func (x *WMB) GetProcessorCount() int32 {
 	if x != nil && x.ProcessorCount != nil {
 		return *x.ProcessorCount
@@ -139,13 +130,12 @@ var File_pkg_apis_proto_watermark_watermark_proto protoreflect.FileDescriptor
 
 const file_pkg_apis_proto_watermark_watermark_proto_rawDesc = "" +
 	"\n" +
-	"(pkg/apis/proto/watermark/watermark.proto\x12\twatermark\"\xc8\x01\n" +
+	"(pkg/apis/proto/watermark/watermark.proto\x12\twatermark\"\xaf\x01\n" +
 	"\x03WMB\x12\x12\n" +
 	"\x04idle\x18\x01 \x01(\bR\x04idle\x12\x16\n" +
 	"\x06offset\x18\x02 \x01(\x03R\x06offset\x12\x1c\n" +
 	"\twatermark\x18\x03 \x01(\x03R\twatermark\x12\x1c\n" +
-	"\tpartition\x18\x04 \x01(\x05R\tpartition\x12\x17\n" +
-	"\ahb_time\x18\x05 \x01(\x03R\x06hbTime\x12,\n" +
+	"\tpartition\x18\x04 \x01(\x05R\tpartition\x12,\n" +
 	"\x0fprocessor_count\x18\x06 \x01(\x05H\x00R\x0eprocessorCount\x88\x01\x01B\x12\n" +
 	"\x10_processor_countB1Z/github.com/numaproj/numaflow/pkg/apis/proto/isbb\x06proto3"
 

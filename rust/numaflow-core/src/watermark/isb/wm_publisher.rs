@@ -2,13 +2,12 @@
 //! which could be a pod or a partition. It publishes watermark to the appropriate OT bucket based on
 //! stream information provided. It makes sure we always publish monotonically increasing watermark.
 //!
-//! Heartbeat is now embedded in the WMB (hb_time field), eliminating the need for a separate
-//! heartbeat store. The publisher ensures that WMBs are published periodically (based on the
-//! configured delay) even when the watermark hasn't changed, to maintain processor liveness detection.
+//! Processor liveness is tracked via the KV store's entry creation timestamp, eliminating the need
+//! for a separate heartbeat store. The publisher ensures that WMBs are published periodically (based
+//! on the configured delay) even when the watermark hasn't changed, to maintain processor liveness detection.
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
-use std::time::{Instant, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use bytes::BytesMut;
 use numaflow_shared::kv::KVStore;
@@ -62,7 +61,7 @@ impl LastPublishedState {
 }
 
 /// ISBWatermarkPublisher is the watermark publisher for the outgoing edges.
-/// Heartbeat is now embedded in WMB (hb_time field), so no separate heartbeat publishing is needed.
+/// Processor liveness is tracked via the KV store's entry creation timestamp.
 pub(crate) struct ISBWatermarkPublisher {
     /// name of the processor(node) that is publishing the watermark.
     processor_name: String,
@@ -116,16 +115,8 @@ impl ISBWatermarkPublisher {
         }
     }
 
-    /// Returns the current epoch time in milliseconds for hb_time.
-    fn current_hb_time() -> i64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Failed to get duration since epoch")
-            .as_millis() as i64
-    }
-
     /// publish_watermark publishes the watermark for the given offset and the stream.
-    /// The WMB now includes hb_time for processor liveness tracking.
+    /// Processor liveness is tracked via the KV store's entry creation timestamp.
     pub(crate) async fn publish_watermark(
         &mut self,
         stream: &Stream,
@@ -212,14 +203,13 @@ impl ISBWatermarkPublisher {
             return;
         }
 
-        // Publish the watermark to the OT store with embedded hb_time
+        // Publish the watermark to the OT store (liveness tracked via KV entry timestamp)
         let ot_store = self.ot_stores.get(stream.vertex).expect("Invalid vertex");
         let wmb_bytes: BytesMut = WMB {
             idle,
             offset: publish_offset,
             watermark: publish_watermark,
             partition: stream.partition,
-            hb_time: Self::current_hb_time(),
             processor_count,
         }
         .try_into()
@@ -336,8 +326,6 @@ mod tests {
         let wmb: WMB = wmb.unwrap().try_into().unwrap();
         assert_eq!(wmb.offset, 1);
         assert_eq!(wmb.watermark, 100);
-        // Verify hb_time is set
-        assert!(wmb.hb_time > 0);
 
         // Try publishing a smaller watermark for the same partition, it should not be published
         publisher
@@ -460,8 +448,6 @@ mod tests {
         let wmb_v1: WMB = wmb_v1.unwrap().try_into().unwrap();
         assert_eq!(wmb_v1.offset, 1);
         assert_eq!(wmb_v1.watermark, 100);
-        // Verify hb_time is set
-        assert!(wmb_v1.hb_time > 0);
 
         let wmb_v2 = ot_bucket_v2
             .get("processor1")
@@ -472,8 +458,6 @@ mod tests {
         let wmb_v2: WMB = wmb_v2.unwrap().try_into().unwrap();
         assert_eq!(wmb_v2.offset, 1);
         assert_eq!(wmb_v2.watermark, 200);
-        // Verify hb_time is set
-        assert!(wmb_v2.hb_time > 0);
 
         // delete the stores
         js_context
@@ -540,8 +524,6 @@ mod tests {
         assert_eq!(wmb.offset, 1);
         assert_eq!(wmb.watermark, 100);
         assert!(wmb.idle);
-        // Verify hb_time is set
-        assert!(wmb.hb_time > 0);
 
         // delete the stores
         js_context

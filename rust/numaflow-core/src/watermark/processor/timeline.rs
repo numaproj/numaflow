@@ -140,7 +140,6 @@ mod tests {
             offset: 1,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb2 = WMB {
@@ -148,7 +147,6 @@ mod tests {
             offset: 2,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb3 = WMB {
@@ -156,7 +154,6 @@ mod tests {
             offset: 3,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb4 = WMB {
@@ -164,7 +161,6 @@ mod tests {
             offset: 4,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb5 = WMB {
@@ -172,7 +168,6 @@ mod tests {
             offset: 5,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
@@ -204,7 +199,6 @@ mod tests {
             offset: 62,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb2 = WMB {
@@ -212,7 +206,6 @@ mod tests {
             offset: 65,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb3 = WMB {
@@ -220,7 +213,6 @@ mod tests {
             offset: 63, // out of order should not be considered
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb4 = WMB {
@@ -228,7 +220,6 @@ mod tests {
             offset: 70,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb5 = WMB {
@@ -236,7 +227,6 @@ mod tests {
             offset: 80,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb6 = WMB {
@@ -244,7 +234,6 @@ mod tests {
             offset: 86,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
@@ -277,7 +266,6 @@ mod tests {
             offset: 1,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb2 = WMB {
@@ -285,7 +273,6 @@ mod tests {
             offset: 2,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb3 = WMB {
@@ -293,7 +280,6 @@ mod tests {
             offset: 3,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb4 = WMB {
@@ -301,7 +287,6 @@ mod tests {
             offset: 4,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb5 = WMB {
@@ -309,7 +294,6 @@ mod tests {
             offset: 5,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
@@ -343,7 +327,6 @@ mod tests {
             offset: 1,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb2 = WMB {
@@ -351,7 +334,6 @@ mod tests {
             offset: 2,
             idle: false,
             partition: 1,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb3 = WMB {
@@ -359,7 +341,6 @@ mod tests {
             offset: 3,
             idle: true,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
@@ -379,7 +360,6 @@ mod tests {
             offset: 4,
             idle: true,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
@@ -396,7 +376,6 @@ mod tests {
             offset: 5,
             idle: true,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 

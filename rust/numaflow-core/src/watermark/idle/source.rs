@@ -7,7 +7,7 @@
 //!
 //! > When to publish the watermark?
 //!
-//! Watermarks serve as heartbeats for downstream vertices via the hb_time field in WMB.
+//! Watermarks serve as heartbeats for downstream vertices via the KV entry timestamps.
 //! We publish watermarks when the step interval has passed. The watermark value depends
 //! on whether the partition is truly idle (increment the value) or just needs a heartbeat
 //! (use current value).
@@ -45,7 +45,7 @@ impl PartitionIdleState {
 }
 
 /// Responsible for detecting the idle state of source partitions and managing watermark publishing.
-/// Watermarks serve as heartbeats for downstream vertices - the hb_time in WMB signals liveness.
+/// Watermarks serve as heartbeats for downstream vertices - the KV entry timestamp signals liveness.
 /// Each partition is tracked independently for idle detection.
 #[derive(Clone)]
 pub(crate) struct SourceIdleDetector {
@@ -72,7 +72,7 @@ impl SourceIdleDetector {
 
     /// Returns partitions that need watermark publishing (step interval has passed).
     /// Watermarks are published when the step interval has passed - they serve as heartbeats
-    /// for downstream vertices via the hb_time field.
+    /// for downstream vertices via the KV entry timestamps.
     pub(crate) fn partitions_needing_publish(&self) -> Vec<u16> {
         self.partition_states
             .iter()

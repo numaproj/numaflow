@@ -176,7 +176,7 @@ impl ISBIdleDetector {
 
     /// Fetches streams that need watermark publishing. A stream needs publishing if the last
     /// published time is greater than the idle timeout. This is used both for idle watermark
-    /// publishing and for heartbeat updates to ensure hb_time stays current.
+    /// publishing and for heartbeat updates to ensure KV entry timestamps stay current.
     pub(crate) async fn fetch_streams_needing_publish(&self) -> Vec<Stream> {
         let read_guard = self
             .last_published_wm_state

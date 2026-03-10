@@ -328,7 +328,6 @@ mod tests {
             offset: 1,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb2 = WMB {
@@ -336,7 +335,6 @@ mod tests {
             offset: 2,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb3 = WMB {
@@ -344,7 +342,6 @@ mod tests {
             offset: 3,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
@@ -403,7 +400,6 @@ mod tests {
                 offset: 5,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -411,7 +407,6 @@ mod tests {
                 offset: 10,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -419,7 +414,6 @@ mod tests {
                 offset: 15,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -427,7 +421,6 @@ mod tests {
                 offset: 20,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -437,7 +430,6 @@ mod tests {
                 offset: 3,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -445,7 +437,6 @@ mod tests {
                 offset: 8,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -453,7 +444,6 @@ mod tests {
                 offset: 13,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -461,7 +451,6 @@ mod tests {
                 offset: 18,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -471,7 +460,6 @@ mod tests {
                 offset: 2,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -479,7 +467,6 @@ mod tests {
                 offset: 7,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -487,7 +474,6 @@ mod tests {
                 offset: 12,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -495,7 +481,6 @@ mod tests {
                 offset: 17,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -570,7 +555,6 @@ mod tests {
                 offset: 6,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -578,7 +562,6 @@ mod tests {
                 offset: 10,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -586,7 +569,6 @@ mod tests {
                 offset: 15,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -594,7 +576,6 @@ mod tests {
                 offset: 20,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -604,7 +585,6 @@ mod tests {
                 offset: 25,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -612,7 +592,6 @@ mod tests {
                 offset: 30,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -620,7 +599,6 @@ mod tests {
                 offset: 35,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -628,7 +606,6 @@ mod tests {
                 offset: 40,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -638,7 +615,6 @@ mod tests {
                 offset: 3,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -646,7 +622,6 @@ mod tests {
                 offset: 8,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -654,7 +629,6 @@ mod tests {
                 offset: 13,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -662,7 +636,6 @@ mod tests {
                 offset: 18,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -672,7 +645,6 @@ mod tests {
                 offset: 23,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -680,7 +652,6 @@ mod tests {
                 offset: 28,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -688,7 +659,6 @@ mod tests {
                 offset: 33,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -696,7 +666,6 @@ mod tests {
                 offset: 38,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -706,7 +675,6 @@ mod tests {
                 offset: 2,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -714,7 +682,6 @@ mod tests {
                 offset: 7,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -722,7 +689,6 @@ mod tests {
                 offset: 12,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -730,7 +696,6 @@ mod tests {
                 offset: 17,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -740,7 +705,6 @@ mod tests {
                 offset: 22,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -748,7 +712,6 @@ mod tests {
                 offset: 27,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -756,7 +719,6 @@ mod tests {
                 offset: 32,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -764,7 +726,6 @@ mod tests {
                 offset: 37,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -852,7 +813,6 @@ mod tests {
                 offset: 6,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -860,7 +820,6 @@ mod tests {
                 offset: 10,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -870,7 +829,6 @@ mod tests {
                 offset: 25,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -878,7 +836,6 @@ mod tests {
                 offset: 30,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -888,7 +845,6 @@ mod tests {
                 offset: 3,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -896,7 +852,6 @@ mod tests {
                 offset: 8,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -906,7 +861,6 @@ mod tests {
                 offset: 23,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -914,7 +868,6 @@ mod tests {
                 offset: 28,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -967,7 +920,6 @@ mod tests {
                 offset: 2,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -975,7 +927,6 @@ mod tests {
                 offset: 7,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -985,7 +936,6 @@ mod tests {
                 offset: 22,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -993,7 +943,6 @@ mod tests {
                 offset: 27,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -1003,7 +952,6 @@ mod tests {
                 offset: 4,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -1011,7 +959,6 @@ mod tests {
                 offset: 9,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -1021,7 +968,6 @@ mod tests {
                 offset: 24,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -1029,7 +975,6 @@ mod tests {
                 offset: 29,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -1105,7 +1050,6 @@ mod tests {
             offset: 1,
             idle: true,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb2 = WMB {
@@ -1113,7 +1057,6 @@ mod tests {
             offset: 2,
             idle: true,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
@@ -1167,7 +1110,6 @@ mod tests {
             offset: 1,
             idle: true,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb2 = WMB {
@@ -1175,7 +1117,6 @@ mod tests {
             offset: 2,
             idle: false, // Not idle
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
@@ -1230,7 +1171,6 @@ mod tests {
                 offset: 6,
                 idle: true,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -1238,7 +1178,6 @@ mod tests {
                 offset: 10,
                 idle: true,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -1248,7 +1187,6 @@ mod tests {
                 offset: 25,
                 idle: true,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -1256,7 +1194,6 @@ mod tests {
                 offset: 30,
                 idle: false, // Not idle
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -1320,7 +1257,6 @@ mod tests {
                 offset: 3,
                 idle: true,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -1328,7 +1264,6 @@ mod tests {
                 offset: 10,
                 idle: true,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -1338,7 +1273,6 @@ mod tests {
                 offset: 5,
                 idle: true,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -1346,7 +1280,6 @@ mod tests {
                 offset: 8,
                 idle: true,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -1408,7 +1341,6 @@ mod tests {
             offset: 1,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb2 = WMB {
@@ -1416,7 +1348,6 @@ mod tests {
             offset: 2,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb3 = WMB {
@@ -1424,7 +1355,6 @@ mod tests {
             offset: 3,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
@@ -1482,7 +1412,6 @@ mod tests {
                 offset: 6,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -1490,7 +1419,6 @@ mod tests {
                 offset: 10,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -1500,7 +1428,6 @@ mod tests {
                 offset: 25,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -1508,7 +1435,6 @@ mod tests {
                 offset: 30,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -1518,7 +1444,6 @@ mod tests {
                 offset: 3,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -1526,7 +1451,6 @@ mod tests {
                 offset: 8,
                 idle: false,
                 partition: 0,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -1536,7 +1460,6 @@ mod tests {
                 offset: 23,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
             WMB {
@@ -1544,7 +1467,6 @@ mod tests {
                 offset: 28,
                 idle: false,
                 partition: 1,
-                hb_time: 0,
                 processor_count: None,
             },
         ];
@@ -1615,7 +1537,6 @@ mod tests {
             offset: 10,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb_edge2 = WMB {
@@ -1623,7 +1544,6 @@ mod tests {
             offset: 5,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
@@ -1696,7 +1616,6 @@ mod tests {
             offset: 10,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
         let wmb_edge2 = WMB {
@@ -1704,7 +1623,6 @@ mod tests {
             offset: 5,
             idle: false,
             partition: 0,
-            hb_time: 0,
             processor_count: None,
         };
 
