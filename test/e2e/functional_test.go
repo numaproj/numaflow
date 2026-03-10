@@ -380,6 +380,37 @@ func (s *FunctionalSuite) TestPipelineUserMetadataPropagation() {
 		VertexPodLogContains("sink", "txn-id", PodLogCheckOptionWithContainer("udsink"))
 }
 
+func (s *FunctionalSuite) TestOrderedProcessing() {
+	w := s.Given().Pipeline("@testdata/ordered-processing.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "ordered-processing"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	// Send messages with different keys, each key getting values in a specific order.
+	// The x-numaflow-keys header sets the message key for partition routing.
+	keys := []string{"A", "M", "Z"}
+	values := []string{"create", "update", "delete"}
+
+	for _, val := range values {
+		for _, key := range keys {
+			w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().
+				WithBody([]byte(val)).
+				WithHeader("x-numaflow-keys", key).
+				WithHeader("x-numaflow-id", fmt.Sprintf("%s-%s", key, val)))
+		}
+	}
+
+	// Verify that for each key, the Redis list contains exactly ["create", "update", "delete"] in order.
+	for _, key := range keys {
+		redisKey := fmt.Sprintf("ordered-processing-out:%s", key)
+		w.Expect().RedisSinkListEquals(redisKey, values)
+	}
+}
+
 func TestFunctionalSuite(t *testing.T) {
 	suite.Run(t, new(FunctionalSuite))
 }
