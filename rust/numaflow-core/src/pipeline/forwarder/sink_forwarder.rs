@@ -425,7 +425,7 @@ mod simple_buffer_tests {
     // End-to-end test for sink forwarder using SimpleBuffer.
     // Reads from a SimpleBuffer-backed ISB, writes to a UD sink that stores
     // messages in a different SimpleBuffer for verification.
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test]
     async fn test_sink_forwarder_with_single_stream() {
         const MESSAGE_COUNT: usize = 10;
 
@@ -528,7 +528,7 @@ mod simple_buffer_tests {
     // Reads from multiple SimpleBuffer-backed ISB partitions and writes to
     // separate UD sinks (one per stream) that all
     // store messages in the same SimpleBuffer for verification.
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test]
     async fn test_sink_forwarder_with_multi_streams() {
         const MESSAGE_COUNT: usize = 100;
         const NUM_PARTITIONS: usize = 5;
@@ -687,7 +687,7 @@ mod simple_buffer_tests {
     // Test sink forwarder with a blackhole (builtin) sink using SimpleBuffer input.
     // This verifies the forwarder completes without errors even when using a
     // builtin sink that doesn't produce output.
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test]
     async fn test_sink_forwarder_with_blackhole_sink() {
         const MESSAGE_COUNT: usize = 10;
 
@@ -788,7 +788,7 @@ mod simple_buffer_tests {
     }
 
     // Test sink forwarder with a panic in the sink writer.
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test]
     async fn test_sink_forwarder_with_panic() {
         const MESSAGE_COUNT: usize = 10;
 
