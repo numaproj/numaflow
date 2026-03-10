@@ -136,7 +136,7 @@ pub mod config {
     const DEFAULT_URL: &str = "localhost:4222";
 
     /// Jetstream client configuration.
-    #[derive(Debug, Clone, PartialEq)]
+    #[derive(Clone, PartialEq)]
     pub struct ClientConfig {
         /// NATS server URL.
         pub url: String,
@@ -146,6 +146,17 @@ pub mod config {
         pub password: Option<String>,
         /// Whether to enable TLS.
         pub tls_enabled: bool,
+    }
+
+    impl std::fmt::Debug for ClientConfig {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("ClientConfig")
+                .field("url", &self.url)
+                .field("user", &self.user)
+                .field("password", &self.password.as_ref().map(|_| "[REDACTED]"))
+                .field("tls_enabled", &self.tls_enabled)
+                .finish()
+        }
     }
 
     impl Default for ClientConfig {
