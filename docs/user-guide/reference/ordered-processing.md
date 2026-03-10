@@ -16,7 +16,7 @@ Ordered processing works differently depending on the vertex type:
 | Vertex Type | Behavior                                                                                                                                                                                             |
 |-------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Source**  | Always ordered by nature — no configuration needed.                                                                                                                                                  |
-| **Map**     | Requires `partitions` to be set. Replicas are fixed to the partition count. Messages are routed to partitions by key hash, so all messages with the same key are processed by the same pod in order. |
+| **Map**     | Requires `partitions` to be configured. Replicas are fixed to the `partitions` count. Messages are routed to partitions by key hash, so all messages with the same key are processed by the same pod in order. |
 | **Reduce**  | Already partitioned and ordered — no additional configuration needed.                                                                                                                                |
 | **Sink**    | Same as Map — requires `partitions`. Replicas are fixed to the partition count.                                                                                                                      |
 
