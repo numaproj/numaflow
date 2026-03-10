@@ -716,6 +716,7 @@ mod tests {
                 },
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
             }],
             vertex_config: VertexConfig::Reduce(ReduceVtxConfig {
                 keyed: true,
@@ -1080,6 +1081,7 @@ mod tests {
                 },
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
             }],
             vertex_config: VertexConfig::Reduce(ReduceVtxConfig {
                 keyed: true,

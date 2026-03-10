@@ -1358,6 +1358,7 @@ mod tests {
                 },
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
             }],
             from_vertex_config: vec![FromVertexConfig {
                 name: "map-in",

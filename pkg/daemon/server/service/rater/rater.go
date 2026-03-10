@@ -169,6 +169,17 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int, times
 	podInfo, err := r.podTracker.GetPodInfo(key)
 	vtx := r.pipeline.GetVertex(podInfo.vertexName)
 	isReduce := vtx.IsReduceUDF()
+	// Check if ordered processing is enabled for the vertex
+	// When ordered processing is enabled, each pod handles a specific partition (1:1 mapping like reduce)
+	// Compute effective ordered config: vertex-level takes precedence over pipeline-level
+	var isOrderedProcessing bool
+	if !isReduce {
+		if vtx.Ordered != nil {
+			isOrderedProcessing = vtx.Ordered.Enabled
+		} else if r.pipeline.Spec.Ordered != nil {
+			isOrderedProcessing = r.pipeline.Spec.Ordered.Enabled
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -180,8 +191,9 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int, times
 		if podReadCount == nil {
 			log.Debugf("Failed retrieving total podReadCount for pod %s", podInfo.podName)
 		}
-		// Only maintain the timestamped pending counts if pod is a Reduce or if it is the 0th replica of any other vertex type.
-		if isReduce || podInfo.replica == 0 {
+		// Only maintain the timestamped pending counts if pod is a Reduce, has ordered processing enabled,
+		// or if it is the 0th replica of any other vertex type.
+		if isReduce || isOrderedProcessing || podInfo.replica == 0 {
 			podPendingCount = r.getPodPendingCounts(podInfo.vertexName, podInfo.podName, podMetrics)
 			if podPendingCount == nil {
 				log.Debugf("Failed retrieving pending counts for pod %s vertex %s", podInfo.podName, podInfo.vertexName)

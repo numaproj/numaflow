@@ -667,6 +667,7 @@ mod tests {
                 conditions: None,
                 partitions: 1,
                 to_vertex_type: VertexType::MapUDF,
+                ordered_processing_enabled: false,
             }],
             &source_config,
             CancellationToken::new(),
@@ -768,6 +769,7 @@ mod tests {
             conditions: None,
             partitions: 1,
             to_vertex_type: VertexType::MapUDF,
+            ordered_processing_enabled: false,
         }];
 
         // create to vertex stream since we will be writing ctrl message to it
@@ -962,6 +964,7 @@ mod tests {
             conditions: None,
             partitions: 1,
             to_vertex_type: VertexType::MapUDF,
+            ordered_processing_enabled: false,
         }];
 
         // create to vertex stream since we will be writing ctrl message to it
