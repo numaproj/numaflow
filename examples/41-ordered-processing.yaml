@@ -1,0 +1,35 @@
+# Available from 1.8
+
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: ordered-pipeline
+spec:
+  limits:
+    readBatchSize: 1
+  ordered:
+    enabled: true
+  vertices:
+    - name: in-1
+      source: 
+        http: {}
+    - name: in-2
+      source:
+        http: {}
+    - name: cat
+      partitions: 3
+      udf:
+        container:
+          image: quay.io/numaio/numaflow-rs/map-cat:stable
+          imagePullPolicy: IfNotPresent
+    - name: out
+      partitions: 3
+      sink:
+        log: {}
+  edges:
+    - from: in-1
+      to: cat
+    - from: in-2
+      to: cat
+    - from: cat
+      to: out
