@@ -1,5 +1,3 @@
-//go:build test
-
 /*
 Copyright 2022 The Numaproj Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -405,8 +403,9 @@ func (s *FunctionalSuite) TestOrderedProcessing() {
 	}
 
 	// Verify that for each key, the Redis list contains exactly ["create", "update", "delete"] in order.
+	// The Rust redis-sink in ordered mode stores at key "{SINK_HASH_KEY}_{message_keys}" using RPUSH.
 	for _, key := range keys {
-		redisKey := fmt.Sprintf("ordered-processing-out:%s", key)
+		redisKey := fmt.Sprintf("ordered-processing-out_%s", key)
 		w.Expect().RedisSinkListEquals(redisKey, values)
 	}
 }

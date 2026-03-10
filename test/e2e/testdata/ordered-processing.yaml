@@ -27,6 +27,8 @@ spec:
             env:
               - name: SINK_HASH_KEY
                 value: "ordered-processing-out"
+              - name: MODE
+                value: "ordered"
   edges:
     - from: in
       to: cat
