@@ -1495,7 +1495,8 @@ mod tests {
             "Ordered mode should have exactly one stream per replica"
         );
         assert_eq!(
-            from_cfg.reader_config.streams.first().unwrap().partition, 0,
+            from_cfg.reader_config.streams.first().unwrap().partition,
+            0,
             "Replica 0 should read from partition 0"
         );
     }
