@@ -101,20 +101,20 @@ pub async fn run_monovertex(cln_token: CancellationToken) -> Result<()> {
 /// (base64-encoded JSON) and returns a [`MonoVertexConfig`] with the fields the daemon needs.
 fn load_mvtx_config() -> Result<MonoVertexConfig> {
     let b64 = std::env::var(ENV_MONO_VERTEX_OBJECT)
-        .map_err(|_| error::Error::Config(format!("{ENV_MONO_VERTEX_OBJECT} is not set")))?;
+        .map_err(|_| error::Error::Init(format!("{ENV_MONO_VERTEX_OBJECT} is not set")))?;
 
     let json = BASE64_STANDARD
         .decode(b64.as_bytes())
-        .map_err(|e| error::Error::Config(format!("Failed to base64-decode CR: {e}")))?;
+        .map_err(|e| error::Error::Init(format!("Failed to base64-decode CR: {e}")))?;
 
     let mv: MonoVertex = serde_json::from_slice(&json)
-        .map_err(|e| error::Error::Config(format!("Failed to parse MonoVertex CR: {e}")))?;
+        .map_err(|e| error::Error::Init(format!("Failed to parse MonoVertex CR: {e}")))?;
 
     let name = mv
         .metadata
         .as_ref()
         .and_then(|m| m.name.clone())
-        .ok_or_else(|| error::Error::Config("MonoVertex metadata.name is missing".to_string()))?;
+        .ok_or_else(|| error::Error::Init("MonoVertex metadata.name is missing".to_string()))?;
 
     let namespace = mv
         .metadata
