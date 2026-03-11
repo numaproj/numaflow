@@ -188,9 +188,10 @@ mod tests {
             .get("processingRates")
             .and_then(|v| v.as_object())
             .expect("processingRates");
-        // -1.0 is the "no data yet" sentinel for all windows.
-        assert_eq!(rates.get("default").and_then(|v| v.as_f64()), Some(-1.0));
-        assert_eq!(rates.get("1m").and_then(|v| v.as_f64()), Some(-1.0));
+        assert_eq!(rates.get("default").and_then(|v| v.as_f64()), Some(67.0));
+        assert_eq!(rates.get("1m").and_then(|v| v.as_f64()), Some(10.0));
+        assert_eq!(rates.get("5m").and_then(|v| v.as_f64()), Some(50.5));
+        assert_eq!(rates.get("15m").and_then(|v| v.as_f64()), Some(150.0));
         let pendings = metrics
             .get("pendings")
             .and_then(|v| v.as_object())
@@ -200,14 +201,14 @@ mod tests {
                 .get("default")
                 .and_then(|v| v.as_str())
                 .and_then(|s| s.parse::<i64>().ok()),
-            Some(-1)
+            Some(67)
         );
         assert_eq!(
             pendings
                 .get("1m")
                 .and_then(|v| v.as_str())
                 .and_then(|s| s.parse::<i64>().ok()),
-            Some(-1)
+            Some(10)
         );
     }
 
@@ -225,14 +226,17 @@ mod tests {
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let status = json.get("status").expect("status key");
-        // Until the rater is implemented, status is "unknown" (D4).
         assert_eq!(
             status.get("status"),
-            Some(&serde_json::Value::String("unknown".into()))
+            Some(&serde_json::Value::String("healthy".into()))
+        );
+        assert_eq!(
+            status.get("message"),
+            Some(&serde_json::Value::String("MonoVertex data flow is healthy".into()))
         );
         assert_eq!(
             status.get("code"),
-            Some(&serde_json::Value::String("D4".into()))
+            Some(&serde_json::Value::String("D1".into()))
         );
     }
 

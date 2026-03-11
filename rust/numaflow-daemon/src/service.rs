@@ -32,19 +32,18 @@ impl MonoVertexDaemonService for MvtxDaemonService {
         &self,
         _: Request<()>,
     ) -> std::result::Result<Response<GetMonoVertexMetricsResponse>, Status> {
-        // TODO(Phase 3): replace with real rater data.
         let mock_processing_rates = HashMap::from([
-            ("default".to_string(), -1.0_f64),
-            ("1m".to_string(), -1.0_f64),
-            ("5m".to_string(), -1.0_f64),
-            ("15m".to_string(), -1.0_f64),
+            ("default".to_string(), 67.0),
+            ("1m".to_string(), 10.0),
+            ("5m".to_string(), 50.5),
+            ("15m".to_string(), 150.0),
         ]);
 
         let mock_pendings = HashMap::from([
-            ("default".to_string(), -1_i64),
-            ("1m".to_string(), -1_i64),
-            ("5m".to_string(), -1_i64),
-            ("15m".to_string(), -1_i64),
+            ("default".to_string(), 67),
+            ("1m".to_string(), 10),
+            ("5m".to_string(), 50),
+            ("15m".to_string(), 150),
         ]);
 
         Ok(Response::new(GetMonoVertexMetricsResponse {
@@ -60,12 +59,11 @@ impl MonoVertexDaemonService for MvtxDaemonService {
         &self,
         _: Request<()>,
     ) -> std::result::Result<Response<GetMonoVertexStatusResponse>, Status> {
-        // TODO(Phase 5): replace with real health checker data.
         Ok(Response::new(GetMonoVertexStatusResponse {
             status: Some(MonoVertexStatus {
-                status: "unknown".to_string(),
-                message: "metrics not yet available".to_string(),
-                code: "D4".to_string(),
+                status: "healthy".to_string(),
+                message: "MonoVertex data flow is healthy".to_string(),
+                code: "D1".to_string(),
             }),
         }))
     }
@@ -120,7 +118,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_mono_vertex_metrics_returns_name_and_no_data_sentinels() {
+    async fn get_mono_vertex_metrics_returns_mock_data() {
         let svc = make_svc();
         let resp = svc
             .get_mono_vertex_metrics(Request::new(()))
@@ -129,13 +127,19 @@ mod tests {
         let metrics = resp.into_inner().metrics.expect("metrics payload");
 
         assert_eq!(metrics.mono_vertex, "simple-mono-vertex");
-        // -1 signals "no data yet" for all windows.
-        assert_eq!(metrics.processing_rates.get("default"), Some(&-1.0));
-        assert_eq!(metrics.pendings.get("1m"), Some(&-1));
+        assert_eq!(metrics.processing_rates.get("default"), Some(&67.0));
+        assert_eq!(metrics.processing_rates.get("1m"), Some(&10.0));
+        assert_eq!(metrics.processing_rates.get("5m"), Some(&50.5));
+        assert_eq!(metrics.processing_rates.get("15m"), Some(&150.0));
+
+        assert_eq!(metrics.pendings.get("default"), Some(&67));
+        assert_eq!(metrics.pendings.get("1m"), Some(&10));
+        assert_eq!(metrics.pendings.get("5m"), Some(&50));
+        assert_eq!(metrics.pendings.get("15m"), Some(&150));
     }
 
     #[tokio::test]
-    async fn get_mono_vertex_status_returns_unknown_before_rater_ready() {
+    async fn get_mono_vertex_status_returns_mock_data() {
         let svc = make_svc();
         let resp = svc
             .get_mono_vertex_status(Request::new(()))
@@ -143,7 +147,9 @@ mod tests {
             .expect("status response");
         let status = resp.into_inner().status.expect("status payload");
 
-        assert_eq!(status.code, "D4");
+        assert_eq!(status.status, "healthy");
+        assert_eq!(status.message, "MonoVertex data flow is healthy");
+        assert_eq!(status.code, "D1");
     }
 
     #[tokio::test]
