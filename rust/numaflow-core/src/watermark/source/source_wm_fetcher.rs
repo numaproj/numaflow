@@ -34,7 +34,10 @@ impl SourceWatermarkFetcher {
     /// `processor_count` value from the head WMBs of all active processors. If we don't
     /// have enough active processors, returns -1 to indicate the watermark cannot be
     /// computed yet. This ensures watermark stability during startup and rebalancing.
-    pub(crate) fn fetch_source_watermark(&mut self) -> Watermark {
+    ///
+    /// The optional `offset` parameter is used for logging purposes to track which offset
+    /// triggered this watermark fetch.
+    pub(crate) fn fetch_source_watermark(&mut self, offset: Option<i64>) -> Watermark {
         let mut min_wm = i64::MAX;
         let mut active_processor_count = 0u32;
         let mut max_expected_count: Option<u32> = None;
@@ -82,7 +85,7 @@ impl SourceWatermarkFetcher {
             // Not enough processors reporting yet, return -1
             let watermark =
                 Watermark::from_timestamp_millis(-1).expect("Failed to parse watermark");
-            self.watermark_log_summary(&watermark);
+            self.watermark_log_summary(&watermark, offset);
             return watermark;
         }
 
@@ -94,7 +97,7 @@ impl SourceWatermarkFetcher {
             Watermark::from_timestamp_millis(min_wm).expect("Failed to parse watermark");
 
         // Log summary periodically
-        self.watermark_log_summary(&watermark);
+        self.watermark_log_summary(&watermark, offset);
 
         watermark
     }
@@ -136,22 +139,24 @@ impl SourceWatermarkFetcher {
     }
 
     /// Logs a summary of the watermark state if the log interval has elapsed.
-    /// This includes fetched watermark, processors, and their timelines.
-    fn watermark_log_summary(&mut self, fetched_wm: &Watermark) {
+    /// This includes fetched watermark, incoming offset, processors, and their timelines.
+    fn watermark_log_summary(&mut self, fetched_wm: &Watermark, offset: Option<i64>) {
         if self.last_log_time.elapsed() < WATERMARK_LOG_INTERVAL {
             return;
         }
         self.last_log_time = Instant::now();
 
-        let summary = self.build_summary(fetched_wm);
+        let summary = self.build_summary(fetched_wm, offset);
         info!("{}", summary);
     }
 
     /// Builds a summary string of the watermark state.
-    fn build_summary(&self, fetched_wm: &Watermark) -> String {
+    fn build_summary(&self, fetched_wm: &Watermark, offset: Option<i64>) -> String {
+        let offset_str = offset.map_or("N/A".to_string(), |o| o.to_string());
         format!(
-            "Source Watermark Summary: fetched_wm={}, processors={:?}",
+            "Source Watermark Summary: fetched_wm={}, incoming_offset={}, processors={:?}",
             fetched_wm.timestamp_millis(),
+            offset_str,
             self.processor_manager
         )
     }
@@ -217,7 +222,7 @@ mod tests {
         let mut fetcher = SourceWatermarkFetcher::new(processor_manager);
 
         // Invoke fetch_watermark and verify the result
-        let watermark = fetcher.fetch_source_watermark();
+        let watermark = fetcher.fetch_source_watermark(Some(100));
         assert_eq!(watermark.timestamp_millis(), 300);
     }
 
@@ -302,7 +307,7 @@ mod tests {
         let mut fetcher = SourceWatermarkFetcher::new(processor_manager);
 
         // Invoke fetch_watermark and verify the result
-        let watermark = fetcher.fetch_source_watermark();
+        let watermark = fetcher.fetch_source_watermark(Some(100));
         assert_eq!(watermark.timestamp_millis(), 323);
     }
 

@@ -56,7 +56,11 @@ impl LastPublishedState {
     /// Returns (offset, watermark, regressed) where regressed is true if watermark regression was detected.
     fn update(&mut self, offset: i64, watermark: i64) -> (i64, i64, bool) {
         self.offset = self.offset.max(offset);
-        let regressed = watermark < self.watermark;
+        let regressed = if watermark != -1 {
+            self.watermark > watermark
+        } else {
+            false
+        };
         if !regressed {
             self.watermark = self.watermark.max(watermark);
         }

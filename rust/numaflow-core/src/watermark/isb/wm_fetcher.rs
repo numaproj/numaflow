@@ -112,7 +112,7 @@ impl ISBWatermarkFetcher {
         let watermark = self.get_watermark();
 
         // Log summary periodically
-        self.watermark_log_summary(&watermark);
+        self.watermark_log_summary(&watermark, offset);
 
         watermark
     }
@@ -252,25 +252,26 @@ impl ISBWatermarkFetcher {
     }
 
     /// Logs a summary of the watermark state if the log interval has elapsed.
-    /// This includes fetched watermark, last processed watermarks, processors, and their timelines.
-    fn watermark_log_summary(&mut self, fetched_wm: &Watermark) {
+    /// This includes fetched watermark, incoming offset, last processed watermarks, processors, and their timelines.
+    fn watermark_log_summary(&mut self, fetched_wm: &Watermark, offset: i64) {
         if self.last_log_time.elapsed() < WATERMARK_LOG_INTERVAL {
             return;
         }
         self.last_log_time = Instant::now();
 
-        let summary = self.build_summary(fetched_wm);
+        let summary = self.build_summary(fetched_wm, offset);
         info!("{}", summary);
     }
 
     /// Builds a summary string of the watermark state.
-    fn build_summary(&self, fetched_wm: &Watermark) -> String {
+    fn build_summary(&self, fetched_wm: &Watermark, offset: i64) -> String {
         let mut summary = String::new();
 
-        // Add fetched watermark
+        // Add fetched watermark and incoming offset
         summary.push_str(&format!(
-            "Watermark Summary: fetched_wm={}, ",
-            fetched_wm.timestamp_millis()
+            "Watermark Summary: fetched_wm={}, incoming_offset={}, ",
+            fetched_wm.timestamp_millis(),
+            offset
         ));
 
         // Add last processed watermarks per edge and partition
@@ -525,7 +526,7 @@ mod tests {
 
         // Invoke fetch_watermark and verify the result
         let watermark = fetcher.fetch_watermark(12, 0);
-        fetcher.watermark_log_summary(&watermark);
+        fetcher.watermark_log_summary(&watermark, 12);
 
         assert_eq!(watermark.timestamp_millis(), 150);
     }

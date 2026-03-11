@@ -131,7 +131,7 @@ impl SourceWatermarkState {
         input_partition: u16,
     ) -> Result<()> {
         // Fetch the source watermark
-        let watermark = self.fetcher.fetch_source_watermark();
+        let watermark = self.fetcher.fetch_source_watermark(Some(offset.offset));
 
         // Publish the watermark
         self.publisher
@@ -164,7 +164,7 @@ impl SourceWatermarkState {
 
         // Fetch the current source watermark (may be -1 if no data yet, but we still
         // publish to update KV entry timestamp which signals liveness to downstream vertices)
-        let compute_wm = self.fetcher.fetch_source_watermark();
+        let compute_wm = self.fetcher.fetch_source_watermark(None);
 
         // Process each partition that needs publishing
         for partition in partitions_needing_publish {
@@ -191,7 +191,7 @@ impl SourceWatermarkState {
     async fn publish_isb_idle_watermark(&mut self) -> Result<()> {
         // Fetch the current source watermark (may be -1 if no data yet, but we still
         // publish to update KV entry timestamp which signals liveness to downstream vertices)
-        let compute_wm = self.fetcher.fetch_source_watermark();
+        let compute_wm = self.fetcher.fetch_source_watermark(None);
 
         // Fetch streams where step interval has passed since last publish
         let streams_needing_publish = self.isb_idle_manager.fetch_streams_needing_publish().await;
@@ -366,7 +366,7 @@ impl SourceWatermarkHandle {
     pub(crate) async fn fetch_source_watermark(&self) -> Watermark {
         // Acquire lock, fetch watermark, and release immediately
         let mut state = self.state.lock().await;
-        state.fetcher.fetch_source_watermark()
+        state.fetcher.fetch_source_watermark(None)
     }
 
     /// Fetches the head watermark using the source watermark fetcher. This returns the minimum
