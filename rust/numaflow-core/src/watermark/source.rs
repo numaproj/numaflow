@@ -454,7 +454,6 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let ot_bucket_name = "test_publish_source_watermark_OT";
-        let hb_bucket_name = "test_publish_source_watermark_PROCESSORS";
 
         let source_config = SourceWatermarkConfig {
             max_delay: Default::default(),
@@ -472,15 +471,6 @@ mod tests {
         js_context
             .create_key_value(Config {
                 bucket: ot_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        js_context
-            .create_key_value(Config {
-                bucket: hb_bucket_name.to_string(),
                 history: 1,
                 ..Default::default()
             })
@@ -551,10 +541,6 @@ mod tests {
 
         // delete the stores
         js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
             .delete_key_value(ot_bucket_name.to_string())
             .await
             .unwrap();
@@ -567,22 +553,14 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let source_ot_bucket_name = "test_publish_source_edge_watermark_source_OT";
-        let source_hb_bucket_name = "test_publish_source_edge_watermark_source_PROCESSORS";
         let edge_ot_bucket_name = "test_publish_source_edge_watermark_edge_OT";
-        let edge_hb_bucket_name = "test_publish_source_edge_watermark_edge_PROCESSORS";
 
         // delete the stores
         let _ = js_context
             .delete_key_value(source_ot_bucket_name.to_string())
             .await;
         let _ = js_context
-            .delete_key_value(source_hb_bucket_name.to_string())
-            .await;
-        let _ = js_context
             .delete_key_value(edge_ot_bucket_name.to_string())
-            .await;
-        let _ = js_context
-            .delete_key_value(edge_hb_bucket_name.to_string())
             .await;
 
         let source_config = SourceWatermarkConfig {
@@ -611,27 +589,11 @@ mod tests {
             })
             .await
             .unwrap();
-        js_context
-            .create_key_value(Config {
-                bucket: source_hb_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
 
         // create key value stores for edge
         js_context
             .create_key_value(Config {
                 bucket: edge_ot_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        js_context
-            .create_key_value(Config {
-                bucket: edge_hb_bucket_name.to_string(),
                 history: 1,
                 ..Default::default()
             })
@@ -737,10 +699,7 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let ot_bucket_name = "test_invoke_publish_source_idle_watermark_OT";
-        let hb_bucket_name = "test_invoke_publish_source_idle_watermark_PROCESSORS";
         let to_vertex_ot_bucket_name = "test_invoke_publish_source_idle_watermark_TO_VERTEX_OT";
-        let to_vertex_hb_bucket_name =
-            "test_invoke_publish_source_idle_watermark_TO_VERTEX_PROCESSORS";
 
         let to_vertex_configs = vec![ToVertexConfig {
             name: "edge_vertex",
@@ -802,23 +761,7 @@ mod tests {
             .unwrap();
         js_context
             .create_key_value(Config {
-                bucket: hb_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        js_context
-            .create_key_value(Config {
                 bucket: to_vertex_ot_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        js_context
-            .create_key_value(Config {
-                bucket: to_vertex_hb_bucket_name.to_string(),
                 history: 1,
                 ..Default::default()
             })
@@ -1068,7 +1011,6 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let ot_bucket_name = "test_fetch_head_watermark_source_OT";
-        let hb_bucket_name = "test_fetch_head_watermark_source_PROCESSORS";
 
         let source_config = SourceWatermarkConfig {
             max_delay: Default::default(),
@@ -1162,10 +1104,6 @@ mod tests {
         assert_ne!(head_watermark.timestamp_millis(), -1);
 
         // delete the stores
-        js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await
-            .unwrap();
         js_context
             .delete_key_value(ot_bucket_name.to_string())
             .await

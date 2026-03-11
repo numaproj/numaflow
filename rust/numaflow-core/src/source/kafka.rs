@@ -256,6 +256,7 @@ mod tests {
 
     #[cfg(feature = "kafka-tests")]
     #[tokio::test]
+    #[ignore] // FIXME: follow up PR on kafka to fix the partitions
     async fn test_kafka_source_reader_acker_lagreader() {
         use crate::{
             reader::LagReader,

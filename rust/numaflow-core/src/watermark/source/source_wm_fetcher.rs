@@ -66,8 +66,7 @@ impl SourceWatermarkFetcher {
                 if let Some(head_wmb) = timeline.get_head_wmb()
                     && let Some(count) = head_wmb.processor_count
                 {
-                    max_expected_count =
-                        Some(max_expected_count.map_or(count, |c| c.max(count)));
+                    max_expected_count = Some(max_expected_count.map_or(count, |c| c.max(count)));
                 }
             }
         }
