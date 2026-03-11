@@ -11,6 +11,7 @@ use numaflow::source;
 use numaflow::sourcetransform::SourceTransformer;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use std::net::TcpListener;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
@@ -21,7 +22,7 @@ use tokio_util::sync::CancellationToken;
 pub(crate) struct SourceTestHandle {
     pub source_transformer_test_handle: Option<SourceTransformerTestHandle>,
     pub source: Source<crate::typ::WithoutRateLimiter>,
-    pub server_handle: TestServerHandle,
+    pub server_handle: Option<TestServerHandle>,
 }
 
 impl SourceTestHandle {
@@ -43,10 +44,10 @@ impl SourceTestHandle {
         // create a transformer for this source if it is provided
         let mut transformer_test_handle = match source_transformer_svc {
             Some(transformer_svc) => {
-                let server_handle = start_source_transform_server(transformer_svc);
+                let _server_handle = start_source_transform_server(transformer_svc);
 
                 let mut client = SourceTransformClient::new(
-                    server_handle
+                    _server_handle
                         .create_rpc_channel()
                         .await
                         .expect("failed to create source transformer rpc channel"),
@@ -67,7 +68,7 @@ impl SourceTestHandle {
                 .expect("failed to create source transformer");
 
                 Some(SourceTransformerTestHandle {
-                    server_handle,
+                    _server_handle,
                     transformer: Some(transformer),
                 })
             }
@@ -136,9 +137,77 @@ impl SourceTestHandle {
         };
 
         SourceTestHandle {
-            server_handle,
+            server_handle: Some(server_handle),
             source,
             source_transformer_test_handle: transformer_test_handle,
+        }
+    }
+
+    /// Create a built-in HTTP source component.
+    ///
+    /// Binds to a random port, starts the embedded HTTP server, and spawns a background
+    /// task that sends `num_messages` POST requests to it. No separate gRPC server is
+    /// started — the HTTP server is embedded in the source itself.
+    pub(crate) async fn create_http_source(
+        batch_size: usize,
+        buffer_size: usize,
+        num_messages: usize,
+        tracker: Tracker,
+        cln_token: CancellationToken,
+    ) -> SourceTestHandle {
+        use crate::source::http::CoreHttpSource;
+
+        // HttpSourceHandle uses axum_server::bind_rustls which requires a global
+        // CryptoProvider. install_default() is idempotent (returns Err if already set).
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+        // Bind to get a free port, then drop so HttpSourceHandle can bind to it.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+
+        let http_source_config = numaflow_http::HttpSourceConfigBuilder::new("test")
+            .addr(addr)
+            .buffer_size(buffer_size)
+            .timeout(Duration::from_millis(100))
+            .build();
+
+        let http_source = numaflow_http::HttpSourceHandle::new(http_source_config, cln_token).await;
+        let core_http_source = CoreHttpSource::new(batch_size, http_source);
+
+        let source = Source::new(
+            batch_size,
+            SourceType::Http(core_http_source),
+            tracker,
+            true,
+            None,
+            None,
+            None,
+        )
+        .await;
+
+        // Spawn a background task to send HTTP POST messages to the source.
+        tokio::spawn(async move {
+            let client = reqwest::Client::builder()
+                .danger_accept_invalid_certs(true)
+                .build()
+                .expect("failed to build client");
+
+            for i in 0..num_messages {
+                let _ = client
+                    .post(format!("https://{}/vertices/test", addr))
+                    .header("Content-Type", "application/json")
+                    .header("X-Numaflow-Id", format!("test-id-{}", i))
+                    .body(format!(r#"{{"message": "test{}"}}"#, i))
+                    .send()
+                    .await;
+            }
+        });
+
+        SourceTestHandle {
+            source_transformer_test_handle: None,
+            source,
+            server_handle: None,
         }
     }
 }
