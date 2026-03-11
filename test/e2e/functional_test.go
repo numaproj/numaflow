@@ -410,6 +410,44 @@ func (s *FunctionalSuite) TestOrderedProcessing() {
 	}
 }
 
+func (s *FunctionalSuite) TestOrderedProcessingMultiSource() {
+	w := s.Given().Pipeline("@testdata/ordered-processing-multi-source.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "ordered-multi-source"
+
+	w.Expect().VertexPodsRunning()
+
+	// 10 numeric keys, 100 messages per key = 1000 total messages.
+	// Messages are sent round-robin across two HTTP sources (in-1, in-2).
+	numKeys := 10
+	msgsPerKey := 100
+	sources := []string{"in-1", "in-2"}
+
+	for seq := 0; seq < msgsPerKey; seq++ {
+		for key := 0; key < numKeys; key++ {
+			src := sources[(key+seq)%len(sources)]
+			keyStr := fmt.Sprintf("%d", key)
+			val := fmt.Sprintf("%d", seq)
+			w.SendMessageTo(pipelineName, src, NewHttpPostRequest().
+				WithBody([]byte(val)).
+				WithHeader("x-numaflow-keys", keyStr).
+				WithHeader("x-numaflow-id", fmt.Sprintf("%s-%s", keyStr, val)))
+		}
+	}
+
+	// Verify that for each key, the Redis list contains values 0..99 in order.
+	expectedValues := make([]string, msgsPerKey)
+	for i := 0; i < msgsPerKey; i++ {
+		expectedValues[i] = fmt.Sprintf("%d", i)
+	}
+	for key := 0; key < numKeys; key++ {
+		redisKey := fmt.Sprintf("ordered-multi-source-out_%d", key)
+		w.Expect().RedisSinkListEquals(redisKey, expectedValues)
+	}
+}
+
 func TestFunctionalSuite(t *testing.T) {
 	suite.Run(t, new(FunctionalSuite))
 }
