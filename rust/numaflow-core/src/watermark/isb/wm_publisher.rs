@@ -17,13 +17,17 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::watermark::wmb::WMB;
 
-/// LastPublishedState is the state of the last published watermark and offset
-/// for a partition.
+/// LastPublishedState tracks the best known watermark and offset for a partition,
+/// and when we last published to the KV store.
 #[derive(Clone, Debug)]
 struct LastPublishedState {
+    /// Best (highest) offset seen so far
     offset: i64,
+    /// Best (highest) watermark seen so far
     watermark: i64,
+    /// When we last published to the KV store
     last_published_time: Instant,
+    /// Configured delay between publishes (to reduce KV writes)
     delay: Option<Duration>,
 }
 
@@ -39,24 +43,29 @@ impl Default for LastPublishedState {
 }
 
 impl LastPublishedState {
-    fn should_publish(&self) -> bool {
-        if let Some(delay) = self.delay
-            && self.last_published_time.elapsed() < delay
-        {
-            return false;
+    /// Returns true if enough time has passed since last publish (delay crossed).
+    /// If no delay is configured, always returns true.
+    fn delay_crossed(&self) -> bool {
+        match self.delay {
+            Some(delay) => self.last_published_time.elapsed() >= delay,
+            None => true,
         }
-        true
     }
 
-    /// Checks if we have not published for the configured delay. We need to publish for heartbeat even if
-    /// watermark hasn't changed to maintain liveness.
-    fn needs_publish(&self) -> bool {
-        if let Some(delay) = self.delay {
-            self.last_published_time.elapsed() >= delay
-        } else {
-            // If no delay is configured, always allow publishing
-            true
+    /// Updates the tracked state with incoming values, keeping the best (highest) values.
+    /// Returns (offset, watermark, regressed) where regressed is true if watermark regression was detected.
+    fn update(&mut self, offset: i64, watermark: i64) -> (i64, i64, bool) {
+        self.offset = self.offset.max(offset);
+        let regressed = watermark < self.watermark;
+        if !regressed {
+            self.watermark = self.watermark.max(watermark);
         }
+        (self.offset, self.watermark, regressed)
+    }
+
+    /// Marks that we just published.
+    fn mark_published(&mut self) {
+        self.last_published_time = Instant::now();
     }
 }
 
@@ -130,6 +139,11 @@ impl ISBWatermarkPublisher {
 
     /// publish_watermark_with_processor_count publishes the watermark with an optional processor count.
     /// This is used by source watermark publishers to include the total partition count in the WMB.
+    ///
+    /// The logic is simple:
+    /// 1. Always update state with best (highest) watermark and offset
+    /// 2. Only publish when delay is crossed
+    /// 3. Publish the best values (guaranteed monotonically increasing)
     pub(crate) async fn publish_watermark_with_processor_count(
         &mut self,
         stream: &Stream,
@@ -145,65 +159,24 @@ impl ISBWatermarkPublisher {
             .get_mut(&stream.partition)
             .expect("should have partition");
 
-        // we can avoid publishing the watermark if the offset is smaller than the last published offset
-        // since we do unordered writes to ISB, the offsets can be out of order even though the watermark
-        // is monotonically increasing.
-        // NOTE: in idling case since we reuse the control message offset, we can have the same offset
-        // with larger watermark (we should publish it).
-        if offset < last_state.offset {
-            last_state.watermark = last_state.watermark.max(watermark);
+        // Update state with incoming values, get the best (highest) values to publish.
+        // This handles out-of-order data - we always track the best watermark and offset.
+        let (publish_offset, publish_watermark, regressed) = last_state.update(offset, watermark);
+
+        // Log warning for watermark regression (only for non-source, since source data can be out of order)
+        if regressed && !self.is_source {
+            warn!(
+                incoming_watermark = watermark,
+                last_watermark = publish_watermark,
+                "Watermark regression detected, using last known watermark"
+            );
+        }
+
+        // Only publish when delay is crossed
+        if !last_state.delay_crossed() {
             return;
         }
 
-        // Check if we need to publish for heartbeat even if watermark hasn't changed.
-        // This ensures processor liveness is maintained.
-        let needs_heartbeat = last_state.needs_publish();
-
-        // If the watermark is same as the last published watermark update the last published offset
-        // to the largest offset otherwise the watermark will regress between the offsets.
-        //
-        // Example of the bug:
-        // Supposed publish watermark offset=3605646 watermark=1750758997480 last_published_offset=3605147 last_published_watermark=1750758997480
-        // Supposed publish watermark offset=3605637 watermark=1750758998480 last_published_offset=3605147 last_published_watermark=1750758997480
-        // Actual published watermark offset=3605637 watermark=1750758998480
-        // We should've published watermark for offset 3605646 and skipped publishing for offset 3605637
-        // if watermark cannot be computed, still we should publish the last known valid WM for the latest offset
-        if (watermark == last_state.watermark || watermark == -1) && !needs_heartbeat {
-            last_state.offset = last_state.offset.max(offset);
-            return;
-        }
-
-        // Skip publishing if watermark regression is detected (unless we need heartbeat).
-        // For source publishers, we silently skip without logging since data can be out of order.
-        if watermark < last_state.watermark && !needs_heartbeat {
-            if !self.is_source {
-                warn!(?watermark, ?last_state.watermark, "Watermark regression detected, skipping publish");
-            }
-            return;
-        }
-
-        // Determine the watermark and offset to publish
-        let (publish_watermark, publish_offset) = if watermark > last_state.watermark {
-            // New watermark is higher, use it
-            (watermark, offset)
-        } else {
-            // Publishing for heartbeat with same or lower watermark, use last known good values
-            (last_state.watermark, last_state.offset.max(offset))
-        };
-
-        // valid offset and watermark, we can update the state
-        last_state.offset = publish_offset;
-        if publish_watermark > last_state.watermark {
-            last_state.watermark = publish_watermark;
-        }
-
-        // Update state but skip publishing if delay hasn't passed (unless we need heartbeat)
-        // (users can configure delay to reduce the number of writes to the ot bucket)
-        if !last_state.should_publish() && !needs_heartbeat {
-            return;
-        }
-
-        // Publish the watermark to the OT store (liveness tracked via KV entry timestamp)
         let ot_store = self.ot_stores.get(stream.vertex).expect("Invalid vertex");
         let wmb_bytes: BytesMut = WMB {
             idle,
@@ -215,7 +188,7 @@ impl ISBWatermarkPublisher {
         .try_into()
         .expect("Failed to convert WMB to bytes");
 
-        // ot writes can fail when isb is not healthy, we can ignore failures
+        // OT writes can fail when ISB is not healthy, we can ignore failures
         // since subsequent writes will go through
         ot_store
             .put(&self.processor_name, wmb_bytes.freeze())
@@ -223,8 +196,7 @@ impl ISBWatermarkPublisher {
             .map_err(|e| warn!(?e, "Failed to write wmb to ot store (ignoring)"))
             .ok();
 
-        // reset the last published time
-        last_state.last_published_time = Instant::now();
+        last_state.mark_published();
     }
 }
 

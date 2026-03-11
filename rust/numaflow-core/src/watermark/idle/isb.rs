@@ -175,8 +175,7 @@ impl ISBIdleDetector {
     }
 
     /// Fetches streams that need watermark publishing. A stream needs publishing if the last
-    /// published time is greater than the idle timeout. This is used both for idle watermark
-    /// publishing and for heartbeat updates to ensure KV entry timestamps stay current.
+    /// published time is greater than the idle timeout.
     pub(crate) async fn fetch_streams_needing_publish(&self) -> Vec<Stream> {
         let read_guard = self
             .last_published_wm_state
@@ -232,7 +231,7 @@ mod tests {
         };
 
         let mut manager =
-            ISBIdleDetector::new(Duration::from_millis(100), &[to_vertex_config], js_context).await;
+            ISBIdleDetector::new(Duration::from_millis(200), &[to_vertex_config], js_context).await;
 
         manager.reset_idle(&stream).await;
 
@@ -280,7 +279,7 @@ mod tests {
         };
 
         let manager =
-            ISBIdleDetector::new(Duration::from_millis(100), &[to_vertex_config], js_context).await;
+            ISBIdleDetector::new(Duration::from_millis(200), &[to_vertex_config], js_context).await;
 
         let offset = manager
             .fetch_idle_offset(&stream)
@@ -320,7 +319,7 @@ mod tests {
         };
 
         let mut manager =
-            ISBIdleDetector::new(Duration::from_millis(100), &[to_vertex_config], js_context).await;
+            ISBIdleDetector::new(Duration::from_millis(200), &[to_vertex_config], js_context).await;
 
         let offset = manager
             .fetch_idle_offset(&stream)
