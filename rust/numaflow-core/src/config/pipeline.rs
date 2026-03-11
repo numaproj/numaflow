@@ -1453,4 +1453,148 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_ordered_processing_from_vertex_single_stream_per_replica() {
+        // When ordered processing is enabled, from_vertex_config should have
+        // exactly one stream matching the replica ID (replica=0 by default).
+        let pipeline_cfg = r#"{
+            "metadata": {"name": "test-map", "namespace": "default", "creationTimestamp": null},
+            "spec": {
+                "name": "map-vertex",
+                "udf": {"container": {"image": "test-image"}},
+                "ordered": {"enabled": true},
+                "pipelineName": "test-pipeline",
+                "interStepBufferServiceName": "",
+                "replicas": 0,
+                "fromEdges": [{
+                    "from": "in", "to": "map-vertex",
+                    "fromVertexType": "Source", "fromVertexPartitionCount": 3,
+                    "toVertexType": "MapUDF", "toVertexPartitionCount": 3
+                }],
+                "toEdges": [{
+                    "from": "map-vertex", "to": "out",
+                    "fromVertexType": "MapUDF", "fromVertexPartitionCount": 3,
+                    "toVertexType": "Sink", "toVertexPartitionCount": 3
+                }]
+            },
+            "status": {"phase": "", "replicas": 0, "desiredReplicas": 0, "lastScaledAt": null}
+        }"#;
+
+        let pipeline_cfg_base64 = BASE64_STANDARD.encode(pipeline_cfg);
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
+
+        assert!(config.ordered_processing_enabled);
+        assert_eq!(config.from_vertex_config.len(), 1);
+
+        let from_cfg = &config.from_vertex_config.first().unwrap();
+        assert_eq!(
+            from_cfg.reader_config.streams.len(),
+            1,
+            "Ordered mode should have exactly one stream per replica"
+        );
+        assert_eq!(
+            from_cfg.reader_config.streams.first().unwrap().partition, 0,
+            "Replica 0 should read from partition 0"
+        );
+    }
+
+    #[test]
+    fn test_unordered_processing_from_vertex_all_streams() {
+        // When ordered processing is disabled, from_vertex_config should have
+        // streams for all partitions.
+        let pipeline_cfg = r#"{
+            "metadata": {"name": "test-map", "namespace": "default", "creationTimestamp": null},
+            "spec": {
+                "name": "map-vertex",
+                "udf": {"container": {"image": "test-image"}},
+                "pipelineName": "test-pipeline",
+                "interStepBufferServiceName": "",
+                "replicas": 0,
+                "fromEdges": [{
+                    "from": "in", "to": "map-vertex",
+                    "fromVertexType": "Source", "fromVertexPartitionCount": 3,
+                    "toVertexType": "MapUDF", "toVertexPartitionCount": 3
+                }],
+                "toEdges": [{
+                    "from": "map-vertex", "to": "out",
+                    "fromVertexType": "MapUDF", "fromVertexPartitionCount": 3,
+                    "toVertexType": "Sink", "toVertexPartitionCount": 3
+                }]
+            },
+            "status": {"phase": "", "replicas": 0, "desiredReplicas": 0, "lastScaledAt": null}
+        }"#;
+
+        let pipeline_cfg_base64 = BASE64_STANDARD.encode(pipeline_cfg);
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
+
+        assert!(!config.ordered_processing_enabled);
+        assert_eq!(config.from_vertex_config.len(), 1);
+
+        let from_cfg = &config.from_vertex_config.first().unwrap();
+        assert_eq!(
+            from_cfg.reader_config.streams.len(),
+            3,
+            "Unordered mode should have streams for all partitions"
+        );
+        let partitions: Vec<u16> = from_cfg
+            .reader_config
+            .streams
+            .iter()
+            .map(|s| s.partition)
+            .collect();
+        assert_eq!(partitions, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn test_ordered_processing_to_vertex_streams() {
+        // to_vertex_config streams should always contain all partitions
+        // (routing is done at write time, not at config time).
+        let pipeline_cfg = r#"{
+            "metadata": {"name": "test-map", "namespace": "default", "creationTimestamp": null},
+            "spec": {
+                "name": "map-vertex",
+                "udf": {"container": {"image": "test-image"}},
+                "ordered": {"enabled": true},
+                "pipelineName": "test-pipeline",
+                "interStepBufferServiceName": "",
+                "replicas": 0,
+                "fromEdges": [{
+                    "from": "in", "to": "map-vertex",
+                    "fromVertexType": "Source", "fromVertexPartitionCount": 3,
+                    "toVertexType": "MapUDF", "toVertexPartitionCount": 3
+                }],
+                "toEdges": [{
+                    "from": "map-vertex", "to": "out",
+                    "fromVertexType": "MapUDF", "fromVertexPartitionCount": 3,
+                    "toVertexType": "Sink", "toVertexPartitionCount": 3
+                }]
+            },
+            "status": {"phase": "", "replicas": 0, "desiredReplicas": 0, "lastScaledAt": null}
+        }"#;
+
+        let pipeline_cfg_base64 = BASE64_STANDARD.encode(pipeline_cfg);
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
+
+        assert!(config.ordered_processing_enabled);
+        assert_eq!(config.to_vertex_config.len(), 1);
+
+        let to_cfg = &config.to_vertex_config.first().unwrap();
+        // to_vertex_config always has streams for all partitions (writer decides at runtime)
+        assert_eq!(
+            to_cfg.writer_config.streams.len(),
+            3,
+            "to_vertex_config should have streams for all partitions even in ordered mode"
+        );
+        let partitions: Vec<u16> = to_cfg
+            .writer_config
+            .streams
+            .iter()
+            .map(|s| s.partition)
+            .collect();
+        assert_eq!(partitions, vec![0, 1, 2]);
+    }
 }
