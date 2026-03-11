@@ -59,12 +59,10 @@ mod tests {
     use std::sync::Arc;
 
     fn make_adapter() -> GrpcAdapter {
-        let runtime = Arc::new(RuntimeCache::new(
-            "test-mvtx".to_string(),
-            "default".to_string(),
-            2,
-        ));
-        let svc = MvtxDaemonService::new("test-mvtx".to_string(), runtime);
+        use crate::MonoVertexConfig;
+        let cfg = MonoVertexConfig { name: "test-mvtx".to_string(), namespace: "default".to_string(), max_replicas: 2 };
+        let runtime = Arc::new(RuntimeCache::new(&cfg));
+        let svc = MvtxDaemonService::new(cfg.name, runtime);
         GrpcAdapter::new(svc)
     }
 

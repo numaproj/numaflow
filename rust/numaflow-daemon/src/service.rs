@@ -113,12 +113,10 @@ mod tests {
     use crate::runtime::RuntimeCache;
 
     fn make_svc() -> MvtxDaemonService {
-        let runtime = Arc::new(RuntimeCache::new(
-            "simple-mono-vertex".to_string(),
-            "default".to_string(),
-            2,
-        ));
-        MvtxDaemonService::new("simple-mono-vertex".to_string(), runtime)
+        use crate::MonoVertexConfig;
+        let cfg = MonoVertexConfig { name: "simple-mono-vertex".to_string(), namespace: "default".to_string(), max_replicas: 2 };
+        let runtime = Arc::new(RuntimeCache::new(&cfg));
+        MvtxDaemonService::new(cfg.name, runtime)
     }
 
     #[tokio::test]

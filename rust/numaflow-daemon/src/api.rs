@@ -152,16 +152,10 @@ mod tests {
     use tower::ServiceExt;
 
     fn test_router() -> Router {
-        use crate::runtime::RuntimeCache;
-        let runtime = Arc::new(RuntimeCache::new(
-            "simple-mono-vertex".to_string(),
-            "default".to_string(),
-            2,
-        ));
-        let svc = Arc::new(MvtxDaemonService::new(
-            "simple-mono-vertex".to_string(),
-            runtime,
-        ));
+        use crate::{MonoVertexConfig, runtime::RuntimeCache};
+        let cfg = MonoVertexConfig { name: "simple-mono-vertex".to_string(), namespace: "default".to_string(), max_replicas: 2 };
+        let runtime = Arc::new(RuntimeCache::new(&cfg));
+        let svc = Arc::new(MvtxDaemonService::new(cfg.name, runtime));
         Router::new()
             .route("/api/v1/metrics", get(api_v1_metrics))
             .route("/api/v1/status", get(api_v1_status))

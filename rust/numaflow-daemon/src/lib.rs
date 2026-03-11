@@ -43,12 +43,20 @@ const ENV_MONO_VERTEX_OBJECT: &str = "NUMAFLOW_MONO_VERTEX_OBJECT";
 /// Default max replicas when spec.scale.max is not set. Matches Go's default.
 const DEFAULT_MAX_REPLICAS: i32 = 50;
 
+/// Configuration required to run the MonoVertex daemon.
+pub(crate) struct MonoVertexConfig {
+    pub(crate) name: String,
+    pub(crate) namespace: String,
+    pub(crate) max_replicas: i32,
+}
+
 /// Runs the MonoVertex daemon: one port, TLS, ALPN (http/1.1 + h2).
 /// REST routes (/readyz, /livez, etc.) and gRPC are served by the same Axum + Tonic stack.
 pub async fn run_monovertex(cln_token: CancellationToken) -> Result<()> {
-    let (name, namespace, max_replicas) = load_cr()?;
+    let cfg = load_mvtx_config()?;
     info!(
-        "Starting daemon server for MonoVertex {name} (namespace={namespace}, max_replicas={max_replicas})"
+        "Starting daemon server for MonoVertex {} (namespace={}, max_replicas={})",
+        cfg.name, cfg.namespace, cfg.max_replicas
     );
 
     let addr: SocketAddr = format!("[::]:{}", DAEMON_SERVICE_PORT)
@@ -58,14 +66,14 @@ pub async fn run_monovertex(cln_token: CancellationToken) -> Result<()> {
     let tls_config = build_rustls_config().await?;
 
     // Create the runtime error cache and start its background refresh task.
-    let runtime = Arc::new(RuntimeCache::new(name.clone(), namespace, max_replicas));
+    let runtime = Arc::new(RuntimeCache::new(&cfg));
     let runtime_bg = Arc::clone(&runtime);
     let runtime_token = cln_token.clone();
     tokio::spawn(async move {
         runtime_bg.run(runtime_token).await;
     });
 
-    let svc = Arc::new(MvtxDaemonService::new(name, runtime));
+    let svc = Arc::new(MvtxDaemonService::new(cfg.name, runtime));
     let app = make_app(svc);
 
     let handle = Handle::new();
@@ -90,8 +98,8 @@ pub async fn run_monovertex(cln_token: CancellationToken) -> Result<()> {
 }
 
 /// Loads the MonoVertex CR from the `NUMAFLOW_MONO_VERTEX_OBJECT` environment variable
-/// (base64-encoded JSON) and returns `(name, namespace, max_replicas)`.
-fn load_cr() -> Result<(String, String, i32)> {
+/// (base64-encoded JSON) and returns a [`MonoVertexConfig`] with the fields the daemon needs.
+fn load_mvtx_config() -> Result<MonoVertexConfig> {
     let b64 = std::env::var(ENV_MONO_VERTEX_OBJECT)
         .map_err(|_| error::Error::Config(format!("{ENV_MONO_VERTEX_OBJECT} is not set")))?;
 
@@ -99,29 +107,29 @@ fn load_cr() -> Result<(String, String, i32)> {
         .decode(b64.as_bytes())
         .map_err(|e| error::Error::Config(format!("Failed to base64-decode CR: {e}")))?;
 
-    let cr: MonoVertex = serde_json::from_slice(&json)
+    let mv: MonoVertex = serde_json::from_slice(&json)
         .map_err(|e| error::Error::Config(format!("Failed to parse MonoVertex CR: {e}")))?;
 
-    let name = cr
+    let name = mv
         .metadata
         .as_ref()
         .and_then(|m| m.name.clone())
         .ok_or_else(|| error::Error::Config("MonoVertex metadata.name is missing".to_string()))?;
 
-    let namespace = cr
+    let namespace = mv
         .metadata
         .as_ref()
         .and_then(|m| m.namespace.clone())
         .unwrap_or_else(|| "default".to_string());
 
-    let max_replicas = cr
+    let max_replicas = mv
         .spec
         .scale
         .as_ref()
         .and_then(|s| s.max)
         .unwrap_or(DEFAULT_MAX_REPLICAS);
 
-    Ok((name, namespace, max_replicas))
+    Ok(MonoVertexConfig { name, namespace, max_replicas })
 }
 
 /// Builds the daemon Axum app: readyz, livez, REST API routes, and gRPC fallback.
@@ -151,12 +159,9 @@ mod tests {
     use tower::ServiceExt;
 
     fn make_test_svc() -> Arc<MvtxDaemonService> {
-        let runtime = Arc::new(RuntimeCache::new(
-            "test-mvtx".to_string(),
-            "default".to_string(),
-            2,
-        ));
-        Arc::new(MvtxDaemonService::new("test-mvtx".to_string(), runtime))
+        let cfg = MonoVertexConfig { name: "test-mvtx".to_string(), namespace: "default".to_string(), max_replicas: 2 };
+        let runtime = Arc::new(RuntimeCache::new(&cfg));
+        Arc::new(MvtxDaemonService::new(cfg.name, runtime))
     }
 
     fn app() -> Router {

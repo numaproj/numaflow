@@ -11,6 +11,8 @@ use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
+use crate::MonoVertexConfig;
+
 /// How often to re-fetch errors from all active pods.
 const REFRESH_INTERVAL: Duration = Duration::from_secs(60);
 
@@ -85,7 +87,7 @@ pub(crate) struct RuntimeCache {
 }
 
 impl RuntimeCache {
-    pub(crate) fn new(name: String, namespace: String, max_replicas: i32) -> Self {
+    pub(crate) fn new(cfg: &MonoVertexConfig) -> Self {
         let client = reqwest::ClientBuilder::new()
             // Pods use a self-signed TLS cert — skip verification, same as Go.
             .danger_accept_invalid_certs(true)
@@ -94,9 +96,9 @@ impl RuntimeCache {
             .expect("Failed to build reqwest client for RuntimeCache");
 
         Self {
-            name,
-            namespace,
-            max_replicas,
+            name: cfg.name.clone(),
+            namespace: cfg.namespace.clone(),
+            max_replicas: cfg.max_replicas,
             cache: Arc::new(RwLock::new(HashMap::new())),
             client,
         }
@@ -211,11 +213,8 @@ mod tests {
 
     #[test]
     fn pod_url_format() {
-        let cache = RuntimeCache::new(
-            "simple-mono-vertex".to_string(),
-            "default".to_string(),
-            DEFAULT_MAX_REPLICAS,
-        );
+        let cfg = MonoVertexConfig { name: "simple-mono-vertex".to_string(), namespace: "default".to_string(), max_replicas: DEFAULT_MAX_REPLICAS };
+        let cache = RuntimeCache::new(&cfg);
         assert_eq!(
             cache.pod_url(0),
             "https://simple-mono-vertex-mv-0.simple-mono-vertex-mv-headless.default.svc:2470/runtime/errors"
