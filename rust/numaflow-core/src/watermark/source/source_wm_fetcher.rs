@@ -63,11 +63,11 @@ impl SourceWatermarkFetcher {
 
                 // Get the processor_count from the head WMB and track the maximum
                 // This is the source of truth for expected processor count
-                if let Some(head_wmb) = timeline.get_head_wmb() {
-                    if let Some(count) = head_wmb.processor_count {
-                        max_expected_count =
-                            Some(max_expected_count.map_or(count, |c| c.max(count)));
-                    }
+                if let Some(head_wmb) = timeline.get_head_wmb()
+                    && let Some(count) = head_wmb.processor_count
+                {
+                    max_expected_count =
+                        Some(max_expected_count.map_or(count, |c| c.max(count)));
                 }
             }
         }
@@ -77,14 +77,14 @@ impl SourceWatermarkFetcher {
 
         // Check if we have enough active processors based on the max processor_count
         // seen in the WMBs (be conservative)
-        if let Some(expected) = max_expected_count {
-            if active_processor_count < expected {
-                // Not enough processors reporting yet, return -1
-                let watermark =
-                    Watermark::from_timestamp_millis(-1).expect("Failed to parse watermark");
-                self.watermark_log_summary(&watermark);
-                return watermark;
-            }
+        if let Some(expected) = max_expected_count
+            && active_processor_count < expected
+        {
+            // Not enough processors reporting yet, return -1
+            let watermark =
+                Watermark::from_timestamp_millis(-1).expect("Failed to parse watermark");
+            self.watermark_log_summary(&watermark);
+            return watermark;
         }
 
         if min_wm == i64::MAX {

@@ -406,10 +406,10 @@ impl SourceWatermarkHandle {
         total_partitions: Option<u32>,
     ) {
         let mut state = self.state.lock().await;
-        total_partitions.map(|p| {
+        if let Some(p) = total_partitions {
             state.set_total_partitions(p);
             state.publisher.set_processor_count(p);
-        });
+        }
 
         // Initialize the source idle manager with the partitions for per-partition tracking
         // This also removes partitions that are no longer active

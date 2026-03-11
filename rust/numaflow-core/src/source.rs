@@ -259,6 +259,7 @@ const PARTITION_REFRESH_INTERVAL: Duration = Duration::from_secs(10);
 
 impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     /// Create a new StreamingSource. It starts the read and ack actors in the background.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn new(
         batch_size: usize,
         src_type: SourceType,
