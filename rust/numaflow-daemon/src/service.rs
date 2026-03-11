@@ -162,7 +162,6 @@ mod tests {
             .await
             .expect("errors response");
 
-        // Cache is empty until the background task runs, so we expect an empty list.
         assert!(resp.into_inner().errors.is_empty());
     }
 }

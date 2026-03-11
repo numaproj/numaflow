@@ -23,10 +23,7 @@ const MONITOR_PORT: u16 = 2470;
 /// HTTP path for the runtime errors endpoint.
 const RUNTIME_ERRORS_PATH: &str = "runtime/errors";
 
-#[cfg(test)]
-const DEFAULT_MAX_REPLICAS: i32 = 50;
-
-// ── wire types from the pod HTTP API ─────────────────────────────────────────
+// ── Response types for deserializing the numaflow-monitor /runtime/errors HTTP API. ──
 
 #[derive(Debug, Deserialize)]
 struct ErrorApiResponse {
@@ -48,7 +45,7 @@ struct ErrorDetails {
     details: String,
 }
 
-// ── internal types returned to callers ───────────────────────────────────────
+// ── Public types returned by RuntimeCache::get_errors() ──────────────────────
 
 /// Container-level error for a single replica.
 #[derive(Debug, Clone)]
@@ -124,6 +121,8 @@ impl RuntimeCache {
     }
 
     /// Fetches errors from all pods in parallel.
+    // TODO: probe only active pods by querying the Kubernetes API for the current replica count,
+    // instead of iterating up to max_replicas and relying on connection failures to skip inactive pods.
     async fn fetch_all(&self) {
         let mut handles = Vec::with_capacity(self.max_replicas as usize);
         for index in 0..self.max_replicas {
@@ -213,7 +212,7 @@ mod tests {
 
     #[test]
     fn pod_url_format() {
-        let cfg = MonoVertexConfig { name: "simple-mono-vertex".to_string(), namespace: "default".to_string(), max_replicas: DEFAULT_MAX_REPLICAS };
+        let cfg = MonoVertexConfig { name: "simple-mono-vertex".to_string(), namespace: "default".to_string(), max_replicas: crate::DEFAULT_MAX_REPLICAS };
         let cache = RuntimeCache::new(&cfg);
         assert_eq!(
             cache.pod_url(0),

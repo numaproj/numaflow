@@ -253,7 +253,6 @@ mod tests {
             .await
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        // Cache is empty until the background task fetches from pods.
         let errors = json
             .get("errors")
             .and_then(|e| e.as_array())
