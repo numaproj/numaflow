@@ -76,8 +76,16 @@ pub(crate) fn extract_trace_context(metadata: &crate::metadata::Metadata) -> ope
 
 /// Injects the current span's trace context into a message's sys_metadata
 /// so downstream vertices / UDFs can continue the trace.
+///
+/// Uses `tracing::Span::current().context()` (from `OpenTelemetrySpanExt`)
+/// because `tracing-opentelemetry` stores the OTel span in the tracing span's
+/// extensions, NOT in the thread-local `opentelemetry::Context`.
 pub(crate) fn inject_trace_context(metadata: &mut crate::metadata::Metadata) {
     use opentelemetry::global;
+    use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+    let cx = tracing::Span::current().context();
+
     let kvg = metadata
         .sys_metadata
         .entry(TRACING_METADATA_KEY.to_string())
@@ -86,7 +94,7 @@ pub(crate) fn inject_trace_context(metadata: &mut crate::metadata::Metadata) {
         });
     let mut injector = MetadataInjector(kvg);
     global::get_text_map_propagator(|prop| {
-        prop.inject_context(&opentelemetry::Context::current(), &mut injector);
+        prop.inject_context(&cx, &mut injector);
     });
     let traceparent = kvg
         .key_value
