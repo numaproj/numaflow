@@ -2614,7 +2614,6 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "reqwest 0.13.2",
- "serde",
  "serde_derive",
  "serde_json",
  "url",
