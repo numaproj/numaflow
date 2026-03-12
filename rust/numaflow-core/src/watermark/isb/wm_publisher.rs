@@ -137,6 +137,7 @@ impl ISBWatermarkPublisher {
         watermark: i64,
         idle: bool,
     ) {
+        info!(stream = ?stream, offset, watermark, idle, "Publishing watermark");
         self.publish_watermark_with_processor_count(stream, offset, watermark, idle, None)
             .await;
     }
@@ -172,6 +173,7 @@ impl ISBWatermarkPublisher {
             warn!(
                 incoming_watermark = watermark,
                 last_watermark = publish_watermark,
+                publish_offset = publish_offset,
                 "Watermark regression detected, using last known watermark"
             );
         }
