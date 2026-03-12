@@ -516,8 +516,8 @@ type PipelineSpec struct {
 	// InterStepBuffer configuration specific to this pipeline.
 	// +optional
 	InterStepBuffer *InterStepBuffer `json:"interStepBuffer,omitempty" protobuf:"bytes,9,opt,name=interStepBuffer"`
-	// Ordered enables ordered processing for the entire pipeline.
-	// When enabled, messages will be processed in order based on their event time.
+	// Ordered enables order-preserving processing for the entire pipeline.
+	// When enabled, messages will be processed in their arrival order (FIFO within each partition).
 	// This can be overridden at the vertex level.
 	// +optional
 	Ordered *Ordered `json:"ordered,omitempty" protobuf:"bytes,10,opt,name=ordered"`

@@ -1,0 +1,36 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: ordered-processing
+spec:
+  limits:
+    readBatchSize: 1
+  ordered:
+    enabled: true
+  vertices:
+    - name: in
+      source:
+        http: {}
+    - name: cat
+      partitions: 3
+      udf:
+        container:
+          image: quay.io/numaio/numaflow-rs/map-cat:stable
+          imagePullPolicy: IfNotPresent
+    - name: out
+      partitions: 3
+      sink:
+        udsink:
+          container:
+            image: quay.io/numaio/numaflow-rs/redis-sink:stable
+            imagePullPolicy: IfNotPresent
+            env:
+              - name: SINK_HASH_KEY
+                value: "ordered-processing-out"
+              - name: MODE
+                value: "ordered"
+  edges:
+    - from: in
+      to: cat
+    - from: cat
+      to: out

@@ -69,6 +69,18 @@ func (t *Expect) RedisSinkNotContains(hashKey string, targetStr string, opts ...
 	return t
 }
 
+// RedisSinkListEquals checks that the Redis list at keyName contains exactly the expectedValues in order.
+// This is used for ordered processing verification where the Rust redis-sink stores values as lists using RPUSH.
+func (t *Expect) RedisSinkListEquals(keyName string, expectedValues []string, opts ...SinkCheckOption) *Expect {
+	t.t.Helper()
+	ctx := context.Background()
+	if equals := redisListEquals(ctx, keyName, expectedValues, opts...); !equals {
+		actual := getRedisListValues(keyName)
+		t.t.Fatalf("Expected redis list at key %s to equal %v, but got %v", keyName, expectedValues, actual)
+	}
+	return t
+}
+
 func (t *Expect) ISBSvcDeleted(timeout time.Duration) *Expect {
 	t.t.Helper()
 	ctx := context.Background()

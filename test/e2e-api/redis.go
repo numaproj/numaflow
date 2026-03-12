@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"net/url"
@@ -81,6 +82,30 @@ func (h *RedisController) GetMsgCountContains(w http.ResponseWriter, r *http.Req
 
 	w.WriteHeader(200)
 	_, _ = w.Write([]byte(count))
+}
+
+func (h *RedisController) GetList(w http.ResponseWriter, r *http.Request) {
+	redisClient := h.getRedisClient()
+
+	keyName := r.URL.Query().Get("keyName")
+
+	vals, err := redisClient.LRange(context.Background(), keyName, 0, -1).Result()
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	respBytes, err := json.Marshal(vals)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, _ = w.Write(respBytes)
 }
 
 // Close closes the Redis client.

@@ -1,3 +1,4 @@
+use crate::pipeline::isb::simplebuffer::WithSimpleBuffer;
 use crate::shared::grpc;
 use crate::shared::test_utils::server;
 use crate::shared::test_utils::server::{TestServerHandle, start_server};
@@ -19,13 +20,13 @@ use tokio_util::sync::CancellationToken;
 ///
 /// Contains the source handle, server handle (for the source server),
 /// and an optional source transformer handle.
-pub(crate) struct SourceTestHandle {
+pub(crate) struct SourceTestHandle<C: crate::typ::NumaflowTypeConfig> {
     pub source_transformer_test_handle: Option<SourceTransformerTestHandle>,
-    pub source: Source<crate::typ::WithoutRateLimiter>,
+    pub source: Source<C>,
     pub server_handle: Option<TestServerHandle>,
 }
 
-impl SourceTestHandle {
+impl SourceTestHandle<WithSimpleBuffer> {
     /// Create a user defined source component with the given source and transformer services.
     ///
     /// Initializes the sourcer and transformer handles along with their servers.
@@ -36,7 +37,7 @@ impl SourceTestHandle {
         batch_size: usize,
         cln_token: CancellationToken,
         tracker: Tracker,
-    ) -> SourceTestHandle
+    ) -> SourceTestHandle<WithSimpleBuffer>
     where
         T: SourceTransformer + Send + Sync + 'static,
         S: source::Sourcer + Send + Sync + 'static,
@@ -99,7 +100,7 @@ impl SourceTestHandle {
         .map_err(|e| panic!("failed to create source reader: {:?}", e))
         .expect("failed to create source");
 
-        let source: Source<crate::typ::WithoutRateLimiter> = match transformer_test_handle {
+        let source: Source<WithSimpleBuffer> = match transformer_test_handle {
             Some(ref mut source_transform) => {
                 Source::new(
                     batch_size,
@@ -152,7 +153,7 @@ impl SourceTestHandle {
         num_messages: usize,
         tracker: Tracker,
         cln_token: CancellationToken,
-    ) -> SourceTestHandle {
+    ) -> SourceTestHandle<WithSimpleBuffer> {
         use crate::source::http::CoreHttpSource;
 
         // HttpSourceHandle uses axum_server::bind_rustls which requires a global
