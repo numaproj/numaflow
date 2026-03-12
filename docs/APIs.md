@@ -8105,9 +8105,9 @@ InterStepBuffer configuration specific to this pipeline.
 <em>(Optional)</em>
 <p>
 
-Ordered enables ordered processing for the entire pipeline. When
-enabled, messages will be processed in order based on their event time.
-This can be overridden at the vertex level.
+Ordered enables order-preserving processing for the entire pipeline.
+When enabled, messages will be processed in their arrival order (FIFO
+within each partition). This can be overridden at the vertex level.
 </p>
 
 </td>
@@ -8552,9 +8552,9 @@ InterStepBuffer configuration specific to this pipeline.
 <em>(Optional)</em>
 <p>
 
-Ordered enables ordered processing for the entire pipeline. When
-enabled, messages will be processed in order based on their event time.
-This can be overridden at the vertex level.
+Ordered enables order-preserving processing for the entire pipeline.
+When enabled, messages will be processed in their arrival order (FIFO
+within each partition). This can be overridden at the vertex level.
 </p>
 
 </td>
