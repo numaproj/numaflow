@@ -52,6 +52,9 @@ type CombinedEdge struct {
 	ToVertexPartitionCount *int32 `json:"toVertexPartitionCount,omitempty" protobuf:"bytes,6,opt,name=toVertexPartitionCount"`
 	// +optional
 	ToVertexLimits *VertexLimits `json:"toVertexLimits,omitempty" protobuf:"bytes,7,opt,name=toVertexLimits"`
+	// Determine whether ordered processing is enabled for `to` vertex. If not provided, the default value is set to "false".
+	// +optional
+	ToVertexOrdered *Ordered `json:"toVertexOrdered,omitempty" protobuf:"bytes,8,opt,name=toVertexOrdered"`
 }
 
 func (ce CombinedEdge) GetFromVertexPartitions() int {

@@ -831,6 +831,7 @@ func copyEdges(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.CombinedEdge {
 			ToVertexLimits:           &toVertexLimits,
 			ToVertexType:             vTo.GetVertexType(),
 			ToVertexPartitionCount:   ptr.To[int32](int32(vTo.GetPartitionCount())),
+			ToVertexOrdered:          vTo.Ordered,
 		}
 		result = append(result, combinedEdge)
 	}
