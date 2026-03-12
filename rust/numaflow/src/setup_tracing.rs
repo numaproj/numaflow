@@ -110,20 +110,25 @@ pub fn register() {
             .boxed()
     };
 
-    // Optional OTLP tracing: if endpoint is set (e.g. by controller from pipeline spec env),
-    // export spans and set W3C propagator for trace context across Core and UDF.
-    let otlp_endpoint = std::env::var(OTEL_EXPORTER_OTLP_TRACES_ENDPOINT)
-        .ok()
-        .or_else(|| std::env::var(OTEL_EXPORTER_OTLP_ENDPOINT).ok());
-    let service_name = std::env::var(OTEL_SERVICE_NAME).unwrap_or_else(|_| DEFAULT_OTEL_SERVICE_NAME.to_string());
+    // Print all OTEL-related env vars for debugging (before subscriber is installed, goes to stderr).
+    let traces_endpoint = std::env::var(OTEL_EXPORTER_OTLP_TRACES_ENDPOINT).ok();
+    let generic_endpoint = std::env::var(OTEL_EXPORTER_OTLP_ENDPOINT).ok();
+    let service_name_env = std::env::var(OTEL_SERVICE_NAME).ok();
+
+    eprintln!("[setup_tracing] OTEL env vars:");
+    eprintln!("  {}={}", OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, traces_endpoint.as_deref().unwrap_or("<not set>"));
+    eprintln!("  {}={}", OTEL_EXPORTER_OTLP_ENDPOINT, generic_endpoint.as_deref().unwrap_or("<not set>"));
+    eprintln!("  {}={}", OTEL_SERVICE_NAME, service_name_env.as_deref().unwrap_or("<not set>"));
+    eprintln!("  NUMAFLOW_DEBUG={}", std::env::var("NUMAFLOW_DEBUG").unwrap_or_else(|_| "<not set>".into()));
+
+    let otlp_endpoint = traces_endpoint.or(generic_endpoint);
+    let service_name = service_name_env.unwrap_or_else(|| DEFAULT_OTEL_SERVICE_NAME.to_string());
 
     // Add optional OTLP layer first so it wraps Registry (required for Layer type).
     let otel_layer = match otlp_endpoint {
         Some(ref ep) => {
-            // Log before subscriber is installed (goes to stderr), so operators
-            // can see whether OTLP env vars were picked up.
             eprintln!(
-                "[setup_tracing] OTLP tracing enabled: endpoint={}, service_name={}",
+                "[setup_tracing] OTLP tracing ENABLED: endpoint={}, service_name={}",
                 ep, service_name
             );
             match init_otlp_tracing(ep.clone(), service_name.clone()) {
@@ -131,16 +136,17 @@ pub fn register() {
                     opentelemetry::global::set_text_map_propagator(
                         opentelemetry_sdk::propagation::TraceContextPropagator::new(),
                     );
+                    eprintln!("[setup_tracing] OTLP exporter initialized successfully, W3C propagator set");
                     Some(l)
                 }
                 Err(e) => {
-                    eprintln!("[setup_tracing] OTLP tracing disabled: failed to init exporter: {e}");
+                    eprintln!("[setup_tracing] OTLP tracing DISABLED: failed to init exporter: {e}");
                     None
                 }
             }
         }
         None => {
-            eprintln!("[setup_tracing] OTLP tracing not configured (OTEL_EXPORTER_OTLP_ENDPOINT not set)");
+            eprintln!("[setup_tracing] OTLP tracing DISABLED (no OTEL_EXPORTER_OTLP_ENDPOINT or OTEL_EXPORTER_OTLP_TRACES_ENDPOINT set)");
             None
         }
     };

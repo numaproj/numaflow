@@ -585,6 +585,16 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     let _guard = source_span.enter();
                     if let Some(ref mut metadata) = message.metadata {
                         crate::shared::otel::inject_trace_context(Arc::make_mut(metadata));
+                        tracing::debug!(
+                            offset = %message.offset,
+                            has_tracing_metadata = metadata.sys_metadata.contains_key(crate::shared::otel::TRACING_METADATA_KEY),
+                            "source: injected trace context into message"
+                        );
+                    } else {
+                        tracing::debug!(
+                            offset = %message.offset,
+                            "source: message has no metadata, skipping trace context injection"
+                        );
                     }
                 }
 

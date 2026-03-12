@@ -62,8 +62,21 @@ impl MapUnaryTask {
 
     /// Executes the unary map operation.
     async fn execute(self) {
-        // Extract trace context from the incoming message metadata so this span
-        // becomes a child of the upstream producer/source span.
+        let has_metadata = self.message.metadata.is_some();
+        let has_tracing = self
+            .message
+            .metadata
+            .as_deref()
+            .map(|m| m.sys_metadata.contains_key(otel::TRACING_METADATA_KEY))
+            .unwrap_or(false);
+
+        tracing::debug!(
+            offset = %self.message.offset,
+            has_metadata,
+            has_tracing_in_sys_metadata = has_tracing,
+            "map: extracting trace context from incoming message"
+        );
+
         let parent_cx = self
             .message
             .metadata
@@ -117,10 +130,13 @@ impl MapUnaryTask {
         let mut mapped_messages: Vec<Message> = Vec::with_capacity(results_len);
         for (i, result) in results.into_iter().enumerate() {
             let mut msg: Message = UserDefinedMessage(result, &parent_info, i as i32).into();
-            // Inject the current span's trace context into outgoing message metadata
-            // so downstream vertices can continue the trace.
             if let Some(ref mut metadata) = msg.metadata {
                 otel::inject_trace_context(Arc::make_mut(metadata));
+                tracing::debug!(
+                    offset = %parent_info.offset,
+                    result_index = i,
+                    "map: injected trace context into outgoing message"
+                );
             }
             mapped_messages.push(msg);
         }

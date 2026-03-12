@@ -287,7 +287,19 @@ impl SinkWriter {
             return Ok(());
         }
 
-        // Extract trace context from the first message of the batch to link the sink span.
+        let batch_size = messages.len();
+        let has_tracing = messages
+            .first()
+            .and_then(|m| m.metadata.as_deref())
+            .map(|m| m.sys_metadata.contains_key(crate::shared::otel::TRACING_METADATA_KEY))
+            .unwrap_or(false);
+
+        tracing::debug!(
+            batch_size,
+            has_tracing_in_first_msg = has_tracing,
+            "sink: extracting trace context from batch for sink span"
+        );
+
         let parent_cx = messages
             .first()
             .and_then(|m| m.metadata.as_deref())
@@ -297,7 +309,7 @@ impl SinkWriter {
             "numaflow.sink.write",
             otel.kind = "CLIENT",
             messaging.operation = "sink",
-            messaging.batch_size = messages.len(),
+            messaging.batch_size = batch_size,
         );
         sink_span.set_parent(parent_cx);
 

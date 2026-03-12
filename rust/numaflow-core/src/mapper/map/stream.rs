@@ -61,6 +61,20 @@ impl MapStreamTask {
 
     /// Executes the stream map operation.
     async fn execute(self) {
+        let has_tracing = self
+            .message
+            .metadata
+            .as_deref()
+            .map(|m| m.sys_metadata.contains_key(otel::TRACING_METADATA_KEY))
+            .unwrap_or(false);
+
+        tracing::debug!(
+            offset = %self.message.offset,
+            has_metadata = self.message.metadata.is_some(),
+            has_tracing_in_sys_metadata = has_tracing,
+            "stream_map: extracting trace context from incoming message"
+        );
+
         let parent_cx = self
             .message
             .metadata
