@@ -52,19 +52,19 @@ impl LastPublishedState {
         }
     }
 
-    /// Updates the tracked state with incoming values, keeping the best (highest) values.
+    /// Updates the tracked state with incoming values, keeping the highest values.
     /// Returns (offset, watermark, regressed) where regressed is true if watermark regression was detected.
     fn update(&mut self, offset: i64, watermark: i64) -> (i64, i64, bool) {
-        self.offset = self.offset.max(offset);
-        let regressed = if watermark != -1 {
-            self.watermark > watermark
-        } else {
-            false
-        };
-        if !regressed {
+        if offset > self.offset {
+            // we cannot have a lower watermark for a higher offset(that means watermark has regressed)
+            let regressed = self.watermark > watermark;
+            self.offset = offset;
             self.watermark = self.watermark.max(watermark);
+            (self.offset, self.watermark, regressed)
+        } else {
+            self.watermark = self.watermark.max(watermark);
+            (self.offset, self.watermark, false)
         }
-        (self.offset, self.watermark, regressed)
     }
 
     /// Marks that we just published.
