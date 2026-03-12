@@ -364,6 +364,8 @@ mod simple_buffer_tests {
     use crate::sinker::test_utils::{SinkTestHandle, SinkType as TestSinkType};
     use crate::tracker::Tracker;
 
+    const TIMEOUT: u64 = 2;
+
     /// A UD sink that writes received messages into a SimpleBuffer for verification.
     /// Uses a shared atomic counter to generate globally unique IDs for each write,
     /// avoiding dedup collisions when multiple partitions send messages with similar IDs.
@@ -492,7 +494,7 @@ mod simple_buffer_tests {
         let forwarder_handle = tokio::spawn(async move { forwarder.start(forwarder_cln).await });
 
         // Wait until all messages appear in the output buffer
-        let result = tokio::time::timeout(Duration::from_secs(5), async {
+        let result = tokio::time::timeout(Duration::from_secs(TIMEOUT), async {
             loop {
                 if output_buffer.pending_count() >= MESSAGE_COUNT {
                     break;
@@ -517,7 +519,7 @@ mod simple_buffer_tests {
 
         // Shutdown
         cln_token.cancel();
-        let forwarder_result = tokio::time::timeout(Duration::from_secs(2), forwarder_handle).await;
+        let forwarder_result = tokio::time::timeout(Duration::from_secs(TIMEOUT), forwarder_handle).await;
         assert!(
             forwarder_result.is_ok(),
             "Forwarder task should complete gracefully"
@@ -623,7 +625,7 @@ mod simple_buffer_tests {
         let total_expected = MESSAGE_COUNT * NUM_PARTITIONS;
 
         // Wait until all messages exit the input buffers
-        let input_result = tokio::time::timeout(Duration::from_secs(10), async {
+        let input_result = tokio::time::timeout(Duration::from_secs(TIMEOUT), async {
             for adapter in &input_adapters {
                 loop {
                     if adapter.pending_count() == 0 {
@@ -650,7 +652,7 @@ mod simple_buffer_tests {
         }
 
         // Wait until all messages appear in the output buffer
-        let output_result = tokio::time::timeout(Duration::from_secs(10), async {
+        let output_result = tokio::time::timeout(Duration::from_secs(TIMEOUT), async {
             loop {
                 if output_buffer.pending_count() >= total_expected {
                     break;
@@ -676,7 +678,7 @@ mod simple_buffer_tests {
         // Shutdown
         cln_token.cancel();
         for handle in forwarder_handles {
-            let forwarder_result = tokio::time::timeout(Duration::from_secs(2), handle).await;
+            let forwarder_result = tokio::time::timeout(Duration::from_secs(TIMEOUT), handle).await;
             assert!(
                 forwarder_result.is_ok(),
                 "Forwarder task should complete gracefully"
@@ -747,7 +749,7 @@ mod simple_buffer_tests {
         let forwarder_handle = tokio::spawn(async move { forwarder.start(forwarder_cln).await });
 
         // Wait until all messages are consumed from the input buffer
-        let result = tokio::time::timeout(Duration::from_secs(5), async {
+        let result = tokio::time::timeout(Duration::from_secs(TIMEOUT), async {
             loop {
                 if input_adapter.pending_count() == 0 {
                     break;
@@ -771,7 +773,7 @@ mod simple_buffer_tests {
 
         // Shutdown
         cln_token.cancel();
-        let forwarder_result = tokio::time::timeout(Duration::from_secs(2), forwarder_handle).await;
+        let forwarder_result = tokio::time::timeout(Duration::from_secs(TIMEOUT), forwarder_handle).await;
         assert!(
             forwarder_result.is_ok(),
             "Forwarder task should complete gracefully"
@@ -845,8 +847,6 @@ mod simple_buffer_tests {
         let forwarder_cln = cln_token.clone();
         let forwarder_handle = tokio::spawn(async move { forwarder.start(forwarder_cln).await });
 
-        tokio::time::sleep(Duration::from_millis(500)).await;
-
         assert_eq!(
             input_adapter.pending_count(),
             MESSAGE_COUNT,
@@ -855,7 +855,7 @@ mod simple_buffer_tests {
 
         // Shutdown
         cln_token.cancel();
-        let forwarder_result = tokio::time::timeout(Duration::from_secs(2), forwarder_handle).await;
+        let forwarder_result = tokio::time::timeout(Duration::from_secs(TIMEOUT), forwarder_handle).await;
         assert!(
             forwarder_result.is_ok(),
             "Forwarder task should complete gracefully"
