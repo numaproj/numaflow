@@ -1647,6 +1647,13 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#what-order-preservation-means" class="md-nav__link">
+    What Order Preservation Means
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#how-it-works" class="md-nav__link">
     How It Works
   </a>
@@ -1683,6 +1690,20 @@
         <li class="md-nav__item">
   <a href="#caveats-and-limitations" class="md-nav__link">
     Caveats and Limitations
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#behavior-at-join-vertices" class="md-nav__link">
+    Behavior at Join Vertices
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#behavior-in-cycles" class="md-nav__link">
+    Behavior in Cycles
   </a>
   
 </li>
@@ -2757,6 +2778,13 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#what-order-preservation-means" class="md-nav__link">
+    What Order Preservation Means
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#how-it-works" class="md-nav__link">
     How It Works
   </a>
@@ -2798,6 +2826,20 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#behavior-at-join-vertices" class="md-nav__link">
+    Behavior at Join Vertices
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#behavior-in-cycles" class="md-nav__link">
+    Behavior in Cycles
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#example" class="md-nav__link">
     Example
   </a>
@@ -2826,11 +2868,38 @@
 <blockquote>
 <p><strong>Available from v1.8</strong></p>
 </blockquote>
-<p>By default, Numaflow improves throughput by distributing work across any available processing unit, which results in 
-out-of-order processing. However, some workflows require messages to be processed in a deterministic order — for 
-example, a create-update-delete sequence where you cannot update a record before it has been created.</p>
-<p>Ordered processing in Numaflow provides partitioned FIFO semantics: within a partition, the N-th message is processed 
-only after the (N-1)-th message completes.</p>
+<p>By default, Numaflow improves throughput by distributing work across any available processing unit, which means
+messages may be processed out of the order in which they arrived. However, some workflows require messages to be
+processed in their arrival order - for example, a create-update-delete sequence where you cannot update a record
+before it has been created.</p>
+<p>The <strong>ordered processing</strong> feature provides <strong>input-order preservation</strong> with partitioned FIFO semantics: within a
+partition, the N-th message is processed only after the (N-1)-th message completes. The ordering is based on the
+position of each message in the Inter-Step Buffer (ISB), not on event timestamps.</p>
+<h2 id="what-order-preservation-means">What Order Preservation Means<a class="headerlink" href="#what-order-preservation-means" title="Permanent link">&para;</a></h2>
+<p>It is important to distinguish <strong>order preservation</strong> from <strong>timestamp ordering</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Concept</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Order preservation (this feature)</strong></td>
+<td>Messages are processed in the same order they were written to the ISB - i.e., FIFO. Message N is processed only after message N-1 completes, within a partition.</td>
+</tr>
+<tr>
+<td><strong>Timestamp ordering</strong></td>
+<td>Messages are sorted by event time so that earlier events are processed before later ones. This feature does <strong>not</strong> provide timestamp ordering.</td>
+</tr>
+</tbody>
+</table>
+<p>Sources may emit events whose event-time timestamps are not monotonically increasing (e.g., late-arriving data,
+multiple producers). Order preservation guarantees that messages are processed in their <strong>arrival order</strong> (the order
+the source emitted them into the pipeline), regardless of their event timestamps.</p>
+<p>In short: if your source emits messages A, B, C in that sequence, order preservation guarantees they are processed in
+the sequence A, B, C - even if B has an earlier event timestamp than A.</p>
 <h2 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
 <p>Ordered processing works differently depending on the vertex type:</p>
 <table>
@@ -2843,7 +2912,7 @@ only after the (N-1)-th message completes.</p>
 <tbody>
 <tr>
 <td><strong>Source</strong></td>
-<td>Always ordered by nature — no configuration needed.</td>
+<td>Always preserves input order - messages are emitted into the pipeline in the order received from the external source. No configuration needed.</td>
 </tr>
 <tr>
 <td><strong>Map</strong></td>
@@ -2851,22 +2920,25 @@ only after the (N-1)-th message completes.</p>
 </tr>
 <tr>
 <td><strong>Reduce</strong></td>
-<td>Already partitioned and ordered — no additional configuration needed.</td>
+<td>Already partitioned and order-preserving - no additional configuration needed.</td>
 </tr>
 <tr>
 <td><strong>Sink</strong></td>
-<td>Same as Map — requires <code>partitions</code>. Replicas are fixed to the partition count.</td>
+<td>Same as Map - requires <code>partitions</code>. Replicas are fixed to the partition count.</td>
 </tr>
 </tbody>
 </table>
-<p>When ordered processing is enabled for a Map or Sink vertex:
-- The number of replicas is automatically fixed to the partition count (one pod per partition).
-- Autoscaling is disabled for that vertex — you must not set <code>scale.min</code> or <code>scale.max</code>.
-- Messages are routed to partitions by hashing their keys, ensuring all messages with the same key go to the same pod in
-  FIFO order.</p>
+<p>When ordered processing is enabled for a Map or Sink vertex:</p>
+<ul>
+<li>The number of replicas is automatically fixed to the partition count (one pod per partition).</li>
+<li>Autoscaling is disabled for that vertex - you must not set <code>scale.min</code> or <code>scale.max</code>.</li>
+<li>Messages are routed to partitions by hashing their keys, ensuring all messages with the same key go to the same pod,
+  preserving their arrival order.</li>
+</ul>
 <h2 id="pipeline-specification">Pipeline Specification<a class="headerlink" href="#pipeline-specification" title="Permanent link">&para;</a></h2>
-<p>Enable ordered processing by setting <code>ordered.enabled: true</code> at the pipeline level. For Map and Sink vertices, set
-<code>partitions</code> to the number of ordered lanes you need — the controller will fix replicas to that count automatically.</p>
+<p>Enable order-preserving processing by setting <code>ordered.enabled: true</code> at the pipeline level. For Map and Sink
+vertices, set <code>partitions</code> to the number of ordered lanes you need - the controller will fix replicas to that count
+automatically.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
 <span class="nt">metadata</span><span class="p">:</span>
@@ -2875,10 +2947,10 @@ only after the (N-1)-th message completes.</p>
 <span class="w">  </span><span class="nt">limits</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">readBatchSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span><span class="w">        </span><span class="c1"># recommended for strict ordering</span>
 <span class="w">  </span><span class="nt">ordered</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">           </span><span class="c1"># enable ordered processing pipeline-wide</span>
+<span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">           </span><span class="c1"># enable order-preserving processing pipeline-wide</span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-source</span>
-<span class="w">      </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span><span class="w">            </span><span class="c1"># always ordered; no extra config needed</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span><span class="w">            </span><span class="c1"># always preserves input order; no extra config needed</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-map</span>
 <span class="w">      </span><span class="nt">partitions</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">N</span><span class="w">         </span><span class="c1"># N replicas will be created, one per partition</span>
 <span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
@@ -2894,7 +2966,7 @@ only after the (N-1)-th message completes.</p>
 <span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink</span>
 </code></pre></div>
 <h2 id="per-vertex-override">Per-Vertex Override<a class="headerlink" href="#per-vertex-override" title="Permanent link">&para;</a></h2>
-<p>Ordered processing can also be enabled or disabled at the individual vertex level, which overrides the pipeline-level 
+<p>Ordered processing can also be enabled or disabled at the individual vertex level, which overrides the pipeline-level
 setting. This is useful when you want most vertices to run unordered for throughput, but need ordering for specific steps.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">ordered</span><span class="p">:</span>
@@ -2914,25 +2986,56 @@ setting. This is useful when you want most vertices to run unordered for through
 <h3 id="partitions-with-ordered-disabled"><code>partitions</code> with Ordered Disabled<a class="headerlink" href="#partitions-with-ordered-disabled" title="Permanent link">&para;</a></h3>
 <p>Setting <code>partitions</code> on a vertex that has ordered processing disabled (or overridden to <code>false</code>) is valid. The vertex
 will still have N ISB buffer partitions created, giving you a <a href="../multi-partition/">multi-partitioned edge</a> for higher
-throughput. However, replicas are determined by normal autoscaling — they are not fixed to N — so multiple replicas may
+throughput. However, replicas are determined by normal autoscaling - they are not fixed to N - so multiple replicas may
 read from the same partition, or one replica may handle multiple partitions. There is no ordering guarantee in this
 case.</p>
 <h2 id="caveats-and-limitations">Caveats and Limitations<a class="headerlink" href="#caveats-and-limitations" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Autoscaling is not supported</strong> for Map and Sink vertices with ordered processing enabled. The replica count is fixed
   to the partition count. Setting <code>scale.min</code> or <code>scale.max</code> on such vertices will cause a validation error.</li>
-<li><strong>Reduce vertices</strong> are already partitioned and ordered by design; the <code>ordered</code> setting is ignored for them.</li>
-<li><strong>Source vertices</strong> are always ordered regardless of the <code>ordered</code> setting.</li>
-<li><strong>Key-based routing</strong>: ordering is guaranteed per key. Messages with different keys may still be interleaved across 
+<li><strong>Reduce vertices</strong> are already partitioned and order-preserving by design; the <code>ordered</code> setting is ignored for them.</li>
+<li><strong>Source vertices</strong> always preserve input order regardless of the <code>ordered</code> setting.</li>
+<li><strong>Key-based routing</strong>: ordering is guaranteed per key. Messages with different keys may still be interleaved across
   partitions. Ensure your UDF or SDK sets meaningful message keys to leverage per-key ordering.</li>
-<li><strong><code>readBatchSize: 1</code></strong> is strongly recommended for strict ordering. With a larger batch size, multiple messages may 
+<li><strong><code>readBatchSize: 1</code></strong> is required for strict ordering. With a larger batch size, multiple messages may
   be in-flight simultaneously within a single pod.</li>
-<li><strong>Throughput trade-off</strong>: ordered processing limits parallelism within a partition. Consider the number of partitions 
+<li><strong>Throughput trade-off</strong>: ordered processing limits parallelism within a partition. Consider the number of partitions
   carefully to balance ordering guarantees with throughput requirements.</li>
+<li><strong>Join vertices (multiple input edges)</strong>: When a vertex receives messages from multiple upstream vertices
+  (a <a href="../join-vertex/">join</a>), order preservation holds independently for each input edge, <em>but not across edges</em>.
+  Messages from different upstream vertices are interleaved in whatever order they arrive at the ISB. If you need a
+  global ordering across multiple inputs, you must merge them at a single source or use application-level sequencing.</li>
+<li><strong>Cycles</strong>: When a <a href="../join-vertex/#cycles">cycle</a> re-injects a message back into an earlier vertex, that message is
+  appended to the ISB after messages that have already been written. From the user's perspective, the re-injected
+  message appears later in the processing order than it did in the original stream. This means order preservation
+  relative to the original input sequence is disrupted for cycled messages.</li>
 </ul>
+<h2 id="behavior-at-join-vertices">Behavior at Join Vertices<a class="headerlink" href="#behavior-at-join-vertices" title="Permanent link">&para;</a></h2>
+<p>A <a href="../join-vertex/">join vertex</a> receives messages from two or more upstream vertices. Each input edge has its own set
+of ISB partitions, and order preservation applies <strong>per edge</strong>:</p>
+<ul>
+<li>Messages arriving from upstream vertex A are processed in FIFO order relative to each other.</li>
+<li>Messages arriving from upstream vertex B are processed in FIFO order relative to each other.</li>
+<li>However, messages from A and B are <strong>interleaved</strong> in whatever order they arrive at the join vertex. There is no
+  cross-edge ordering guarantee.</li>
+</ul>
+<p>The <a href="#example">example below</a> demonstrates this: sources <code>in-1</code> and <code>in-2</code> both feed into the <code>cat</code> vertex. Within each source's
+stream, order is preserved, but <code>cat</code> will interleave messages from <code>in-1</code> and <code>in-2</code> based on arrival time.</p>
+<h2 id="behavior-in-cycles">Behavior in Cycles<a class="headerlink" href="#behavior-in-cycles" title="Permanent link">&para;</a></h2>
+<p>A <a href="../join-vertex/#cycles">cycle</a> sends a message from a vertex back to itself or to a previous vertex. When a message
+is re-injected via a cycle:</p>
+<ol>
+<li>The cycled message is appended to the ISB <strong>after</strong> messages that have already been written by the original upstream
+   source.</li>
+<li>From the perspective of the receiving vertex, the cycled message appears as a new, later message - not in its
+   original position.</li>
+<li>Therefore, order preservation relative to the original input stream is <strong>not maintained</strong> for cycled messages.</li>
+</ol>
+<p>If your use case requires strict ordering and also uses cycles (e.g., retry logic), be aware that retried messages will
+be processed after messages that arrived in the interim. Design your application logic accordingly.</p>
 <h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
-<p>To enable ordered processing, set <code>ordered.enabled: true</code> in the pipeline spec. For Map and Sink vertices, also set
-<code>partitions</code> to the desired number of partitions (which will also be the fixed replica count).</p>
+<p>To enable order-preserving processing, set <code>ordered.enabled: true</code> in the pipeline spec. For Map and Sink vertices,
+also set <code>partitions</code> to the desired number of partitions (which will also be the fixed replica count).</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
 <span class="nt">metadata</span><span class="p">:</span>
@@ -2969,11 +3072,13 @@ case.</p>
 </code></pre></div>
 <p>In the example above:</p>
 <ul>
-<li><code>ordered.enabled: true</code> enables ordered processing pipeline-wide.</li>
-<li><code>limits.readBatchSize: 1</code> is recommended so that each pod processes one message at a time, which is required for
-  strict in-order guarantees.</li>
+<li><code>ordered.enabled: true</code> enables order-preserving processing pipeline-wide.</li>
+<li><code>limits.readBatchSize: 1</code> is required so that each pod processes one message at a time, which is essential for
+strict in-order guarantees.</li>
 <li>The <code>cat</code> (Map) and <code>out</code> (Sink) vertices each have <code>partitions: 3</code>, so they will run with exactly 3 replicas.</li>
-<li>Source vertices (<code>in-1</code>, <code>in-2</code>) are always ordered and require no extra configuration.</li>
+<li>Source vertices (<code>in-1</code>, <code>in-2</code>) always preserve input order and require no extra configuration.</li>
+<li>Because <code>in-1</code> and <code>in-2</code> both feed into <code>cat</code> (a join), messages from the two sources are interleaved at <code>cat</code>.
+  Order preservation holds within each source's stream, not across the two sources.</li>
 </ul>
 
               
