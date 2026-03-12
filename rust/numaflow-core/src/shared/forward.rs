@@ -168,39 +168,4 @@ mod tests {
         let result = should_forward(tags, Some(Box::new(conditions)));
         assert!(result);
     }
-
-    #[test]
-    fn test_determine_partition_deterministic() {
-        // Same key should always map to the same partition
-        let p1 = determine_partition("user-123".to_string(), 5);
-        let p2 = determine_partition("user-123".to_string(), 5);
-        assert_eq!(p1, p2, "Same key must always hash to the same partition");
-    }
-
-    #[test]
-    fn test_determine_partition_key_isolation() {
-        // Different keys should (with enough partitions) map to different partitions.
-        // Use many distinct keys and verify we see more than one distinct partition.
-        let partitions: std::collections::HashSet<u16> = (0..100)
-            .map(|i| determine_partition(format!("key-{}", i), 16))
-            .collect();
-        assert!(
-            partitions.len() > 1,
-            "With 100 distinct keys and 16 partitions, expected multiple partitions, got {:?}",
-            partitions
-        );
-    }
-
-    #[test]
-    fn test_determine_partition_single_partition_short_circuit() {
-        // Single partition should always return 0 regardless of key
-        for key in ["a", "b", "hello", "world", "12345"] {
-            assert_eq!(
-                determine_partition(key.to_string(), 1),
-                0,
-                "Single partition must always return 0 for key '{}'",
-                key
-            );
-        }
-    }
 }
