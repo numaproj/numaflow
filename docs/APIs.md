@@ -1776,6 +1776,27 @@ value is set to “1”.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>toVertexOrdered</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Ordered"> Ordered </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Determine whether ordered processing is enabled for <code>to</code>
+vertex. If not provided, the default value is set to “false”.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -7591,6 +7612,7 @@ Ordered
 
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.CombinedEdge">CombinedEdge</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>)
 </p>
 

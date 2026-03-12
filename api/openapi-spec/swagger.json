@@ -19900,6 +19900,10 @@
         "toVertexLimits": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.VertexLimits"
         },
+        "toVertexOrdered": {
+          "description": "Determine whether ordered processing is enabled for `to` vertex. If not provided, the default value is set to \"false\".",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Ordered"
+        },
         "toVertexPartitionCount": {
           "description": "The number of partitions of the to vertex, if not provided, the default value is set to \"1\".",
           "type": "integer",

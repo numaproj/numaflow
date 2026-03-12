@@ -359,6 +359,10 @@ message CombinedEdge {
 
   // +optional
   optional VertexLimits toVertexLimits = 7;
+
+  // Determine whether ordered processing is enabled for `to` vertex. If not provided, the default value is set to "false".
+  // +optional
+  optional Ordered toVertexOrdered = 8;
 }
 
 // Compression is the compression settings for the messages in the InterStepBuffer
