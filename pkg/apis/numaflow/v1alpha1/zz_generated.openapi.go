@@ -4098,7 +4098,7 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref common.ReferenceCallback
 					},
 					"ordered": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Ordered enables ordered processing for the entire pipeline. When enabled, messages will be processed in order based on their event time. This can be overridden at the vertex level.",
+							Description: "Ordered enables order-preserving processing for the entire pipeline. When enabled, messages will be processed in their arrival order (FIFO within each partition). This can be overridden at the vertex level.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ordered"),
 						},
 					},

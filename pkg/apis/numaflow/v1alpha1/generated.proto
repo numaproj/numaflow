@@ -1350,8 +1350,8 @@ message PipelineSpec {
   // +optional
   optional InterStepBuffer interStepBuffer = 9;
 
-  // Ordered enables ordered processing for the entire pipeline.
-  // When enabled, messages will be processed in order based on their event time.
+  // Ordered enables order-preserving processing for the entire pipeline.
+  // When enabled, messages will be processed in their arrival order (FIFO within each partition).
   // This can be overridden at the vertex level.
   // +optional
   optional Ordered ordered = 10;
