@@ -156,6 +156,10 @@ pub fn register() {
 
 /// Builds OTLP span exporter and tracer provider, sets global provider, returns
 /// a tracing layer that records spans to OTLP. Uses batch exporter.
+///
+/// A temporary Tokio runtime is created for the tonic channel handshake because
+/// `register()` is called before the main Tokio runtime exists.  The batch
+/// exporter's background task will later run on the real runtime.
 fn init_otlp_tracing(
     endpoint: String,
     service_name: String,
@@ -164,10 +168,17 @@ fn init_otlp_tracing(
     Box<dyn std::error::Error + Send + Sync>,
 > {
     let endpoint = endpoint.trim_end_matches('/').to_string();
-    let exporter = opentelemetry_otlp::SpanExporter::builder()
-        .with_tonic()
-        .with_endpoint(endpoint)
+
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
         .build()?;
+    let exporter = rt.block_on(async {
+        opentelemetry_otlp::SpanExporter::builder()
+            .with_tonic()
+            .with_endpoint(&endpoint)
+            .build()
+    })?;
+
     let resource = opentelemetry_sdk::Resource::builder_empty()
         .with_attributes([opentelemetry::KeyValue::new(
             "service.name",
