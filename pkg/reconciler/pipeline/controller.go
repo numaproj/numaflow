@@ -734,24 +734,28 @@ func copyVertexLimits(pl *dfv1.Pipeline, v *dfv1.AbstractVertex) {
 // Vertex-level config takes precedence over pipeline-level config.
 // Reduce vertices always have ordered disabled as they are already partitioned.
 func resolveOrderedConfig(pl *dfv1.Pipeline, v *dfv1.AbstractVertex) {
+	v.Ordered = getOrderedConfig(pl, v)
+}
+
+// getOrderedConfig returns the effective ordered processing configuration for a vertex.
+func getOrderedConfig(pl *dfv1.Pipeline, v *dfv1.AbstractVertex) *dfv1.Ordered {
 	// Reduce vertices are already partitioned, ignore ordered config
 	if v.IsReduceUDF() {
-		v.Ordered = &dfv1.Ordered{Enabled: false}
-		return
+		return &dfv1.Ordered{Enabled: false}
 	}
 
 	// If vertex-level config is already set, use it (it takes precedence)
 	if v.Ordered != nil {
-		return
+		return &dfv1.Ordered{Enabled: v.Ordered.Enabled}
 	}
 
 	// Fall back to pipeline-level config
 	if pl.Spec.Ordered != nil {
-		v.Ordered = &dfv1.Ordered{Enabled: pl.Spec.Ordered.Enabled}
-	} else {
-		// Set explicit default
-		v.Ordered = &dfv1.Ordered{Enabled: false}
+		return &dfv1.Ordered{Enabled: pl.Spec.Ordered.Enabled}
 	}
+
+	// Set explicit default
+	return &dfv1.Ordered{Enabled: false}
 }
 
 func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.VertexLimits {
@@ -831,7 +835,7 @@ func copyEdges(pl *dfv1.Pipeline, edges []dfv1.Edge) []dfv1.CombinedEdge {
 			ToVertexLimits:           &toVertexLimits,
 			ToVertexType:             vTo.GetVertexType(),
 			ToVertexPartitionCount:   ptr.To[int32](int32(vTo.GetPartitionCount())),
-			ToVertexOrdered:          vTo.Ordered,
+			ToVertexOrdered:          getOrderedConfig(pl, vTo),
 		}
 		result = append(result, combinedEdge)
 	}
