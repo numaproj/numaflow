@@ -22,7 +22,6 @@
 
 use opentelemetry::trace::TracerProvider;
 use opentelemetry_otlp::WithExportConfig;
-use tracing::Level;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{Layer, filter::EnvFilter, fmt};
@@ -88,15 +87,14 @@ pub fn register() {
     // The default log level is `info`. The `axum::rejection=trace` enables showing
     // rejections from built-in extractors at `TRACE` level.
     let debug_mode = std::env::var("NUMAFLOW_DEBUG").is_ok_and(|v| v.to_lowercase() == "true");
-    let default_log_level = if debug_mode {
-        "debug,h2::codec=info" // "h2::codec" is too noisy
-    } else {
-        "info"
-    };
 
-    let filter = EnvFilter::builder()
-        .with_default_directive(default_log_level.parse().unwrap_or(Level::INFO.into()))
-        .from_env_lossy(); // Read RUST_LOG environment variable
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        if debug_mode {
+            EnvFilter::new("debug,h2::codec=info")
+        } else {
+            EnvFilter::new("info")
+        }
+    });
 
     let layer = if debug_mode {
         // Text format
@@ -163,9 +161,8 @@ pub fn register() {
 /// Builds OTLP span exporter and tracer provider, sets global provider, returns
 /// a tracing layer that records spans to OTLP. Uses batch exporter.
 ///
-/// A temporary Tokio runtime is created for the tonic channel handshake because
-/// `register()` is called before the main Tokio runtime exists.  The batch
-/// exporter's background task will later run on the real runtime.
+/// Requires the main Tokio runtime to be entered (via `rt.enter()`) before
+/// calling, so the tonic gRPC channel binds to the long-lived runtime.
 fn init_otlp_tracing(
     endpoint: String,
     service_name: String,
@@ -175,10 +172,8 @@ fn init_otlp_tracing(
 > {
     let endpoint = endpoint.trim_end_matches('/').to_string();
 
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()?;
-    let exporter = rt.block_on(async {
+    let handle = tokio::runtime::Handle::current();
+    let exporter = handle.block_on(async {
         opentelemetry_otlp::SpanExporter::builder()
             .with_tonic()
             .with_endpoint(&endpoint)
