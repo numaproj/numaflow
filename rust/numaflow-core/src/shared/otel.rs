@@ -56,21 +56,10 @@ pub(crate) fn extract_trace_context(metadata: &crate::metadata::Metadata) -> ope
     use opentelemetry::global;
     match metadata.sys_metadata.get(TRACING_METADATA_KEY) {
         Some(kvg) => {
-            let traceparent = kvg
-                .key_value
-                .get("traceparent")
-                .and_then(|b| std::str::from_utf8(b.as_ref()).ok());
-            tracing::debug!(
-                traceparent = traceparent.unwrap_or("<missing>"),
-                "otel::extract_trace_context: found tracing metadata"
-            );
             let extractor = MetadataExtractor(kvg);
             global::get_text_map_propagator(|prop| prop.extract(&extractor))
         }
-        None => {
-            tracing::debug!("otel::extract_trace_context: no tracing metadata in sys_metadata, using current context");
-            opentelemetry::Context::current()
-        }
+        None => opentelemetry::Context::current(),
     }
 }
 
@@ -96,13 +85,4 @@ pub(crate) fn inject_trace_context(metadata: &mut crate::metadata::Metadata) {
     global::get_text_map_propagator(|prop| {
         prop.inject_context(&cx, &mut injector);
     });
-    let traceparent = kvg
-        .key_value
-        .get("traceparent")
-        .and_then(|b| std::str::from_utf8(b.as_ref()).ok())
-        .unwrap_or("<not injected>");
-    tracing::debug!(
-        traceparent = traceparent,
-        "otel::inject_trace_context: injected trace context into sys_metadata"
-    );
 }

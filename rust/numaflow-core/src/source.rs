@@ -573,28 +573,18 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     }
                 }
 
-                // Inject trace context into each outgoing message so downstream
-                // vertices (map/sink) can continue the trace.
                 for message in messages.iter_mut() {
                     let source_span = tracing::info_span!(
-                        "numaflow.source.read",
+                        "numaflow.platform.source.read",
                         otel.kind = "PRODUCER",
-                        messaging.operation = "source_read",
-                        offset = %message.offset,
+                        messaging.system = "numaflow",
+                        messaging.operation.type = "publish",
+                        messaging.operation.name = "source.read",
+                        messaging.message.id = %message.offset,
                     );
                     let _guard = source_span.enter();
                     if let Some(ref mut metadata) = message.metadata {
                         crate::shared::otel::inject_trace_context(Arc::make_mut(metadata));
-                        tracing::debug!(
-                            offset = %message.offset,
-                            has_tracing_metadata = metadata.sys_metadata.contains_key(crate::shared::otel::TRACING_METADATA_KEY),
-                            "source: injected trace context into message"
-                        );
-                    } else {
-                        tracing::debug!(
-                            offset = %message.offset,
-                            "source: message has no metadata, skipping trace context injection"
-                        );
                     }
                 }
 

@@ -61,20 +61,6 @@ impl MapStreamTask {
 
     /// Executes the stream map operation.
     async fn execute(self) {
-        let has_tracing = self
-            .message
-            .metadata
-            .as_deref()
-            .map(|m| m.sys_metadata.contains_key(otel::TRACING_METADATA_KEY))
-            .unwrap_or(false);
-
-        tracing::debug!(
-            offset = %self.message.offset,
-            has_metadata = self.message.metadata.is_some(),
-            has_tracing_in_sys_metadata = has_tracing,
-            "stream_map: extracting trace context from incoming message"
-        );
-
         let parent_cx = self
             .message
             .metadata
@@ -82,10 +68,12 @@ impl MapStreamTask {
             .map(otel::extract_trace_context)
             .unwrap_or_else(opentelemetry::Context::current);
         let stream_span = tracing::info_span!(
-            "numaflow.stream_map",
+            "numaflow.platform.stream_map",
             otel.kind = "INTERNAL",
-            messaging.operation = "stream_map",
-            offset = %self.message.offset,
+            messaging.system = "numaflow",
+            messaging.operation.type = "process",
+            messaging.operation.name = "stream_map",
+            messaging.message.id = %self.message.offset,
         );
         stream_span.set_parent(parent_cx);
 

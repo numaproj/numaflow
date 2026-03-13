@@ -62,21 +62,6 @@ impl MapUnaryTask {
 
     /// Executes the unary map operation.
     async fn execute(self) {
-        let has_metadata = self.message.metadata.is_some();
-        let has_tracing = self
-            .message
-            .metadata
-            .as_deref()
-            .map(|m| m.sys_metadata.contains_key(otel::TRACING_METADATA_KEY))
-            .unwrap_or(false);
-
-        tracing::debug!(
-            offset = %self.message.offset,
-            has_metadata,
-            has_tracing_in_sys_metadata = has_tracing,
-            "map: extracting trace context from incoming message"
-        );
-
         let parent_cx = self
             .message
             .metadata
@@ -85,10 +70,12 @@ impl MapUnaryTask {
             .unwrap_or_else(opentelemetry::Context::current);
 
         let map_span = tracing::info_span!(
-            "numaflow.map",
+            "numaflow.platform.map",
             otel.kind = "INTERNAL",
-            messaging.operation = "map",
-            offset = %self.message.offset,
+            messaging.system = "numaflow",
+            messaging.operation.type = "process",
+            messaging.operation.name = "map",
+            messaging.message.id = %self.message.offset,
         );
         map_span.set_parent(parent_cx);
 
@@ -132,11 +119,6 @@ impl MapUnaryTask {
             let mut msg: Message = UserDefinedMessage(result, &parent_info, i as i32).into();
             if let Some(ref mut metadata) = msg.metadata {
                 otel::inject_trace_context(Arc::make_mut(metadata));
-                tracing::debug!(
-                    offset = %parent_info.offset,
-                    result_index = i,
-                    "map: injected trace context into outgoing message"
-                );
             }
             mapped_messages.push(msg);
         }

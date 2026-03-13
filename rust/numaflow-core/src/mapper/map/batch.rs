@@ -56,24 +56,13 @@ impl MapBatchTask {
     /// Executes the batch map operation.
     /// Returns an error if any message in the batch fails to be processed.
     pub async fn execute(self) -> Result<()> {
-        let has_tracing = self
-            .batch
-            .first()
-            .and_then(|m| m.metadata.as_deref())
-            .map(|m| m.sys_metadata.contains_key(otel::TRACING_METADATA_KEY))
-            .unwrap_or(false);
-
-        tracing::debug!(
-            batch_size = self.batch.len(),
-            has_tracing_in_first_msg = has_tracing,
-            "batch_map: extracting trace context from batch"
-        );
-
         let batch_span = tracing::info_span!(
-            "numaflow.batch_map",
+            "numaflow.platform.batch_map",
             otel.kind = "INTERNAL",
-            messaging.operation = "batch_map",
-            messaging.batch_size = self.batch.len(),
+            messaging.system = "numaflow",
+            messaging.operation.type = "process",
+            messaging.operation.name = "batch_map",
+            messaging.batch.message_count = self.batch.len(),
         );
         if let Some(parent_cx) = self
             .batch
