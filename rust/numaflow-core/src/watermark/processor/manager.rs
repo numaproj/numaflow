@@ -194,8 +194,9 @@ impl ProcessorManager {
         })
     }
 
-    /// Prepopulate processors and timelines from the OT store using watch with revision 1.
-    /// This allows us to get the entry creation timestamps for processor liveness tracking.
+    /// Prepopulate processors and timelines from the OT store.
+    /// Uses current time as last_seen_time since we only need the latest WMB value for each processor.
+    /// The OT watcher will update last_seen_time with actual KV entry timestamps for new entries.
     async fn prepopulate_processors(
         ot_store: &Arc<dyn KVStore>,
         bucket_config: &BucketConfig,
@@ -204,95 +205,33 @@ impl ProcessorManager {
     ) -> HashMap<Bytes, Processor> {
         let mut processors: HashMap<Bytes, Processor> = HashMap::new();
 
-        // Get all keys first to know how many entries to expect
+        // Get all keys from the OT store
         let ot_keys = ot_store.keys().await.unwrap_or_else(|e| {
             warn!(error = ?e, "Failed to get keys from ot store");
             Vec::new()
         });
 
-        if ot_keys.is_empty() {
-            return processors;
-        }
+        // Use current time as last_seen_time for prepopulated processors
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_millis() as i64;
 
-        // Use watch with revision 1 to get all historical entries with their timestamps
-        let mut watcher = match ot_store.watch(Some(1)).await {
-            Ok(w) => w,
-            Err(e) => {
-                warn!(error = ?e, "Failed to create watcher for prepopulation, using current time");
-                // Fallback: use get() and current time as last_seen_time
-                let current_time = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("Time went backwards")
-                    .as_millis() as i64;
-
-                for ot_key in ot_keys {
-                    let processor_name = Bytes::from(ot_key.clone());
-                    let Ok(Some(ot_value)) = ot_store.get(&ot_key).await else {
-                        continue;
-                    };
-                    let wmb: WMB = ot_value.try_into().expect("Failed to decode WMB");
-
-                    let processor = processors.entry(processor_name.clone()).or_insert_with(|| {
-                        Processor::new(
-                            processor_name.clone(),
-                            Status::Active,
-                            &bucket_config.partitions,
-                            current_time,
-                        )
-                    });
-
-                    match vertex_type {
-                        VertexType::Source | VertexType::Sink | VertexType::MapUDF => {
-                            if let Some(timeline) = processor.timelines.get_mut(&wmb.partition) {
-                                timeline.put(wmb);
-                            }
-                        }
-                        VertexType::ReduceUDF => {
-                            if wmb.partition != vertex_replica {
-                                continue;
-                            }
-                            if let Some(timeline) = processor.timelines.get_mut(&vertex_replica) {
-                                timeline.put(wmb);
-                            }
-                        }
-                    }
-                }
-                return processors;
-            }
-        };
-
-        // Read entries from the watcher until we've seen all keys
-        let mut seen_keys = std::collections::HashSet::new();
-        let expected_count = ot_keys.len();
-
-        while seen_keys.len() < expected_count {
-            let Some(kv) = watcher.next().await else {
-                break;
-            };
-
-            if kv.operation != KVWatchOp::Put {
+        for ot_key in ot_keys {
+            let processor_name = Bytes::from(ot_key.clone());
+            let Ok(Some(ot_value)) = ot_store.get(&ot_key).await else {
                 continue;
-            }
+            };
+            let wmb: WMB = ot_value.try_into().expect("Failed to decode WMB");
 
-            let processor_name = Bytes::from(kv.key.clone());
-            seen_keys.insert(kv.key.clone());
-
-            let wmb: WMB = kv.value.try_into().expect("Failed to decode WMB");
-
-            // Get or create the processor with the entry's creation timestamp
             let processor = processors.entry(processor_name.clone()).or_insert_with(|| {
                 Processor::new(
                     processor_name.clone(),
                     Status::Active,
                     &bucket_config.partitions,
-                    kv.created,
+                    current_time,
                 )
             });
-
-            // Update last_seen_time if this entry is more recent
-            if kv.created > processor.last_seen_time {
-                processor.update_last_seen_time(kv.created);
-            }
 
             match vertex_type {
                 VertexType::Source | VertexType::Sink | VertexType::MapUDF => {

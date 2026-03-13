@@ -498,6 +498,7 @@ impl KafkaActor {
 
     /// Returns partition information including active partitions (assigned to this consumer)
     /// and total partitions (max across all configured topics).
+    /// FIXME: multi-topics needs to be handled differently
     fn partitions_info(&self) -> Result<KafkaPartitionsInfo> {
         // Get active partitions from consumer assignment
         let active_partitions = self

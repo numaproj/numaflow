@@ -137,7 +137,6 @@ impl ISBWatermarkPublisher {
         watermark: i64,
         idle: bool,
     ) {
-        info!(stream = ?stream, offset, watermark, idle, "Publishing watermark");
         self.publish_watermark_with_processor_count(stream, offset, watermark, idle, None)
             .await;
     }
