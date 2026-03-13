@@ -282,7 +282,6 @@ impl SourceWatermarkHandle {
             config.max_delay,
             config.source_bucket_config.clone(),
             config.to_vertex_bucket_config.clone(),
-            wmb_delay,
         )
         .await?;
 
