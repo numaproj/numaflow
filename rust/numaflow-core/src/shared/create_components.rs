@@ -533,7 +533,11 @@ async fn create_source_client(
 
     let channel =
         create_rpc_channel(PathBuf::from(user_defined_config.socket_path.clone())).await?;
-    let mut client = SourceClient::new(channel);
+
+    let mut client = SourceClient::new(channel)
+        .max_encoding_message_size(user_defined_config.grpc_max_message_size)
+        .max_decoding_message_size(user_defined_config.grpc_max_message_size);
+
     wait_until_source_ready(&cln_token, &mut client).await?;
     Ok((client, server_info))
 }
