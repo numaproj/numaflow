@@ -933,12 +933,18 @@ func schema_pkg_apis_numaflow_v1alpha1_CombinedEdge(ref common.ReferenceCallback
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits"),
 						},
 					},
+					"toVertexOrdered": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Determine whether ordered processing is enabled for `to` vertex. If not provided, the default value is set to \"false\".",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ordered"),
+						},
+					},
 				},
 				Required: []string{"from", "to", "fromVertexType", "toVertexType"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ordered", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits"},
 	}
 }
 
