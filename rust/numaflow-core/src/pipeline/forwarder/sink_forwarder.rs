@@ -519,7 +519,8 @@ mod simple_buffer_tests {
 
         // Shutdown
         cln_token.cancel();
-        let forwarder_result = tokio::time::timeout(Duration::from_secs(TIMEOUT), forwarder_handle).await;
+        let forwarder_result =
+            tokio::time::timeout(Duration::from_secs(TIMEOUT), forwarder_handle).await;
         assert!(
             forwarder_result.is_ok(),
             "Forwarder task should complete gracefully"
@@ -773,7 +774,8 @@ mod simple_buffer_tests {
 
         // Shutdown
         cln_token.cancel();
-        let forwarder_result = tokio::time::timeout(Duration::from_secs(TIMEOUT), forwarder_handle).await;
+        let forwarder_result =
+            tokio::time::timeout(Duration::from_secs(TIMEOUT), forwarder_handle).await;
         assert!(
             forwarder_result.is_ok(),
             "Forwarder task should complete gracefully"
@@ -855,7 +857,8 @@ mod simple_buffer_tests {
 
         // Shutdown
         cln_token.cancel();
-        let forwarder_result = tokio::time::timeout(Duration::from_secs(TIMEOUT), forwarder_handle).await;
+        let forwarder_result =
+            tokio::time::timeout(Duration::from_secs(TIMEOUT), forwarder_handle).await;
         assert!(
             forwarder_result.is_ok(),
             "Forwarder task should complete gracefully"
