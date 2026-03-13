@@ -18,6 +18,7 @@ package util
 
 import (
 	"container/list"
+	"strings"
 	"sync"
 )
 
@@ -94,9 +95,12 @@ func (l *UniqueStringList) Remove(value string) {
 func (l *UniqueStringList) ToString() string {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
-	var s string
+	var sb strings.Builder
 	for e := l.l.Front(); e != nil; e = e.Next() {
-		s += e.Value.(string) + ","
+		if sb.Len() > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteString(e.Value.(string))
 	}
-	return s
+	return sb.String()
 }
