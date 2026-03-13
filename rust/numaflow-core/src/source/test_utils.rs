@@ -113,6 +113,7 @@ impl SourceTestHandle<WithSimpleBuffer> {
                     true,
                     source_transform.transformer.take(),
                     None,
+                    cln_token.clone(),
                     None,
                 )
                 .await
@@ -129,6 +130,7 @@ impl SourceTestHandle<WithSimpleBuffer> {
                     true,
                     None,
                     None,
+                    cln_token.clone(),
                     None,
                 )
                 .await
@@ -171,7 +173,8 @@ impl SourceTestHandle<WithSimpleBuffer> {
             .timeout(Duration::from_millis(100))
             .build();
 
-        let http_source = numaflow_http::HttpSourceHandle::new(http_source_config, cln_token).await;
+        let http_source =
+            numaflow_http::HttpSourceHandle::new(http_source_config, cln_token.clone()).await;
         let core_http_source = CoreHttpSource::new(batch_size, http_source);
 
         let source = Source::new(
@@ -181,6 +184,7 @@ impl SourceTestHandle<WithSimpleBuffer> {
             true,
             None,
             None,
+            cln_token,
             None,
         )
         .await;

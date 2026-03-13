@@ -18,7 +18,7 @@ use crate::message::{Message, MessageID, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::reader::LagReader;
 use crate::shared::grpc::utc_from_timestamp;
-use crate::source::{SourceAcker, SourceReader};
+use crate::source::{SourceAcker, SourcePartitions, SourceReader};
 use crate::{Error, Result, config};
 use tracing::warn;
 
@@ -248,18 +248,20 @@ impl SourceReader for UserDefinedSourceRead {
         Some(Ok(messages))
     }
 
-    async fn partitions(&mut self) -> Result<Vec<u16>> {
-        let partitions = self
+    async fn partitions(&mut self) -> Result<SourcePartitions> {
+        let result = self
             .source_client
             .partitions_fn(Request::new(()))
             .await
             .map_err(|e| Error::Source(e.to_string()))?
             .into_inner()
             .result
-            .expect("partitions not found")
-            .partitions;
+            .expect("partitions not found");
 
-        Ok(partitions.iter().map(|p| *p as u16).collect())
+        let active_partitions: Vec<u16> = result.partitions.iter().map(|p| *p as u16).collect();
+        let total_partitions = result.total_partitions.map(|t| t as u32);
+
+        Ok(SourcePartitions::new(active_partitions, total_partitions))
     }
 }
 
@@ -609,8 +611,8 @@ mod tests {
         let pending = lag_reader.pending().await.unwrap();
         assert_eq!(pending, Some(0));
 
-        let partitions = src_read.partitions().await.unwrap();
-        assert_eq!(partitions, vec![2]);
+        let source_partitions = src_read.partitions().await.unwrap();
+        assert_eq!(source_partitions.active_partitions, vec![2]);
 
         let messages = src_read.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 5);

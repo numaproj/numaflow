@@ -85,6 +85,15 @@ pub struct KafkaOffset {
     pub offset: i64,
 }
 
+/// Represents partition information for a Kafka source.
+#[derive(Debug, Clone)]
+pub struct KafkaPartitionsInfo {
+    /// The partitions this consumer is actively assigned to.
+    pub active_partitions: Vec<i32>,
+    /// The maximum number of partitions across all configured topics.
+    pub total_partitions: u32,
+}
+
 enum KafkaActorMessage {
     Read {
         respond_to: oneshot::Sender<Option<Result<Vec<KafkaMessage>>>>,
@@ -97,7 +106,7 @@ enum KafkaActorMessage {
         respond_to: oneshot::Sender<Result<Option<usize>>>,
     },
     PartitionsInfo {
-        respond_to: oneshot::Sender<Result<Vec<i32>>>,
+        respond_to: oneshot::Sender<Result<KafkaPartitionsInfo>>,
     },
 }
 
@@ -239,16 +248,16 @@ impl KafkaActor {
                     .expect("Failed to send pending messages from Kafka actor to main task");
             }
             KafkaActorMessage::PartitionsInfo { respond_to } => {
-                let partitions = self.partitions_info().await;
+                let partitions = self.partitions_info();
                 respond_to
                     .send(partitions)
                     .inspect_err(|e| {
                         error!(
                             ?e,
-                            "Failed to send partition count from Kafka actor to main task"
+                            "Failed to send partition info from Kafka actor to main task"
                         );
                     })
-                    .expect("Failed to send partition count from Kafka actor to main task");
+                    .expect("Failed to send partition info from Kafka actor to main task");
             }
         }
     }
@@ -487,52 +496,50 @@ impl KafkaActor {
         Ok(Some(total_pending))
     }
 
-    /// Returns the partition IDs of the topic with the maximum number of partitions.
-    /// Since we support specifying multiple topics, this method returns the Vec of partition IDs
-    /// from the topic that has the most partitions among all configured topics.
-    async fn partitions_info(&mut self) -> Result<Vec<i32>> {
-        let timeout = Duration::from_secs(5);
-        let mut handles = Vec::new();
-        for topic in &self.topics {
-            let consumer = Arc::clone(&self.consumer);
-            let topic = topic.clone();
+    /// Returns partition information including active partitions (assigned to this consumer)
+    /// and total partitions (max across all configured topics).
+    /// FIXME: multi-topics needs to be handled differently
+    fn partitions_info(&self) -> Result<KafkaPartitionsInfo> {
+        // Get active partitions from consumer assignment
+        let active_partitions = self
+            .consumer
+            .assignment()
+            .map_err(|e| Error::Kafka(format!("Failed to get consumer assignment: {e}")))
+            .map(|tpl| {
+                tpl.elements()
+                    .iter()
+                    .map(|elem| elem.partition())
+                    .collect::<Vec<i32>>()
+            })?;
 
-            // fetch_metadata internally calls [rd_kafka_metadata](https://docs.confluent.io/platform/current/clients/librdkafka/html/rdkafka_8h.html#a84bba4a4b13fdb515f1a22d6fd4f7344)
-            // This may be a blocking call, so we spawn a new task to run it.
-            handles.push(tokio::task::spawn_blocking(move || {
-                let metadata = consumer
-                    .fetch_metadata(Some(&topic), timeout)
-                    .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {e}")))?;
-                let Some(topic_metadata) = metadata.topics().first() else {
-                    warn!(topic = topic, "No topic metadata found");
-                    return Ok(Vec::new());
-                };
-                let partitions: Vec<i32> =
-                    topic_metadata.partitions().iter().map(|p| p.id()).collect();
-                Ok(partitions)
-            }));
-        }
-        let mut max_partitions = 0;
-        let mut result: Vec<i32> = Vec::new();
-        for handle in handles {
-            match handle.await {
-                Ok(Ok(partitions)) => {
-                    if partitions.len() > max_partitions {
-                        max_partitions = partitions.len();
-                        result = partitions;
-                    }
-                }
-                Ok(Err(e)) => {
-                    error!(?e, "Error fetching partitions info");
-                    return Err(e);
-                }
-                Err(e) => {
-                    error!(?e, "Tokio task join error fetching partitions info");
-                    return Err(Error::Other(format!("Tokio task join error: {e}")));
-                }
+        // Get total partitions from metadata (max across all topics)
+        let total_partitions = self.fetch_max_partitions_from_metadata()?;
+
+        Ok(KafkaPartitionsInfo {
+            active_partitions,
+            total_partitions,
+        })
+    }
+
+    /// Fetches the maximum number of partitions across all configured topics from metadata.
+    fn fetch_max_partitions_from_metadata(&self) -> Result<u32> {
+        let timeout = Duration::from_secs(5);
+        let mut max_partitions: u32 = 0;
+
+        for topic in &self.topics {
+            let metadata = self
+                .consumer
+                .fetch_metadata(Some(topic), timeout)
+                .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {e}")))?;
+
+            if let Some(topic_metadata) = metadata.topics().first() {
+                max_partitions = max_partitions.max(topic_metadata.partitions().len() as u32);
+            } else {
+                warn!(topic = topic, "No topic metadata found");
             }
         }
-        Ok(result)
+
+        Ok(max_partitions)
     }
 }
 
@@ -580,7 +587,7 @@ impl KafkaSource {
             .map_err(|_| Error::Other("Actor task terminated".into()))?
     }
 
-    pub async fn partitions_info(&self) -> Result<Vec<i32>> {
+    pub async fn partitions_info(&self) -> Result<KafkaPartitionsInfo> {
         let (tx, rx) = oneshot::channel();
         let msg = KafkaActorMessage::PartitionsInfo { respond_to: tx };
         let _ = self.actor_tx.send(msg).await;

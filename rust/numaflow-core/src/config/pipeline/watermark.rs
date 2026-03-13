@@ -20,7 +20,6 @@ impl WatermarkConfig {
         vertex: &VertexConfig,
         from_vertex_config: &[FromVertexConfig],
         to_vertex_config: &[ToVertexConfig],
-        delay_in_millis: u64,
         ordered_processing_enabled: bool,
     ) -> Option<WatermarkConfig> {
         let max_delay = watermark_spec
@@ -28,15 +27,24 @@ impl WatermarkConfig {
             .and_then(|w| w.max_delay.map(|x| Duration::from(x).as_millis() as u64))
             .unwrap_or(0);
 
+        // Always create IdleConfig with default WMB delay (100ms).
+        // User's idle_source config (if provided) overrides threshold and increment_by
+        // for actual idle detection (when to mark as idle and increment watermark).
         let idle_config = watermark_spec
             .as_ref()
             .and_then(|w| w.idle_source.as_ref())
             .map(|idle| IdleConfig {
                 increment_by: idle.increment_by.map(Duration::from).unwrap_or_default(),
-                step_interval: idle.step_interval.map(Duration::from).unwrap_or_default(),
+                step_interval: idle
+                    .step_interval
+                    .map(Duration::from)
+                    .unwrap_or(DEFAULT_WMB_DELAY),
                 threshold: idle.threshold.map(Duration::from).unwrap_or_default(),
                 init_source_delay: idle.init_source_delay.map(Duration::from),
-            });
+            })
+            .unwrap_or_default();
+
+        let wmb_publish_delay = Some(idle_config.step_interval);
 
         // Helper function to create bucket config for to_vertex
         let create_to_vertex_bucket_config = |to: &ToVertexConfig| BucketConfig {
@@ -49,14 +57,7 @@ impl WatermarkConfig {
                 )
                 .into_boxed_str(),
             ),
-            hb_bucket: Box::leak(
-                format!(
-                    "{}-{}-{}-{}_PROCESSORS",
-                    namespace, pipeline_name, vertex_name, &to.name
-                )
-                .into_boxed_str(),
-            ),
-            delay: Some(Duration::from_millis(delay_in_millis)),
+            delay: wmb_publish_delay,
         };
 
         // Helper function to create bucket config for from_vertex
@@ -71,14 +72,7 @@ impl WatermarkConfig {
                     )
                     .into_boxed_str(),
                 ),
-                hb_bucket: Box::leak(
-                    format!(
-                        "{}-{}-{}-{}_PROCESSORS",
-                        namespace, pipeline_name, &from.name, vertex_name
-                    )
-                    .into_boxed_str(),
-                ),
-                delay: Some(Duration::from_millis(delay_in_millis)),
+                delay: wmb_publish_delay,
             };
 
         match vertex {
@@ -91,11 +85,7 @@ impl WatermarkConfig {
                         format!("{namespace}-{pipeline_name}-{vertex_name}_SOURCE_OT")
                             .into_boxed_str(),
                     ),
-                    hb_bucket: Box::leak(
-                        format!("{namespace}-{pipeline_name}-{vertex_name}_SOURCE_PROCESSORS")
-                            .into_boxed_str(),
-                    ),
-                    delay: Some(Duration::from_millis(delay_in_millis)),
+                    delay: wmb_publish_delay,
                 },
                 to_vertex_bucket_config: to_vertex_config
                     .iter()
@@ -149,16 +139,29 @@ pub(crate) struct SourceWatermarkConfig {
     pub(crate) max_delay: Duration,
     pub(crate) source_bucket_config: BucketConfig,
     pub(crate) to_vertex_bucket_config: Vec<BucketConfig>,
-    pub(crate) idle_config: Option<IdleConfig>,
+    /// Idle config is always present (with default 100ms heartbeat interval).
+    /// User's idle_source config overrides threshold/increment_by for actual idle detection.
+    pub(crate) idle_config: IdleConfig,
 }
+
+/// Default delay for publishing WMB to progress watermark.
+pub(crate) const DEFAULT_WMB_DELAY: Duration = Duration::from_millis(100);
 
 /// Idle configuration for detecting idleness when there is no data
 /// from source and publish the Watermark.
+///
+/// Note: `step_interval` defaults to 100ms (DEFAULT_WMB_DELAY) and is always active.
+/// The `threshold` and `increment_by` are only used when the user explicitly configures
+/// idle detection - they control when to mark a partition as "idle" and increment the watermark.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct IdleConfig {
+    /// How much to increment the watermark when partition is idle
     pub(crate) increment_by: Duration,
+    /// How often to publish WMB (default 100ms)
     pub(crate) step_interval: Duration,
+    /// How long without data before marking partition as idle
     pub(crate) threshold: Duration,
+    /// Delay before starting idle detection for new partitions
     pub(crate) init_source_delay: Option<Duration>,
 }
 
@@ -166,7 +169,7 @@ impl Default for IdleConfig {
     fn default() -> Self {
         IdleConfig {
             increment_by: Duration::from_millis(0),
-            step_interval: Duration::from_millis(0),
+            step_interval: DEFAULT_WMB_DELAY,
             threshold: Duration::from_millis(0),
             init_source_delay: None,
         }
@@ -174,14 +177,15 @@ impl Default for IdleConfig {
 }
 
 /// Watermark movements are captured via a Key/Value bucket.
+/// Processor liveness is tracked via the KV store's entry creation timestamp, so no separate
+/// heartbeat bucket is needed.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct BucketConfig {
     pub(crate) vertex: &'static str,
     pub(crate) partitions: Vec<u16>,
-    /// Offset Timeline (OT) bucket.
+    /// Offset Timeline (OT) bucket. Also serves as the source of truth for processor liveness
+    /// via the KV entry creation timestamp.
     pub(crate) ot_bucket: &'static str,
-    /// Heartbeat bucket for processor heartbeats.
-    pub(crate) hb_bucket: &'static str,
     /// Optional delay to publish watermark, to reduce the number of writes to the kv bucket.
     pub(crate) delay: Option<Duration>,
 }

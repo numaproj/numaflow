@@ -5,6 +5,8 @@ use prost::Message;
 use crate::error::Error;
 
 /// WMB is the watermark message that is sent by the processor to the downstream.
+/// Processor liveness is tracked via the KV store's entry creation timestamp,
+/// eliminating the need for a separate heartbeat store.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[allow(clippy::upper_case_acronyms)]
 pub(crate) struct WMB {
@@ -12,6 +14,10 @@ pub(crate) struct WMB {
     pub(crate) offset: i64,
     pub(crate) watermark: i64,
     pub(crate) partition: u16,
+    /// Optional expected processor count for source watermarks.
+    /// When set, the fetcher will wait until this many processors are active before
+    /// computing a valid watermark.
+    pub(crate) processor_count: Option<u32>,
 }
 
 impl Default for WMB {
@@ -21,6 +27,7 @@ impl Default for WMB {
             offset: -1,
             idle: false,
             partition: 0,
+            processor_count: None,
         }
     }
 }
@@ -41,6 +48,7 @@ impl TryFrom<Bytes> for WMB {
             offset: proto_wmb.offset,
             watermark: proto_wmb.watermark,
             partition: proto_wmb.partition as u16,
+            processor_count: proto_wmb.processor_count.map(|c| c as u32),
         })
     }
 }
@@ -55,6 +63,7 @@ impl TryFrom<WMB> for BytesMut {
             offset: wmb.offset,
             watermark: wmb.watermark,
             partition: wmb.partition as i32,
+            processor_count: wmb.processor_count.map(|c| c as i32),
         };
 
         let mut bytes = BytesMut::with_capacity(proto_wmb.encoded_len());

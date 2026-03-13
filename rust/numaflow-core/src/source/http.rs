@@ -74,8 +74,11 @@ impl SourceReader for CoreHttpSource {
         }
     }
 
-    async fn partitions(&mut self) -> Result<Vec<u16>> {
-        Ok(vec![*get_vertex_replica()])
+    async fn partitions(&mut self) -> Result<source::SourcePartitions> {
+        Ok(source::SourcePartitions::new(
+            vec![*get_vertex_replica()],
+            None,
+        ))
     }
 }
 
@@ -274,7 +277,15 @@ mod tests {
 
         // Test partitions
         let partitions = core_http_source.partitions().await.unwrap();
-        assert_eq!(partitions.len(), 1, "Should have 1 partition");
+        assert_eq!(
+            partitions.active_partitions.len(),
+            1,
+            "Should have 1 partition"
+        );
+        assert!(
+            partitions.total_partitions.is_none(),
+            "HTTP source should not have total_partitions"
+        );
 
         // Test read method - should get batch_size (5) messages
         let messages = core_http_source.read().await.unwrap().unwrap();
