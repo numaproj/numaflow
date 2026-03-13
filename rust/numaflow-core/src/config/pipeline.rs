@@ -613,7 +613,11 @@ impl PipelineConfig {
                 },
                 conditions: edge.conditions,
                 to_vertex_type: VertexType::from_str(&edge.to_vertex_type)?,
-                ordered_processing_enabled,
+                ordered_processing_enabled: edge
+                    .to_vertex_ordered
+                    .as_ref()
+                    .and_then(|o| o.enabled)
+                    .unwrap_or(false),
             });
         }
 

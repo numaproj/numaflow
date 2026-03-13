@@ -457,6 +457,11 @@ func (in *CombinedEdge) DeepCopyInto(out *CombinedEdge) {
 		*out = new(VertexLimits)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.ToVertexOrdered != nil {
+		in, out := &in.ToVertexOrdered, &out.ToVertexOrdered
+		*out = new(Ordered)
+		**out = **in
+	}
 	return
 }
 
