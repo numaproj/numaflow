@@ -13,7 +13,6 @@ mod setup_tracing;
 mod cmdline;
 
 const VERSION_INFO: &str = env!("NUMAFLOW_VERSION_INFO");
-const ENV_MONO_VERTEX_NAME: &str = "NUMAFLOW_MONO_VERTEX_NAME";
 
 fn main() {
     setup_tracing::register();
@@ -107,14 +106,7 @@ async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
         }
         Some((cmdline::CMD_ARG_MVTX_DAEMON_SERVER, _)) => {
             info!("Starting the MonoVertex daemon server");
-            match env::var(ENV_MONO_VERTEX_NAME) {
-                Ok(name) => numaflow_daemon::run_monovertex(name, cln_token).await?,
-                _ => {
-                    return Err(
-                        format!("Environment variable {ENV_MONO_VERTEX_NAME} is not set").into(),
-                    );
-                }
-            }
+            numaflow_daemon::run_monovertex(cln_token).await?;
         }
         others => {
             return Err(format!("Invalid subcommand {others:?}").into());

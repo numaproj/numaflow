@@ -152,7 +152,10 @@ mod tests {
     use tower::ServiceExt;
 
     fn test_router() -> Router {
-        let svc = Arc::new(MvtxDaemonService);
+        use crate::{MonoVertexConfig, runtime::RuntimeCache};
+        let cfg = MonoVertexConfig { name: "simple-mono-vertex".to_string(), namespace: "default".to_string(), max_replicas: 2 };
+        let runtime = Arc::new(RuntimeCache::new(&cfg));
+        let svc = Arc::new(MvtxDaemonService::new(cfg.name, runtime));
         Router::new()
             .route("/api/v1/metrics", get(api_v1_metrics))
             .route("/api/v1/status", get(api_v1_status))
@@ -229,9 +232,7 @@ mod tests {
         );
         assert_eq!(
             status.get("message"),
-            Some(&serde_json::Value::String(
-                "MonoVertex data flow is healthy".into()
-            ))
+            Some(&serde_json::Value::String("MonoVertex data flow is healthy".into()))
         );
         assert_eq!(
             status.get("code"),
@@ -256,37 +257,7 @@ mod tests {
             .get("errors")
             .and_then(|e| e.as_array())
             .expect("errors array");
-        assert_eq!(errors.len(), 1);
-        let first = errors.first().expect("first error");
-        assert_eq!(
-            first.get("replica"),
-            Some(&serde_json::Value::String("mock_replica".into()))
-        );
-        let container_errors = first
-            .get("containerErrors")
-            .and_then(|c| c.as_array())
-            .expect("containerErrors");
-        assert_eq!(container_errors.len(), 1);
-        let ce = container_errors.first().expect("first container error");
-        assert_eq!(ce.get("container").and_then(|v| v.as_str()), Some("main"));
-        assert_eq!(ce.get("code").and_then(|v| v.as_str()), Some("mock_code"));
-        assert_eq!(
-            ce.get("message").and_then(|v| v.as_str()),
-            Some("mock_message")
-        );
-        assert_eq!(
-            ce.get("details").and_then(|v| v.as_str()),
-            Some("mock_details")
-        );
-        let ts = ce
-            .get("timestamp")
-            .and_then(|v| v.as_str())
-            .expect("timestamp");
-        assert!(
-            chrono::DateTime::parse_from_rfc3339(ts).is_ok(),
-            "timestamp should be RFC3339: {:?}",
-            ts
-        );
+        assert!(errors.is_empty());
     }
 
     #[tokio::test]
