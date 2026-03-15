@@ -25,9 +25,8 @@ import (
 func LookupEnvStringOr(key, defaultValue string) string {
 	if v, existing := os.LookupEnv(key); existing && v != "" {
 		return v
-	} else {
-		return defaultValue
 	}
+	return defaultValue
 }
 
 func LookupEnvIntOr(key string, defaultValue int) int {
@@ -37,9 +36,8 @@ func LookupEnvIntOr(key string, defaultValue int) int {
 			panic(fmt.Errorf("invalid value for env variable %q, value %q", key, valStr))
 		}
 		return val
-	} else {
-		return defaultValue
 	}
+	return defaultValue
 }
 
 func LookupEnvBoolOr(key string, defaultValue bool) bool {
@@ -49,7 +47,6 @@ func LookupEnvBoolOr(key string, defaultValue bool) bool {
 			panic(fmt.Errorf("invalid value for env variable %q, value %q", key, valStr))
 		}
 		return val
-	} else {
-		return defaultValue
 	}
+	return defaultValue
 }

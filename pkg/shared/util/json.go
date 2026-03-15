@@ -19,11 +19,11 @@ package util
 import "encoding/json"
 
 func MustJSON(in interface{}) string {
-	if data, err := json.Marshal(in); err != nil {
+	data, err := json.Marshal(in)
+	if err != nil {
 		panic(err)
-	} else {
-		return string(data)
 	}
+	return string(data)
 }
 
 // MustUnJSON unmarshalls JSON or panics.
