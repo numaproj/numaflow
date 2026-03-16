@@ -18,17 +18,15 @@ package util
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"strconv"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 )
 
-// GetIsbSvcEnvVars is helper function to get the ISB service type and generate corresponnding environment variables
+// GetIsbSvcEnvVars is helper function to get the ISB service type and generate corresponding environment variables
 func GetIsbSvcEnvVars(isbSvcConfig dfv1.BufferServiceConfig) (dfv1.ISBSvcType, []corev1.EnvVar) {
-	isbSvcConfigBytes, _ := json.Marshal(isbSvcConfig)
-	encodedISBSvcConfig := base64.StdEncoding.EncodeToString(isbSvcConfigBytes)
+	encodedISBSvcConfig := base64.StdEncoding.EncodeToString([]byte(MustJSON(isbSvcConfig)))
 	env := []corev1.EnvVar{
 		{
 			Name:  dfv1.EnvISBSvcConfig,
