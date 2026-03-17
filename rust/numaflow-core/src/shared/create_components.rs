@@ -371,7 +371,7 @@ pub(crate) async fn create_mapper(
                 Protocol::UDS => {
                     // based on the map mode that is set in the server info, we will override the socket path
                     // so that the clients can connect to the appropriate socket.
-                    let config = match server_info.get_map_mode().unwrap_or(MapMode::Unary) {
+                    let mut config = match server_info.get_map_mode().unwrap_or(MapMode::Unary) {
                         MapMode::Unary => config,
                         MapMode::Batch => {
                             config.socket_path = DEFAULT_BATCH_MAP_SOCKET.into();
@@ -382,6 +382,20 @@ pub(crate) async fn create_mapper(
                             config
                         }
                     };
+
+                    // If multiproc is enabled, randomly select one of the multiproc
+                    // sockets. Each partition independently picks a socket, distributing
+                    // load across the N gRPC server processes.
+                    if let Some(count) = server_info.get_multiproc_count() {
+                        let idx = rand::random_range(0..count);
+                        config.socket_path =
+                            format!("/var/run/numaflow/multiproc{idx}.sock");
+                        tracing::info!(
+                            multiproc_count = count,
+                            selected_socket = %config.socket_path,
+                            "Using multiproc UDS socket"
+                        );
+                    }
 
                     let mut map_grpc_client = MapClient::new(
                         grpc::create_rpc_channel(config.socket_path.clone().into()).await?,

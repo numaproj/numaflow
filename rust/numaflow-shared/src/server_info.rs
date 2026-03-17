@@ -20,6 +20,7 @@ use crate::server_info::version::SdkConstraints;
 const END: &str = "U+005C__END__";
 const MAP_MODE_KEY: &str = "MAP_MODE";
 const HTTP_ENDPOINTS_KEY: &str = "MULTIPROC_ENDPOINTS";
+const MULTIPROC_KEY: &str = "MULTIPROC";
 
 /// A map can be run in different modes.
 #[derive(Debug, Clone, PartialEq)]
@@ -203,6 +204,17 @@ impl ServerInfo {
             return endpoints.split(',').map(|s| s.to_string()).collect();
         }
         vec![]
+    }
+
+    /// get_multiproc_count returns the number of multiproc server processes
+    /// if MULTIPROC is set in the metadata. Returns None if not set or invalid.
+    pub fn get_multiproc_count(&self) -> Option<usize> {
+        self.metadata
+            .as_ref()?
+            .get(MULTIPROC_KEY)?
+            .parse::<usize>()
+            .ok()
+            .filter(|&n| n > 0)
     }
 }
 
