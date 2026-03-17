@@ -78,9 +78,10 @@ func CompareSlice(operator v1alpha1.LogicOperator, a []string, b []string) bool 
 	return false
 }
 
+var dns1035Regex = regexp.MustCompile(`[^a-z0-9-]+`)
+
 func DNS1035(str string) string {
-	re := regexp.MustCompile(`[^a-z0-9-]+`)
-	return re.ReplaceAllString(strings.ToLower(str), "-")
+	return dns1035Regex.ReplaceAllString(strings.ToLower(str), "-")
 }
 
 // Hashcode returns a unique hashcode of a string.

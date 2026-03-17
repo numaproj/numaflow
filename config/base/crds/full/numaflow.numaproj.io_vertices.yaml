@@ -1274,6 +1274,12 @@ spec:
                         readTimeout:
                           type: string
                       type: object
+                    toVertexOrdered:
+                      properties:
+                        enabled:
+                          default: false
+                          type: boolean
+                      type: object
                     toVertexPartitionCount:
                       format: int32
                       type: integer
@@ -7379,6 +7385,12 @@ spec:
                           type: integer
                         readTimeout:
                           type: string
+                      type: object
+                    toVertexOrdered:
+                      properties:
+                        enabled:
+                          default: false
+                          type: boolean
                       type: object
                     toVertexPartitionCount:
                       format: int32

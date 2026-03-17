@@ -933,12 +933,18 @@ func schema_pkg_apis_numaflow_v1alpha1_CombinedEdge(ref common.ReferenceCallback
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits"),
 						},
 					},
+					"toVertexOrdered": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Determine whether ordered processing is enabled for `to` vertex. If not provided, the default value is set to \"false\".",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ordered"),
+						},
+					},
 				},
 				Required: []string{"from", "to", "fromVertexType", "toVertexType"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ordered", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits"},
 	}
 }
 
@@ -4092,7 +4098,7 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref common.ReferenceCallback
 					},
 					"ordered": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Ordered enables ordered processing for the entire pipeline. When enabled, messages will be processed in order based on their event time. This can be overridden at the vertex level.",
+							Description: "Ordered enables order-preserving processing for the entire pipeline. When enabled, messages will be processed in their arrival order (FIFO within each partition). This can be overridden at the vertex level.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ordered"),
 						},
 					},

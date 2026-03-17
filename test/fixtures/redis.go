@@ -17,6 +17,7 @@ limitations under the License.
 package fixtures
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -31,4 +32,14 @@ func getMsgCountContains(keyName, targetStr string) int {
 		panic(fmt.Sprintf("Can't parse string %s to an integer.", str))
 	}
 	return count
+}
+
+// getRedisListValues returns the full ordered list of values stored at keyName in Redis.
+func getRedisListValues(keyName string) []string {
+	str := InvokeE2EAPI("/redis/get-list?keyName=%s", keyName)
+	var vals []string
+	if err := json.Unmarshal([]byte(str), &vals); err != nil {
+		panic(fmt.Sprintf("Can't parse string %s as JSON string array: %v", str, err))
+	}
+	return vals
 }

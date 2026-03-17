@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.7.4 (2026-03-13)
+
+ * [be04ae80](https://github.com/numaproj/numaflow/commit/be04ae805ed4a9742e9be1711e6271fc12548c1f) Update manifests to v1.7.4
+
+### Contributors
+
+ * Yashash Lokesh
+
 ## v1.7.3 (2026-02-22)
 
  * [90a31118](https://github.com/numaproj/numaflow/commit/90a31118d901a7ce067d5f33774a33b942fa325f) Update manifests to v1.7.3

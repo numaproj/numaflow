@@ -2,10 +2,12 @@ use numaflow_sqs::{
     SQS_METADATA_KEY,
     sink::{SqsSink, SqsSinkMessage},
 };
+use std::time::Instant;
 
 use crate::error;
 use crate::error::Error;
 use crate::message::Message;
+use crate::metrics::sqs_metrics;
 use crate::sinker::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
 
 impl TryFrom<Message> for SqsSinkMessage {
@@ -61,17 +63,37 @@ impl From<numaflow_sqs::SqsSinkError> for Error {
 impl Sink for SqsSink {
     async fn sink(&mut self, messages: Vec<Message>) -> error::Result<Vec<ResponseFromSink>> {
         let mut result = Vec::with_capacity(messages.len());
+        let labels = vec![("queue_name".to_string(), self.queue_name.to_string())];
 
         let sqs_messages: Vec<SqsSinkMessage> = messages
             .iter()
             .map(|msg| SqsSinkMessage::try_from(msg.clone()))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let sqs_sink_result = self.sink_messages(sqs_messages).await;
+        let message_count = sqs_messages.len();
 
-        if sqs_sink_result.is_err() {
-            return Err(Error::from(sqs_sink_result.err().unwrap()));
+        let start = Instant::now();
+        let sqs_sink_result = self.sink_messages(sqs_messages).await;
+        let elapsed = start.elapsed().as_micros() as f64;
+
+        sqs_metrics()
+            .producer
+            .publish_latency
+            .get_or_create(&labels)
+            .observe(elapsed);
+
+        if let Err(e) = sqs_sink_result {
+            sqs_metrics()
+                .producer
+                .publish_failure
+                .get_or_create(&labels)
+                .inc_by(message_count as u64);
+            return Err(Error::from(e));
         }
+
+        let mut success_count = 0u64;
+        let mut failure_count = 0u64;
+
         for sqs_response in sqs_sink_result?.iter() {
             match &sqs_response.status {
                 Ok(_) => {
@@ -79,15 +101,29 @@ impl Sink for SqsSink {
                         id: sqs_response.id.clone(),
                         status: ResponseStatusFromSink::Success,
                     });
+                    success_count += 1;
                 }
                 Err(err) => {
                     result.push(ResponseFromSink {
                         id: sqs_response.id.clone(),
                         status: ResponseStatusFromSink::Failed(err.to_string()),
                     });
+                    failure_count += 1;
                 }
             }
         }
+
+        sqs_metrics()
+            .producer
+            .publish_success
+            .get_or_create(&labels)
+            .inc_by(success_count);
+        sqs_metrics()
+            .producer
+            .publish_failure
+            .get_or_create(&labels)
+            .inc_by(failure_count);
+
         Ok(result)
     }
 }
