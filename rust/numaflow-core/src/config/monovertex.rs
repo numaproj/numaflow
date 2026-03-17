@@ -4,7 +4,7 @@ use std::time::Duration;
 use super::pipeline::ServingCallbackConfig;
 use super::{
     DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED,
-    ENV_MONO_VERTEX_OBJ, get_namespace, get_pipeline_name,
+    ENV_MONO_VERTEX_OBJ, ENV_UDF_CONCURRENCY, get_namespace, get_pipeline_name,
 };
 use crate::Result;
 use crate::config::components::metrics::MetricsConfig;
@@ -98,6 +98,12 @@ impl MonovertexConfig {
             .and_then(|limits| limits.read_batch_size.map(|x| x as u64))
             .unwrap_or(DEFAULT_BATCH_SIZE);
 
+        // fetch concurrency from env var `UDF_CONCURRENCY` if set, else use batch_size
+        let concurrency = env_vars
+            .get(ENV_UDF_CONCURRENCY)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(batch_size as usize);
+
         let timeout_in_ms = mono_vertex_obj
             .spec
             .limits
@@ -174,7 +180,7 @@ impl MonovertexConfig {
 
         let map_config = match udf {
             Ok(udf) => Some(MapVtxConfig {
-                concurrency: batch_size as usize,
+                concurrency,
                 map_type: udf.try_into()?,
             }),
             Err(_) => None,
