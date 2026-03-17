@@ -311,9 +311,18 @@ impl SinkWriter {
 
     async fn write_to_sink_inner(
         &mut self,
-        messages: Vec<Message>,
+        mut messages: Vec<Message>,
         cln_token: CancellationToken,
     ) -> Result<()> {
+        // Inject the platform.sink.write span's context into each message
+        // before sending to the UDF, so the Java UDF sees platform.sink.write
+        // as its parent span.
+        for message in messages.iter_mut() {
+            if let Some(ref mut metadata) = message.metadata {
+                crate::shared::otel::inject_trace_context(Arc::make_mut(metadata));
+            }
+        }
+
         let write_start_time = time::Instant::now();
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();

@@ -76,7 +76,15 @@ impl MapBatchTask {
         self.execute_inner().instrument(batch_span).await
     }
 
-    async fn execute_inner(self) -> Result<()> {
+    async fn execute_inner(mut self) -> Result<()> {
+        // Inject the platform.batch_map span's context into each message before
+        // sending to the UDF, so the Java UDF sees platform.batch_map as its parent.
+        for message in self.batch.iter_mut() {
+            if let Some(ref mut metadata) = message.metadata {
+                otel::inject_trace_context(Arc::make_mut(metadata));
+            }
+        }
+
         // Store parent message info for each message before sending to UDF
         let parent_infos: Vec<ParentMessageInfo> = self.batch.iter().map(|m| m.into()).collect();
 

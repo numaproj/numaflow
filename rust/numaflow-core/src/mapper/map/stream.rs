@@ -80,9 +80,15 @@ impl MapStreamTask {
         self.execute_inner().instrument(stream_span).await;
     }
 
-    async fn execute_inner(self) {
+    async fn execute_inner(mut self) {
         // Hold the permit until the task completes
         let _permit = self.permit;
+
+        // Inject the platform.stream_map span's context into the message before
+        // sending to the UDF, so the Java UDF sees platform.stream_map as its parent.
+        if let Some(ref mut metadata) = self.message.metadata {
+            otel::inject_trace_context(Arc::make_mut(metadata));
+        }
 
         // Store parent message info before sending to UDF
         let mut parent_info: ParentMessageInfo = (&self.message).into();
