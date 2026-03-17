@@ -2521,6 +2521,26 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#sqs-metrics" class="md-nav__link">
+    SQS Metrics
+  </a>
+  
+    <nav class="md-nav" aria-label="SQS Metrics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#producer-metrics" class="md-nav__link">
+    Producer Metrics
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#controller-metrics" class="md-nav__link">
     Controller Metrics
   </a>
@@ -3088,6 +3108,26 @@
   <a href="#isb-metrics-nats-jetstream" class="md-nav__link">
     ISB Metrics (NATS JetStream)
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sqs-metrics" class="md-nav__link">
+    SQS Metrics
+  </a>
+  
+    <nav class="md-nav" aria-label="SQS Metrics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#producer-metrics" class="md-nav__link">
+    Producer Metrics
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3841,6 +3881,39 @@
 <td>Histogram</td>
 <td><code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Processing times of JetStream ack operations, in microseconds</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sqs-metrics">SQS Metrics<a class="headerlink" href="#sqs-metrics" title="Permanent link">&para;</a></h2>
+<p>These metrics are emitted when using SQS.</p>
+<h3 id="producer-metrics">Producer Metrics<a class="headerlink" href="#producer-metrics" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric name</th>
+<th>Metric type</th>
+<th>Labels</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sqs_producer_publish_success_total</code></td>
+<td>Counter</td>
+<td><code>queue_name=&lt;queue-name&gt;</code></td>
+<td>Total number of messages successfully published to SQS</td>
+</tr>
+<tr>
+<td><code>sqs_producer_publish_failure_total</code></td>
+<td>Counter</td>
+<td><code>queue_name=&lt;queue-name&gt;</code></td>
+<td>Total number of messages that failed to publish to SQS</td>
+</tr>
+<tr>
+<td><code>sqs_producer_publish_latency</code></td>
+<td>Histogram</td>
+<td><code>queue_name=&lt;queue-name&gt;</code></td>
+<td>Latency of SQS publish operations, in microseconds</td>
 </tr>
 </tbody>
 </table>
