@@ -15,6 +15,7 @@ use numaflow_pb::clients::sink::sink_response;
 use numaflow_pulsar::sink::Sink as PulsarSink;
 use numaflow_sqs::sink::SqsSink;
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
