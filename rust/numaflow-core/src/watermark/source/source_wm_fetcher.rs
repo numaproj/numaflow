@@ -448,6 +448,133 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_source_watermark_fetcher_processor_count_insufficient() {
+        // When processor_count=3 but only 2 active processors exist, watermark should be -1
+        let processor_name1 = Bytes::from("processor1");
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0], 0);
+        let mut timeline1 = OffsetTimeline::new(10);
+        timeline1.put(WMB {
+            watermark: 100,
+            offset: 1,
+            idle: false,
+            partition: 0,
+            processor_count: Some(3),
+        });
+        processor1.timelines.insert(0, timeline1);
+
+        let processor_name2 = Bytes::from("processor2");
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0], 0);
+        let mut timeline2 = OffsetTimeline::new(10);
+        timeline2.put(WMB {
+            watermark: 200,
+            offset: 2,
+            idle: false,
+            partition: 0,
+            processor_count: Some(3),
+        });
+        processor2.timelines.insert(0, timeline2);
+
+        let mut processors = HashMap::new();
+        processors.insert(processor_name1, processor1);
+        processors.insert(processor_name2, processor2);
+
+        let processor_manager = ProcessorManager {
+            processors: Arc::new(RwLock::new(processors)),
+            handles: vec![],
+        };
+
+        let mut fetcher = SourceWatermarkFetcher::new(processor_manager);
+        let watermark = fetcher.fetch_source_watermark(Some(100));
+        // Only 2 of 3 expected processors are active, so watermark should be -1
+        assert_eq!(watermark.timestamp_millis(), -1);
+    }
+
+    #[tokio::test]
+    async fn test_source_watermark_fetcher_processor_count_sufficient() {
+        // When processor_count=2 and 2 active processors exist, watermark should be valid
+        let processor_name1 = Bytes::from("processor1");
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0], 0);
+        let mut timeline1 = OffsetTimeline::new(10);
+        timeline1.put(WMB {
+            watermark: 100,
+            offset: 1,
+            idle: false,
+            partition: 0,
+            processor_count: Some(2),
+        });
+        processor1.timelines.insert(0, timeline1);
+
+        let processor_name2 = Bytes::from("processor2");
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0], 0);
+        let mut timeline2 = OffsetTimeline::new(10);
+        timeline2.put(WMB {
+            watermark: 200,
+            offset: 2,
+            idle: false,
+            partition: 0,
+            processor_count: Some(2),
+        });
+        processor2.timelines.insert(0, timeline2);
+
+        let mut processors = HashMap::new();
+        processors.insert(processor_name1, processor1);
+        processors.insert(processor_name2, processor2);
+
+        let processor_manager = ProcessorManager {
+            processors: Arc::new(RwLock::new(processors)),
+            handles: vec![],
+        };
+
+        let mut fetcher = SourceWatermarkFetcher::new(processor_manager);
+        let watermark = fetcher.fetch_source_watermark(Some(100));
+        // Both expected processors are active, watermark should be min(100, 200) = 100
+        assert_eq!(watermark.timestamp_millis(), 100);
+    }
+
+    #[tokio::test]
+    async fn test_source_watermark_fetcher_processor_count_mixed_with_none() {
+        // When some processors report processor_count and others don't,
+        // the max from those reporting should be used
+        let processor_name1 = Bytes::from("processor1");
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, &[0], 0);
+        let mut timeline1 = OffsetTimeline::new(10);
+        timeline1.put(WMB {
+            watermark: 100,
+            offset: 1,
+            idle: false,
+            partition: 0,
+            processor_count: Some(3), // expects 3 processors
+        });
+        processor1.timelines.insert(0, timeline1);
+
+        let processor_name2 = Bytes::from("processor2");
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, &[0], 0);
+        let mut timeline2 = OffsetTimeline::new(10);
+        timeline2.put(WMB {
+            watermark: 200,
+            offset: 2,
+            idle: false,
+            partition: 0,
+            processor_count: None, // hasn't reported count yet
+        });
+        processor2.timelines.insert(0, timeline2);
+
+        let mut processors = HashMap::new();
+        processors.insert(processor_name1, processor1);
+        processors.insert(processor_name2, processor2);
+
+        let processor_manager = ProcessorManager {
+            processors: Arc::new(RwLock::new(processors)),
+            handles: vec![],
+        };
+
+        let mut fetcher = SourceWatermarkFetcher::new(processor_manager);
+        let watermark = fetcher.fetch_source_watermark(Some(100));
+        // max_expected_count=3 from processor1, but only 2 active → -1
+        assert_eq!(watermark.timestamp_millis(), -1);
+    }
+
+    #[tokio::test]
     async fn test_source_watermark_fetcher_fetch_head_watermark_inactive_processor() {
         // Create a ProcessorManager with one active and one inactive processor
         let processor_name1 = Bytes::from("processor1");
