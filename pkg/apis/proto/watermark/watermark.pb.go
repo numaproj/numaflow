@@ -56,7 +56,7 @@ type WMB struct {
 	// Optional expected processor count for source watermarks.
 	// When set, the fetcher will wait until this many processors are active before
 	// computing a valid watermark.
-	ProcessorCount *int32 `protobuf:"varint,6,opt,name=processor_count,json=processorCount,proto3,oneof" json:"processor_count,omitempty"`
+	ProcessorCount *int32 `protobuf:"varint,5,opt,name=processor_count,json=processorCount,proto3,oneof" json:"processor_count,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -136,7 +136,7 @@ const file_pkg_apis_proto_watermark_watermark_proto_rawDesc = "" +
 	"\x06offset\x18\x02 \x01(\x03R\x06offset\x12\x1c\n" +
 	"\twatermark\x18\x03 \x01(\x03R\twatermark\x12\x1c\n" +
 	"\tpartition\x18\x04 \x01(\x05R\tpartition\x12,\n" +
-	"\x0fprocessor_count\x18\x06 \x01(\x05H\x00R\x0eprocessorCount\x88\x01\x01B\x12\n" +
+	"\x0fprocessor_count\x18\x05 \x01(\x05H\x00R\x0eprocessorCount\x88\x01\x01B\x12\n" +
 	"\x10_processor_countB1Z/github.com/numaproj/numaflow/pkg/apis/proto/isbb\x06proto3"
 
 var (

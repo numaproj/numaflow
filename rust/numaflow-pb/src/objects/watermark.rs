@@ -23,6 +23,6 @@ pub struct Wmb {
     /// Optional expected processor count for source watermarks.
     /// When set, the fetcher will wait until this many processors are active before
     /// computing a valid watermark.
-    #[prost(int32, optional, tag = "6")]
+    #[prost(int32, optional, tag = "5")]
     pub processor_count: ::core::option::Option<i32>,
 }

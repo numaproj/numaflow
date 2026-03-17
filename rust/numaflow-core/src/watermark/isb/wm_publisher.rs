@@ -57,7 +57,7 @@ impl LastPublishedState {
     fn update(&mut self, offset: i64, watermark: i64) -> (i64, i64, bool) {
         if offset > self.offset {
             // we cannot have a lower watermark for a higher offset(that means watermark has regressed)
-            let regressed = self.watermark > watermark;
+            let regressed = watermark != -1 && self.watermark > watermark;
             self.offset = offset;
             self.watermark = self.watermark.max(watermark);
             (self.offset, self.watermark, regressed)
