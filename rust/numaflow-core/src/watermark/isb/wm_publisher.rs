@@ -156,6 +156,16 @@ impl ISBWatermarkPublisher {
         idle: bool,
         processor_count: Option<u32>,
     ) {
+        info!(
+            processor = ?self.processor_name,
+            stream = ?stream.name,
+            offset = offset,
+            watermark = watermark,
+            idle = idle,
+            processor_count = ?processor_count,
+            "Publishing watermark"
+        );
+
         let last_state = self
             .last_published_wm
             .get_mut(stream.vertex)
