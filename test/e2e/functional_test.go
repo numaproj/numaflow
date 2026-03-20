@@ -1,5 +1,3 @@
-//go:build test
-
 /*
 Copyright 2022 The Numaproj Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -378,6 +376,76 @@ func (s *FunctionalSuite) TestPipelineUserMetadataPropagation() {
 		VertexPodLogContains("sink", "simple-source", PodLogCheckOptionWithContainer("udsink")).
 		VertexPodLogContains("sink", "map-group", PodLogCheckOptionWithContainer("udsink")).
 		VertexPodLogContains("sink", "txn-id", PodLogCheckOptionWithContainer("udsink"))
+}
+
+func (s *FunctionalSuite) TestOrderedProcessing() {
+	w := s.Given().Pipeline("@testdata/ordered-processing.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "ordered-processing"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	// Send messages with different keys, each key getting values in a specific order.
+	// The x-numaflow-keys header sets the message key for partition routing.
+	keys := []string{"A", "M", "Z"}
+	values := []string{"create", "update", "delete"}
+
+	for _, val := range values {
+		for _, key := range keys {
+			w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().
+				WithBody([]byte(val)).
+				WithHeader("x-numaflow-keys", key).
+				WithHeader("x-numaflow-id", fmt.Sprintf("%s-%s", key, val)))
+		}
+	}
+
+	// Verify that for each key, the Redis list contains exactly ["create", "update", "delete"] in order.
+	// The Rust redis-sink in ordered mode stores at key "{SINK_HASH_KEY}_{message_keys}" using RPUSH.
+	for _, key := range keys {
+		redisKey := fmt.Sprintf("ordered-processing-out_%s", key)
+		w.Expect().RedisSinkListEquals(redisKey, values)
+	}
+}
+
+func (s *FunctionalSuite) TestOrderedProcessingMultiSource() {
+	w := s.Given().Pipeline("@testdata/ordered-processing-multi-source.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "ordered-multi-source"
+
+	w.Expect().VertexPodsRunning()
+
+	// 10 numeric keys, 100 messages per key = 1000 total messages.
+	// Messages are sent round-robin across two HTTP sources (in-1, in-2).
+	numKeys := 10
+	msgsPerKey := 100
+	sources := []string{"in-1", "in-2"}
+
+	for seq := 0; seq < msgsPerKey; seq++ {
+		for key := 0; key < numKeys; key++ {
+			src := sources[(key+seq)%len(sources)]
+			keyStr := fmt.Sprintf("%d", key)
+			val := fmt.Sprintf("%d", seq)
+			w.SendMessageTo(pipelineName, src, NewHttpPostRequest().
+				WithBody([]byte(val)).
+				WithHeader("x-numaflow-keys", keyStr).
+				WithHeader("x-numaflow-id", fmt.Sprintf("%s-%s", keyStr, val)))
+		}
+	}
+
+	// Verify that for each key, the Redis list contains values 0..99 in order.
+	expectedValues := make([]string, msgsPerKey)
+	for i := 0; i < msgsPerKey; i++ {
+		expectedValues[i] = fmt.Sprintf("%d", i)
+	}
+	for key := 0; key < numKeys; key++ {
+		redisKey := fmt.Sprintf("ordered-multi-source-out_%d", key)
+		w.Expect().RedisSinkListEquals(redisKey, expectedValues)
+	}
 }
 
 func TestFunctionalSuite(t *testing.T) {

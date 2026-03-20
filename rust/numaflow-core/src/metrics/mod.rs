@@ -33,6 +33,9 @@ use crate::sinker::sink::SinkWriter;
 use crate::source::Source;
 use crate::watermark::WatermarkHandle;
 
+pub(crate) mod sqs;
+pub(crate) use sqs::sqs_metrics;
+
 // SDK information
 const SDK_INFO: &str = "sdk_info";
 const COMPONENT: &str = "component";
@@ -732,8 +735,8 @@ impl MonoVtxMetrics {
             metrics.fb_sink.write_total.clone(),
         );
         fb_sink_registry.register(FALLBACK_SINK_TIME,
-            "A Histogram to keep track of the total time taken to Write to the fallback sink, in microseconds",
-            metrics.fb_sink.time.clone());
+                                  "A Histogram to keep track of the total time taken to Write to the fallback sink, in microseconds",
+                                  metrics.fb_sink.time.clone());
 
         // OnSuccess Sink metrics
         let ons_sink_registry = registry.sub_registry_with_prefix(ON_SUCCESS_SINK_REGISTRY_PREFIX);
@@ -744,8 +747,8 @@ impl MonoVtxMetrics {
             metrics.ons_sink.write_total.clone(),
         );
         ons_sink_registry.register(ON_SUCCESS_SINK_TIME,
-                                  "A Histogram to keep track of the total time taken to Write to the on-success sink, in microseconds",
-                                  metrics.ons_sink.time.clone());
+                                   "A Histogram to keep track of the total time taken to Write to the on-success sink, in microseconds",
+                                   metrics.ons_sink.time.clone());
 
         metrics
     }
@@ -1912,6 +1915,24 @@ mod tests {
             .write_error_total
             .get_or_create(&jetstream_isb_error_labels)
             .inc();
+        // populate sqs metrics
+        let sqs_metrics = sqs_metrics();
+        let sqs_labels = vec![("queue_name".to_string(), "test-queue".to_string())];
+        sqs_metrics
+            .producer
+            .publish_success
+            .get_or_create(&sqs_labels)
+            .inc_by(5);
+        sqs_metrics
+            .producer
+            .publish_failure
+            .get_or_create(&sqs_labels)
+            .inc_by(2);
+        sqs_metrics
+            .producer
+            .publish_latency
+            .get_or_create(&sqs_labels)
+            .observe(1500.0);
 
         // Validate the metric names
         let state = global_registry().registry.lock();
@@ -1956,6 +1977,11 @@ mod tests {
             r#"isb_jetstream_write_error_total{buffer="test_jetstream_isb",reason="test_error"} 1"#,
             r#"isb_jetstream_buffer_soft_usage{buffer="test_jetstream_isb"} 0.22"#,
             r#"isb_jetstream_buffer_pending{buffer="test_jetstream_isb"} 5"#,
+            r#"sqs_producer_publish_success_total{queue_name="test-queue"} 5"#,
+            r#"sqs_producer_publish_failure_total{queue_name="test-queue"} 2"#,
+            r#"sqs_producer_publish_latency_sum{queue_name="test-queue"} 1500.0"#,
+            r#"sqs_producer_publish_latency_count{queue_name="test-queue"} 1"#,
+            r#"sqs_producer_publish_latency_bucket{le="100.0",queue_name="test-queue"} 0"#,
         ];
 
         let got = buffer
@@ -1966,7 +1992,7 @@ mod tests {
             .join("\n");
 
         for t in expected {
-            assert!(got.contains(t));
+            assert!(got.contains(t), "expected metric not found: {}", t);
         }
     }
 }

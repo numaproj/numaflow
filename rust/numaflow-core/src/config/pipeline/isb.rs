@@ -12,11 +12,21 @@ const DEFAULT_WIP_ACK_INTERVAL_MILLIS: u64 = 1000;
 
 pub(crate) mod jetstream {
     const DEFAULT_URL: &str = "localhost:4222";
-    #[derive(Debug, Clone, PartialEq)]
+    #[derive(Clone, PartialEq)]
     pub(crate) struct ClientConfig {
         pub url: String,
         pub user: Option<String>,
         pub password: Option<String>,
+    }
+
+    impl std::fmt::Debug for ClientConfig {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("ClientConfig")
+                .field("url", &self.url)
+                .field("user", &self.user)
+                .field("password", &self.password.as_ref().map(|_| "[REDACTED]"))
+                .finish()
+        }
     }
 
     impl Default for ClientConfig {

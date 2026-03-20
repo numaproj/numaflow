@@ -1027,7 +1027,7 @@ mod tests {
 // SimpleBuffer Integration Tests
 // These tests use SimpleBuffer to test ISBWriterOrchestrator without a distributed ISB.
 #[cfg(test)]
-mod simplebuffer_tests {
+mod simple_buffer_tests {
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
     use crate::message::{AckHandle, IntOffset, MessageID, ReadAck};
@@ -1866,5 +1866,162 @@ mod simplebuffer_tests {
         // Only one message should have been written to each stream
         assert_eq!(adapter1.pending_count(), 1);
         assert_eq!(adapter2.pending_count(), 1);
+    }
+
+    /// Helper to create a message with specific keys and offset.
+    fn create_message_with_keys_and_offset(keys: Vec<&str>, offset: &str) -> Message {
+        Message {
+            typ: Default::default(),
+            keys: Arc::from(keys.into_iter().map(String::from).collect::<Vec<_>>()),
+            tags: None,
+            value: Bytes::from("test"),
+            offset: Offset::Int(IntOffset::new(0, 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "test".into(),
+                index: 0,
+                offset: Bytes::from(offset.to_string()),
+            },
+            headers: Arc::new(HashMap::new()),
+            metadata: None,
+            is_late: false,
+            ack_handle: None,
+        }
+    }
+
+    /// Helper to create a ToVertexConfig for routing tests.
+    fn create_vertex_config(
+        vertex_type: VertexType,
+        ordered: bool,
+        num_partitions: u16,
+    ) -> ToVertexConfig {
+        let streams: Vec<Stream> = (0..num_partitions)
+            .map(|i| {
+                let name: &'static str = Box::leak(format!("stream-{}", i).into_boxed_str());
+                Stream::new(name, "test-vertex", i)
+            })
+            .collect();
+        ToVertexConfig {
+            name: "test-vertex",
+            partitions: num_partitions,
+            writer_config: BufferWriterConfig {
+                streams,
+                ..Default::default()
+            },
+            conditions: None,
+            to_vertex_type: vertex_type,
+            ordered_processing_enabled: ordered,
+        }
+    }
+
+    #[test]
+    fn test_ordered_mode_routes_by_keys() {
+        // Messages with the same keys but different offsets should land on the same stream
+        // when ordered processing is enabled.
+        let vertex = create_vertex_config(VertexType::MapUDF, true, 3);
+        let msg1 = create_message_with_keys_and_offset(vec!["user-42"], "offset-1");
+        let msg2 = create_message_with_keys_and_offset(vec!["user-42"], "offset-999");
+
+        let stream1 =
+            ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(&msg1, &vertex);
+        let stream2 =
+            ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(&msg2, &vertex);
+
+        assert_eq!(
+            stream1, stream2,
+            "Same keys must route to the same stream in ordered mode"
+        );
+
+        // Also verify for Sink vertex type
+        let sink_vertex = create_vertex_config(VertexType::Sink, true, 3);
+        let s1 =
+            ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(&msg1, &sink_vertex);
+        let s2 =
+            ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(&msg2, &sink_vertex);
+        assert_eq!(
+            s1, s2,
+            "Same keys must route to the same stream in ordered mode for Sink"
+        );
+    }
+
+    #[test]
+    fn test_ordered_mode_multi_key_messages() {
+        // Multi-key messages should use keys.join(":") as shuffle key.
+        // ["region", "us-east"] should hash differently than ["region:us-east"].
+        let vertex = create_vertex_config(VertexType::MapUDF, true, 16);
+
+        let msg_multi = create_message_with_keys_and_offset(vec!["region", "us-east"], "offset-1");
+        let msg_single = create_message_with_keys_and_offset(vec!["region:us-east"], "offset-1");
+
+        let stream_multi =
+            ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(&msg_multi, &vertex);
+        let stream_single = ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(
+            &msg_single,
+            &vertex,
+        );
+
+        // The join of ["region", "us-east"] is "region:us-east", which equals the single key
+        // "region:us-east". So they should hash to the same partition.
+        assert_eq!(
+            stream_multi, stream_single,
+            "Multi-key join should produce the same shuffle key as the equivalent single key"
+        );
+
+        // Now verify a genuinely different multi-key produces a different shuffle key
+        // (with enough partitions, this should differ for most key combinations)
+        let msg_different =
+            create_message_with_keys_and_offset(vec!["region", "eu-west"], "offset-1");
+        let stream_different = ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(
+            &msg_different,
+            &vertex,
+        );
+
+        // Two messages with the same multi-key should always match
+        let msg_multi_again =
+            create_message_with_keys_and_offset(vec!["region", "us-east"], "offset-2");
+        let stream_multi_again = ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(
+            &msg_multi_again,
+            &vertex,
+        );
+        assert_eq!(
+            stream_multi, stream_multi_again,
+            "Same multi-key must always route to the same stream"
+        );
+
+        // stream_different may or may not equal stream_multi depending on hash collisions,
+        // so we just verify the function doesn't panic with different multi-keys.
+        let _ = stream_different;
+    }
+
+    #[test]
+    fn test_single_partition_always_returns_partition_zero() {
+        // With a single partition, all messages must route to partition 0
+        // regardless of keys, offset, or ordered mode.
+        let ordered_vertex = create_vertex_config(VertexType::MapUDF, true, 1);
+        let unordered_vertex = create_vertex_config(VertexType::MapUDF, false, 1);
+
+        for key in ["a", "b", "c", "user-123", "xyz"] {
+            let msg = create_message_with_keys_and_offset(vec![key], &format!("offset-{}", key));
+
+            let stream_ordered = ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(
+                &msg,
+                &ordered_vertex,
+            );
+            let stream_unordered =
+                ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(
+                    &msg,
+                    &unordered_vertex,
+                );
+
+            assert_eq!(
+                stream_ordered.partition, 0,
+                "Single partition ordered must always be partition 0"
+            );
+            assert_eq!(
+                stream_unordered.partition, 0,
+                "Single partition unordered must always be partition 0"
+            );
+        }
     }
 }

@@ -1776,6 +1776,27 @@ value is set to “1”.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>toVertexOrdered</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Ordered"> Ordered </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Determine whether ordered processing is enabled for <code>to</code>
+vertex. If not provided, the default value is set to “false”.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -7591,6 +7612,7 @@ Ordered
 
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.CombinedEdge">CombinedEdge</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>)
 </p>
 
@@ -8105,9 +8127,9 @@ InterStepBuffer configuration specific to this pipeline.
 <em>(Optional)</em>
 <p>
 
-Ordered enables ordered processing for the entire pipeline. When
-enabled, messages will be processed in order based on their event time.
-This can be overridden at the vertex level.
+Ordered enables order-preserving processing for the entire pipeline.
+When enabled, messages will be processed in their arrival order (FIFO
+within each partition). This can be overridden at the vertex level.
 </p>
 
 </td>
@@ -8552,9 +8574,9 @@ InterStepBuffer configuration specific to this pipeline.
 <em>(Optional)</em>
 <p>
 
-Ordered enables ordered processing for the entire pipeline. When
-enabled, messages will be processed in order based on their event time.
-This can be overridden at the vertex level.
+Ordered enables order-preserving processing for the entire pipeline.
+When enabled, messages will be processed in their arrival order (FIFO
+within each partition). This can be overridden at the vertex level.
 </p>
 
 </td>

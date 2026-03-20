@@ -154,6 +154,18 @@ These metrics are emitted by pipeline vertex pods for NATS JetStream Inter-Step 
 | `isb_jetstream_write_time_total`   | Histogram   | `buffer=<buffer-name>`      | Processing times of JetStream write operations, in microseconds                                            |
 | `isb_jetstream_ack_time_total`     | Histogram   | `buffer=<buffer-name>`      | Processing times of JetStream ack operations, in microseconds                                              |
 
+## SQS Metrics
+
+These metrics are emitted when using SQS.
+
+### Producer Metrics
+
+| Metric name                              | Metric type | Labels                     | Description                                                    |
+|------------------------------------------|-------------|----------------------------|----------------------------------------------------------------|
+| `sqs_producer_publish_success_total`     | Counter     | `queue_name=<queue-name>`  | Total number of messages successfully published to SQS         |
+| `sqs_producer_publish_failure_total`     | Counter     | `queue_name=<queue-name>`  | Total number of messages that failed to publish to SQS         |
+| `sqs_producer_publish_latency`           | Histogram   | `queue_name=<queue-name>`  | Latency of SQS publish operations, in microseconds             |
+
 ## Controller Metrics
 
 These metrics are emitted by the Numaflow controller.

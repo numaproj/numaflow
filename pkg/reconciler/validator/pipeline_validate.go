@@ -780,18 +780,23 @@ func validateSQSSink(sqs dfv1.SqsSink) error {
 func validateOrderedProcessing(pl dfv1.Pipeline) error {
 	// Iterate through all vertices to validate ordered processing configuration
 	for _, v := range pl.Spec.Vertices {
-		// Get the effective ordered config for this vertex
-		orderedEnabled := v.GetEffectiveOrderedConfig(pl.Spec.Ordered)
-
-		// Skip if ordered processing is not enabled
-		if !orderedEnabled {
-			continue
-		}
-
 		// Skip source and reduce vertices - ordered processing only applies to map and sink
 		// Source vertices are always ordered by nature
 		// Reduce vertices are already partitioned and ordered
 		if v.IsASource() || v.IsReduceUDF() {
+			continue
+		}
+
+		// Compute effective ordered config: vertex-level takes precedence over pipeline-level
+		var orderedEnabled bool
+		if v.Ordered != nil {
+			orderedEnabled = v.Ordered.Enabled
+		} else if pl.Spec.Ordered != nil {
+			orderedEnabled = pl.Spec.Ordered.Enabled
+		}
+
+		// Skip if ordered processing is not enabled
+		if !orderedEnabled {
 			continue
 		}
 

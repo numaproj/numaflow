@@ -89,6 +89,30 @@ func SinkCheckWithTimeout(t time.Duration) SinkCheckOption {
 	}
 }
 
+// redisListEquals verifies that the Redis list at the given key contains exactly the expected values in order.
+func redisListEquals(ctx context.Context, keyName string, expectedValues []string, opts ...SinkCheckOption) bool {
+	o := defaultRedisCheckOptions()
+	for _, opt := range opts {
+		if opt != nil {
+			opt(o)
+		}
+	}
+	ctx, cancel := context.WithTimeout(ctx, o.timeout)
+	defer cancel()
+	return runChecks(ctx, func() bool {
+		actual := getRedisListValues(keyName)
+		if len(actual) != len(expectedValues) {
+			return false
+		}
+		for i, v := range expectedValues {
+			if actual[i] != v {
+				return false
+			}
+		}
+		return true
+	})
+}
+
 type CheckFunc func() bool
 
 // runChecks executes a performChecks function with retry strategy (retryInterval with timeout).

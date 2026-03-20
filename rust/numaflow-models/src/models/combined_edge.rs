@@ -42,6 +42,8 @@ pub struct CombinedEdge {
     pub to: String,
     #[serde(rename = "toVertexLimits", skip_serializing_if = "Option::is_none")]
     pub to_vertex_limits: Option<Box<crate::models::VertexLimits>>,
+    #[serde(rename = "toVertexOrdered", skip_serializing_if = "Option::is_none")]
+    pub to_vertex_ordered: Option<Box<crate::models::Ordered>>,
     /// The number of partitions of the to vertex, if not provided, the default value is set to \"1\".
     #[serde(
         rename = "toVertexPartitionCount",
@@ -70,6 +72,7 @@ impl CombinedEdge {
             on_full: None,
             to,
             to_vertex_limits: None,
+            to_vertex_ordered: None,
             to_vertex_partition_count: None,
             to_vertex_type,
         }
