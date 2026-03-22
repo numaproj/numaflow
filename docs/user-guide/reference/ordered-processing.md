@@ -208,3 +208,12 @@ strict in-order guarantees.
 - Source vertices (`in-1`, `in-2`) always preserve input order and require no extra configuration.
 - Because `in-1` and `in-2` both feed into `cat` (a join), messages from the two sources are interleaved at `cat`.
   Order preservation holds within each source's stream, not across the two sources.
+
+
+### Complete Example
+
+For a more complete example that combines ordered processing with event-time sorting, see
+[ordered-stream-processing](https://github.com/numaproj/numaflow-rs/tree/main/examples/ordered-stream-processing)
+in the Rust SDK. That example uses an accumulator to sort out-of-order events by event time, then feeds them through
+partitioned map and sink vertices with ordered processing enabled, demonstrating both temporal and spatial ordering
+working together.
