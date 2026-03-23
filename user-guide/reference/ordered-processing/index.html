@@ -1713,6 +1713,19 @@
     Example
   </a>
   
+    <nav class="md-nav" aria-label="Example">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#complete-example" class="md-nav__link">
+    Complete Example
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -2844,6 +2857,19 @@
     Example
   </a>
   
+    <nav class="md-nav" aria-label="Example">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#complete-example" class="md-nav__link">
+    Complete Example
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -3080,6 +3106,12 @@ strict in-order guarantees.</li>
 <li>Because <code>in-1</code> and <code>in-2</code> both feed into <code>cat</code> (a join), messages from the two sources are interleaved at <code>cat</code>.
   Order preservation holds within each source's stream, not across the two sources.</li>
 </ul>
+<h3 id="complete-example">Complete Example<a class="headerlink" href="#complete-example" title="Permanent link">&para;</a></h3>
+<p>For a more complete example that combines ordered processing with event-time sorting, see
+<a href="https://github.com/numaproj/numaflow-rs/tree/main/examples/ordered-stream-processing">ordered-stream-processing</a>
+in the Rust SDK. That example uses an accumulator to sort out-of-order events by event time, then feeds them through
+partitioned map and sink vertices with ordered processing enabled, demonstrating both temporal and spatial ordering
+working together.</p>
 
               
             </article>
