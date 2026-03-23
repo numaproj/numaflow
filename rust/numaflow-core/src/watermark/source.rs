@@ -54,8 +54,6 @@ struct SourceWatermarkState {
     /// Cache of partitions that have been active during the current interval.
     /// Used for ISB idle watermark publishing.
     active_input_partitions: HashMap<u16, bool>,
-    /// Total partitions in the source.
-    total_partitions: Option<u32>,
 }
 
 impl SourceWatermarkState {
@@ -72,13 +70,7 @@ impl SourceWatermarkState {
             isb_idle_manager,
             source_idle_manager,
             active_input_partitions: HashMap::new(),
-            total_partitions: None,
         }
-    }
-
-    /// Sets the initialized partitions for source idle watermark publishing.
-    fn set_total_partitions(&mut self, partitions: u32) {
-        self.total_partitions = Some(partitions);
     }
 
     /// Handles generating and publishing source watermark with computation
@@ -406,7 +398,6 @@ impl SourceWatermarkHandle {
     ) {
         let mut state = self.state.lock().await;
         if let Some(p) = total_partitions {
-            state.set_total_partitions(p);
             state.publisher.set_processor_count(p);
         }
 

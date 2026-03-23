@@ -66,7 +66,7 @@ impl SourceWatermarkPublisher {
     }
 
     /// Helper to create OT KV stores from bucket configs using the JetStream context.
-    /// Heartbeat is now embedded in WMB, so no separate hb_stores are needed.
+    /// Heartbeat is now embedded in WMB, so no separate store needed to track heartbeats.
     async fn create_ot_stores(
         js_context: &async_nats::jetstream::Context,
         bucket_configs: &[BucketConfig],
