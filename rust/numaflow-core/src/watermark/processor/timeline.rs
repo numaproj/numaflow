@@ -56,7 +56,7 @@ impl OffsetTimeline {
             node.offset.cmp(&element_node.offset),
         ) {
             (Ordering::Equal, Ordering::Greater) => {
-                element_node.offset = node.offset;
+                self.watermarks.push_front(node);
             }
             (Ordering::Equal, _) => {
                 debug!(
