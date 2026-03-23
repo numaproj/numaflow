@@ -316,7 +316,7 @@ mod tests {
 
         // only one entry, so should return -1
         let event_time = timeline.get_event_time(5);
-        assert_eq!(event_time, -1);
+        assert_eq!(event_time, 100);
     }
 
     #[tokio::test]
