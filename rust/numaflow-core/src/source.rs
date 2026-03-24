@@ -574,6 +574,13 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 }
 
                 for message in messages.iter_mut() {
+                    // Check incoming message headers for external trace context
+                    // (W3C traceparent or B3 multi-headers from upstream Kafka producers).
+                    // If found, source.read becomes a child of the upstream trace.
+                    let parent_cx = crate::shared::otel::extract_trace_context_from_headers(
+                        &message.headers,
+                    );
+
                     let source_span = tracing::info_span!(
                         "numaflow.platform.source.read",
                         otel.kind = "PRODUCER",
@@ -582,6 +589,13 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         messaging.operation.name = "source.read",
                         messaging.message.id = %message.offset,
                     );
+
+                    // Set parent context before entering the span
+                    {
+                        use tracing_opentelemetry::OpenTelemetrySpanExt;
+                        source_span.set_parent(parent_cx);
+                    }
+
                     let _guard = source_span.enter();
                     if let Some(ref mut metadata) = message.metadata {
                         crate::shared::otel::inject_trace_context(Arc::make_mut(metadata));
