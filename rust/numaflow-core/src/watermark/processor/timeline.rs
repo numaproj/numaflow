@@ -70,7 +70,7 @@ impl OffsetTimeline {
                 error!("The new input offset should never be smaller than the existing offset");
             }
             (Ordering::Less, _) => {
-                error!(
+                debug!(
                     "Watermark should not regress, current: {:?}, new: {:?}",
                     element_node, node
                 );
@@ -108,6 +108,12 @@ impl OffsetTimeline {
             .iter()
             .find(|w| w.offset < input_offset)
             .map_or(-1, |w| w.watermark)
+    }
+
+    /// Returns an iterator over all valid (non-default) entries in the timeline.
+    /// Entries are returned from highest to lowest watermark.
+    pub(crate) fn entries(&self) -> VecDeque<WMB> {
+        self.watermarks.clone()
     }
 }
 

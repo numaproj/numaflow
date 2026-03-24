@@ -74,6 +74,17 @@ func fakePod(pipelineName string, vertexName string, namespace string, phase str
 		Status: corev1.PodStatus{
 			Phase:             corev1.PodPhase("Running"),
 			ContainerStatuses: []corev1.ContainerStatus{containerStatus},
+			InitContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name:  "init",
+					Ready: true,
+					State: corev1.ContainerState{
+						Terminated: &corev1.ContainerStateTerminated{
+							ExitCode: 0,
+						},
+					},
+				},
+			},
 		},
 	}
 	return pod

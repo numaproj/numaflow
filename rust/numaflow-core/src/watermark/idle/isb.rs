@@ -240,6 +240,7 @@ mod tests {
             },
             conditions: None,
             to_vertex_type: VertexType::Sink,
+            ordered_processing_enabled: false,
         };
 
         let mut manager =
@@ -287,6 +288,7 @@ mod tests {
             },
             conditions: None,
             to_vertex_type: VertexType::Sink,
+            ordered_processing_enabled: false,
         };
 
         let manager =
@@ -326,6 +328,7 @@ mod tests {
             },
             conditions: None,
             to_vertex_type: VertexType::Sink,
+            ordered_processing_enabled: false,
         };
 
         let mut manager =
@@ -365,6 +368,7 @@ mod tests {
             },
             conditions: None,
             to_vertex_type: VertexType::Sink,
+            ordered_processing_enabled: false,
         };
 
         let mut manager =

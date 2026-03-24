@@ -6,3 +6,6 @@ pub mod server_info;
 
 /// ISB utilities.
 pub mod isb;
+
+/// Generic Key-Value store traits and implementations.
+pub mod kv;

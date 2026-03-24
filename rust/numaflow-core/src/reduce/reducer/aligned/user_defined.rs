@@ -284,7 +284,7 @@ mod tests {
     use super::*;
     use crate::message::{MessageID, StringOffset};
     use crate::reduce::reducer::aligned::windower::{
-        AlignedWindowOperation, Window, window_pnf_slot,
+        AlignedWindowOperation, Window, window_to_pnf_slot,
     };
     use crate::shared::grpc::create_rpc_channel;
 
@@ -410,7 +410,7 @@ mod tests {
                     message: messages.first().expect("Expected message 0").clone(),
                     window: window.clone(),
                 },
-                pnf_slot: window_pnf_slot(&window),
+                pnf_slot: window_to_pnf_slot(&window),
             },
             // Append messages
             AlignedWindowMessage {
@@ -418,14 +418,14 @@ mod tests {
                     message: messages.get(1).expect("Expected message 1").clone(),
                     window: window.clone(),
                 },
-                pnf_slot: window_pnf_slot(&window),
+                pnf_slot: window_to_pnf_slot(&window),
             },
             AlignedWindowMessage {
                 operation: AlignedWindowOperation::Append {
                     message: messages.get(2).expect("Expected message 2").clone(),
                     window: window.clone(),
                 },
-                pnf_slot: window_pnf_slot(&window),
+                pnf_slot: window_to_pnf_slot(&window),
             },
         ];
 
@@ -602,7 +602,7 @@ mod tests {
                         .clone(),
                     window: window.clone(),
                 },
-                pnf_slot: window_pnf_slot(&window),
+                pnf_slot: window_to_pnf_slot(&window),
             },
             // Append message for key1
             AlignedWindowMessage {
@@ -613,7 +613,7 @@ mod tests {
                         .clone(),
                     window: window.clone(),
                 },
-                pnf_slot: window_pnf_slot(&window),
+                pnf_slot: window_to_pnf_slot(&window),
             },
             // Open window for key2
             AlignedWindowMessage {
@@ -624,7 +624,7 @@ mod tests {
                         .clone(),
                     window: window.clone(),
                 },
-                pnf_slot: window_pnf_slot(&window),
+                pnf_slot: window_to_pnf_slot(&window),
             },
             // Append messages for key2
             AlignedWindowMessage {
@@ -635,7 +635,7 @@ mod tests {
                         .clone(),
                     window: window.clone(),
                 },
-                pnf_slot: window_pnf_slot(&window),
+                pnf_slot: window_to_pnf_slot(&window),
             },
             AlignedWindowMessage {
                 operation: AlignedWindowOperation::Append {
@@ -645,7 +645,7 @@ mod tests {
                         .clone(),
                     window: window.clone(),
                 },
-                pnf_slot: window_pnf_slot(&window),
+                pnf_slot: window_to_pnf_slot(&window),
             },
         ];
 
@@ -800,7 +800,7 @@ mod tests {
                     message: messages.first().expect("Expected message 0").clone(),
                     window: window.clone(),
                 },
-                pnf_slot: window_pnf_slot(&window),
+                pnf_slot: window_to_pnf_slot(&window),
             },
             // Append messages
             AlignedWindowMessage {
@@ -808,14 +808,14 @@ mod tests {
                     message: messages.get(1).expect("Expected message 1").clone(),
                     window: window.clone(),
                 },
-                pnf_slot: window_pnf_slot(&window),
+                pnf_slot: window_to_pnf_slot(&window),
             },
             AlignedWindowMessage {
                 operation: AlignedWindowOperation::Append {
                     message: messages.get(2).expect("Expected message 2").clone(),
                     window: window.clone(),
                 },
-                pnf_slot: window_pnf_slot(&window),
+                pnf_slot: window_to_pnf_slot(&window),
             },
         ];
 

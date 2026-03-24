@@ -20,7 +20,7 @@ use crate::metrics::{
     pipeline_metrics,
 };
 use crate::pipeline::isb::error::ISBError;
-use crate::pipeline::isb::{ISBWriter, WriteError, WriteResult};
+use crate::pipeline::isb::{ISBWriter, PendingWrite, WriteError, WriteResult};
 use crate::shared::forward;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::WatermarkHandle;
@@ -33,10 +33,10 @@ type MetricLabels = Arc<Vec<(String, String)>>;
 type StreamMetricLabelsMap = Arc<HashMap<&'static str, MetricLabels>>;
 
 /// Result of a successful async write operation to a stream.
-/// Contains the pending write (PAF) that needs to be resolved.
-struct PendingWriteResult<C: NumaflowTypeConfig> {
+/// Contains the pending write (boxed future) that needs to be awaited.
+struct PendingWriteResult {
     stream: Stream,
-    paf: <C::ISBWriter as ISBWriter>::PendingWrite,
+    paf: PendingWrite,
     write_start: Instant,
 }
 
@@ -118,7 +118,6 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
 }
 
 /// Components needed to create an ISBWriterOrchestrator.
-#[derive(Clone)]
 pub(crate) struct ISBWriterOrchestratorComponents<C: NumaflowTypeConfig> {
     pub config: Vec<ToVertexConfig>,
     pub writers: HashMap<&'static str, C::ISBWriter>,
@@ -130,7 +129,6 @@ pub(crate) struct ISBWriterOrchestratorComponents<C: NumaflowTypeConfig> {
 /// ISBWriterOrchestrator orchestrates writing to multiple ISB streams.
 /// It manages multiple ISBWriters (one per stream), handles message routing,
 /// watermark publishing, and tracker operations.
-#[derive(Clone)]
 pub(crate) struct ISBWriterOrchestrator<C: NumaflowTypeConfig> {
     config: Arc<Vec<ToVertexConfig>>,
     /// HashMap: stream_name -> ISBWriter
@@ -142,6 +140,22 @@ pub(crate) struct ISBWriterOrchestrator<C: NumaflowTypeConfig> {
     /// Cached metric labels per stream to avoid repeated allocations
     /// HashMap: stream_name -> labels
     stream_metric_labels: StreamMetricLabelsMap,
+}
+
+/// Manual Clone implementation for ISBWriterOrchestrator.
+/// Since all fields are either Arc-wrapped or Clone types, cloning is cheap.
+impl<C: NumaflowTypeConfig> Clone for ISBWriterOrchestrator<C> {
+    fn clone(&self) -> Self {
+        Self {
+            config: Arc::clone(&self.config),
+            writers: Arc::clone(&self.writers),
+            watermark_handle: self.watermark_handle.clone(),
+            sem: Arc::clone(&self.sem),
+            paf_concurrency: self.paf_concurrency,
+            vertex_type: self.vertex_type,
+            stream_metric_labels: Arc::clone(&self.stream_metric_labels),
+        }
+    }
 }
 
 impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
@@ -219,7 +233,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
         &self,
         message: &Message,
         cln_token: CancellationToken,
-    ) -> Vec<PendingWriteResult<C>> {
+    ) -> Vec<PendingWriteResult> {
         let mut results = vec![];
 
         for vertex in &*self.config {
@@ -258,13 +272,21 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
     }
 
     /// Determines the target stream for a message based on vertex configuration.
+    /// When `ordered_processing_enabled` is true and the target vertex is Map or Sink,
+    /// uses keys for shuffling to ensure messages with the same keys land on the same partition.
     fn determine_target_stream(message: &Message, vertex: &ToVertexConfig) -> Stream {
-        // If the to_vertex is a reduce vertex, use the keys as the shuffle key
+        // Determine the shuffle key based on vertex type and ordered processing setting
         let shuffle_key = match vertex.to_vertex_type {
-            VertexType::MapUDF | VertexType::Sink | VertexType::Source => {
-                String::from_utf8_lossy(&message.id.offset).to_string()
-            }
+            // For ReduceUDF, always use keys for shuffling (existing behavior)
             VertexType::ReduceUDF => message.keys.join(":"),
+            // For Map/Sink/Source, use keys if ordered processing is enabled, otherwise use offset
+            VertexType::MapUDF | VertexType::Sink | VertexType::Source => {
+                if vertex.ordered_processing_enabled {
+                    message.keys.join(":")
+                } else {
+                    String::from_utf8_lossy(&message.id.offset).to_string()
+                }
+            }
         };
 
         // Determine partition
@@ -288,7 +310,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
         stream: &Stream,
         buffer_full_strategy: BufferFullStrategy,
         cln_token: CancellationToken,
-    ) -> Option<PendingWriteResult<C>> {
+    ) -> Option<PendingWriteResult> {
         let writer = self
             .writers
             .get(stream.name)
@@ -417,20 +439,15 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
     /// Resolves all PAFs and returns the offsets for successful writes.
     async fn resolve_all_pafs(
         &self,
-        write_results: Vec<PendingWriteResult<C>>,
+        write_results: Vec<PendingWriteResult>,
         message: &Message,
         cln_token: CancellationToken,
     ) -> Vec<(Stream, Offset)> {
         let mut offsets = Vec::new();
 
         for write_result in write_results {
-            let writer = self
-                .writers
-                .get(write_result.stream.name)
-                .expect("writer should exist for stream");
-
-            // Try to resolve the PAF using the trait's resolve method
-            let resolve_result = match writer.resolve(write_result.paf).await {
+            // The paf is a boxed future - await it directly
+            let resolve_result = match write_result.paf.await {
                 Ok(result) => Ok(result),
                 Err(e) => {
                     error!(
@@ -439,6 +456,10 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
                     );
                     Self::publish_paf_error_metrics(write_result.stream.name, &e);
                     // Fallback to write with retry loop
+                    let writer = self
+                        .writers
+                        .get(write_result.stream.name)
+                        .expect("writer should exist for stream");
                     self.write_with_retry(writer, message.clone(), cln_token.clone())
                         .await
                 }
@@ -643,6 +664,7 @@ mod tests {
                     writer_config,
                     conditions: None,
                     to_vertex_type: VertexType::Sink,
+                    ordered_processing_enabled: false,
                 }],
                 writers,
                 paf_concurrency: 100,
@@ -753,6 +775,7 @@ mod tests {
                     writer_config,
                     conditions: None,
                     to_vertex_type: VertexType::Sink,
+                    ordered_processing_enabled: false,
                 }],
                 writers,
                 paf_concurrency: 100,
@@ -897,6 +920,7 @@ mod tests {
                             }),
                         })),
                         to_vertex_type: VertexType::Sink,
+                        ordered_processing_enabled: false,
                     },
                     ToVertexConfig {
                         name: "vertex2",
@@ -909,6 +933,7 @@ mod tests {
                             }),
                         })),
                         to_vertex_type: VertexType::Sink,
+                        ordered_processing_enabled: false,
                     },
                     ToVertexConfig {
                         name: "vertex3",
@@ -916,6 +941,7 @@ mod tests {
                         writer_config: vertex3_writer_config,
                         conditions: None, // No conditions, always forward
                         to_vertex_type: VertexType::Sink,
+                        ordered_processing_enabled: false,
                     },
                 ],
                 writers,
@@ -1015,5 +1041,1007 @@ mod tests {
         }
 
         (streams, consumers)
+    }
+}
+
+// SimpleBuffer Integration Tests
+// These tests use SimpleBuffer to test ISBWriterOrchestrator without a distributed ISB.
+#[cfg(test)]
+mod simple_buffer_tests {
+    use super::*;
+    use crate::config::pipeline::isb::BufferWriterConfig;
+    use crate::message::{AckHandle, IntOffset, MessageID, ReadAck};
+    use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
+    use bytes::Bytes;
+    use chrono::Utc;
+    use numaflow_models::models::{ForwardConditions, TagConditions};
+    use numaflow_testing::simplebuffer::SimpleBuffer;
+    use tokio::sync::mpsc;
+
+    /// Helper to create a test message with an ack handle
+    fn create_test_message(
+        id: i64,
+        value: &str,
+        tags: Option<Vec<&str>>,
+    ) -> (Message, tokio::sync::oneshot::Receiver<ReadAck>) {
+        let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+        let message = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec![format!("key-{}", id)]),
+            tags: tags.map(|t| Arc::from(t.into_iter().map(String::from).collect::<Vec<_>>())),
+            value: Bytes::from(value.to_string()),
+            offset: Offset::Int(IntOffset::new(id, 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "test".into(),
+                index: id as i32,
+                offset: format!("offset-{}", id).into(),
+            },
+            headers: Arc::new(HashMap::new()),
+            metadata: None,
+            is_late: false,
+            ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+        };
+        (message, ack_rx)
+    }
+
+    /// Helper to create ISBWriterOrchestrator with a single SimpleBuffer
+    fn create_single_stream_orchestrator(
+        adapter: &SimpleBufferAdapter,
+        stream_name: &'static str,
+        buffer_full_strategy: BufferFullStrategy,
+        paf_concurrency: usize,
+    ) -> (ISBWriterOrchestrator<WithSimpleBuffer>, CancellationToken) {
+        let stream = Stream::new(stream_name, "test-vertex", 0);
+        let cancel = CancellationToken::new();
+
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            buffer_full_strategy,
+            ..Default::default()
+        };
+
+        let mut writers = HashMap::new();
+        writers.insert(stream_name, adapter.writer());
+
+        let components = ISBWriterOrchestratorComponents {
+            config: vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
+            }],
+            writers,
+            paf_concurrency,
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+        };
+
+        let orchestrator = ISBWriterOrchestrator::<WithSimpleBuffer>::new(components);
+        (orchestrator, cancel)
+    }
+
+    // ==================== Happy Path Tests ====================
+
+    /// Test: Single message write completes successfully
+    #[tokio::test]
+    async fn test_streaming_write_single_message() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+        drop(tx);
+
+        // Wait for ack
+        let ack = ack_rx.await.unwrap();
+        assert_eq!(ack, ReadAck::Ack);
+
+        handle.await.unwrap().unwrap();
+
+        // Verify message was written to buffer
+        assert_eq!(adapter.pending_count(), 1);
+    }
+
+    /// Test: Multiple messages write completes successfully
+    #[tokio::test]
+    async fn test_streaming_write_multiple_messages() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(20);
+        let messages_stream = ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let mut ack_rxs = vec![];
+        for i in 0..10 {
+            let (msg, ack_rx) = create_test_message(i, &format!("message-{}", i), None);
+            ack_rxs.push(ack_rx);
+            tx.send(msg).await.unwrap();
+        }
+        drop(tx);
+
+        // All messages should be acked
+        for ack_rx in ack_rxs {
+            let ack = ack_rx.await.unwrap();
+            assert_eq!(ack, ReadAck::Ack);
+        }
+
+        handle.await.unwrap().unwrap();
+        assert_eq!(adapter.pending_count(), 10);
+    }
+
+    // ==================== Buffer Full Tests ====================
+
+    /// Test: Buffer full with DiscardLatest strategy drops message
+    #[tokio::test]
+    async fn test_buffer_full_with_discard_strategy() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Force buffer full
+        adapter.error_injector().set_buffer_full(true);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::DiscardLatest,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+        drop(tx);
+
+        // Message should still be acked (dropped messages are considered processed)
+        let ack = ack_rx.await.unwrap();
+        assert_eq!(ack, ReadAck::Ack);
+
+        handle.await.unwrap().unwrap();
+
+        // No messages should be in buffer (was dropped)
+        assert_eq!(adapter.pending_count(), 0);
+    }
+
+    /// Test: Buffer full with RetryUntilSuccess strategy retries until buffer available
+    #[tokio::test]
+    async fn test_buffer_full_with_retry_strategy() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Force buffer full initially
+        adapter.error_injector().set_buffer_full(true);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+
+        // Let it retry a few times, then unblock (this sleep is to simulate some retries, won't
+        // affect the test outcome)
+        sleep(Duration::from_millis(50)).await;
+        adapter.error_injector().set_buffer_full(false);
+
+        drop(tx);
+
+        // Should eventually succeed
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
+            .await
+            .expect("Should receive ack")
+            .unwrap();
+        assert_eq!(ack, ReadAck::Ack);
+
+        handle.await.unwrap().unwrap();
+        // So pending_count() == 1 is correct - one message is in the buffer, and no consumer has
+        // read it.
+        assert_eq!(adapter.pending_count(), 1);
+    }
+
+    // ==================== Write Failure Tests ====================
+
+    /// Test: Write failures are retried until success
+    #[tokio::test]
+    async fn test_write_failed_retries_until_success() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Fail first 3 writes
+        adapter.error_injector().fail_writes(3);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+        drop(tx);
+
+        // Should eventually succeed after retries
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
+            .await
+            .expect("Should receive ack")
+            .unwrap();
+        assert_eq!(ack, ReadAck::Ack);
+
+        handle.await.unwrap().unwrap();
+        assert_eq!(adapter.pending_count(), 1);
+    }
+
+    /// Test: Write failures with cancellation stops retry loop
+    #[tokio::test]
+    async fn test_write_failed_with_cancellation() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Force buffer full forever (will keep retrying)
+        adapter.error_injector().set_buffer_full(true);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+
+        // Let it try a few times (doesn't affect test outcome)
+        sleep(Duration::from_millis(50)).await;
+
+        // Cancel to stop retries
+        cancel.cancel();
+        drop(tx);
+
+        // Message should be acked (we exit the loop on cancel)
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
+            .await
+            .expect("Should receive ack")
+            .unwrap();
+        assert_eq!(ack, ReadAck::Ack);
+
+        handle.await.unwrap().unwrap();
+        assert_eq!(adapter.pending_count(), 0);
+    }
+
+    // ==================== PAF Resolution Failure Tests ====================
+
+    /// Test: PAF resolution failure triggers write_with_retry fallback
+    #[tokio::test]
+    async fn test_paf_resolution_failure_triggers_write_retry() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Fail first resolve, but write should succeed on retry
+        adapter.error_injector().fail_resolves(1);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+        drop(tx);
+
+        // Should succeed via fallback write
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
+            .await
+            .expect("Should receive ack")
+            .unwrap();
+        assert_eq!(ack, ReadAck::Ack);
+
+        handle.await.unwrap().unwrap();
+        assert_eq!(adapter.pending_count(), 1);
+    }
+
+    /// Test: When resolve fails but is still retrying when cancellation happens,
+    /// the message still gets processed correctly.
+    ///
+    /// This tests that when PAF resolution fails and triggers write_with_retry,
+    /// if the retry eventually succeeds (as duplicate detection), the message is ACK'd.
+    /// Note: Testing the NAK path where write_with_retry fails is non-trivial with
+    /// SimpleBuffer because async_write and write share the same error injection.
+    #[tokio::test]
+    async fn test_paf_resolution_failure_with_retry_succeeds_as_duplicate() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Fail only the first resolve - this triggers write_with_retry fallback
+        // The fallback write will succeed because the message is already in the buffer
+        // (written by async_write), so it will be detected as a duplicate.
+        adapter.error_injector().fail_resolves(1);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+
+        // Message should succeed via duplicate detection in fallback write
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
+            .await
+            .expect("Timeout future should not error out");
+        assert!(ack.is_ok(), "Should receive ack before timeout");
+        assert_eq!(ack.expect("Should receive an ack"), ReadAck::Ack);
+
+        cancel.cancel();
+        drop(tx);
+
+        handle.await.unwrap().unwrap();
+        assert_eq!(adapter.pending_count(), 1);
+    }
+
+    // ==================== Dropped Message Tests ====================
+
+    /// Test: Messages with DROP tag are not written to buffer
+    #[tokio::test]
+    async fn test_dropped_message_not_written() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        // Send a message with DROP tag
+        let (msg, ack_rx) = create_test_message(1, "hello", Some(vec!["U+005C__DROP__"]));
+        tx.send(msg).await.unwrap();
+        drop(tx);
+
+        // Should be acked (drop is considered successful processing)
+        let ack = ack_rx.await.unwrap();
+        assert_eq!(ack, ReadAck::Ack);
+
+        handle.await.unwrap().unwrap();
+
+        // Message should NOT be in buffer
+        assert_eq!(adapter.pending_count(), 0);
+    }
+
+    // ==================== Duplicate Detection Tests ====================
+
+    /// Test: Duplicate messages are detected
+    #[tokio::test]
+    async fn test_duplicate_message_detection() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        // Send the same message twice (same ID)
+        let (msg1, ack_rx1) = create_test_message(1, "hello", None);
+        let (msg2, ack_rx2) = create_test_message(1, "hello", None); // Same ID!
+
+        tx.send(msg1).await.unwrap();
+        // Wait for first to complete
+        let ack1 = ack_rx1.await.unwrap();
+        assert_eq!(ack1, ReadAck::Ack);
+
+        tx.send(msg2).await.unwrap();
+        drop(tx);
+
+        // Second should also be acked (duplicate is still successful)
+        let ack2 = ack_rx2.await.unwrap();
+        assert_eq!(ack2, ReadAck::Ack);
+
+        handle.await.unwrap().unwrap();
+
+        // Only 1 message should be in buffer (duplicate was detected)
+        assert_eq!(adapter.pending_count(), 1);
+    }
+
+    // ==================== Graceful Shutdown Tests ====================
+
+    /// Test: wait_for_paf_resolvers blocks until all PAF resolutions complete
+    #[tokio::test]
+    async fn test_graceful_shutdown_waits_for_paf_resolvers() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Add resolve latency to make the wait observable
+        adapter.error_injector().set_resolve_latency(10);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let mut ack_rxs = vec![];
+        for i in 0..3 {
+            let (msg, ack_rx) = create_test_message(i, &format!("message-{}", i), None);
+            ack_rxs.push(ack_rx);
+            tx.send(msg).await.unwrap();
+        }
+        drop(tx); // Close the channel to signal end of stream
+
+        // Wait for all acks
+        for ack_rx in ack_rxs {
+            let ack = tokio::time::timeout(Duration::from_secs(5), ack_rx)
+                .await
+                .expect("Should receive ack")
+                .unwrap();
+            assert_eq!(ack, ReadAck::Ack);
+        }
+
+        // Handle should complete cleanly (wait_for_paf_resolvers ensures all done)
+        tokio::time::timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("Handle should complete")
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(adapter.pending_count(), 3);
+    }
+
+    /// Test: Multiple messages with paf_concurrency=1 are processed sequentially,
+    /// and the semaphore properly gates concurrent PAF resolutions.
+    #[tokio::test]
+    async fn test_paf_concurrency_one_processes_sequentially() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        // Add resolve latency to make timing observable
+        adapter.error_injector().set_resolve_latency(10);
+
+        let (orchestrator, cancel) = create_single_stream_orchestrator(
+            &adapter,
+            "test-buffer",
+            BufferFullStrategy::RetryUntilSuccess,
+            1, // paf_concurrency = 1
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let start = std::time::Instant::now();
+
+        // Send 3 messages
+        let mut ack_rxs = vec![];
+        for i in 0..3 {
+            let (msg, ack_rx) = create_test_message(i, &format!("msg-{}", i), None);
+            ack_rxs.push(ack_rx);
+            tx.send(msg).await.unwrap();
+        }
+        drop(tx);
+
+        // All should complete
+        for ack_rx in ack_rxs {
+            let ack = tokio::time::timeout(Duration::from_secs(5), ack_rx)
+                .await
+                .expect("Should receive ack")
+                .unwrap();
+            assert_eq!(ack, ReadAck::Ack);
+        }
+
+        handle.await.unwrap().unwrap();
+
+        // With paf_concurrency=1 and 10ms resolve latency per message,
+        // 3 messages should take at least 30ms (sequential processing)
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed.as_millis() >= 30,
+            "Expected sequential processing (>=30ms), but took {}ms",
+            elapsed.as_millis()
+        );
+
+        assert_eq!(adapter.pending_count(), 3);
+    }
+
+    // ==================== Multi-Stream Tests ====================
+
+    /// Helper to create ISBWriterOrchestrator with multiple downstream vertices.
+    /// Each vertex has its own stream with independent error injection.
+    /// This allows testing scenarios where a message is written to multiple streams
+    /// (one per downstream vertex).
+    fn create_multi_vertex_orchestrator(
+        adapters: Vec<(
+            &'static str,
+            &SimpleBufferAdapter,
+            Option<Box<ForwardConditions>>,
+        )>,
+        buffer_full_strategy: BufferFullStrategy,
+        paf_concurrency: usize,
+    ) -> (ISBWriterOrchestrator<WithSimpleBuffer>, CancellationToken) {
+        let cancel = CancellationToken::new();
+
+        let mut writers = HashMap::new();
+        let mut vertex_configs = vec![];
+
+        for (idx, (stream_name, adapter, condition)) in adapters.iter().enumerate() {
+            let vertex_name: &'static str = Box::leak(format!("vertex-{}", idx).into_boxed_str());
+            let stream = Stream::new(stream_name, vertex_name, 0);
+            writers.insert(*stream_name, adapter.writer());
+
+            let writer_config = BufferWriterConfig {
+                streams: vec![stream],
+                buffer_full_strategy: buffer_full_strategy.clone(),
+                ..Default::default()
+            };
+
+            vertex_configs.push(ToVertexConfig {
+                name: Box::leak(format!("vertex-{}", idx).into_boxed_str()),
+                partitions: 1,
+                writer_config,
+                conditions: condition.clone(),
+                to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
+            });
+        }
+
+        let components = ISBWriterOrchestratorComponents {
+            config: vertex_configs,
+            writers,
+            paf_concurrency,
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+        };
+
+        let orchestrator = ISBWriterOrchestrator::<WithSimpleBuffer>::new(components);
+        (orchestrator, cancel)
+    }
+
+    /// Test: When writing to multiple downstream vertices and one vertex's PAF resolution fails
+    /// (and retry also fails due to cancellation), the message should be NAK'd.
+    ///
+    /// This tests the `resolved_offsets.len() != n` path in resolve_and_finalize.
+    #[tokio::test]
+    async fn test_multi_vertex_partial_failure_naks_message() {
+        // Create two separate buffers with independent error injection
+        let adapter1 = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "stream-1"));
+        let adapter2 = SimpleBufferAdapter::new(SimpleBuffer::new(100, 1, "stream-2"));
+
+        // Stream 2 configuration:
+        // 1. Initial write succeeds (skip 1 write before failing)
+        // 2. Resolve fails (fail_resolves(1))
+        // 3. Retry writes fail (fail all writes after skipping the first one)
+        // 4. Cancellation will cause write_with_retry to exit with error
+        adapter2.error_injector().fail_resolves(1);
+        adapter2
+            .error_injector()
+            .skip_writes_then_fail(1, usize::MAX);
+
+        let (orchestrator, cancel) = create_multi_vertex_orchestrator(
+            vec![("stream-1", &adapter1, None), ("stream-2", &adapter2, None)],
+            BufferFullStrategy::RetryUntilSuccess,
+            10,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+
+        // Cancel after a short delay to allow the initial write and resolve to happen,
+        // then cause the retry loop to exit with error
+        let cancel_clone = cancel.clone();
+        tokio::spawn(async move {
+            // Wait for the resolve to fail and retry to start
+            sleep(Duration::from_millis(50)).await;
+            cancel_clone.cancel();
+        });
+
+        // The message should be NAK'd because stream-2's retry fails due to cancellation
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
+            .await
+            .expect("Should receive ack response")
+            .unwrap();
+        assert_eq!(ack, ReadAck::Nak);
+
+        drop(tx);
+
+        handle.await.unwrap().unwrap();
+
+        // Stream 1 should have the message (write succeeded)
+        assert_eq!(adapter1.pending_count(), 1);
+        // Stream 2 should also have the message from initial write (before resolve failed)
+        assert_eq!(adapter2.pending_count(), 1);
+    }
+
+    /// Test: Semaphore permit is properly released even when PAF resolution fails,
+    /// allowing subsequent messages to be processed.
+    ///
+    /// This test differs from `test_multi_vertex_partial_failure_naks_message` in that:
+    /// - It uses `paf_concurrency = 1` (vs 10) to make semaphore behavior critical
+    /// - It sends a **second message after the first fails** to explicitly verify
+    ///   the semaphore permit was released
+    ///
+    /// With `paf_concurrency = 1`, if the permit wasn't released after the first
+    /// message's failure, the second message would never be processed (deadlock).
+    /// The first test only verifies NAK behavior; this test verifies resource cleanup.
+    #[tokio::test]
+    async fn test_semaphore_released_on_paf_failure() {
+        let adapter1 = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "stream-1"));
+        let adapter2 = SimpleBufferAdapter::new(SimpleBuffer::new(100, 1, "stream-2"));
+
+        // First message: stream-2 will fail resolve only (no write failures)
+        // The resolve failure will trigger write_with_retry, which will succeed
+        // (detecting the duplicate from the initial async_write).
+        // The key is that the first message's PAF resolution "fails" initially.
+        adapter2.error_injector().fail_resolves(1);
+
+        // Use paf_concurrency = 1 to ensure sequential processing
+        // This makes semaphore release critical - if not released, second message blocks forever
+        let (orchestrator, cancel) = create_multi_vertex_orchestrator(
+            vec![("stream-1", &adapter1, None), ("stream-2", &adapter2, None)],
+            BufferFullStrategy::RetryUntilSuccess,
+            1,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        // Send first message (resolve will fail on stream-2, but retry write succeeds as duplicate)
+        let (msg1, ack_rx1) = create_test_message(1, "first", None);
+        tx.send(msg1).await.unwrap();
+
+        // First message should be ACK'd (resolve failed but retry succeeded via duplicate detection)
+        let ack1 = tokio::time::timeout(Duration::from_secs(2), ack_rx1)
+            .await
+            .expect("Should receive ack response for msg1")
+            .unwrap();
+        assert_eq!(ack1, ReadAck::Ack);
+
+        // Send second message - this is the key assertion!
+        // If the semaphore permit wasn't released after msg1's PAF resolution completed,
+        // this message would never be processed (blocked waiting for permit)
+        let (msg2, ack_rx2) = create_test_message(2, "second", None);
+        tx.send(msg2).await.unwrap();
+
+        // Second message should be ACK'd (proves semaphore was released)
+        let ack2 = tokio::time::timeout(Duration::from_secs(2), ack_rx2)
+            .await
+            .expect("Should receive ack response for msg2 - semaphore should have been released")
+            .unwrap();
+        assert_eq!(ack2, ReadAck::Ack);
+
+        drop(tx);
+        handle.await.unwrap().unwrap();
+
+        // Both messages should have been written to both streams
+        // (msg1's retry detected duplicate, so still only 1 entry per message)
+        assert_eq!(adapter1.pending_count(), 2);
+        assert_eq!(adapter2.pending_count(), 2);
+    }
+
+    /// Test: Conditional forwarding based on tag values.
+    ///
+    /// This test verifies that messages are forwarded to the correct streams based on tag values.
+    #[tokio::test]
+    async fn test_conditional_forwarding() {
+        let adapter1 = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "stream-1"));
+        let adapter2 = SimpleBufferAdapter::new(SimpleBuffer::new(100, 1, "stream-2"));
+
+        let condition1: Option<Box<ForwardConditions>> = Some(Box::new(ForwardConditions {
+            tags: Box::new(TagConditions {
+                operator: Some(String::from("or")),
+                values: vec![String::from("tag1")],
+            }),
+        }));
+
+        let condition2: Option<Box<ForwardConditions>> = Some(Box::new(ForwardConditions {
+            tags: Box::new(TagConditions {
+                operator: Some(String::from("or")),
+                values: vec![String::from("tag2")],
+            }),
+        }));
+
+        // Use paf_concurrency = 1 to ensure sequential processing
+        // This makes semaphore release critical - if not released, second message blocks forever
+        let (orchestrator, cancel) = create_multi_vertex_orchestrator(
+            vec![
+                ("stream-1", &adapter1, condition1),
+                ("stream-2", &adapter2, condition2),
+            ],
+            BufferFullStrategy::RetryUntilSuccess,
+            1,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        let messages_stream = ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg1, ack_rx1) = create_test_message(1, "first", Some(vec!["tag1"]));
+        tx.send(msg1).await.unwrap();
+
+        let (msg2, ack_rx2) = create_test_message(2, "second", Some(vec!["tag2"]));
+        tx.send(msg2).await.unwrap();
+
+        let ack1 = tokio::time::timeout(Duration::from_secs(2), ack_rx1)
+            .await
+            .expect("Should receive ack response for msg1")
+            .unwrap();
+        assert_eq!(ack1, ReadAck::Ack);
+
+        let ack2 = tokio::time::timeout(Duration::from_secs(2), ack_rx2)
+            .await
+            .expect("Should receive ack response for msg2")
+            .unwrap();
+        assert_eq!(ack2, ReadAck::Ack);
+
+        drop(tx);
+        handle.await.unwrap().unwrap();
+
+        // Only one message should have been written to each stream
+        assert_eq!(adapter1.pending_count(), 1);
+        assert_eq!(adapter2.pending_count(), 1);
+    }
+
+    /// Helper to create a message with specific keys and offset.
+    fn create_message_with_keys_and_offset(keys: Vec<&str>, offset: &str) -> Message {
+        Message {
+            typ: Default::default(),
+            keys: Arc::from(keys.into_iter().map(String::from).collect::<Vec<_>>()),
+            tags: None,
+            value: Bytes::from("test"),
+            offset: Offset::Int(IntOffset::new(0, 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "test".into(),
+                index: 0,
+                offset: Bytes::from(offset.to_string()),
+            },
+            headers: Arc::new(HashMap::new()),
+            metadata: None,
+            is_late: false,
+            ack_handle: None,
+        }
+    }
+
+    /// Helper to create a ToVertexConfig for routing tests.
+    fn create_vertex_config(
+        vertex_type: VertexType,
+        ordered: bool,
+        num_partitions: u16,
+    ) -> ToVertexConfig {
+        let streams: Vec<Stream> = (0..num_partitions)
+            .map(|i| {
+                let name: &'static str = Box::leak(format!("stream-{}", i).into_boxed_str());
+                Stream::new(name, "test-vertex", i)
+            })
+            .collect();
+        ToVertexConfig {
+            name: "test-vertex",
+            partitions: num_partitions,
+            writer_config: BufferWriterConfig {
+                streams,
+                ..Default::default()
+            },
+            conditions: None,
+            to_vertex_type: vertex_type,
+            ordered_processing_enabled: ordered,
+        }
+    }
+
+    #[test]
+    fn test_ordered_mode_routes_by_keys() {
+        // Messages with the same keys but different offsets should land on the same stream
+        // when ordered processing is enabled.
+        let vertex = create_vertex_config(VertexType::MapUDF, true, 3);
+        let msg1 = create_message_with_keys_and_offset(vec!["user-42"], "offset-1");
+        let msg2 = create_message_with_keys_and_offset(vec!["user-42"], "offset-999");
+
+        let stream1 =
+            ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(&msg1, &vertex);
+        let stream2 =
+            ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(&msg2, &vertex);
+
+        assert_eq!(
+            stream1, stream2,
+            "Same keys must route to the same stream in ordered mode"
+        );
+
+        // Also verify for Sink vertex type
+        let sink_vertex = create_vertex_config(VertexType::Sink, true, 3);
+        let s1 =
+            ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(&msg1, &sink_vertex);
+        let s2 =
+            ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(&msg2, &sink_vertex);
+        assert_eq!(
+            s1, s2,
+            "Same keys must route to the same stream in ordered mode for Sink"
+        );
+    }
+
+    #[test]
+    fn test_ordered_mode_multi_key_messages() {
+        // Multi-key messages should use keys.join(":") as shuffle key.
+        // ["region", "us-east"] should hash differently than ["region:us-east"].
+        let vertex = create_vertex_config(VertexType::MapUDF, true, 16);
+
+        let msg_multi = create_message_with_keys_and_offset(vec!["region", "us-east"], "offset-1");
+        let msg_single = create_message_with_keys_and_offset(vec!["region:us-east"], "offset-1");
+
+        let stream_multi =
+            ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(&msg_multi, &vertex);
+        let stream_single = ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(
+            &msg_single,
+            &vertex,
+        );
+
+        // The join of ["region", "us-east"] is "region:us-east", which equals the single key
+        // "region:us-east". So they should hash to the same partition.
+        assert_eq!(
+            stream_multi, stream_single,
+            "Multi-key join should produce the same shuffle key as the equivalent single key"
+        );
+
+        // Now verify a genuinely different multi-key produces a different shuffle key
+        // (with enough partitions, this should differ for most key combinations)
+        let msg_different =
+            create_message_with_keys_and_offset(vec!["region", "eu-west"], "offset-1");
+        let stream_different = ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(
+            &msg_different,
+            &vertex,
+        );
+
+        // Two messages with the same multi-key should always match
+        let msg_multi_again =
+            create_message_with_keys_and_offset(vec!["region", "us-east"], "offset-2");
+        let stream_multi_again = ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(
+            &msg_multi_again,
+            &vertex,
+        );
+        assert_eq!(
+            stream_multi, stream_multi_again,
+            "Same multi-key must always route to the same stream"
+        );
+
+        // stream_different may or may not equal stream_multi depending on hash collisions,
+        // so we just verify the function doesn't panic with different multi-keys.
+        let _ = stream_different;
+    }
+
+    #[test]
+    fn test_single_partition_always_returns_partition_zero() {
+        // With a single partition, all messages must route to partition 0
+        // regardless of keys, offset, or ordered mode.
+        let ordered_vertex = create_vertex_config(VertexType::MapUDF, true, 1);
+        let unordered_vertex = create_vertex_config(VertexType::MapUDF, false, 1);
+
+        for key in ["a", "b", "c", "user-123", "xyz"] {
+            let msg = create_message_with_keys_and_offset(vec![key], &format!("offset-{}", key));
+
+            let stream_ordered = ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(
+                &msg,
+                &ordered_vertex,
+            );
+            let stream_unordered =
+                ISBWriterOrchestrator::<WithSimpleBuffer>::determine_target_stream(
+                    &msg,
+                    &unordered_vertex,
+                );
+
+            assert_eq!(
+                stream_ordered.partition, 0,
+                "Single partition ordered must always be partition 0"
+            );
+            assert_eq!(
+                stream_unordered.partition, 0,
+                "Single partition unordered must always be partition 0"
+            );
+        }
     }
 }

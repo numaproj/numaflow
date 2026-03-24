@@ -227,7 +227,8 @@ const FiltersDropdown = ({
     <Box
       className={"filters-dropdown-container"}
       sx={{
-        border: isFilterFocused ? "0.2rem solid #0077c5" : "0.1rem solid black",
+        border: isFilterFocused ? "0.2rem solid var(--accent-primary)" : "0.1rem solid var(--border-primary)",
+        backgroundColor: "transparent",
       }}
       onFocus={() => setFilterFocused(true)}
       onBlur={() => setFilterFocused(false)}
@@ -251,7 +252,7 @@ const FiltersDropdown = ({
 
       <Button
         variant="outlined"
-        startIcon={<AddIcon sx={{ color: "#0077C5" }} />}
+        startIcon={<AddIcon sx={{ color: "var(--accent-primary)" }} />}
         onClick={handleClick}
         className={"filters-dropdown-add-filter-button"}
       >

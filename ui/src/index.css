@@ -125,7 +125,6 @@ code {
 [data-theme="dark"] .pipeline-card-icon,
 [data-theme="dark"] .summary-page-layout-collapse-button,
 [data-theme="dark"] .summary-page-layout-expand-button,
-[data-theme="dark"] .vertex-details-header-icon,
 [data-theme="dark"] .close-modal-warn-icon {
   filter: invert(1) brightness(2);
 }
@@ -144,4 +143,12 @@ code {
 [data-theme="dark"] .MuiToggleButton-root.Mui-selected {
   color: var(--text-primary);
   background-color: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .MuiInputLabel-root {
+  color: var(--text-tertiary);
+}
+
+[data-theme="dark"] .MuiInputLabel-root.Mui-focused {
+  color: var(--accent-primary);
 }

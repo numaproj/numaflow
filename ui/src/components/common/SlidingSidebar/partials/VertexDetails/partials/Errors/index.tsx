@@ -112,7 +112,7 @@ export const Errors = ({ details, square }: ErrorsProps) => {
               }}
               sx={{
                 width: "35rem",
-                border: "1px solid #E0E0E0",
+                border: "1px solid var(--border-primary)",
                 borderRadius: "0.5rem",
                 "& .MuiOutlinedInput-root": {
                   borderRadius: "0.5rem",
@@ -149,7 +149,7 @@ export const Errors = ({ details, square }: ErrorsProps) => {
               }}
               sx={{
                 width: "35rem",
-                border: "1px solid #E0E0E0",
+                border: "1px solid var(--border-primary)",
                 borderRadius: "0.5rem",
                 "& .MuiOutlinedInput-root": {
                   borderRadius: "0.5rem",

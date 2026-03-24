@@ -9,19 +9,18 @@ use std::sync::RwLock;
 use std::time::SystemTime;
 use std::time::{Duration, UNIX_EPOCH};
 
-use crate::config::pipeline::VertexType;
-use crate::config::pipeline::watermark::BucketConfig;
-use crate::error::{Error, Result};
-use crate::watermark::processor::timeline::OffsetTimeline;
-use crate::watermark::wmb::WMB;
-use async_nats::jetstream::kv::Watch;
-use backoff::retry::Retry;
-use backoff::strategy::fixed;
 use bytes::Bytes;
-use futures::{StreamExt, TryStreamExt};
+use futures::StreamExt;
 use numaflow_pb::objects::watermark::Heartbeat;
+use numaflow_shared::kv::{KVStore, KVWatchOp};
 use prost::Message as ProtoMessage;
 use tracing::{debug, error, info, warn};
+
+use crate::config::pipeline::VertexType;
+use crate::config::pipeline::watermark::BucketConfig;
+use crate::error::Result;
+use crate::watermark::processor::timeline::OffsetTimeline;
+use crate::watermark::wmb::WMB;
 
 const DEFAULT_PROCESSOR_REFRESH_RATE: u16 = 5;
 
@@ -45,16 +44,33 @@ pub(crate) struct Processor {
 }
 
 impl Debug for Processor {
+    /// Formats the processor as: "name(status)[p0:[entries],p1:[entries],...]"
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(
-            f,
-            "Processor: {:?}, Status: {:?}, Timelines: ",
-            self.name, self.status
-        )?;
+        let name_str = String::from_utf8_lossy(&self.name);
+        let status = match self.status {
+            Status::Active => "active",
+            Status::Deleted => "deleted",
+            Status::InActive => "inactive",
+        };
+
+        // Get complete timeline for each partition
+        let mut timeline_parts: Vec<String> = Vec::new();
         for (partition, timeline) in &self.timelines {
-            writeln!(f, "Partition {partition}: {timeline:?}")?;
+            let entries: Vec<String> = timeline
+                .entries()
+                .iter()
+                .map(|wmb| format!("(wm={},off={})", wmb.watermark, wmb.offset))
+                .collect();
+            let entries_str = if entries.is_empty() {
+                "empty".to_string()
+            } else {
+                entries.join("->")
+            };
+            timeline_parts.push(format!("p{}:[{}]", partition, entries_str));
         }
-        Ok(())
+        timeline_parts.sort();
+
+        write!(f, "{}({})[{}]", name_str, status, timeline_parts.join(","))
     }
 }
 
@@ -98,8 +114,12 @@ pub(crate) struct ProcessorManager {
 }
 
 impl Debug for ProcessorManager {
+    /// Formats as: "{proc1, proc2, ...}" where each processor uses its Debug format
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ProcessorManager: {:?}", self.processors)
+        let processors = self.processors.read().expect("failed to acquire lock");
+        let mut proc_infos: Vec<String> = processors.values().map(|p| format!("{:?}", p)).collect();
+        proc_infos.sort();
+        write!(f, "{{{}}}", proc_infos.join(", "))
     }
 }
 
@@ -113,37 +133,25 @@ impl Drop for ProcessorManager {
 
 impl ProcessorManager {
     /// Creates a new ProcessorManager. It prepopulates the processor-map with previous data
-    /// fetched from the OT and HB buckets.
+    /// fetched from the OT and HB stores.
+    ///
+    /// # Arguments
+    /// * `ot_store` - The offset-timeline KV store for tracking watermark entries
+    /// * `hb_store` - The heartbeat KV store for tracking processor liveness
+    /// * `bucket_config` - Configuration for the bucket (partitions, etc.)
+    /// * `vertex_type` - Type of vertex (Source, Sink, MapUDF, ReduceUDF)
+    /// * `vertex_replica` - Replica number of this vertex
     pub(crate) async fn new(
-        js_context: async_nats::jetstream::context::Context,
+        ot_store: Arc<dyn KVStore>,
+        hb_store: Arc<dyn KVStore>,
         bucket_config: &BucketConfig,
         vertex_type: VertexType,
         vertex_replica: u16,
     ) -> Result<Self> {
-        let ot_bucket = js_context
-            .get_key_value(bucket_config.ot_bucket)
-            .await
-            .map_err(|e| {
-                Error::Watermark(format!(
-                    "Failed to get kv bucket {}: {}",
-                    bucket_config.ot_bucket, e
-                ))
-            })?;
-
-        let hb_bucket = js_context
-            .get_key_value(bucket_config.hb_bucket)
-            .await
-            .map_err(|e| {
-                Error::Watermark(format!(
-                    "Failed to get kv bucket {}: {}",
-                    bucket_config.hb_bucket, e
-                ))
-            })?;
-
         // fetch old data
         let (processors_map, heartbeats_map) = Self::prepopulate_processors(
-            &hb_bucket,
-            &ot_bucket,
+            &hb_store,
+            &ot_store,
             bucket_config,
             vertex_type,
             vertex_replica,
@@ -153,19 +161,19 @@ impl ProcessorManager {
         let processors = Arc::new(RwLock::new(processors_map));
         let heartbeats = Arc::new(RwLock::new(heartbeats_map));
 
-        // start the ot watcher, to listen to the OT bucket and update the timelines
+        // start the ot watcher, to listen to the OT store and update the timelines
         let ot_handle = tokio::spawn(Self::start_ot_watcher(
-            ot_bucket,
+            Arc::clone(&ot_store),
             Arc::clone(&processors),
             vertex_type,
             vertex_replica,
         ));
 
-        // start the hb watcher, to listen to the HB bucket and update the list of
+        // start the hb watcher, to listen to the HB store and update the list of
         // active processors
         let hb_handle = tokio::spawn(Self::start_hb_watcher(
             bucket_config.partitions.clone(),
-            hb_bucket,
+            Arc::clone(&hb_store),
             Arc::clone(&heartbeats),
             Arc::clone(&processors),
         ));
@@ -184,10 +192,10 @@ impl ProcessorManager {
         })
     }
 
-    /// Prepopulate processors and timelines from the hb and ot buckets.
+    /// Prepopulate processors and timelines from the hb and ot stores.
     async fn prepopulate_processors(
-        hb_bucket: &async_nats::jetstream::kv::Store,
-        ot_bucket: &async_nats::jetstream::kv::Store,
+        hb_store: &Arc<dyn KVStore>,
+        ot_store: &Arc<dyn KVStore>,
         bucket_config: &BucketConfig,
         vertex_type: VertexType,
         vertex_replica: u16,
@@ -195,14 +203,11 @@ impl ProcessorManager {
         let mut processors = HashMap::new();
         let mut heartbeats = HashMap::new();
 
-        // Get all existing keys from the hb bucket and create processors
-        let hb_keys = match hb_bucket.keys().await {
-            Ok(keys) => keys
-                .try_collect::<Vec<String>>()
-                .await
-                .unwrap_or_else(|_| Vec::new()),
+        // Get all existing keys from the hb store and create processors
+        let hb_keys = match hb_store.keys().await {
+            Ok(keys) => keys,
             Err(e) => {
-                error!(?e, "Failed to get keys from hb bucket");
+                error!(?e, "Failed to get keys from hb store");
                 Vec::new()
             }
         };
@@ -216,7 +221,7 @@ impl ProcessorManager {
             );
             processors.insert(processor_name.clone(), processor);
 
-            let Ok(Some(value)) = hb_bucket.get(&key).await else {
+            let Ok(Some(value)) = hb_store.get(&key).await else {
                 continue;
             };
 
@@ -234,14 +239,11 @@ impl ProcessorManager {
             heartbeats.insert(processor_name, hb);
         }
 
-        // Get all existing entries from the ot bucket and store them in the timeline
-        let ot_keys = match ot_bucket.keys().await {
-            Ok(keys) => keys
-                .try_collect::<Vec<String>>()
-                .await
-                .unwrap_or_else(|_| Vec::new()),
+        // Get all existing entries from the ot store and store them in the timeline
+        let ot_keys = match ot_store.keys().await {
+            Ok(keys) => keys,
             Err(e) => {
-                warn!(error = ?e, "Failed to get keys from ot bucket");
+                warn!(error = ?e, "Failed to get keys from ot store");
                 Vec::new()
             }
         };
@@ -256,7 +258,7 @@ impl ProcessorManager {
                 }
             };
 
-            let Ok(Some(ot_value)) = ot_bucket.get(&ot_key).await else {
+            let Ok(Some(ot_value)) = ot_store.get(&ot_key).await else {
                 continue;
             };
             let wmb: WMB = ot_value.try_into().expect("Failed to decode WMB");
@@ -315,34 +317,25 @@ impl ProcessorManager {
         }
     }
 
-    /// Starts the ot watcher, to listen to the OT bucket and update the timelines for the
-    /// processors.
+    /// Starts the ot watcher, to listen to the OT store and update the timelines for the
+    /// processors. Uses KVStore::watch() with revision=None to only watch for new changes
+    /// (since we prepopulate the data first).
     async fn start_ot_watcher(
-        ot_bucket: async_nats::jetstream::kv::Store,
+        ot_store: Arc<dyn KVStore>,
         processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
         vertex_type: VertexType,
         vertex_replica: u16,
     ) {
-        let mut ot_watcher = Self::create_watcher(ot_bucket.clone()).await;
+        // Use watch with revision=None to only watch for new changes
+        // (we prepopulate the data first, so we don't need historical data)
+        let mut ot_watcher = ot_store
+            .watch(None)
+            .await
+            .expect("Failed to create OT watcher");
 
-        loop {
-            let Some(val) = ot_watcher.next().await else {
-                warn!("OT watcher stopped, recreating watcher");
-                ot_watcher = Self::create_watcher(ot_bucket.clone()).await;
-                continue;
-            };
-
-            let kv = match val {
-                Ok(kv) => kv,
-                Err(e) => {
-                    warn!(error = ?e, "Failed to get next kv entry, recreating watcher");
-                    ot_watcher = Self::create_watcher(ot_bucket.clone()).await;
-                    continue;
-                }
-            };
-
+        while let Some(kv) = ot_watcher.next().await {
             match kv.operation {
-                async_nats::jetstream::kv::Operation::Put => {
+                KVWatchOp::Put => {
                     let processor_name = Bytes::from(kv.key);
                     let wmb: WMB = kv.value.try_into().expect("Failed to decode WMB");
 
@@ -369,41 +362,32 @@ impl ProcessorManager {
                         }
                     }
                 }
-                async_nats::jetstream::kv::Operation::Delete
-                | async_nats::jetstream::kv::Operation::Purge => {
+                KVWatchOp::Delete | KVWatchOp::Purge => {
                     // we don't care about delete or purge operations
                 }
             }
         }
     }
 
-    /// Starts the hb watcher, to listen to the HB bucket, will also create the processor if it
-    /// doesn't exist.
+    /// Starts the hb watcher, to listen to the HB store, will also create the processor if it
+    /// doesn't exist. Uses KVStore::watch() with revision=None to only watch for new changes
+    /// (since we prepopulate the data first).
     async fn start_hb_watcher(
         partitions: Vec<u16>,
-        hb_bucket: async_nats::jetstream::kv::Store,
+        hb_store: Arc<dyn KVStore>,
         heartbeats: Arc<RwLock<HashMap<Bytes, i64>>>,
         processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
     ) {
-        let mut hb_watcher = Self::create_watcher(hb_bucket.clone()).await;
-        loop {
-            let Some(val) = hb_watcher.next().await else {
-                warn!("HB watcher stopped, recreating watcher");
-                hb_watcher = Self::create_watcher(hb_bucket.clone()).await;
-                continue;
-            };
+        // Use watch with revision=None to only watch for new changes
+        // (we prepopulate the data first, so we don't need historical data)
+        let mut hb_watcher = hb_store
+            .watch(None)
+            .await
+            .expect("Failed to create HB watcher");
 
-            let kv = match val {
-                Ok(kv) => kv,
-                Err(e) => {
-                    warn!(error = ?e, "Failed to get next kv entry, recreating watcher");
-                    hb_watcher = Self::create_watcher(hb_bucket.clone()).await;
-                    continue;
-                }
-            };
-
+        while let Some(kv) = hb_watcher.next().await {
             match kv.operation {
-                async_nats::jetstream::kv::Operation::Put => {
+                KVWatchOp::Put => {
                     let processor_name = Bytes::from(kv.key);
                     let hb = numaflow_pb::objects::watermark::Heartbeat::decode(kv.value)
                         .expect("Failed to decode heartbeat")
@@ -427,7 +411,7 @@ impl ProcessorManager {
                         processors.insert(processor.name.clone(), processor);
                     }
                 }
-                async_nats::jetstream::kv::Operation::Delete => {
+                KVWatchOp::Delete => {
                     let processor_name = Bytes::from(kv.key);
                     heartbeats
                         .write()
@@ -443,7 +427,7 @@ impl ProcessorManager {
                         processor.set_status(Status::Deleted);
                     }
                 }
-                async_nats::jetstream::kv::Operation::Purge => {
+                KVWatchOp::Purge => {
                     heartbeats.write().expect("failed to acquire lock").clear();
 
                     // update the processor status to deleted
@@ -457,28 +441,6 @@ impl ProcessorManager {
                 }
             }
         }
-    }
-
-    /// creates a watcher for the given bucket, will retry infinitely until it succeeds
-    // FIXME: create_watcher is not cancel safe
-    async fn create_watcher(bucket: async_nats::jetstream::kv::Store) -> Watch {
-        const RECONNECT_INTERVAL: u64 = 1000;
-        // infinite retry
-        let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(usize::MAX);
-
-        Retry::new(
-            interval,
-            async || match bucket.watch_all().await {
-                Ok(w) => Ok(w),
-                Err(e) => {
-                    error!(?e, "Failed to create watcher");
-                    Err(Error::Watermark(format!("Failed to create watcher: {e}")))
-                }
-            },
-            |_: &Error| true,
-        )
-        .await
-        .expect("Failed to create ot watcher")
     }
 
     /// Delete a processor from the processors map
@@ -497,6 +459,8 @@ mod tests {
     use bytes::{Bytes, BytesMut};
     use prost::Message;
 
+    use numaflow_shared::kv::jetstream::JetstreamKVStore;
+
     use super::*;
 
     async fn setup_nats() -> Context {
@@ -514,6 +478,20 @@ mod tests {
         .unwrap()
     }
 
+    /// Create KV stores wrapped in JetstreamKVStore for ProcessorManager
+    #[cfg(feature = "nats-tests")]
+    fn create_kv_stores(
+        ot_bucket: Store,
+        hb_bucket: Store,
+        ot_bucket_name: &'static str,
+        hb_bucket_name: &'static str,
+    ) -> (Arc<dyn KVStore>, Arc<dyn KVStore>) {
+        (
+            Arc::new(JetstreamKVStore::new(ot_bucket, ot_bucket_name)),
+            Arc::new(JetstreamKVStore::new(hb_bucket, hb_bucket_name)),
+        )
+    }
+
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_processor_manager_tracks_heartbeats_and_wmbs() {
@@ -527,6 +505,14 @@ mod tests {
         let ot_bucket = create_kv_bucket(&js_context, ot_bucket_name).await;
         let hb_bucket = create_kv_bucket(&js_context, hb_bucket_name).await;
 
+        // Create wrapped KV stores for ProcessorManager
+        let (ot_store, hb_store) = create_kv_stores(
+            ot_bucket.clone(),
+            hb_bucket.clone(),
+            ot_bucket_name,
+            hb_bucket_name,
+        );
+
         let bucket_config = BucketConfig {
             vertex: "test",
             ot_bucket: ot_bucket_name,
@@ -536,7 +522,7 @@ mod tests {
         };
 
         let processor_manager =
-            ProcessorManager::new(js_context.clone(), &bucket_config, VertexType::MapUDF, 0)
+            ProcessorManager::new(ot_store, hb_store, &bucket_config, VertexType::MapUDF, 0)
                 .await
                 .unwrap();
 
@@ -621,6 +607,14 @@ mod tests {
         let ot_bucket = create_kv_bucket(&js_context, ot_bucket_name).await;
         let hb_bucket = create_kv_bucket(&js_context, hb_bucket_name).await;
 
+        // Create wrapped KV stores for ProcessorManager
+        let (ot_store, hb_store) = create_kv_stores(
+            ot_bucket.clone(),
+            hb_bucket.clone(),
+            ot_bucket_name,
+            hb_bucket_name,
+        );
+
         let bucket_config = BucketConfig {
             vertex: "test",
             ot_bucket: ot_bucket_name,
@@ -630,7 +624,7 @@ mod tests {
         };
 
         let processor_manager =
-            ProcessorManager::new(js_context.clone(), &bucket_config, VertexType::MapUDF, 0)
+            ProcessorManager::new(ot_store, hb_store, &bucket_config, VertexType::MapUDF, 0)
                 .await
                 .unwrap();
 
@@ -752,6 +746,14 @@ mod tests {
         let ot_bucket = create_kv_bucket(&js_context, ot_bucket_name).await;
         let hb_bucket = create_kv_bucket(&js_context, hb_bucket_name).await;
 
+        // Create wrapped KV stores for ProcessorManager
+        let (ot_store, hb_store) = create_kv_stores(
+            ot_bucket.clone(),
+            hb_bucket.clone(),
+            ot_bucket_name,
+            hb_bucket_name,
+        );
+
         let bucket_config = BucketConfig {
             vertex: "test",
             ot_bucket: ot_bucket_name,
@@ -762,7 +764,8 @@ mod tests {
 
         // Create processor manager for reduce UDF with replica 1
         let processor_manager = ProcessorManager::new(
-            js_context.clone(),
+            ot_store,
+            hb_store,
             &bucket_config,
             VertexType::ReduceUDF,
             1, // vertex replica 1

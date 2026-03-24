@@ -10,6 +10,7 @@ members = [
     "numaflow-daemon",
     "numaflow-shared",
     "numaflow-throttling",
+    "numaflow-testing",
     # extensions
     "extns/numaflow-pulsar",
     "extns/numaflow-sqs",
@@ -33,7 +34,7 @@ dbg_macro = "deny"
 todo = "deny"
 # We should probably enable it in the future
 # future_not_send = "deny"
-empty_enum = "warn"
+empty_enums = "warn"
 exit = "warn"
 filter_map_next = "warn"
 fn_params_excessive_bools = "warn"
@@ -121,6 +122,6 @@ trait-variant = "0.1.2"
 parking_lot = "0.12.4"
 prometheus-client = "0.24.0"
 pin-project = "1.1.5"
-kube = "0.99.0"
+kube = "3.0.1"
 rand = "0.9.2"
-time = "0.3.41"
+time = "0.3.47"

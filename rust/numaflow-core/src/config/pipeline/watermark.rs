@@ -21,6 +21,7 @@ impl WatermarkConfig {
         from_vertex_config: &[FromVertexConfig],
         to_vertex_config: &[ToVertexConfig],
         delay_in_millis: u64,
+        ordered_processing_enabled: bool,
     ) -> Option<WatermarkConfig> {
         let max_delay = watermark_spec
             .as_ref()
@@ -107,7 +108,13 @@ impl WatermarkConfig {
                     from_vertex_config: from_vertex_config
                         .iter()
                         .map(|from| {
-                            create_from_vertex_bucket_config(from, (0..from.partitions).collect())
+                            // If ordered processing is enabled, only track the partition matching replica ID
+                            let partitions = if ordered_processing_enabled {
+                                vec![*get_vertex_replica()]
+                            } else {
+                                (0..from.partitions).collect()
+                            };
+                            create_from_vertex_bucket_config(from, partitions)
                         })
                         .collect(),
                     to_vertex_config: to_vertex_config

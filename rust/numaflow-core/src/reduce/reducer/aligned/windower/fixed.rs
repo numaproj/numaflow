@@ -15,7 +15,7 @@ use std::time::Duration;
 use crate::message::Message;
 use crate::reduce::reducer::aligned::windower;
 use crate::reduce::reducer::aligned::windower::{
-    AlignedWindowMessage, AlignedWindowOperation, Window, window_pnf_slot,
+    AlignedWindowMessage, AlignedWindowOperation, Window, window_to_pnf_slot,
 };
 use chrono::{DateTime, TimeZone, Utc};
 
@@ -59,7 +59,7 @@ impl FixedWindowManager {
     /// Assigns windows to a message
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
         let window = self.create_window(&msg);
-        let pnf_slot = window_pnf_slot(&window);
+        let pnf_slot = window_to_pnf_slot(&window);
 
         // Check if window already exists
         let mut active_windows = self
@@ -125,7 +125,7 @@ impl FixedWindowManager {
 
         for window in windows_to_close {
             result.push(AlignedWindowMessage {
-                pnf_slot: window_pnf_slot(&window),
+                pnf_slot: window_to_pnf_slot(&window),
                 operation: AlignedWindowOperation::Close { window },
             });
         }

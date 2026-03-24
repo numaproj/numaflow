@@ -60,10 +60,11 @@ flate2 = "1.1.2"
 zstd = "0.13.3"
 lz4 = "1.28.1"
 async-trait = "0.1.88"
+tracing-subscriber = "0.3.20"
 
 [dev-dependencies]
+numaflow-testing = { path = "../numaflow-testing" }
 tempfile = "3.11.0"
-# TODO: Remove this when OnSuccess sink support is added in numaflow-rs SDK
 numaflow = "0.5.0"
 pulsar = { version = "6.3.0", default-features = false, features = ["tokio-rustls-runtime"] }
 hyper = "1.6.0"
@@ -71,9 +72,10 @@ hyper-rustls = "0.27.5"
 http = "1.2.0"
 aws-sdk-sqs = "1.65.0"
 aws-smithy-mocks = "0.1.1"
-k8s-openapi = { version = "0.24.0", features = ["v1_32"] }
+k8s-openapi = { version = "0.27.1", features = ["v1_34"] }
 numaflow-kafka = { workspace = true, features = ["kafka-tests-utils"] }
 numaflow-pulsar = { workspace = true, features = ["pulsar-tests-utils"] }
 serial_test = "3.3.1"
+reqwest = { workspace = true }
 
 [build-dependencies]

@@ -17,6 +17,9 @@ pub enum Error {
     Kafka(String),
 
     #[error("{0}")]
+    NonRetryable(String),
+
+    #[error("{0}")]
     Other(String),
 }
 

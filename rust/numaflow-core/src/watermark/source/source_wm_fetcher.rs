@@ -6,16 +6,25 @@
 
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::wmb::Watermark;
+use std::time::{Duration, Instant};
+use tracing::info;
+
+/// Interval for logging watermark summary
+const WATERMARK_LOG_INTERVAL: Duration = Duration::from_secs(60);
 
 /// SourceWatermarkFetcher is the watermark fetcher for the source.
 pub struct SourceWatermarkFetcher {
     processor_manager: ProcessorManager,
+    last_log_time: Instant,
 }
 
 impl SourceWatermarkFetcher {
     /// Creates a new [SourceWatermarkFetcher].
     pub(crate) fn new(processor_manager: ProcessorManager) -> Self {
-        SourceWatermarkFetcher { processor_manager }
+        SourceWatermarkFetcher {
+            processor_manager,
+            last_log_time: Instant::now() - WATERMARK_LOG_INTERVAL,
+        }
     }
 
     /// Fetches the watermark for the source, which is the minimum watermark of all the active
@@ -47,7 +56,13 @@ impl SourceWatermarkFetcher {
             min_wm = -1;
         }
 
-        Watermark::from_timestamp_millis(min_wm).expect("Failed to parse watermark")
+        let watermark =
+            Watermark::from_timestamp_millis(min_wm).expect("Failed to parse watermark");
+
+        // Log summary periodically
+        self.watermark_log_summary(&watermark);
+
+        watermark
     }
 
     /// Fetches the head watermark for the source, which is the minimum head watermark of all the active
@@ -84,6 +99,27 @@ impl SourceWatermarkFetcher {
         }
 
         Watermark::from_timestamp_millis(min_wm).expect("Failed to parse watermark")
+    }
+
+    /// Logs a summary of the watermark state if the log interval has elapsed.
+    /// This includes fetched watermark, processors, and their timelines.
+    fn watermark_log_summary(&mut self, fetched_wm: &Watermark) {
+        if self.last_log_time.elapsed() < WATERMARK_LOG_INTERVAL {
+            return;
+        }
+        self.last_log_time = Instant::now();
+
+        let summary = self.build_summary(fetched_wm);
+        info!("{}", summary);
+    }
+
+    /// Builds a summary string of the watermark state.
+    fn build_summary(&self, fetched_wm: &Watermark) -> String {
+        format!(
+            "Source Watermark Summary: fetched_wm={}, processors={:?}",
+            fetched_wm.timestamp_millis(),
+            self.processor_manager
+        )
     }
 }
 

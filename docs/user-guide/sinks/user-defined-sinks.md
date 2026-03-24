@@ -9,6 +9,7 @@ A pre-defined sink vertex runs single-container pods, while a user-defined sink 
 > - [Sinks Overview](./overview.md) - General information about sinks
 > - [Fallback Sink](./fallback.md) - Dead Letter Queue (DLQ) functionality
 > - [Retry Strategy](./retry-strategy.md) - Configuring retry behavior for failed messages
+> - [OnSuccess Sink](./on-success.md) - Sink to receive successful message processing notifications
 
 ## Build Your Own User-defined Sinks
 
@@ -21,19 +22,20 @@ When developing a user-defined sink in Numaflow, your sink container communicate
 ### Core Rules:
 
 1. **Response Count:**
-   - For every batch of `N` input messages received, your sink **must return exactly** `N` responses.
+    - For every batch of `N` input messages received, your sink **must return exactly** `N` responses.
 
 2. **Response Matching:**
-   - Each response must include the corresponding message ID (`datumID`) to identify which message it corresponds to.
-   - The order of responses does **not** need to match the order of incoming messages.
-   - Every input message must have exactly one matching response.
+    - Each response must include the corresponding message ID (`datumID`) to identify which message it corresponds to.
+    - The order of responses does **not** need to match the order of incoming messages.
+    - Every input message must have exactly one matching response.
 
 3. **Response Status:**
-   - Each response must indicate how the message was handled by returning one of the following statuses:
-     - `OK`
-     - `FAILURE`
-     - `FALLBACK`
-     - `SERVE`
+    - Each response must indicate how the message was handled by returning one of the following statuses:
+        - `OK`
+        - `FAILURE`
+        - `FALLBACK`
+        - `SERVE`
+        - `ON_SUCCESS`
 
 ### Response Types
 
@@ -54,9 +56,18 @@ When developing a user-defined sink in Numaflow, your sink container communicate
 - **Action:** Message is immediately sent to the configured fallback sink without retry.
 - **Requirements:** 
   - A fallback sink must be configured in the pipeline spec.
-  - Fallback responses **must not** return further fallback or serve statuses.
+  - Fallback responses **must not** return further fallback, on-success or serve statuses.
 - **Use Case:** Messages that cannot be processed by the primary sink but should be preserved.
 - **Related:** See [Fallback Sink](./fallback.md) for detailed configuration.
+
+#### **ON_SUCCESS** (`ResponseOnSuccess`)
+- **Meaning:** Message should be routed to the on-success sink.
+- **Action:** Message is immediately sent to the configured on-success sink without retry.
+- **Requirements:**
+    - An on-success sink must be configured in the pipeline spec.
+    - OnSuccess responses **must not** return further fallback, on-success, or serve statuses.
+- **Use Case:** Notify downstream through on-success sink of the successful processing of a message (e.g., send a kafka message after writing to the primary DB sink) .
+- **Related:** See [OnSuccess Sink](./on-success.md) for detailed configuration.
 
 #### **SERVE** (`ResponseServe`)
 - **Meaning:** Message should be stored in the serving store for later retrieval.
@@ -113,29 +124,60 @@ Then your response must be:
 
 Check the links below to see the examples for different languages.
 
-**Golang:**
-```go
-ResponseOK(id string)
-ResponseFailure(id string, errMsg string)
-ResponseFallback(id string)
-ResponseServe(id string, serveResponse []byte)
-```
+=== "Golang"
 
-**Java:**
-```java
-Response.ok(id)
-Response.failure(id, errMsg)
-Response.fallback(id)
-Response.serve(id, serveResponse)
-```
+    ```go
+    ResponseOK(id string)
+    ResponseFailure(id string, errMsg string)
+    ResponseFallback(id string)
+    ResponseServe(id string, serveResponse []byte)
+    ResponseOnSuccess(id string, onSuccessMessage Message)
+    ```
+    [Golang SDK Examples](https://github.com/numaproj/numaflow-go/tree/main/examples/sinker)
 
-**Python:**
-```python
-Response.ok(id)
-Response.failure(id, err_msg)
-Response.fallback(id)
-Response.serve(id, serve_response)
-```
+=== "Java"
+    
+    ```java
+    Response.responseOK(id)
+    Response.responseFailure(id, errMsg)
+    Response.responseFallback(id)
+    Response.responseServe(id, serveResponse)
+    Response.responseOnSuccess(id, onSuccessMessage)
+    ```
+    [Java SDK Examples](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple/)
+
+=== "Python"
+
+    ```python
+    Response.as_success(id)
+    Response.as_failure(id, err_msg)
+    Response.as_fallback(id)
+    Response.as_serve(id, serve_response)
+    Response.as_on_success(id, message)
+    ```
+    [Python SDK Examples](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/sink/)
+
+=== "Rust"
+
+    ```rust
+    Response::ok(id)
+    Response::failure(id, err_msg)
+    Response::fallback(id)
+    Response::serve(id, serve_response)
+    Response::on_success(id, payload)
+    ```
+    [Rust SDK Examples](https://github.com/numaproj/numaflow-rs/tree/main/examples)
+
+=== "JS/TS"
+
+    ```typescript
+    Response.ok(id)
+    Response.failure(id, err_msg)
+    Response.fallback(id)
+    Response.serve(id, serve_response)
+    Response.onSuccess(id, payload)
+    ```
+    [Javascript SDK Examples](https://github.com/numaproj/numaflow-js/tree/main/examples/sinker)
 
 ###  Explore SDK Examples
 
@@ -144,6 +186,8 @@ For more detailed examples and implementation patterns, check out the official S
 - **[Golang SDK Examples](https://github.com/numaproj/numaflow-go/tree/main/examples/sinker)**
 - **[Java SDK Examples](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple/)**
 - **[Python SDK Examples](https://github.com/numaproj/numaflow-python/tree/main/packages/pynumaflow/examples/sink/)**
+- **[Rust SDK Examples](https://github.com/numaproj/numaflow-rs/tree/main/examples)**
+- **[Javascript SDK Examples](https://github.com/numaproj/numaflow-js/tree/main/examples/sinker)**
 
 These repositories contain complete working examples of user-defined sinks with various response types and error handling patterns.
 

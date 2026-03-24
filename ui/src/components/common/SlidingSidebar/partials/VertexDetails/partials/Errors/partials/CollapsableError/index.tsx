@@ -36,7 +36,7 @@ const highlightFilePaths = (rawText: string) => {
   return text.split(filePathRegex).map((part, index) => {
     if (filePathRegex.test(part) && !exclusionList.includes(part)) {
       return (
-        <span key={index} style={{ color: "blue", fontWeight: "bold" }}>
+        <span key={index} style={{ color: "var(--accent-primary)", fontWeight: "bold" }}>
           {part}
         </span>
       );
@@ -113,7 +113,7 @@ export const CollapsableError = ({ detail }: CollapsableErrorProps) => {
           <Box className={"collapsable-error-accordion-details-title"} sx={{ flex: 1 }}>
             Details
           </Box>
-          <Divider orientation="vertical" flexItem color={"#878789"} />
+          <Divider orientation="vertical" flexItem sx={{ borderColor: "var(--border-primary)" }} />
           <Box className={"collapsable-error-accordion-details-title-content"} sx={{ flex: 3 }}>
             <pre style={{ whiteSpace: "pre-wrap", wordWrap: "break-word" }}>
               {detail?.details
@@ -124,7 +124,7 @@ export const CollapsableError = ({ detail }: CollapsableErrorProps) => {
           <Divider
             orientation="vertical"
             flexItem
-            color={"#878789"}
+            sx={{ borderColor: "var(--border-primary)" }}
           />
           <Box sx={{ flex: 1 }} />
         </Box>

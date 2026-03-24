@@ -146,14 +146,14 @@ pub(crate) enum AlignedWindowOperation {
 #[derive(Debug, Clone)]
 pub(crate) struct AlignedWindowMessage {
     pub(crate) operation: AlignedWindowOperation,
-    /// PNF slot for the window operation. This is stored as a field is to quickly access this in
+    /// PNF slot for the window operation. This is stored as a field as to quickly access this in
     /// different code path without recreating it all the time.
     pub(crate) pnf_slot: Bytes,
 }
 
 /// Helper function to construct PNF slot from a window.
 /// The PNF slot is used as a unique identifier for the window.
-pub(crate) fn window_pnf_slot(window: &Window) -> Bytes {
+pub(crate) fn window_to_pnf_slot(window: &Window) -> Bytes {
     format!(
         "{}-{}",
         window.start_time.timestamp_millis(),
