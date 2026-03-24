@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use crate::mark_success;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
+use crate::mark_success;
 use crate::message::{Message, MessageHandle};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{OwnedSemaphorePermit, mpsc};
@@ -144,15 +144,7 @@ impl MapStreamTask {
                     // Channel closed. If no results were ever sent (current_index == 0),
                     // this means the UDF stream may have closed unexpectedly (e.g., panic or gRPC
                     // stream error where the sender was dropped without delivering an error).
-                    // Mark the message as failed so that it gets nacked.
-                    if parent_info.current_index == 0 {
-                        parent_info
-                            .ack_handle
-                            .as_ref()
-                            .expect("ack handle should be present")
-                            .is_failed
-                            .store(true, Ordering::Relaxed);
-                    }
+                    // read_message will be dropped without mark_success, causing NAK automatically.
                     break;
                 }
             }

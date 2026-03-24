@@ -112,7 +112,11 @@ impl MapBatchTask {
                     // Each output message increments ref_count, and downstream will call mark_success()
                     // when the message is successfully written.
                     for mapped_message in mapped_messages {
-                        let read_msg = self.read_batch[idx].clone_with_message(mapped_message);
+                        let read_msg = self
+                            .read_batch
+                            .get(idx)
+                            .expect("read_batch index must be valid")
+                            .clone_with_message(mapped_message);
 
                         // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
                         // If not bypassed, it returns Some(read_msg) for us to send downstream.

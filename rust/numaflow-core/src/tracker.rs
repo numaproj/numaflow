@@ -493,7 +493,6 @@ mod tests {
                 ..Default::default()
             })),
             is_late: false,
-            ..Default::default()
         };
 
         // Insert a new message

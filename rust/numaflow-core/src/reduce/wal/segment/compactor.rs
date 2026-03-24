@@ -238,7 +238,7 @@ impl Compactor {
             match entry {
                 SegmentEntry::DataEntry { data, .. } => {
                     // Deserialize the message
-                    let msg: isb::MessageHandle = prost::Message::decode(data.clone())
+                    let msg: isb::ReadMessage = prost::Message::decode(data.clone())
                         .map_err(|e| format!("Failed to decode message: {e}"))?;
 
                     if should_retain
@@ -819,7 +819,7 @@ mod tests {
         let mut remaining_message_count = 0;
         while let Some(entry) = rx.next().await {
             if let SegmentEntry::DataEntry { data, .. } = entry {
-                let msg: isb::MessageHandle = prost::Message::decode(data).unwrap();
+                let msg: isb::ReadMessage = prost::Message::decode(data).unwrap();
                 if let Some(header) = msg.message.unwrap().header
                     && let Some(message_info) = header.message_info
                 {
@@ -1004,7 +1004,7 @@ mod tests {
         let mut replayed_event_times = Vec::new();
 
         while let Ok(data) = replay_rx.try_recv() {
-            let msg: isb::MessageHandle = prost::Message::decode(data)
+            let msg: isb::ReadMessage = prost::Message::decode(data)
                 .map_err(|e| format!("Failed to decode message: {e}"))?;
 
             // Verify that the message has an event time after the GC end time
@@ -1256,7 +1256,7 @@ mod tests {
         let mut key3_key4_count = 0;
 
         while let Ok(data) = replay_rx.try_recv() {
-            let msg: isb::MessageHandle = prost::Message::decode(data)
+            let msg: isb::ReadMessage = prost::Message::decode(data)
                 .map_err(|e| format!("Failed to decode message: {e}"))?;
 
             // Verify that the message has an event time after the appropriate GC end time

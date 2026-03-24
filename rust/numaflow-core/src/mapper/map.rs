@@ -16,7 +16,7 @@ use tracing::{error, info, warn};
 use crate::config::pipeline::map::MapMode;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{self, Error};
-use crate::message::{Message, MessageID, Offset, MessageHandle};
+use crate::message::{Message, MessageHandle, MessageID, Offset};
 use crate::metadata::Metadata;
 use crate::shared::grpc::prost_timestamp_from_utc;
 use crate::tracker::Tracker;
@@ -559,15 +559,14 @@ async fn create_response_stream(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{AckHandle, ReadAck};
     use crate::mapper::test_utils::MapperTestHandle;
-    use crate::message::ReadAck;
+    use crate::message::{AckHandle, ReadAck};
     use crate::{
         Result,
-        message::{MessageID, Offset, MessageHandle, StringOffset},
+        message::{MessageHandle, MessageID, Offset, StringOffset},
         shared::grpc::create_rpc_channel,
     };
-    use futures::{SinkExt, StreamExt};
+    use futures::StreamExt;
     use numaflow::shared::ServerExtras;
     use numaflow::{batchmap, map, mapstream};
     use numaflow_pb::clients::map::map_client::MapClient;
@@ -1244,8 +1243,8 @@ mod tests {
         Ok(())
     }
 
-    fn create_default_msg(i: i32, ack_tx: oneshot::Sender<ReadAck>) -> Message {
-        Message {
+    fn create_default_msg(i: i32, ack_tx: oneshot::Sender<ReadAck>) -> MessageHandle {
+        let message = Message {
             typ: Default::default(),
             keys: Arc::from(vec![format!("key_{}", i)]),
             tags: None,
@@ -1258,9 +1257,9 @@ mod tests {
                 offset: i.to_string().into(),
                 index: i,
             },
-            ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
             ..Default::default()
-        }
+        };
+        MessageHandle::new(message, AckHandle::new(ack_tx))
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1337,38 +1336,42 @@ mod tests {
         let (ack_tx1, ack_rx1) = oneshot::channel();
         let (ack_tx2, ack_rx2) = oneshot::channel();
         let messages = vec![
-            Message {
-                typ: Default::default(),
-                keys: Arc::from(vec!["first".into()]),
-                tags: None,
-                value: "hello".into(),
-                offset: Offset::String(StringOffset::new("0".to_string(), 0)),
-                event_time: chrono::Utc::now(),
-                watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: "0".to_string().into(),
-                    index: 0,
+            MessageHandle::new(
+                Message {
+                    typ: Default::default(),
+                    keys: Arc::from(vec!["first".into()]),
+                    tags: None,
+                    value: "hello".into(),
+                    offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+                    event_time: chrono::Utc::now(),
+                    watermark: None,
+                    id: MessageID {
+                        vertex_name: "vertex_name".to_string().into(),
+                        offset: "0".to_string().into(),
+                        index: 0,
+                    },
+                    ..Default::default()
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx1))),
-                ..Default::default()
-            },
-            Message {
-                typ: Default::default(),
-                keys: Arc::from(vec!["second".into()]),
-                tags: None,
-                value: "world".into(),
-                offset: Offset::String(StringOffset::new("1".to_string(), 1)),
-                event_time: chrono::Utc::now(),
-                watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex_name".to_string().into(),
-                    offset: "1".to_string().into(),
-                    index: 1,
+                AckHandle::new(ack_tx1),
+            ),
+            MessageHandle::new(
+                Message {
+                    typ: Default::default(),
+                    keys: Arc::from(vec!["second".into()]),
+                    tags: None,
+                    value: "world".into(),
+                    offset: Offset::String(StringOffset::new("1".to_string(), 1)),
+                    event_time: chrono::Utc::now(),
+                    watermark: None,
+                    id: MessageID {
+                        vertex_name: "vertex_name".to_string().into(),
+                        offset: "1".to_string().into(),
+                        index: 1,
+                    },
+                    ..Default::default()
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx2))),
-                ..Default::default()
-            },
+                AckHandle::new(ack_tx2),
+            ),
         ];
 
         let (input_tx, input_rx) = mpsc::channel(10);
@@ -1671,50 +1674,5 @@ mod tests {
     fn test_update_udf_process_time_metric_pipeline() {
         // Currently only ensuring that this should not panic
         update_udf_process_time_metric(false);
-    }
-
-    #[tokio::test]
-    async fn concurrency_transformer_fn() {
-        let (tx, mut rx) = mpsc::channel(100);
-
-        let rx_stream = ReceiverStream::new(rx);
-        let _ = tx.send("hello");
-
-        let (error_tx, error_rx) = mpsc::channel(1);
-
-        let concurrency = 500;
-        let (futures_tx, mut futures_rx) = mpsc::channel(100);
-        futures_tx
-            .send(async {
-                let x = "yash";
-                if x == "yash" {
-                    error_tx.send(Error::Cancelled()).await.unwrap();
-                }
-            })
-            .await
-            .unwrap();
-
-        let futures_stream = ReceiverStream::new(futures_rx);
-        let mut stream = futures_stream.buffer_unordered(concurrency);
-
-        while let Some(future) = stream.next().await {}
-
-        /*
-         * you read 500 messages
-         * create futures for 500 messages
-         * await for futures using buffer unordered
-         * return
-         */
-
-        /*
-        * read 1 message at a time
-        * have concurrency of 500
-        * create futures for each message
-        * keep adding to the futures until you hit 500 concurrency
-
-
-        * keep getting the response of the completed future
-        * write the response to downstream
-         */
     }
 }

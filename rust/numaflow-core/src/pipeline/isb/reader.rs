@@ -1382,8 +1382,6 @@ mod simplebuffer_tests {
     use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
     use numaflow_testing::simplebuffer::SimpleBuffer;
     use std::collections::HashMap;
-    use std::sync::atomic::Ordering;
-
     use crate::message::MessageID;
     use bytes::Bytes;
     use chrono::Utc;
@@ -1452,7 +1450,6 @@ mod simplebuffer_tests {
                 headers: Arc::new(HashMap::new()),
                 metadata: None,
                 is_late: false,
-                ack_handle: None,
             };
             writer.write(msg).await.expect("write should succeed");
         }
@@ -1703,12 +1700,9 @@ mod simplebuffer_tests {
 
         // Read message first time
         let msg1 = rx.next().await.expect("Should receive message first time");
-        let payload1 = msg1.value.clone();
+        let payload1 = msg1.message.value.clone();
 
-        // Nack it by setting is_failed and dropping
-        if let Some(h) = &msg1.ack_handle {
-            h.is_failed.store(true, Ordering::Relaxed);
-        }
+        // Nack it by dropping without calling mark_success (ref_count != 0 causes NAK on drop)
         drop(msg1);
 
         // After nacking, the message goes back to Pending state and will be refetched.
@@ -1719,7 +1713,7 @@ mod simplebuffer_tests {
             .expect("Stream should not end");
 
         assert_eq!(
-            msg2.value, payload1,
+            msg2.message.value, payload1,
             "Redelivered message should have same payload"
         );
 

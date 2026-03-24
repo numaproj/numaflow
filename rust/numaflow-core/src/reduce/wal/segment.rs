@@ -236,7 +236,7 @@ mod tests {
         let mut remaining_message_count = 0;
         while let Some(entry) = rx.next().await {
             if let SegmentEntry::DataEntry { data, .. } = entry {
-                let msg: numaflow_pb::objects::isb::MessageHandle =
+                let msg: numaflow_pb::objects::isb::ReadMessage =
                     prost::Message::decode(data).unwrap();
                 if let Some(header) = msg.message.unwrap().header
                     && let Some(message_info) = header.message_info
@@ -396,7 +396,7 @@ mod tests {
 
         while let Some(entry) = rx.next().await {
             if let SegmentEntry::DataEntry { data, .. } = entry {
-                let msg: numaflow_pb::objects::isb::MessageHandle =
+                let msg: numaflow_pb::objects::isb::ReadMessage =
                     prost::Message::decode(data).unwrap();
                 // Check event time based on key
                 if let Some(header) = msg.message.unwrap().header

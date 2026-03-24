@@ -1050,7 +1050,7 @@ mod tests {
 mod simple_buffer_tests {
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
-    use crate::message::{AckHandle, IntOffset, MessageID, ReadAck};
+    use crate::message::{AckHandle, IntOffset, MessageHandle, MessageID, ReadAck};
     use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
     use bytes::Bytes;
     use chrono::Utc;
@@ -1063,7 +1063,7 @@ mod simple_buffer_tests {
         id: i64,
         value: &str,
         tags: Option<Vec<&str>>,
-    ) -> (Message, tokio::sync::oneshot::Receiver<ReadAck>) {
+    ) -> (MessageHandle, tokio::sync::oneshot::Receiver<ReadAck>) {
         let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
         let message = Message {
             typ: Default::default(),
@@ -1081,9 +1081,8 @@ mod simple_buffer_tests {
             headers: Arc::new(HashMap::new()),
             metadata: None,
             is_late: false,
-            ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
         };
-        (message, ack_rx)
+        (MessageHandle::new(message, AckHandle::new(ack_tx)), ack_rx)
     }
 
     /// Helper to create ISBWriterOrchestrator with a single SimpleBuffer
@@ -1906,7 +1905,6 @@ mod simple_buffer_tests {
             headers: Arc::new(HashMap::new()),
             metadata: None,
             is_late: false,
-            ack_handle: None,
         }
     }
 
