@@ -1,5 +1,3 @@
-# Summary
-
 # Motivation
 With advances in sensing, networking, and AI processing, modern ICT infrastructures are facing rapidly increasing demands for large-scale data processing. As a result, the power consumption required to handle these large volumes of data has become a serious concern. In other words, today’s infrastructures must simultaneously improve processing performance while reducing energy consumption.
 
@@ -31,6 +29,8 @@ In contrast, GPUDirect RDMA enables direct device-to-device communication. There
 Accordingly, to enable GPUDirect RDMA in Numaflow, we introduce a mechanism that provides the necessary connection information—such as IP address, port, and GPU ID—required for direct device-to-device communication using GPUDirect RDMA.
 
 # Desired Functionality
+This section describes the features introduced by this proposal.
+
 ## Overall Architecture
 An example pipeline based on the Video Inference System is presented below.
 
@@ -48,6 +48,8 @@ The figure illustrates a newly proposed network type and a direct communication 
 
 
 ## Functionality
+- The destination IP address is resolved from a domain name in the UDF container
+- Using the destination IP address, data is transferred to the target UDF container via the attached second NIC (MultiNetwork) using GPUDirect RDMA.
 
 ![Functionality Architecture](./assets/functionality_architecture.drawio.png)
 
@@ -77,7 +79,7 @@ The figure illustrates a newly proposed network type and a direct communication 
   <tr>
     <td rowspan="5">Add GPUDirect RDMA as a communication method on MultiNetwork</td>
     <td>The Vertex controller creates and stores a query domain name</td>
-    <td>TBD</td>
+    <td>The VertexController adds the vertexDomain of the Vertex that the Pod belongs to as a label on the Pod</td>
   </tr>
   <tr>
     <td>The external controller(a new component) registers DNS resource records in CoreDNS, mapping destination Vertex domains to second NIC IPs on the network to which the Vertex belongs</td>
@@ -97,15 +99,22 @@ The figure illustrates a newly proposed network type and a direct communication 
   </tr>
 </table>
 
-# Workflow
+# Changes
+This section describes the changes introduced by this proposal in the following three parts (excluding the setup of the Numaflow execution environment, which is assumed as a prerequisite).
+- Resource Deployment
+- Second NIC IP Configuration and Assignment
+- Direct Communication Processing During Application Execution
+
 ## Precondition
-1. Cluster administrator create [Virtual Function](https://docs.nvidia.com/doca/archive/doca-v1.3/virtual-functions/index.html)
-2. Cluster administrator deploy [DeviceClass](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/#deviceclass)
-3. Users create [ResourceClaims or ResourceClaimTemplates](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/#resourceclaims-templates) to request PCIe devices other than NICs, such as GPUs
+1. Cluster administrator setup of the Kubernetes and Numaflow execution environment
+2. Cluster administrator create [Virtual Function](https://docs.nvidia.com/doca/archive/doca-v1.3/virtual-functions/index.html)
+3. Cluster administrators install and start the DRA drivers, and [ResourceSlices](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/#resourceslice) are created
+4. Cluster administrator deploy [DeviceClass](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/#deviceclass)
+5. Users create [ResourceClaims or ResourceClaimTemplates](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/#resourceclaims-templates) to request PCIe devices other than NICs, such as GPUs
 
-## Deployment Sequence of Pods resources
+## Resource Deployment
 
-![Deployment Sequence](./assets/pod_deployment_sequence.drawio.png)
+![Resoruce Deployment Sequence](./assets/resource_deployment_sequence.drawio.png)
 
 The following workflow represents our current understanding.
 
@@ -114,51 +123,182 @@ The following workflow represents our current understanding.
    1. If a numaNetwork is referenced, the controller accesses the API Server to retrieve the numaNetwork information
    2. Add a field to the Vertex to reference the ResourceClaimTemplate associated with the numaNetwork
    3. Creates a domain name for each destination Vertex on a per-network basis in the toEdges field
-       - The domain name is called vertexDomain and is defined as <numaNetwork metadata.name>-<vertex metadata.name>
+       - The domain name is called `vertexDomain` and is defined as `<vertex name>.<numaNetwork name>.<pipeline name>.<namespace>.vertexdomain.local`
+         - The FQDN format is currently provisional. The key point is how to uniquely identify a domain within a sufficiently broad scope.
+          - local: Indicates that the scope is limited to within a Kubernetes cluster.
+          - vertexdomain: Represents the field type (serving as an alternative to a resource kind).
+          - `<namespace>`: The namespace where the Pipeline is deployed.
+          - `<pipeline name>`: The name of the Pipeline.
+          - `<numaNetwork name>`: The numaNetwork used by the Pipeline.
+          - `<vertex name>`: The target Vertex of the FQDN.
 3. The Vertex controller creates Pod resources and registers them in etcd via the API Server
-4. The ResourceClaimTemplate controller detects that pod.spec.resourceClaims[].resourceClaimTemplateName is specified and creates the corresponding ResourceClaim
+4. The ResourceClaimTemplate controller detects that `pod.spec.resourceClaims[].resourceClaimTemplateName` is specified and creates the corresponding ResourceClaim
 5. The kube-scheduler schedules the Pod
    - The mapping between the ResourceClaim and the ResourceSlice is evaluated
 
 
 ## Second NIC IP Configuration and Assignment
-- Precondition:
-	- A component that watches Vertex creation and registers DNS resource records in CoreDNS is running
-	- Each DNS resource record maps a Vertex domain to the second NIC IP address assigned to the container
+
+- Currently, a custom component (vertexDomainManager) is introduced to perform name resolution between Pods on MultiNetwork. In the future, we expect this functionality to be provided by a Kubernetes-native component through the MultiNetwork subproject.
+
+### Architecture
+
+![Resoruce Deployment Architecture](./assets/2nd_nic_ip_configuration_and_assignment_architecture.png)
+
+### Sequence
+![Resoruce Deployment Sequence](./assets/2nd_nic_ip_configuration_and_assignment_sequence.png)
+
+#### Preparation steps
+
+1. Start a separate etcd instance from the one used by Kubernetes
+  - This etcd is used to store DNS resource records referenced by CoreDNS
+  - Each DNS resource record maps a Vertex domain to the second NIC IP address assigned to the container
+2. The vertexDomainManager component, which is responsible for registering DNS resource records in CoreDNS is running
+3. The CoreDNS configuration is modified to receive DNS records from etcd (enabling the etcd plugin)	
+
+#### Regisration of IP to coreDNS
+
+Following "Pod deployment process"
 
 1. Once the kube-scheduler assigns a Pod to a Node, the kubelet on that Node starts operating
-2. Based on the ResourceClaims associated with the Pod assigned to the Node, the kubelet instructs the DRA driver to allocate the actual device.
-3. DRA driver for NIC performs device setup. As part of this process, it assigns an IP address to the second NIC (VF) using an IPAM tool
-   - In the case of [dranet](https://github.com/kubernetes-sigs/dranet?tab=readme-ov-file), this would be an internal IPAM tool (not supported in the current specification. We are planning to propose a new feature.)
-4. The NIC DRA driver assigns the second NIC (VF) to the container
-5. Pod creation is completed (the Vertex controller continues running and proceeds to the next phase)
-6. Clients verify whether a DNS record has been registered for a newly created Vertex. If no record exists, the client registers the record in etcd
-	- "The Vertex domain" is defined by introducing a new vertexDomain field in the Vertex resource and is referenced from there.
-	- "The secondary NIC IP address assigned to the container" is planned to be obtained by referencing the ResourceClaimStatus.
+2. The kubelet instructs the DRA drivers to allocate actual devices according to the ResourceClaims associated with the Pod
+3. DRA driver for NIC([dranet](https://github.com/kubernetes-sigs/dranet?tab=readme-ov-file)) performs device setup. As part of this process, it assigns an IP address to the second NIC (VF) using an IPAM tool
+4. dranet assigns the second NIC (VF) to the container
+5. Pod creation is completed (the Vertex controller continues running and proceeds to the next step)
+6. A component responsible for registering DNS resource records in CoreDNS (tentatively called `vertexDomainManager`) checks whether records corresponding to the created Vertex are already registered.
+	- `vertexDomainManager` starts operating in response to Pod deployment
+  - "The Vertex domain" is set as a label on the Pod by `Vertex Controller`
+	- The Second NIC IP assigned to the container is planned to be obtained from `ResourceClaimStatus`.
 
 
 ## Direct Communication Processing During Application Execution
-- Precondition: 
-  - The UDF container holds the domain corresponding to the destination Vertex as a environment varialbe
-  - Users are expected to perform direct communication by using a newly developed library that wraps GPUDirect RDMA libraries
-    - From the user’s perspective, only an interface function needs to be invoked
-    - The newly developed library is intended to be provided as part of the Numaflow SDK
+Before describing "Direct Communication processing during application execution, we first confirm the state established by the processing sequence so far.
 
-1. Users pass "the data to be sent" to the interface function
-   - The exact interface specification is yet to be defined
-2. The IP addresses of candidate destination pods are retrieved using the Vertex domain name obtained from environment variables.
-   - In languages such as Python, this can be achieved using functions like socket.getaddrinfo. 
-   - Name resolution follows the standard OS-level procedure; therefore, no special handling is required as long as the library function relies on the operating system’s name resolution mechanism.
-      - Specifically, the function queries the OS resolver, which refers to /etc/resolv.conf and sends a request to the DNS server specified there (CoreDNS). CoreDNS then queries the Kubernetes API and returns a list of pod IP addresses.
-      - Since the resolved destination candidates are expected to be stored in an internal cache (within the container’s OS space), this lookup is assumed to occur only once in most cases.
-3. Data is sent to the destination pods using a selection strategy such as round-robin.
+The UDF container holds the domain (vertexDomain) corresponding to the destination Vertex, which allows it to resolve the destination Pod’s IP address.
 
+### Architecture
+Significant changes have been made to the existing architecture, so discussion with the community is required.
+
+![Direct Communication Architecture](./assets/direct_communication_architecture.png)
+
+The reason why the main container is not used on the receiving side.
+
+As a prerequisite, the UDF container is implemented as a sidecar container, so the main container itself must be running.
+
+In the conventional architecture, users register their processing logic as a handler function in the main function of the UDF container. When the main container receives data from ISBSVC, it invokes the handler function via gRPC.
+
+In this proposal, however, data is delivered directly to the UDF container without passing through ISBSVC. As a result, there is no trigger for the main container to invoke the handler function. Therefore, there is no need to use the main container for data communication. Instead, the main function of the UDF container starts a thread to receive data and sends it to ISBSVC.
+
+Such changes introduce the following concerns.
+
+- On the sending side, since data is transmitted using GPUDirect RDMA, the data format returned by the handler function may change. As a result, if data cannot be correctly returned to ISBSVC, upstream Vertices may fail to recognize that the data has been sent, potentially triggering unnecessary retransmissions.
+- On the receiving side, the main container is not used.
+  - A receiving thread is required to format incoming data into a message format acceptable to ISBSVC before forwarding it.
+  - Since data is passed to ISBSVC through a path different from the conventional one, inconsistencies in related processing may arise.
+
+At the same time, we aim to maintain the separation between user-defined logic and communication-related processing, as in the conventional design. Therefore, users are expected to use a newly introduced API that wraps the GPUDirect RDMA library to perform direct communication.
+  - In other words, users only interact with a provided interface function.
+  - The newly introduced API is intended to be provided as part of the Numaflow SDK.
+
+Specifically, by encapsulating the components shown in the green boxes in the figure as APIs, we aim to separate them from the user-implemented code (shown in the purple boxes). Concretely, this consists of ①An API for initialization processing
+ and ②Communication APIs (for sending and receiving) that internally execute user-defined logic
+
+### Sequence
+
+![Direct Communication Sequence](./assets/direct_communication_sequence.png)
+
+> [!IMPORTANT]
+> In the following procedure, two QPs are created:
+>
+> - QP(1): Used as a control path to exchange information about the remote write destination
+> - QP(2): Used for data and metadata transfer via GPUNetIO
+
+#### Initialization Phase (Control Path)
+**Sender: main() function of UDF Container**
+
+1. Obtain the candidate destination Second NIC IPs using the "Vertex domain" retrieved from environment variables
+  - In Python, this can be done using functions such as `socket.getaddrinfo()`
+  - Name resolution follows the standard OS procedure:
+    - The function queries the OS resolver -> `/etc/resolv.conf` is referencedn DNS servers (CoreDNS) listed there are queried -> CoreDNS uses the Kubernetes API to return a list of Pod IPs
+    - Since destination candidates are cached internally (within the container OS), this resolution is expected to occur only once.
+2. Create a Protection Domain (PD)
+3. Using rdma_cm, first create CQ(1), then create QP(1) and associate it with the CQ. After that, establish an RC (Reliable Connection) and transition QP(1) to the RTS state
+  - Connection establishment follows a client-server model similar to TCP, managed internally by RDMA-CM.
+    - The sender requires the receiver's IP address. The receiver extracts the sender's address from the CONNECT_REQUEST event.
+  - The PD is created in advance and reused later for GPUNetIO QP(2)
+  - This process runs in an event loop, synchronized with the receiver.
+4. The sender pre-posts `ibv_post_recv()` and enters a listen state to receive remote memory information
+  - The sender receives this via CQ(1) recv completion and uses it for subsequent RDMA Write operations.
+
+**Receiver: main() function of UDF Container**
+
+5. Create a Protection Domain (PD)
+6. Using rdma_cm, first create CQ(1), then create QP(1) and associate it with the CQ. After that, establish an RC (Reliable Connection) and transition QP(1) to the RTS state
+  - The PD is created in advance and reused later for GPUNetIO QP(2)
+  - This process also runs in an event loop, synchronized with the sender.
+7. Allocate a receive buffer on the GPU and register it as a Memory Region (MR)
+  - The buffer is shared between RDMA Write and Send/Recv, with different offsets used to separate purposes.
+8. Use `ibv_post_send()` to send the following information to the sender via QP(1):
+  - Base address of the receive buffer
+  - Buffer size
+  - rkey
+
+**Sender & Receiver: main() function of UDF Container**
+
+9. Initialize GPUNetIO and establish QP(2) and CQ(2)
+10. Capture CUDA Graphs to define execution pipelines on both sides
+  - Users define processing logic to be captured and executed from the main() function.
+  - Sender side: Input → GPU processing → write results to "send GPU buffer"
+    - Process input data (e.g., filter/resize)
+    - Transfer data via RDMA Write
+    - Send metadata via Send/Recv
+  - Receiver side: Process "arrived data on receive ring" → return results to host
+    - Read data from buffer
+    - Perform processing (e.g., inference)
+    - Write results back to host memory
+
+**Receiver: main() function of UDF Container**
+
+11. Invoke the communication API
+
+**Receiver: Data Reception API of UDF Container**
+
+12. Launch a dedicated thread to wait for incoming data
+13. Prepare to receive metadata over QP(2)
+  - Enter a waiting state until data arrives
+
+#### Execution Phase
+**Sender: handler() function of UDF Container**
+
+1. handler function is triggered by invocation from the main container
+2. Inside the handler function, data is retrieved from InterStepBufferSVC as an argument
+3. Passes the data to the interface function
+
+**Sender: Data Transmission API**
+
+4. Verify that destination Pod IPs are available
+5. Execute CUDA Graph:
+  1. Run user-defined processing (e.g., filter/resize)
+  2. Select destination (e.g., round-robin).
+  3. Transfer processed data via RDMA Write over QP(2)
+    - Use unsignaled mode (no CQE generated)
+  4. Send metadata via Send/Recv over QP(2)
+    - Since both use the same QP(2), ordering (Write → Send) is guaranteed. No need for the sender to wait for CQ completion
+
+**Receiver: Data Reception API**
+6. GPU polls CQ(2) to detect metadata arrival
+7. GPUNetIO allows the GPU to detect QP(2) receive completion
+8. Execute CUDA Graph:
+  1. Run user-defined processing (e.g., inference)
+  2. Write processed data back to host memory
+9. Send results to ISBSVC
+10. Return to waiting for the next metadata reception
 
 # Resource Specification
 > [!WARNING]
 > With a view to supporting InterStepBufferService (ISBSVC) on MultiNetwork in the future, the resource specification is designed with potential ISBSVC extensions in mind.
 >
->However, the extension of ISBSVC itself is outside the scope of this proposal.
+> However, the extension of ISBSVC itself is outside the scope of this proposal.
 
 ## Pipeline
 ### Specification
@@ -181,7 +321,7 @@ spec:
               - name: gpu
       resourceClaims:
         - name: gpu
-          resourceClaimTemplateName: A100
+          resourceClaimTemplateName: a100
     - name: inference
       ...
       udf:
@@ -192,7 +332,7 @@ spec:
               - name: gpu
       resourceClaims:
         - name: gpu
-          resourceClaimTemplateName: A100
+          resourceClaimTemplateName: a100
       ...
     - name: out
       ...
@@ -217,11 +357,11 @@ spec:
 | edges[].numaNetwork.name<br>(★1) | Specifies the name of the numaNetwork used for communication between Vertices.<br> - If this parameter is omitted, the communication falls back to the default behavior of Numaflow, in which communication is performed via ISBSVC on the DefaultNetwork. |
 | edges[].numaNetwork.connectionType<br>(★2) | Specifies the communication method used for connections between Vertices.<br> - direct: Performs direct UDF-to-UDF communication using the numaNetwork specified by name.<br> - multi-isbsvc: Performs communication via an InterStepBufferService (ISBSVC) associated with the numaNetwork specified by name.
 
-### Behavior
-- If a numaNetwork is specified in edges[], the Pipeline controller retrieves the corresponding, already deployed numaNetwork resource
-- It then adds a field to the Vertices specified in the from and to fields to reference the associated ResourceClaimTemplate
+### How It Works
+If numaNetwork object is set in `edges[]` field of a Pipeline resource, the Pipeline controller retrieves the information of the already deployed `ResourceClaimTemplate` by referencing `spec.edges[].numaNetwork.name`.
 
 ```
+# Excerpt from the Pipeline resource
 edeges:
   - from: filter-resize
     to: inference
@@ -230,12 +370,54 @@ edeges:
       connectionType: direct         # ★2
 ```
 
-The following shows an example of a Vertex resource with the added fields.
-The ResourceClaimTemplate name is tentatively defined as `<numaNetwork metadata.name>-rct`, where rct is an abbreviation for ResourceClaimTemplate.
+By attaching a label to the ResourceClaimTemplate indicating which numaNetwork created it, the Pipeline controller can retrieve the required ResourceClaimTemplate information using spec.edges[].numaNetwork.name.
+
+(The name of the ResourceClaimTemplate is currently defined as numaNetwork.metadata.name + "rct" (short for ResourceClaimTemplate).)
 
 ```
-- name: inference
+# The ResourceClaimTemplate resource generated by the numaNetworkController, as described later.
+apiVersion: resource.k8s.io/v1beta1
+kind:  ResourceClaimTemplate
+metadata:
+  name: <numaNetwork metadata.name>-<rct>
+  labels:
+    XXX.example.com/numa-network-name: <numaNetwork metadata.name>-<rct>
+spec:
+  devices:
+    requests:
+    - name: req-nvidia-vf-ip
+      deviceClassName: XXX <- refDeviceClass.name
+    config:
+    - opaque:
+        driver: dra.net
+        parameters:
+          <- refResourceClaimDranet.XXX
   ...
+```
+
+When creating the Vertex resources specified by spec.edges[].from and to in the Pipeline resource, a field is added to reference the ResourceClaimTemplate (used for DRA).
+The following shows an example of a Vertex resource with the added field.
+
+```
+# Excerpt from Inference Vertex resource
+# Inference Vertexリソースの抜粋
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Vertex
+  ...
+spec:
+  fromeEdges:
+  - from: filter-resize
+    ...
+  name: inference
+  ...
+  resourceClaims:
+    - name: gpu
+      resourceClaimTemplateName: a100
+    - name: secondNIC
+      resourceClaimTemplateName: pipeline1-multi-network-rct <- Add
+  toEdges:
+  - from: inference
+    ...
   udf:
     container:
       ...
@@ -243,12 +425,7 @@ The ResourceClaimTemplate name is tentatively defined as `<numaNetwork metadata.
         claims:
           - name: gpu
           - name: secondNIC <- Add
-  resourceClaims:
-    - name: gpu
-      resourceClaimTemplateName: A100
-    - name: secondNIC
-      resourceClaimTemplateName: pipeline1-multi-network-rct <- Add
-  ...
+    ...
 ```
 
 ## (New) numaNetwork
@@ -259,11 +436,10 @@ In parallel, the Kubernetes SIG Network Multi-Network Subproject is discussing t
 
 ### Overview
 - The numaNetwork is a Custom Resource (CR) that defines the network configuration itself, which users design on MultiNetwork.
-  - While users can define multiple numaNetwork resources, it is not feasible to allow unlimited creation. Therefore, the CR should be designed to support configurable limits, such as an upper bound on the number of resources, in the future.
+- The custom controller for this CR creates the ResourceClaimTemplate required to assign NICs to Pods. Therefore, this CR contains the information necessary to place each Pod into the user-intended network.
 - This CR can be referenced from the InterStepBufferService (ISBSVC) manifest and the edge field of the Pipeline manifest.
   - Each edge can specify exactly one numaNetwork; however, the same or different numaNetwork resources may be specified on a per-edge basis.
   - In addition, the same numaNetwork can be shared across edges belonging to different pipelines.
-- The numaNetwork information is referenced during the processing flows of the InterStepBufferService and Pipeline controllers, and is used to create the required fields.
 
 ### Specification
 ```
@@ -290,13 +466,17 @@ spec:
 | refResourceClaimDranet.ethernetSpeed<br>(★3) | The maximum Ethernet link speed (Gb/s) used along the physical network path.<br>- Since software cannot obtain the maximum capacity of the physical Ethernet cabling in use, this value is intended for manifest authors to record network configuration information. |
 | refResourceClaimDranet.vlanTag<br>(★4) | The VLAN tag value assigned to data belonging to a numaNetwork. |
 
-### Behavior
-1. When a numaNetwork resource is deployed, a ResourceClaimTemplate is created using the fields defined under its spec, as shown below:
+### How It Works
+1. When a numaNetwork is deployed, a ResourceClaimTemplate is created using the fields under spec
+  - A label is added to indicate which numaNetwork resource generated the ResourceClaimTemplate.
+
 ```
 apiVersion: resource.k8s.io/v1beta1
 kind:  ResourceClaimTemplate
 metadata:
   name: <numaNetwork metadata.name>-<rct>
+  labels:
+    XXX.example.com/numa-network-name: <numaNetwork metadata.name>-<rct>
 spec:
   devices:
     requests:
@@ -309,5 +489,5 @@ spec:
           <- refResourceClaimDranet.XXX
 ```
 
-2. When a Pipeline resource is deployed, a reference to the corresponding ResourceClaimTemplate is added to the Vertex (see ResourceSpecification > Pipeline > Behavior for details)
+2. When a Pipeline resource is deployed, a reference to the corresponding ResourceClaimTemplate is added to the Vertex (see ResourceSpecification > Pipeline > How It Works)
 3. When a Pod is deployed, the parameters are interpreted by DRANET, and the internal IPAM tool in dranet allocates an IP address and assigns the NIC to the Pod
