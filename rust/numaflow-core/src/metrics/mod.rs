@@ -1685,6 +1685,7 @@ mod tests {
             true,
             None,
             None,
+            cln_token.clone(),
             None,
         )
         .await;

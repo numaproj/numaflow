@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -27,6 +28,8 @@ pub struct KVHistoryEntry {
     pub value: Bytes,
     /// The operation type.
     pub operation: KVWatchOp,
+    /// The time the entry was created (epoch milliseconds).
+    pub created: i64,
 }
 
 impl From<&KVHistoryEntry> for KVEntry {
@@ -40,6 +43,7 @@ impl From<&KVHistoryEntry> for KVEntry {
                 KVWatchOp::Delete => KVWatchOp::Delete,
                 KVWatchOp::Purge => KVWatchOp::Purge,
             },
+            created: value.created,
         }
     }
 }
@@ -77,11 +81,16 @@ impl KVState {
     /// Record a mutation in history.
     pub(crate) fn record_history(&mut self, key: String, value: Bytes, operation: KVWatchOp) {
         self.revision += 1;
+        let created = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_millis() as i64;
         let entry = KVHistoryEntry {
             revision: self.revision,
             key,
             value,
             operation,
+            created,
         };
         self.history.push(entry);
 

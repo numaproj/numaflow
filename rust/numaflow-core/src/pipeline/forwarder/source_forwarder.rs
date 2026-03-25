@@ -899,6 +899,7 @@ mod tests {
             true,
             Some(transformer),
             None,
+            cln_token.clone(),
             None,
         )
         .await;

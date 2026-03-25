@@ -20,7 +20,6 @@
 //! ```
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
@@ -149,7 +148,7 @@ impl ISBWatermarkState {
         // barrier offset which can be used safely to publish the idle watermark.
 
         // Identify the streams that are idle and publish the idle watermark
-        let idle_streams = self.idle_manager.fetch_idle_streams().await;
+        let idle_streams = self.idle_manager.fetch_streams_needing_publish().await;
         for stream in idle_streams.iter() {
             if let Ok(offset) = self.idle_manager.fetch_idle_offset(stream).await {
                 // publish the watermark
@@ -255,12 +254,12 @@ pub(crate) struct ISBWatermarkHandle {
 
 impl ISBWatermarkHandle {
     /// new creates a new [ISBWatermarkHandle]. We also start a background task to detect WM idleness.
+    /// Uses the heartbeat interval from the bucket config's delay (default 100ms from DEFAULT_HEARTBEAT_INTERVAL).
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn new(
         vertex_name: &'static str,
         vertex_replica: u16,
         vertex_type: VertexType,
-        idle_timeout: Duration,
         js_context: async_nats::jetstream::Context,
         config: &EdgeWatermarkConfig,
         to_vertex_configs: &[ToVertexConfig],
@@ -269,41 +268,38 @@ impl ISBWatermarkHandle {
         tracker: Tracker,
         from_partitions: Vec<u16>,
     ) -> Result<Self> {
+        // Get WMB delay from the first to_vertex bucket config's delay.
+        // All bucket configs use the same delay (DEFAULT_WMB_DELAY = 100ms).
+        use crate::config::pipeline::watermark::DEFAULT_WMB_DELAY;
+        let wmb_delay = config
+            .to_vertex_config
+            .first()
+            .and_then(|c| c.delay)
+            .unwrap_or(DEFAULT_WMB_DELAY);
+
         // create a processor manager map (from_vertex -> ProcessorManager)
         let mut processor_managers = HashMap::new();
         for from_bucket_config in &config.from_vertex_config {
-            // Create KV stores for ProcessorManager
-            let (ot_store, hb_store) =
-                Self::create_single_kv_stores(&js_context, from_bucket_config).await;
+            // Create KV store for ProcessorManager
+            let ot_store = Self::create_ot_store(&js_context, from_bucket_config).await;
 
-            let processor_manager = ProcessorManager::new(
-                ot_store,
-                hb_store,
-                from_bucket_config,
-                vertex_type,
-                vertex_replica,
-            )
-            .await?;
+            let processor_manager =
+                ProcessorManager::new(ot_store, from_bucket_config, vertex_type, vertex_replica)
+                    .await?;
             processor_managers.insert(from_bucket_config.vertex, processor_manager);
         }
         let fetcher =
             ISBWatermarkFetcher::new(processor_managers, &config.from_vertex_config).await?;
 
         // Create KV stores for the publisher
-        let (ot_stores, hb_stores) =
-            Self::create_kv_stores(&js_context, &config.to_vertex_config).await;
+        let ot_stores = Self::create_ot_stores(&js_context, &config.to_vertex_config).await;
 
         let processor_name = format!("{vertex_name}-{vertex_replica}");
-        let publisher = ISBWatermarkPublisher::new(
-            processor_name,
-            ot_stores,
-            hb_stores,
-            &config.to_vertex_config,
-            false,
-        );
+        let publisher =
+            ISBWatermarkPublisher::new(processor_name, ot_stores, &config.to_vertex_config, false);
 
         let idle_manager =
-            ISBIdleDetector::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
+            ISBIdleDetector::new(wmb_delay, to_vertex_configs, js_context.clone()).await;
 
         let state = Arc::new(Mutex::new(ISBWatermarkState::new(
             fetcher,
@@ -316,10 +312,10 @@ impl ISBWatermarkHandle {
 
         let isb_watermark_handle = Self { state };
 
-        // start a task to keep publishing idle watermarks every idle_timeout
+        // start a task to keep publishing idle watermarks every wmb_delay
         tokio::spawn({
             let isb_watermark_handle = isb_watermark_handle.clone();
-            let mut interval_ticker = tokio::time::interval(idle_timeout);
+            let mut interval_ticker = tokio::time::interval(wmb_delay);
             let cln_token = cln_token.clone();
             async move {
                 loop {
@@ -391,40 +387,24 @@ impl ISBWatermarkHandle {
         state.publish_idle_watermark().await;
     }
 
-    /// Helper to create KV stores for a single bucket config.
-    /// Returns (ot_store, hb_store) tuple.
-    async fn create_single_kv_stores(
+    /// Helper to create OT KV store for a single bucket config.
+    async fn create_ot_store(
         js_context: &async_nats::jetstream::Context,
         bucket_config: &BucketConfig,
-    ) -> (Arc<dyn KVStore>, Arc<dyn KVStore>) {
+    ) -> Arc<dyn KVStore> {
         let ot_bucket = js_context
             .get_key_value(bucket_config.ot_bucket)
             .await
             .expect("Failed to get OT bucket");
-        let ot_store: Arc<dyn KVStore> =
-            Arc::new(JetstreamKVStore::new(ot_bucket, bucket_config.ot_bucket));
-
-        let hb_bucket = js_context
-            .get_key_value(bucket_config.hb_bucket)
-            .await
-            .expect("Failed to get HB bucket");
-        let hb_store: Arc<dyn KVStore> =
-            Arc::new(JetstreamKVStore::new(hb_bucket, bucket_config.hb_bucket));
-
-        (ot_store, hb_store)
+        Arc::new(JetstreamKVStore::new(ot_bucket, bucket_config.ot_bucket))
     }
 
-    /// Helper to create KV stores from bucket configs using the JetStream context.
-    /// Returns (ot_stores, hb_stores) tuple.
-    async fn create_kv_stores(
+    /// Helper to create OT KV stores from bucket configs using the JetStream context.
+    async fn create_ot_stores(
         js_context: &async_nats::jetstream::Context,
         bucket_configs: &[BucketConfig],
-    ) -> (
-        HashMap<&'static str, Arc<dyn KVStore>>,
-        Vec<Arc<dyn KVStore>>,
-    ) {
+    ) -> HashMap<&'static str, Arc<dyn KVStore>> {
         let mut ot_stores: HashMap<&'static str, Arc<dyn KVStore>> = HashMap::new();
-        let mut hb_stores: Vec<Arc<dyn KVStore>> = Vec::new();
 
         for config in bucket_configs {
             let ot_bucket = js_context
@@ -435,20 +415,16 @@ impl ISBWatermarkHandle {
                 config.vertex,
                 Arc::new(JetstreamKVStore::new(ot_bucket, config.ot_bucket)),
             );
-
-            let hb_bucket = js_context
-                .get_key_value(config.hb_bucket)
-                .await
-                .expect("Failed to get HB bucket");
-            hb_stores.push(Arc::new(JetstreamKVStore::new(hb_bucket, config.hb_bucket)));
         }
 
-        (ot_stores, hb_stores)
+        ot_stores
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
     use tokio::time::sleep;
@@ -495,7 +471,6 @@ mod tests {
             vertex: "from_vertex",
             partitions: vec![0],
             ot_bucket: ot_bucket_name,
-            hb_bucket: hb_bucket_name,
             delay: None,
         };
 
@@ -503,7 +478,6 @@ mod tests {
             vertex: "to_vertex",
             partitions: vec![0],
             ot_bucket: to_ot_bucket_name,
-            hb_bucket: to_hb_bucket_name,
             delay: None,
         };
 
@@ -567,7 +541,6 @@ mod tests {
             vertex_name,
             0,
             VertexType::MapUDF,
-            Duration::from_millis(100),
             js_context.clone(),
             &edge_config,
             &[ToVertexConfig {
@@ -697,15 +670,11 @@ mod tests {
             vertex: "from_vertex",
             partitions: vec![0],
             ot_bucket: ot_bucket_name,
-            hb_bucket: hb_bucket_name,
             delay: None,
         };
 
         let _ = js_context
             .delete_key_value(ot_bucket_name.to_string())
-            .await;
-        let _ = js_context
-            .delete_key_value(hb_bucket_name.to_string())
             .await;
 
         // create key value stores
@@ -737,7 +706,6 @@ mod tests {
             vertex_name,
             0,
             VertexType::MapUDF,
-            Duration::from_millis(100),
             js_context.clone(),
             &edge_config,
             &[ToVertexConfig {
@@ -825,7 +793,6 @@ mod tests {
             vertex: "from_vertex",
             partitions: vec![0],
             ot_bucket: ot_bucket_name,
-            hb_bucket: hb_bucket_name,
             delay: None,
         };
 
@@ -833,7 +800,6 @@ mod tests {
             vertex: "to_vertex",
             partitions: vec![0],
             ot_bucket: to_ot_bucket_name,
-            hb_bucket: to_hb_bucket_name,
             delay: None,
         };
 
@@ -842,13 +808,7 @@ mod tests {
             .delete_key_value(ot_bucket_name.to_string())
             .await;
         let _ = js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await;
-        let _ = js_context
             .delete_key_value(to_ot_bucket_name.to_string())
-            .await;
-        let _ = js_context
-            .delete_key_value(to_hb_bucket_name.to_string())
             .await;
 
         // create key value stores
@@ -898,7 +858,6 @@ mod tests {
             vertex_name,
             0,
             VertexType::MapUDF,
-            Duration::from_millis(10), // Set idle timeout to a very short duration
             js_context.clone(),
             &edge_config,
             &[ToVertexConfig {
@@ -963,7 +922,6 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let ot_bucket_name = "test_fetch_head_watermark_OT";
-        let hb_bucket_name = "test_fetch_head_watermark_PROCESSORS";
 
         let vertex_name = "test-vertex";
 
@@ -971,30 +929,17 @@ mod tests {
             vertex: "from_vertex",
             partitions: vec![0],
             ot_bucket: ot_bucket_name,
-            hb_bucket: hb_bucket_name,
             delay: None,
         };
 
         let _ = js_context
             .delete_key_value(ot_bucket_name.to_string())
             .await;
-        let _ = js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await;
 
         // create key value stores
         js_context
             .create_key_value(Config {
                 bucket: ot_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        js_context
-            .create_key_value(Config {
-                bucket: hb_bucket_name.to_string(),
                 history: 1,
                 ..Default::default()
             })
@@ -1011,7 +956,6 @@ mod tests {
             vertex_name,
             0,
             VertexType::MapUDF,
-            Duration::from_millis(100),
             js_context.clone(),
             &edge_config,
             &[ToVertexConfig {
