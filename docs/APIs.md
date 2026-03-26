@@ -4221,6 +4221,25 @@ Whether to create a ClusterIP Service
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>port</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The port to listen on for HTTP requests, defaults to 8443
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>

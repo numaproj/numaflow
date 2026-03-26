@@ -697,6 +697,10 @@ message HTTPSource {
   // Whether to create a ClusterIP Service
   // +optional
   optional bool service = 2;
+
+  // The port to listen on for HTTP requests, defaults to 8443
+  // +optional
+  optional int32 port = 3;
 }
 
 message IdleSource {
