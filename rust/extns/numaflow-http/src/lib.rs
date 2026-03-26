@@ -167,7 +167,9 @@ impl HttpSourceConfigBuilder {
     }
 
     pub fn port(mut self, port: u16) -> Self {
-        let mut addr = self.addr.unwrap_or_else(|| "0.0.0.0:8443".parse().expect("Invalid address"));
+        let mut addr = self
+            .addr
+            .unwrap_or_else(|| "0.0.0.0:8443".parse().expect("Invalid address"));
         addr.set_port(port);
         self.addr = Some(addr);
         self
