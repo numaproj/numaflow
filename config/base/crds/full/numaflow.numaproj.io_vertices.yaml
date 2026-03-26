@@ -5643,6 +5643,9 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                         type: object
+                      port:
+                        format: int32
+                        type: integer
                       service:
                         type: boolean
                     type: object

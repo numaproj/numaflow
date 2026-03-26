@@ -373,6 +373,10 @@ impl TryFrom<Box<numaflow_models::models::HttpSource>> for SourceType {
     ) -> std::result::Result<Self, Self::Error> {
         let mut http_config = numaflow_http::HttpSourceConfigBuilder::new(get_vertex_name());
 
+        if let Some(port) = value.port {
+            http_config = http_config.port(port as u16);
+        }
+
         if let Some(auth) = value.auth {
             let auth = auth.token.unwrap();
             let token = get_secret_from_volume(&auth.name, &auth.key).map_err(|e| {

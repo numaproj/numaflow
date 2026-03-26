@@ -20557,6 +20557,11 @@
         "auth": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
         },
+        "port": {
+          "description": "The port to listen on for HTTP requests, defaults to 8443",
+          "format": "int32",
+          "type": "integer"
+        },
         "service": {
           "description": "Whether to create a ClusterIP Service",
           "type": "boolean"

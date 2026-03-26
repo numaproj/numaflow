@@ -25,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 )
 
@@ -205,6 +206,25 @@ func TestGetServiceObjs(t *testing.T) {
 	assert.Equal(t, s[1].Name, v.Name)
 	assert.Equal(t, 1, len(s[1].Spec.Ports))
 	assert.Equal(t, VertexHTTPSPort, int(s[1].Spec.Ports[0].Port))
+}
+
+func TestGetServiceObjsWithCustomPort(t *testing.T) {
+	v := testVertex.DeepCopy()
+	v.Spec.UDF = nil
+	customPort := int32(9090)
+	v.Spec.Source = &Source{
+		HTTP: &HTTPSource{
+			Service: true,
+			Port:    &customPort,
+		},
+	}
+	s := v.GetServiceObjs()
+	assert.Equal(t, 2, len(s))
+	assert.Equal(t, s[1].Name, v.Name)
+	assert.Equal(t, 1, len(s[1].Spec.Ports))
+	assert.Equal(t, int32(9090), s[1].Spec.Ports[0].Port)
+	assert.Equal(t, intstr.FromInt32(9090), s[1].Spec.Ports[0].TargetPort)
+	assert.Equal(t, VertexHTTPSPortName, s[1].Spec.Ports[0].Name)
 }
 
 func TestGetHeadlessServiceName(t *testing.T) {

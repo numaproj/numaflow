@@ -166,6 +166,15 @@ impl HttpSourceConfigBuilder {
         self
     }
 
+    pub fn port(mut self, port: u16) -> Self {
+        let mut addr = self
+            .addr
+            .unwrap_or_else(|| "0.0.0.0:8443".parse().expect("Invalid address"));
+        addr.set_port(port);
+        self.addr = Some(addr);
+        self
+    }
+
     pub fn graceful_shutdown_time(mut self, graceful_shutdown_time: Duration) -> Self {
         self.graceful_shutdown_time = Some(graceful_shutdown_time);
         self

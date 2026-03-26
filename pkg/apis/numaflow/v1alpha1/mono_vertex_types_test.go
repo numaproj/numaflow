@@ -24,6 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 )
 
@@ -541,6 +542,26 @@ func TestMonoVertex_GetServiceObjs(t *testing.T) {
 		assert.Equal(t, VertexHTTPSPort, int(services[1].Spec.Ports[0].Port))
 		assert.Equal(t, VertexHTTPSPortName, services[1].Spec.Ports[0].Name)
 		assert.NotEqual(t, "None", services[1].Spec.ClusterIP)
+	})
+
+	t.Run("verify HTTP source with custom port", func(t *testing.T) {
+		mvCopy := mv.DeepCopy()
+		customPort := int32(9090)
+		mvCopy.Spec.Source = &Source{
+			HTTP: &HTTPSource{
+				Service: true,
+				Port:    &customPort,
+			},
+		}
+		services := mvCopy.GetServiceObjs()
+		assert.Equal(t, 2, len(services), "Expected 2 service objects (headless + HTTP)")
+
+		// Second service should be the HTTP service with custom port
+		assert.Equal(t, services[1].Name, mvCopy.Name)
+		assert.Equal(t, 1, len(services[1].Spec.Ports))
+		assert.Equal(t, int32(9090), services[1].Spec.Ports[0].Port)
+		assert.Equal(t, intstr.FromInt32(9090), services[1].Spec.Ports[0].TargetPort)
+		assert.Equal(t, VertexHTTPSPortName, services[1].Spec.Ports[0].Name)
 	})
 }
 
