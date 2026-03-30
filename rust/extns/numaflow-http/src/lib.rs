@@ -1635,8 +1635,7 @@ mod tests {
 
         // Plain HTTP client (no TLS).
         let http_connector = hyper_util::client::legacy::connect::HttpConnector::new();
-        let client =
-            Client::builder(hyper_util::rt::TokioExecutor::new()).build(http_connector);
+        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(http_connector);
 
         let request = Request::builder()
             .method(Method::POST)
@@ -1652,10 +1651,7 @@ mod tests {
         let (response, _) = tokio::join!(response_fut, async {
             let msgs = http_source.read(1).await.unwrap().unwrap();
             assert_eq!(msgs.len(), 1);
-            http_source
-                .ack(vec![msgs[0].id.clone()])
-                .await
-                .unwrap();
+            http_source.ack(vec![msgs[0].id.clone()]).await.unwrap();
         });
 
         assert_eq!(response.unwrap().status(), hyper::StatusCode::OK);
