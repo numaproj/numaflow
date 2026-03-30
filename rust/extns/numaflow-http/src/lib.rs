@@ -96,6 +96,8 @@ pub struct HttpSourceConfig {
     /// Default buffer size is 500
     pub buffer_size: usize,
     pub addr: SocketAddr,
+    /// Optional HTTP (non-TLS) address. When set, an additional plain HTTP server is started.
+    pub http_addr: Option<SocketAddr>,
     pub timeout: Duration,
     pub token: Option<&'static str>,
     pub graceful_shutdown_time: Duration,
@@ -118,6 +120,7 @@ impl Default for HttpSourceConfig {
             vertex_name: "in",
             buffer_size: 500,
             addr: "0.0.0.0:8443".parse().expect("Invalid address"),
+            http_addr: None,
             timeout: Duration::from_millis(5),
             token: None,
             graceful_shutdown_time: Duration::from_secs(20),
@@ -129,6 +132,7 @@ pub struct HttpSourceConfigBuilder {
     vertex_name: &'static str,
     buffer_size: Option<usize>,
     addr: Option<SocketAddr>,
+    http_addr: Option<SocketAddr>,
     timeout: Option<Duration>,
     token: Option<&'static str>,
     graceful_shutdown_time: Option<Duration>,
@@ -140,6 +144,7 @@ impl HttpSourceConfigBuilder {
             vertex_name,
             buffer_size: None,
             addr: None,
+            http_addr: None,
             timeout: None,
             token: None,
             graceful_shutdown_time: None,
@@ -175,6 +180,15 @@ impl HttpSourceConfigBuilder {
         self
     }
 
+    pub fn http_port(mut self, port: u16) -> Self {
+        let mut addr = self
+            .http_addr
+            .unwrap_or_else(|| "0.0.0.0:8090".parse().expect("Invalid address"));
+        addr.set_port(port);
+        self.http_addr = Some(addr);
+        self
+    }
+
     pub fn graceful_shutdown_time(mut self, graceful_shutdown_time: Duration) -> Self {
         self.graceful_shutdown_time = Some(graceful_shutdown_time);
         self
@@ -187,6 +201,7 @@ impl HttpSourceConfigBuilder {
             addr: self
                 .addr
                 .unwrap_or_else(|| "0.0.0.0:8443".parse().expect("Invalid address")),
+            http_addr: self.http_addr,
             timeout: self.timeout.unwrap_or(Duration::from_millis(5)),
             token: self.token,
             // FIXME: As of today we have a hard timeout of 30 secs from K8s, we have not exposed a way to increase it.
@@ -224,12 +239,23 @@ impl HttpSourceActor {
 
         let server_handle = tokio::spawn(start_server(
             http_source_config.vertex_name,
-            tx,
+            tx.clone(),
             http_source_config.addr,
             http_source_config.token,
             Arc::clone(&inflight_requests),
             axum_handle.clone(),
         ));
+
+        let http_server_handle = http_source_config.http_addr.map(|http_addr| {
+            tokio::spawn(start_http_server(
+                http_source_config.vertex_name,
+                tx,
+                http_addr,
+                http_source_config.token,
+                Arc::clone(&inflight_requests),
+                axum_handle.clone(),
+            ))
+        });
 
         let graceful_shutdown_time = http_source_config.graceful_shutdown_time;
         let shutdown_handle = tokio::spawn(async move {
@@ -237,6 +263,11 @@ impl HttpSourceActor {
             info!("CancellationToken cancelled; initiating HTTP graceful shutdown");
             axum_handle.graceful_shutdown(Some(graceful_shutdown_time));
             if let Err(e) = server_handle.await.expect("server handle failed") {
+                error!(?e, "HTTPS server failed");
+            }
+            if let Some(handle) = http_server_handle
+                && let Err(e) = handle.await.expect("http server handle failed")
+            {
                 error!(?e, "HTTP server failed");
             }
         });
@@ -576,6 +607,28 @@ pub async fn start_server(
         .serve(router.into_make_service())
         .await
         .map_err(|e| Error::Server(format!("HTTPS server error: {e}")))?;
+
+    Ok(())
+}
+
+/// Start a plain HTTP (non-TLS) server on the specified address
+pub async fn start_http_server(
+    vertex_name: &'static str,
+    tx: mpsc::Sender<HttpMessage>,
+    addr: SocketAddr,
+    token: Option<&'static str>,
+    inflight_requests: InflightRequestsMap,
+    axum_handle: AxumHandle,
+) -> Result<()> {
+    let router = create_router(vertex_name, token, tx, inflight_requests);
+
+    info!(?addr, "Starting HTTP source server");
+
+    axum_server::bind(addr)
+        .handle(axum_handle)
+        .serve(router.into_make_service())
+        .await
+        .map_err(|e| Error::Server(format!("HTTP server error: {e}")))?;
 
     Ok(())
 }

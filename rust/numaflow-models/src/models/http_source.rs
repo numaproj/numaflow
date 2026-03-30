@@ -20,9 +20,13 @@ limitations under the License.
 pub struct HttpSource {
     #[serde(rename = "auth", skip_serializing_if = "Option::is_none")]
     pub auth: Option<Box<crate::models::Authorization>>,
-    /// The port to listen on for HTTP requests, defaults to 8443
+    /// The port to listen on for HTTPS requests, defaults to 8443
     #[serde(rename = "port", skip_serializing_if = "Option::is_none")]
     pub port: Option<i32>,
+    /// The port to listen on for HTTP (non-TLS) requests. To start an HTTP server
+    /// the http port should be explicitly set.
+    #[serde(rename = "httpPort", skip_serializing_if = "Option::is_none")]
+    pub http_port: Option<i32>,
     /// Whether to create a ClusterIP Service
     #[serde(rename = "service", skip_serializing_if = "Option::is_none")]
     pub service: Option<bool>,
@@ -33,6 +37,7 @@ impl HttpSource {
         HttpSource {
             auth: None,
             port: None,
+            http_port: None,
             service: None,
         }
     }

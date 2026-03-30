@@ -377,6 +377,10 @@ impl TryFrom<Box<numaflow_models::models::HttpSource>> for SourceType {
             http_config = http_config.port(port as u16);
         }
 
+        if let Some(http_port) = value.http_port {
+            http_config = http_config.http_port(http_port as u16);
+        }
+
         if let Some(auth) = value.auth {
             let auth = auth.token.unwrap();
             let token = get_secret_from_volume(&auth.name, &auth.key).map_err(|e| {
