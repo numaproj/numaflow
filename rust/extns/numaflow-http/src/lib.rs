@@ -1651,7 +1651,10 @@ mod tests {
         let (response, _) = tokio::join!(response_fut, async {
             let msgs = http_source.read(1).await.unwrap().unwrap();
             assert_eq!(msgs.len(), 1);
-            http_source.ack(vec![msgs[0].id.clone()]).await.unwrap();
+            http_source
+                .ack(vec![msgs.first().expect("Expected message").id.clone()])
+                .await
+                .unwrap();
         });
 
         assert_eq!(response.unwrap().status(), hyper::StatusCode::OK);

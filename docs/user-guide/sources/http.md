@@ -76,7 +76,7 @@ curl -kq -X POST -d "hello world" https://localhost:8443/vertices/in
 
 ## Plain HTTP (non-TLS)
 
-By default, the HTTP source only accepts HTTPS traffic. To also accept plain HTTP requests, explicitly set `httpPort`. The HTTPS server always starts on `port` (default 8443); the HTTP server only starts when `httpPort` is set.
+By default, the HTTP source only accepts HTTPS traffic. To also accept plain HTTP requests, explicitly set `ports.http`. The HTTPS server always starts on `ports.https` (default 8443); the HTTP server only starts when `ports.http` is set.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -89,7 +89,9 @@ spec:
       source:
         http:
           service: true
-          httpPort: 8090
+          ports:
+            http: 8090       # enables plain HTTP
+            # https: 8443    # optional, defaults to 8443
 ```
 
 When `service: true` is set alongside `httpPort`, the generated ClusterIP Service will expose both ports:

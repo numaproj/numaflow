@@ -4225,7 +4225,8 @@ Whether to create a ClusterIP Service
 
 <td>
 
-<code>port</code></br> <em> int32 </em>
+<code>ports</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Ports"> Ports </a> </em>
 </td>
 
 <td>
@@ -4233,27 +4234,8 @@ Whether to create a ClusterIP Service
 <em>(Optional)</em>
 <p>
 
-The port to listen on for HTTPS requests, defaults to 8443
-</p>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>httpPort</code></br> <em> int32 </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-<p>
-
-The port to listen on for HTTP (non-TLS) requests. To start an HTTP
-server the http port should be explicitly set.
+Ports to listen on. HTTPS always runs on port 8443 by default. To enable
+plain HTTP, set ports.http explicitly.
 </p>
 
 </td>
@@ -8864,6 +8846,7 @@ Ports
 <p>
 
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.HTTPSource">HTTPSource</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.ServingSpec">ServingSpec</a>)
 </p>
 

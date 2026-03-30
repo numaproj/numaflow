@@ -7276,12 +7276,15 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                         type: object
-                      httpPort:
-                        format: int32
-                        type: integer
-                      port:
-                        format: int32
-                        type: integer
+                      ports:
+                        properties:
+                          http:
+                            format: int32
+                            type: integer
+                          https:
+                            format: int32
+                            type: integer
+                        type: object
                       service:
                         type: boolean
                     type: object
@@ -20403,12 +20406,15 @@ spec:
                                   type: object
                                   x-kubernetes-map-type: atomic
                               type: object
-                            httpPort:
-                              format: int32
-                              type: integer
-                            port:
-                              format: int32
-                              type: integer
+                            ports:
+                              properties:
+                                http:
+                                  format: int32
+                                  type: integer
+                                https:
+                                  format: int32
+                                  type: integer
+                              type: object
                             service:
                               type: boolean
                           type: object
@@ -33526,12 +33532,15 @@ spec:
                                       type: object
                                       x-kubernetes-map-type: atomic
                                   type: object
-                                httpPort:
-                                  format: int32
-                                  type: integer
-                                port:
-                                  format: int32
-                                  type: integer
+                                ports:
+                                  properties:
+                                    http:
+                                      format: int32
+                                      type: integer
+                                    https:
+                                      format: int32
+                                      type: integer
+                                  type: object
                                 service:
                                   type: boolean
                               type: object
@@ -42848,12 +42857,15 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                         type: object
-                      httpPort:
-                        format: int32
-                        type: integer
-                      port:
-                        format: int32
-                        type: integer
+                      ports:
+                        properties:
+                          http:
+                            format: int32
+                            type: integer
+                          https:
+                            format: int32
+                            type: integer
+                        type: object
                       service:
                         type: boolean
                     type: object
