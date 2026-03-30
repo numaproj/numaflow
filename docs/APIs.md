@@ -4233,7 +4233,27 @@ Whether to create a ClusterIP Service
 <em>(Optional)</em>
 <p>
 
-The port to listen on for HTTP requests, defaults to 8443
+The port to listen on for HTTPS requests, defaults to 8443
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>httpPort</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The port to listen on for HTTP (non-TLS) requests. To start an HTTP
+server the http port should be explicitly set.
 </p>
 
 </td>

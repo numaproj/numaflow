@@ -7276,6 +7276,9 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                         type: object
+                      httpPort:
+                        format: int32
+                        type: integer
                       port:
                         format: int32
                         type: integer
@@ -20400,6 +20403,9 @@ spec:
                                   type: object
                                   x-kubernetes-map-type: atomic
                               type: object
+                            httpPort:
+                              format: int32
+                              type: integer
                             port:
                               format: int32
                               type: integer
@@ -33520,6 +33526,9 @@ spec:
                                       type: object
                                       x-kubernetes-map-type: atomic
                                   type: object
+                                httpPort:
+                                  format: int32
+                                  type: integer
                                 port:
                                   format: int32
                                   type: integer
@@ -42839,6 +42848,9 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                         type: object
+                      httpPort:
+                        format: int32
+                        type: integer
                       port:
                         format: int32
                         type: integer

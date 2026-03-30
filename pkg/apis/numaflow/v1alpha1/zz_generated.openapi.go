@@ -2137,7 +2137,14 @@ func schema_pkg_apis_numaflow_v1alpha1_HTTPSource(ref common.ReferenceCallback) 
 					},
 					"port": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The port to listen on for HTTP requests, defaults to 8443",
+							Description: "The port to listen on for HTTPS requests, defaults to 8443",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"httpPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The port to listen on for HTTP (non-TLS) requests. To start an HTTP server the http port should be explicitly set.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},

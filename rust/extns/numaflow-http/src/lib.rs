@@ -1605,4 +1605,61 @@ mod tests {
         let result = parse_keys_from_header(&keys_header_value).unwrap();
         assert_eq!(result, vec!["key1", "key2"]);
     }
+
+    /// Verify that when `http_addr` is set the HTTP source also accepts plain HTTP requests.
+    #[tokio::test]
+    async fn test_http_source_with_plain_http() {
+        let cln_token = CancellationToken::new();
+
+        // Pick two random ports: one for HTTPS, one for plain HTTP.
+        let https_listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let https_addr = https_listener.local_addr().unwrap();
+        drop(https_listener);
+
+        let http_listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let http_addr = http_listener.local_addr().unwrap();
+        drop(http_listener);
+
+        let config = HttpSourceConfigBuilder::new("test")
+            .addr(https_addr)
+            .http_port(http_addr.port())
+            .buffer_size(10)
+            .timeout(Duration::from_millis(100))
+            .build();
+
+        assert_eq!(config.http_addr.map(|a| a.port()), Some(http_addr.port()));
+
+        let http_source = HttpSourceHandle::new(config, cln_token.clone()).await;
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Plain HTTP client (no TLS).
+        let http_connector = hyper_util::client::legacy::connect::HttpConnector::new();
+        let client =
+            Client::builder(hyper_util::rt::TokioExecutor::new()).build(http_connector);
+
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri(format!("http://{}/vertices/test", http_addr))
+            .header("Content-Type", "application/json")
+            .header(NUMAFLOW_ID_HEADER_KEY, "plain-http-test-id")
+            .body("plain http body".to_string())
+            .unwrap();
+
+        let response_fut = client.request(request);
+
+        // Concurrently read & ack so the handler can return a response.
+        let (response, _) = tokio::join!(response_fut, async {
+            let msgs = http_source.read(1).await.unwrap().unwrap();
+            assert_eq!(msgs.len(), 1);
+            http_source
+                .ack(vec![msgs[0].id.clone()])
+                .await
+                .unwrap();
+        });
+
+        assert_eq!(response.unwrap().status(), hyper::StatusCode::OK);
+
+        cln_token.cancel();
+    }
 }

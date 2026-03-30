@@ -20562,8 +20562,13 @@
         "auth": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
         },
+        "httpPort": {
+          "description": "The port to listen on for HTTP (non-TLS) requests. To start an HTTP server the http port should be explicitly set.",
+          "type": "integer",
+          "format": "int32"
+        },
         "port": {
-          "description": "The port to listen on for HTTP requests, defaults to 8443",
+          "description": "The port to listen on for HTTPS requests, defaults to 8443",
           "type": "integer",
           "format": "int32"
         },

@@ -1031,6 +1031,11 @@ func (in *HTTPSource) DeepCopyInto(out *HTTPSource) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.HTTPPort != nil {
+		in, out := &in.HTTPPort, &out.HTTPPort
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 

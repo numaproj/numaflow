@@ -698,9 +698,14 @@ message HTTPSource {
   // +optional
   optional bool service = 2;
 
-  // The port to listen on for HTTP requests, defaults to 8443
+  // The port to listen on for HTTPS requests, defaults to 8443
   // +optional
   optional int32 port = 3;
+
+  // The port to listen on for HTTP (non-TLS) requests. To start an HTTP server
+  // the http port should be explicitly set.
+  // +optional
+  optional int32 httpPort = 4;
 }
 
 message IdleSource {
