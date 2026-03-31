@@ -1,8 +1,8 @@
 use crate::Result;
-use crate::mark_success_batch;
 use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
+use crate::mark_success_batch;
 use crate::message::{Message, MessageHandle};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
@@ -259,9 +259,6 @@ impl SinkWriter {
 
         let dropped_count = dropped.len();
 
-        // Dropped messages are treated as successfully processed
-        mark_success_batch!(dropped);
-
         // If all messages were dropped, we're done
         if to_process.is_empty() {
             send_drop_metrics(is_mono_vertex(), dropped_count);
@@ -279,6 +276,9 @@ impl SinkWriter {
 
         // Success: ack all processed messages
         mark_success_batch!(to_process);
+        // Dropped messages are treated as successfully processed
+        mark_success_batch!(dropped);
+
         send_drop_metrics(is_mono_vertex(), dropped_count);
         Ok(())
     }
@@ -727,7 +727,9 @@ impl From<sink_response::Result> for ResponseFromSink {
 mod tests {
     use super::*;
     use crate::config::pipeline::NatsStoreConfig;
-    use crate::message::{AckHandle, IntOffset, Message, MessageID, Offset, ReadAck, MessageHandle};
+    use crate::message::{
+        AckHandle, IntOffset, Message, MessageHandle, MessageID, Offset, ReadAck,
+    };
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::serve::nats::NatsServingStore;
     use crate::tracker::Tracker;

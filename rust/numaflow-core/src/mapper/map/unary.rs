@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use crate::mark_success;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
+use crate::mark_success;
 use crate::message::{Message, MessageHandle};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
@@ -110,9 +110,9 @@ impl MapUnaryTask {
             .await
             .expect("failed to update tracker");
 
-        // Send messages downstream
         for mapped_message in mapped_messages {
-            let read_msg = self.read_message.clone_with_message(mapped_message);
+            let read_msg =
+                MessageHandle::from_arc(mapped_message, Arc::clone(&self.read_message.ack_handle));
 
             // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
             // If not bypassed, it returns Some(read_msg) for us to send downstream.

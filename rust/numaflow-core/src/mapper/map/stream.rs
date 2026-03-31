@@ -109,7 +109,10 @@ impl MapStreamTask {
                         // Wrap in MessageHandle sharing the same AckHandle.
                         // Each output message increments ref_count, and downstream will call mark_success()
                         // when the message is successfully written.
-                        let read_msg = self.read_message.clone_with_message(mapped_message);
+                        let read_msg = MessageHandle::from_arc(
+                            mapped_message,
+                            Arc::clone(&self.read_message.ack_handle),
+                        );
 
                         // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
                         // If not bypassed, it returns Some(read_msg) for us to send downstream.

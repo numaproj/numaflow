@@ -5,10 +5,10 @@ use super::{
 use crate::config::is_mono_vertex;
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
+use crate::mark_success_batch;
 use crate::message::{Message, MessageHandle};
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::tracker::Tracker;
-use crate::mark_success_batch;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -112,12 +112,15 @@ impl MapBatchTask {
                     // Each output message increments ref_count, and downstream will call mark_success()
                     // when the message is successfully written.
                     for mapped_message in mapped_messages {
-                        let read_msg = self
-                            .read_batch
-                            .get(idx)
-                            .expect("read_batch index must be valid")
-                            .clone_with_message(mapped_message);
+                        let ack_handle = Arc::clone(
+                            &self
+                                .read_batch
+                                .get(idx)
+                                .expect("read_batch index must be valid")
+                                .ack_handle,
+                        );
 
+                        let read_msg = MessageHandle::from_arc(mapped_message, ack_handle);
                         // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
                         // If not bypassed, it returns Some(read_msg) for us to send downstream.
                         let read_msg = if let Some(ref bypass_router) = self.bypass_router {
