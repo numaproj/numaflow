@@ -169,6 +169,17 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int, times
 	podInfo, err := r.podTracker.GetPodInfo(key)
 	vtx := r.pipeline.GetVertex(podInfo.vertexName)
 	isReduce := vtx.IsReduceUDF()
+	// Check if ordered processing is enabled for the vertex
+	// When ordered processing is enabled, each pod handles a specific partition (1:1 mapping like reduce)
+	// Compute effective ordered config: vertex-level takes precedence over pipeline-level
+	var isOrderedProcessing bool
+	if !isReduce {
+		if vtx.Ordered != nil {
+			isOrderedProcessing = vtx.Ordered.Enabled
+		} else if r.pipeline.Spec.Ordered != nil {
+			isOrderedProcessing = r.pipeline.Spec.Ordered.Enabled
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -180,8 +191,9 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int, times
 		if podReadCount == nil {
 			log.Debugf("Failed retrieving total podReadCount for pod %s", podInfo.podName)
 		}
-		// Only maintain the timestamped pending counts if pod is a Reduce or if it is the 0th replica of any other vertex type.
-		if isReduce || podInfo.replica == 0 {
+		// Only maintain the timestamped pending counts if pod is a Reduce, has ordered processing enabled,
+		// or if it is the 0th replica of any other vertex type.
+		if isReduce || isOrderedProcessing || podInfo.replica == 0 {
 			podPendingCount = r.getPodPendingCounts(podInfo.vertexName, podInfo.podName, podMetrics)
 			if podPendingCount == nil {
 				log.Debugf("Failed retrieving pending counts for pod %s vertex %s", podInfo.podName, podInfo.vertexName)
@@ -359,35 +371,37 @@ func (r *Rater) getPodPendingCounts(vertexName, podName string, metricsData map[
 // since a pod can read from multiple partitions, we will return a map of partition to read count.
 func (r *Rater) getPodReadCounts(vertexName, podName string, metricsData map[string]*dto.MetricFamily) *PodReadCount {
 	readTotalMetricName := "forwarder_data_read_total"
-	if value, ok := metricsData[readTotalMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
-		metricsList := value.GetMetric()
-		partitionReadCount := make(map[string]float64)
-		for _, ele := range metricsList {
-			var partitionName string
-			for _, label := range ele.Label {
-				if label.GetName() == metrics.LabelPartitionName {
-					partitionName = label.GetValue()
-					break
-				}
-			}
-			if partitionName == "" {
-				r.log.Warnf("[vertex name %s, pod name %s]: Partition name is not found for metric %s", vertexName, podName, readTotalMetricName)
-			} else {
-				// https://github.com/prometheus/client_rust/issues/194
-				counterVal := ele.Counter.GetValue()
-				untypedVal := ele.Untyped.GetValue()
-				if counterVal == 0 && untypedVal != 0 {
-					counterVal = untypedVal
-				}
-				partitionReadCount[partitionName] = counterVal
-			}
-		}
-		podReadCount := &PodReadCount{podName, partitionReadCount}
-		return podReadCount
-	} else {
+	value, ok := metricsData[readTotalMetricName]
+	if !ok || value == nil || len(value.GetMetric()) == 0 {
 		r.log.Infof("[vertex name %s, pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", vertexName, podName, readTotalMetricName)
 		return nil
 	}
+
+	metricsList := value.GetMetric()
+	partitionReadCount := make(map[string]float64)
+	for _, ele := range metricsList {
+		var partitionName string
+		for _, label := range ele.Label {
+			if label.GetName() == metrics.LabelPartitionName {
+				partitionName = label.GetValue()
+				break
+			}
+		}
+		if partitionName == "" {
+			r.log.Warnf("[vertex name %s, pod name %s]: Partition name is not found for metric %s", vertexName, podName, readTotalMetricName)
+		} else {
+			// https://github.com/prometheus/client_rust/issues/194
+			counterVal := ele.Counter.GetValue()
+			untypedVal := ele.Untyped.GetValue()
+			if counterVal == 0 && untypedVal != 0 {
+				counterVal = untypedVal
+			}
+			// Sum the counts for the same partition, as there may be multiple metric series
+			// with the same partition_name but different values for other labels
+			partitionReadCount[partitionName] += counterVal
+		}
+	}
+	return &PodReadCount{podName, partitionReadCount}
 }
 
 // GetRates returns the processing rates of the vertex partition in the format of lookback second to rate mappings

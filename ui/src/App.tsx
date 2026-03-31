@@ -32,6 +32,7 @@ import {
 } from "./types/declarations/app";
 import { VersionDetailsProps } from "./components/common/SlidingSidebar/partials/VersionDetails";
 import AccountMenu from "./components/common/AccountMenu";
+import { ThemeToggle } from "./components/common/ThemeToggle";
 import { getBaseHref } from "./utils";
 import logo from "./images/icon.png";
 import textLogo from "./images/text-icon.png";
@@ -348,6 +349,7 @@ function App(props: AppProps) {
                     </Box>
 
                     <Box sx={{ flexGrow: 1 }} />
+                    <ThemeToggle />
                     <AccountMenu />
                   </Toolbar>
                 </AppBar>
@@ -361,7 +363,7 @@ function App(props: AppProps) {
                   width: "100%",
                   overflow: "auto",
                   height: "3.3rem",
-                  background: "#F8F8FB",
+                  background: "var(--bg-secondary)",
                   zIndex: (theme) => theme.zIndex.drawer - 1,
                   position: "fixed",
                   top: "6rem",

@@ -154,6 +154,8 @@ const (
 	VertexMonitorPortName       = "monitor"
 	VertexHTTPSPort             = 8443
 	VertexHTTPSPortName         = "https"
+	VertexHTTPPort              = 8090
+	VertexHTTPPortName          = "http"
 	DaemonServicePort           = 4327
 	MonoVertexMetricsPort       = 2469
 	MonoVertexMetricsPortName   = "metrics"
@@ -253,4 +255,10 @@ const (
 	RuntimeDirSizeLimit = 20 * 1024 * 1024
 
 	PendingNotAvailable = int64(math.MinInt64)
+)
+
+var (
+	// unhealthyWaitingStatus contains the status messages for a pod in waiting state
+	// which should be considered as unhealthy
+	UnhealthyWaitingStatus = []string{"CrashLoopBackOff", "ImagePullBackOff"}
 )

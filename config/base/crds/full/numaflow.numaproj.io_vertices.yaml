@@ -1274,6 +1274,12 @@ spec:
                         readTimeout:
                           type: string
                       type: object
+                    toVertexOrdered:
+                      properties:
+                        enabled:
+                          default: false
+                          type: boolean
+                      type: object
                     toVertexPartitionCount:
                       format: int32
                       type: integer
@@ -2494,6 +2500,12 @@ spec:
               nodeSelector:
                 additionalProperties:
                   type: string
+                type: object
+              ordered:
+                properties:
+                  enabled:
+                    default: false
+                    type: boolean
                 type: object
               partitions:
                 format: int32
@@ -5631,6 +5643,15 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                         type: object
+                      ports:
+                        properties:
+                          http:
+                            format: int32
+                            type: integer
+                          https:
+                            format: int32
+                            type: integer
+                        type: object
                       service:
                         type: boolean
                     type: object
@@ -7373,6 +7394,12 @@ spec:
                           type: integer
                         readTimeout:
                           type: string
+                      type: object
+                    toVertexOrdered:
+                      properties:
+                        enabled:
+                          default: false
+                          type: boolean
                       type: object
                     toVertexPartitionCount:
                       format: int32

@@ -18,6 +18,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
           flexDirection: "column",
           padding: "2.4rem",
           minWidth: "43.5rem",
+          backgroundColor: "var(--bg-secondary)",
         }}
       >
         <span className="namespace-card-name">{data.name}</span>
@@ -38,7 +39,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
           rowSpacing={0}
           columnSpacing={0}
           sx={{
-            borderBottom: "0.05rem solid #8D9096",
+            borderBottom: "0.05rem solid var(--border-primary)",
             marginTop: "0.8rem",
           }}
         >
@@ -52,7 +53,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
               sx={{
                 display: "flex",
                 flexDirection: "row",
-                borderRight: "0.05rem solid #8D9096",
+                borderRight: "0.05rem solid var(--border-primary)",
                 width: "67%",
               }}
             >
@@ -80,7 +81,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
           rowSpacing={0}
           columnSpacing={0}
           sx={{
-            borderBottom: "0.05rem solid #8D9096",
+            borderBottom: "0.05rem solid var(--border-primary)",
             marginTop: "0.8rem",
           }}
         >
@@ -116,7 +117,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
           rowSpacing={0}
           columnSpacing={0}
           sx={{
-            borderBottom: "0.05rem solid #8D9096",
+            borderBottom: "0.05rem solid var(--border-primary)",
             marginTop: "0.8rem",
           }}
         >
@@ -130,7 +131,7 @@ export function NamespaceCard({ data }: NamespaceCardProps) {
               sx={{
                 display: "flex",
                 flexDirection: "row",
-                borderRight: "0.05rem solid #8D9096",
+                borderRight: "0.05rem solid var(--border-primary)",
                 width: "67%",
               }}
             >

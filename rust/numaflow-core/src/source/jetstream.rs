@@ -69,8 +69,11 @@ impl SourceReader for JetstreamSource {
         }
     }
 
-    async fn partitions(&mut self) -> Result<Vec<u16>> {
-        Ok(vec![*get_vertex_replica()])
+    async fn partitions(&mut self) -> Result<super::SourcePartitions> {
+        Ok(super::SourcePartitions::new(
+            vec![*get_vertex_replica()],
+            None,
+        ))
     }
 }
 
@@ -209,7 +212,9 @@ mod tests {
                 .await
                 .unwrap();
 
-        assert_eq!(source.partitions().await.unwrap(), vec![0]);
+        let partitions = source.partitions().await.unwrap();
+        assert_eq!(partitions.active_partitions, vec![0]);
+        assert!(partitions.total_partitions.is_none());
 
         // Test SourceReader::read
         let messages = source.read().await.unwrap().unwrap();

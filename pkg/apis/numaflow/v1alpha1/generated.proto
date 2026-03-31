@@ -261,6 +261,12 @@ message AbstractVertex {
   // +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
   // +optional
   optional UpdateStrategy updateStrategy = 16;
+
+  // Ordered enables ordered processing for this vertex, overrides pipeline-level setting.
+  // When enabled, messages will be processed in order based on their event time.
+  // Note: Reduce vertices ignore this setting as they are already partitioned.
+  // +optional
+  optional Ordered ordered = 17;
 }
 
 // AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should
@@ -353,6 +359,10 @@ message CombinedEdge {
 
   // +optional
   optional VertexLimits toVertexLimits = 7;
+
+  // Determine whether ordered processing is enabled for `to` vertex. If not provided, the default value is set to "false".
+  // +optional
+  optional Ordered toVertexOrdered = 8;
 }
 
 // Compression is the compression settings for the messages in the InterStepBuffer
@@ -687,6 +697,11 @@ message HTTPSource {
   // Whether to create a ClusterIP Service
   // +optional
   optional bool service = 2;
+
+  // Ports to listen on. HTTPS always runs on port 8443 by default.
+  // To enable plain HTTP, set ports.http explicitly.
+  // +optional
+  optional Ports ports = 3;
 }
 
 message IdleSource {
@@ -1200,6 +1215,14 @@ message NatsSource {
 message NoStore {
 }
 
+// Ordered defines the ordered processing configuration.
+message Ordered {
+  // Enabled toggles ordered processing.
+  // +kubebuilder:default=false
+  // +optional
+  optional bool enabled = 1;
+}
+
 // PBQStorage defines the persistence configuration for a vertex.
 message PBQStorage {
   // +optional
@@ -1331,6 +1354,12 @@ message PipelineSpec {
   // InterStepBuffer configuration specific to this pipeline.
   // +optional
   optional InterStepBuffer interStepBuffer = 9;
+
+  // Ordered enables order-preserving processing for the entire pipeline.
+  // When enabled, messages will be processed in their arrival order (FIFO within each partition).
+  // This can be overridden at the vertex level.
+  // +optional
+  optional Ordered ordered = 10;
 }
 
 message PipelineStatus {

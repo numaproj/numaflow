@@ -21,3 +21,6 @@ pub(crate) mod sink;
 mod actor;
 
 mod builder;
+
+#[cfg(test)]
+pub(crate) mod test_utils;

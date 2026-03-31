@@ -1,5 +1,5 @@
 .pod-exp-text {
-    color: #3C4348;
+    color: var(--text-secondary);
     font-size: 1.4rem;
     font-style: normal;
     font-weight: 400;

@@ -28,7 +28,6 @@ use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
 
 use crate::watermark::wmb::WMB;
-use async_nats::jetstream::Context;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use numaflow_throttling::RateLimiter;
@@ -43,7 +42,6 @@ type MetricLabels = Arc<Vec<(String, String)>>;
 /// ISBReaderOrchestrator component which reads messages from ISB, assigns watermark to the messages and starts
 /// tracking them using the tracker and also listens for ack/nack from the tracker and performs the
 /// ack/nack to the ISB.
-#[derive(Clone)]
 pub(crate) struct ISBReaderOrchestrator<C: NumaflowTypeConfig> {
     vertex_type: String,
     stream: Stream,
@@ -52,10 +50,36 @@ pub(crate) struct ISBReaderOrchestrator<C: NumaflowTypeConfig> {
     read_timeout: Duration,
     tracker: Tracker,
     watermark: Option<ISBWatermarkHandle>,
-    reader: C::ISBReader,
+    reader: Arc<C::ISBReader>,
+    /// Reader name cached to avoid lock acquisition
+    reader_name: &'static str,
     rate_limiter: Option<C::RateLimiter>,
     /// Cached metric labels to avoid repeated allocations
     metric_labels: MetricLabels,
+}
+
+/// Manual Clone implementation for ISBReaderOrchestrator.
+///
+/// We implement Clone manually instead of using `#[derive(Clone)]` because:
+/// - The derive macro would add `C::ISBReader: Clone` bound
+/// - But `reader: Arc<C::ISBReader>` doesn't need that - `Arc<T>` is always `Clone`
+/// - By implementing manually, we avoid requiring `ISBReader: Clone` on the trait
+impl<C: NumaflowTypeConfig> Clone for ISBReaderOrchestrator<C> {
+    fn clone(&self) -> Self {
+        Self {
+            vertex_type: self.vertex_type.clone(),
+            stream: self.stream.clone(),
+            cfg: self.cfg.clone(),
+            batch_size: self.batch_size,
+            read_timeout: self.read_timeout,
+            tracker: self.tracker.clone(),
+            watermark: self.watermark.clone(),
+            reader: Arc::clone(&self.reader),
+            reader_name: self.reader_name,
+            rate_limiter: self.rate_limiter.clone(),
+            metric_labels: Arc::clone(&self.metric_labels),
+        }
+    }
 }
 
 impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
@@ -72,6 +96,9 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         ));
         let metric_labels = Arc::new(labels);
 
+        // Cache reader name for fast access
+        let reader_name = reader.name();
+
         Ok(Self {
             vertex_type: components.vertex_type,
             stream: components.stream,
@@ -80,7 +107,8 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             read_timeout: components.read_timeout,
             tracker: components.tracker,
             watermark: components.watermark_handle,
-            reader,
+            reader: Arc::new(reader),
+            reader_name,
             rate_limiter,
             metric_labels,
         })
@@ -146,12 +174,12 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         Ok((ReceiverStream::new(rx), handle))
     }
 
-    pub(crate) async fn pending(&mut self) -> Result<Option<usize>> {
+    pub(crate) async fn pending(&self) -> Result<Option<usize>> {
         self.reader.pending().await
     }
 
-    pub(crate) fn name(&mut self) -> &'static str {
-        self.reader.name()
+    pub(crate) fn name(&self) -> &'static str {
+        self.reader_name
     }
 
     /// Periodically mark WIP until ack/nack received, then perform final ack/nack and publish metrics.
@@ -204,7 +232,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 
     /// invokes the ack with infinite retries until the cancellation token is cancelled.
     async fn ack_with_retry(
-        reader: &C::ISBReader,
+        reader: &Arc<C::ISBReader>,
         offset: &Offset,
         cancel: &CancellationToken,
     ) -> Result<()> {
@@ -235,7 +263,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 
     /// invokes the nack with infinite retries until the cancellation token is cancelled.
     async fn nak_with_retry(
-        reader: &C::ISBReader,
+        reader: &Arc<C::ISBReader>,
         offset: &Offset,
         cancel: &CancellationToken,
     ) -> Result<()> {
@@ -354,7 +382,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
     }
 
     /// Applies rate limiting and fetches the message batch.
-    async fn apply_rate_limiting_and_fetch(&mut self, batch_size: usize) -> Vec<Message> {
+    async fn apply_rate_limiting_and_fetch(&self, batch_size: usize) -> Vec<Message> {
         // Apply rate limiting if configured to determine effective batch size
         let effective_batch_size = match &self.rate_limiter {
             Some(rl) => {
@@ -496,13 +524,14 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         ack_rx: oneshot::Receiver<ReadAck>,
     ) -> Result<()> {
         self.tracker.insert(message).await?;
+        let tick = self.reader.wip_ack_interval();
         let params = WipParams {
             stream_name: self.stream.name,
             labels: Arc::clone(&self.metric_labels),
-            reader: self.reader.clone(),
+            reader: Arc::clone(&self.reader),
             offset: message.offset.clone(),
             ack_rx,
-            tick: self.reader.wip_ack_interval(),
+            tick,
             _permit: permit,
             cancel,
             message_processing_start: processing_start,
@@ -549,7 +578,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
 struct WipParams<C: NumaflowTypeConfig> {
     stream_name: &'static str,
     labels: Arc<Vec<(String, String)>>,
-    reader: C::ISBReader,
+    reader: Arc<C::ISBReader>,
     offset: Offset,
     ack_rx: oneshot::Receiver<ReadAck>,
     tick: Option<Duration>,
@@ -559,12 +588,15 @@ struct WipParams<C: NumaflowTypeConfig> {
     tracker: Tracker,
 }
 
-/// Components needed to create a JetStreamReader.
+/// Components needed to create an ISB reader.
+///
+/// This struct holds all the configuration and runtime components needed
+/// to create an ISB reader. It is ISB-agnostic - the actual reader creation
+/// is handled by the ISBFactory.
 #[derive(Clone)]
 pub(crate) struct ISBReaderComponents {
     pub vertex_type: String,
     pub stream: Stream,
-    pub js_ctx: Context,
     pub config: BufferReaderConfig,
     pub tracker: Tracker,
     pub batch_size: usize,
@@ -575,16 +607,19 @@ pub(crate) struct ISBReaderComponents {
 }
 
 impl ISBReaderComponents {
-    pub fn new(
+    pub fn new<C, F>(
         stream: Stream,
         reader_config: BufferReaderConfig,
         watermark_handle: Option<ISBWatermarkHandle>,
-        context: &crate::pipeline::PipelineContext<'_>,
-    ) -> Self {
+        context: &crate::pipeline::PipelineContext<'_, C, F>,
+    ) -> Self
+    where
+        C: crate::typ::NumaflowTypeConfig,
+        F: crate::pipeline::isb::ISBFactory<Reader = C::ISBReader, Writer = C::ISBWriter>,
+    {
         Self {
             vertex_type: context.config.vertex_type.to_string(),
             stream,
-            js_ctx: context.js_context.clone(),
             config: reader_config,
             tracker: context.tracker.clone(),
             batch_size: context.config.batch_size,
@@ -695,7 +730,6 @@ mod tests {
         let isb_reader_components = ISBReaderComponents {
             vertex_type: "Map".to_string(),
             stream: stream.clone(),
-            js_ctx: context.clone(),
             config: buf_reader_config,
             tracker: tracker.clone(),
             batch_size: 500,
@@ -809,7 +843,6 @@ mod tests {
         let isb_reader_components = ISBReaderComponents {
             vertex_type: "Map".to_string(),
             stream: js_stream.clone(),
-            js_ctx: context.clone(),
             config: buf_reader_config,
             tracker: tracker.clone(),
             batch_size: 1,
@@ -942,7 +975,6 @@ mod tests {
         let isb_reader_components = ISBReaderComponents {
             vertex_type: "Map".to_string(),
             stream: stream.clone(),
-            js_ctx: context.clone(),
             config: buf_reader_config,
             tracker: tracker.clone(),
             batch_size: 500,
@@ -1061,7 +1093,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
             .await
             .unwrap();
 
@@ -1098,6 +1130,7 @@ mod tests {
             .offset
             .clone();
         let cancel_token = CancellationToken::new();
+        let js_reader = Arc::new(js_reader);
 
         // Test nack_with_retry - should succeed
         let result = ISBReaderOrchestrator::<crate::typ::WithoutRateLimiter>::nak_with_retry(
@@ -1149,6 +1182,7 @@ mod tests {
         let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
             .await
             .unwrap();
+        let js_reader = Arc::new(js_reader);
 
         // Try to nack an offset that doesn't exist
         let missing_offset = Offset::Int(IntOffset::new(999, 0));
@@ -1206,7 +1240,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
             .await
             .unwrap();
 
@@ -1243,6 +1277,7 @@ mod tests {
             .offset
             .clone();
         let cancel_token = CancellationToken::new();
+        let js_reader = Arc::new(js_reader);
 
         // Test ack_with_retry - should succeed
         let result = ISBReaderOrchestrator::<crate::typ::WithoutRateLimiter>::ack_with_retry(
@@ -1294,6 +1329,7 @@ mod tests {
         let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
             .await
             .unwrap();
+        let js_reader = Arc::new(js_reader);
 
         // Try to ack an offset that doesn't exist
         let missing_offset = Offset::Int(IntOffset::new(999, 0));
@@ -1318,5 +1354,492 @@ mod tests {
         }
 
         context.delete_stream(stream.name).await.unwrap();
+    }
+}
+
+// SimpleBuffer Integration Tests
+// These tests use SimpleBuffer to test ISBReaderOrchestrator without a distributed ISB.
+#[cfg(test)]
+mod simplebuffer_tests {
+    use super::*;
+    use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
+    use numaflow_testing::simplebuffer::SimpleBuffer;
+    use std::collections::HashMap;
+    use std::sync::atomic::Ordering;
+
+    use crate::message::MessageID;
+    use bytes::Bytes;
+    use chrono::Utc;
+    use tokio::time::sleep;
+    use tokio_stream::StreamExt;
+    use tokio_util::sync::CancellationToken;
+
+    /// Helper to create ISBReaderOrchestrator with SimpleBuffer
+    async fn create_orchestrator(
+        adapter: &SimpleBufferAdapter,
+        batch_size: usize,
+        max_ack_pending: usize,
+    ) -> (
+        ISBReaderOrchestrator<WithSimpleBuffer>,
+        Tracker,
+        CancellationToken,
+    ) {
+        let stream = Stream::new("test-stream", "test", 0);
+        let cancel = CancellationToken::new();
+        let tracker = Tracker::new(None, cancel.clone());
+
+        let buf_reader_config = BufferReaderConfig {
+            streams: vec![],
+            wip_ack_interval: Duration::from_millis(10),
+            max_ack_pending,
+        };
+
+        let components = ISBReaderComponents {
+            vertex_type: "Map".to_string(),
+            stream,
+            config: buf_reader_config,
+            tracker: tracker.clone(),
+            batch_size,
+            read_timeout: Duration::from_millis(50),
+            watermark_handle: None,
+            isb_config: None,
+            cln_token: cancel.clone(),
+        };
+
+        let orchestrator: ISBReaderOrchestrator<WithSimpleBuffer> =
+            ISBReaderOrchestrator::new(components, adapter.reader(), None)
+                .await
+                .unwrap();
+
+        (orchestrator, tracker, cancel)
+    }
+
+    /// Helper to write messages to the buffer
+    async fn write_messages(adapter: &SimpleBufferAdapter, count: usize) {
+        let writer = adapter.writer();
+        for i in 0..count {
+            use crate::pipeline::isb::ISBWriter;
+            let msg = Message {
+                typ: Default::default(),
+                keys: Arc::new([format!("key-{}", i)]),
+                tags: None,
+                value: Bytes::from(format!("payload-{}", i)),
+                offset: Offset::Int(IntOffset::new(i as i64, 0)),
+                event_time: Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "test".into(),
+                    index: i as i32,
+                    offset: format!("{}", i).into(),
+                },
+                headers: Arc::new(HashMap::new()),
+                metadata: None,
+                is_late: false,
+                ack_handle: None,
+            };
+            writer.write(msg).await.expect("write should succeed");
+        }
+    }
+
+    /// Test: streaming_read happy path - read messages, ack them, verify completion
+    #[tokio::test]
+    async fn test_streaming_read_and_ack_flow() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 5).await;
+
+        let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        // Read all 5 messages
+        let mut received = Vec::new();
+        for _ in 0..5 {
+            if let Some(msg) = rx.next().await {
+                received.push(msg);
+            }
+        }
+        assert_eq!(received.len(), 5, "Should receive all 5 messages");
+
+        // Ack all messages by dropping them (default behavior is ack on drop)
+        drop(received);
+
+        // Wait for tracker to become empty (all acks processed)
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !tracker.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("Tracker should become empty after acks");
+
+        // Cancel and verify clean shutdown
+        cancel.cancel();
+        handle.await.unwrap().unwrap();
+    }
+
+    /// Test: fetch errors are handled gracefully and reading continues
+    #[tokio::test]
+    async fn test_fetch_error_recovery() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 3).await;
+
+        // Inject 2 fetch failures
+        adapter.error_injector().fail_fetches(2);
+
+        let (orchestrator, _tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        // Despite fetch failures, we should eventually get messages
+        let mut received = Vec::new();
+        let timeout_result = tokio::time::timeout(Duration::from_secs(2), async {
+            while received.len() < 3 {
+                if let Some(msg) = rx.next().await {
+                    received.push(msg);
+                }
+            }
+        })
+        .await;
+
+        assert!(
+            timeout_result.is_ok(),
+            "Should recover from fetch errors and receive messages"
+        );
+        assert_eq!(received.len(), 3);
+
+        // Ack all messages by dropping
+        drop(received);
+
+        cancel.cancel();
+        handle.await.unwrap().unwrap();
+    }
+
+    /// Test: ack retries on transient failures and eventually succeeds
+    /// Note: We only test ack retries here because nacks cause message redelivery,
+    /// which creates an infinite fetch loop with the streaming_read.
+    #[tokio::test]
+    async fn test_ack_retry_on_transient_failures() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 2).await;
+
+        let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        // Read both messages
+        let msg1 = rx.next().await.expect("Should receive first message");
+        let msg2 = rx.next().await.expect("Should receive second message");
+
+        // Inject ack failures - will retry and succeed after 2 failures
+        // With ACK_RETRY_INTERVAL=100ms, 2 failures = ~200ms of retries per message
+        adapter.error_injector().fail_acks(4); // 2 failures per message * 2 messages
+        drop(msg1);
+        drop(msg2);
+
+        // Wait for tracker to process both (ack retries should succeed)
+        // Allow 5 seconds: 4 retries * 100ms = 400ms + buffer
+        let result = tokio::time::timeout(Duration::from_secs(5), async {
+            while !tracker.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        // Cancel before checking result to ensure cleanup
+        cancel.cancel();
+
+        // Check the result
+        result.expect("Tracker should become empty after retried acks");
+
+        // Wait for handle with a timeout to avoid hanging
+        let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
+    }
+
+    /// Test: ack/nack stops immediately on OffsetNotFound (non-retryable error)
+    #[tokio::test]
+    async fn test_ack_nack_stops_on_offset_not_found() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        let reader = adapter.reader();
+        let reader = Arc::new(reader);
+        let cancel = CancellationToken::new();
+
+        // Test ack with non-existent offset
+        let missing_offset = Offset::Int(IntOffset::new(999, 0));
+        let ack_result = ISBReaderOrchestrator::<WithSimpleBuffer>::ack_with_retry(
+            &reader,
+            &missing_offset,
+            &cancel,
+        )
+        .await;
+
+        assert!(ack_result.is_err());
+        assert!(
+            matches!(ack_result, Err(Error::ISB(ISBError::OffsetNotFound(_)))),
+            "Should get OffsetNotFound error for ack"
+        );
+
+        // Test nack with non-existent offset
+        let nack_result = ISBReaderOrchestrator::<WithSimpleBuffer>::nak_with_retry(
+            &reader,
+            &missing_offset,
+            &cancel,
+        )
+        .await;
+
+        assert!(nack_result.is_err());
+        assert!(
+            matches!(nack_result, Err(Error::ISB(ISBError::OffsetNotFound(_)))),
+            "Should get OffsetNotFound error for nack"
+        );
+    }
+
+    /// Test: cancellation stops ack/nack retry loops
+    #[tokio::test]
+    async fn test_cancellation_stops_retry_loops() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 1).await;
+
+        let reader = adapter.reader();
+        use crate::pipeline::isb::ISBReader;
+
+        // Fetch the message to get a valid offset
+        let messages = reader.fetch(1, Duration::from_millis(100)).await.unwrap();
+        let offset = messages
+            .first()
+            .expect("should have at least one message")
+            .offset
+            .clone();
+
+        // Inject infinite ack failures
+        adapter.error_injector().fail_acks(1000);
+
+        let cancel = CancellationToken::new();
+        let cancel_clone = cancel.clone();
+        let reader = Arc::new(reader);
+
+        // Spawn ack_with_retry in background
+        let ack_handle = tokio::spawn(async move {
+            ISBReaderOrchestrator::<WithSimpleBuffer>::ack_with_retry(
+                &reader,
+                &offset,
+                &cancel_clone,
+            )
+            .await
+        });
+
+        // Cancel should stop the retry loop
+        cancel.cancel();
+
+        // Should complete quickly after cancellation
+        let result = tokio::time::timeout(Duration::from_secs(1), ack_handle)
+            .await
+            .expect("ack_with_retry should complete after cancellation")
+            .unwrap();
+
+        // Result should be an error (cancelled during retry)
+        assert!(result.is_err(), "Should error after cancellation");
+    }
+
+    /// Test: WIP failures are ignored and loop continues
+    #[tokio::test]
+    async fn test_wip_failures_are_ignored() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 1).await;
+
+        // Inject WIP failures - these should be ignored
+        adapter.error_injector().fail_wip_acks(5);
+
+        let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        // Read message
+        let msg = rx.next().await.expect("Should receive message");
+
+        // Ack by dropping msg (is_failed defaults to false)
+        drop(msg);
+
+        // Tracker should become empty
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !tracker.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("Tracker should become empty despite WIP failures");
+
+        cancel.cancel();
+        handle.await.unwrap().unwrap();
+    }
+
+    /// Test: nack causes message redelivery
+    /// When a message is nacked, it goes back to Pending state in the buffer
+    /// and the streaming_read loop will refetch it.
+    #[tokio::test]
+    async fn test_nack_causes_redelivery() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 1).await;
+
+        let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 1, 100).await;
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        // Read message first time
+        let msg1 = rx.next().await.expect("Should receive message first time");
+        let payload1 = msg1.value.clone();
+
+        // Nack it by setting is_failed and dropping
+        if let Some(h) = &msg1.ack_handle {
+            h.is_failed.store(true, Ordering::Relaxed);
+        }
+        drop(msg1);
+
+        // After nacking, the message goes back to Pending state and will be refetched.
+        // The streaming_read loop immediately fetches it again, so wait for redelivery.
+        let msg2 = tokio::time::timeout(Duration::from_secs(1), rx.next())
+            .await
+            .expect("Should receive redelivered message")
+            .expect("Stream should not end");
+
+        assert_eq!(
+            msg2.value, payload1,
+            "Redelivered message should have same payload"
+        );
+
+        // Ack it this time by dropping (is_failed defaults to false)
+        drop(msg2);
+
+        // Wait for final ack
+        let result = tokio::time::timeout(Duration::from_secs(1), async {
+            while !tracker.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        cancel.cancel();
+        result.expect("Tracker should become empty after final ack");
+        let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
+    }
+
+    /// Test: cleanup waits for inflight messages before shutdown
+    #[tokio::test]
+    async fn test_cleanup_waits_for_inflight() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 3).await;
+
+        let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        // Read all messages but don't ack yet
+        let mut messages = Vec::new();
+        for _ in 0..3 {
+            if let Some(msg) = rx.next().await {
+                messages.push(msg);
+            }
+        }
+        assert_eq!(messages.len(), 3);
+
+        // Cancel while messages are inflight
+        cancel.cancel();
+
+        // Ack messages after cancellation by dropping them
+        drop(messages);
+
+        // Handle should complete (cleanup waits for inflight)
+        let result = tokio::time::timeout(Duration::from_secs(2), handle)
+            .await
+            .expect("Handle should complete after inflight messages are acked");
+
+        assert!(result.unwrap().is_ok(), "Shutdown should be clean");
+        assert!(tracker.is_empty().await.unwrap(), "Tracker should be empty");
+    }
+
+    /// Test: semaphore limits inflight messages (backpressure)
+    /// Note: We use batch_size=1 to ensure permits are acquired one at a time.
+    /// With larger batch sizes, the loop would wait for all batch_size permits at once,
+    /// which would prevent incremental permit release from unblocking the next fetch.
+    #[tokio::test]
+    async fn test_semaphore_backpressure() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 10).await;
+
+        // Set max_ack_pending to 3 with batch_size=1 - only 3 messages can be inflight
+        // batch_size=1 means we acquire 1 permit per fetch iteration
+        let (orchestrator, _tracker, cancel) = create_orchestrator(&adapter, 1, 3).await;
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        // Read 3 messages (should work)
+        let mut inflight = Vec::new();
+        for _ in 0..3 {
+            let msg = tokio::time::timeout(Duration::from_millis(500), rx.next())
+                .await
+                .expect("Should receive message within timeout")
+                .expect("Stream should not end");
+            inflight.push(msg);
+        }
+
+        // Try to read 4th message - should block because semaphore is exhausted
+        let fourth = tokio::time::timeout(Duration::from_millis(100), rx.next()).await;
+        assert!(
+            fourth.is_err(),
+            "4th message should block due to backpressure"
+        );
+
+        // Ack first message to free a permit by taking it out and dropping
+        let first_msg = inflight.remove(0);
+        drop(first_msg);
+
+        // Now 4th message should come through
+        let fourth = tokio::time::timeout(Duration::from_millis(500), rx.next())
+            .await
+            .expect("Should receive 4th message after ack")
+            .expect("Stream should not end");
+        inflight.push(fourth);
+
+        // Cleanup - ack remaining by dropping
+        drop(inflight);
+
+        cancel.cancel();
+        let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
+    }
+
+    /// Test: multiple concurrent ack operations complete successfully
+    /// Note: This test only uses acks (not nacks) because nacks cause messages
+    /// to be redelivered, which would create an infinite fetch loop.
+    #[tokio::test]
+    async fn test_concurrent_ack_operations() {
+        let adapter = SimpleBufferAdapter::new(SimpleBuffer::new(100, 0, "test-buffer"));
+        write_messages(&adapter, 10).await;
+
+        let (orchestrator, tracker, cancel) = create_orchestrator(&adapter, 10, 100).await;
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        // Read all messages
+        let mut messages = Vec::new();
+        for _ in 0..10 {
+            if let Some(msg) = rx.next().await {
+                messages.push(msg);
+            }
+        }
+        assert_eq!(messages.len(), 10);
+
+        // Drop all messages to trigger ack (is_failed defaults to false)
+        drop(messages);
+
+        // Wait for all ack operations to complete
+        let result = tokio::time::timeout(Duration::from_secs(2), async {
+            while !tracker.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        cancel.cancel();
+        result.expect("All ack operations should complete");
+        let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
     }
 }

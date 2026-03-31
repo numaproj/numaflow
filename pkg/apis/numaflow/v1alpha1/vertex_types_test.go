@@ -25,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 )
 
@@ -205,6 +206,25 @@ func TestGetServiceObjs(t *testing.T) {
 	assert.Equal(t, s[1].Name, v.Name)
 	assert.Equal(t, 1, len(s[1].Spec.Ports))
 	assert.Equal(t, VertexHTTPSPort, int(s[1].Spec.Ports[0].Port))
+}
+
+func TestGetServiceObjsWithCustomPort(t *testing.T) {
+	v := testVertex.DeepCopy()
+	v.Spec.UDF = nil
+	customPort := int32(9090)
+	v.Spec.Source = &Source{
+		HTTP: &HTTPSource{
+			Service: true,
+			Ports:   &Ports{HTTPS: &customPort},
+		},
+	}
+	s := v.GetServiceObjs()
+	assert.Equal(t, 2, len(s))
+	assert.Equal(t, s[1].Name, v.Name)
+	assert.Equal(t, 1, len(s[1].Spec.Ports))
+	assert.Equal(t, int32(9090), s[1].Spec.Ports[0].Port)
+	assert.Equal(t, intstr.FromInt32(9090), s[1].Spec.Ports[0].TargetPort)
+	assert.Equal(t, VertexHTTPSPortName, s[1].Spec.Ports[0].Name)
 }
 
 func TestGetHeadlessServiceName(t *testing.T) {
@@ -885,4 +905,135 @@ func Test_VertexStatus_IsHealthy(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestAbstractVertex_IsOrdered(t *testing.T) {
+	tests := []struct {
+		name   string
+		vertex AbstractVertex
+		want   bool
+	}{
+		{
+			name: "vertex ordered enabled",
+			vertex: AbstractVertex{
+				Name:    "test",
+				Ordered: &Ordered{Enabled: true},
+				UDF:     &UDF{Container: &Container{Image: "test"}},
+			},
+			want: true,
+		},
+		{
+			name: "vertex ordered disabled",
+			vertex: AbstractVertex{
+				Name:    "test",
+				Ordered: &Ordered{Enabled: false},
+				UDF:     &UDF{Container: &Container{Image: "test"}},
+			},
+			want: false,
+		},
+		{
+			name: "vertex ordered not set - returns false",
+			vertex: AbstractVertex{
+				Name: "test",
+				UDF:  &UDF{Container: &Container{Image: "test"}},
+			},
+			want: false,
+		},
+		{
+			name: "reduce vertex with ordered enabled - should return false",
+			vertex: AbstractVertex{
+				Name:    "test",
+				Ordered: &Ordered{Enabled: true},
+				UDF: &UDF{
+					Container: &Container{Image: "test"},
+					GroupBy: &GroupBy{
+						Window: Window{
+							Fixed: &FixedWindow{Length: &metav1.Duration{Duration: 60000000000}},
+						},
+						Keyed: true,
+						Storage: &PBQStorage{
+							PersistentVolumeClaim: &PersistenceStrategy{},
+						},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "reduce vertex without ordered config - should return false",
+			vertex: AbstractVertex{
+				Name: "test",
+				UDF: &UDF{
+					Container: &Container{Image: "test"},
+					GroupBy: &GroupBy{
+						Window: Window{
+							Fixed: &FixedWindow{Length: &metav1.Duration{Duration: 60000000000}},
+						},
+						Keyed: true,
+						Storage: &PBQStorage{
+							PersistentVolumeClaim: &PersistenceStrategy{},
+						},
+					},
+				},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.vertex.IsOrdered()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestHTTPSourceGetServiceObjs(t *testing.T) {
+	httpPort := int32(8090)
+	v := &Vertex{
+		ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testVertexName},
+		Spec: VertexSpec{
+			PipelineName: testPipelineName,
+			AbstractVertex: AbstractVertex{
+				Name: testVertexSpecName,
+				Source: &Source{
+					HTTP: &HTTPSource{
+						Service: true,
+						Ports:   &Ports{HTTP: &httpPort},
+					},
+				},
+			},
+		},
+	}
+
+	svcs := v.GetServiceObjs()
+	// headless + ClusterIP service
+	assert.Len(t, svcs, 2)
+
+	var clusterIPSvc *corev1.Service
+	for _, s := range svcs {
+		if s.Name == testVertexName {
+			clusterIPSvc = s
+		}
+	}
+	assert.NotNil(t, clusterIPSvc)
+
+	portNames := map[string]int32{}
+	for _, p := range clusterIPSvc.Spec.Ports {
+		portNames[p.Name] = p.Port
+	}
+	assert.Equal(t, int32(VertexHTTPSPort), portNames[VertexHTTPSPortName])
+	assert.Equal(t, int32(VertexHTTPPort), portNames[VertexHTTPPortName])
+}
+
+func TestHTTPSourceIsHTTPConfigured(t *testing.T) {
+	httpPort := int32(8090)
+	httpsPort := int32(9443)
+
+	assert.False(t, (&HTTPSource{}).IsHTTPConfigured())
+	assert.True(t, (&HTTPSource{Ports: &Ports{HTTP: &httpPort}}).IsHTTPConfigured())
+	assert.Equal(t, int32(VertexHTTPSPort), (&HTTPSource{}).GetHTTPSPort())
+	assert.Equal(t, int32(VertexHTTPPort), (&HTTPSource{}).GetHTTPPort())
+	assert.Equal(t, httpsPort, (&HTTPSource{Ports: &Ports{HTTPS: &httpsPort}}).GetHTTPSPort())
+	assert.Equal(t, httpPort, (&HTTPSource{Ports: &Ports{HTTP: &httpPort}}).GetHTTPPort())
 }

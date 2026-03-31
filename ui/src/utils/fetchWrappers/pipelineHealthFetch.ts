@@ -47,12 +47,14 @@ export const usePipelineHealthFetch = ({
   );
 
   useEffect(() => {
-    setInterval(() => {
+    const interval = setInterval(() => {
       setOptions({
         skip: false,
         requestKey: "id" + Math.random().toString(16).slice(2),
       });
     }, DATA_REFRESH_INTERVAL);
+    // clear interval when component unmounts to prevent memory leaks
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {

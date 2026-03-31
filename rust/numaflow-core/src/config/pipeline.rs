@@ -38,7 +38,6 @@ const DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS: u64 = 20; // time we will wait for UD
 const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
-const ENV_NUMAFLOW_WATERMARK_DELAY: &str = "NUMAFLOW_WATERMARK_DELAY_IN_MS";
 const ENV_WRITE_CONCURRENCY_SIZE: &str = "WRITE_CONCURRENCY_SIZE";
 const ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS: &str = "NUMAFLOW_GRACEFUL_TIMEOUT_SECS";
 const ENV_MAX_ACK_PENDING: &str = "MAX_ACK_PENDING";
@@ -49,7 +48,6 @@ pub(crate) const DEFAULT_STREAM_MAP_SOCKET: &str = "/var/run/numaflow/mapstream.
 const DEFAULT_MAP_SERVER_INFO_FILE: &str = "/var/run/numaflow/mapper-server-info";
 const DEFAULT_SERVING_STORE_SOCKET: &str = "/var/run/numaflow/serving.sock";
 const DEFAULT_SERVING_STORE_SERVER_INFO_FILE: &str = "/var/run/numaflow/serving-server-info";
-const DEFAULT_WATERMARK_DELAY_IN_MILLIS: u64 = 100;
 pub(crate) const VERTEX_TYPE_SOURCE: &str = "Source";
 pub(crate) const VERTEX_TYPE_SINK: &str = "Sink";
 pub(crate) const VERTEX_TYPE_MAP_UDF: &str = "MapUDF";
@@ -78,6 +76,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) callback_config: Option<ServingCallbackConfig>,
     pub(crate) isb_config: Option<isb::ISBConfig>,
     pub(crate) rate_limit: Option<RateLimitConfig>,
+    pub(crate) ordered_processing_enabled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -109,6 +108,7 @@ impl Default for PipelineConfig {
             callback_config: None,
             isb_config: None,
             rate_limit: None,
+            ordered_processing_enabled: false,
         }
     }
 }
@@ -276,6 +276,10 @@ pub(crate) struct ToVertexConfig {
     pub(crate) writer_config: BufferWriterConfig,
     pub(crate) conditions: Option<Box<ForwardConditions>>,
     pub(crate) to_vertex_type: VertexType,
+    /// Whether ordered processing is enabled for this vertex.
+    /// When enabled, messages are shuffled based on keys instead of offset
+    /// to ensure messages with the same keys land on the same partition.
+    pub(crate) ordered_processing_enabled: bool,
 }
 
 impl PipelineConfig {
@@ -509,20 +513,51 @@ impl PipelineConfig {
             })
             .unwrap_or(DEFAULT_MAX_ACK_PENDING);
 
+        // Determine if ordered processing is enabled for this vertex
+        // Logic follows Go's GetEffectiveOrderedConfig():
+        // - Source vertices are always ordered (no partitions to read from)
+        // - Reduce vertices always return false (already partitioned by replica ID)
+        // - For Map/Sink vertices, use vertex-level ordered config if present
+        // Note: Pipeline-level config would be resolved by the controller before
+        // setting the vertex spec, so we only need to check vertex-level here
+        let ordered_processing_enabled =
+            if vertex_type == VertexType::Source || vertex_type == VertexType::ReduceUDF {
+                false
+            } else {
+                vertex_obj
+                    .spec
+                    .ordered
+                    .as_ref()
+                    .and_then(|o| o.enabled)
+                    .unwrap_or(false)
+            };
+
         let mut from_vertex_config = vec![];
         for edge in from_edges {
             let partition_count = edge.to_vertex_partition_count.unwrap_or_default() as u16;
+            let from_partition_count = edge.from_vertex_partition_count.unwrap_or_default() as u16;
 
-            let streams: Vec<Stream> = (0..partition_count)
-                .map(|i| {
-                    let ns: &'static str = Box::leak(namespace.clone().into_boxed_str());
-                    let pl: &'static str = Box::leak(pipeline_name.clone().into_boxed_str());
-                    let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
-                    let name: &'static str =
-                        Box::leak(format!("{ns}-{pl}-{to}-{i}").into_boxed_str());
-                    Stream::new(name, to, i)
-                })
-                .collect();
+            // If ordered processing is enabled, only create the stream for the partition matching replica ID
+            // Otherwise, create streams for all partitions
+            let streams: Vec<Stream> = if ordered_processing_enabled {
+                let i = *replica;
+                let ns: &'static str = Box::leak(namespace.clone().into_boxed_str());
+                let pl: &'static str = Box::leak(pipeline_name.clone().into_boxed_str());
+                let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
+                let name: &'static str = Box::leak(format!("{ns}-{pl}-{to}-{i}").into_boxed_str());
+                vec![Stream::new(name, to, i)]
+            } else {
+                (0..partition_count)
+                    .map(|i| {
+                        let ns: &'static str = Box::leak(namespace.clone().into_boxed_str());
+                        let pl: &'static str = Box::leak(pipeline_name.clone().into_boxed_str());
+                        let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
+                        let name: &'static str =
+                            Box::leak(format!("{ns}-{pl}-{to}-{i}").into_boxed_str());
+                        Stream::new(name, to, i)
+                    })
+                    .collect()
+            };
 
             from_vertex_config.push(FromVertexConfig {
                 name: Box::leak(edge.from.clone().into_boxed_str()),
@@ -531,7 +566,7 @@ impl PipelineConfig {
                     max_ack_pending,
                     ..Default::default()
                 },
-                partitions: partition_count,
+                partitions: from_partition_count,
             });
         }
 
@@ -576,6 +611,11 @@ impl PipelineConfig {
                 },
                 conditions: edge.conditions,
                 to_vertex_type: VertexType::from_str(&edge.to_vertex_type)?,
+                ordered_processing_enabled: edge
+                    .to_vertex_ordered
+                    .as_ref()
+                    .and_then(|o| o.enabled)
+                    .unwrap_or(false),
             });
         }
 
@@ -585,11 +625,6 @@ impl PipelineConfig {
             .clone()
             .is_none_or(|w| !w.disabled.unwrap_or(false))
         {
-            let delay_in_millis = env_vars
-                .get(ENV_NUMAFLOW_WATERMARK_DELAY)
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(DEFAULT_WATERMARK_DELAY_IN_MILLIS);
-
             WatermarkConfig::new(
                 vertex_obj.spec.watermark.clone(),
                 &namespace,
@@ -598,7 +633,7 @@ impl PipelineConfig {
                 &vertex,
                 &from_vertex_config,
                 &to_vertex_config,
-                delay_in_millis,
+                ordered_processing_enabled,
             )
         } else {
             None
@@ -690,6 +725,7 @@ impl PipelineConfig {
             callback_config,
             isb_config,
             rate_limit,
+            ordered_processing_enabled,
         })
     }
 }
@@ -705,7 +741,7 @@ mod tests {
     use crate::config::components::source::{GeneratorConfig, SourceType};
     use crate::config::pipeline::map::{MapType, UserDefinedConfig};
     use crate::config::pipeline::watermark::{
-        BucketConfig, EdgeWatermarkConfig, SourceWatermarkConfig,
+        BucketConfig, EdgeWatermarkConfig, IdleConfig, SourceWatermarkConfig,
     };
 
     #[test]
@@ -731,6 +767,7 @@ mod tests {
             callback_config: None,
             isb_config: None,
             rate_limit: None,
+            ordered_processing_enabled: false,
         };
 
         let config = PipelineConfig::default();
@@ -839,7 +876,6 @@ mod tests {
                     vertex: "in",
                     partitions: vec![0],
                     ot_bucket: "default-simple-pipeline-in-out_OT",
-                    hb_bucket: "default-simple-pipeline-in-out_PROCESSORS",
                     delay: Some(Duration::from_millis(100)),
                 }],
                 to_vertex_config: vec![],
@@ -990,6 +1026,7 @@ mod tests {
                 },
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
             }],
             vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: SourceConfig {
@@ -1047,6 +1084,7 @@ mod tests {
                 },
                 conditions: None,
                 to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
             }],
             vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: SourceConfig {
@@ -1069,17 +1107,15 @@ mod tests {
                     vertex: "in",
                     partitions: vec![0],
                     ot_bucket: "default-simple-pipeline-in_SOURCE_OT",
-                    hb_bucket: "default-simple-pipeline-in_SOURCE_PROCESSORS",
                     delay: Some(Duration::from_millis(100)),
                 },
                 to_vertex_bucket_config: vec![BucketConfig {
                     vertex: "out",
                     partitions: vec![0],
                     ot_bucket: "default-simple-pipeline-in-out_OT",
-                    hb_bucket: "default-simple-pipeline-in-out_PROCESSORS",
                     delay: Some(Duration::from_millis(100)),
                 }],
-                idle_config: None,
+                idle_config: IdleConfig::default(),
             })),
             ..Default::default()
         };
@@ -1168,7 +1204,6 @@ mod tests {
                     vertex: "in",
                     partitions: vec![0],
                     ot_bucket: "default-simple-pipeline-in-map_OT",
-                    hb_bucket: "default-simple-pipeline-in-map_PROCESSORS",
                     delay: Some(Duration::from_millis(100)),
                 }],
                 to_vertex_config: vec![],
@@ -1205,5 +1240,354 @@ mod tests {
             pipeline_config.graceful_shutdown_time,
             Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS)
         );
+    }
+
+    #[test]
+    fn test_ordered_processing_always_disabled_for_source_and_reduce() {
+        // Test that Source and Reduce vertices always have ordered_processing_enabled = false
+        // even when ordered.enabled is set to true
+        let test_cases = vec![
+            (
+                "Source vertex",
+                r#"{
+                    "metadata": {"name": "test-source", "namespace": "default", "creationTimestamp": null},
+                    "spec": {
+                        "name": "in",
+                        "source": {"generator": {"rpu": 100000, "duration": "1s", "msgSize": 8}},
+                        "ordered": {"enabled": true},
+                        "pipelineName": "test-pipeline",
+                        "interStepBufferServiceName": "",
+                        "replicas": 0,
+                        "toEdges": []
+                    },
+                    "status": {"phase": "", "replicas": 0, "desiredReplicas": 0, "lastScaledAt": null}
+                }"#,
+                VertexType::Source,
+            ),
+            (
+                "Reduce vertex",
+                r#"{
+                    "metadata": {"name": "test-reduce", "namespace": "default", "creationTimestamp": null},
+                    "spec": {
+                        "name": "reduce-vertex",
+                        "udf": {
+                            "container": {"image": "test-image"},
+                            "groupBy": {
+                                "window": {"fixed": {"length": "60s"}},
+                                "keyed": true,
+                                "storage": {"persistentVolumeClaim": {"volumeSize": "10Gi", "accessMode": "ReadWriteOnce"}}
+                            }
+                        },
+                        "ordered": {"enabled": true},
+                        "pipelineName": "test-pipeline",
+                        "interStepBufferServiceName": "",
+                        "replicas": 0,
+                        "fromEdges": [{
+                            "from": "in", "to": "reduce-vertex",
+                            "fromVertexType": "Source", "fromVertexPartitionCount": 2,
+                            "toVertexType": "ReduceUDF", "toVertexPartitionCount": 2
+                        }],
+                        "toEdges": []
+                    },
+                    "status": {"phase": "", "replicas": 0, "desiredReplicas": 0, "lastScaledAt": null}
+                }"#,
+                VertexType::ReduceUDF,
+            ),
+        ];
+
+        for (name, pipeline_cfg, expected_vertex_type) in test_cases {
+            let pipeline_cfg_base64 = BASE64_STANDARD.encode(pipeline_cfg);
+            let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+            let pipeline_config =
+                PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+            assert!(
+                !pipeline_config.ordered_processing_enabled,
+                "{} should have ordered_processing_enabled = false",
+                name
+            );
+            assert_eq!(
+                pipeline_config.vertex_type, expected_vertex_type,
+                "{} vertex type mismatch",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn test_ordered_processing_for_map_vertices() {
+        // Test that Map vertices respect the ordered.enabled flag
+        let test_cases = vec![
+            (
+                "Map with ordered enabled",
+                r#","ordered": {"enabled": true}"#,
+                true,
+            ),
+            ("Map without ordered flag", "", false),
+        ];
+
+        for (name, ordered_field, expected_enabled) in test_cases {
+            let ordered_suffix = if ordered_field.is_empty() {
+                ",".to_string()
+            } else {
+                format!("{},", ordered_field)
+            };
+
+            let pipeline_cfg = format!(
+                r#"{{
+                    "metadata": {{"name": "test-map", "namespace": "default", "creationTimestamp": null}},
+                    "spec": {{
+                        "name": "map-vertex",
+                        "udf": {{"container": {{"image": "test-image"}}}}{}
+                        "pipelineName": "test-pipeline",
+                        "interStepBufferServiceName": "",
+                        "replicas": 0,
+                        "fromEdges": [{{
+                            "from": "in", "to": "map-vertex",
+                            "fromVertexType": "Source", "fromVertexPartitionCount": 3,
+                            "toVertexType": "MapUDF", "toVertexPartitionCount": 1
+                        }}],
+                        "toEdges": []
+                    }},
+                    "status": {{"phase": "", "replicas": 0, "desiredReplicas": 0, "lastScaledAt": null}}
+                }}"#,
+                ordered_suffix
+            );
+
+            let pipeline_cfg_base64 = BASE64_STANDARD.encode(&pipeline_cfg);
+            let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+            let pipeline_config =
+                PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+            assert_eq!(
+                pipeline_config.ordered_processing_enabled, expected_enabled,
+                "{} failed",
+                name
+            );
+            assert_eq!(pipeline_config.vertex_type, VertexType::MapUDF);
+        }
+    }
+
+    #[test]
+    fn test_ordered_processing_for_sink_vertices() {
+        // Test that Sink vertices respect the ordered.enabled flag and watermark config is correct
+        let test_cases = vec![
+            (
+                "Sink with ordered enabled",
+                r#","ordered": {"enabled": true}"#,
+                true,
+                vec![0], // Only partition 0 when ordered processing is enabled
+            ),
+            (
+                "Sink without ordered flag",
+                "",
+                false,
+                vec![0, 1, 2], // All partitions when ordered processing is disabled
+            ),
+        ];
+
+        for (name, ordered_field, expected_enabled, expected_partitions) in test_cases {
+            let ordered_suffix = if ordered_field.is_empty() {
+                ",".to_string()
+            } else {
+                format!("{},", ordered_field)
+            };
+
+            let pipeline_cfg = format!(
+                r#"{{
+                    "metadata": {{"name": "test-sink", "namespace": "default", "creationTimestamp": null}},
+                    "spec": {{
+                        "name": "out",
+                        "sink": {{"log": {{}}}}{}
+                        "limits": {{"readBatchSize": 500, "readTimeout": "1s"}},
+                        "pipelineName": "test-pipeline",
+                        "interStepBufferServiceName": "",
+                        "replicas": 0,
+                        "fromEdges": [{{
+                            "from": "in", "to": "out",
+                            "fromVertexType": "Source", "fromVertexPartitionCount": 3,
+                            "toVertexType": "Sink", "toVertexPartitionCount": 1
+                        }}],
+                        "watermark": {{"maxDelay": "0s"}}
+                    }},
+                    "status": {{"phase": "", "replicas": 0, "desiredReplicas": 0, "lastScaledAt": null}}
+                }}"#,
+                ordered_suffix
+            );
+
+            let pipeline_cfg_base64 = BASE64_STANDARD.encode(&pipeline_cfg);
+            let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+            let pipeline_config =
+                PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+            assert_eq!(
+                pipeline_config.ordered_processing_enabled, expected_enabled,
+                "{} failed",
+                name
+            );
+            assert_eq!(pipeline_config.vertex_type, VertexType::Sink);
+
+            // Verify watermark config has the expected partitions
+            if let Some(WatermarkConfig::Edge(edge_config)) = &pipeline_config.watermark_config {
+                assert_eq!(edge_config.from_vertex_config.len(), 1);
+                let partitions = &edge_config
+                    .from_vertex_config
+                    .first()
+                    .expect("Expected at least one from_vertex_config")
+                    .partitions;
+                assert_eq!(
+                    partitions, &expected_partitions,
+                    "{} watermark partitions mismatch",
+                    name
+                );
+            } else {
+                panic!("Expected Edge watermark config for {}", name);
+            }
+        }
+    }
+
+    #[test]
+    fn test_ordered_processing_from_vertex_single_stream_per_replica() {
+        // When ordered processing is enabled, from_vertex_config should have
+        // exactly one stream matching the replica ID (replica=0 by default).
+        let pipeline_cfg = r#"{
+            "metadata": {"name": "test-map", "namespace": "default", "creationTimestamp": null},
+            "spec": {
+                "name": "map-vertex",
+                "udf": {"container": {"image": "test-image"}},
+                "ordered": {"enabled": true},
+                "pipelineName": "test-pipeline",
+                "interStepBufferServiceName": "",
+                "replicas": 0,
+                "fromEdges": [{
+                    "from": "in", "to": "map-vertex",
+                    "fromVertexType": "Source", "fromVertexPartitionCount": 3,
+                    "toVertexType": "MapUDF", "toVertexPartitionCount": 3
+                }],
+                "toEdges": [{
+                    "from": "map-vertex", "to": "out",
+                    "fromVertexType": "MapUDF", "fromVertexPartitionCount": 3,
+                    "toVertexType": "Sink", "toVertexPartitionCount": 3
+                }]
+            },
+            "status": {"phase": "", "replicas": 0, "desiredReplicas": 0, "lastScaledAt": null}
+        }"#;
+
+        let pipeline_cfg_base64 = BASE64_STANDARD.encode(pipeline_cfg);
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
+
+        assert!(config.ordered_processing_enabled);
+        assert_eq!(config.from_vertex_config.len(), 1);
+
+        let from_cfg = &config.from_vertex_config.first().unwrap();
+        assert_eq!(
+            from_cfg.reader_config.streams.len(),
+            1,
+            "Ordered mode should have exactly one stream per replica"
+        );
+        assert_eq!(
+            from_cfg.reader_config.streams.first().unwrap().partition,
+            0,
+            "Replica 0 should read from partition 0"
+        );
+    }
+
+    #[test]
+    fn test_unordered_processing_from_vertex_all_streams() {
+        // When ordered processing is disabled, from_vertex_config should have
+        // streams for all partitions.
+        let pipeline_cfg = r#"{
+            "metadata": {"name": "test-map", "namespace": "default", "creationTimestamp": null},
+            "spec": {
+                "name": "map-vertex",
+                "udf": {"container": {"image": "test-image"}},
+                "pipelineName": "test-pipeline",
+                "interStepBufferServiceName": "",
+                "replicas": 0,
+                "fromEdges": [{
+                    "from": "in", "to": "map-vertex",
+                    "fromVertexType": "Source", "fromVertexPartitionCount": 3,
+                    "toVertexType": "MapUDF", "toVertexPartitionCount": 3
+                }],
+                "toEdges": [{
+                    "from": "map-vertex", "to": "out",
+                    "fromVertexType": "MapUDF", "fromVertexPartitionCount": 3,
+                    "toVertexType": "Sink", "toVertexPartitionCount": 3
+                }]
+            },
+            "status": {"phase": "", "replicas": 0, "desiredReplicas": 0, "lastScaledAt": null}
+        }"#;
+
+        let pipeline_cfg_base64 = BASE64_STANDARD.encode(pipeline_cfg);
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
+
+        assert!(!config.ordered_processing_enabled);
+        assert_eq!(config.from_vertex_config.len(), 1);
+
+        let from_cfg = &config.from_vertex_config.first().unwrap();
+        assert_eq!(
+            from_cfg.reader_config.streams.len(),
+            3,
+            "Unordered mode should have streams for all partitions"
+        );
+        let partitions: Vec<u16> = from_cfg
+            .reader_config
+            .streams
+            .iter()
+            .map(|s| s.partition)
+            .collect();
+        assert_eq!(partitions, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn test_ordered_processing_to_vertex_streams() {
+        // to_vertex_config streams should always contain all partitions
+        // (routing is done at write time, not at config time).
+        let pipeline_cfg = r#"{
+            "metadata": {"name": "test-map", "namespace": "default", "creationTimestamp": null},
+            "spec": {
+                "name": "map-vertex",
+                "udf": {"container": {"image": "test-image"}},
+                "ordered": {"enabled": true},
+                "pipelineName": "test-pipeline",
+                "interStepBufferServiceName": "",
+                "replicas": 0,
+                "fromEdges": [{
+                    "from": "in", "to": "map-vertex",
+                    "fromVertexType": "Source", "fromVertexPartitionCount": 3,
+                    "toVertexType": "MapUDF", "toVertexPartitionCount": 3
+                }],
+                "toEdges": [{
+                    "from": "map-vertex", "to": "out",
+                    "fromVertexType": "MapUDF", "fromVertexPartitionCount": 3,
+                    "toVertexType": "Sink", "toVertexPartitionCount": 3
+                }]
+            },
+            "status": {"phase": "", "replicas": 0, "desiredReplicas": 0, "lastScaledAt": null}
+        }"#;
+
+        let pipeline_cfg_base64 = BASE64_STANDARD.encode(pipeline_cfg);
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
+
+        assert!(config.ordered_processing_enabled);
+        assert_eq!(config.to_vertex_config.len(), 1);
+
+        let to_cfg = &config.to_vertex_config.first().unwrap();
+        // to_vertex_config always has streams for all partitions (writer decides at runtime)
+        assert_eq!(
+            to_cfg.writer_config.streams.len(),
+            3,
+            "to_vertex_config should have streams for all partitions even in ordered mode"
+        );
+        let partitions: Vec<u16> = to_cfg
+            .writer_config
+            .streams
+            .iter()
+            .map(|s| s.partition)
+            .collect();
+        assert_eq!(partitions, vec![0, 1, 2]);
     }
 }

@@ -141,15 +141,26 @@ func (h *HTTPWatermarkFetcher) fetchAndUpdateCache() {
 
 	partitionCount := toVertex.GetPartitionCount()
 	isReduce := toVertex.IsReduceUDF()
+	// Check if ordered processing is enabled for the target vertex
+	// When ordered processing is enabled, each pod handles a specific partition (1:1 mapping like reduce)
+	// Compute effective ordered config: vertex-level takes precedence over pipeline-level
+	var isOrderedProcessing bool
+	if !isReduce {
+		if toVertex.Ordered != nil {
+			isOrderedProcessing = toVertex.Ordered.Enabled
+		} else if h.pipeline.Spec.Ordered != nil {
+			isOrderedProcessing = h.pipeline.Spec.Ordered.Enabled
+		}
+	}
 
-	h.log.Debugf("Fetching watermarks for edge %s (reduce: %t, partitions: %d)",
-		h.edge.GetEdgeName(), isReduce, partitionCount)
+	h.log.Debugf("Fetching watermarks for edge %s (reduce: %t, ordered: %t, partitions: %d)",
+		h.edge.GetEdgeName(), isReduce, isOrderedProcessing, partitionCount)
 
-	if isReduce {
-		// For reduce vertices: hit all pods (x partitions = x pods), 1:1 pod to partition mapping
+	if isReduce || isOrderedProcessing {
+		// For reduce vertices or ordered processing: hit all pods (x partitions = x pods), 1:1 pod to partition mapping
 		h.fetchFromAllPods(partitionCount)
 	} else {
-		// For non-reduce vertices: hit only 0th pod to get all partition watermarks, 1:n pod to partition mapping
+		// For non-reduce vertices without ordered processing: hit only 0th pod to get all partition watermarks, 1:n pod to partition mapping
 		h.fetchFromSinglePod(partitionCount)
 	}
 }

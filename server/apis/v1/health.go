@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	evictCache "github.com/hashicorp/golang-lru/v2/expirable"
@@ -194,7 +195,7 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 			Code:    "V6",
 		}, err
 	}
-	// Iterate over all the pods, and verify if all the containers in the pod are in running state
+	// Iterate over all the pods, and verify if all the containers and initContainers in the pod are in a healthy state
 	for _, pod := range pods.Items {
 		// Iterate over all the containers in the pod
 		for _, containerStatus := range pod.Status.ContainerStatuses {
@@ -207,6 +208,24 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 				}, nil
 			}
 		}
+		// Iterate over all the initContainers in the pod
+		for _, containerStatus := range pod.Status.InitContainerStatuses {
+			// if waiting, check that there is no backoff error
+			if containerStatus.State.Waiting != nil && slices.Contains(dfv1.UnhealthyWaitingStatus, containerStatus.State.Waiting.Reason) {
+				return false, &resourceHealthResponse{
+					Message: fmt.Sprintf("Init container %q in pod %q is in waiting state and not healthy", containerStatus.Name, pod.Name),
+					Code:    "V3",
+				}, nil
+			}
+			// if terminated, check that it did not error
+			if containerStatus.State.Terminated != nil && containerStatus.State.Terminated.Reason == "Error" {
+				return false, &resourceHealthResponse{
+					Message: fmt.Sprintf("Init container %q in pod %q terminated and is not healthy", containerStatus.Name, pod.Name),
+					Code:    "V3",
+				}, nil
+			}
+		}
+
 	}
 	return true, &resourceHealthResponse{
 		Message: fmt.Sprintf("Vertex %q is healthy", vertexName),

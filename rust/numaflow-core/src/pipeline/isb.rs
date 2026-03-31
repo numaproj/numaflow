@@ -3,19 +3,30 @@
 //! [Vertex]: https://numaflow.numaproj.io/core-concepts/vertex/
 //! [ISB]: https://numaflow.numaproj.io/core-concepts/inter-step-buffer/
 
+use std::future::Future;
+use std::pin::Pin;
 use std::time::Duration;
-
-use async_trait::async_trait;
-use tokio_util::sync::CancellationToken;
 
 use crate::error::Result;
 use crate::message::{Message, Offset};
 
+/// A boxed future representing a pending write operation.
+/// This is returned by `ISBWriter::async_write()` and can be awaited
+/// to get the final `WriteResult`.
+pub type PendingWrite =
+    Pin<Box<dyn Future<Output = std::result::Result<WriteResult, WriteError>> + Send + 'static>>;
+
 pub(crate) mod compression;
 pub(crate) mod error;
+pub(crate) mod factory;
 pub(crate) mod jetstream;
 pub(crate) mod reader;
 pub(crate) mod writer;
+// SimpleBuffer for integration tests
+#[cfg(test)]
+pub(crate) mod simplebuffer;
+
+pub(crate) use factory::ISBFactory;
 
 /// Trait for reading messages from an Inter Step Buffer (ISB).
 ///
@@ -25,9 +36,10 @@ pub(crate) mod writer;
 /// internal state needed to perform these operations (e.g., JetStream needs
 /// the original message object).
 ///
-/// Implementations must be cheaply cloneable (e.g., using Arc internally).
-#[async_trait]
-pub(crate) trait ISBReader: Send + Sync + Clone {
+/// Uses `trait_variant::make` to generate an object-safe `ISBReader` trait with `Send` bound.
+#[allow(dead_code)]
+#[trait_variant::make(ISBReader: Send)]
+pub(crate) trait LocalISBReader: Sync {
     /// Fetches a batch of messages from the ISB.
     ///
     /// This is a blocking call that waits up to `timeout` for messages.
@@ -35,7 +47,7 @@ pub(crate) trait ISBReader: Send + Sync + Clone {
     /// # Arguments
     /// * `max` - Maximum number of messages to fetch
     /// * `timeout` - Maximum time to wait for messages
-    async fn fetch(&mut self, max: usize, timeout: Duration) -> Result<Vec<Message>>;
+    async fn fetch(&self, max: usize, timeout: Duration) -> Result<Vec<Message>>;
 
     /// Acknowledges successful processing of a message.
     ///
@@ -50,7 +62,7 @@ pub(crate) trait ISBReader: Send + Sync + Clone {
     /// Returns the number of pending (unprocessed) messages, if available.
     ///
     /// Returns `None` if the ISB implementation doesn't support pending counts.
-    async fn pending(&mut self) -> Result<Option<usize>>;
+    async fn pending(&self) -> Result<Option<usize>>;
 
     /// Returns the name/identifier of this reader (e.g., stream name).
     fn name(&self) -> &'static str;
@@ -59,9 +71,7 @@ pub(crate) trait ISBReader: Send + Sync + Clone {
     ///
     /// This is optional - implementations that don't support WIP can use the default
     /// implementation which does nothing.
-    async fn mark_wip(&self, _offset: &Offset) -> Result<()> {
-        Ok(())
-    }
+    async fn mark_wip(&self, offset: &Offset) -> Result<()>;
 
     /// Returns the interval at which WIP acks should be sent, if WIP is supported.
     ///
@@ -92,20 +102,20 @@ impl std::fmt::Display for WriteError {
 
 impl std::error::Error for WriteError {}
 
-/// Result of resolving a pending write operation.
+/// Result of a write operation.
 ///
 /// Contains the offset of the written message along with additional metadata
 /// that may be useful for logging, metrics, or debugging.
 #[derive(Debug, Clone)]
-pub struct ResolveResult {
+pub struct WriteResult {
     /// The offset of the written message
     pub offset: Offset,
     /// Whether this was a duplicate message (already existed in the buffer)
     pub is_duplicate: bool,
 }
 
-impl ResolveResult {
-    /// Creates a new ResolveResult with the given offset and no duplicate flag.
+impl WriteResult {
+    /// Creates a new WriteResult with the given offset and no duplicate flag.
     pub fn new(offset: Offset) -> Self {
         Self {
             offset,
@@ -113,7 +123,7 @@ impl ResolveResult {
         }
     }
 
-    /// Creates a new ResolveResult marked as a duplicate.
+    /// Creates a new WriteResult marked as a duplicate.
     pub fn duplicate(offset: Offset) -> Self {
         Self {
             offset,
@@ -126,60 +136,42 @@ impl ResolveResult {
 ///
 /// This trait supports two write patterns:
 /// 1. **High-performance async pattern**: Use `async_write()` to get a `PendingWrite` handle
-///    immediately, then resolve it later with `resolve()`. This allows batching acknowledgments
-///    for higher throughput.
-/// 2. **Simple blocking pattern**: Use `blocking_write()` which blocks until the write is confirmed.
+///    immediately, then resolve it later by awaiting the future. This allows batching
+///    acknowledgments for higher throughput.
+/// 2. **Simple synchronous pattern**: Use `write()` which writes and waits for confirmation
+///    in a single call. This is useful as a fallback when async writes fail.
 ///
-/// Implementations must be cheaply cloneable (e.g., using Arc internally).
-#[async_trait]
-pub(crate) trait ISBWriter: Send + Sync + Clone {
-    /// The pending write handle returned by `async_write()`.
-    /// For JetStream, this is `PublishAckFuture`. For simple implementations,
-    /// this can be `()` if acknowledgments are immediate.
-    type PendingWrite: Send + 'static;
-
+/// Both patterns return `Result<WriteResult, WriteError>` for consistency.
+/// The orchestrator is responsible for retry logic and handling cancellation.
+///
+/// Uses `trait_variant::make` to generate an object-safe `ISBWriter` trait with `Send` bound.
+#[allow(dead_code)]
+#[trait_variant::make(ISBWriter: Send)]
+pub(crate) trait LocalISBWriter: Sync {
     /// Writes a message and returns immediately with a pending write handle.
     ///
-    /// This is the high-performance write method. The returned `PendingWrite` can be
-    /// resolved later using `resolve()` to get the offset. This allows batching
-    /// multiple writes and resolving them in parallel.
+    /// This is the high-performance write method. The returned `PendingWrite` is a
+    /// boxed future that can be awaited later to get the `WriteResult`. This allows
+    /// batching multiple writes and resolving them in parallel.
     ///
     /// Returns `Err(WriteError::BufferFull)` if the buffer is full.
     /// Returns `Err(WriteError::WriteFailed)` if the publish operation fails.
     ///
     /// # Arguments
     /// * `message` - The message to write
-    async fn async_write(
-        &self,
-        message: Message,
-    ) -> std::result::Result<Self::PendingWrite, WriteError>;
+    async fn async_write(&self, message: Message) -> std::result::Result<PendingWrite, WriteError>;
 
-    /// Resolves a pending write to get the result.
+    /// Writes a message and waits for confirmation, returning the result.
     ///
-    /// This waits for the write acknowledgment and returns a `ResolveResult` containing
-    /// the offset of the written message along with additional metadata (e.g., whether
-    /// the message was a duplicate).
+    /// This is a single-attempt write that returns immediately after the write
+    /// completes or fails. The orchestrator is responsible for retry logic.
     ///
-    /// # Arguments
-    /// * `pending` - The pending write handle from `async_write()`
-    async fn resolve(
-        &self,
-        pending: Self::PendingWrite,
-    ) -> std::result::Result<ResolveResult, WriteError>;
-
-    /// Writes a message and blocks until confirmed, returning the offset.
-    ///
-    /// This is the simple blocking write method with infinite retries until success
-    /// or cancellation. Use this when you don't need the high-performance async pattern.
+    /// Returns `Err(WriteError::BufferFull)` if the buffer is full.
+    /// Returns `Err(WriteError::WriteFailed)` if the write operation fails.
     ///
     /// # Arguments
     /// * `message` - The message to write
-    /// * `cln_token` - Cancellation token for graceful shutdown
-    async fn blocking_write(
-        &self,
-        message: Message,
-        cln_token: CancellationToken,
-    ) -> std::result::Result<Offset, WriteError>;
+    async fn write(&self, message: Message) -> std::result::Result<WriteResult, WriteError>;
 
     /// Returns the name/identifier of this writer (e.g., stream name).
     #[allow(dead_code)]

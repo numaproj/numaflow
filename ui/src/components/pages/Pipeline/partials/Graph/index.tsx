@@ -74,7 +74,17 @@ import "./style.css";
 
 const nodeWidth = 252;
 const nodeHeight = 72;
+const nodeHeightTall = 112;
 const graphDirection = "LR";
+
+const getNodeLayoutHeight = (node: Node): number => {
+  const d = node?.data as Record<string, any> | undefined;
+  if (!d) return nodeHeight;
+  const nodeInfo = d.nodeInfo as Record<string, any> | undefined;
+  if (d.type === "source" && nodeInfo?.source?.transformer) return nodeHeightTall;
+  if (d.type === "sink" && (nodeInfo?.sink?.onSuccess || nodeInfo?.sink?.fallback)) return nodeHeightTall;
+  return nodeHeight;
+};
 
 const defaultNodeTypes: NodeTypes = {
   custom: CustomNode,
@@ -100,7 +110,8 @@ const getLayoutedElements = (
   dagreGraph.setGraph({ rankdir: direction, ranksep: 240, edgesep: 180 });
 
   nodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+    const h = getNodeLayoutHeight(node);
+    dagreGraph.setNode(node.id, { width: nodeWidth, height: h });
   });
 
   edges.forEach((edge) => {
@@ -121,6 +132,7 @@ const getLayoutedElements = (
   let cnt = 2;
   nodes.forEach((node) => {
     const nodeWithPosition = dagreGraph.node(node.id);
+    const h = getNodeLayoutHeight(node);
     if (node?.data?.type === "sideInput" || node?.data?.type === "generator") {
       nodeWithPosition.x = nodeWidth;
       nodeWithPosition.y = max_pos + nodeHeight * 0.75 * cnt;
@@ -129,11 +141,9 @@ const getLayoutedElements = (
     node.targetPosition = isHorizontal ? Position.Left : Position.Top;
     node.sourcePosition = isHorizontal ? Position.Right : Position.Bottom;
 
-    // We are shifting the dagre node position (anchor=center) to the top left
-    // so that it matches the React Flow node anchor point (top left).
     node.position = {
       x: nodeWithPosition.x - nodeWidth / 2,
-      y: nodeWithPosition.y - nodeHeight / 2,
+      y: nodeWithPosition.y - h / 2,
     };
   });
 
@@ -353,8 +363,6 @@ const Flow = (props: FlowProps) => {
                 <Alert
                   severity="error"
                   sx={{
-                    backgroundColor: "#FDEDED",
-                    color: "#5F2120",
                     fontSize: "1.6rem",
                   }}
                 >
@@ -370,11 +378,11 @@ const Flow = (props: FlowProps) => {
                   style={{
                     borderRadius: "1.3rem",
                     width: "22.8rem",
-                    background: "#F0F0F0",
+                    background: "var(--bg-tertiary)",
                     display: "flex",
                     flexDirection: "row",
                     padding: "0.8rem",
-                    color: "#516F91",
+                    color: "var(--text-secondary)",
                     alignItems: "center",
                   }}
                   data-testid="pipeline-status"
@@ -490,8 +498,8 @@ const Flow = (props: FlowProps) => {
               width="53"
               height="29"
               rx="3.5"
-              fill="white"
-              stroke="#D4D7DC"
+              fill="var(--bg-primary)"
+              stroke="var(--border-primary)"
             />
             <text x="50%" y="50%" className={"zoom-percent-text"}>
               {(((zoomLevel - 0.1) / 2) * 100).toFixed(0)}%

@@ -29,3 +29,6 @@
 //! is an error, the [map::MapHandle] will stop reading new requests and return an error.
 
 pub(crate) mod map;
+
+#[cfg(test)]
+pub(crate) mod test_utils;

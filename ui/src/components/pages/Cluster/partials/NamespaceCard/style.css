@@ -2,21 +2,21 @@
   font-size: 2rem;
   font-style: normal;
   font-weight: 400;
-  color: #000;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .namespace-card-section-title {
-  color: #3C4348;
+  color: var(--text-secondary);
   font-size: 1.4rem;
   font-style: normal;
   font-weight: 600;
 }
 
 .namespace-card-section-title-value {
-  color: #3C4348;
+  color: var(--text-secondary);
   font-size: 1.4rem;
   font-style: normal;
   font-weight: 400;
@@ -24,21 +24,21 @@
 }
 
 .namespace-card-section-text-14-normal {
-  color: #3C4348;
+  color: var(--text-secondary);
   font-size: 1.4rem;
   font-style: normal;
   font-weight: 400;
 }
 
 .namespace-card-section-text-16-bold {
-  color: #3C4348;
+  color: var(--text-secondary);
   font-size: 1.6rem;
   font-style: normal;
   font-weight: 600;
 }
 
 .namespace-card-section-text-16-normal {
-  color: #3C4348;
+  color: var(--text-secondary);
   font-size: 1.6rem;
   font-style: normal;
   font-weight: 400;

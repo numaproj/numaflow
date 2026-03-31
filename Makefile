@@ -189,10 +189,8 @@ endif
 .PHONY: build-rust-in-docker
 build-rust-in-docker:
 	mkdir -p dist
-	-$(DOCKER) container ls --all --filter=ancestor='$(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)' --format "{{.ID}}" | xargs $(DOCKER) rm
-	-$(DOCKER) image rm $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)
 	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION) --target rust-builder -f $(DOCKERFILE) . --load
-	export CTR=$$($(DOCKER) create $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)) && $(DOCKER) cp $$CTR:/root/numaflow dist/numaflow-rs-linux-$(HOST_ARCH) && $(DOCKER) cp $$CTR:/root/entrypoint dist/entrypoint-linux-$(HOST_ARCH) && $(DOCKER) rm $$CTR && $(DOCKER) image rm $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)
+	export CTR=$$($(DOCKER) create $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)) && $(DOCKER) cp $$CTR:/root/numaflow dist/numaflow-rs-linux-$(HOST_ARCH) && $(DOCKER) cp $$CTR:/root/entrypoint dist/entrypoint-linux-$(HOST_ARCH)
 
 .PHONY: build-rust-in-docker-multi
 build-rust-in-docker-multi:
@@ -316,7 +314,7 @@ docs-serve: docs
 
 .PHONY: docs-linkcheck
 docs-linkcheck: /usr/local/bin/lychee
-	lychee --insecure --accept '100..=399,403,429' --exclude-path=CHANGELOG.md --exclude-path=USERS.md --exclude-path=./docs/APIs.md --exclude "https://localhost:*" --exclude "http://localhost:*" --exclude "http://127.0.0.1*" --exclude "https://kubernetes.io/" *.md $(shell find ./docs -name '*.md') $(shell find ./examples -name '*.yaml')
+	lychee --insecure --accept '100..=399,403,429' --exclude-path=CHANGELOG.md --exclude-path=USERS.md --exclude-path=./docs/APIs.md --exclude "https://localhost:*" --exclude "http://localhost:*" --exclude "http://127.0.0.1*" --exclude "https://kubernetes.io/" --exclude "https://goreportcard.com/"  --exclude "https://classic.yarnpkg.com" *.md $(shell find ./docs -name '*.md') $(shell find ./examples -name '*.yaml')
 
 # pre-push checks
 

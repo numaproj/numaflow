@@ -74,8 +74,11 @@ impl SourceReader for CoreHttpSource {
         }
     }
 
-    async fn partitions(&mut self) -> Result<Vec<u16>> {
-        Ok(vec![*get_vertex_replica()])
+    async fn partitions(&mut self) -> Result<source::SourcePartitions> {
+        Ok(source::SourcePartitions::new(
+            vec![*get_vertex_replica()],
+            None,
+        ))
     }
 }
 
@@ -272,22 +275,17 @@ mod tests {
             }
         });
 
-        // wait for 1s to make sure all the requests are sent
-        let start = tokio::time::timeout(Duration::from_secs(1), async {
-            loop {
-                let pending = core_http_source.pending().await.unwrap();
-                if pending == Some(7) {
-                    break;
-                }
-                tokio::time::sleep(Duration::from_millis(10)).await;
-            }
-        })
-        .await;
-        assert!(start.is_ok(), "Timeout occurred before pending became 7");
-
         // Test partitions
         let partitions = core_http_source.partitions().await.unwrap();
-        assert_eq!(partitions.len(), 1, "Should have 1 partition");
+        assert_eq!(
+            partitions.active_partitions.len(),
+            1,
+            "Should have 1 partition"
+        );
+        assert!(
+            partitions.total_partitions.is_none(),
+            "HTTP source should not have total_partitions"
+        );
 
         // Test read method - should get batch_size (5) messages
         let messages = core_http_source.read().await.unwrap().unwrap();
@@ -317,13 +315,9 @@ mod tests {
         let offsets = messages.iter().map(|m| m.offset.clone()).collect();
         core_http_source.ack(offsets).await.unwrap();
 
-        // Test pending count after reading and acking
+        // pending() always returns None for HTTP source
         let pending = core_http_source.pending().await.unwrap();
-        assert_eq!(
-            pending,
-            Some(2),
-            "Should have 2 pending messages after reading 5"
-        );
+        assert_eq!(pending, None, "HTTP source pending should always be None");
 
         // Read remaining messages
         let messages = core_http_source.read().await.unwrap().unwrap();
@@ -333,9 +327,9 @@ mod tests {
         let offsets = messages.iter().map(|m| m.offset.clone()).collect();
         core_http_source.ack(offsets).await.unwrap();
 
-        // Verify no more pending messages
+        // pending() always returns None for HTTP source
         let pending = core_http_source.pending().await.unwrap();
-        assert_eq!(pending, Some(0), "Should have 0 pending messages");
+        assert_eq!(pending, None, "HTTP source pending should always be None");
 
         request_handle.await.unwrap();
     }

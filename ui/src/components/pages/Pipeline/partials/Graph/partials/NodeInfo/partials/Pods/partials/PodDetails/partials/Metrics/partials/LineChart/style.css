@@ -3,6 +3,7 @@
   flex-direction: column;
   gap: 0.5rem;
   background-color: #fff;
+  color: #000;
   padding: 1rem;
   border: 0.1rem solid #ccc;
   border-radius: 1rem;
@@ -75,7 +76,7 @@
   top: -1rem;
   left: 1rem;
   transition: 0.2s ease all;
-  background-color: white;
+  background-color: var(--bg-secondary);
   padding: 0 0.5rem;
   z-index: 1;
 }

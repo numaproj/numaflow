@@ -76,14 +76,14 @@ mod tests {
 
     use super::*;
 
-    #[tokio::test]
-    async fn test_evaluate_write_condition_no_conditions() {
+    #[test]
+    fn test_evaluate_write_condition_no_conditions() {
         let result = should_forward(None, None);
         assert!(result);
     }
 
-    #[tokio::test]
-    async fn test_evaluate_write_condition_and_operator() {
+    #[test]
+    fn test_evaluate_write_condition_and_operator() {
         let mut tag_conditions = TagConditions::new(vec!["tag1".to_string(), "tag2".to_string()]);
         tag_conditions.operator = Some("and".to_string());
         let conditions = ForwardConditions::new(tag_conditions);
@@ -92,8 +92,8 @@ mod tests {
         assert!(result);
     }
 
-    #[tokio::test]
-    async fn test_evaluate_write_condition_or_operator() {
+    #[test]
+    fn test_evaluate_write_condition_or_operator() {
         let mut tag_conditions = TagConditions::new(vec!["tag1".to_string()]);
         tag_conditions.operator = Some("or".to_string());
         let conditions = ForwardConditions::new(tag_conditions);
@@ -102,8 +102,8 @@ mod tests {
         assert!(result);
     }
 
-    #[tokio::test]
-    async fn test_evaluate_write_condition_not_operator() {
+    #[test]
+    fn test_evaluate_write_condition_not_operator() {
         let mut tag_conditions = TagConditions::new(vec!["tag1".to_string()]);
         tag_conditions.operator = Some("not".to_string());
         let conditions = ForwardConditions::new(tag_conditions);
@@ -112,8 +112,8 @@ mod tests {
         assert!(result);
     }
 
-    #[tokio::test]
-    async fn test_empty_tags_with_and_operator() {
+    #[test]
+    fn test_empty_tags_with_and_operator() {
         let mut tag_conditions = TagConditions::new(vec!["tag1".to_string(), "tag2".to_string()]);
         tag_conditions.operator = Some("and".to_string());
         let conditions = ForwardConditions::new(tag_conditions);
@@ -128,8 +128,8 @@ mod tests {
         assert!(!result, "AND condition should fail with None tags");
     }
 
-    #[tokio::test]
-    async fn test_empty_tags_with_or_operator() {
+    #[test]
+    fn test_empty_tags_with_or_operator() {
         let mut tag_conditions = TagConditions::new(vec!["tag1".to_string(), "tag2".to_string()]);
         tag_conditions.operator = Some("or".to_string());
         let conditions = ForwardConditions::new(tag_conditions);
@@ -144,8 +144,8 @@ mod tests {
         assert!(!result, "OR condition should fail with None tags");
     }
 
-    #[tokio::test]
-    async fn test_empty_tags_with_not_operator() {
+    #[test]
+    fn test_empty_tags_with_not_operator() {
         let mut tag_conditions = TagConditions::new(vec!["tag1".to_string(), "tag2".to_string()]);
         tag_conditions.operator = Some("not".to_string());
         let conditions = ForwardConditions::new(tag_conditions);
@@ -160,8 +160,8 @@ mod tests {
         assert!(result, "NOT condition should pass with None tags");
     }
 
-    #[tokio::test]
-    async fn test_default_operator() {
+    #[test]
+    fn test_default_operator() {
         let tag_conditions = TagConditions::new(vec!["tag1".to_string(), "tag2".to_string()]);
         let conditions = ForwardConditions::new(tag_conditions);
         let tags = Some(Arc::from(vec!["tag1".to_string(), "tag2".to_string()]));

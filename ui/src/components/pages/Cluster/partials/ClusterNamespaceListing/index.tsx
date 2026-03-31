@@ -212,7 +212,7 @@ export function ClusterNamespaceListing({
               flexGrow: 0.15,
             }}
           >
-            <label style={{ color: "#6B6C72", fontSize: "1.6rem" }}>
+            <label style={{ color: "var(--text-tertiary)", fontSize: "1.6rem" }}>
               Namespaces
             </label>
             <Select
@@ -222,8 +222,8 @@ export function ClusterNamespaceListing({
               onChange={handleNamespaceFilterChange}
               style={{
                 width: "22.4rem",
-                background: "#fff",
-                border: "1px solid #6B6C72",
+                background: "var(--bg-primary)",
+                border: "1px solid var(--border-primary)",
                 height: "3.4rem",
                 marginRight: "0.8rem",
                 fontSize: "1.6rem",
@@ -247,7 +247,7 @@ export function ClusterNamespaceListing({
               flexGrow: 0.15,
             }}
           >
-            <label style={{ color: "#6B6C72", fontSize: "1.6rem" }}>
+            <label style={{ color: "var(--text-tertiary)", fontSize: "1.6rem" }}>
               Health
             </label>
             <Select
@@ -259,8 +259,8 @@ export function ClusterNamespaceListing({
               }}
               style={{
                 width: "22.4rem",
-                background: "#fff",
-                border: "1px solid #6B6C72",
+                background: "var(--bg-primary)",
+                border: "1px solid var(--border-primary)",
                 height: "3.4rem",
                 marginRight: "0.8rem",
                 textTransform: "capitalize",
@@ -288,7 +288,7 @@ export function ClusterNamespaceListing({
               textTransform: "capitalize",
             }}
           >
-            <label style={{ color: "#6B6C72", fontSize: "1.6rem" }}>
+            <label style={{ color: "var(--text-tertiary)", fontSize: "1.6rem" }}>
               Status
             </label>
             <Select
@@ -300,8 +300,8 @@ export function ClusterNamespaceListing({
               }}
               style={{
                 width: "22.4rem",
-                background: "#fff",
-                border: "1px solid #6B6C72",
+                background: "var(--bg-primary)",
+                border: "1px solid var(--border-primary)",
                 height: "3.4rem",
                 textTransform: "capitalize",
                 fontSize: "1.6rem",

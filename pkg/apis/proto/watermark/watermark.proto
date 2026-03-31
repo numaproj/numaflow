@@ -38,10 +38,9 @@ message WMB {
 
   // Partition to identify the partition to which the watermark belongs.
   int32 partition = 4;
-}
 
-// Heartbeat is used to track the active processors
-message Heartbeat {
-  // Heartbeat(current time in millis) published by the active processors.
-  int64 heartbeat = 1;
+  // Optional expected processor count for source watermarks.
+  // When set, the fetcher will wait until this many processors are active before
+  // computing a valid watermark.
+  optional int32 processor_count = 5;
 }

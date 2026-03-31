@@ -1,3 +1,33 @@
+:root {
+  --text-primary: #393A3D;
+  --text-secondary: #3C4348;
+  --text-tertiary: #6B6C72;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f8fb;
+  --bg-tertiary: #fafafa;
+  --border-primary: #D4D7DC;
+  --border-secondary: #dae3e8;
+  --accent-primary: #0077C5;
+  --node-bg: #d1dee9;
+  --node-text: #274c77;
+  --appbar-gradient: linear-gradient(90deg, #00254A 2.77%, #3492EF 105.54%);
+}
+
+[data-theme="dark"] {
+  --text-primary: #E4E4E7;
+  --text-secondary: #A1A1AA;
+  --text-tertiary: #71717A;
+  --bg-primary: #18181B;
+  --bg-secondary: #1E1E23;
+  --bg-tertiary: #27272A;
+  --border-primary: #3F3F46;
+  --border-secondary: #4A5568;
+  --accent-primary: #38BDF8;
+  --node-bg: #3F3F46;
+  --node-text: #E4E4E7;
+  --appbar-gradient: linear-gradient(90deg, #0F172A 2.77%, #1E3A5F 105.54%);
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
@@ -5,9 +35,120 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
     monospace;
+}
+
+/* MUI component overrides for dark mode */
+[data-theme="dark"] .MuiPaper-root {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .MuiMenu-paper {
+  background-color: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .MuiMenuItem-root {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .MuiMenuItem-root:hover {
+  background-color: var(--bg-secondary);
+}
+
+[data-theme="dark"] .MuiSelect-select {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .MuiInputBase-input {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .MuiOutlinedInput-notchedOutline {
+  border-color: var(--border-primary);
+}
+
+[data-theme="dark"] .MuiPaginationItem-root {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .MuiAccordion-root {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .MuiAccordionSummary-root {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .MuiAccordionDetails-root {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .MuiTypography-root {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .MuiButton-contained {
+  color: #fff;
+}
+
+[data-theme="dark"] .MuiDrawer-paper {
+  background-color: var(--bg-secondary);
+}
+
+[data-theme="dark"] .MuiTableCell-root {
+  color: var(--text-primary);
+  border-color: var(--border-primary);
+}
+
+[data-theme="dark"] .MuiTableCell-head {
+  background-color: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .MuiTab-root {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .Mui-selected.MuiTab-root {
+  color: var(--text-primary);
+}
+
+/* Icon filters for dark mode - invert dark icons to light */
+[data-theme="dark"] .sidebar-drag-icon,
+[data-theme="dark"] .pipeline-card-icon,
+[data-theme="dark"] .summary-page-layout-collapse-button,
+[data-theme="dark"] .summary-page-layout-expand-button,
+[data-theme="dark"] .close-modal-warn-icon {
+  filter: invert(1) brightness(2);
+}
+
+/* Breadcrumb chevrons */
+[data-theme="dark"] .crumb-separator {
+  filter: invert(1) brightness(1.5);
+}
+
+/* Adjust toggle button group for dark mode */
+[data-theme="dark"] .MuiToggleButton-root {
+  color: var(--text-secondary);
+  border-color: var(--border-primary);
+}
+
+[data-theme="dark"] .MuiToggleButton-root.Mui-selected {
+  color: var(--text-primary);
+  background-color: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .MuiInputLabel-root {
+  color: var(--text-tertiary);
+}
+
+[data-theme="dark"] .MuiInputLabel-root.Mui-focused {
+  color: var(--accent-primary);
 }

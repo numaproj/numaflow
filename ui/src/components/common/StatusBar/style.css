@@ -22,14 +22,14 @@
 }
 
 .status-bar-status-value {
-  color: #393A3D;
+  color: var(--text-primary);
   font-size: 1.6rem;
   font-style: normal;
   font-weight: 600;
 }
 
 .status-bar-status-text {
-  color: #393A3D;
+  color: var(--text-primary);
   font-size: 1rem;
   font-style: normal;
   font-weight: 400;

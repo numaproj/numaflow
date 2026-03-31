@@ -179,7 +179,7 @@ export function K8sEvents({
           flexDirection: "column",
           marginRight: "0.8rem",
           fontSize: "1.6rem",
-          color: "#6B6C72"
+          color: "var(--text-tertiary)"
           }}
         >
           <label>
@@ -194,8 +194,8 @@ export function K8sEvents({
           }}
           sx={{
             fontSize: "1.6rem",
-            background: "#fff",
-            border: "1px solid #6B6C72",
+            background: "var(--bg-primary)",
+            border: "1px solid var(--border-primary)",
             height: "3.4rem",
           }}
             >
@@ -246,7 +246,7 @@ export function K8sEvents({
         sx={{
           display: "flex",
           flexDirection: "column",
-          borderTop: "1px solid #DCDCDC",
+          borderTop: "1px solid var(--border-primary)",
           marginTop: "1.6rem",
           height: "100%",
         }}
@@ -254,7 +254,7 @@ export function K8sEvents({
         <TableContainer
           sx={{
             maxHeight: "75%",
-            backgroundColor: "#FFF",
+            backgroundColor: "var(--bg-primary)",
           }}
         >
           <Table stickyHeader>
@@ -332,8 +332,8 @@ export function K8sEvents({
       fontSize: "1.6rem",
     };
     const selectStyle = {
-      background: "#fff",
-      border: "1px solid #6B6C72",
+      background: "var(--bg-primary)",
+      border: "1px solid var(--border-primary)",
       height: "3.4rem",
       fontSize: "1.6rem",
     };
@@ -353,7 +353,7 @@ export function K8sEvents({
       // Vertex options available
       return (
         <Box sx={selectContainerStyle}>
-          <label style={{ color: "#6B6C72" }}>Vertex</label>
+          <label style={{ color: "var(--text-tertiary)" }}>Vertex</label>
           <Select
             label="Vertex"
             defaultValue={DEFAULT_FILTER_VALUE}
@@ -397,7 +397,7 @@ export function K8sEvents({
       // No pipeline selected or one selected and no vertex options, just show pipeline selector
       return (
         <Box sx={selectContainerStyle}>
-          <label style={{ color: "#6B6C72" }}>Pipeline</label>
+          <label style={{ color: "var(--text-tertiary)" }}>Pipeline</label>
           <Select
             label="Pipeline"
             defaultValue={DEFAULT_FILTER_VALUE}
@@ -433,7 +433,7 @@ export function K8sEvents({
         }}
       >
         <Box sx={selectContainerStyle}>
-          <label style={{ color: "#6B6C72" }}>Pipeline</label>
+          <label style={{ color: "var(--text-tertiary)" }}>Pipeline</label>
           <Select
             label="Pipeline"
             defaultValue={DEFAULT_FILTER_VALUE}
@@ -459,7 +459,7 @@ export function K8sEvents({
           </Select>
         </Box>
         <Box sx={selectContainerStyle}>
-          <label style={{ color: "#6B6C72" }}>Vertex</label>
+          <label style={{ color: "var(--text-tertiary)" }}>Vertex</label>
           <Select
             label="Vertex"
             defaultValue={DEFAULT_FILTER_VALUE}

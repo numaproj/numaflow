@@ -18,7 +18,7 @@ use crate::message::{Message, MessageID, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::reader::LagReader;
 use crate::shared::grpc::utc_from_timestamp;
-use crate::source::{SourceAcker, SourceReader};
+use crate::source::{SourceAcker, SourcePartitions, SourceReader};
 use crate::{Error, Result, config};
 use tracing::warn;
 
@@ -248,18 +248,20 @@ impl SourceReader for UserDefinedSourceRead {
         Some(Ok(messages))
     }
 
-    async fn partitions(&mut self) -> Result<Vec<u16>> {
-        let partitions = self
+    async fn partitions(&mut self) -> Result<SourcePartitions> {
+        let result = self
             .source_client
             .partitions_fn(Request::new(()))
             .await
             .map_err(|e| Error::Source(e.to_string()))?
             .into_inner()
             .result
-            .expect("partitions not found")
-            .partitions;
+            .expect("partitions not found");
 
-        Ok(partitions.iter().map(|p| *p as u16).collect())
+        let active_partitions: Vec<u16> = result.partitions.iter().map(|p| *p as u16).collect();
+        let total_partitions = result.total_partitions.map(|t| t as u32);
+
+        Ok(SourcePartitions::new(active_partitions, total_partitions))
     }
 }
 
@@ -325,6 +327,7 @@ impl SourceAcker for UserDefinedSourceAck {
         let ack_offsets: Result<Vec<source::Offset>> =
             offsets.into_iter().map(TryInto::try_into).collect();
 
+        // Sending can only fail if the channel is closed (receiver is dropped, which happens when gRPC stream is closed)
         self.ack_tx
             .send(AckRequest {
                 request: Some(source::ack_request::Request {
@@ -333,7 +336,7 @@ impl SourceAcker for UserDefinedSourceAck {
                 handshake: None,
             })
             .await
-            .map_err(|e| Error::Source(e.to_string()))?;
+            .map_err(|e| Error::NonRetryable(e.to_string()))?;
 
         self.ack_resp_stream
             .message()
@@ -369,7 +372,13 @@ impl SourceAcker for UserDefinedSourceAck {
                 }),
             })
             .await
-            .map_err(|e| Error::Grpc(Box::new(e)))?;
+            .map_err(|e| {
+                if is_stream_closed(&e) {
+                    Error::NonRetryable(e.to_string())
+                } else {
+                    Error::Grpc(Box::new(e))
+                }
+            })?;
 
         response
             .into_inner()
@@ -378,6 +387,34 @@ impl SourceAcker for UserDefinedSourceAck {
 
         Ok(())
     }
+}
+
+use std::error::Error as StdError;
+use std::io::ErrorKind;
+fn has_io_kind_in_chain(err: &(dyn StdError + 'static), kinds: &[ErrorKind]) -> bool {
+    let mut current: Option<&(dyn StdError + 'static)> = Some(err);
+    while let Some(e) = current {
+        if let Some(ioe) = e.downcast_ref::<std::io::Error>()
+            && kinds.contains(&ioe.kind())
+        {
+            return true;
+        }
+        current = e.source();
+    }
+    false
+}
+
+fn is_stream_closed(status: &tonic::Status) -> bool {
+    // The error log looks like this when the UDF exits before after client invokes a method like nack
+    // {"timestamp":"2026-02-26T03:26:51.057042Z","level":"ERROR","message":"Cancellation token received, stopping the nack retry loop","result":"Err(Grpc(Status { code: Unknown, message: \"transport error\", source: Some(tonic::transport::Error(Transport, hyper::Error(Io, Custom { kind: BrokenPipe, error: \"stream closed because of a broken pipe\" }))) }))","target":"numaflow_core::source"}
+    has_io_kind_in_chain(
+        status,
+        &[
+            ErrorKind::BrokenPipe,
+            ErrorKind::ConnectionReset,
+            ErrorKind::NotConnected,
+        ],
+    )
 }
 
 #[derive(Clone)]
@@ -412,11 +449,29 @@ mod tests {
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;
     use std::collections::{HashMap, HashSet};
+    use std::io::ErrorKind;
     use tokio::sync::mpsc::Sender;
 
     use super::*;
     use crate::message::IntOffset;
     use crate::shared::grpc::{create_rpc_channel, prost_timestamp_from_utc};
+
+    #[test]
+    fn test_has_io_kind_in_chain_direct_match() {
+        let err = std::io::Error::new(ErrorKind::BrokenPipe, "broken pipe");
+        assert!(has_io_kind_in_chain(&err, &[ErrorKind::BrokenPipe]));
+        assert!(has_io_kind_in_chain(
+            &err,
+            &[ErrorKind::ConnectionReset, ErrorKind::BrokenPipe]
+        ));
+    }
+
+    #[test]
+    fn test_has_io_kind_in_chain_direct_no_match() {
+        let err = std::io::Error::new(ErrorKind::BrokenPipe, "broken pipe");
+        assert!(!has_io_kind_in_chain(&err, &[ErrorKind::ConnectionReset]));
+        assert!(!has_io_kind_in_chain(&err, &[]));
+    }
 
     struct SimpleSource {
         num: usize,
@@ -556,8 +611,8 @@ mod tests {
         let pending = lag_reader.pending().await.unwrap();
         assert_eq!(pending, Some(0));
 
-        let partitions = src_read.partitions().await.unwrap();
-        assert_eq!(partitions, vec![2]);
+        let source_partitions = src_read.partitions().await.unwrap();
+        assert_eq!(source_partitions.active_partitions, vec![2]);
 
         let messages = src_read.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 5);

@@ -452,7 +452,7 @@ mod tests {
     #[tokio::test]
     async fn test_tracker_with_callback_handler() -> Result<()> {
         let store_name = "test_tracker_with_callback_handler";
-        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let client = async_nats::connect("localhost:4222").await?;
         let js_context = jetstream::new(client);
 
         let _ = js_context.delete_key_value(store_name).await;
@@ -462,8 +462,7 @@ mod tests {
                 history: 1,
                 ..Default::default()
             })
-            .await
-            .unwrap();
+            .await?;
 
         let callback_handler =
             CallbackHandler::new("test", js_context.clone(), store_name, 10).await;
@@ -498,10 +497,10 @@ mod tests {
         };
 
         // Insert a new message
-        handle.insert(&message).await.unwrap();
-        handle.delete(&offset).await.unwrap();
+        handle.insert(&message).await?;
+        handle.delete(&offset).await?;
 
-        assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
+        assert!(handle.is_empty().await?, "Tracker should be empty");
 
         // Verify that the callback was written to the KV store
         let result = timeout(Duration::from_secs(1), async {
@@ -518,7 +517,7 @@ mod tests {
         assert!(result.is_ok(), "callback was not written to the KV store");
 
         // Clean up the KV store
-        js_context.delete_key_value(store_name).await.unwrap();
+        js_context.delete_key_value(store_name).await?;
         Ok(())
     }
 

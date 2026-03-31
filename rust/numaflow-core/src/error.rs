@@ -80,6 +80,9 @@ pub enum Error {
     #[error("WAL Error - {0}")]
     #[allow(clippy::upper_case_acronyms)]
     WAL(String),
+
+    #[error("Non Retryable Error - {0}")]
+    NonRetryable(String),
 }
 
 impl From<numaflow_shared::error::Error> for Error {

@@ -1,5 +1,5 @@
 .bold-text{
-    color: #3C4348;
+    color: var(--text-secondary);
     font-size: 1.2rem;
     font-weight: 600;
     line-height: 2.35rem;

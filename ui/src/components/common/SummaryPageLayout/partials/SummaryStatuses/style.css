@@ -1,12 +1,12 @@
 .summary-statuses-title {
-  color: #393A3D;
+  color: var(--text-primary);
   font-size: 1.3rem;
   font-style: normal;
   font-weight: 600;
 }
 
 .summary-statuses-count {
-  color: #3C4348;
+  color: var(--text-secondary);
   font-size: 1.6rem;
   font-style: normal;
   font-weight: 600;
@@ -17,7 +17,7 @@
 }
 
 .summary-statuses-active-text {
-  color: #3C4348;
+  color: var(--text-secondary);
   font-size: 1.4rem;
   font-style: normal;
   font-weight: 400;
@@ -25,7 +25,7 @@
 }
 
 .summary-statuses-link {
-  color: #393A3D;
+  color: var(--text-primary);
   font-size: 1.3rem;
   font-style: normal;
   font-weight: 600;

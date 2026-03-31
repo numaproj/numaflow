@@ -34,7 +34,11 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 			{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
 				ContainerStatuses: []corev1.ContainerStatus{
 					{State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "Running"}}},
-				}},
+				},
+				InitContainerStatuses: []corev1.ContainerStatus{
+					{State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Completed"}}},
+				},
+			},
 			}},
 		}
 		done, reason, message, _ := CheckPodsStatus(&pods)
@@ -116,6 +120,27 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 		assert.Equal(t, "PodRecentRestart", reason)
 		assert.False(t, done)
 		assert.True(t, transient)
+	})
+
+	t.Run("Test vertex status as false with failed initContainer", func(t *testing.T) {
+		pods := corev1.PodList{
+			Items: []corev1.Pod{
+				{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{
+						{State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "Running"}}},
+					},
+					InitContainerStatuses: []corev1.ContainerStatus{
+						{State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error"}}},
+					},
+				},
+				},
+			},
+		}
+		done, reason, message, transient := CheckPodsStatus(&pods)
+		assert.Equal(t, "Pod test-pod is unhealthy", message)
+		assert.Equal(t, "PodError", reason)
+		assert.False(t, done)
+		assert.False(t, transient)
 	})
 }
 
@@ -319,6 +344,11 @@ func TestNumOfReadyPods(t *testing.T) {
 							Ready: true,
 						},
 					},
+					InitContainerStatuses: []corev1.ContainerStatus{
+						{
+							Ready: true,
+						},
+					},
 				},
 			},
 			{
@@ -328,6 +358,11 @@ func TestNumOfReadyPods(t *testing.T) {
 						{
 							Ready: false,
 						},
+						{
+							Ready: true,
+						},
+					},
+					InitContainerStatuses: []corev1.ContainerStatus{
 						{
 							Ready: true,
 						},
@@ -345,6 +380,11 @@ func TestNumOfReadyPods(t *testing.T) {
 							Ready: false,
 						},
 					},
+					InitContainerStatuses: []corev1.ContainerStatus{
+						{
+							Ready: false,
+						},
+					},
 				},
 			},
 			{
@@ -361,6 +401,11 @@ func TestNumOfReadyPods(t *testing.T) {
 							Ready: true,
 						},
 					},
+					InitContainerStatuses: []corev1.ContainerStatus{
+						{
+							Ready: true,
+						},
+					},
 				},
 			},
 			{
@@ -373,6 +418,11 @@ func TestNumOfReadyPods(t *testing.T) {
 						{
 							Ready: false,
 						},
+						{
+							Ready: false,
+						},
+					},
+					InitContainerStatuses: []corev1.ContainerStatus{
 						{
 							Ready: false,
 						},
@@ -391,6 +441,21 @@ func TestNumOfReadyPods(t *testing.T) {
 						},
 						{
 							Ready: true,
+						},
+					},
+				},
+			},
+			{
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Ready: true,
+						},
+					},
+					InitContainerStatuses: []corev1.ContainerStatus{
+						{
+							Ready: false,
 						},
 					},
 				},

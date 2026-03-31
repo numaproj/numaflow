@@ -9,8 +9,8 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
 use crate::message::{AckHandle, ReadAck};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
-    pipeline_metric_labels, pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, SOURCE_PARTITION_NAME_LABEL, monovertex_metrics,
+    mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::source::http::CoreHttpSource;
@@ -63,6 +63,8 @@ pub(crate) mod sqs;
 
 pub(crate) mod http;
 pub(crate) mod kafka;
+#[cfg(test)]
+pub(crate) mod test_utils;
 
 use crate::transformer::Transformer;
 use crate::watermark::source::SourceWatermarkHandle;
@@ -70,28 +72,58 @@ use crate::watermark::source::SourceWatermarkHandle;
 const MAX_ACK_PENDING: usize = 10000;
 const ACK_RETRY_INTERVAL: u64 = 100;
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
+const NACK_RETRY_ATTEMPTS: usize = 1200; // 100ms apart, total=2 minutes
+
+/// Represents the partition information returned by a source.
+/// Contains both the active partitions being processed and optionally the total number of partitions.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct SourcePartitions {
+    /// The list of active partitions being processed by this source instance.
+    pub active_partitions: Vec<u16>,
+    /// The total number of partitions in the source (if known).
+    /// This is used for watermark stability to know when all processors have reported.
+    /// Sources that don't support partitions (e.g., generator, HTTP) should set this to None.
+    pub total_partitions: Option<u32>,
+}
+
+impl SourcePartitions {
+    /// Creates a new SourcePartitions with the given active partitions and optional total partitions.
+    /// Sources that don't support partitions should pass `None` for `total_partitions`.
+    pub fn new(active_partitions: Vec<u16>, total_partitions: Option<u32>) -> Self {
+        Self {
+            active_partitions,
+            total_partitions,
+        }
+    }
+}
 
 /// Set of Read related items that has to be implemented to become a Source.
-pub(crate) trait SourceReader {
-    #[allow(dead_code)]
+/// Uses `trait_variant::make` to generate an object-safe `SourceReader` trait with `Send` bound.
+#[allow(dead_code)]
+#[trait_variant::make(SourceReader: Send)]
+pub(crate) trait LocalSourceReader {
     /// Name of the source.
     fn name(&self) -> &'static str;
 
     /// Read messages from the source. Returns None when the stream has ended.
     async fn read(&mut self) -> Option<Result<Vec<Message>>>;
 
-    /// number of partitions processed by this source.
-    async fn partitions(&mut self) -> Result<Vec<u16>>;
+    /// Returns partition information for this source, including active partitions
+    /// and optionally the total number of partitions.
+    async fn partitions(&mut self) -> Result<SourcePartitions>;
 }
 
 /// Set of Ack related items that has to be implemented to become a Source.
-pub(crate) trait SourceAcker {
+/// Uses `trait_variant::make` to generate an object-safe `SourceAcker` trait with `Send` bound.
+#[allow(dead_code)]
+#[trait_variant::make(SourceAcker: Send)]
+pub(crate) trait LocalSourceAcker {
     /// acknowledge an offset. The implementor might choose to do it in an asynchronous way.
-    async fn ack(&mut self, _: Vec<Offset>) -> Result<()>;
+    async fn ack(&mut self, offsets: Vec<Offset>) -> Result<()>;
 
     /// negatively acknowledge an offset. The implementor might choose to do it in an asynchronous way.
     /// For sources that don't support nack, this should be a no-op.
-    async fn nack(&mut self, _: Vec<Offset>) -> Result<()>;
+    async fn nack(&mut self, offsets: Vec<Offset>) -> Result<()>;
 }
 
 pub(crate) enum SourceType {
@@ -133,7 +165,7 @@ enum ActorMessage {
         respond_to: oneshot::Sender<Result<Option<usize>>>,
     },
     Partitions {
-        respond_to: oneshot::Sender<Result<Vec<u16>>>,
+        respond_to: oneshot::Sender<Result<SourcePartitions>>,
     },
 }
 
@@ -222,8 +254,12 @@ pub(crate) struct Source<C: crate::typ::NumaflowTypeConfig> {
     rate_limiter: Option<C::RateLimiter>,
 }
 
+/// Interval for refreshing source partitions (10 seconds)
+const PARTITION_REFRESH_INTERVAL: Duration = Duration::from_secs(10);
+
 impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     /// Create a new StreamingSource. It starts the read and ack actors in the background.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn new(
         batch_size: usize,
         src_type: SourceType,
@@ -231,6 +267,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         read_ahead: bool,
         transformer: Option<Transformer>,
         watermark_handle: Option<SourceWatermarkHandle>,
+        cln_token: CancellationToken,
         rate_limiter: Option<C::RateLimiter>,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(batch_size);
@@ -303,13 +340,31 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             }
         };
 
-        // initialize the active partitions in the watermark actor to indicate the partitions to which
-        // the watermark should be published.
-        let active_partitions = Self::partitions(sender.clone()).await.unwrap_or_default();
-        if let Some(watermark_handle) = &watermark_handle {
-            watermark_handle
-                .initialize_active_partitions(active_partitions)
-                .await;
+        // Start a background task to periodically refresh partitions from the source.
+        // This handles dynamic partition changes (e.g., Kafka partition rebalancing).
+        // The interval ticks immediately on first call, so this also initializes the active partitions.
+        if let Some(wm_handle) = watermark_handle.clone() {
+            let source_sender = sender.clone();
+            tokio::spawn(async move {
+                let mut interval_ticker = tokio::time::interval(PARTITION_REFRESH_INTERVAL);
+                loop {
+                    tokio::select! {
+                        _ = interval_ticker.tick() => {
+                            if let Ok(partitions) = Self::partitions(source_sender.clone()).await {
+                                wm_handle
+                                    .initialize_active_partitions(
+                                        partitions.active_partitions,
+                                        partitions.total_partitions,
+                                    )
+                                    .await;
+                            }
+                        }
+                        _ = cln_token.cancelled() => {
+                            break;
+                        }
+                    }
+                }
+            });
         }
 
         Self {
@@ -382,7 +437,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     }
 
     /// get the source partitions from which the source is reading from.
-    async fn partitions(source_handle: mpsc::Sender<ActorMessage>) -> Result<Vec<u16>> {
+    async fn partitions(source_handle: mpsc::Sender<ActorMessage>) -> Result<SourcePartitions> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Partitions { respond_to: sender };
         // Ignore send errors. If send fails, so does the recv.await below. There's no reason
@@ -407,14 +462,13 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             PIPELINE_PARTITION_NAME_LABEL.to_string(),
             get_vertex_name().to_string(),
         ));
-
         let mvtx_labels = mvtx_forward_metric_labels();
 
         info!(?self.read_batch_size, "Started streaming source with batch size");
         let handle = tokio::spawn(async move {
             // this semaphore is used only if read-ahead is disabled. we hold this semaphore to
             // make sure we can read only if the current inflight ones are ack'ed. If read ahead
-            // is disabled you can have upto (max_ack_pending / read_batch_size) ack tasks. We
+            // is enabled you can have upto (max_ack_pending / read_batch_size) ack tasks. We
             // divide by read_batch_size because we do batch acking in source.
             let max_ack_tasks = match &self.read_ahead {
                 true => MAX_ACK_PENDING / self.read_batch_size,
@@ -460,32 +514,19 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 };
 
                 let msgs_len = messages.len();
-                let msgs_bytes = messages.iter().map(|msg| msg.value.len()).sum();
-                Self::send_read_metrics(
-                    &pipeline_labels,
-                    mvtx_labels,
-                    read_start_time,
-                    msgs_len,
-                    msgs_bytes,
-                );
-
-                // attempt to publish idle watermark since we are not able to read any message from
-                // the source.
-                if msgs_len == 0
-                    && let Some(watermark_handle) = self.watermark_handle.as_mut()
-                {
-                    watermark_handle
-                        .publish_source_idle_watermark(
-                            Self::partitions(self.sender.clone())
-                                .await
-                                .unwrap_or_default(),
-                        )
-                        .await;
-                }
+                let read_time = read_start_time.elapsed().as_micros() as f64;
+                Self::record_batch_read_metrics(&pipeline_labels, mvtx_labels, read_time, msgs_len);
 
                 let mut ack_handles = vec![];
                 let mut ack_batch = Vec::with_capacity(msgs_len);
                 for message in messages.iter_mut() {
+                    Self::record_partition_read_metrics(
+                        &pipeline_labels,
+                        mvtx_labels,
+                        message.offset.partition_idx(),
+                        message.value.len(),
+                    );
+
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
                     message.ack_handle = Some(Arc::new(AckHandle::new(resp_ack_tx)));
 
@@ -500,14 +541,31 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 // start a background task to invoke ack on the source for the offsets that are acked.
                 // if read ahead is disabled, acquire the semaphore permit before invoking ack so that
                 // we wait for all the inflight messages to be acked before reading the next batch.
-                tokio::spawn(Self::invoke_ack(
-                    read_start_time,
-                    self.sender.clone(),
-                    ack_batch,
-                    _permit,
-                    self.tracker.clone(),
-                    cln_token.clone(),
-                ));
+                tokio::spawn({
+                    let sender = self.sender.clone();
+                    let tracker = self.tracker.clone();
+                    let cln_token = cln_token.clone();
+                    async move {
+                        let result = Self::invoke_ack(
+                            read_start_time,
+                            sender,
+                            ack_batch,
+                            _permit,
+                            tracker,
+                            cln_token.clone(),
+                        )
+                        .await;
+
+                        if let Err(e) = result {
+                            error!(
+                                ?e,
+                                "Non retryable error while invoking ack, stopping the source forwarder"
+                            );
+                            // This cancels the source forwarder, which will stop the source.
+                            cln_token.cancel();
+                        }
+                    }
+                });
 
                 // transform the batch if the transformer is present, this need not
                 // be streaming because transformation should be fast operation.
@@ -624,10 +682,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
         let start = Instant::now();
         if !offsets_to_ack.is_empty() {
-            Self::ack_with_retry(source_handle.clone(), offsets_to_ack, &cancel_token).await;
+            Self::ack_with_retry(source_handle.clone(), offsets_to_ack, &cancel_token).await?;
         }
         if !offsets_to_nack.is_empty() {
-            Self::nack_with_retry(source_handle, offsets_to_nack, &cancel_token).await;
+            Self::nack_with_retry(source_handle, offsets_to_nack, &cancel_token).await?;
         }
         Self::send_ack_metrics(e2e_start_time, n, start);
 
@@ -639,27 +697,30 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         source_handle: mpsc::Sender<ActorMessage>,
         offsets: Vec<Offset>,
         cancel_token: &CancellationToken,
-    ) {
+    ) -> Result<()> {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
-        let _ = Retry::new(
+        Retry::new(
             interval,
-            async || {
-                let result = Self::ack(source_handle.clone(), offsets.clone()).await;
-                if result.is_err() {
-                    error!(?result, "Failed to send ack to source, retrying...");
-                    if cancel_token.is_cancelled() {
-                        error!(
-                            ?result,
-                            "Cancellation token received, stopping the ack retry loop"
-                        );
-                        return Ok(());
-                    }
+            async || Self::ack(source_handle.clone(), offsets.clone()).await,
+            |error: &Error| {
+                error!(?error, "Failed to send ack to source, retrying...");
+                // Don't retry non-retryable errors
+                if matches!(error, Error::NonRetryable(_)) {
+                    error!(?error, "Non retryable error, stopping the ack retry loop");
+                    return false;
                 }
-                result
+                // Don't retry if cancelled
+                if cancel_token.is_cancelled() {
+                    error!(
+                        ?error,
+                        "Cancellation token received, stopping the ack retry loop"
+                    );
+                    return false;
+                }
+                true // Retry for all other errors
             },
-            |_: &Error| !cancel_token.is_cancelled(),
         )
-        .await;
+        .await
     }
 
     /// Invokes nack with infinite retries until the cancellation token is cancelled.
@@ -667,83 +728,107 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         source_handle: mpsc::Sender<ActorMessage>,
         offsets: Vec<Offset>,
         cancel_token: &CancellationToken,
-    ) {
-        let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
+    ) -> Result<()> {
+        // In practice, this retry should exit early since it is invoked during ISB/map/sink errors, which results in CancellationToken cancellation
+        let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(NACK_RETRY_ATTEMPTS);
         let _ = Retry::new(
             interval,
-            async || {
-                let result = Self::nack(source_handle.clone(), offsets.clone()).await;
-                if result.is_err() {
-                    error!(?result, "Failed to send nack to source, retrying...");
-                    if cancel_token.is_cancelled() {
-                        error!(
-                            ?result,
-                            "Cancellation token received, stopping the nack retry loop"
-                        );
-                        return Ok(());
-                    }
+            async || Self::nack(source_handle.clone(), offsets.clone()).await,
+            |error: &Error| {
+                error!(?error, "Failed to send nack to source, retrying...");
+                // Don't retry non-retryable errors
+                if matches!(error, Error::NonRetryable(_)) {
+                    error!(?error, "Non retryable error, stopping the NACK retry loop");
+                    return false;
                 }
-                result
+                if cancel_token.is_cancelled() {
+                    error!(
+                        ?error,
+                        "Cancellation token received, stopping the NACK retry loop"
+                    );
+                    return false;
+                }
+                true
             },
-            |_: &Error| !cancel_token.is_cancelled(),
         )
         .await;
+        Ok(())
     }
 
-    fn send_read_metrics(
+    /// Record per-batch read metrics (read_time, read_batch_size).
+    /// These metrics are recorded once per batch read operation.
+    fn record_batch_read_metrics(
         pipeline_labels: &Vec<(String, String)>,
         mvtx_labels: &Vec<(String, String)>,
-        read_start_time: Instant,
-        n: usize,
-        msgs_bytes: usize,
+        read_time: f64,
+        batch_size: usize,
     ) {
         if is_mono_vertex() {
             monovertex_metrics()
-                .read_total
-                .get_or_create(mvtx_labels)
-                .inc_by(n as u64);
-            monovertex_metrics()
                 .read_time
                 .get_or_create(mvtx_labels)
-                .observe(read_start_time.elapsed().as_micros() as f64);
+                .observe(read_time);
             monovertex_metrics()
                 .read_batch_size
                 .get_or_create(mvtx_labels)
-                .set(n as i64);
+                .set(batch_size as i64);
         } else {
             pipeline_metrics()
                 .forwarder
                 .read_batch_size
                 .get_or_create(pipeline_labels)
-                .set(n as i64);
-            pipeline_metrics()
-                .forwarder
-                .read_total
-                .get_or_create(pipeline_labels)
-                .inc_by(n as u64);
-            pipeline_metrics()
-                .forwarder
-                .data_read_total
-                .get_or_create(pipeline_labels)
-                .inc_by(n as u64);
-            pipeline_metrics()
-                .forwarder
-                .read_bytes_total
-                .get_or_create(pipeline_labels)
-                .inc_by(msgs_bytes as u64);
-            pipeline_metrics()
-                .forwarder
-                .data_read_bytes_total
-                .get_or_create(pipeline_labels)
-                .inc_by(msgs_bytes as u64);
+                .set(batch_size as i64);
             pipeline_metrics()
                 .forwarder
                 .read_processing_time
                 .get_or_create(pipeline_labels)
-                .observe(read_start_time.elapsed().as_micros() as f64);
+                .observe(read_time);
         }
     }
 
+    /// Record per-partition read metrics (read_total, data_read_total, read_bytes_total, etc.).
+    /// These metrics are recorded for each message, grouped by partition.
+    fn record_partition_read_metrics(
+        pipeline_labels: &[(String, String)],
+        mvtx_labels: &[(String, String)],
+        partition_idx: u16,
+        bytes: usize,
+    ) {
+        if is_mono_vertex() {
+            let mut labels = mvtx_labels.to_owned();
+            labels.push((
+                SOURCE_PARTITION_NAME_LABEL.to_string(),
+                partition_idx.to_string(),
+            ));
+            monovertex_metrics().read_total.get_or_create(&labels).inc();
+        } else {
+            let mut labels = pipeline_labels.to_owned();
+            labels.push((
+                SOURCE_PARTITION_NAME_LABEL.to_string(),
+                partition_idx.to_string(),
+            ));
+            pipeline_metrics()
+                .forwarder
+                .read_total
+                .get_or_create(&labels)
+                .inc();
+            pipeline_metrics()
+                .forwarder
+                .data_read_total
+                .get_or_create(&labels)
+                .inc();
+            pipeline_metrics()
+                .forwarder
+                .read_bytes_total
+                .get_or_create(&labels)
+                .inc_by(bytes as u64);
+            pipeline_metrics()
+                .forwarder
+                .data_read_bytes_total
+                .get_or_create(&labels)
+                .inc_by(bytes as u64);
+        }
+    }
     fn send_ack_metrics(e2e_start_time: Instant, n: usize, start: Instant) {
         if is_mono_vertex() {
             let mvtx_labels = mvtx_forward_metric_labels();
@@ -975,6 +1060,7 @@ mod tests {
             true,
             None,
             None,
+            cln_token.clone(),
             None,
         )
         .await;
@@ -1013,10 +1099,11 @@ mod tests {
 
         assert!(x.is_ok(), "Timeout occurred before pending became 50");
 
-        let partitions = Source::<crate::typ::WithoutRateLimiter>::partitions(sender.clone())
-            .await
-            .unwrap();
-        assert_eq!(partitions, vec![1, 2]);
+        let source_partitions =
+            Source::<crate::typ::WithoutRateLimiter>::partitions(sender.clone())
+                .await
+                .unwrap();
+        assert_eq!(source_partitions.active_partitions, vec![1, 2]);
 
         for message in messages.into_iter() {
             // set failed to true so that the message is nacked

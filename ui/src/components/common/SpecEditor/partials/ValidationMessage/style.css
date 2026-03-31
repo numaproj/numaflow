@@ -6,12 +6,12 @@
   font-size: 2.4rem;
   font-style: normal;
   font-weight: 500;
-  color: #393A3D;
+  color: var(--text-primary);
 }
 
 .validation-message-content {
   font-size: 2rem;
   font-style: normal;
   font-weight: 400;
-  color: #393A3D;
+  color: var(--text-primary);
 }

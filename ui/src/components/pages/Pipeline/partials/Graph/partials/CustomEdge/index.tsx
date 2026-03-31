@@ -7,6 +7,7 @@ import {
   EdgeProps,
   EdgeLabelRenderer,
   getSimpleBezierPath,
+  getStraightPath,
 } from "@xyflow/react";
 import { duration } from "moment";
 import { HighlightContext } from "../../index";
@@ -27,39 +28,48 @@ const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
   data,
   markerEnd,
 }) => {
-  const straightWidth = 50;
+  const edgeOffset = 50;
+  const useStraightPath = !data?.backEdge && !data?.selfEdge && !data?.sideInputEdge;
 
-  // eslint-disable-next-line prefer-const
-  let [sX, sY, tX, tY] = [
-    sourceX + straightWidth,
-    sourceY,
-    targetX - straightWidth,
-    targetY,
-  ];
-
-  if (data?.sideInputEdge) {
-    tX = tX + straightWidth;
-    tY = tY + straightWidth;
-  }
-
-  const obj = getSimpleBezierPath({
-    sourceX: sX,
-    sourceY: sY,
-    sourcePosition,
-    targetX: tX,
-    targetY: tY,
-    targetPosition,
-  });
-
-  let [edgePath] = obj;
-
+  let edgePath: string;
   let labelRenderer = "";
 
-  edgePath = `M ${
-    sX - straightWidth
-  } ${sY} L ${sX} ${sY} ${edgePath} M ${tX} ${tY} L ${
-    data?.sideInputEdge ? tX : tX + straightWidth
-  } ${data?.sideInputEdge ? tY - straightWidth : tY}`;
+  if (useStraightPath) {
+    const [path] = getStraightPath({
+      sourceX,
+      sourceY,
+      targetX,
+      targetY,
+    });
+    edgePath = path;
+  } else {
+    // eslint-disable-next-line prefer-const
+    let [sX, sY, tX, tY] = [
+      sourceX + edgeOffset,
+      sourceY,
+      targetX - edgeOffset,
+      targetY,
+    ];
+
+    if (data?.sideInputEdge) {
+      tX = tX + edgeOffset;
+      tY = tY + edgeOffset;
+    }
+
+    const obj = getSimpleBezierPath({
+      sourceX: sX,
+      sourceY: sY,
+      sourcePosition,
+      targetX: tX,
+      targetY: tY,
+      targetPosition,
+    });
+
+    const [bezierPath] = obj;
+    edgePath = `M ${sX - edgeOffset} ${sY} L ${sX} ${sY} ${bezierPath} M ${tX} ${tY} L ${
+      data?.sideInputEdge ? tX : tX + edgeOffset
+    } ${data?.sideInputEdge ? tY - edgeOffset : tY}`;
+  }
 
   if (data?.fwdEdge) {
     const centerX = (sourceX + targetX) / 2;

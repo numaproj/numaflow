@@ -378,8 +378,11 @@ impl source::SourceReader for GeneratorRead {
         Some(Ok(self.stream_generator.next().await?))
     }
 
-    async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
-        Ok(vec![*get_vertex_replica()])
+    async fn partitions(&mut self) -> crate::error::Result<source::SourcePartitions> {
+        Ok(source::SourcePartitions::new(
+            vec![*get_vertex_replica()],
+            None,
+        ))
     }
 }
 

@@ -146,7 +146,11 @@ func (v Vertex) GetServiceObjs() []*corev1.Service {
 	}
 	svcs := []*corev1.Service{v.getServiceObj(v.GetHeadlessServiceName(), true, ports)}
 	if x := v.Spec.Source; x != nil && x.HTTP != nil && x.HTTP.Service {
-		svcs = append(svcs, v.getServiceObj(v.Name, false, map[string]int32{VertexHTTPSPortName: VertexHTTPSPort}))
+		httpSvcPorts := map[string]int32{VertexHTTPSPortName: x.HTTP.GetHTTPSPort()}
+		if x.HTTP.IsHTTPConfigured() {
+			httpSvcPorts[VertexHTTPPortName] = x.HTTP.GetHTTPPort()
+		}
+		svcs = append(svcs, v.getServiceObj(v.Name, false, httpSvcPorts))
 	}
 	return svcs
 }
@@ -606,6 +610,11 @@ type AbstractVertex struct {
 	// +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
 	// +optional
 	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty" protobuf:"bytes,16,opt,name=updateStrategy"`
+	// Ordered enables ordered processing for this vertex, overrides pipeline-level setting.
+	// When enabled, messages will be processed in order based on their event time.
+	// Note: Reduce vertices ignore this setting as they are already partitioned.
+	// +optional
+	Ordered *Ordered `json:"ordered,omitempty" protobuf:"bytes,17,opt,name=ordered"`
 }
 
 type VertexLifecycle struct {
@@ -647,6 +656,22 @@ func (av AbstractVertex) GetPartitionCount() int {
 		return 1
 	}
 	return int(*av.Partitions)
+}
+
+// IsOrdered returns whether ordered processing is enabled for this vertex.
+// The ordered config should already be resolved by the controller (merging pipeline-level and vertex-level).
+// Reduce vertices always return false as they are already partitioned.
+func (av AbstractVertex) IsOrdered() bool {
+	// Reduce vertices are already partitioned, ignore ordered config
+	if av.IsReduceUDF() {
+		return false
+	}
+
+	if av.Ordered != nil {
+		return av.Ordered.Enabled
+	}
+
+	return false
 }
 
 func (av AbstractVertex) IsASource() bool {

@@ -268,19 +268,22 @@ func (r *Rater) getPodMetrics(podName string) map[string]*dto.MetricFamily {
 
 // getPodReadCounts returns the total number of messages read by the pod
 func (r *Rater) getPodReadCounts(podName string, result map[string]*dto.MetricFamily) *PodMetricsCount {
-	if value, ok := result[monoVtxReadMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
-		metricsList := value.GetMetric()
-		// Each pod should be emitting only one metric with this name, so we should be able to take the first value
-		// from the results safely.
-		// We use Untyped here as the counter metric family shows up as untyped from the rust client
-		// TODO(MonoVertex): Check further on this to understand why not type is counter
-		// https://github.com/prometheus/client_rust/issues/194
-		podReadCount := &PodMetricsCount{podName, metricsList[0].Untyped.GetValue()}
-		return podReadCount
-	} else {
+	value, ok := result[monoVtxReadMetricName]
+	if !ok || value == nil || len(value.GetMetric()) == 0 {
 		r.log.Infof("[Pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", podName, monoVtxReadMetricName)
 		return nil
 	}
+
+	metricsList := value.GetMetric()
+	// Sum all metric values as there may be multiple series with different labels
+	// (e.g., different source_partition values)
+	// We use Untyped here as the counter metric family shows up as untyped from the rust client
+	// https://github.com/prometheus/client_rust/issues/194
+	var totalCount float64
+	for _, ele := range metricsList {
+		totalCount += ele.Untyped.GetValue()
+	}
+	return &PodMetricsCount{podName, totalCount}
 }
 
 // getPodPendingCounts returns the total number of pending messages for a pod
