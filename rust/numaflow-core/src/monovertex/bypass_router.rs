@@ -261,7 +261,6 @@ impl BypassRouterReceiver {
 
                     // Separate messages marked for drop from those to be forwarded.
                     // Dropped messages must be ACK'd — drop is a successful outcome.
-                    let original_len = batch.len();
                     let (to_drop, batch): (Vec<_>, Vec<_>) =
                         batch.into_iter().partition(|msg| msg.inner().dropped());
                     let dropped_message_count = to_drop.len();

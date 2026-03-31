@@ -602,7 +602,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 // write the messages to downstream as MessageHandles.
                 // messages and ack_handles are parallel arrays.
                 for (message, ack_handle) in messages.into_iter().zip(ack_handles.into_iter()) {
-                    let read_message = MessageHandle::from_arc(message, ack_handle);
+                    let read_message = MessageHandle::new_with_arc(message, ack_handle);
 
                     // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
                     // If not bypassed, it returns Some(read_message) for us to send downstream.

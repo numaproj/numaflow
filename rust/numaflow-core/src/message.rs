@@ -163,7 +163,7 @@ impl MessageHandle {
 
     /// Creates a new MessageHandle from an existing Arc<AckHandle>.
     /// This is used when the AckHandle has already been wrapped in Arc.
-    pub(crate) fn from_arc(message: Message, ack_handle: Arc<AckHandle>) -> Self {
+    pub(crate) fn new_with_arc(message: Message, ack_handle: Arc<AckHandle>) -> Self {
         Self {
             message,
             ack_handle,
@@ -182,20 +182,6 @@ impl MessageHandle {
     /// Get a reference to the inner message.
     pub(crate) fn message(&self) -> &Message {
         &self.message
-    }
-
-    /// Creates a new MessageHandle with a different message but sharing the same AckHandle.
-    /// This is used for flatmap scenarios where one input message produces multiple output messages.
-    /// Each output message shares the same AckHandle and increments the ref_count.
-    /// All output messages must call mark_success() for the original message to be ACK'd.
-    pub(crate) fn clone_with_message(&self, message: Message) -> Self {
-        self.ack_handle
-            .ref_count
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        Self {
-            message,
-            ack_handle: Arc::clone(&self.ack_handle),
-        }
     }
 }
 

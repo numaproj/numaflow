@@ -77,11 +77,7 @@ impl MapBatchTask {
         // Call the UDF and get results directly
         let results = self.mapper.batch(requests, self.cln_token).await;
 
-        for (idx, (result, parent_info)) in results
-            .into_iter()
-            .zip(parent_infos.into_iter())
-            .enumerate()
-        {
+        for (result, parent_info) in results.into_iter().zip(parent_infos.into_iter()) {
             match result {
                 Ok(results) => {
                     // Convert raw results to Messages using parent info
