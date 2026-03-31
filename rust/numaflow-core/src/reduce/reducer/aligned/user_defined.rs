@@ -1,5 +1,5 @@
 use crate::config::{get_vertex_name, get_vertex_replica};
-use crate::message::{IntOffset, Message, MessageID, Offset, MessageHandle};
+use crate::message::{IntOffset, Message, MessageHandle, MessageID, Offset};
 use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, AlignedWindowOperation};
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use crate::{Result, jh_abort_guard};
@@ -458,7 +458,10 @@ mod tests {
 
         // Verify the result
         assert_eq!(result.message().keys.to_vec(), vec!["key1"]);
-        assert_eq!(String::from_utf8(result.message().value.to_vec()).unwrap(), "3"); // Counter should be 3
+        assert_eq!(
+            String::from_utf8(result.message().value.to_vec()).unwrap(),
+            "3"
+        ); // Counter should be 3
 
         // Shutdown the server
         shutdown_tx
@@ -688,12 +691,18 @@ mod tests {
         // Check key1 result
         let result0 = results.first().expect("Expected result for key1");
         assert_eq!(result0.message().keys.to_vec(), vec!["key1"]);
-        assert_eq!(String::from_utf8(result0.message().value.to_vec()).unwrap(), "2"); // Counter should be 2
+        assert_eq!(
+            String::from_utf8(result0.message().value.to_vec()).unwrap(),
+            "2"
+        ); // Counter should be 2
 
         // Check key2 result
         let result1 = results.get(1).expect("Expected result for key2");
         assert_eq!(result1.message().keys.to_vec(), vec!["key2"]);
-        assert_eq!(String::from_utf8(result1.message().value.to_vec()).unwrap(), "3"); // Counter should be 3
+        assert_eq!(
+            String::from_utf8(result1.message().value.to_vec()).unwrap(),
+            "3"
+        ); // Counter should be 3
 
         // Shutdown the server
         shutdown_tx
@@ -848,7 +857,10 @@ mod tests {
 
         // Verify the result
         assert_eq!(result.message().keys.to_vec(), vec!["key1"]);
-        assert_eq!(String::from_utf8(result.message().value.to_vec()).unwrap(), "3"); // Counter should be 3
+        assert_eq!(
+            String::from_utf8(result.message().value.to_vec()).unwrap(),
+            "3"
+        ); // Counter should be 3
 
         // Shutdown the server
         shutdown_tx

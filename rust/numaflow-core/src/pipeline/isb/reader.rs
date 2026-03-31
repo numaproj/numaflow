@@ -12,15 +12,15 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 
 use crate::Result;
-#[cfg(test)]
-use crate::mark_success;
-#[cfg(test)]
-use crate::mark_success_batch;
 use crate::config::get_vertex_name;
 use crate::config::pipeline::VertexType::ReduceUDF;
 use crate::config::pipeline::isb::{BufferReaderConfig, ISBConfig, Stream};
 use crate::error::Error;
-use crate::message::{AckHandle, IntOffset, Message, MessageType, Offset, ReadAck, MessageHandle};
+#[cfg(test)]
+use crate::mark_success;
+#[cfg(test)]
+use crate::mark_success_batch;
+use crate::message::{AckHandle, IntOffset, Message, MessageHandle, MessageType, Offset, ReadAck};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
     jetstream_isb_metrics_labels, pipeline_metric_labels, pipeline_metrics,
@@ -1379,12 +1379,12 @@ mod tests {
 #[cfg(test)]
 mod simplebuffer_tests {
     use super::*;
-    use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
-    use numaflow_testing::simplebuffer::SimpleBuffer;
-    use std::collections::HashMap;
     use crate::message::MessageID;
+    use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
     use bytes::Bytes;
     use chrono::Utc;
+    use numaflow_testing::simplebuffer::SimpleBuffer;
+    use std::collections::HashMap;
     use tokio::time::sleep;
     use tokio_stream::StreamExt;
     use tokio_util::sync::CancellationToken;
@@ -1474,8 +1474,10 @@ mod simplebuffer_tests {
         }
         assert_eq!(received.len(), 5, "Should receive all 5 messages");
 
-        // Ack all messages by dropping them (default behavior is ack on drop)
-        drop(received);
+        // Ack all messages by marking them as success
+        for msg in received {
+            mark_success!(msg);
+        }
 
         // Wait for tracker to become empty (all acks processed)
         tokio::time::timeout(Duration::from_secs(2), async {
@@ -1521,8 +1523,10 @@ mod simplebuffer_tests {
         );
         assert_eq!(received.len(), 3);
 
-        // Ack all messages by dropping
-        drop(received);
+        // Ack all messages by marking them as success
+        for msg in received {
+            mark_success!(msg);
+        }
 
         cancel.cancel();
         handle.await.unwrap().unwrap();
@@ -1670,8 +1674,8 @@ mod simplebuffer_tests {
         // Read message
         let msg = rx.next().await.expect("Should receive message");
 
-        // Ack by dropping msg (is_failed defaults to false)
-        drop(msg);
+        // Ack by marking as success
+        mark_success!(msg);
 
         // Tracker should become empty
         tokio::time::timeout(Duration::from_secs(2), async {
@@ -1717,8 +1721,8 @@ mod simplebuffer_tests {
             "Redelivered message should have same payload"
         );
 
-        // Ack it this time by dropping (is_failed defaults to false)
-        drop(msg2);
+        // Ack it this time by marking as success
+        mark_success!(msg2);
 
         // Wait for final ack
         let result = tokio::time::timeout(Duration::from_secs(1), async {
@@ -1755,8 +1759,10 @@ mod simplebuffer_tests {
         // Cancel while messages are inflight
         cancel.cancel();
 
-        // Ack messages after cancellation by dropping them
-        drop(messages);
+        // Ack messages after cancellation by marking them as success
+        for msg in messages {
+            mark_success!(msg);
+        }
 
         // Handle should complete (cleanup waits for inflight)
         let result = tokio::time::timeout(Duration::from_secs(2), handle)
@@ -1799,9 +1805,9 @@ mod simplebuffer_tests {
             "4th message should block due to backpressure"
         );
 
-        // Ack first message to free a permit by taking it out and dropping
+        // Ack first message to free a permit
         let first_msg = inflight.remove(0);
-        drop(first_msg);
+        mark_success!(first_msg);
 
         // Now 4th message should come through
         let fourth = tokio::time::timeout(Duration::from_millis(500), rx.next())
@@ -1810,8 +1816,10 @@ mod simplebuffer_tests {
             .expect("Stream should not end");
         inflight.push(fourth);
 
-        // Cleanup - ack remaining by dropping
-        drop(inflight);
+        // Cleanup - ack remaining
+        for msg in inflight {
+            mark_success!(msg);
+        }
 
         cancel.cancel();
         let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
@@ -1838,8 +1846,10 @@ mod simplebuffer_tests {
         }
         assert_eq!(messages.len(), 10);
 
-        // Drop all messages to trigger ack (is_failed defaults to false)
-        drop(messages);
+        // Ack all messages by marking as success
+        for msg in messages {
+            mark_success!(msg);
+        }
 
         // Wait for all ack operations to complete
         let result = tokio::time::timeout(Duration::from_secs(2), async {

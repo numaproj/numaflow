@@ -1,5 +1,5 @@
-use crate::mark_success;
 use crate::error::Result;
+use crate::mark_success;
 use crate::message::Message;
 use crate::pipeline::isb::reader::ISBReaderOrchestrator;
 use crate::reduce::wal::WalMessage;

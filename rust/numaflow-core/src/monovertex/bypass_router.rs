@@ -40,11 +40,11 @@
 //! +==========================================================================+
 //! ```
 
-use crate::mark_success_batch;
 use crate::config::is_mono_vertex;
 use crate::config::monovertex::BypassConditions;
 use crate::error;
 use crate::error::Error;
+use crate::mark_success_batch;
 use crate::message::{Message, MessageHandle};
 use crate::shared::forward::should_forward;
 use crate::sinker::sink::{SinkWriter, send_drop_metrics};

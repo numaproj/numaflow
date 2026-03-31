@@ -10,11 +10,11 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
 use crate::Result;
-use crate::mark_success;
 use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
 use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Error;
-use crate::message::{Message, Offset, MessageHandle};
+use crate::mark_success;
+use crate::message::{Message, MessageHandle, Offset};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_metric_labels,
     pipeline_metrics,
@@ -74,7 +74,9 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
             pipeline_metrics()
                 .forwarder
                 .udf_drop_total
-                .get_or_create(pipeline_metric_labels(self.orchestrator.vertex_type.as_str()))
+                .get_or_create(pipeline_metric_labels(
+                    self.orchestrator.vertex_type.as_str(),
+                ))
                 .inc();
             // Mark as success since dropped messages are intentionally dropped
             mark_success!(self.read_message);
@@ -593,7 +595,9 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
 mod tests {
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
-    use crate::message::{AckHandle, IntOffset, Message, MessageID, Offset, ReadAck, MessageHandle};
+    use crate::message::{
+        AckHandle, IntOffset, Message, MessageHandle, MessageID, Offset, ReadAck,
+    };
     use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
     use crate::typ::WithoutRateLimiter;
     use async_nats::jetstream;

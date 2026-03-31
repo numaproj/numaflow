@@ -7,7 +7,7 @@
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
-use crate::message::{AckHandle, ReadAck, MessageHandle};
+use crate::message::{AckHandle, MessageHandle, ReadAck};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, SOURCE_PARTITION_NAME_LABEL, monovertex_metrics,
     mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
