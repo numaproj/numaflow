@@ -174,9 +174,9 @@ impl ISBIdleDetector {
             .last_wm_published_time = Utc::now();
     }
 
-    /// fetches the idle streams, we consider a stream as idle if the last published
-    /// time is greater than the idle timeout.
-    pub(crate) async fn fetch_idle_streams(&self) -> Vec<Stream> {
+    /// Fetches streams that need watermark publishing. A stream needs publishing if the last
+    /// published time is greater than the idle timeout.
+    pub(crate) async fn fetch_streams_needing_publish(&self) -> Vec<Stream> {
         let read_guard = self
             .last_published_wm_state
             .read()
@@ -194,19 +194,6 @@ impl ISBIdleDetector {
                     })
                     .map(move |partition| partition.stream.clone())
             })
-            .collect()
-    }
-
-    /// fetch all the partitions for the vertices.
-    pub(crate) async fn fetch_all_streams(&self) -> Vec<Stream> {
-        let read_guard = self
-            .last_published_wm_state
-            .read()
-            .expect("Failed to get read lock");
-
-        read_guard
-            .iter()
-            .flat_map(|(_, partitions)| partitions.iter().map(|partition| partition.stream.clone()))
             .collect()
     }
 }
@@ -244,7 +231,7 @@ mod tests {
         };
 
         let mut manager =
-            ISBIdleDetector::new(Duration::from_millis(100), &[to_vertex_config], js_context).await;
+            ISBIdleDetector::new(Duration::from_millis(200), &[to_vertex_config], js_context).await;
 
         manager.reset_idle(&stream).await;
 
@@ -292,7 +279,7 @@ mod tests {
         };
 
         let manager =
-            ISBIdleDetector::new(Duration::from_millis(100), &[to_vertex_config], js_context).await;
+            ISBIdleDetector::new(Duration::from_millis(200), &[to_vertex_config], js_context).await;
 
         let offset = manager
             .fetch_idle_offset(&stream)
@@ -332,7 +319,7 @@ mod tests {
         };
 
         let mut manager =
-            ISBIdleDetector::new(Duration::from_millis(100), &[to_vertex_config], js_context).await;
+            ISBIdleDetector::new(Duration::from_millis(200), &[to_vertex_config], js_context).await;
 
         let offset = manager
             .fetch_idle_offset(&stream)
@@ -354,7 +341,7 @@ mod tests {
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
-    async fn test_fetch_idle_streams() {
+    async fn test_fetch_streams_needing_publish() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
         let js_context = jetstream::new(client);
 
@@ -380,12 +367,12 @@ mod tests {
         // Simulate idle timeout
         sleep(Duration::from_millis(20)).await;
 
-        let idle_streams = manager.fetch_idle_streams().await;
-        assert_eq!(idle_streams.len(), 1);
+        let streams_needing_publish = manager.fetch_streams_needing_publish().await;
+        assert_eq!(streams_needing_publish.len(), 1);
         assert_eq!(
-            *idle_streams
+            *streams_needing_publish
                 .first()
-                .expect("Expected at least one idle stream"),
+                .expect("Expected at least one stream needing publish"),
             stream
         );
     }

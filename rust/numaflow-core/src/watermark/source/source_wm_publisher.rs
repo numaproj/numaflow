@@ -2,6 +2,9 @@
 //! the watermark across the source partitions. Since we write the messages to the ISB, we will also publish
 //! the watermark to the ISB. Unlike other vertices we don't use pod as the processing entity for publishing
 //! watermark we use the partition(watermark originates here).
+//!
+//! Processor liveness is tracked via the KV store's entry creation timestamp, eliminating the need
+//! for a separate heartbeat store.
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -18,11 +21,18 @@ use numaflow_shared::kv::jetstream::JetstreamKVStore;
 
 /// SourcePublisher is the watermark publisher for the source vertex.
 pub(crate) struct SourceWatermarkPublisher {
-    js_context: async_nats::jetstream::Context,
     max_delay: Duration,
     source_config: BucketConfig,
     to_vertex_configs: Vec<BucketConfig>,
     publishers: HashMap<String, ISBWatermarkPublisher>,
+    /// Total number of source partitions (processors) for this source.
+    /// This is included in every published WMB to help the fetcher determine
+    /// when all processors have reported.
+    processor_count: Option<u32>,
+    /// Pre-created OT stores for source watermark publishers
+    source_ot_stores: HashMap<&'static str, Arc<dyn KVStore>>,
+    /// Pre-created OT stores for ISB watermark publishers
+    isb_ot_stores: HashMap<&'static str, Arc<dyn KVStore>>,
 }
 
 impl SourceWatermarkPublisher {
@@ -33,26 +43,35 @@ impl SourceWatermarkPublisher {
         source_config: BucketConfig,
         to_vertex_configs: Vec<BucketConfig>,
     ) -> error::Result<Self> {
+        // Create OT stores once during initialization
+        let source_ot_stores =
+            Self::create_ot_stores(&js_context, std::slice::from_ref(&source_config)).await;
+        let isb_ot_stores = Self::create_ot_stores(&js_context, &to_vertex_configs).await;
+
         Ok(SourceWatermarkPublisher {
-            js_context,
             max_delay,
             source_config,
             to_vertex_configs,
             publishers: HashMap::new(),
+            processor_count: None,
+            source_ot_stores,
+            isb_ot_stores,
         })
     }
 
-    /// Helper to create KV stores from bucket configs using the JetStream context.
-    /// Returns (ot_stores, hb_stores) tuple.
-    async fn create_kv_stores(
+    /// Sets the total processor count (number of source partitions).
+    /// This count is included in every published WMB.
+    pub(crate) fn set_processor_count(&mut self, count: u32) {
+        self.processor_count = Some(count);
+    }
+
+    /// Helper to create OT KV stores from bucket configs using the JetStream context.
+    /// Heartbeat is now embedded in WMB, so no separate store needed to track heartbeats.
+    async fn create_ot_stores(
         js_context: &async_nats::jetstream::Context,
         bucket_configs: &[BucketConfig],
-    ) -> (
-        HashMap<&'static str, Arc<dyn KVStore>>,
-        Vec<Arc<dyn KVStore>>,
-    ) {
+    ) -> HashMap<&'static str, Arc<dyn KVStore>> {
         let mut ot_stores: HashMap<&'static str, Arc<dyn KVStore>> = HashMap::new();
-        let mut hb_stores: Vec<Arc<dyn KVStore>> = Vec::new();
 
         for config in bucket_configs {
             let ot_bucket = js_context
@@ -63,15 +82,9 @@ impl SourceWatermarkPublisher {
                 config.vertex,
                 Arc::new(JetstreamKVStore::new(ot_bucket, config.ot_bucket)),
             );
-
-            let hb_bucket = js_context
-                .get_key_value(config.hb_bucket)
-                .await
-                .expect("Failed to get HB bucket");
-            hb_stores.push(Arc::new(JetstreamKVStore::new(hb_bucket, config.hb_bucket)));
         }
 
-        (ot_stores, hb_stores)
+        ot_stores
     }
 
     /// Publishes the source watermark for the input partition. It internally uses edge publisher
@@ -86,16 +99,11 @@ impl SourceWatermarkPublisher {
         // the processing entity is the partition itself. We create a publisher for each partition
         // and publish the watermark to it.
         let processor_name = format!("source-{}-{}", self.source_config.vertex, partition);
-        // create a publisher if not exists
+        // create a publisher if not exists (lazy initialization for partitions not known at startup)
         if !self.publishers.contains_key(&processor_name) {
-            let (ot_stores, hb_stores) =
-                Self::create_kv_stores(&self.js_context, std::slice::from_ref(&self.source_config))
-                    .await;
-
             let publisher = ISBWatermarkPublisher::new(
                 processor_name.clone(),
-                ot_stores,
-                hb_stores,
+                self.source_ot_stores.clone(),
                 std::slice::from_ref(&self.source_config),
                 true,
             );
@@ -114,7 +122,7 @@ impl SourceWatermarkPublisher {
         self.publishers
             .get_mut(&processor_name)
             .expect("Publisher not found")
-            .publish_watermark(
+            .publish_watermark_with_processor_count(
                 &Stream {
                     name: "source",
                     vertex: self.source_config.vertex,
@@ -129,6 +137,7 @@ impl SourceWatermarkPublisher {
                 Utc::now().timestamp_micros(), // we don't care about the offsets
                 watermark,
                 idle,
+                self.processor_count,
             )
             .await;
     }
@@ -146,17 +155,14 @@ impl SourceWatermarkPublisher {
         let processor_name = format!("{}-{}", self.source_config.vertex, input_partition);
         // In source, since we do partition-based watermark publishing rather than pod-based, we
         // create a publisher for each partition and publish the watermark to it.
+        // (lazy initialization for partitions not known at startup)
         if !self.publishers.contains_key(&processor_name) {
             info!(processor = ?processor_name, partition = ?input_partition,
                 "Creating new publisher for ISB"
             );
-            let (ot_stores, hb_stores) =
-                Self::create_kv_stores(&self.js_context, &self.to_vertex_configs).await;
-
             let publisher = ISBWatermarkPublisher::new(
                 processor_name.clone(),
-                ot_stores,
-                hb_stores,
+                self.isb_ot_stores.clone(),
                 &self.to_vertex_configs,
                 true,
             );
@@ -170,22 +176,58 @@ impl SourceWatermarkPublisher {
             .await;
     }
 
-    /// Initializes the active partitions by creating a publisher for each partition.
-    pub(crate) async fn initialize_active_partitions(&mut self, active_partitions: Vec<u16>) {
-        for partition in active_partitions {
-            let processor_name = format!("{}-{}", self.source_config.vertex, partition);
-            if !self.publishers.contains_key(&processor_name) {
-                let (ot_stores, hb_stores) =
-                    Self::create_kv_stores(&self.js_context, &self.to_vertex_configs).await;
+    /// Initializes the active partitions by creating publishers for each partition.
+    /// This creates both source watermark publishers (with `source-` prefix) and
+    /// ISB watermark publishers for all partitions upfront.
+    /// Also removes publishers for partitions that are no longer active to handle
+    /// dynamic partition changes (e.g., Kafka rebalancing).
+    pub(crate) fn initialize_active_partitions(&mut self, active_partitions: Vec<u16>) {
+        // Build the set of valid publisher names for the new partitions
+        let mut valid_publisher_names: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for partition in &active_partitions {
+            valid_publisher_names.insert(format!(
+                "source-{}-{}",
+                self.source_config.vertex, partition
+            ));
+            valid_publisher_names.insert(format!("{}-{}", self.source_config.vertex, partition));
+        }
 
+        // Remove publishers for partitions that are no longer active
+        self.publishers
+            .retain(|name, _| valid_publisher_names.contains(name));
+
+        // Add publishers for new partitions
+        for partition in &active_partitions {
+            // Create source watermark publisher (used by publish_source_watermark)
+            let source_processor_name =
+                format!("source-{}-{}", self.source_config.vertex, partition);
+            if !self.publishers.contains_key(&source_processor_name) {
                 let publisher = ISBWatermarkPublisher::new(
-                    processor_name.clone(),
-                    ot_stores,
-                    hb_stores,
+                    source_processor_name.clone(),
+                    self.source_ot_stores.clone(),
+                    std::slice::from_ref(&self.source_config),
+                    true,
+                );
+                info!(processor = ?source_processor_name, partition = ?partition,
+                    "Creating new publisher for source"
+                );
+                self.publishers.insert(source_processor_name, publisher);
+            }
+
+            // Create ISB watermark publisher (used by publish_isb_watermark)
+            let isb_processor_name = format!("{}-{}", self.source_config.vertex, partition);
+            if !self.publishers.contains_key(&isb_processor_name) {
+                let publisher = ISBWatermarkPublisher::new(
+                    isb_processor_name.clone(),
+                    self.isb_ot_stores.clone(),
                     &self.to_vertex_configs,
                     true,
                 );
-                self.publishers.insert(processor_name.clone(), publisher);
+                info!(processor = ?isb_processor_name, partition = ?partition,
+                    "Creating new publisher for ISB"
+                );
+                self.publishers.insert(isb_processor_name, publisher);
             }
         }
     }
@@ -209,13 +251,11 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let ot_bucket_name = "source_watermark_OT";
-        let hb_bucket_name = "source_watermark_PROCESSORS";
 
         let source_config = BucketConfig {
             vertex: "source_vertex",
             partitions: vec![0, 1],
             ot_bucket: ot_bucket_name,
-            hb_bucket: hb_bucket_name,
             delay: None,
         };
 
@@ -223,15 +263,6 @@ mod tests {
         js_context
             .create_key_value(Config {
                 bucket: ot_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        js_context
-            .create_key_value(Config {
-                bucket: hb_bucket_name.to_string(),
                 history: 1,
                 ..Default::default()
             })
@@ -268,10 +299,6 @@ mod tests {
 
         // delete the stores
         js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
             .delete_key_value(ot_bucket_name.to_string())
             .await
             .unwrap();
@@ -284,15 +311,12 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let source_ot_bucket_name = "source_edge_watermark_source_OT";
-        let source_hb_bucket_name = "source_edge_watermark_source_PROCESSORS";
         let edge_ot_bucket_name = "source_edge_watermark_edge_OT";
-        let edge_hb_bucket_name = "source_edge_watermark_edge_PROCESSORS";
 
         let source_config = BucketConfig {
             vertex: "source_vertex",
             partitions: vec![0, 1],
             ot_bucket: source_ot_bucket_name,
-            hb_bucket: source_hb_bucket_name,
             delay: None,
         };
 
@@ -300,7 +324,6 @@ mod tests {
             vertex: "edge_vertex",
             partitions: vec![0, 1],
             ot_bucket: edge_ot_bucket_name,
-            hb_bucket: edge_hb_bucket_name,
             delay: None,
         };
 
@@ -313,27 +336,11 @@ mod tests {
             })
             .await
             .unwrap();
-        js_context
-            .create_key_value(Config {
-                bucket: source_hb_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
 
         // create key value stores for edge
         js_context
             .create_key_value(Config {
                 bucket: edge_ot_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        js_context
-            .create_key_value(Config {
-                bucket: edge_hb_bucket_name.to_string(),
                 history: 1,
                 ..Default::default()
             })
@@ -377,15 +384,7 @@ mod tests {
 
         // delete the stores
         js_context
-            .delete_key_value(source_hb_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
             .delete_key_value(source_ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(edge_hb_bucket_name.to_string())
             .await
             .unwrap();
         js_context
@@ -401,13 +400,11 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let ot_bucket_name = "source_watermark_idle_OT";
-        let hb_bucket_name = "source_watermark_idle_PROCESSORS";
 
         let source_config = BucketConfig {
             vertex: "source_vertex",
             partitions: vec![0, 1],
             ot_bucket: ot_bucket_name,
-            hb_bucket: hb_bucket_name,
             delay: None,
         };
 
@@ -415,15 +412,6 @@ mod tests {
         js_context
             .create_key_value(Config {
                 bucket: ot_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        js_context
-            .create_key_value(Config {
-                bucket: hb_bucket_name.to_string(),
                 history: 1,
                 ..Default::default()
             })
@@ -461,10 +449,6 @@ mod tests {
 
         // delete the stores
         js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
             .delete_key_value(ot_bucket_name.to_string())
             .await
             .unwrap();
@@ -477,15 +461,12 @@ mod tests {
         let js_context = jetstream::new(client);
 
         let source_ot_bucket_name = "source_edge_watermark_idle_source_OT";
-        let source_hb_bucket_name = "source_edge_watermark_idle_source_PROCESSORS";
         let edge_ot_bucket_name = "source_edge_watermark_idle_edge_OT";
-        let edge_hb_bucket_name = "source_edge_watermark_idle_edge_PROCESSORS";
 
         let source_config = BucketConfig {
             vertex: "source_vertex",
             partitions: vec![0, 1],
             ot_bucket: source_ot_bucket_name,
-            hb_bucket: source_hb_bucket_name,
             delay: None,
         };
 
@@ -493,7 +474,6 @@ mod tests {
             vertex: "edge_vertex",
             partitions: vec![0, 1],
             ot_bucket: edge_ot_bucket_name,
-            hb_bucket: edge_hb_bucket_name,
             delay: None,
         };
 
@@ -506,27 +486,11 @@ mod tests {
             })
             .await
             .unwrap();
-        js_context
-            .create_key_value(Config {
-                bucket: source_hb_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
 
         // create key value stores for edge
         js_context
             .create_key_value(Config {
                 bucket: edge_ot_bucket_name.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-        js_context
-            .create_key_value(Config {
-                bucket: edge_hb_bucket_name.to_string(),
                 history: 1,
                 ..Default::default()
             })
@@ -571,15 +535,7 @@ mod tests {
 
         // delete the stores
         js_context
-            .delete_key_value(source_hb_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
             .delete_key_value(source_ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(edge_hb_bucket_name.to_string())
             .await
             .unwrap();
         js_context

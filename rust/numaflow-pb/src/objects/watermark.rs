@@ -20,11 +20,9 @@ pub struct Wmb {
     /// Partition to identify the partition to which the watermark belongs.
     #[prost(int32, tag = "4")]
     pub partition: i32,
-}
-/// Heartbeat is used to track the active processors
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct Heartbeat {
-    /// Heartbeat(current time in millis) published by the active processors.
-    #[prost(int64, tag = "1")]
-    pub heartbeat: i64,
+    /// Optional expected processor count for source watermarks.
+    /// When set, the fetcher will wait until this many processors are active before
+    /// computing a valid watermark.
+    #[prost(int32, optional, tag = "5")]
+    pub processor_count: ::core::option::Option<i32>,
 }

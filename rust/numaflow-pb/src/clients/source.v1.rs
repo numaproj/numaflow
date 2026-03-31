@@ -273,9 +273,12 @@ pub struct PartitionsResponse {
 pub mod partitions_response {
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
     pub struct Result {
-        /// Required field holding the list of partitions.
+        /// Required field holding the list of active partitions.
         #[prost(int32, repeated, tag = "1")]
         pub partitions: ::prost::alloc::vec::Vec<i32>,
+        /// Total number of partitions in the source
+        #[prost(int32, optional, tag = "2")]
+        pub total_partitions: ::core::option::Option<i32>,
     }
 }
 /// Offset is the offset of the datum.

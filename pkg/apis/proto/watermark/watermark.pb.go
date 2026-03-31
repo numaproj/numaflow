@@ -52,9 +52,13 @@ type WMB struct {
 	// increasing.
 	Watermark int64 `protobuf:"varint,3,opt,name=watermark,proto3" json:"watermark,omitempty"`
 	// Partition to identify the partition to which the watermark belongs.
-	Partition     int32 `protobuf:"varint,4,opt,name=partition,proto3" json:"partition,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Partition int32 `protobuf:"varint,4,opt,name=partition,proto3" json:"partition,omitempty"`
+	// Optional expected processor count for source watermarks.
+	// When set, the fetcher will wait until this many processors are active before
+	// computing a valid watermark.
+	ProcessorCount *int32 `protobuf:"varint,5,opt,name=processor_count,json=processorCount,proto3,oneof" json:"processor_count,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *WMB) Reset() {
@@ -115,48 +119,9 @@ func (x *WMB) GetPartition() int32 {
 	return 0
 }
 
-// Heartbeat is used to track the active processors
-type Heartbeat struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Heartbeat(current time in millis) published by the active processors.
-	Heartbeat     int64 `protobuf:"varint,1,opt,name=heartbeat,proto3" json:"heartbeat,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Heartbeat) Reset() {
-	*x = Heartbeat{}
-	mi := &file_pkg_apis_proto_watermark_watermark_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Heartbeat) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Heartbeat) ProtoMessage() {}
-
-func (x *Heartbeat) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_proto_watermark_watermark_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Heartbeat.ProtoReflect.Descriptor instead.
-func (*Heartbeat) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_proto_watermark_watermark_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *Heartbeat) GetHeartbeat() int64 {
-	if x != nil {
-		return x.Heartbeat
+func (x *WMB) GetProcessorCount() int32 {
+	if x != nil && x.ProcessorCount != nil {
+		return *x.ProcessorCount
 	}
 	return 0
 }
@@ -165,14 +130,14 @@ var File_pkg_apis_proto_watermark_watermark_proto protoreflect.FileDescriptor
 
 const file_pkg_apis_proto_watermark_watermark_proto_rawDesc = "" +
 	"\n" +
-	"(pkg/apis/proto/watermark/watermark.proto\x12\twatermark\"m\n" +
+	"(pkg/apis/proto/watermark/watermark.proto\x12\twatermark\"\xaf\x01\n" +
 	"\x03WMB\x12\x12\n" +
 	"\x04idle\x18\x01 \x01(\bR\x04idle\x12\x16\n" +
 	"\x06offset\x18\x02 \x01(\x03R\x06offset\x12\x1c\n" +
 	"\twatermark\x18\x03 \x01(\x03R\twatermark\x12\x1c\n" +
-	"\tpartition\x18\x04 \x01(\x05R\tpartition\")\n" +
-	"\tHeartbeat\x12\x1c\n" +
-	"\theartbeat\x18\x01 \x01(\x03R\theartbeatB1Z/github.com/numaproj/numaflow/pkg/apis/proto/isbb\x06proto3"
+	"\tpartition\x18\x04 \x01(\x05R\tpartition\x12,\n" +
+	"\x0fprocessor_count\x18\x05 \x01(\x05H\x00R\x0eprocessorCount\x88\x01\x01B\x12\n" +
+	"\x10_processor_countB1Z/github.com/numaproj/numaflow/pkg/apis/proto/isbb\x06proto3"
 
 var (
 	file_pkg_apis_proto_watermark_watermark_proto_rawDescOnce sync.Once
@@ -186,10 +151,9 @@ func file_pkg_apis_proto_watermark_watermark_proto_rawDescGZIP() []byte {
 	return file_pkg_apis_proto_watermark_watermark_proto_rawDescData
 }
 
-var file_pkg_apis_proto_watermark_watermark_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_pkg_apis_proto_watermark_watermark_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_pkg_apis_proto_watermark_watermark_proto_goTypes = []any{
-	(*WMB)(nil),       // 0: watermark.WMB
-	(*Heartbeat)(nil), // 1: watermark.Heartbeat
+	(*WMB)(nil), // 0: watermark.WMB
 }
 var file_pkg_apis_proto_watermark_watermark_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -204,13 +168,14 @@ func file_pkg_apis_proto_watermark_watermark_proto_init() {
 	if File_pkg_apis_proto_watermark_watermark_proto != nil {
 		return
 	}
+	file_pkg_apis_proto_watermark_watermark_proto_msgTypes[0].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_apis_proto_watermark_watermark_proto_rawDesc), len(file_pkg_apis_proto_watermark_watermark_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   1,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

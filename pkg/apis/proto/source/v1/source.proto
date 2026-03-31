@@ -209,8 +209,10 @@ message PendingResponse {
  */
 message PartitionsResponse {
   message Result {
-    // Required field holding the list of partitions.
+    // Required field holding the list of active partitions.
     repeated int32 partitions = 1;
+    // Total number of partitions in the source
+    optional int32 total_partitions = 2;
   }
   // Required field holding the result.
   Result result = 1;

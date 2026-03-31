@@ -38,7 +38,6 @@ const DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS: u64 = 20; // time we will wait for UD
 const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
-const ENV_NUMAFLOW_WATERMARK_DELAY: &str = "NUMAFLOW_WATERMARK_DELAY_IN_MS";
 const ENV_WRITE_CONCURRENCY_SIZE: &str = "WRITE_CONCURRENCY_SIZE";
 const ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS: &str = "NUMAFLOW_GRACEFUL_TIMEOUT_SECS";
 const ENV_MAX_ACK_PENDING: &str = "MAX_ACK_PENDING";
@@ -49,7 +48,6 @@ pub(crate) const DEFAULT_STREAM_MAP_SOCKET: &str = "/var/run/numaflow/mapstream.
 const DEFAULT_MAP_SERVER_INFO_FILE: &str = "/var/run/numaflow/mapper-server-info";
 const DEFAULT_SERVING_STORE_SOCKET: &str = "/var/run/numaflow/serving.sock";
 const DEFAULT_SERVING_STORE_SERVER_INFO_FILE: &str = "/var/run/numaflow/serving-server-info";
-const DEFAULT_WATERMARK_DELAY_IN_MILLIS: u64 = 100;
 pub(crate) const VERTEX_TYPE_SOURCE: &str = "Source";
 pub(crate) const VERTEX_TYPE_SINK: &str = "Sink";
 pub(crate) const VERTEX_TYPE_MAP_UDF: &str = "MapUDF";
@@ -627,11 +625,6 @@ impl PipelineConfig {
             .clone()
             .is_none_or(|w| !w.disabled.unwrap_or(false))
         {
-            let delay_in_millis = env_vars
-                .get(ENV_NUMAFLOW_WATERMARK_DELAY)
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(DEFAULT_WATERMARK_DELAY_IN_MILLIS);
-
             WatermarkConfig::new(
                 vertex_obj.spec.watermark.clone(),
                 &namespace,
@@ -640,7 +633,6 @@ impl PipelineConfig {
                 &vertex,
                 &from_vertex_config,
                 &to_vertex_config,
-                delay_in_millis,
                 ordered_processing_enabled,
             )
         } else {
@@ -749,7 +741,7 @@ mod tests {
     use crate::config::components::source::{GeneratorConfig, SourceType};
     use crate::config::pipeline::map::{MapType, UserDefinedConfig};
     use crate::config::pipeline::watermark::{
-        BucketConfig, EdgeWatermarkConfig, SourceWatermarkConfig,
+        BucketConfig, EdgeWatermarkConfig, IdleConfig, SourceWatermarkConfig,
     };
 
     #[test]
@@ -884,7 +876,6 @@ mod tests {
                     vertex: "in",
                     partitions: vec![0],
                     ot_bucket: "default-simple-pipeline-in-out_OT",
-                    hb_bucket: "default-simple-pipeline-in-out_PROCESSORS",
                     delay: Some(Duration::from_millis(100)),
                 }],
                 to_vertex_config: vec![],
@@ -1116,17 +1107,15 @@ mod tests {
                     vertex: "in",
                     partitions: vec![0],
                     ot_bucket: "default-simple-pipeline-in_SOURCE_OT",
-                    hb_bucket: "default-simple-pipeline-in_SOURCE_PROCESSORS",
                     delay: Some(Duration::from_millis(100)),
                 },
                 to_vertex_bucket_config: vec![BucketConfig {
                     vertex: "out",
                     partitions: vec![0],
                     ot_bucket: "default-simple-pipeline-in-out_OT",
-                    hb_bucket: "default-simple-pipeline-in-out_PROCESSORS",
                     delay: Some(Duration::from_millis(100)),
                 }],
-                idle_config: None,
+                idle_config: IdleConfig::default(),
             })),
             ..Default::default()
         };
@@ -1215,7 +1204,6 @@ mod tests {
                     vertex: "in",
                     partitions: vec![0],
                     ot_bucket: "default-simple-pipeline-in-map_OT",
-                    hb_bucket: "default-simple-pipeline-in-map_PROCESSORS",
                     delay: Some(Duration::from_millis(100)),
                 }],
                 to_vertex_config: vec![],

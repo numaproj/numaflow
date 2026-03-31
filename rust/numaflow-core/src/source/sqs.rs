@@ -103,8 +103,11 @@ impl source::SourceReader for SqsSource {
     }
 
     // if source doesn't support partitions, we should return the vec![vertex_replica]
-    async fn partitions(&mut self) -> crate::Result<Vec<u16>> {
-        Ok(vec![*get_vertex_replica()])
+    async fn partitions(&mut self) -> crate::Result<source::SourcePartitions> {
+        Ok(source::SourcePartitions::new(
+            vec![*get_vertex_replica()],
+            None,
+        ))
     }
 }
 
@@ -287,6 +290,7 @@ pub mod tests {
             true,
             None,
             None,
+            cln_token.clone(),
             None,
         )
         .await;
