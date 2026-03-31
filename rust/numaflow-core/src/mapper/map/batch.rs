@@ -108,19 +108,10 @@ impl MapBatchTask {
                         )
                         .await?;
 
-                    // Send messages downstream wrapped in MessageHandle sharing the same AckHandle.
-                    // Each output message increments ref_count, and downstream will call mark_success()
-                    // when the message is successfully written.
+                    // Downstream messages are independent - they use a no-op AckHandle.
+                    // The original read_batch is ACK'd via mark_success_batch! below.
                     for mapped_message in mapped_messages {
-                        let ack_handle = Arc::clone(
-                            &self
-                                .read_batch
-                                .get(idx)
-                                .expect("read_batch index must be valid")
-                                .ack_handle,
-                        );
-
-                        let read_msg = MessageHandle::from_arc(mapped_message, ack_handle);
+                        let read_msg: MessageHandle = mapped_message.into();
                         // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
                         // If not bypassed, it returns Some(read_msg) for us to send downstream.
                         let read_msg = if let Some(ref bypass_router) = self.bypass_router {

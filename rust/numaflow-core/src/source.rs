@@ -898,6 +898,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
 #[cfg(test)]
 mod tests {
+    use crate::mark_success;
     use crate::shared::grpc::create_rpc_channel;
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
@@ -1080,9 +1081,11 @@ mod tests {
             assert_eq!(message.message.value, "hello".as_bytes());
             offsets.push(message.message.offset.clone());
 
-            // only store the last 50 messages, rest will be dropped and acknowledged.
+            // store last 50 messages; ACK the first 50 explicitly.
             if i >= 50 {
                 messages.push(message);
+            } else {
+                mark_success!(message);
             }
         }
 
@@ -1113,6 +1116,8 @@ mod tests {
         for _ in 0..50 {
             let message = stream.next().await.unwrap();
             assert_eq!(message.message.value, "hello".as_bytes());
+            // Mark as success so they get ACK'd (pending goes to 0)
+            mark_success!(message);
         }
 
         // pending should be 0 now

@@ -44,6 +44,7 @@ use crate::config::is_mono_vertex;
 use crate::config::monovertex::BypassConditions;
 use crate::error;
 use crate::error::Error;
+use crate::mark_success;
 use crate::mark_success_batch;
 use crate::message::{Message, MessageHandle};
 use crate::shared::forward::should_forward;
@@ -258,13 +259,20 @@ impl BypassRouterReceiver {
                         continue;
                     }
 
-                    // filter out messages that are marked for drop
+                    // Separate messages marked for drop from those to be forwarded.
+                    // Dropped messages must be ACK'd — drop is a successful outcome.
                     let original_len = batch.len();
-                    let batch: Vec<_> = batch
-                        .into_iter()
-                        .filter(|msg| !msg.inner().dropped())
-                        .collect();
-                    let dropped_message_count = original_len - batch.len();
+                    let (to_drop, batch): (Vec<_>, Vec<_>) =
+                        batch.into_iter().partition(|msg| msg.inner().dropped());
+                    let dropped_message_count = to_drop.len();
+                    for msg in to_drop {
+                        let handle = match msg {
+                            MessageToSink::Primary(h)
+                            | MessageToSink::Fallback(h)
+                            | MessageToSink::OnSuccess(h) => h,
+                        };
+                        mark_success!(handle);
+                    }
 
                     // skip if all were dropped
                     if batch.is_empty() {

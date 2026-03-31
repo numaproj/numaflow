@@ -120,9 +120,9 @@ impl Drop for AckHandle {
         if let Some(ack_handle) = self.ack_handle.take() {
             // NAK if ref_count is not 0 (meaning not all references were marked as success)
             if self.ref_count.load(std::sync::atomic::Ordering::SeqCst) != 0 {
-                ack_handle.send(ReadAck::Nak).expect("Failed to send nak");
+                let _ = ack_handle.send(ReadAck::Nak);
             } else {
-                ack_handle.send(ReadAck::Ack).expect("Failed to send ack");
+                let _ = ack_handle.send(ReadAck::Ack);
             }
         }
     }

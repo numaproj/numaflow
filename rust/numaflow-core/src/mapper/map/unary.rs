@@ -111,8 +111,9 @@ impl MapUnaryTask {
             .expect("failed to update tracker");
 
         for mapped_message in mapped_messages {
-            let read_msg =
-                MessageHandle::from_arc(mapped_message, Arc::clone(&self.read_message.ack_handle));
+            // Downstream messages are independent - they use a no-op AckHandle.
+            // The original read_message is ACK'd via mark_success! below.
+            let read_msg: MessageHandle = mapped_message.into();
 
             // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
             // If not bypassed, it returns Some(read_msg) for us to send downstream.
