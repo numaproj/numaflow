@@ -550,7 +550,7 @@ func TestMonoVertex_GetServiceObjs(t *testing.T) {
 		mvCopy.Spec.Source = &Source{
 			HTTP: &HTTPSource{
 				Service: true,
-				Port:    &customPort,
+				Ports:   &Ports{HTTPS: &customPort},
 			},
 		}
 		services := mvCopy.GetServiceObjs()

@@ -146,7 +146,11 @@ func (v Vertex) GetServiceObjs() []*corev1.Service {
 	}
 	svcs := []*corev1.Service{v.getServiceObj(v.GetHeadlessServiceName(), true, ports)}
 	if x := v.Spec.Source; x != nil && x.HTTP != nil && x.HTTP.Service {
-		svcs = append(svcs, v.getServiceObj(v.Name, false, map[string]int32{VertexHTTPSPortName: x.HTTP.GetPort()}))
+		httpSvcPorts := map[string]int32{VertexHTTPSPortName: x.HTTP.GetHTTPSPort()}
+		if x.HTTP.IsHTTPConfigured() {
+			httpSvcPorts[VertexHTTPPortName] = x.HTTP.GetHTTPPort()
+		}
+		svcs = append(svcs, v.getServiceObj(v.Name, false, httpSvcPorts))
 	}
 	return svcs
 }

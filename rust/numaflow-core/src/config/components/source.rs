@@ -373,8 +373,13 @@ impl TryFrom<Box<numaflow_models::models::HttpSource>> for SourceType {
     ) -> std::result::Result<Self, Self::Error> {
         let mut http_config = numaflow_http::HttpSourceConfigBuilder::new(get_vertex_name());
 
-        if let Some(port) = value.port {
-            http_config = http_config.port(port as u16);
+        if let Some(ports) = value.ports {
+            if let Some(https_port) = ports.https {
+                http_config = http_config.port(https_port as u16);
+            }
+            if let Some(http_port) = ports.http {
+                http_config = http_config.http_port(http_port as u16);
+            }
         }
 
         if let Some(auth) = value.auth {

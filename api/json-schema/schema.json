@@ -20557,10 +20557,9 @@
         "auth": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
         },
-        "port": {
-          "description": "The port to listen on for HTTP requests, defaults to 8443",
-          "format": "int32",
-          "type": "integer"
+        "ports": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Ports",
+          "description": "Ports to listen on. HTTPS always runs on port 8443 by default. To enable plain HTTP, set ports.http explicitly."
         },
         "service": {
           "description": "Whether to create a ClusterIP Service",

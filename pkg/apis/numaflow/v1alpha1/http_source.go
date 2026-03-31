@@ -24,17 +24,31 @@ type HTTPSource struct {
 	// Whether to create a ClusterIP Service
 	// +optional
 	Service bool `json:"service" protobuf:"bytes,2,opt,name=service"`
-	// The port to listen on for HTTP requests, defaults to 8443
+	// Ports to listen on. HTTPS always runs on port 8443 by default.
+	// To enable plain HTTP, set ports.http explicitly.
 	// +optional
-	Port *int32 `json:"port,omitempty" protobuf:"bytes,3,opt,name=port"`
+	Ports *Ports `json:"ports,omitempty" protobuf:"bytes,3,opt,name=ports"`
 }
 
-// GetPort returns the configured port, or the default VertexHTTPSPort (8443).
-func (h HTTPSource) GetPort() int32 {
-	if h.Port != nil {
-		return *h.Port
+// GetHTTPSPort returns the configured HTTPS port, or the default VertexHTTPSPort (8443).
+func (h HTTPSource) GetHTTPSPort() int32 {
+	if h.Ports != nil && h.Ports.HTTPS != nil {
+		return *h.Ports.HTTPS
 	}
 	return VertexHTTPSPort
+}
+
+// GetHTTPPort returns the configured HTTP port, or the default VertexHTTPPort (8090).
+func (h HTTPSource) GetHTTPPort() int32 {
+	if h.Ports != nil && h.Ports.HTTP != nil {
+		return *h.Ports.HTTP
+	}
+	return VertexHTTPPort
+}
+
+// IsHTTPConfigured returns true if plain HTTP is explicitly enabled by the user.
+func (h HTTPSource) IsHTTPConfigured() bool {
+	return h.Ports != nil && h.Ports.HTTP != nil
 }
 
 type Authorization struct {
