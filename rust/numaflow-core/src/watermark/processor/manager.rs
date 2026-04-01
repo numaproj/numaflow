@@ -18,8 +18,8 @@ use futures::StreamExt;
 use numaflow_shared::kv::{KVStore, KVWatchOp};
 use tracing::{info, warn};
 
-use crate::config::pipeline::watermark::BucketConfig;
 use crate::config::pipeline::VertexType;
+use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::Result;
 use crate::watermark::processor::timeline::OffsetTimeline;
 use crate::watermark::wmb::WMB;
@@ -400,6 +400,7 @@ mod tests {
     use async_nats::jetstream::kv::Store;
     use bytes::{Bytes, BytesMut};
 
+    use numaflow_shared::kv::jetstream::JetstreamKVStore;
     use numaflow_testing::simplekvstore::SimpleKVStore;
 
     use super::*;
@@ -478,7 +479,10 @@ mod tests {
         })
         .await;
 
-        assert!(result.is_ok(), "Timed out after {timeout:?} waiting for: {description}");
+        assert!(
+            result.is_ok(),
+            "Timed out after {timeout:?} waiting for: {description}"
+        );
     }
 
     #[cfg(feature = "nats-tests")]
