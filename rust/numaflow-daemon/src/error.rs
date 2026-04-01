@@ -14,4 +14,7 @@ pub enum Error {
 
     #[error("Failed to parse address: {0}")]
     Address(String),
+
+    #[error("Failed to initialize: {0}")]
+    Init(String),
 }
