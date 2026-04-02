@@ -105,7 +105,7 @@ test:
 
 .PHONY: test-coverage
 test-coverage:
-	go test -v -timeout 7m -covermode=atomic -coverprofile=test/profile.cov $$(go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
+	go test -v -timeout 7m -covermode=atomic -coverprofile=test/profile.cov $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
 	go tool cover -func=test/profile.cov
 
 test-e2e:
