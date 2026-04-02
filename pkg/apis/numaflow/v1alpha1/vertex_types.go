@@ -411,7 +411,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		InitContainers: initContainers,
 		Containers:     append(containers, v.Spec.Sidecars...),
 	}
-	v.Spec.AbstractPodTemplate.ApplyToPodSpec(spec)
+	v.Spec.ApplyToPodSpec(spec)
 	if v.Spec.ContainerTemplate != nil {
 		v.Spec.ContainerTemplate.ApplyToNumaflowContainers(spec.Containers)
 	}

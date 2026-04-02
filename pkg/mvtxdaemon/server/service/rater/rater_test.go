@@ -43,7 +43,8 @@ type raterMockHttpClient struct {
 func (m *raterMockHttpClient) Get(url string) (*http.Response, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	if url == "https://p-mv-0.p-mv-headless.default.svc:2469/metrics" {
+	switch url {
+	case "https://p-mv-0.p-mv-headless.default.svc:2469/metrics":
 		m.podOneCount = m.podOneCount + 20
 		resp := &http.Response{
 			StatusCode: 200,
@@ -54,7 +55,7 @@ func (m *raterMockHttpClient) Get(url string) (*http.Response, error) {
 monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="0"} %d
 `, m.podOneCount))))}
 		return resp, nil
-	} else if url == "https://p-mv-1.p-mv-headless.default.svc:2469/metrics" {
+	case "https://p-mv-1.p-mv-headless.default.svc:2469/metrics":
 		m.podTwoCount = m.podTwoCount + 60
 		resp := &http.Response{
 			StatusCode: 200,
@@ -64,7 +65,7 @@ monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="0"} %d
 monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="1"} %d
 `, m.podTwoCount))))}
 		return resp, nil
-	} else {
+	default:
 		return nil, nil
 	}
 }
@@ -72,15 +73,16 @@ monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="1"} %d
 func (m *raterMockHttpClient) Head(url string) (*http.Response, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	if url == "https://p-mv-0.p-mv-headless.default.svc:2469/metrics" {
+	switch url {
+	case "https://p-mv-0.p-mv-headless.default.svc:2469/metrics":
 		return &http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader([]byte(``)))}, nil
-	} else if url == "https://p-mv-1.p-mv-headless.default.svc:2469/metrics" {
+	case "https://p-mv-1.p-mv-headless.default.svc:2469/metrics":
 		return &http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader([]byte(``)))}, nil
-	} else {
+	default:
 		return nil, fmt.Errorf("unknown url: %s", url)
 	}
 }
@@ -251,7 +253,8 @@ type multiPartitionMockHttpClient struct {
 func (m *multiPartitionMockHttpClient) Get(url string) (*http.Response, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	if url == "https://p-mv-0.p-mv-headless.default.svc:2469/metrics" {
+	switch url {
+	case "https://p-mv-0.p-mv-headless.default.svc:2469/metrics":
 		m.podOneCount = m.podOneCount + 20
 		// Return metrics with multiple source_partition labels
 		resp := &http.Response{
@@ -263,7 +266,7 @@ monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="0",source_partit
 monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="0",source_partition="partition-1"} %d
 `, m.podOneCount, m.podOneCount*2))))}
 		return resp, nil
-	} else if url == "https://p-mv-1.p-mv-headless.default.svc:2469/metrics" {
+	case "https://p-mv-1.p-mv-headless.default.svc:2469/metrics":
 		m.podTwoCount = m.podTwoCount + 60
 		// Return metrics with multiple source_partition labels
 		resp := &http.Response{
@@ -275,7 +278,7 @@ monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="1",source_partit
 monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="1",source_partition="partition-1"} %d
 `, m.podTwoCount, m.podTwoCount*2))))}
 		return resp, nil
-	} else {
+	default:
 		return nil, nil
 	}
 }
@@ -283,15 +286,16 @@ monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="1",source_partit
 func (m *multiPartitionMockHttpClient) Head(url string) (*http.Response, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	if url == "https://p-mv-0.p-mv-headless.default.svc:2469/metrics" {
+	switch url {
+	case "https://p-mv-0.p-mv-headless.default.svc:2469/metrics":
 		return &http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader([]byte(``)))}, nil
-	} else if url == "https://p-mv-1.p-mv-headless.default.svc:2469/metrics" {
+	case "https://p-mv-1.p-mv-headless.default.svc:2469/metrics":
 		return &http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader([]byte(``)))}, nil
-	} else {
+	default:
 		return nil, fmt.Errorf("unknown url: %s", url)
 	}
 }

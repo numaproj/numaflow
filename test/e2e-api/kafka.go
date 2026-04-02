@@ -212,7 +212,7 @@ readLoop:
 	}
 
 	w.WriteHeader(200)
-	_, _ = w.Write([]byte(fmt.Sprint(count)))
+	_, _ = fmt.Fprint(w, count)
 }
 
 func (kh *KafkaController) ProduceTopicHandler(w http.ResponseWriter, r *http.Request) {
@@ -257,7 +257,7 @@ func (kh *KafkaController) ProduceTopicHandler(w http.ResponseWriter, r *http.Re
 	}
 	// send the partition and offset as response
 	w.WriteHeader(200)
-	_, _ = w.Write([]byte(fmt.Sprintf("Partition - %d: Offset - %d", p, of)))
+	_, _ = fmt.Fprintf(w, "Partition - %d: Offset - %d", p, of)
 }
 
 func (kh *KafkaController) PumpTopicHandler(w http.ResponseWriter, r *http.Request) {

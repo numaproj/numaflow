@@ -73,7 +73,7 @@ func setBaseHref(filename string, baseHref string) error {
 
 	prevHref := `<base href="/"/>`
 	newHref := fmt.Sprintf(`<base href="%s/"/>`, baseHref)
-	file = bytes.Replace(file, []byte(prevHref), []byte(newHref), -1)
+	file = bytes.ReplaceAll(file, []byte(prevHref), []byte(newHref))
 
 	err = os.WriteFile("/opt/numaflow/index.html", file, 0644)
 	return err

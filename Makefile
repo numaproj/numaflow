@@ -267,12 +267,12 @@ manifests: crds
 	kubectl kustomize config/extensions/webhook > config/validating-webhook-install.yaml
 
 $(GOPATH)/bin/golangci-lint:
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v1.64.8
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v2.11.4
 
 .PHONY: lint
 lint: $(GOPATH)/bin/golangci-lint
 	go mod tidy
-	$(GOPATH)/bin/golangci-lint run --fix --verbose --concurrency 4 --timeout 5m --enable goimports
+	$(GOPATH)/bin/golangci-lint run --fix --verbose --concurrency 4 --timeout 5m
 	cd rust && cargo fmt -- --check || (echo "Run 'cd rust && cargo fmt' to fix formatting issues" && exit 1)
 
 .PHONY: start
