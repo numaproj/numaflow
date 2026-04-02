@@ -215,7 +215,7 @@ func TestGetServiceObjsWithCustomPort(t *testing.T) {
 	v.Spec.Source = &Source{
 		HTTP: &HTTPSource{
 			Service: true,
-			Port:    &customPort,
+			Ports:   &Ports{HTTPS: &customPort},
 		},
 	}
 	s := v.GetServiceObjs()
@@ -986,4 +986,54 @@ func TestAbstractVertex_IsOrdered(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestHTTPSourceGetServiceObjs(t *testing.T) {
+	httpPort := int32(8090)
+	v := &Vertex{
+		ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testVertexName},
+		Spec: VertexSpec{
+			PipelineName: testPipelineName,
+			AbstractVertex: AbstractVertex{
+				Name: testVertexSpecName,
+				Source: &Source{
+					HTTP: &HTTPSource{
+						Service: true,
+						Ports:   &Ports{HTTP: &httpPort},
+					},
+				},
+			},
+		},
+	}
+
+	svcs := v.GetServiceObjs()
+	// headless + ClusterIP service
+	assert.Len(t, svcs, 2)
+
+	var clusterIPSvc *corev1.Service
+	for _, s := range svcs {
+		if s.Name == testVertexName {
+			clusterIPSvc = s
+		}
+	}
+	assert.NotNil(t, clusterIPSvc)
+
+	portNames := map[string]int32{}
+	for _, p := range clusterIPSvc.Spec.Ports {
+		portNames[p.Name] = p.Port
+	}
+	assert.Equal(t, int32(VertexHTTPSPort), portNames[VertexHTTPSPortName])
+	assert.Equal(t, int32(VertexHTTPPort), portNames[VertexHTTPPortName])
+}
+
+func TestHTTPSourceIsHTTPConfigured(t *testing.T) {
+	httpPort := int32(8090)
+	httpsPort := int32(9443)
+
+	assert.False(t, (&HTTPSource{}).IsHTTPConfigured())
+	assert.True(t, (&HTTPSource{Ports: &Ports{HTTP: &httpPort}}).IsHTTPConfigured())
+	assert.Equal(t, int32(VertexHTTPSPort), (&HTTPSource{}).GetHTTPSPort())
+	assert.Equal(t, int32(VertexHTTPPort), (&HTTPSource{}).GetHTTPPort())
+	assert.Equal(t, httpsPort, (&HTTPSource{Ports: &Ports{HTTPS: &httpsPort}}).GetHTTPSPort())
+	assert.Equal(t, httpPort, (&HTTPSource{Ports: &Ports{HTTP: &httpPort}}).GetHTTPPort())
 }

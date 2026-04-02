@@ -698,9 +698,10 @@ message HTTPSource {
   // +optional
   optional bool service = 2;
 
-  // The port to listen on for HTTP requests, defaults to 8443
+  // Ports to listen on. HTTPS always runs on port 8443 by default.
+  // To enable plain HTTP, set ports.http explicitly.
   // +optional
-  optional int32 port = 3;
+  optional Ports ports = 3;
 }
 
 message IdleSource {
