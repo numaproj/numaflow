@@ -2880,7 +2880,7 @@
 
 <h1 id="http-source">HTTP Source<a class="headerlink" href="#http-source" title="Permanent link">&para;</a></h1>
 <p>HTTP Source starts an HTTP service to accept POST requests in the Vertex Pod. By default, it listens on port 8443 with TLS enabled, with request URI <code>/vertices/{vertexName}</code>.</p>
-<p>A plain HTTP (non-TLS) server can also be enabled by explicitly setting <code>httpPort</code>.</p>
+<p>A plain HTTP (non-TLS) server can also be enabled by explicitly setting <code>http</code> under <code>ports</code>.</p>
 <p>A Pipeline with HTTP Source:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
@@ -2977,7 +2977,7 @@ curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span
 <div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;hello world&quot;</span><span class="w"> </span>http://http-pipeline-in:8090/vertices/in
 </code></pre></div>
 <blockquote>
-<p><strong>Note:</strong> Plain HTTP should only be used in trusted network environments. Prefer HTTPS whenever possible, as it encrypts data in transit.</p>
+<p><strong>Note:</strong> Plain HTTP should only be used in trusted network environments (e.g., you have service mesh). Prefer HTTPS whenever possible, as it encrypts data in transit.</p>
 </blockquote>
 <h2 id="x-numaflow-id">x-numaflow-id<a class="headerlink" href="#x-numaflow-id" title="Permanent link">&para;</a></h2>
 <p>When posting data to the HTTP Source, an optional HTTP header <code>x-numaflow-id</code> can be specified, which will be used to dedup. If it's not provided, the HTTP Source will generate a random UUID to do it.</p>
