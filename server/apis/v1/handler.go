@@ -162,7 +162,8 @@ func (h *handler) AuthInfo(c *gin.Context) {
 		return
 	}
 
-	if loginType == "dex" {
+	switch loginType {
+	case "dex":
 		cookies := c.Request.Cookies()
 		userIdentityTokenStr, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
 		if err != nil {
@@ -198,7 +199,7 @@ func (h *handler) AuthInfo(c *gin.Context) {
 		res := authn.NewUserInfo(&claims, userInfo.IDToken, userInfo.RefreshToken)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 		return
-	} else if loginType == "local" {
+	case "local":
 		userIdentityTokenStr, err := c.Cookie(common.JWTCookieName)
 		if err != nil {
 			errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
@@ -937,7 +938,9 @@ func (h *handler) PodLogs(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("Failed to get pod logs: %s", err.Error()))
 		return
 	}
-	defer stream.Close()
+	defer func(stream io.ReadCloser) {
+		_ = stream.Close()
+	}(stream)
 
 	// Stream the logs back to the client
 	h.streamLogs(c, stream)
@@ -1044,7 +1047,7 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 		defaultTimeObject time.Time
 	)
 	for _, event := range events.Items {
-		if event.LastTimestamp.Time == defaultTimeObject {
+		if event.LastTimestamp.Time.Equal(defaultTimeObject) {
 			continue
 		}
 		if (objType == "" && objName == "") ||
