@@ -698,7 +698,6 @@ mod tests {
         // Read messages
         let messages = source.read_messages().await.unwrap();
         assert_eq!(messages.len(), 30);
-        tokio::time::sleep(Duration::from_millis(30)).await;
         let pending = source.pending_messages().await.unwrap();
         assert_eq!(
             pending,
