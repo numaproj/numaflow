@@ -701,7 +701,8 @@ mod tests {
                 }
                 tokio::time::sleep(interval).await;
             }
-        }).await;
+        })
+        .await;
 
         assert!(
             result.is_err(),
