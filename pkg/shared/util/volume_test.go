@@ -36,7 +36,7 @@ func (m mockedVolumes) getSecretFromVolume(selector *corev1.SecretKeySelector) (
 		objectName string
 		key        string
 	}{
-		objectName: selector.LocalObjectReference.Name,
+		objectName: selector.Name,
 		key:        selector.Key,
 	}], nil
 }
@@ -63,15 +63,15 @@ var (
 
 func Test_generateSecretVolumeSpecs(t *testing.T) {
 	v, vm := generateSecretVolumeSpecs(testSecretKeySelector)
-	assert.NotNil(t, v.VolumeSource.Secret)
-	assert.Equal(t, "test-secret", v.VolumeSource.Secret.SecretName)
+	assert.NotNil(t, v.Secret)
+	assert.Equal(t, "test-secret", v.Secret.SecretName)
 	assert.Equal(t, v.Name, vm.Name)
 }
 
 func Test_generateConfigMapVolumeSpecs(t *testing.T) {
 	v, vm := generateConfigMapVolumeSpecs(testConfigMapSelector)
-	assert.NotNil(t, v.VolumeSource.ConfigMap)
-	assert.Equal(t, "test-cm", v.VolumeSource.ConfigMap.Name)
+	assert.NotNil(t, v.ConfigMap)
+	assert.Equal(t, "test-cm", v.ConfigMap.Name)
 	assert.Equal(t, v.Name, vm.Name)
 }
 

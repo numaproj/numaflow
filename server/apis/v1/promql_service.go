@@ -85,9 +85,9 @@ func formatMapLabels(labels map[string]string) string {
 		}
 		// Check if the value contains ".*" - regex and use =~ if it does
 		if strings.Contains(v, ".*") {
-			builder.WriteString(fmt.Sprintf("%s =~ \"%s\"", k, v))
+			fmt.Fprintf(&builder, "%s =~ \"%s\"", k, v)
 		} else {
-			builder.WriteString(fmt.Sprintf("%s = \"%s\"", k, v))
+			fmt.Fprintf(&builder, "%s = \"%s\"", k, v)
 		}
 		first = false
 	}
@@ -103,7 +103,7 @@ func substitutePlaceHolders(expr string, placeholders []string, reqMap map[strin
 		if !ok || val == "" {
 			return "", fmt.Errorf("missing the %s field in the request body", key)
 		}
-		expr = strings.Replace(expr, key, val, -1)
+		expr = strings.ReplaceAll(expr, key, val)
 	}
 	return expr, nil
 }

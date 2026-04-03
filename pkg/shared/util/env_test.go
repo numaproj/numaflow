@@ -30,20 +30,20 @@ func TestLookupEnvStringOr(t *testing.T) {
 
 func TestLookupEnvIntOr(t *testing.T) {
 	assert.Equal(t, LookupEnvIntOr("fake_int_env", 3), 3)
-	os.Setenv("fake_int_env", "4")
+	_ = os.Setenv("fake_int_env", "4")
 	assert.Equal(t, LookupEnvIntOr("fake_int_env", 3), 4)
 }
 
 func TestLookupEnvBoolOr(t *testing.T) {
 	assert.Equal(t, LookupEnvBoolOr("fake_bool_env", false), false)
-	os.Setenv("fake_bool_env", "1")
+	_ = os.Setenv("fake_bool_env", "1")
 	assert.Equal(t, LookupEnvBoolOr("fake_bool_env", false), true)
-	os.Setenv("fake_bool_env", "True")
+	_ = os.Setenv("fake_bool_env", "True")
 	assert.Equal(t, LookupEnvBoolOr("fake_bool_env", false), true)
-	os.Setenv("fake_bool_env", "TRUE")
+	_ = os.Setenv("fake_bool_env", "TRUE")
 	assert.Equal(t, LookupEnvBoolOr("fake_bool_env", false), true)
-	os.Setenv("fake_bool_env", "False")
+	_ = os.Setenv("fake_bool_env", "False")
 	assert.Equal(t, LookupEnvBoolOr("fake_bool_env", false), false)
-	os.Setenv("fake_bool_env", "5")
+	_ = os.Setenv("fake_bool_env", "5")
 	assert.Panics(t, func() { LookupEnvBoolOr("fake_bool_env", false) })
 }
