@@ -684,30 +684,35 @@ mod tests {
         js
     }
 
-    /// Polls pending_messages() until it matches the expected value or a timeout is reached.
+    /// Polls pending_messages() until it matches the expected value or retries are exhausted.
     async fn assert_pending_eventually(
         source: &JetstreamSource,
         expected: usize,
         description: &str,
     ) {
-        let timeout = Duration::from_millis(500);
-        let interval = Duration::from_millis(30);
+        let interval_ms: u64 = 30;
+        let max_retries: usize = 16;
+        let interval = fixed::Interval::from_millis(interval_ms).take(max_retries);
 
-        let result = tokio::time::timeout(timeout, async {
-            loop {
+        let result = Retry::new(
+            interval,
+            async || {
                 let pending = source.pending_messages().await.unwrap();
                 if pending == Some(expected) {
-                    return;
+                    Ok(())
+                } else {
+                    Err(pending)
                 }
-                tokio::time::sleep(interval).await;
-            }
-        })
+            },
+            |_: &Option<usize>| true,
+        )
         .await;
 
         assert!(
             result.is_ok(),
-            "{description}: expected Some({expected}) but got {:?} after {timeout:?}",
-            source.pending_messages().await.unwrap()
+            "{description}: expected Some({expected}) but got {:?} after ~{}ms",
+            source.pending_messages().await.unwrap(),
+            interval_ms * max_retries as u64,
         );
     }
 
