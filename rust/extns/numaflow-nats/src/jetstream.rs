@@ -705,7 +705,7 @@ mod tests {
         .await;
 
         assert!(
-            result.is_err(),
+            result.is_ok(),
             "{description}: expected Some({expected}) but got {:?} after {timeout:?}",
             source.pending_messages().await.unwrap()
         );
