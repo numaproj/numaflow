@@ -30,11 +30,12 @@ func (as *ActiveStatus) isEmpty() bool {
 }
 
 func (as *ActiveStatus) increment(status string) {
-	if status == dfv1.PipelineStatusHealthy {
+	switch status {
+	case dfv1.PipelineStatusHealthy:
 		as.Healthy++
-	} else if status == dfv1.PipelineStatusWarning {
+	case dfv1.PipelineStatusWarning:
 		as.Warning++
-	} else if status == dfv1.PipelineStatusCritical {
+	case dfv1.PipelineStatusCritical:
 		as.Critical++
 	}
 }
@@ -92,7 +93,7 @@ func NewNamespaceSummary(
 	isbSummary IsbServiceSummary,
 	monoVertexSummary MonoVertexSummary) NamespaceSummary {
 	return NamespaceSummary{
-		IsEmpty:           !(pipelineSummary.hasPipeline() || isbSummary.hasIsbService() || monoVertexSummary.hasMonoVertex()),
+		IsEmpty:           !pipelineSummary.hasPipeline() && !isbSummary.hasIsbService() && !monoVertexSummary.hasMonoVertex(),
 		Namespace:         namespace,
 		PipelineSummary:   pipelineSummary,
 		IsbServiceSummary: isbSummary,

@@ -22,6 +22,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"sort"
@@ -189,7 +190,7 @@ func (ac *AdmissionController) register(ctx context.Context, client clientadmiss
 		if !reflect.DeepEqual(configuredWebhook.Webhooks, webhook.Webhooks) {
 			ac.Logger.Info("Updating webhook")
 			// Set the ResourceVersion as required by update.
-			webhook.ObjectMeta.ResourceVersion = configuredWebhook.ObjectMeta.ResourceVersion
+			webhook.ResourceVersion = configuredWebhook.ResourceVersion
 			if _, err := client.Update(ctx, webhook, metav1.UpdateOptions{}); err != nil {
 				return fmt.Errorf("failed to update webhook, %w", err)
 			}
@@ -214,7 +215,9 @@ func (ac *AdmissionController) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	}
 
 	var review admissionv1.AdmissionReview
-	defer r.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(r.Body)
 	if err := json.NewDecoder(r.Body).Decode(&review); err != nil {
 		http.Error(w, fmt.Sprintf("could not decode body: %v", err), http.StatusBadRequest)
 		return

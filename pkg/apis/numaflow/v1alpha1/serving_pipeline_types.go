@@ -315,7 +315,7 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		spec.Template.Spec.Containers = append(spec.Template.Spec.Containers, sp.getStoreSidecarContainerSpec(containerRequest)...)
 	}
 
-	sp.Spec.Serving.AbstractPodTemplate.ApplyToPodTemplateSpec(&spec.Template)
+	sp.Spec.Serving.ApplyToPodTemplateSpec(&spec.Template)
 
 	return &appv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{

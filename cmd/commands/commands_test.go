@@ -29,7 +29,7 @@ import (
 
 func Test_Commands(t *testing.T) {
 
-	os.Setenv(dfv1.EnvPipelineName, "test-pl")
+	_ = os.Setenv(dfv1.EnvPipelineName, "test-pl")
 
 	t.Run("root execute", func(t *testing.T) {
 		assert.NotPanics(t, Execute, "help")

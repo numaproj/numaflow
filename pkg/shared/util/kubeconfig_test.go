@@ -14,8 +14,10 @@ func TestK8sRestConfig(t *testing.T) {
 	t.Run("K8sRestConfig returns error when KUBECONFIG is invalid", func(t *testing.T) {
 		// Setup the environment to simulate an invalid KUBECONFIG
 		kubeconfig := "invalid-kubeconfig"
-		os.Setenv("KUBECONFIG", kubeconfig)
-		defer os.Unsetenv("KUBECONFIG")
+		_ = os.Setenv("KUBECONFIG", kubeconfig)
+		defer func() {
+			_ = os.Unsetenv("KUBECONFIG")
+		}()
 
 		config, err := K8sRestConfig()
 		assert.NotNil(t, err)
@@ -25,12 +27,12 @@ func TestK8sRestConfig(t *testing.T) {
 }
 
 func TestK8sRestConfig_blank(t *testing.T) {
-	os.Unsetenv("KUBECONFIG")
+	_ = os.Unsetenv("KUBECONFIG")
 
 	// Ensure the default kubeconfig does not exist
 	homeDir := homedir.HomeDir()
 	defaultKubeconfigPath := filepath.Join(homeDir, ".kube", "config")
-	os.Remove(defaultKubeconfigPath)
+	_ = os.Remove(defaultKubeconfigPath)
 
 	restConfig, err := K8sRestConfig()
 	assert.Error(t, err)

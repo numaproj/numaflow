@@ -69,7 +69,7 @@ func (mr *monoVertexReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if err := mr.client.Get(ctx, req.NamespacedName, monoVtx); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Clean up metrics here, since there's no finalizer defined for MonoVertex objects, best effort
-			cleanupMetrics(req.NamespacedName.Namespace, req.NamespacedName.Name)
+			cleanupMetrics(req.Namespace, req.Name)
 			return ctrl.Result{}, nil
 		}
 		mr.logger.Errorw("Unable to get MonoVertex", zap.Any("request", req), zap.Error(err))

@@ -197,11 +197,12 @@ func TestConfigFileReload(t *testing.T) {
 
 	// Load the RBAC properties
 	scopes := authorizer.getCurrentScopes()
+loop1:
 	for scopes[0] != "email" {
 		fmt.Println("Waiting for RBAC config to be reloaded")
 		select {
 		case <-ctx.Done():
-			break
+			break loop1
 		default:
 			time.Sleep(10 * time.Millisecond)
 			scopes = authorizer.getCurrentScopes()
@@ -227,11 +228,12 @@ func TestConfigFileReload(t *testing.T) {
 
 	// Check if the RBAC properties are reloaded correctly
 	scopes = authorizer.getCurrentScopes()
+loop2:
 	for scopes[0] != "groups" {
 		fmt.Println("Waiting for RBAC config to be reloaded")
 		select {
 		case <-ctx.Done():
-			break
+			break loop2
 		default:
 			time.Sleep(10 * time.Millisecond)
 			scopes = authorizer.getCurrentScopes()
@@ -249,11 +251,12 @@ func TestConfigFileReload(t *testing.T) {
 
 	// Check if the RBAC properties are reloaded correctly
 	scopes = authorizer.getCurrentScopes()
+loop3:
 	for scopes[0] != "email" {
 		fmt.Println("Waiting for RBAC config to be reloaded")
 		select {
 		case <-ctx.Done():
-			break
+			break loop3
 		default:
 			time.Sleep(10 * time.Millisecond)
 			scopes = authorizer.getCurrentScopes()

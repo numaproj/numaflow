@@ -45,7 +45,8 @@ type raterMockHttpClient struct {
 func (m *raterMockHttpClient) Get(url string) (*http.Response, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	if url == "https://p-v-0.p-v-headless.default.svc:2469/metrics" {
+	switch url {
+	case "https://p-v-0.p-v-headless.default.svc:2469/metrics":
 		m.podOneCount = m.podOneCount + 20
 		resp := &http.Response{
 			StatusCode: 200,
@@ -57,7 +58,7 @@ func (m *raterMockHttpClient) Get(url string) (*http.Response, error) {
 forwarder_data_read_total{buffer="input",pipeline="simple-pipeline",vertex="input",replica="0",partition_name="p-v-0"} %d
 `, m.podOneCount))))}
 		return resp, nil
-	} else if url == "https://p-v-1.p-v-headless.default.svc:2469/metrics" {
+	case "https://p-v-1.p-v-headless.default.svc:2469/metrics":
 		m.podTwoCount = m.podTwoCount + 60
 		resp := &http.Response{
 			StatusCode: 200,
@@ -67,7 +68,7 @@ forwarder_data_read_total{buffer="input",pipeline="simple-pipeline",vertex="inpu
 forwarder_data_read_total{buffer="input",pipeline="simple-pipeline",vertex="input",replica="0",partition_name="p-v-1"} %d
 `, m.podTwoCount))))}
 		return resp, nil
-	} else {
+	default:
 		return nil, nil
 	}
 }
@@ -75,15 +76,16 @@ forwarder_data_read_total{buffer="input",pipeline="simple-pipeline",vertex="inpu
 func (m *raterMockHttpClient) Head(url string) (*http.Response, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	if url == "https://p-v-0.p-v-headless.default.svc:2469/metrics" {
+	switch url {
+	case "https://p-v-0.p-v-headless.default.svc:2469/metrics":
 		return &http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader([]byte(``)))}, nil
-	} else if url == "https://p-v-1.p-v-headless.default.svc:2469/metrics" {
+	case "https://p-v-1.p-v-headless.default.svc:2469/metrics":
 		return &http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader([]byte(``)))}, nil
-	} else {
+	default:
 		return nil, fmt.Errorf("unknown url: %s", url)
 	}
 }
