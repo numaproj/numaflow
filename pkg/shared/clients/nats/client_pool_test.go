@@ -27,9 +27,9 @@ import (
 )
 
 func TestNewClientPool_Success(t *testing.T) {
-	os.Setenv(dfv1.EnvISBSvcJetStreamURL, "nats://localhost:4222")
-	os.Setenv(dfv1.EnvISBSvcJetStreamUser, "user")
-	os.Setenv(dfv1.EnvISBSvcJetStreamPassword, "password")
+	_ = os.Setenv(dfv1.EnvISBSvcJetStreamURL, "nats://localhost:4222")
+	_ = os.Setenv(dfv1.EnvISBSvcJetStreamUser, "user")
+	_ = os.Setenv(dfv1.EnvISBSvcJetStreamPassword, "password")
 	ctx := context.Background()
 	pool, err := NewClientPool(ctx)
 
@@ -39,9 +39,9 @@ func TestNewClientPool_Success(t *testing.T) {
 }
 
 func TestClientPool_NextAvailableClient(t *testing.T) {
-	os.Setenv(dfv1.EnvISBSvcJetStreamURL, "nats://localhost:4222")
-	os.Setenv(dfv1.EnvISBSvcJetStreamUser, "user")
-	os.Setenv(dfv1.EnvISBSvcJetStreamPassword, "password")
+	_ = os.Setenv(dfv1.EnvISBSvcJetStreamURL, "nats://localhost:4222")
+	_ = os.Setenv(dfv1.EnvISBSvcJetStreamUser, "user")
+	_ = os.Setenv(dfv1.EnvISBSvcJetStreamPassword, "password")
 	ctx := context.Background()
 	pool, err := NewClientPool(ctx)
 	assert.NoError(t, err)
@@ -58,9 +58,9 @@ func TestClientPool_NextAvailableClient(t *testing.T) {
 }
 
 func TestClientPool_CloseAll(t *testing.T) {
-	os.Setenv(dfv1.EnvISBSvcJetStreamURL, "nats://localhost:4222")
-	os.Setenv(dfv1.EnvISBSvcJetStreamUser, "user")
-	os.Setenv(dfv1.EnvISBSvcJetStreamPassword, "password")
+	_ = os.Setenv(dfv1.EnvISBSvcJetStreamURL, "nats://localhost:4222")
+	_ = os.Setenv(dfv1.EnvISBSvcJetStreamUser, "user")
+	_ = os.Setenv(dfv1.EnvISBSvcJetStreamPassword, "password")
 	ctx := context.Background()
 	pool, err := NewClientPool(ctx)
 	assert.NoError(t, err)

@@ -2,7 +2,7 @@
 
 HTTP Source starts an HTTP service to accept POST requests in the Vertex Pod. By default, it listens on port 8443 with TLS enabled, with request URI `/vertices/{vertexName}`.
 
-A plain HTTP (non-TLS) server can also be enabled by explicitly setting `httpPort`.
+A plain HTTP (non-TLS) server can also be enabled by explicitly setting `http` under `ports`.
 
 A Pipeline with HTTP Source:
 
@@ -107,7 +107,7 @@ Sending data over plain HTTP:
 curl -X POST -d "hello world" http://http-pipeline-in:8090/vertices/in
 ```
 
-> **Note:** Plain HTTP should only be used in trusted network environments. Prefer HTTPS whenever possible, as it encrypts data in transit.
+> **Note:** Plain HTTP should only be used in trusted network environments (e.g., you have service mesh). Prefer HTTPS whenever possible, as it encrypts data in transit.
 
 ## x-numaflow-id
 
