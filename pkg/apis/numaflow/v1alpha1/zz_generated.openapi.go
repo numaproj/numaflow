@@ -2135,11 +2135,17 @@ func schema_pkg_apis_numaflow_v1alpha1_HTTPSource(ref common.ReferenceCallback) 
 							Format:      "",
 						},
 					},
+					"ports": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Ports to listen on. HTTPS always runs on port 8443 by default. To enable plain HTTP, set ports.http explicitly.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ports"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ports"},
 	}
 }
 

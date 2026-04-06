@@ -1091,6 +1091,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "redis-tests")]
     #[tokio::test]
     async fn test_previously_stored_max_filled_at_deregister_redis() {
         let test_name = "test_previously_stored_max_filled_at_deregister_redis";
@@ -1121,6 +1122,7 @@ mod tests {
         test_utils::cleanup_redis_keys(test_name);
     }
 
+    #[cfg(feature = "redis-tests")]
     #[tokio::test]
     async fn test_expired_stored_max_filled_at_deregister_redis() {
         let test_name = "test_expired_stored_max_filled_at_deregister_redis";

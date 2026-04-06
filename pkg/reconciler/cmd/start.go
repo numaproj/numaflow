@@ -136,7 +136,7 @@ func Start(namespaced bool, managedNamespace string) {
 		// Some k8s distro (e.g. v1.30.11-eks-bcf3d70) may have a suffix in the minor version, e.g. 30+
 		pattern := regexp.MustCompile(`[^0-9]`)
 		k8sVersion := fmt.Sprintf("%s.%s", svrVersion.Major, pattern.ReplaceAllString(svrVersion.Minor, ""))
-		os.Setenv(dfv1.EnvK8sServerVersion, k8sVersion)
+		_ = os.Setenv(dfv1.EnvK8sServerVersion, k8sVersion)
 		logger.Infof("Kubernetes server version: %s, distro: %s", k8sVersion, svrVersion.GitVersion)
 	}
 

@@ -72,7 +72,7 @@ func checkContainerStatuses(containers []corev1.ContainerStatus) (bool, string, 
 			return false, c.State.Terminated.Reason, false
 		}
 		if x := c.LastTerminationState.Terminated; x != nil && !x.FinishedAt.Time.IsZero() {
-			if lastRestartTime.IsZero() || x.FinishedAt.Time.After(lastRestartTime) {
+			if lastRestartTime.IsZero() || x.FinishedAt.After(lastRestartTime) {
 				// Only check OOM or exit with Error
 				// TODO: revisit later if needed.
 				if x.ExitCode == 137 || (x.ExitCode == 143 && x.Reason == "Error") {

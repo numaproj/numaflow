@@ -684,6 +684,38 @@ mod tests {
         js
     }
 
+    /// Polls pending_messages() until it matches the expected value or retries are exhausted.
+    async fn assert_pending_eventually(
+        source: &JetstreamSource,
+        expected: usize,
+        description: &str,
+    ) {
+        let interval_ms: u64 = 30;
+        let max_retries: usize = 16;
+        let interval = fixed::Interval::from_millis(interval_ms).take(max_retries);
+
+        let result = Retry::new(
+            interval,
+            async || {
+                let pending = source.pending_messages().await.unwrap();
+                if pending == Some(expected) {
+                    Ok(())
+                } else {
+                    Err(pending)
+                }
+            },
+            |_: &Option<usize>| true,
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "{description}: expected Some({expected}) but got {:?} after ~{}ms",
+            source.pending_messages().await.unwrap(),
+            interval_ms * max_retries as u64,
+        );
+    }
+
     async fn source_functionality_test(
         source: JetstreamSource,
         js: Context,
@@ -698,26 +730,23 @@ mod tests {
         // Read messages
         let messages = source.read_messages().await.unwrap();
         assert_eq!(messages.len(), 30);
-        let pending = source.pending_messages().await.unwrap();
-        assert_eq!(
-            pending,
-            Some(100),
-            "Pending messages should include unacknowledged messages"
-        );
+        assert_pending_eventually(
+            &source,
+            100,
+            "Pending messages should include unacknowledged messages",
+        )
+        .await;
 
         // Ack messages
         let offsets: Vec<u64> = messages.iter().map(|msg| msg.stream_sequence).collect();
         source.ack_messages(offsets).await.unwrap();
 
-        // Check pending messages
-        // If checked immediately, Nats server intermittently returns 1 more than the actual value
-        tokio::time::sleep(Duration::from_millis(30)).await;
-        let pending = source.pending_messages().await.unwrap();
-        assert_eq!(
-            pending,
-            Some(70),
-            "Pending messages should be 70 after acking 30 messages"
-        );
+        assert_pending_eventually(
+            &source,
+            70,
+            "Pending messages should be 70 after acking 30 messages",
+        )
+        .await;
 
         // Read remaining messages
         let messages = source.read_messages().await.unwrap();
@@ -727,15 +756,12 @@ mod tests {
         let offsets: Vec<u64> = messages.iter().map(|msg| msg.stream_sequence).collect();
         source.ack_messages(offsets).await.unwrap();
 
-        // Check pending messages
-        // If checked immediately, Nats server intermittently returns 1 more than the actual value
-        tokio::time::sleep(Duration::from_millis(30)).await;
-        let pending = source.pending_messages().await.unwrap();
-        assert_eq!(
-            pending,
-            Some(40),
-            "Pending messages should be 40 after acking another 30 messages"
-        );
+        assert_pending_eventually(
+            &source,
+            40,
+            "Pending messages should be 40 after acking another 30 messages",
+        )
+        .await;
 
         // Read remaining messages
         let messages = source.read_messages().await.unwrap();
@@ -745,14 +771,12 @@ mod tests {
         let offsets: Vec<u64> = messages.iter().map(|msg| msg.stream_sequence).collect();
         source.ack_messages(offsets).await.unwrap();
 
-        // Check pending messages
-        tokio::time::sleep(Duration::from_millis(30)).await;
-        let pending = source.pending_messages().await.unwrap();
-        assert_eq!(
-            pending,
-            Some(10),
-            "Pending messages should be 10 after acking another 30 messages"
-        );
+        assert_pending_eventually(
+            &source,
+            10,
+            "Pending messages should be 10 after acking another 30 messages",
+        )
+        .await;
 
         // Read remaining messages
         let messages = source.read_messages().await.unwrap();
@@ -762,14 +786,12 @@ mod tests {
         let offsets: Vec<u64> = messages.iter().map(|msg| msg.stream_sequence).collect();
         source.ack_messages(offsets).await.unwrap();
 
-        // Check pending messages
-        tokio::time::sleep(Duration::from_millis(30)).await;
-        let pending = source.pending_messages().await.unwrap();
-        assert_eq!(
-            pending,
-            Some(0),
-            "Pending messages should be 0 after acking all messages"
-        );
+        assert_pending_eventually(
+            &source,
+            0,
+            "Pending messages should be 0 after acking all messages",
+        )
+        .await;
 
         // Ensure read operation returns after the read timeout
         let start = Instant::now();
