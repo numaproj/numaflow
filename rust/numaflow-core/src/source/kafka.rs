@@ -288,10 +288,6 @@ mod tests {
         .await
         .unwrap();
 
-        let source_partitions = source.partitions().await.unwrap();
-        assert_eq!(source_partitions.active_partitions, vec![0]);
-        assert_eq!(source_partitions.total_partitions, Some(1));
-
         // Test SourceReader::read
         let messages = source.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 20, "Should read 20 messages in a batch");
@@ -309,6 +305,11 @@ mod tests {
                 .value,
             Bytes::from("message 19")
         );
+
+        // Query partition info after reading messages
+        let source_partitions = source.partitions().await.unwrap();
+        assert_eq!(source_partitions.active_partitions, vec![0]);
+        assert_eq!(source_partitions.total_partitions, Some(1));
 
         // Test SourceAcker::ack
         let offsets: Vec<Offset> = messages.iter().map(|msg| msg.offset.clone()).collect();
