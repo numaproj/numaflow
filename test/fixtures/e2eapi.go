@@ -63,7 +63,9 @@ func InvokeE2EAPI(format string, args ...interface{}) string {
 
 	log.Printf("> %s\n", resp.Status)
 	body := ""
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 	for s := bufio.NewScanner(resp.Body); s.Scan(); {
 		x := s.Text()
 		if strings.Contains(x, "ERROR") { // hacky way to return an error from an octet-stream

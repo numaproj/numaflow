@@ -251,7 +251,7 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 
 			// Only skip if we would be scaling up
 			if desired > current {
-				log.Infof("MonoVertex %s would scale up but is at rate limit, skip scaling up.", monoVtxName)
+				log.Infof("MonoVertex %s would scale up but is at rate limit (currentRate=%.2f, maxRate=%.2f), skip scaling up.", monoVtxName, currentRate, maxRate)
 				return nil
 			}
 		}
