@@ -270,7 +270,7 @@ mod tests {
 
         // Configure KafkaSource
         let config = numaflow_kafka::source::KafkaSourceConfig {
-            brokers: vec!["localhost:9092".to_string()],
+            brokers: vec![numaflow_kafka::source::test_utils::broker_addr()],
             topics: vec![topic_name.clone()],
             consumer_group: "test_consumer_group".to_string(),
             auth: None,

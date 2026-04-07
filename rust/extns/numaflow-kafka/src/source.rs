@@ -665,9 +665,14 @@ pub mod test_utils {
     use rdkafka::producer::{FutureProducer, FutureRecord};
     use std::time::Duration;
 
+    pub fn broker_addr() -> String {
+        std::env::var("KAFKA_BROKER").unwrap_or_else(|_| "localhost:9092".to_string())
+    }
+
     pub async fn setup_test_topic() -> (FutureProducer, String) {
+        let broker = broker_addr();
         let producer: FutureProducer = ClientConfig::new()
-            .set("bootstrap.servers", "localhost:9092")
+        .set("bootstrap.servers", &broker)
             .create()
             .expect("Failed to create producer");
 
@@ -678,7 +683,7 @@ pub mod test_utils {
 
         // Create topic if it doesn't exist
         let admin_client = ClientConfig::new()
-            .set("bootstrap.servers", "localhost:9092")
+            .set("bootstrap.servers", &broker)
             .create::<rdkafka::admin::AdminClient<_>>()
             .expect("Failed to create admin client");
 
@@ -724,7 +729,7 @@ mod tests {
         test_utils::produce_test_messages(&producer, &topic_name, 100).await;
 
         let config = KafkaSourceConfig {
-            brokers: vec!["localhost:9092".to_string()],
+            brokers: vec![test_utils::broker_addr()],
             topics: vec![topic_name.clone()],
             consumer_group: "test_consumer_group".to_string(),
             auth: None,
@@ -941,7 +946,7 @@ mod tests {
             .expect("Failed to send message");
 
         let config = KafkaSourceConfig {
-            brokers: vec!["localhost:9092".to_string()],
+            brokers: vec![test_utils::broker_addr()],
             topics: vec![topic_name.clone()],
             consumer_group: "test_consumer_group_headers".to_string(),
             auth: None,
