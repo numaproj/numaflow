@@ -66,7 +66,7 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
         // Hold the permit until the task completes
         let _permit = self.permit;
 
-        let message = self.msg_handle.message();
+        let message = self.msg_handle.message().clone();
 
         // Handle dropped messages
         if message.dropped() {
@@ -86,7 +86,7 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
         // Route and write to appropriate streams
         let write_results = self
             .orchestrator
-            .route_and_write_message(message, self.cln_token.clone())
+            .route_and_write_message(&message, self.cln_token.clone())
             .await;
 
         let n = write_results.len();
@@ -94,24 +94,28 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
         // Resolve all PAFs
         let resolved_offsets = self
             .orchestrator
-            .resolve_all_pafs(write_results, message, self.cln_token.clone())
+            .resolve_all_pafs(write_results, &message, self.cln_token.clone())
             .await;
 
-        // If any of the writes failed, NAK the message by dropping without mark_success
+        // If any of the writes failed, NAK the message
         if resolved_offsets.len() != n {
             warn!(
                 expected = n,
                 actual = resolved_offsets.len(),
                 "Some writes failed during PAF resolution, message will be NAK'd"
             );
-            // msg_handle is dropped here without mark_success, causing NAK
+            self.msg_handle.mark_failed(format!(
+                "PAF resolution failed: {}/{} writes succeeded",
+                resolved_offsets.len(),
+                n
+            ));
             return;
         }
 
         // Publish watermarks for successful writes
         self.orchestrator
             .clone()
-            .publish_watermarks_for_offsets(resolved_offsets, message)
+            .publish_watermarks_for_offsets(resolved_offsets, &message)
             .await;
 
         // All PAFs resolved successfully, mark as success to ACK

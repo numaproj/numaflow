@@ -139,8 +139,7 @@ impl MapBatchTask {
                 }
                 Err(e) => {
                     error!(err=?e, "failed to map message");
-                    // msg_handle will be dropped without mark_success, causing NAK
-                    // (any already-processed messages in the batch will also NAK via their shared handle)
+                    msg_handle.mark_failed(&e);
                     return Err(e);
                 }
             }

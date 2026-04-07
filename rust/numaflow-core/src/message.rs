@@ -14,6 +14,7 @@
 //! ## Macros
 //! - [mark_success!] - Marks a single [MessageHandle] as success (consumes the handle).
 //! - [mark_success_batch!] - Marks a batch of [MessageHandle]s as success (consumes the batch).
+//! - [mark_failed!] - Marks a single [MessageHandle] as failed with a reason (consumes the handle).
 
 /// Marks a single [MessageHandle] as success (consumes the handle).
 ///
@@ -25,7 +26,19 @@
 macro_rules! mark_success {
     ($msg:expr) => {{
         $msg.mark_success();
-        drop($msg);
+    }};
+}
+
+/// Marks a single [MessageHandle] as failed (consumes the handle), recording the failure reason.
+///
+/// # Example
+/// ```ignore
+/// mark_failed!(message_handle, error);
+/// ```
+#[macro_export]
+macro_rules! mark_failed {
+    ($msg:expr, $err:expr) => {{
+        $msg.mark_failed($err);
     }};
 }
 
@@ -49,8 +62,9 @@ use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
-use tracing::warn;
+use tracing::{error, warn};
 
 use crate::metadata::Metadata;
 use crate::shared::grpc::prost_timestamp_from_utc;
@@ -96,7 +110,8 @@ pub(crate) struct Message {
 /// AckHandle is used to send the ack/nak to the source. It uses a reference count to track
 /// the number of active references. When dropped, it sends NAK if ref_count != 0 (not all
 /// references were marked as success), or ACK if ref_count == 0 (all references were marked
-/// as success).
+/// as success). If [MessageHandle::mark_failed] was called, the failure reason is logged at
+/// NAK time.
 #[derive(Debug)]
 struct AckHandle {
     sender: Option<oneshot::Sender<ReadAck>>,
@@ -104,6 +119,8 @@ struct AckHandle {
     /// Incremented when cloned (via MessageHandle::clone or with_message), decremented when
     /// mark_success is called. On drop: NAK if ref_count != 0, ACK if ref_count == 0.
     ref_count: AtomicUsize,
+    /// Set by mark_failed to record why the message is being nacked.
+    failure_reason: Mutex<Option<String>>,
 }
 
 impl AckHandle {
@@ -111,6 +128,7 @@ impl AckHandle {
         Self {
             sender: Some(sender),
             ref_count: AtomicUsize::new(1),
+            failure_reason: Mutex::new(None),
         }
     }
 }
@@ -120,6 +138,9 @@ impl Drop for AckHandle {
         if let Some(sender) = self.sender.take() {
             // NAK if ref_count is not 0 (meaning not all references were marked as success)
             let ack = if self.ref_count.load(std::sync::atomic::Ordering::Relaxed) != 0 {
+                if let Some(reason) = self.failure_reason.lock().unwrap().as_deref() {
+                    error!(reason, "message nacked due to failure");
+                }
                 ReadAck::Nak
             } else {
                 ReadAck::Ack
@@ -167,13 +188,20 @@ impl MessageHandle {
         }
     }
 
-    /// Mark the message as successfully processed.
+    /// Mark the message as successfully processed (consumes the handle).
     /// This decrements the reference count. When all references are marked as success
     /// (ref_count reaches 0), the message will be ACK'd when the AckHandle is dropped.
-    pub(crate) fn mark_success(&self) {
+    pub(crate) fn mark_success(self) {
         self.ack_handle
             .ref_count
             .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Mark the message as failed (consumes the handle), recording the reason it will be nacked.
+    /// ref_count is not decremented, so the message will be NAK'd when the AckHandle is dropped.
+    /// The error is logged at NAK time.
+    pub(crate) fn mark_failed(self, reason: impl fmt::Display) {
+        *self.ack_handle.failure_reason.lock().unwrap() = Some(reason.to_string());
     }
 
     /// Creates a new MessageHandle with a different message but sharing this handle's ack tracking.
@@ -211,6 +239,7 @@ impl From<Message> for MessageHandle {
             ack_handle: Arc::new(AckHandle {
                 sender: None,
                 ref_count: AtomicUsize::new(0), // Already "success" state
+                failure_reason: Mutex::new(None),
             }),
         }
     }
@@ -647,9 +676,8 @@ mod tests {
         let (ack_tx, ack_rx) = oneshot::channel();
         let read_message = MessageHandle::new(message, ack_tx);
 
-        // Mark as success before dropping
+        // Mark as success (consumes the handle)
         read_message.mark_success();
-        drop(read_message);
 
         // Should receive ACK
         let result = ack_rx.await.unwrap();
@@ -666,13 +694,9 @@ mod tests {
         // Clone (simulating message split in map/transformer)
         let cloned = read_message.clone();
 
-        // Mark both as success
+        // Mark both as success (each call consumes the handle)
         read_message.mark_success();
         cloned.mark_success();
-
-        // Drop both
-        drop(read_message);
-        drop(cloned);
 
         // Should receive ACK since all were marked as success
         let result = ack_rx.await.unwrap();
@@ -687,14 +711,11 @@ mod tests {
         let read_message = MessageHandle::new(message, ack_tx);
 
         // Clone
-        let cloned = read_message.clone();
+        let _cloned = read_message.clone();
 
-        // Only mark the original as success, not the clone
+        // Only mark the original as success (consumes it), not the clone
         read_message.mark_success();
-
-        // Drop both
-        drop(read_message);
-        drop(cloned);
+        // cloned is dropped here implicitly, leaving ref_count > 0
 
         // Should receive NAK since not all were marked as success
         let result = ack_rx.await.unwrap();

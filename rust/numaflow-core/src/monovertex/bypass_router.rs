@@ -253,9 +253,16 @@ impl BypassRouterReceiver {
                 // Main processing loop
                 while let Some(batch) = chunk_stream.next().await {
                     // we are in shutting down mode, we will not be writing to any sink,
-                    // messages will be nack'ed when dropped without mark_success.
+                    // messages will be nack'ed.
                     if self.shutting_down_on_err {
-                        // batch is dropped here without mark_success, causing NAK
+                        for msg in batch {
+                            let handle = match msg {
+                                MessageToSink::Primary(h)
+                                | MessageToSink::Fallback(h)
+                                | MessageToSink::OnSuccess(h) => h,
+                            };
+                            handle.mark_failed(self.final_result.as_ref().unwrap_err());
+                        }
                         continue;
                     }
 
@@ -317,7 +324,9 @@ impl BypassRouterReceiver {
                         Err(e) => {
                             error!(?e, "Error writing to sink, initiating shutdown.");
                             cln_token.cancel();
-                            // read_messages will be dropped without mark_success, causing NAK
+                            for msg in read_messages {
+                                msg.mark_failed(&e);
+                            }
                             self.final_result = Err(e);
                             self.shutting_down_on_err = true;
                         }

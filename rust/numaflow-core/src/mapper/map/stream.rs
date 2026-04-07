@@ -135,15 +135,13 @@ impl MapStreamTask {
                 }
                 Some(Err(e)) => {
                     error!(?e, "failed to map message");
-                    // msg_handle will be dropped without mark_success, causing NAK
+                    self.msg_handle.mark_failed(&e);
                     let _ = self.shared_ctx.error_tx.send(e).await;
                     return;
                 }
                 None => {
-                    // Channel closed. If no results were ever sent (current_index == 0),
-                    // this means the UDF stream may have closed unexpectedly (e.g., panic or gRPC
-                    // stream error where the sender was dropped without delivering an error).
-                    // msg_handle will be dropped without mark_success, causing NAK automatically.
+                    // Channel closed — stream ended cleanly (e.g., UDF returned empty results or
+                    // finished after sending all results). Fall through to mark_success below.
                     break;
                 }
             }

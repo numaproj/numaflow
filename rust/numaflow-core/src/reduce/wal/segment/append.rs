@@ -151,7 +151,7 @@ impl SegmentWriteActor {
                     }
                     Err(e) => {
                         error!(?e, "Failed to write message to WAL");
-                        // read_message is dropped without ack, causing NAK
+                        read_message.mark_failed(&e);
                         Err(e)
                     }
                 }

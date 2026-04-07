@@ -79,7 +79,7 @@ impl MapUnaryTask {
             Ok(results) => results,
             Err(e) => {
                 error!(?e, offset = ?parent_info.offset, "failed to map message");
-                // msg_handle will be dropped without mark_success, causing NAK
+                self.msg_handle.mark_failed(&e);
                 let _ = self.shared_ctx.error_tx.send(e).await;
                 return;
             }

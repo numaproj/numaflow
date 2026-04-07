@@ -213,7 +213,9 @@ impl SinkWriter {
                 while let Some(read_batch) = chunk_stream.next().await {
                     // We are in shutting down mode, NAK all messages
                     if self.shutting_down_on_err {
-                        // read_batch is dropped without ack, causing NAK
+                        for msg in read_batch {
+                            msg.mark_failed(self.final_result.as_ref().unwrap_err());
+                        }
                         continue;
                     }
 
