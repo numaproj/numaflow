@@ -47,7 +47,7 @@ struct ISBWriteTask<C: NumaflowTypeConfig> {
     /// Permit to achieve structured concurrency by ensuring we do not exceed the concurrency limit
     /// and all the tasks are cleaned up when the component is shutting down.
     permit: OwnedSemaphorePermit,
-    read_message: MessageHandle,
+    msg_handle: MessageHandle,
     cln_token: CancellationToken,
 }
 
@@ -66,7 +66,7 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
         // Hold the permit until the task completes
         let _permit = self.permit;
 
-        let message = self.read_message.message();
+        let message = self.msg_handle.message();
 
         // Handle dropped messages
         if message.dropped() {
@@ -79,7 +79,7 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
                 ))
                 .inc();
             // Mark as success since dropped messages are intentionally dropped
-            mark_success!(self.read_message);
+            mark_success!(self.msg_handle);
             return;
         }
 
@@ -104,7 +104,7 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
                 actual = resolved_offsets.len(),
                 "Some writes failed during PAF resolution, message will be NAK'd"
             );
-            // read_message is dropped here without mark_success, causing NAK
+            // msg_handle is dropped here without mark_success, causing NAK
             return;
         }
 
@@ -115,7 +115,7 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
             .await;
 
         // All PAFs resolved successfully, mark as success to ACK
-        mark_success!(self.read_message);
+        mark_success!(self.msg_handle);
     }
 }
 
@@ -198,7 +198,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             let mut messages_stream = messages_stream;
 
-            while let Some(read_message) = messages_stream.next().await {
+            while let Some(msg_handle) = messages_stream.next().await {
                 // Acquire permit for structured concurrency
                 let permit = match Arc::clone(&self.sem).acquire_owned().await {
                     Ok(permit) => permit,
@@ -215,7 +215,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
                 ISBWriteTask {
                     orchestrator: self.clone(),
                     permit,
-                    read_message,
+                    msg_handle,
                     cln_token: cln_token.clone(),
                 }
                 .spawn();
@@ -595,9 +595,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
 mod tests {
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
-    use crate::message::{
-        AckHandle, IntOffset, Message, MessageHandle, MessageID, Offset, ReadAck,
-    };
+    use crate::message::{IntOffset, Message, MessageHandle, MessageID, Offset, ReadAck};
     use crate::pipeline::isb::jetstream::js_writer::JetStreamWriter;
     use crate::typ::WithoutRateLimiter;
     use async_nats::jetstream;
@@ -704,7 +702,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let read_message = MessageHandle::new(message, AckHandle::new(ack_tx));
+            let read_message = MessageHandle::new(message, ack_tx);
             ack_rxs.push(ack_rx);
             tx.send(read_message).await.unwrap();
         }
@@ -815,7 +813,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let read_message = MessageHandle::new(message, AckHandle::new(ack_tx));
+            let read_message = MessageHandle::new(message, ack_tx);
             ack_rxs.push(ack_rx);
             tx.send(read_message).await.unwrap();
         }
@@ -990,7 +988,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let read_message = MessageHandle::new(message, AckHandle::new(ack_tx));
+            let read_message = MessageHandle::new(message, ack_tx);
             ack_rxs.push(ack_rx);
             tx.send(read_message).await.unwrap();
         }
@@ -1054,7 +1052,7 @@ mod tests {
 mod simple_buffer_tests {
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
-    use crate::message::{AckHandle, IntOffset, MessageHandle, MessageID, ReadAck};
+    use crate::message::{IntOffset, MessageHandle, MessageID, ReadAck};
     use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
     use bytes::Bytes;
     use chrono::Utc;
@@ -1086,7 +1084,7 @@ mod simple_buffer_tests {
             metadata: None,
             is_late: false,
         };
-        (MessageHandle::new(message, AckHandle::new(ack_tx)), ack_rx)
+        (MessageHandle::new(message, ack_tx), ack_rx)
     }
 
     /// Helper to create ISBWriterOrchestrator with a single SimpleBuffer

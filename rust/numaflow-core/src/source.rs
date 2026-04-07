@@ -7,7 +7,7 @@
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
-use crate::message::{AckHandle, MessageHandle, ReadAck};
+use crate::message::{MessageHandle, ReadAck};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, SOURCE_PARTITION_NAME_LABEL, monovertex_metrics,
     mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
@@ -66,7 +66,7 @@ pub(crate) mod kafka;
 pub(crate) mod test_utils;
 
 use crate::transformer::Transformer;
-use crate::watermark::source::SourceWatermarkHandle;
+use crate::watermark::source::{SourceWatermarkEntry, SourceWatermarkHandle};
 
 const MAX_ACK_PENDING: usize = 10000;
 const ACK_RETRY_INTERVAL: u64 = 100;
@@ -526,15 +526,13 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         message.value.len(),
                     );
 
-                    let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
-                    let ack_handle = Arc::new(AckHandle::new(resp_ack_tx));
-
-                    // insert the offset and the ack one shot in the tracker.
+                    // insert the message (with offset) into the tracker.
                     self.tracker.insert(message).await?;
 
-                    // store the ack one shot in the batch to invoke ack later.
-                    ack_batch.push((message.offset.clone(), resp_ack_rx));
-                    ack_handles.push(ack_handle);
+                    let (ack_tx, ack_rx) = oneshot::channel();
+                    // store the ack receiver in the batch to invoke ack later.
+                    ack_batch.push((message.offset.clone(), ack_rx));
+                    ack_handles.push(MessageHandle::new(message.clone(), ack_tx));
                 }
 
                 // start a background task to invoke ack on the source for the offsets that are acked.
@@ -568,19 +566,21 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
                 // transform the batch if the transformer is present, this need not
                 // be streaming because transformation should be fast operation.
-                let mut messages = match self.transformer.as_mut() {
-                    None => messages,
+                // transform_batch accepts MessageHandles and returns MessageHandles with ack
+                // tracking preserved — flatmap outputs share the parent's ack handle.
+                let mut msg_handles = match self.transformer.as_mut() {
+                    None => ack_handles,
                     Some(transformer) => match transformer
-                        .transform_batch(messages, cln_token.clone())
+                        .transform_batch(ack_handles, cln_token.clone())
                         .await
                     {
-                        Ok(messages) => messages,
+                        Ok(handles) => handles,
                         Err(e) => {
                             error!(
                                 ?e,
                                 "Error while transforming messages, sending nack to the batch"
                             );
-                            // ack_handles will be dropped without mark_success, causing NAK
+                            // handles dropped without mark_success, causing NAK
                             result = Err(e);
                             break;
                         }
@@ -588,22 +588,23 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 };
 
                 if let Some(watermark_handle) = self.watermark_handle.as_mut() {
+                    let entries: Vec<SourceWatermarkEntry> =
+                        msg_handles.iter().map(SourceWatermarkEntry::from).collect();
                     watermark_handle
-                        .generate_and_publish_source_watermark(&messages)
+                        .generate_and_publish_source_watermark(&entries)
                         .await;
 
                     let watermark = watermark_handle.fetch_source_watermark().await;
-                    // compare with the event time of the message and set is_late
-                    for message in messages.iter_mut() {
-                        message.is_late = message.event_time < watermark;
+                    // set is_late on messages that arrived after the watermark
+                    for msg_handle in msg_handles.iter_mut() {
+                        if msg_handle.message().event_time < watermark {
+                            msg_handle.message_mut().is_late = true;
+                        }
                     }
                 }
 
                 // write the messages to downstream as MessageHandles.
-                // messages and ack_handles are parallel arrays.
-                for (message, ack_handle) in messages.into_iter().zip(ack_handles.into_iter()) {
-                    let read_message = MessageHandle::new_with_arc(message, ack_handle);
-
+                for read_message in msg_handles.into_iter() {
                     // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
                     // If not bypassed, it returns Some(read_message) for us to send downstream.
                     let read_message = if let Some(ref bypass_router) = bypass_router {

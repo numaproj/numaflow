@@ -20,7 +20,7 @@ use crate::error::Error;
 use crate::mark_success;
 #[cfg(test)]
 use crate::mark_success_batch;
-use crate::message::{AckHandle, IntOffset, Message, MessageHandle, MessageType, Offset, ReadAck};
+use crate::message::{IntOffset, Message, MessageHandle, MessageType, Offset, ReadAck};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
     jetstream_isb_metrics_labels, pipeline_metric_labels, pipeline_metrics,
@@ -499,11 +499,11 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             Self::publish_read_metrics(&self.metric_labels, &message);
 
             let (ack_tx, ack_rx) = oneshot::channel();
-            let ack_handle = AckHandle::new(ack_tx);
+            let read_message = MessageHandle::new(message, ack_tx);
 
             // Start message tracking and WIP loop
             self.start_message_tracking(
-                &message,
+                read_message.message(),
                 permits.split(1).expect("Failed to split permit"),
                 cancel.clone(),
                 processing_start,
@@ -511,8 +511,6 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             )
             .await?;
 
-            // Create MessageHandle and send to channel
-            let read_message = MessageHandle::new(message, ack_handle);
             if tx.send(read_message).await.is_err() {
                 break;
             }

@@ -44,7 +44,7 @@ pub(in crate::mapper) struct StreamSenderMapState {
 pub(in crate::mapper) struct MapStreamTask {
     pub mapper: UserDefinedStreamMap,
     pub permit: OwnedSemaphorePermit,
-    pub read_message: MessageHandle,
+    pub msg_handle: MessageHandle,
     pub shared_ctx: Arc<SharedMapTaskContext>,
 }
 
@@ -64,9 +64,9 @@ impl MapStreamTask {
 
         // Store parent message info before sending to UDF
         // parent_info contains offset, so we don't need to clone it separately
-        let mut parent_info: ParentMessageInfo = self.read_message.message().into();
+        let mut parent_info: ParentMessageInfo = self.msg_handle.message().into();
 
-        let request: MapRequest = self.read_message.message().clone().into();
+        let request: MapRequest = self.msg_handle.message().clone().into();
         update_udf_read_metric(self.shared_ctx.is_mono_vertex);
 
         // Call the UDF and get receiver for raw results
@@ -106,16 +106,16 @@ impl MapStreamTask {
                             .await
                             .expect("failed to update tracker");
 
-                        // Downstream messages are independent - they use a no-op AckHandle.
-                        // The original read_message is ACK'd via mark_success! below.
-                        let read_msg: MessageHandle = mapped_message.into();
+                        // Each downstream handle shares the original ack tracking — ACK is
+                        // deferred until all mapped messages are written to ISB/sink.
+                        let msg_handle = self.msg_handle.with_message(mapped_message);
 
                         // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
-                        // If not bypassed, it returns Some(read_msg) for us to send downstream.
-                        let read_msg =
+                        // If not bypassed, it returns Some(msg_handle) for us to send downstream.
+                        let msg_handle =
                             if let Some(ref bypass_router) = self.shared_ctx.bypass_router {
                                 match bypass_router
-                                    .try_bypass(read_msg)
+                                    .try_bypass(msg_handle)
                                     .await
                                     .expect("failed to send message to bypass channel")
                                 {
@@ -123,19 +123,19 @@ impl MapStreamTask {
                                     None => continue, // Message was bypassed, move to next
                                 }
                             } else {
-                                read_msg
+                                msg_handle
                             };
 
                         self.shared_ctx
                             .output_tx
-                            .send(read_msg)
+                            .send(msg_handle)
                             .await
                             .expect("failed to send response");
                     }
                 }
                 Some(Err(e)) => {
                     error!(?e, "failed to map message");
-                    // read_message will be dropped without mark_success, causing NAK
+                    // msg_handle will be dropped without mark_success, causing NAK
                     let _ = self.shared_ctx.error_tx.send(e).await;
                     return;
                 }
@@ -143,15 +143,14 @@ impl MapStreamTask {
                     // Channel closed. If no results were ever sent (current_index == 0),
                     // this means the UDF stream may have closed unexpectedly (e.g., panic or gRPC
                     // stream error where the sender was dropped without delivering an error).
-                    // read_message will be dropped without mark_success, causing NAK automatically.
+                    // msg_handle will be dropped without mark_success, causing NAK automatically.
                     break;
                 }
             }
         }
 
-        // Mark the original read message as success (decrement its ref_count).
-        // The message will only be ACK'd when all downstream messages also call mark_success().
-        mark_success!(self.read_message);
+        // Decrement the original ref_count now that we've accounted for all downstream messages.
+        mark_success!(self.msg_handle);
     }
 }
 

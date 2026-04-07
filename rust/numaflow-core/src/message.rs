@@ -50,6 +50,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
+use tracing::warn;
 
 use crate::metadata::Metadata;
 use crate::shared::grpc::prost_timestamp_from_utc;
@@ -97,19 +98,18 @@ pub(crate) struct Message {
 /// references were marked as success), or ACK if ref_count == 0 (all references were marked
 /// as success).
 #[derive(Debug)]
-pub(crate) struct AckHandle {
-    pub(crate) ack_handle: Option<oneshot::Sender<ReadAck>>,
+struct AckHandle {
+    sender: Option<oneshot::Sender<ReadAck>>,
     /// Reference count to track active references. Starts at 1 when created.
-    /// Incremented when cloned (via MessageHandle::clone), decremented when mark_success is called.
-    /// On drop: NAK if ref_count != 0, ACK if ref_count == 0.
-    pub(crate) ref_count: AtomicUsize,
+    /// Incremented when cloned (via MessageHandle::clone or with_message), decremented when
+    /// mark_success is called. On drop: NAK if ref_count != 0, ACK if ref_count == 0.
+    ref_count: AtomicUsize,
 }
 
 impl AckHandle {
-    /// create a new AckHandle for a message.
-    pub(crate) fn new(ack_handle: oneshot::Sender<ReadAck>) -> Self {
+    fn new(sender: oneshot::Sender<ReadAck>) -> Self {
         Self {
-            ack_handle: Some(ack_handle),
+            sender: Some(sender),
             ref_count: AtomicUsize::new(1),
         }
     }
@@ -117,12 +117,17 @@ impl AckHandle {
 
 impl Drop for AckHandle {
     fn drop(&mut self) {
-        if let Some(ack_handle) = self.ack_handle.take() {
+        if let Some(sender) = self.sender.take() {
             // NAK if ref_count is not 0 (meaning not all references were marked as success)
-            if self.ref_count.load(std::sync::atomic::Ordering::SeqCst) != 0 {
-                let _ = ack_handle.send(ReadAck::Nak);
+            let ack = if self.ref_count.load(std::sync::atomic::Ordering::Relaxed) != 0 {
+                ReadAck::Nak
             } else {
-                let _ = ack_handle.send(ReadAck::Ack);
+                ReadAck::Ack
+            };
+            if sender.send(ack).is_err() {
+                warn!(
+                    "ack/nak receiver exited before receiving ack/nak; the listener task may have exited prematurely"
+                );
             }
         }
     }
@@ -137,14 +142,14 @@ impl Drop for AckHandle {
 #[derive(Debug)]
 pub(crate) struct MessageHandle {
     pub(crate) message: Message,
-    pub(crate) ack_handle: Arc<AckHandle>,
+    ack_handle: Arc<AckHandle>,
 }
 
 impl Clone for MessageHandle {
     fn clone(&self) -> Self {
         self.ack_handle
             .ref_count
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Self {
             message: self.message.clone(),
             ack_handle: Arc::clone(&self.ack_handle),
@@ -153,20 +158,12 @@ impl Clone for MessageHandle {
 }
 
 impl MessageHandle {
-    /// Creates a new MessageHandle.
-    pub(crate) fn new(message: Message, ack_handle: AckHandle) -> Self {
+    /// Creates a new MessageHandle with the given ack sender.
+    /// The caller owns the corresponding receiver and awaits it to know when to ack/nak upstream.
+    pub(crate) fn new(message: Message, ack_tx: oneshot::Sender<ReadAck>) -> Self {
         Self {
             message,
-            ack_handle: Arc::new(ack_handle),
-        }
-    }
-
-    /// Creates a new MessageHandle from an existing Arc<AckHandle>.
-    /// This is used when the AckHandle has already been wrapped in Arc.
-    pub(crate) fn new_with_arc(message: Message, ack_handle: Arc<AckHandle>) -> Self {
-        Self {
-            message,
-            ack_handle,
+            ack_handle: Arc::new(AckHandle::new(ack_tx)),
         }
     }
 
@@ -176,12 +173,30 @@ impl MessageHandle {
     pub(crate) fn mark_success(&self) {
         self.ack_handle
             .ref_count
-            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Creates a new MessageHandle with a different message but sharing this handle's ack tracking.
+    /// The ref_count is incremented so both handles must be marked as success for ACK.
+    /// Use this when fanning out one input message into multiple downstream messages (e.g., map).
+    pub(crate) fn with_message(&self, message: Message) -> Self {
+        self.ack_handle
+            .ref_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Self {
+            message,
+            ack_handle: Arc::clone(&self.ack_handle),
+        }
     }
 
     /// Get a reference to the inner message.
     pub(crate) fn message(&self) -> &Message {
         &self.message
+    }
+
+    /// Get a mutable reference to the inner message.
+    pub(crate) fn message_mut(&mut self) -> &mut Message {
+        &mut self.message
     }
 }
 
@@ -194,7 +209,7 @@ impl From<Message> for MessageHandle {
         Self {
             message,
             ack_handle: Arc::new(AckHandle {
-                ack_handle: None,
+                sender: None,
                 ref_count: AtomicUsize::new(0), // Already "success" state
             }),
         }
@@ -613,10 +628,9 @@ mod tests {
     #[tokio::test]
     async fn test_read_message_nack_by_default() {
         // When MessageHandle is dropped without calling mark_success, it should NAK
-        let (ack_tx, ack_rx) = oneshot::channel();
         let message = Message::default();
-        let ack_handle = AckHandle::new(ack_tx);
-        let read_message = MessageHandle::new(message, ack_handle);
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let read_message = MessageHandle::new(message, ack_tx);
 
         // Drop the MessageHandle without calling mark_success
         drop(read_message);
@@ -629,10 +643,9 @@ mod tests {
     #[tokio::test]
     async fn test_read_message_ack_on_mark_success() {
         // When mark_success is called, it should ACK
-        let (ack_tx, ack_rx) = oneshot::channel();
         let message = Message::default();
-        let ack_handle = AckHandle::new(ack_tx);
-        let read_message = MessageHandle::new(message, ack_handle);
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let read_message = MessageHandle::new(message, ack_tx);
 
         // Mark as success before dropping
         read_message.mark_success();
@@ -646,10 +659,9 @@ mod tests {
     #[tokio::test]
     async fn test_read_message_clone_all_success() {
         // When cloning, all clones must be marked as success for ACK
-        let (ack_tx, ack_rx) = oneshot::channel();
         let message = Message::default();
-        let ack_handle = AckHandle::new(ack_tx);
-        let read_message = MessageHandle::new(message, ack_handle);
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let read_message = MessageHandle::new(message, ack_tx);
 
         // Clone (simulating message split in map/transformer)
         let cloned = read_message.clone();
@@ -670,10 +682,9 @@ mod tests {
     #[tokio::test]
     async fn test_read_message_clone_partial_success() {
         // When only some clones are marked as success, it should NAK
-        let (ack_tx, ack_rx) = oneshot::channel();
         let message = Message::default();
-        let ack_handle = AckHandle::new(ack_tx);
-        let read_message = MessageHandle::new(message, ack_handle);
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let read_message = MessageHandle::new(message, ack_tx);
 
         // Clone
         let cloned = read_message.clone();

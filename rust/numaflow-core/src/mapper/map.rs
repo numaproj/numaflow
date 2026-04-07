@@ -263,7 +263,7 @@ impl MapHandle {
                                 MapUnaryTask {
                                     mapper: mapper.clone(),
                                     permit,
-                                    read_message: read_msg,
+                                    msg_handle: read_msg,
                                     shared_ctx: Arc::clone(&ctx.shared_ctx),
                                 }
                                 .spawn();
@@ -272,7 +272,7 @@ impl MapHandle {
                                 MapStreamTask {
                                     mapper: mapper.clone(),
                                     permit,
-                                    read_message: read_msg,
+                                    msg_handle: read_msg,
                                     shared_ctx: Arc::clone(&ctx.shared_ctx),
                                 }
                                 .spawn();
@@ -560,7 +560,7 @@ async fn create_response_stream(
 mod tests {
     use super::*;
     use crate::mapper::test_utils::MapperTestHandle;
-    use crate::message::{AckHandle, ReadAck};
+    use crate::message::ReadAck;
     use crate::{
         Result,
         message::{MessageHandle, MessageID, Offset, StringOffset},
@@ -636,7 +636,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let read_message: MessageHandle = message.into();
+        let msg_handle: MessageHandle = message.into();
 
         let (output_tx, mut output_rx) = mpsc::channel(10);
 
@@ -662,7 +662,7 @@ mod tests {
         MapUnaryTask {
             mapper: unary_mapper,
             permit,
-            read_message,
+            msg_handle,
             shared_ctx,
         }
         .spawn();
@@ -973,7 +973,6 @@ mod tests {
         let mut ack_rxs = vec![];
         // send 10 requests to the mapper
         for i in 0..10 {
-            let (ack_tx, ack_rx) = oneshot::channel();
             let message = Message {
                 typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
@@ -989,7 +988,8 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let read_message = MessageHandle::new(message, AckHandle::new(ack_tx));
+            let (ack_tx, ack_rx) = oneshot::channel();
+            let read_message = MessageHandle::new(message, ack_tx);
             input_tx.send(read_message).await.unwrap();
             ack_rxs.push(ack_rx);
         }
@@ -1068,45 +1068,44 @@ mod tests {
         .await?;
 
         let (ack_tx1, ack_rx1) = oneshot::channel();
+        let msg1 = MessageHandle::new(
+            Message {
+                typ: Default::default(),
+                keys: Arc::from(vec!["first".into()]),
+                tags: None,
+                value: "hello".into(),
+                offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+                event_time: chrono::Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: "0".to_string().into(),
+                    index: 0,
+                },
+                ..Default::default()
+            },
+            ack_tx1,
+        );
         let (ack_tx2, ack_rx2) = oneshot::channel();
-        let read_messages = vec![
-            MessageHandle::new(
-                Message {
-                    typ: Default::default(),
-                    keys: Arc::from(vec!["first".into()]),
-                    tags: None,
-                    value: "hello".into(),
-                    offset: Offset::String(StringOffset::new("0".to_string(), 0)),
-                    event_time: chrono::Utc::now(),
-                    watermark: None,
-                    id: MessageID {
-                        vertex_name: "vertex_name".to_string().into(),
-                        offset: "0".to_string().into(),
-                        index: 0,
-                    },
-                    ..Default::default()
+        let msg2 = MessageHandle::new(
+            Message {
+                typ: Default::default(),
+                keys: Arc::from(vec!["second".into()]),
+                tags: None,
+                value: "world".into(),
+                offset: Offset::String(StringOffset::new("1".to_string(), 1)),
+                event_time: chrono::Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: "1".to_string().into(),
+                    index: 1,
                 },
-                AckHandle::new(ack_tx1),
-            ),
-            MessageHandle::new(
-                Message {
-                    typ: Default::default(),
-                    keys: Arc::from(vec!["second".into()]),
-                    tags: None,
-                    value: "world".into(),
-                    offset: Offset::String(StringOffset::new("1".to_string(), 1)),
-                    event_time: chrono::Utc::now(),
-                    watermark: None,
-                    id: MessageID {
-                        vertex_name: "vertex_name".to_string().into(),
-                        offset: "1".to_string().into(),
-                        index: 1,
-                    },
-                    ..Default::default()
-                },
-                AckHandle::new(ack_tx2),
-            ),
-        ];
+                ..Default::default()
+            },
+            ack_tx2,
+        );
+        let read_messages = vec![msg1, msg2];
 
         let (input_tx, input_rx) = mpsc::channel(10);
         let input_stream = ReceiverStream::new(input_rx);
@@ -1198,7 +1197,6 @@ mod tests {
         let mut ack_rxs = vec![];
         // send 10 requests to the mapper
         for i in 0..10 {
-            let (ack_tx, ack_rx) = oneshot::channel();
             let message = Message {
                 typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
@@ -1214,7 +1212,8 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let read_message = MessageHandle::new(message, AckHandle::new(ack_tx));
+            let (ack_tx, ack_rx) = oneshot::channel();
+            let read_message = MessageHandle::new(message, ack_tx);
             ack_rxs.push(ack_rx);
             input_tx.send(read_message).await.unwrap();
         }
@@ -1243,7 +1242,7 @@ mod tests {
         Ok(())
     }
 
-    fn create_default_msg(i: i32, ack_tx: oneshot::Sender<ReadAck>) -> MessageHandle {
+    fn create_default_msg(i: i32) -> (MessageHandle, oneshot::Receiver<ReadAck>) {
         let message = Message {
             typ: Default::default(),
             keys: Arc::from(vec![format!("key_{}", i)]),
@@ -1259,7 +1258,8 @@ mod tests {
             },
             ..Default::default()
         };
-        MessageHandle::new(message, AckHandle::new(ack_tx))
+        let (ack_tx, ack_rx) = oneshot::channel();
+        (MessageHandle::new(message, ack_tx), ack_rx)
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1292,8 +1292,7 @@ mod tests {
         let mut ack_rxs = vec![];
         // send 10 requests to the mapper
         for i in 0..10 {
-            let (ack_tx, ack_rx) = oneshot::channel();
-            let message = create_default_msg(i, ack_tx);
+            let (message, ack_rx) = create_default_msg(i);
             input_tx.send(message).await.unwrap();
             ack_rxs.push(ack_rx);
         }
@@ -1334,45 +1333,44 @@ mod tests {
         .await;
 
         let (ack_tx1, ack_rx1) = oneshot::channel();
+        let msg1 = MessageHandle::new(
+            Message {
+                typ: Default::default(),
+                keys: Arc::from(vec!["first".into()]),
+                tags: None,
+                value: "hello".into(),
+                offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+                event_time: chrono::Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: "0".to_string().into(),
+                    index: 0,
+                },
+                ..Default::default()
+            },
+            ack_tx1,
+        );
         let (ack_tx2, ack_rx2) = oneshot::channel();
-        let messages = vec![
-            MessageHandle::new(
-                Message {
-                    typ: Default::default(),
-                    keys: Arc::from(vec!["first".into()]),
-                    tags: None,
-                    value: "hello".into(),
-                    offset: Offset::String(StringOffset::new("0".to_string(), 0)),
-                    event_time: chrono::Utc::now(),
-                    watermark: None,
-                    id: MessageID {
-                        vertex_name: "vertex_name".to_string().into(),
-                        offset: "0".to_string().into(),
-                        index: 0,
-                    },
-                    ..Default::default()
+        let msg2 = MessageHandle::new(
+            Message {
+                typ: Default::default(),
+                keys: Arc::from(vec!["second".into()]),
+                tags: None,
+                value: "world".into(),
+                offset: Offset::String(StringOffset::new("1".to_string(), 1)),
+                event_time: chrono::Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: "1".to_string().into(),
+                    index: 1,
                 },
-                AckHandle::new(ack_tx1),
-            ),
-            MessageHandle::new(
-                Message {
-                    typ: Default::default(),
-                    keys: Arc::from(vec!["second".into()]),
-                    tags: None,
-                    value: "world".into(),
-                    offset: Offset::String(StringOffset::new("1".to_string(), 1)),
-                    event_time: chrono::Utc::now(),
-                    watermark: None,
-                    id: MessageID {
-                        vertex_name: "vertex_name".to_string().into(),
-                        offset: "1".to_string().into(),
-                        index: 1,
-                    },
-                    ..Default::default()
-                },
-                AckHandle::new(ack_tx2),
-            ),
-        ];
+                ..Default::default()
+            },
+            ack_tx2,
+        );
+        let messages = vec![msg1, msg2];
 
         let (input_tx, input_rx) = mpsc::channel(10);
         let input_stream = ReceiverStream::new(input_rx);
@@ -1430,8 +1428,7 @@ mod tests {
         let mut ack_rxs = vec![];
         // send 10 requests to the mapper
         for i in 0..10 {
-            let (ack_tx, ack_rx) = oneshot::channel();
-            let message = create_default_msg(i, ack_tx);
+            let (message, ack_rx) = create_default_msg(i);
             ack_rxs.push(ack_rx);
             input_tx
                 .send(message)

@@ -727,9 +727,7 @@ impl From<sink_response::Result> for ResponseFromSink {
 mod tests {
     use super::*;
     use crate::config::pipeline::NatsStoreConfig;
-    use crate::message::{
-        AckHandle, IntOffset, Message, MessageHandle, MessageID, Offset, ReadAck,
-    };
+    use crate::message::{IntOffset, Message, MessageHandle, MessageID, Offset, ReadAck};
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::serve::nats::NatsServingStore;
     use crate::tracker::Tracker;
@@ -836,7 +834,7 @@ mod tests {
                     },
                     ..Default::default()
                 };
-                MessageHandle::new(message, AckHandle::new(ack_tx))
+                MessageHandle::new(message, ack_tx)
             })
             .collect();
 
@@ -915,7 +913,7 @@ mod tests {
                     },
                     ..Default::default()
                 };
-                MessageHandle::new(message, AckHandle::new(ack_tx))
+                MessageHandle::new(message, ack_tx)
             })
             .collect();
 
@@ -1004,7 +1002,7 @@ mod tests {
                     },
                     ..Default::default()
                 };
-                MessageHandle::new(message, AckHandle::new(ack_tx))
+                MessageHandle::new(message, ack_tx)
             })
             .collect();
 
@@ -1086,7 +1084,7 @@ mod tests {
                     },
                     ..Default::default()
                 };
-                MessageHandle::new(message, AckHandle::new(ack_tx))
+                MessageHandle::new(message, ack_tx)
             })
             .collect();
 
@@ -1200,7 +1198,7 @@ mod tests {
                     headers: Arc::new(headers),
                     ..Default::default()
                 };
-                MessageHandle::new(message, AckHandle::new(ack_tx))
+                MessageHandle::new(message, ack_tx)
             })
             .collect();
 

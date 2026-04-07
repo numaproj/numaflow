@@ -5,7 +5,6 @@ use super::{
 use crate::config::is_mono_vertex;
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
-use crate::mark_success_batch;
 use crate::message::{Message, MessageHandle};
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::tracker::Tracker;
@@ -77,7 +76,10 @@ impl MapBatchTask {
         // Call the UDF and get results directly
         let results = self.mapper.batch(requests, self.cln_token).await;
 
-        for (result, parent_info) in results.into_iter().zip(parent_infos.into_iter()) {
+        for (result, (msg_handle, parent_info)) in results
+            .into_iter()
+            .zip(self.read_batch.into_iter().zip(parent_infos.into_iter()))
+        {
             match result {
                 Ok(results) => {
                     // Convert raw results to Messages using parent info
@@ -104,15 +106,17 @@ impl MapBatchTask {
                         )
                         .await?;
 
-                    // Downstream messages are independent - they use a no-op AckHandle.
-                    // The original read_batch is ACK'd via mark_success_batch! below.
                     for mapped_message in mapped_messages {
-                        let read_msg: MessageHandle = mapped_message.into();
+                        // Each downstream handle shares the original ack tracking — ACK is
+                        // deferred until all mapped messages are written to ISB/sink.
+                        let downstream_handle = msg_handle.with_message(mapped_message);
+
                         // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
-                        // If not bypassed, it returns Some(read_msg) for us to send downstream.
-                        let read_msg = if let Some(ref bypass_router) = self.bypass_router {
+                        // If not bypassed, it returns Some(downstream_handle) for us to send downstream.
+                        let downstream_handle = if let Some(ref bypass_router) = self.bypass_router
+                        {
                             match bypass_router
-                                .try_bypass(read_msg)
+                                .try_bypass(downstream_handle)
                                 .await
                                 .expect("failed to send message to bypass channel")
                             {
@@ -120,25 +124,27 @@ impl MapBatchTask {
                                 None => continue, // Message was bypassed, move to next
                             }
                         } else {
-                            read_msg
+                            downstream_handle
                         };
 
                         self.output_tx
-                            .send(read_msg)
+                            .send(downstream_handle)
                             .await
                             .expect("failed to send response");
                     }
+
+                    // Decrement the original ref_count for this message now that all downstream
+                    // handles have been created and sent.
+                    msg_handle.mark_success();
                 }
                 Err(e) => {
                     error!(err=?e, "failed to map message");
-                    // read_batch will be dropped without mark_success, causing NAK
+                    // msg_handle will be dropped without mark_success, causing NAK
+                    // (any already-processed messages in the batch will also NAK via their shared handle)
                     return Err(e);
                 }
             }
         }
-
-        // we have successfully processed the batch, mark the batch as success.
-        mark_success_batch!(self.read_batch);
 
         Ok(())
     }

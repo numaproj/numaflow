@@ -357,7 +357,7 @@ impl BypassRouterReceiver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{AckHandle, IntOffset, MessageID, Offset, ReadAck};
+    use crate::message::{IntOffset, MessageID, Offset, ReadAck};
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
     use crate::tracker::Tracker;
@@ -399,9 +399,9 @@ mod tests {
         id: i32,
         tags: Option<Vec<String>>,
     ) -> (MessageHandle, oneshot::Receiver<ReadAck>) {
-        let (ack_tx, ack_rx) = oneshot::channel();
         let msg = create_test_message(id, tags);
-        (MessageHandle::new(msg, AckHandle::new(ack_tx)), ack_rx)
+        let (ack_tx, ack_rx) = oneshot::channel();
+        (MessageHandle::new(msg, ack_tx), ack_rx)
     }
 
     // ==================== MessageToSink Tests ====================
@@ -511,8 +511,6 @@ mod tests {
         let mut ack_rxs = vec![];
         let messages: Vec<MessageHandle> = (0..10)
             .map(|i| {
-                let (ack_tx, ack_rx) = oneshot::channel();
-                ack_rxs.push(ack_rx);
                 let message = Message {
                     typ: Default::default(),
                     keys: Arc::from(vec![format!("key_{}", i)]),
@@ -528,7 +526,10 @@ mod tests {
                     },
                     ..Default::default()
                 };
-                MessageHandle::new(message, AckHandle::new(ack_tx))
+                let (ack_tx, ack_rx) = oneshot::channel();
+                let handle = MessageHandle::new(message, ack_tx);
+                ack_rxs.push(ack_rx);
+                handle
             })
             .collect();
 
