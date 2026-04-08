@@ -715,7 +715,9 @@ mod tests {
 
         // Only mark the original as success (consumes it), not the clone
         read_message.mark_success();
-        // cloned is dropped here implicitly, leaving ref_count > 0
+        // Explicitly drop the clone before awaiting — _cloned must be dropped to
+        // trigger the NAK send, otherwise awaiting the channel would deadlock.
+        drop(_cloned);
 
         // Should receive NAK since not all were marked as success
         let result = ack_rx.await.unwrap();
