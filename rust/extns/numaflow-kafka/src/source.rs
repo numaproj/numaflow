@@ -133,7 +133,7 @@ struct KafkaActor {
     topic_partition_offsets: HashMap<String, u32>,
     /// Total number of partitions across all topics (sum).
     total_partitions: u32,
-    /// The maximum number of partitions per topic.
+    /// Timeout used for calls to broker.
     session_timeout: Duration,
 }
 
