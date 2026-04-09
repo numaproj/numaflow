@@ -30,7 +30,7 @@ spec:
           brokers:
             - my-broker1:19700
             - my-broker2:19700
-          topic: my-topic
+          topic: my-topic # Use commas to specify multiple topics.
           consumerGroup: my-consumer-group
           config: | # Optional.
             consumer:
