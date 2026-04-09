@@ -133,6 +133,8 @@ struct KafkaActor {
     topic_partition_offsets: HashMap<String, u32>,
     /// Total number of partitions across all topics (sum).
     total_partitions: u32,
+    /// The maximum number of partitions per topic.
+    session_timeout: Duration,
 }
 
 impl KafkaActor {
@@ -207,6 +209,10 @@ impl KafkaActor {
             cancel_token,
             topic_partition_offsets,
             total_partitions,
+            session_timeout: client_config
+                .get("session.timeout.ms")
+                .and_then(|v| v.parse().ok())
+                .map_or(Duration::from_millis(45_000), Duration::from_millis),
         };
 
         actor
@@ -467,7 +473,7 @@ impl KafkaActor {
     /// The total pending is calculated as the sum of (high watermark - committed offset)
     /// for each partition across all topics.
     async fn pending_messages(&mut self) -> Result<Option<usize>> {
-        let timeout = Duration::from_secs(5);
+        let timeout = self.session_timeout;
         let mut handles = Vec::new();
         for topic in &self.topics {
             let consumer = Arc::clone(&self.consumer);
