@@ -200,6 +200,11 @@ impl KafkaActor {
         let (topic_partition_offsets, total_partitions) =
             Self::compute_topic_partition_offsets(&consumer, &config.topics)?;
 
+        let session_timeout = client_config
+            .get("session.timeout.ms")
+            .and_then(|v| v.parse().ok())
+            .map_or(Duration::from_millis(45_000), Duration::from_millis);
+
         let mut actor = KafkaActor {
             consumer,
             read_timeout,
@@ -209,10 +214,7 @@ impl KafkaActor {
             cancel_token,
             topic_partition_offsets,
             total_partitions,
-            session_timeout: client_config
-                .get("session.timeout.ms")
-                .and_then(|v| v.parse().ok())
-                .map_or(Duration::from_millis(45_000), Duration::from_millis),
+            session_timeout,
         };
 
         actor
