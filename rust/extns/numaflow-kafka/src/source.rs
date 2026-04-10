@@ -370,8 +370,14 @@ impl KafkaActor {
                     let timestamp = message.timestamp().to_millis();
                     let topic = message.topic().to_string();
                     let partition = message.partition();
-                    let topic_offset = self.topic_partition_offsets.get(&topic).copied().unwrap_or(0);
-                    let global_partition_id = (topic_offset + partition as u32) as u16;
+                    let topic_offset = self.topic_partition_offsets.get(&topic).copied().unwrap_or_else(|| {
+                        warn!(topic = topic, "Topic not found in partition offset map, defaulting to 0");
+                        0
+                    });
+                    let partition_u32 = u32::try_from(partition)
+                        .expect("Kafka partition id should not be negative");
+                    let global_partition_id = u16::try_from(topic_offset + partition_u32)
+                        .expect("Global partition id overflows u16");
 
                     let message = KafkaMessage {
                         topic,
@@ -600,8 +606,17 @@ impl KafkaActor {
                             .topic_partition_offsets
                             .get(elem.topic())
                             .copied()
-                            .unwrap_or(0);
-                        (topic_offset + elem.partition() as u32) as u16
+                            .unwrap_or_else(|| {
+                                warn!(
+                                    topic = elem.topic(),
+                                    "Topic not found in partition offset map, defaulting to 0"
+                                );
+                                0
+                            });
+                        let partition = u32::try_from(elem.partition())
+                            .expect("Kafka partition id should not be negative");
+                        u16::try_from(topic_offset + partition)
+                            .expect("Global partition id overflows u16")
                     })
                     .collect::<Vec<u16>>()
             })?;
