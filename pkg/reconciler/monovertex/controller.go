@@ -307,6 +307,9 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 		monoVtx.Status.Replicas = uint32(desiredReplicas)
 		monoVtx.Status.LastScaledAt = metav1.Time{Time: time.Now()}
 	}
+	if monoVtx.Status.LastScaledAt.IsZero() {
+		monoVtx.Status.LastScaledAt = monoVtx.CreationTimestamp
+	}
 	if monoVtx.Status.Selector == "" {
 		selector, _ := labels.Parse(dfv1.KeyComponent + "=" + dfv1.ComponentMonoVertex + "," + dfv1.KeyMonoVertexName + "=" + monoVtx.Name)
 		monoVtx.Status.Selector = selector.String()
