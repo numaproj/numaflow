@@ -988,7 +988,17 @@ mod tests {
         store.put("processor1", wmb_bytes(200, 2, 0)).await.unwrap();
 
         // Give the OT watcher time to process the WMB
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        wait_for(
+            &manager.processors,
+            Duration::from_millis(500),
+            "processor1 to process the WMB",
+            |map| {
+                map.get(&Bytes::from("processor1"))
+                    .and_then(|p| p.timelines.get(&0))
+                    .is_some_and(|t| t.entries().len() > 1)
+            },
+        )
+        .await;
 
         // The timeline should be updated but status should remain Deleted
         let processors = manager.processors.read().expect("failed to acquire lock");
