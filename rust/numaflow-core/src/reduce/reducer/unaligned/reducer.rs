@@ -19,7 +19,6 @@ use numaflow_pb::clients::sessionreduce::SessionReduceRequest;
 use numaflow_pb::objects::wal::GcEvent;
 use prost::Message as ProstMessage;
 use std::collections::HashMap;
-use std::marker::PhantomData;
 use std::ops::Sub;
 use std::sync::Arc;
 use std::time::Duration;
@@ -63,7 +62,6 @@ struct ReduceTask<C: NumaflowTypeConfig> {
     /// For session: stores the window that got closed for that keys.
     /// For accumulator: stores a window with max end time (same start and end time)
     tracked_windows: HashMap<Vec<String>, Window>,
-    _marker: PhantomData<C>,
 }
 
 impl<C: NumaflowTypeConfig> ReduceTask<C> {
@@ -84,7 +82,6 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
             window_manager,
             batch_timeout,
             tracked_windows: HashMap::new(),
-            _marker: PhantomData,
         }
     }
 
@@ -393,7 +390,6 @@ struct UnalignedReduceActor<C: NumaflowTypeConfig> {
     window_manager: UnalignedWindowManager,
     /// Cancellation token to signal tasks to stop
     cln_token: CancellationToken,
-    _marker: PhantomData<C>,
 }
 
 impl<C: NumaflowTypeConfig> UnalignedReduceActor<C> {
@@ -433,7 +429,6 @@ impl<C: NumaflowTypeConfig> UnalignedReduceActor<C> {
             gc_wal_tx,
             window_manager,
             cln_token,
-            _marker: PhantomData,
         }
     }
 
@@ -525,7 +520,6 @@ pub(crate) struct UnalignedReducer<C: NumaflowTypeConfig> {
     keyed: bool,
     /// Graceful shutdown timeout duration.
     graceful_timeout: Duration,
-    _marker: PhantomData<C>,
 }
 
 impl<C: NumaflowTypeConfig> UnalignedReducer<C> {
@@ -550,7 +544,6 @@ impl<C: NumaflowTypeConfig> UnalignedReducer<C> {
             current_watermark: DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"),
             keyed,
             graceful_timeout,
-            _marker: PhantomData,
         }
     }
 
