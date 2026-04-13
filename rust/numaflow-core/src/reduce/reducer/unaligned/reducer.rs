@@ -41,7 +41,7 @@ struct ActiveStream {
 }
 
 /// Represents a reduce task for a pnf slot. It is responsible for calling the user-defined reduce
-/// function for the given slot and writing the output to JetStream and publishing the watermark.
+/// function for the given slot and writing the output to ISB and publishing the watermark.
 /// Also writes the GC events to the WAL if configured.
 struct ReduceTask<C: NumaflowTypeConfig> {
     /// Client for user-defined reduce operations.
@@ -85,7 +85,7 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
         }
     }
 
-    /// accumulator reduce implementation. It internally batches writes to JetStream to checkpoint
+    /// accumulator reduce implementation. It internally batches writes to ISB to checkpoint
     /// that the writes have been persisted. Once persisted it deletes the window and watermark can
     /// progress.
     async fn accumulator_reduce(
@@ -132,7 +132,7 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
                     drop(writer_tx);
                     // wait for the writer to finish writing the current batch
                     if let Err(e) = writer_handle.await {
-                        error!(?e, "Error while writing results to JetStream");
+                        error!(?e, "Error while writing results to ISB");
                         return Err(Error::Reduce(format!("Writer task failed: {e}")));
                     }
 
@@ -183,7 +183,7 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
         drop(writer_tx);
         // wait for writer to complete
         if let Err(e) = writer_handle.await {
-            error!(?e, "Error while writing final results to JetStream");
+            error!(?e, "Error while writing final results to ISB");
             return Err(Error::Reduce(format!("Writer task failed: {e}")));
         }
 
@@ -206,7 +206,7 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
         }
     }
 
-    /// session reduce  implementation. It internally batches writes to JetStream to checkpoint
+    /// session reduce  implementation. It internally batches writes to ISB to checkpoint
     /// that the writes have been persisted. Once persisted it deletes the window and watermark can
     /// progress. In session window we add to the tracked only when the reduce function returns EOF.
     async fn session_reduce(
@@ -252,7 +252,7 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
 
                     // Wait for the writer to finish writing the current batch and start a new one
                     if let Err(e) = writer_handle.await {
-                        error!(?e, "Error while writing results to JetStream");
+                        error!(?e, "Error while writing results to ISB");
                         return Err(Error::Reduce(format!("Writer task failed: {e}")));
                     }
 
@@ -295,7 +295,7 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
         drop(writer_tx);
         // Final cleanup: wait for writer to complete
         if let Err(e) = writer_handle.await {
-            error!(?e, "Error while writing final results to JetStream");
+            error!(?e, "Error while writing final results to ISB");
             return Err(Error::Reduce(format!("Writer task failed: {e}")));
         }
 
@@ -401,6 +401,7 @@ impl<C: NumaflowTypeConfig> UnalignedReduceActor<C> {
         );
 
         for (window_id, active_stream) in self.active_streams.drain() {
+            drop(active_stream.message_tx);
             // Wait for the task to complete
             if let Err(e) = active_stream.task_handle.await.expect("task failed") {
                 error!(?window_id, err = ?e, "Reduce task for window failed during shutdown");
@@ -504,7 +505,7 @@ pub(crate) struct UnalignedReducer<C: NumaflowTypeConfig> {
     client: UserDefinedUnalignedReduce,
     /// Window manager for assigning windows to messages and closing windows.
     window_manager: UnalignedWindowManager,
-    /// Writer for writing results to JetStream
+    /// Writer for writing results to ISB
     isb_writer: ISBWriterOrchestrator<C>,
     /// Final state of the component (any error will set this as Err).
     final_result: crate::Result<()>,

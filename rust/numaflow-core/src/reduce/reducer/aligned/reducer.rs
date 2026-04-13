@@ -35,7 +35,7 @@ struct ActiveStream {
 }
 
 /// Represents a reduce task for a window. It is responsible for calling the user-defined reduce
-/// function for the given window and writing the output to JetStream and publishing the watermark.
+/// function for the given window and writing the output to ISB and publishing the watermark.
 /// Also writes the GC events to the WAL if configured.
 struct ReduceTask<C: NumaflowTypeConfig> {
     client: UserDefinedAlignedReduce,
@@ -76,7 +76,7 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
             let (result_tx, result_rx) = mpsc::channel(100);
             let result_stream = ReceiverStream::new(result_rx);
 
-            // Spawn a task to write results to JetStream
+            // Spawn a task to write results to ISB
             let writer_handle = match self
                 .isb_writer
                 .streaming_write(result_stream, cln_token.clone())
@@ -84,14 +84,14 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
             {
                 Ok(handle) => handle,
                 Err(e) => {
-                    error!(?e, "Failed to start JetStream writer");
+                    error!(?e, "Failed to start ISB writer");
                     return;
                 }
             };
 
             // Call the reduce function. This is a blocking call and will return only once the window
             // is closed, cancellation is detected, or on error. The output is sent to the result_tx
-            // channel which is consumed by the writer task and published to JetStream.
+            // channel which is consumed by the writer task and published to ISB.
             let result = self
                 .client
                 .reduce_fn(message_stream, result_tx, cln_token)
@@ -112,8 +112,8 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
             }
 
             // Wait for the writer to complete, write takes care of publishing the watermark.
-            if let Err(e) = writer_handle.await.expect("join failed for js writer task") {
-                error!(?e, "Error while writing results to JetStream");
+            if let Err(e) = writer_handle.await.expect("join failed for isb writer task") {
+                error!(?e, "Error while writing results to ISB");
                 let _ = self.error_tx.send(e).await;
                 return;
             }
@@ -127,7 +127,7 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
                 .expect("no oldest window found");
 
             // we can safely delete the window from the window manager since the results are
-            // successfully written to jetstream and watermark is published.
+            // successfully written to ISB and watermark is published.
             self.window_manager.gc_window(self.window.clone());
 
             // now that the processing is done, we can add this window to the GC WAL.
@@ -196,6 +196,7 @@ impl<C: NumaflowTypeConfig> AlignedReduceActor<C> {
         let active_streams: Vec<_> = self.active_streams.drain().collect();
 
         for (window_id, active_stream) in active_streams {
+            drop(active_stream.message_tx);
             // Wait for the task to complete
             if let Err(e) = active_stream.task_handle.await {
                 error!(?window_id, err = ?e, "Reduce task for window failed during shutdown");
@@ -357,7 +358,7 @@ pub(crate) struct AlignedReducer<C: NumaflowTypeConfig> {
     client: UserDefinedAlignedReduce,
     /// Window manager for assigning windows to messages and closing windows.
     window_manager: AlignedWindowManager,
-    /// Writer for writing results to JetStream
+    /// Writer for writing results to ISB
     isb_writer: ISBWriterOrchestrator<C>,
     /// Final state of the component (any error will set this as Err).
     final_result: crate::Result<()>,
