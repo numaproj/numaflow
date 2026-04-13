@@ -112,7 +112,10 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
             }
 
             // Wait for the writer to complete, write takes care of publishing the watermark.
-            if let Err(e) = writer_handle.await.expect("join failed for isb writer task") {
+            if let Err(e) = writer_handle
+                .await
+                .expect("join failed for isb writer task")
+            {
                 error!(?e, "Error while writing results to ISB");
                 let _ = self.error_tx.send(e).await;
                 return;
