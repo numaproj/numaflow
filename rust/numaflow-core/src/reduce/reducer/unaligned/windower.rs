@@ -194,6 +194,23 @@ impl UnalignedWindowManager {
             UnalignedWindowManager::Session(manager) => manager.oldest_window_end_time(),
         }
     }
+
+    /// Returns the number of currently active windows.
+    pub(crate) fn active_window_count(&self) -> usize {
+        match self {
+            UnalignedWindowManager::Accumulator(manager) => manager.active_window_count(),
+            UnalignedWindowManager::Session(manager) => manager.active_window_count(),
+        }
+    }
+
+    /// Returns the number of closed windows awaiting GC.
+    /// Accumulator doesn't track closed windows separately, so returns 0.
+    pub(crate) fn closed_window_count(&self) -> usize {
+        match self {
+            UnalignedWindowManager::Accumulator(_) => 0,
+            UnalignedWindowManager::Session(manager) => manager.closed_window_count(),
+        }
+    }
 }
 
 /// Combines keys into a single string for use as a map key

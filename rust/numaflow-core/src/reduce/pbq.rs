@@ -1,5 +1,7 @@
+use crate::config::pipeline::VERTEX_TYPE_REDUCE_UDF;
 use crate::error::Result;
 use crate::message::Message;
+use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 use crate::pipeline::isb::reader::ISBReaderOrchestrator;
 use crate::reduce::wal::WalMessage;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
@@ -113,6 +115,11 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
                 .send(msg.into())
                 .await
                 .expect("Receiver dropped");
+            pipeline_metrics()
+                .reduce
+                .pbq_write_total
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                .inc();
             replayed_count += 1;
         }
 
@@ -146,6 +153,11 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
                 .expect("Receiver dropped");
 
             tx.send(msg).await.expect("Receiver dropped");
+            pipeline_metrics()
+                .reduce
+                .pbq_write_total
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                .inc();
         }
 
         isb_handle.await.expect("task failed")?;
@@ -173,6 +185,11 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
         while let Some(msg) = isb_stream.next().await {
             // Forward the message to the output channel
             tx.send(msg).await.expect("Receiver dropped");
+            pipeline_metrics()
+                .reduce
+                .pbq_write_total
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                .inc();
         }
 
         // Wait for the ISB reader task to complete

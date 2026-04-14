@@ -62,6 +62,7 @@ const MVTX_REGISTRY_GLOBAL_PREFIX: &str = "monovtx";
 // Prefixes for the sub-registries
 const SINK_REGISTRY_PREFIX: &str = "sink";
 const FALLBACK_SINK_REGISTRY_PREFIX: &str = "fallback_sink";
+const REDUCE_REGISTRY_PREFIX: &str = "reduce";
 const ON_SUCCESS_SINK_REGISTRY_PREFIX: &str = "onsuccess_sink";
 const TRANSFORMER_REGISTRY_PREFIX: &str = "transformer";
 const UDF_REGISTRY_PREFIX: &str = "udf";
@@ -148,6 +149,14 @@ const ACK_TIME: &str = "ack_time";
 const SINK_TIME: &str = "time";
 const FALLBACK_SINK_TIME: &str = "time";
 const ON_SUCCESS_SINK_TIME: &str = "time";
+
+// reduce specific metrics
+const REDUCE_ACTIVE_WINDOWS: &str = "active_windows";
+const REDUCE_CLOSED_WINDOWS: &str = "closed_windows";
+const REDUCE_WINDOW_PROCESSING_TIME: &str = "window_processing_time";
+const REDUCE_PNF_PROCESS_TIME: &str = "pnf_process_time";
+const REDUCE_CURRENT_WATERMARK: &str = "current_watermark";
+const REDUCE_PBQ_WRITE_TOTAL: &str = "pbq_write";
 
 // jetstream isb processing times
 const JETSTREAM_ISB_READ_TIME_TOTAL: &str = "read_time_total";
@@ -306,6 +315,8 @@ pub(crate) struct PipelineMetrics {
     pub(crate) sink_forwarder: SinkForwarderMetrics,
     pub(crate) jetstream_isb: JetStreamISBMetrics,
     pub(crate) pending_raw: Family<Vec<(String, String)>, Gauge>,
+    // reduce specific metrics
+    pub(crate) reduce: ReduceMetrics,
 }
 
 /// Family of metrics for the sink
@@ -339,6 +350,39 @@ pub(crate) struct UDFMetrics {
     /// Mapper latency
     pub(crate) time: Family<Vec<(String, String)>, Histogram>,
     pub(crate) errors_total: Family<Vec<(String, String)>, Counter>,
+}
+
+/// Family of metrics for the Reduce vertex
+pub(crate) struct ReduceMetrics {
+    // gauges
+    pub(crate) active_windows: Family<Vec<(String, String)>, Gauge>,
+    pub(crate) closed_windows: Family<Vec<(String, String)>, Gauge>,
+    pub(crate) current_watermark: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
+    // histograms
+    pub(crate) window_processing_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) pnf_process_time: Family<Vec<(String, String)>, Histogram>,
+    // counters
+    pub(crate) pbq_write_total: Family<Vec<(String, String)>, Counter>,
+}
+
+impl ReduceMetrics {
+    pub(crate) fn new() -> Self {
+        Self {
+            active_windows: Family::<Vec<(String, String)>, Gauge>::default(),
+            closed_windows: Family::<Vec<(String, String)>, Gauge>::default(),
+            current_watermark: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
+            window_processing_time:
+                Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                    // 1ms to 60 minutes in microseconds
+                    || Histogram::new(exponential_buckets_range(1000.0, 3_600_000_000.0, 10)),
+                ),
+            pnf_process_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                // 1ms to 20 minutes in microseconds
+                || Histogram::new(exponential_buckets_range(1000.0, 1_200_000_000.0, 10)),
+            ),
+            pbq_write_total: Family::<Vec<(String, String)>, Counter>::default(),
+        }
+    }
 }
 
 /// Generic forwarder metrics
@@ -762,6 +806,7 @@ impl PipelineMetrics {
             sink_forwarder: SinkForwarderMetrics::new(),
             jetstream_isb: JetStreamISBMetrics::new(),
             pending_raw: Family::<Vec<(String, String)>, Gauge>::default(),
+            reduce: ReduceMetrics::new(),
         };
         let mut registry = global_registry().registry.lock();
         Self::register_forwarder_metrics(&metrics, &mut registry);
@@ -769,6 +814,7 @@ impl PipelineMetrics {
         Self::register_sink_forwarder_metrics(&metrics, &mut registry);
         Self::register_jetstream_isb_metrics(&metrics, &mut registry);
         Self::register_vertex_metrics(&metrics, &mut registry);
+        Self::register_reduce_metrics(&metrics, &mut registry);
         metrics
     }
 
@@ -1044,6 +1090,40 @@ impl PipelineMetrics {
             VERTEX_PENDING_RAW,
             "Total number of pending messages",
             metrics.pending_raw.clone(),
+        );
+    }
+
+    fn register_reduce_metrics(metrics: &Self, registry: &mut Registry) {
+        let reduce_registry = registry.sub_registry_with_prefix(REDUCE_REGISTRY_PREFIX);
+        reduce_registry.register(
+            REDUCE_ACTIVE_WINDOWS,
+            "Number of currently open reduce windows",
+            metrics.reduce.active_windows.clone(),
+        );
+        reduce_registry.register(
+            REDUCE_CLOSED_WINDOWS,
+            "Number of closed reduce windows awaiting GC",
+            metrics.reduce.closed_windows.clone(),
+        );
+        reduce_registry.register(
+            REDUCE_CURRENT_WATERMARK,
+            "Current watermark value as epoch milliseconds",
+            metrics.reduce.current_watermark.clone(),
+        );
+        reduce_registry.register(
+            REDUCE_WINDOW_PROCESSING_TIME,
+            "Time from window open to window close in microseconds (1ms to 60 minutes)",
+            metrics.reduce.window_processing_time.clone(),
+        );
+        reduce_registry.register(
+            REDUCE_PNF_PROCESS_TIME,
+            "Time for UDF reduce function to complete per window in microseconds (1ms to 20 minutes)",
+            metrics.reduce.pnf_process_time.clone(),
+        );
+        reduce_registry.register(
+            REDUCE_PBQ_WRITE_TOTAL,
+            "Total number of messages written to PBQ",
+            metrics.reduce.pbq_write_total.clone(),
         );
     }
 }

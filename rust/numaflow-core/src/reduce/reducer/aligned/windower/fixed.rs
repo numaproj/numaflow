@@ -164,6 +164,22 @@ impl FixedWindowManager {
             .next()
             .cloned()
     }
+
+    /// Returns the number of currently active windows.
+    pub(crate) fn active_window_count(&self) -> usize {
+        self.active_windows
+            .read()
+            .expect("Poisoned lock for active_windows")
+            .len()
+    }
+
+    /// Returns the number of closed windows awaiting GC.
+    pub(crate) fn closed_window_count(&self) -> usize {
+        self.closed_windows
+            .read()
+            .expect("Poisoned lock for closed_windows")
+            .len()
+    }
 }
 
 #[cfg(test)]

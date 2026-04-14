@@ -10,9 +10,10 @@ use crate::reduce::reducer::unaligned::windower::{
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::typ::NumaflowTypeConfig;
 
+use crate::config::pipeline::VERTEX_TYPE_REDUCE_UDF;
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::jh_abort_guard;
-use crate::metrics::{pipeline_drop_metric_labels, pipeline_metrics};
+use crate::metrics::{pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics};
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::accumulator::AccumulatorRequest;
 use numaflow_pb::clients::sessionreduce::SessionReduceRequest;
@@ -621,7 +622,22 @@ impl<C: NumaflowTypeConfig> UnalignedReducer<C> {
                                         // Only close windows if the idle watermark is greater than current watermark
                                         if idle_watermark > self.current_watermark {
                                             self.current_watermark = idle_watermark;
+                                            pipeline_metrics()
+                                                .reduce
+                                                .current_watermark
+                                                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                                                .set(self.current_watermark.timestamp_millis() as f64);
                                             self.close_windows_by_wm(idle_watermark, &actor_tx).await;
+                                            pipeline_metrics()
+                                                .reduce
+                                                .active_windows
+                                                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                                                .set(self.window_manager.active_window_count() as i64);
+                                            pipeline_metrics()
+                                                .reduce
+                                                .closed_windows
+                                                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                                                .set(self.window_manager.closed_window_count() as i64);
                                         }
                                     }
                                     continue; // Skip further processing for WMB messages
@@ -634,6 +650,16 @@ impl<C: NumaflowTypeConfig> UnalignedReducer<C> {
                                 }
 
                                 self.assign_and_close_windows(msg, &actor_tx).await;
+                                pipeline_metrics()
+                                    .reduce
+                                    .active_windows
+                                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                                    .set(self.window_manager.active_window_count() as i64);
+                                pipeline_metrics()
+                                    .reduce
+                                    .closed_windows
+                                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                                    .set(self.window_manager.closed_window_count() as i64);
                             }
                             None => {
                                 // Stream ended
@@ -719,6 +745,15 @@ impl<C: NumaflowTypeConfig> UnalignedReducer<C> {
             msg.watermark
                 .unwrap_or(DateTime::from_timestamp_millis(-1).expect("Invalid timestamp")),
         );
+
+        // Update watermark gauge (skip -1 sentinel)
+        if self.current_watermark.timestamp_millis() != -1 {
+            pipeline_metrics()
+                .reduce
+                .current_watermark
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                .set(self.current_watermark.timestamp_millis() as f64);
+        }
 
         // Handle late messages
         if msg.is_late {

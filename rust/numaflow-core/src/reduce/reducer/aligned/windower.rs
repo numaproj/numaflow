@@ -62,6 +62,22 @@ impl AlignedWindowManager {
             AlignedWindowManager::Sliding(manager) => manager.oldest_window(),
         }
     }
+
+    /// Returns the number of currently active windows.
+    pub(crate) fn active_window_count(&self) -> usize {
+        match self {
+            AlignedWindowManager::Fixed(manager) => manager.active_window_count(),
+            AlignedWindowManager::Sliding(manager) => manager.active_window_count(),
+        }
+    }
+
+    /// Returns the number of closed windows awaiting GC.
+    pub(crate) fn closed_window_count(&self) -> usize {
+        match self {
+            AlignedWindowManager::Fixed(manager) => manager.closed_window_count(),
+            AlignedWindowManager::Sliding(manager) => manager.closed_window_count(),
+        }
+    }
 }
 
 /// A Window is represented by its start and end time. All the data which event time falls within
