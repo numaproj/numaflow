@@ -519,11 +519,12 @@ impl<C: NumaflowTypeConfig> AlignedReducer<C> {
                                         // Only close windows if the idle watermark is greater than current watermark
                                         if idle_watermark > self.current_watermark {
                                             self.current_watermark = idle_watermark;
+                                            let lag = Utc::now().timestamp_millis() - self.current_watermark.timestamp_millis();
                                             pipeline_metrics()
                                                 .reduce
-                                                .current_watermark
+                                                .watermark_lag
                                                 .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
-                                                .set(self.current_watermark.timestamp_millis() as f64);
+                                                .set(lag as f64);
                                             self.close_windows_with_watermark(idle_watermark, &actor_tx).await;
                                         }
                                     }
@@ -628,13 +629,14 @@ impl<C: NumaflowTypeConfig> AlignedReducer<C> {
                 .unwrap_or(DateTime::from_timestamp_millis(-1).expect("Invalid timestamp")),
         );
 
-        // Update watermark gauge (skip -1 sentinel)
+        // Update watermark lag gauge (skip -1 sentinel)
         if self.current_watermark.timestamp_millis() != -1 {
+            let lag = Utc::now().timestamp_millis() - self.current_watermark.timestamp_millis();
             pipeline_metrics()
                 .reduce
-                .current_watermark
+                .watermark_lag
                 .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
-                .set(self.current_watermark.timestamp_millis() as f64);
+                .set(lag as f64);
         }
 
         // Handle late messages

@@ -155,7 +155,7 @@ const REDUCE_ACTIVE_WINDOWS: &str = "active_windows";
 const REDUCE_CLOSED_WINDOWS: &str = "closed_windows";
 const REDUCE_WINDOW_PROCESSING_TIME: &str = "window_processing_time";
 const REDUCE_PNF_PROCESS_TIME: &str = "pnf_process_time";
-const REDUCE_CURRENT_WATERMARK: &str = "current_watermark";
+const REDUCE_WATERMARK_LAG: &str = "watermark_lag";
 const REDUCE_PBQ_WRITE_TOTAL: &str = "pbq_write";
 
 // jetstream isb processing times
@@ -357,7 +357,7 @@ pub(crate) struct ReduceMetrics {
     // gauges
     pub(crate) active_windows: Family<Vec<(String, String)>, Gauge>,
     pub(crate) closed_windows: Family<Vec<(String, String)>, Gauge>,
-    pub(crate) current_watermark: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
+    pub(crate) watermark_lag: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
     // histograms
     pub(crate) window_processing_time: Family<Vec<(String, String)>, Histogram>,
     pub(crate) pnf_process_time: Family<Vec<(String, String)>, Histogram>,
@@ -370,7 +370,7 @@ impl ReduceMetrics {
         Self {
             active_windows: Family::<Vec<(String, String)>, Gauge>::default(),
             closed_windows: Family::<Vec<(String, String)>, Gauge>::default(),
-            current_watermark: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
+            watermark_lag: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
             window_processing_time:
                 Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
                     // 1ms to 60 minutes in microseconds
@@ -1106,9 +1106,9 @@ impl PipelineMetrics {
             metrics.reduce.closed_windows.clone(),
         );
         reduce_registry.register(
-            REDUCE_CURRENT_WATERMARK,
-            "Current watermark value as epoch milliseconds",
-            metrics.reduce.current_watermark.clone(),
+            REDUCE_WATERMARK_LAG,
+            "Difference between current wall clock and watermark in milliseconds",
+            metrics.reduce.watermark_lag.clone(),
         );
         reduce_registry.register(
             REDUCE_WINDOW_PROCESSING_TIME,
