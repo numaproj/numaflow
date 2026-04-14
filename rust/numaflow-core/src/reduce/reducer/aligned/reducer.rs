@@ -13,7 +13,6 @@ use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::wal::GcEvent;
 use std::collections::HashMap;
-use std::marker::PhantomData;
 use std::ops::Sub;
 use std::sync::Arc;
 use std::time::Duration;
@@ -45,7 +44,6 @@ struct ReduceTask<C: NumaflowTypeConfig> {
     error_tx: mpsc::Sender<Error>,
     window: Window,
     window_manager: AlignedWindowManager,
-    _marker: PhantomData<C>,
 }
 
 impl<C: NumaflowTypeConfig> ReduceTask<C> {
@@ -65,7 +63,6 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
             error_tx,
             window,
             window_manager,
-            _marker: PhantomData,
         }
     }
 
@@ -185,7 +182,6 @@ struct AlignedReduceActor<C: NumaflowTypeConfig> {
     window_manager: AlignedWindowManager,
     /// Cancellation token to signal tasks to stop
     cln_token: CancellationToken,
-    _marker: PhantomData<C>,
 }
 
 impl<C: NumaflowTypeConfig> AlignedReduceActor<C> {
@@ -228,7 +224,6 @@ impl<C: NumaflowTypeConfig> AlignedReduceActor<C> {
             gc_wal_tx,
             window_manager,
             cln_token,
-            _marker: PhantomData,
         }
     }
 
@@ -378,7 +373,6 @@ pub(crate) struct AlignedReducer<C: NumaflowTypeConfig> {
     keyed: bool,
     /// Graceful shutdown timeout duration.
     graceful_timeout: Duration,
-    _marker: PhantomData<C>,
 }
 
 impl<C: NumaflowTypeConfig> AlignedReducer<C> {
@@ -403,7 +397,6 @@ impl<C: NumaflowTypeConfig> AlignedReducer<C> {
             graceful_timeout,
             shutting_down_on_err: false,
             final_result: Ok(()),
-            _marker: PhantomData,
         }
     }
 
