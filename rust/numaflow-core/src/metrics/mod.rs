@@ -168,6 +168,7 @@ pub(crate) enum ComponentHealthChecks<C: crate::typ::NumaflowTypeConfig> {
 pub(crate) struct MonovertexComponents<C: crate::typ::NumaflowTypeConfig> {
     pub(crate) source: Source<C>,
     pub(crate) sink: SinkWriter,
+    pub(crate) mapper: Option<MapHandle>,
 }
 
 /// PipelineComponents is used to store the all the components required for running pipeline. Transformer
@@ -1318,6 +1319,12 @@ async fn sidecar_livez<C: crate::typ::NumaflowTypeConfig>(
                 error!("Monovertex sink client is not ready");
                 return StatusCode::INTERNAL_SERVER_ERROR;
             }
+            if let Some(ref mut mapper) = monovertex_state.mapper {
+                if !mapper.ready().await {
+                    error!("Monovertex mapper component is not ready");
+                    return StatusCode::INTERNAL_SERVER_ERROR;
+                }
+            }
         }
         ComponentHealthChecks::Pipeline(pipeline_state) => match *pipeline_state {
             PipelineComponents::Source(mut source) => {
@@ -1708,6 +1715,7 @@ mod tests {
             health_checks: ComponentHealthChecks::Monovertex(Box::new(MonovertexComponents {
                 source,
                 sink: sink_writer,
+                mapper: None,
             })),
             watermark_fetcher_state: None,
         };
