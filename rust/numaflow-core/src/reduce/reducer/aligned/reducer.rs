@@ -1536,4 +1536,186 @@ mod tests {
 
         Ok(())
     }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_reducer_not_hanging_on_stream_close() -> crate::Result<()> {
+        // Set up the reducer server
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("reduce_fixed.sock");
+        let server_info_file = tmp_dir.path().join("reduce_fixed-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let server_handle = tokio::spawn(async move {
+            reduce::Server::new(CounterCreator {})
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // Wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Create the client
+        let client =
+            UserDefinedAlignedReduce::new(ReduceClient::new(create_rpc_channel(sock_file).await?))
+                .await;
+
+        // Create a fixed window manager with 60s window length
+        let windower = FixedWindowManager::new(Duration::from_secs(60));
+
+        // Set up JetStream
+        let js_url = "localhost:4222";
+        let nats_client = async_nats::connect(js_url).await.unwrap();
+        let js_context = jetstream::new(nats_client);
+
+        // Create output stream
+        let stream = Stream::new("test_aligned_reducer_fixed", "test", 0);
+        // Delete stream if it exists
+        let _ = js_context.delete_stream(stream.name).await;
+
+        let _stream = js_context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // Create consumer
+        let _consumer = js_context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        // Create ISBWriter
+        let cln_token = CancellationToken::new();
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        let mut writers = std::collections::HashMap::new();
+        writers.insert(
+            stream.name,
+            crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
+                stream.clone(),
+                js_context.clone(),
+                writer_config.clone(),
+                None,
+                cln_token.clone(),
+            )
+            .await
+            .unwrap(),
+        );
+
+        let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
+            ISBWriterOrchestratorComponents {
+                config: vec![ToVertexConfig {
+                    name: "test-vertex",
+                    partitions: 1,
+                    writer_config,
+                    conditions: None,
+                    to_vertex_type: VertexType::Sink,
+                    ordered_processing_enabled: false,
+                }],
+                writers,
+                paf_concurrency: 100,
+                watermark_handle: None,
+                vertex_type: VertexType::ReduceUDF,
+            };
+        let isb_writer = ISBWriterOrchestrator::<WithoutRateLimiter>::new(writer_components);
+
+        // Create the AlignedReducer
+        let reducer = AlignedReducer::new(
+            client,
+            AlignedWindowManager::Fixed(windower),
+            isb_writer,
+            None, // No GC WAL for testing
+            Duration::from_secs(0),
+            Duration::from_millis(50),
+            true,
+        )
+        .await;
+
+        // Create a channel for input messages
+        let (input_tx, input_rx) = mpsc::channel(10);
+        let input_stream = ReceiverStream::new(input_rx);
+
+        // Start the reducer
+        let reducer_handle = reducer.start(input_stream, cln_token.clone()).await?;
+
+        // Create test messages
+        let base_time = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
+
+        let msg1 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into()]),
+            tags: None,
+            value: "value1".into(),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+            event_time: base_time + chrono::Duration::seconds(10),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "0".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+
+        // Send a message to create a reduce task
+        input_tx.send(msg1).await.unwrap();
+
+        // Drop the sender to close the stream
+        drop(input_tx);
+
+        let result = tokio::time::timeout(Duration::from_secs(5), reducer_handle).await;
+
+        assert!(
+            result.is_ok(),
+            "reducer should shutdown after input stream closes"
+        );
+
+        let result = result.expect("reducer should not hang");
+
+        assert!(result.is_ok(), "Reducer task should not panic");
+
+        assert!(
+            result.expect("Reducer task should not panic").is_ok(),
+            "Reducer should not return error"
+        );
+
+        cln_token.cancel();
+
+        // Shutdown the server
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Wait for the server to shut down
+        assert!(
+            server_handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
+
+        // Clean up JetStream
+        js_context.delete_stream(stream.name).await.unwrap();
+
+        Ok(())
+    }
 }
