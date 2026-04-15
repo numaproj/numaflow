@@ -1554,11 +1554,13 @@ mod tests {
     use crate::source::SourceType;
     use crate::source::user_defined::new_source;
     use crate::tracker::Tracker;
+    use crate::mapper::test_utils::MapperTestHandle;
     use numaflow::shared::ServerExtras;
     use numaflow::source::{Message, Offset, SourceReadRequest};
-    use numaflow::{sink, source, sourcetransform};
+    use numaflow::{map, sink, source, sourcetransform};
     use numaflow_pb::clients::sink::sink_client::SinkClient;
     use numaflow_pb::clients::source::source_client::SourceClient;
+    use numaflow_shared::server_info::MapMode;
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
 
@@ -1601,6 +1603,15 @@ mod tests {
             _input: sourcetransform::SourceTransformRequest,
         ) -> Vec<sourcetransform::Message> {
             vec![]
+        }
+    }
+
+    struct SimpleMapper;
+
+    #[tonic::async_trait]
+    impl map::Mapper for SimpleMapper {
+        async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
+            vec![map::Message::new(input.value).with_keys(input.keys)]
         }
     }
 
@@ -1711,11 +1722,25 @@ mod tests {
         .await
         .expect("failed to create sink writer");
 
+        let MapperTestHandle {
+            mapper,
+            server_handle: _mapper_server_handle,
+        } = MapperTestHandle::create_mapper(
+            SimpleMapper,
+            tracker,
+            MapMode::Unary,
+            10,
+            Duration::from_millis(1000),
+            Duration::from_millis(100),
+            1,
+        )
+        .await;
+
         let metrics_state: MetricsState<crate::typ::WithoutRateLimiter> = MetricsState {
             health_checks: ComponentHealthChecks::Monovertex(Box::new(MonovertexComponents {
                 source,
                 sink: sink_writer,
-                mapper: None,
+                mapper: Some(mapper),
             })),
             watermark_fetcher_state: None,
         };
