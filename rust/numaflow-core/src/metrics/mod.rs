@@ -1549,12 +1549,12 @@ mod tests {
     use std::net::SocketAddr;
 
     use super::*;
+    use crate::mapper::test_utils::MapperTestHandle;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::SourceType;
     use crate::source::user_defined::new_source;
     use crate::tracker::Tracker;
-    use crate::mapper::test_utils::MapperTestHandle;
     use numaflow::shared::ServerExtras;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{map, sink, source, sourcetransform};
@@ -1722,10 +1722,7 @@ mod tests {
         .await
         .expect("failed to create sink writer");
 
-        let MapperTestHandle {
-            mapper,
-            server_handle: _mapper_server_handle,
-        } = MapperTestHandle::create_mapper(
+        let mapper_handle = MapperTestHandle::create_mapper(
             SimpleMapper,
             tracker,
             MapMode::Unary,
@@ -1740,7 +1737,7 @@ mod tests {
             health_checks: ComponentHealthChecks::Monovertex(Box::new(MonovertexComponents {
                 source,
                 sink: sink_writer,
-                mapper: Some(mapper),
+                mapper: Some(mapper_handle.mapper),
             })),
             watermark_fetcher_state: None,
         };
