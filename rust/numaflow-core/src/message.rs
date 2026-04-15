@@ -57,6 +57,21 @@ macro_rules! mark_success_batch {
     }};
 }
 
+/// Marks a batch of [MessageHandle]s as failed (consumes the batch), recording the failure reason.
+///
+/// # Example
+/// ```ignore
+/// mark_failed_batch!(message_handles, error);
+/// ```
+#[macro_export]
+macro_rules! mark_failed_batch {
+    ($batch:expr, $err:expr) => {{
+        for msg in $batch {
+            msg.mark_failed($err);
+        }
+    }};
+}
+
 use crate::Error;
 use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;

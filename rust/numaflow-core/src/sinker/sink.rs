@@ -1,4 +1,3 @@
-use crate::Result;
 use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
@@ -9,6 +8,7 @@ use crate::metrics::{
     pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::sinker::actor::{SinkActorMessage, SinkActorResponse};
+use crate::{Result, mark_failed_batch};
 use numaflow_kafka::sink::KafkaSink;
 use numaflow_pb::clients::sink::Status::{Failure, Fallback, OnSuccess, Serve, Success};
 use numaflow_pb::clients::sink::sink_client::SinkClient;
@@ -219,11 +219,14 @@ impl SinkWriter {
                         continue;
                     }
 
-                    match self.process_batch(read_batch, cln_token.clone()).await {
+                    let messages = read_batch.iter().map(|msg| msg.message().clone()).collect();
+                    match self.process_batch(messages, cln_token.clone()).await {
                         Ok(()) => {
                             // Batch processed successfully
+                            mark_success_batch!(read_batch);
                         }
                         Err(e) => {
+                            mark_failed_batch!(read_batch, &e);
                             // Critical error, cancel upstream and initiate shutdown
                             error!(?e, "Error writing to sink, initiating shutdown.");
                             cln_token.cancel();
@@ -243,21 +246,20 @@ impl SinkWriter {
     /// On success, all messages are ACK'd. On error, messages are NAK'd (dropped without ack).
     async fn process_batch(
         &mut self,
-        read_batch: Vec<MessageHandle>,
+        messages: Vec<Message>,
         cln_token: CancellationToken,
     ) -> Result<()> {
         // If bypass conditions exist for primary sink, ack and skip
         if let Some(conditions) = &self.bypass_conditions
             && let Some(ref _sink) = conditions.sink
         {
-            mark_success_batch!(read_batch);
             return Ok(());
         }
 
         // Separate dropped messages from messages to process
-        let (dropped, to_process): (Vec<_>, Vec<_>) = read_batch
+        let (dropped, to_process): (Vec<_>, Vec<_>) = messages
             .into_iter()
-            .partition(|read_msg| read_msg.message().dropped());
+            .partition(|read_msg| read_msg.dropped());
 
         let dropped_count = dropped.len();
 
@@ -267,19 +269,8 @@ impl SinkWriter {
             return Ok(());
         }
 
-        // Extract messages for writing to sink
-        let messages: Vec<Message> = to_process
-            .iter()
-            .map(|read_msg| read_msg.message().clone())
-            .collect();
-
         // Perform the write operation
-        self.write_to_sink(messages, cln_token.clone()).await?;
-
-        // Success: ack all processed messages
-        mark_success_batch!(to_process);
-        // Dropped messages are treated as successfully processed
-        mark_success_batch!(dropped);
+        self.write_to_sink(to_process, cln_token.clone()).await?;
 
         send_drop_metrics(is_mono_vertex(), dropped_count);
         Ok(())
