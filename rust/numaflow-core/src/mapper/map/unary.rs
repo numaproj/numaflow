@@ -4,8 +4,8 @@ use std::sync::Mutex;
 
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
-use crate::mark_success;
 use crate::message::{Message, MessageHandle};
+use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
 use tokio_stream::StreamExt;
@@ -79,7 +79,7 @@ impl MapUnaryTask {
             Ok(results) => results,
             Err(e) => {
                 error!(?e, offset = ?parent_info.offset, "failed to map message");
-                self.msg_handle.mark_failed(&e);
+                mark_failed!(self.msg_handle, &e);
                 let _ = self.shared_ctx.error_tx.send(e).await;
                 return;
             }

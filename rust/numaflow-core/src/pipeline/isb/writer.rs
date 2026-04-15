@@ -9,7 +9,6 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
-use crate::Result;
 use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
 use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Error;
@@ -24,6 +23,7 @@ use crate::pipeline::isb::{ISBWriter, PendingWrite, WriteError, WriteResult};
 use crate::shared::forward;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::WatermarkHandle;
+use crate::{Result, mark_failed};
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 
@@ -104,11 +104,14 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
                 actual = resolved_offsets.len(),
                 "Some writes failed during PAF resolution, message will be NAK'd"
             );
-            self.msg_handle.mark_failed(format!(
-                "PAF resolution failed: {}/{} writes succeeded",
-                resolved_offsets.len(),
-                n
-            ));
+            mark_failed!(
+                self.msg_handle,
+                format!(
+                    "PAF resolution failed: {}/{} writes succeeded",
+                    resolved_offsets.len(),
+                    n
+                )
+            );
             return;
         }
 

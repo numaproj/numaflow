@@ -9,7 +9,6 @@ use tonic::transport::Channel;
 use tonic::{Code, Status};
 use tracing::error;
 
-use crate::Result;
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
@@ -20,6 +19,7 @@ use crate::metrics::{
 };
 use crate::tracker::Tracker;
 use crate::transformer::user_defined::UserDefinedTransformer;
+use crate::{Result, mark_success};
 
 /// User-Defined Transformer is a custom transformer that can be built by the user.
 ///
@@ -234,7 +234,7 @@ impl Transformer {
                     .map(|m| msg_handle.with_message(m))
                     .collect();
 
-                msg_handle.mark_success();
+                mark_success!(msg_handle);
                 Ok::<Vec<MessageHandle>, Error>(output)
             }
         });

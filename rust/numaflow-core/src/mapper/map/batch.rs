@@ -8,6 +8,7 @@ use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::tracker::Tracker;
+use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -135,11 +136,11 @@ impl MapBatchTask {
 
                     // Decrement the original ref_count for this message now that all downstream
                     // handles have been created and sent.
-                    msg_handle.mark_success();
+                    mark_success!(msg_handle);
                 }
                 Err(e) => {
                     error!(err=?e, "failed to map message");
-                    msg_handle.mark_failed(&e);
+                    mark_failed!(msg_handle, &e);
                     return Err(e);
                 }
             }
