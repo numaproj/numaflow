@@ -1613,8 +1613,8 @@ mod tests {
                 None,
                 cln_token.clone(),
             )
-                .await
-                .unwrap(),
+            .await
+            .unwrap(),
         );
 
         let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
@@ -1644,7 +1644,7 @@ mod tests {
             Duration::from_millis(50),
             true,
         )
-            .await;
+        .await;
 
         // Create a channel for input messages
         let (input_tx, input_rx) = mpsc::channel(10);
