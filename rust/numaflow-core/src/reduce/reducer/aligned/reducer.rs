@@ -199,6 +199,9 @@ impl<C: NumaflowTypeConfig> AlignedReduceActor<C> {
         let active_streams: Vec<_> = self.active_streams.drain().collect();
 
         for (window_id, active_stream) in active_streams {
+            // Drop the sender before awaiting the task handle to avoid deadlock:
+            // the reduce task polls the receiver end of this channel, so it will
+            // never complete if the sender is still alive.
             drop(active_stream.message_tx);
             // Wait for the task to complete
             if let Err(e) = active_stream.task_handle.await {
