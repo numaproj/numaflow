@@ -1319,11 +1319,11 @@ async fn sidecar_livez<C: crate::typ::NumaflowTypeConfig>(
                 error!("Monovertex sink client is not ready");
                 return StatusCode::INTERNAL_SERVER_ERROR;
             }
-            if let Some(ref mut mapper) = monovertex_state.mapper {
-                if !mapper.ready().await {
-                    error!("Monovertex mapper component is not ready");
-                    return StatusCode::INTERNAL_SERVER_ERROR;
-                }
+            if let Some(ref mut mapper) = monovertex_state.mapper
+                && !mapper.ready().await
+            {
+                error!("Monovertex mapper component is not ready");
+                return StatusCode::INTERNAL_SERVER_ERROR;
             }
         }
         ComponentHealthChecks::Pipeline(pipeline_state) => match *pipeline_state {
