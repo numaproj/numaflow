@@ -168,6 +168,7 @@ pub(crate) enum ComponentHealthChecks<C: crate::typ::NumaflowTypeConfig> {
 pub(crate) struct MonovertexComponents<C: crate::typ::NumaflowTypeConfig> {
     pub(crate) source: Source<C>,
     pub(crate) sink: SinkWriter,
+    pub(crate) mapper: Option<MapHandle>,
 }
 
 /// PipelineComponents is used to store the all the components required for running pipeline. Transformer
@@ -1318,6 +1319,12 @@ async fn sidecar_livez<C: crate::typ::NumaflowTypeConfig>(
                 error!("Monovertex sink client is not ready");
                 return StatusCode::INTERNAL_SERVER_ERROR;
             }
+            if let Some(ref mut mapper) = monovertex_state.mapper
+                && !mapper.ready().await
+            {
+                error!("Monovertex mapper component is not ready");
+                return StatusCode::INTERNAL_SERVER_ERROR;
+            }
         }
         ComponentHealthChecks::Pipeline(pipeline_state) => match *pipeline_state {
             PipelineComponents::Source(mut source) => {
@@ -1542,6 +1549,7 @@ mod tests {
     use std::net::SocketAddr;
 
     use super::*;
+    use crate::mapper::test_utils::MapperTestHandle;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::SourceType;
@@ -1549,9 +1557,10 @@ mod tests {
     use crate::tracker::Tracker;
     use numaflow::shared::ServerExtras;
     use numaflow::source::{Message, Offset, SourceReadRequest};
-    use numaflow::{sink, source, sourcetransform};
+    use numaflow::{map, sink, source, sourcetransform};
     use numaflow_pb::clients::sink::sink_client::SinkClient;
     use numaflow_pb::clients::source::source_client::SourceClient;
+    use numaflow_shared::server_info::MapMode;
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
 
@@ -1594,6 +1603,15 @@ mod tests {
             _input: sourcetransform::SourceTransformRequest,
         ) -> Vec<sourcetransform::Message> {
             vec![]
+        }
+    }
+
+    struct SimpleMapper;
+
+    #[tonic::async_trait]
+    impl map::Mapper for SimpleMapper {
+        async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
+            vec![map::Message::new(input.value).with_keys(input.keys)]
         }
     }
 
@@ -1704,10 +1722,22 @@ mod tests {
         .await
         .expect("failed to create sink writer");
 
+        let mapper_handle = MapperTestHandle::create_mapper(
+            SimpleMapper,
+            tracker,
+            MapMode::Unary,
+            10,
+            Duration::from_millis(1000),
+            Duration::from_millis(100),
+            1,
+        )
+        .await;
+
         let metrics_state: MetricsState<crate::typ::WithoutRateLimiter> = MetricsState {
             health_checks: ComponentHealthChecks::Monovertex(Box::new(MonovertexComponents {
                 source,
                 sink: sink_writer,
+                mapper: Some(mapper_handle.mapper),
             })),
             watermark_fetcher_state: None,
         };
