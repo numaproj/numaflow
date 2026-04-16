@@ -128,6 +128,7 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
             metrics::MonovertexComponents {
                 source: source.clone(),
                 sink: sink_writer.clone(),
+                mapper: mapper.clone(),
             },
         )),
         watermark_fetcher_state: None, // Monovertex doesn't have watermark handles
