@@ -34,6 +34,7 @@ use async_nats::jetstream::Context;
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::fs;
+use tokio::task::JoinHandle;
 use tokio::time::{interval, timeout};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
@@ -68,8 +69,15 @@ impl<C: NumaflowTypeConfig> ReduceForwarder<C> {
             }
         };
 
+        let pbq_monitor = create_cancellable_handle(
+            pbq_handle,
+            cln_token.clone(),
+            "PBQ Handle panicked".to_string(),
+        )
+        .await;
+
         // Join the pbq and reducer
-        let (pbq_result, processor_result) = tokio::try_join!(pbq_handle, processor_handle)
+        let (pbq_result, processor_result) = tokio::try_join!(pbq_monitor, processor_handle)
             .map_err(|e| {
                 error!(?e, "Error while joining PBQ reader and reducer");
                 crate::error::Error::Forwarder(format!(
@@ -542,6 +550,24 @@ pub(crate) async fn start_reduce_forwarder(
             .await
         }
     }
+}
+
+/// Currently there exists no way for the PBQ streaming_read or the wrapped ISB streaming_read to
+/// cancel the cancellation token in case any error is encountered during streaming read.
+/// This method simply wraps the original join handle in a spawned task, unwraps the JoinError,
+/// and checks the inner Result<()> based on which the cancellation token is cancelled.
+async fn create_cancellable_handle(
+    join_handle: JoinHandle<Result<()>>,
+    cancel_token: CancellationToken,
+    panic_str: String,
+) -> JoinHandle<Result<()>> {
+    tokio::spawn(async move {
+        let result = join_handle.await.expect(panic_str.as_str());
+        if result.is_err() {
+            cancel_token.cancel();
+        }
+        result
+    })
 }
 
 #[cfg(test)]
