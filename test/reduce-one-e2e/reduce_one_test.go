@@ -184,6 +184,15 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 		StreamVertexPodLogs("atoi", "numa").
 		TerminateAllPodLogs()
 
+	defer func() {
+		// Before exiting, log what IS in Redis
+		// Check for a range of plausible values
+		for _, v := range []string{"2", "4", "6", "8", "10", "20", "38", "40", "60", "76", "80", "120", "240"} {
+			r.T().Logf("Redis check: key=%s, target=%s, count=%s",
+				"even-odd-sum-sink", v, InvokeE2EAPI("/redis/get-msg-count-contains?keyName=even-odd-sum-sink&targetStr=%s", v))
+		}
+	}()
+
 	go func() {
 		startTime := int(time.Unix(1000, 0).UnixMilli())
 		for i := 1; true; i++ {
@@ -191,18 +200,8 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 			case <-ctx.Done():
 				// Before exiting, log what IS in Redis
 				// Check for a range of plausible values
-				for _, v := range []string{"2", "4", "6", "8", "10", "20", "38", "40", "60", "76", "80", "120", "240"} {
-					r.T().Logf("Redis check: key=%s, target=%s, count=%s",
-						"even-odd-sum-sink", v, InvokeE2EAPI("/redis/get-msg-count-contains?keyName=even-odd-sum-sink&targetStr=%s", v))
-				}
 				return
 			case <-done:
-				// Before exiting, log what IS in Redis
-				// Check for a range of plausible values
-				for _, v := range []string{"2", "4", "6", "8", "10", "20", "38", "40", "60", "76", "80", "120", "240"} {
-					r.T().Logf("Redis check: key=%s, target=%s, count=%s",
-						"even-odd-sum-sink", v, InvokeE2EAPI("/redis/get-msg-count-contains?keyName=even-odd-sum-sink&targetStr=%s", v))
-				}
 				return
 			default:
 				eventTime := strconv.Itoa(startTime + (i * 1000))
