@@ -2880,7 +2880,7 @@
 
 <h1 id="http-source">HTTP Source<a class="headerlink" href="#http-source" title="Permanent link">&para;</a></h1>
 <p>HTTP Source starts an HTTP service to accept POST requests in the Vertex Pod. By default, it listens on port 8443 with TLS enabled, with request URI <code>/vertices/{vertexName}</code>.</p>
-<p>A plain HTTP (non-TLS) server can also be enabled by explicitly setting <code>http</code> under <code>ports</code>.</p>
+<p>A plain HTTP (non-TLS) server can also be enabled by explicitly setting <code>ports.http</code>. By default, only HTTPS is exposed. When <code>ports.http</code> is set, both HTTPS and HTTP endpoints are exposed.</p>
 <p>A Pipeline with HTTP Source:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
@@ -2906,14 +2906,14 @@
 <span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 </code></pre></div>
 <h2 id="sending-data">Sending Data<a class="headerlink" href="#sending-data" title="Permanent link">&para;</a></h2>
-<p>Data could be sent to an HTTP source through:</p>
+<p>Data can be sent to an HTTP source through:</p>
 <ul>
 <li>ClusterIP Service (within the cluster)</li>
 <li>Ingress or LoadBalancer Service (outside of the cluster)</li>
 <li>Port-forward (for testing)</li>
 </ul>
 <h3 id="clusterip-service">ClusterIP Service<a class="headerlink" href="#clusterip-service" title="Permanent link">&para;</a></h3>
-<p>An HTTP Source Vertex can generate a <code>ClusterIP</code> Service if <code>service: true</code> is specified. The service name is in the format <code>{pipelineName}-{vertexName}</code>, so the HTTP Source can be accessed at <code>https://{pipelineName}-{vertexName}.{namespace}.svc:8443/vertices/{vertexName}</code> within the cluster.</p>
+<p>An HTTP Source Vertex can generate a <code>ClusterIP</code> Service if <code>service: true</code> is specified. The service name is in the format <code>{pipelineName}-{vertexName}</code>, so the HTTP Source can be accessed at <code>https://{pipelineName}-{vertexName}.{namespace}.svc:8443/vertices/{vertexName}</code> within the cluster by default.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
 <span class="nt">metadata</span><span class="p">:</span>
@@ -2936,7 +2936,7 @@
 curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;hello world&quot;</span><span class="w"> </span>https://localhost:8443/vertices/in
 </code></pre></div>
 <h2 id="plain-http-non-tls">Plain HTTP (non-TLS)<a class="headerlink" href="#plain-http-non-tls" title="Permanent link">&para;</a></h2>
-<p>By default, the HTTP source only accepts HTTPS traffic. To also accept plain HTTP requests, explicitly set <code>ports.http</code>. The HTTPS server always starts on <code>ports.https</code> (default 8443); the HTTP server only starts when <code>ports.http</code> is set.</p>
+<p>By default, the HTTP source only accepts HTTPS traffic and listens on port 8443. To also accept plain HTTP requests, explicitly set <code>ports.http</code>. The HTTPS server always starts on <code>ports.https</code> (default 8443), and the HTTP server only starts when <code>ports.http</code> is set. When enabled, both servers run simultaneously.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
 <span class="nt">metadata</span><span class="p">:</span>
@@ -2951,7 +2951,7 @@ curl<span class="w"> </span>-kq<span class="w"> </span>-X<span class="w"> </span
 <span class="w">            </span><span class="nt">http</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8090</span><span class="w">       </span><span class="c1"># enables plain HTTP</span>
 <span class="w">            </span><span class="c1"># https: 8443    # optional, defaults to 8443</span>
 </code></pre></div>
-<p>When <code>service: true</code> is set alongside <code>httpPort</code>, the generated ClusterIP Service will expose both ports:</p>
+<p>When <code>service: true</code> is set alongside <code>ports.http</code>, the generated ClusterIP Service will expose both ports:</p>
 <table>
 <thead>
 <tr>
