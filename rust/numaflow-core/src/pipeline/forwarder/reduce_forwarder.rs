@@ -34,7 +34,6 @@ use async_nats::jetstream::Context;
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::fs;
-use tokio::task::JoinHandle;
 use tokio::time::{interval, timeout};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
