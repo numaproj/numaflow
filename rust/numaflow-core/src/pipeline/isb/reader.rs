@@ -126,49 +126,60 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             let semaphore = Arc::new(Semaphore::new(max_ack_pending));
 
-            loop {
-                // stop reading if the token is cancelled. cancel is only honored here since it is
-                // the first block in the chain.
-                if cancel.is_cancelled() {
-                    break;
+            let result = async {
+                loop {
+                    // stop reading if the token is cancelled. cancel is only honored here since it is
+                    // the first block in the chain.
+                    if cancel.is_cancelled() {
+                        break;
+                    }
+
+                    // Acquire permits up-front to cap inflight messages
+                    let mut permits = Arc::clone(&semaphore)
+                        .acquire_many_owned(batch_size as u32)
+                        .await
+                        .map_err(|e| {
+                            Error::ISB(crate::pipeline::isb::error::ISBError::Other(format!(
+                                "Failed to acquire semaphore permit: {e}"
+                            )))
+                        })?;
+
+                    let start = Instant::now();
+                    // Apply rate limiting and fetch message batch
+                    let batch = self.apply_rate_limiting_and_fetch(batch_size).await;
+
+                    pipeline_metrics()
+                        .jetstream_isb
+                        .read_time_total
+                        .get_or_create(&jetstream_isb_metrics_labels(self.stream.name))
+                        .observe(start.elapsed().as_micros() as f64);
+
+                    // Handle idle watermarks
+                    self.handle_idle_watermarks(batch.is_empty(), &tx).await?;
+
+                    // Process each message in the batch
+                    self.process_message_batch(batch, &tx, &mut permits, cancel.clone(), start)
+                        .await?;
+
+                    pipeline_metrics()
+                        .forwarder
+                        .read_processing_time
+                        .get_or_create(&self.metric_labels)
+                        .observe(start.elapsed().as_micros() as f64);
                 }
 
-                // Acquire permits up-front to cap inflight messages
-                let mut permits = Arc::clone(&semaphore)
-                    .acquire_many_owned(batch_size as u32)
-                    .await
-                    .map_err(|e| {
-                        Error::ISB(crate::pipeline::isb::error::ISBError::Other(format!(
-                            "Failed to acquire semaphore permit: {e}"
-                        )))
-                    })?;
-
-                let start = Instant::now();
-                // Apply rate limiting and fetch message batch
-                let batch = self.apply_rate_limiting_and_fetch(batch_size).await;
-
-                pipeline_metrics()
-                    .jetstream_isb
-                    .read_time_total
-                    .get_or_create(&jetstream_isb_metrics_labels(self.stream.name))
-                    .observe(start.elapsed().as_micros() as f64);
-
-                // Handle idle watermarks
-                self.handle_idle_watermarks(batch.is_empty(), &tx).await?;
-
-                // Process each message in the batch
-                self.process_message_batch(batch, &tx, &mut permits, cancel.clone(), start)
-                    .await?;
-
-                pipeline_metrics()
-                    .forwarder
-                    .read_processing_time
-                    .get_or_create(&self.metric_labels)
-                    .observe(start.elapsed().as_micros() as f64);
+                // Cleanup on shutdown
+                self.cleanup_on_shutdown(semaphore, max_ack_pending).await
             }
+            .await;
 
-            // Cleanup on shutdown
-            self.cleanup_on_shutdown(semaphore, max_ack_pending).await
+            result.inspect_err(|e| {
+                error!(
+                    ?e,
+                    "ISBReaderOrchestrator encountered a critical error, cancelling token"
+                );
+                cancel.cancel();
+            })
         });
 
         Ok((ReceiverStream::new(rx), handle))
