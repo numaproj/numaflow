@@ -69,12 +69,7 @@ impl<C: NumaflowTypeConfig> ReduceForwarder<C> {
             }
         };
 
-        let pbq_monitor = create_cancellable_handle(
-            pbq_handle,
-            cln_token.clone(),
-            "PBQ Handle panicked".to_string(),
-        )
-        .await;
+        let pbq_monitor = spawn_cancel_on_error(pbq_handle, cln_token.clone());
 
         // Join the pbq and reducer
         let (pbq_result, processor_result) = tokio::try_join!(pbq_monitor, processor_handle)
@@ -552,21 +547,29 @@ pub(crate) async fn start_reduce_forwarder(
     }
 }
 
-/// Currently there exists no way for the PBQ streaming_read or the wrapped ISB streaming_read to
-/// cancel the cancellation token in case any error is encountered during streaming read.
-/// This method simply wraps the original join handle in a spawned task, unwraps the JoinError,
-/// and checks the inner Result<()> based on which the cancellation token is cancelled.
-async fn create_cancellable_handle(
+/// Wraps a `JoinHandle<Result<()>>` in a monitor task that triggers `cancel_token` when the
+/// inner task fails (either by returning `Err` or by panicking/being cancelled at the task
+/// layer). This is used so that an error from the PBQ reader signals the reducer to finish,
+/// instead of the reducer hanging forever waiting for messages that will never arrive.
+fn spawn_cancel_on_error(
     join_handle: JoinHandle<Result<()>>,
     cancel_token: CancellationToken,
-    panic_str: String,
 ) -> JoinHandle<Result<()>> {
     tokio::spawn(async move {
-        let result = join_handle.await.expect(panic_str.as_str());
-        if result.is_err() {
-            cancel_token.cancel();
+        match join_handle.await {
+            Ok(inner) => {
+                if inner.is_err() {
+                    cancel_token.cancel();
+                }
+                inner
+            }
+            Err(join_err) => {
+                cancel_token.cancel();
+                Err(crate::error::Error::Forwarder(format!(
+                    "Spawn task failed to join: {join_err}"
+                )))
+            }
         }
-        result
     })
 }
 
