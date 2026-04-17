@@ -60,10 +60,11 @@ impl<C: crate::typ::NumaflowTypeConfig> SinkForwarder<C> {
             .streaming_write(read_messages_stream, cln_token.clone())
             .await?;
 
-        // Join the reader and sink writer
+        // Join the reader and sink writer. Cancel on panic (JoinError).
         let (reader_result, sink_writer_result) =
             tokio::try_join!(reader_handle, sink_writer_handle).map_err(|e| {
-                error!(?e, "Error while joining reader and sink writer");
+                error!(?e, "Reader or sink writer task panicked, cancelling token");
+                cln_token.cancel();
                 Error::Forwarder(format!("Error while joining reader and sink writer: {e}",))
             })?;
 
@@ -220,9 +221,11 @@ pub async fn start_sink_forwarder(
     )
     .await;
 
-    let results = try_join_all(forwarder_tasks)
-        .await
-        .map_err(|e| Error::Forwarder(e.to_string()))?;
+    let results = try_join_all(forwarder_tasks).await.map_err(|e| {
+        error!(?e, "A forwarder task panicked, cancelling token");
+        cln_token.cancel();
+        Error::Forwarder(e.to_string())
+    })?;
 
     for result in results {
         info!(?result, "Forwarder task completed");
