@@ -18,6 +18,8 @@ images:
     kind: MonoVertex
   - path: spec/source/transformer/container/image
     kind: MonoVertex
+  - path: spec/udf/container/image
+    kind: MonoVertex
   - path: spec/sink/udsink/container/image
     kind: MonoVertex
   - path: spec/sink/fallback/udsink/container/image
