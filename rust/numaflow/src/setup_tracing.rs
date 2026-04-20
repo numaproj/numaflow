@@ -53,10 +53,72 @@ fn report_panic(panic_info: &PanicHookInfo<'_>) {
     };
 }
 
-pub fn register() {
-    // Set up the tracing subscriber. RUST_LOG can be used to set the log level.
-    // The default log level is `info`. The `axum::rejection=trace` enables showing
-    // rejections from built-in extractors at `TRACE` level.
+/// Initialize the OTLP tracing layer if `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
+/// Returns `None` if tracing is not configured (no env var), in which case
+/// the subscriber runs with logging only.
+fn init_otlp_layer<S>(
+    service_name: String,
+) -> Option<(
+    tracing_opentelemetry::OpenTelemetryLayer<S, opentelemetry_sdk::trace::Tracer>,
+    opentelemetry_sdk::trace::SdkTracerProvider,
+)>
+where
+    S: tracing::Subscriber + for<'span> tracing_subscriber::registry::LookupSpan<'span>,
+{
+    let otlp_endpoint = std::env::var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+        .or_else(|_| std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT"))
+        .ok()?;
+
+    eprintln!(
+        "[setup_tracing] Configuring OTLP exporter: endpoint={otlp_endpoint}, service_name={service_name}"
+    );
+
+    use opentelemetry_otlp::WithExportConfig;
+    let exporter = match opentelemetry_otlp::SpanExporter::builder()
+        .with_tonic()
+        .with_endpoint(&otlp_endpoint)
+        .build()
+    {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("[setup_tracing] Failed to create OTLP exporter: {e}");
+            return None;
+        }
+    };
+
+    let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_batch_exporter(exporter)
+        .with_resource(
+            opentelemetry_sdk::Resource::builder()
+                .with_service_name(service_name)
+                .build(),
+        )
+        .build();
+
+    use opentelemetry::trace::TracerProvider as _;
+    let tracer = tracer_provider.tracer("numaflow-core");
+
+    // Set the global tracer provider so OTel API users (e.g., per-message sink.write
+    // spans created via the OTel API directly) can access it.
+    // We clone here because we also return the provider for explicit shutdown.
+    opentelemetry::global::set_tracer_provider(tracer_provider.clone());
+
+    // Set W3C Trace Context propagator for context propagation via sys_metadata.
+    opentelemetry::global::set_text_map_propagator(
+        opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+    );
+    let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+
+    eprintln!("[setup_tracing] OTLP tracing ENABLED");
+
+    Some((otel_layer, tracer_provider))
+}
+
+/// Initialize the tracing subscriber with optional OTLP export.
+/// Returns the `SdkTracerProvider` handle if OTLP is enabled — the caller
+/// must keep it alive and call `.shutdown()` before process exit to flush
+/// buffered spans.
+pub fn register() -> Option<opentelemetry_sdk::trace::SdkTracerProvider> {
     let debug_mode = std::env::var("NUMAFLOW_DEBUG").is_ok_and(|v| v.to_lowercase() == "true");
     let default_log_level = if debug_mode {
         "debug,h2::codec=info" // "h2::codec" is too noisy
@@ -66,13 +128,11 @@ pub fn register() {
 
     let filter = EnvFilter::builder()
         .with_default_directive(default_log_level.parse().unwrap_or(Level::INFO.into()))
-        .from_env_lossy(); // Read RUST_LOG environment variable
+        .from_env_lossy();
 
-    let layer = if debug_mode {
-        // Text format
+    let fmt_layer = if debug_mode {
         fmt::layer().boxed()
     } else {
-        // JSON format, flattened
         fmt::layer()
             .with_ansi(false)
             .json()
@@ -80,10 +140,19 @@ pub fn register() {
             .boxed()
     };
 
+    let service_name = std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "platform".into());
+    let (otel_layer, tracer_provider) = match init_otlp_layer(service_name) {
+        Some((layer, provider)) => (Some(layer), Some(provider)),
+        None => (None, None),
+    };
+
     tracing_subscriber::registry()
         .with(filter)
-        .with(layer)
+        .with(fmt_layer)
+        .with(otel_layer)
         .init();
 
     std::panic::set_hook(Box::new(report_panic));
+
+    tracer_provider
 }

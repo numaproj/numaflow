@@ -5,7 +5,7 @@ use std::error::Error;
 use tokio::task::JoinHandle;
 use tokio::{runtime, signal};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 mod setup_tracing;
 
@@ -16,7 +16,6 @@ const VERSION_INFO: &str = env!("NUMAFLOW_VERSION_INFO");
 const ENV_MONO_VERTEX_NAME: &str = "NUMAFLOW_MONO_VERTEX_NAME";
 
 fn main() {
-    setup_tracing::register();
     // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()
@@ -36,14 +35,24 @@ fn main() {
     // section for the vertex.
     let cpu_core_count = env::var("NUMAFLOW_CPU_REQUEST").unwrap_or_else(|_| "1".into());
     let worker_thread_count = cpu_core_count.parse::<usize>().inspect_err(|e| {
-        warn!(integer_conversion_error=?e, "The value of NUMAFLOW_CPU_REQUEST environment variable should be a valid unsigned integer. Worker thread count will be set to 1");
+        // Use eprintln! because tracing subscriber is not yet initialized at this point
+        // (it requires the Tokio runtime for OTLP export).
+        eprintln!("WARN: NUMAFLOW_CPU_REQUEST is not a valid unsigned integer ({e}). Worker thread count will be set to 1");
     }).unwrap_or(1).max(1);
 
+    // Build the Tokio runtime BEFORE initializing tracing. The OTLP tonic/gRPC
+    // exporter needs a Tokio runtime for its background tasks. By entering the
+    // runtime context first, the tonic channel binds to this runtime.
     let rt = runtime::Builder::new_multi_thread()
         .enable_all()
         .worker_threads(worker_thread_count)
         .build()
         .unwrap();
+
+    // Enter the runtime context so that tracing initialization (which may create
+    // a tonic gRPC channel for OTLP export) can use this runtime.
+    let _rt_guard = rt.enter();
+    let tracer_provider = setup_tracing::register();
 
     info!(
         VERSION_INFO,
@@ -53,12 +62,20 @@ fn main() {
 
     let cli = cmdline::root_cli();
 
-    rt.block_on(async move {
-        if let Err(e) = run(cli).await {
-            error!("{e:?}");
-            std::process::exit(1);
-        }
-    });
+    let run_result = rt.block_on(async move { run(cli).await });
+
+    if let Err(ref e) = run_result {
+        error!("{e:?}");
+    }
+
+    // Flush buffered spans before process exit (both success and error paths).
+    if let Some(provider) = tracer_provider {
+        let _ = provider.shutdown();
+    }
+
+    if run_result.is_err() {
+        std::process::exit(1);
+    }
 
     info!("Exited.");
 }
