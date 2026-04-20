@@ -53,6 +53,61 @@ fn report_panic(panic_info: &PanicHookInfo<'_>) {
     };
 }
 
+/// Build a sampler from standard OTel environment variables.
+///
+/// - `OTEL_TRACES_SAMPLER`: sampler type (default: `parentbased_always_on`)
+/// - `OTEL_TRACES_SAMPLER_ARG`: sampler argument (e.g., `0.1` for 10%)
+///
+/// Supported samplers: `always_on`, `always_off`, `traceidratio`,
+/// `parentbased_always_on`, `parentbased_always_off`, `parentbased_traceidratio`.
+fn build_sampler() -> opentelemetry_sdk::trace::Sampler {
+    use opentelemetry_sdk::trace::Sampler;
+
+    let sampler_name = std::env::var("OTEL_TRACES_SAMPLER")
+        .unwrap_or_else(|_| "parentbased_always_on".into());
+    let sampler_arg_raw = std::env::var("OTEL_TRACES_SAMPLER_ARG").ok();
+    let sampler_arg = sampler_arg_raw
+        .as_deref()
+        .and_then(|v| v.parse::<f64>().ok());
+
+    let ratio_or_default = |sampler_kind: &str| {
+        sampler_arg.unwrap_or_else(|| {
+            if let Some(raw) = sampler_arg_raw.as_deref() {
+                eprintln!(
+                    "[setup_tracing] Invalid OTEL_TRACES_SAMPLER_ARG='{raw}' for sampler '{sampler_kind}', defaulting ratio to 1.0"
+                );
+            }
+            1.0
+        })
+    };
+
+    let sampler = match sampler_name.as_str() {
+        "always_on" => Sampler::AlwaysOn,
+        "always_off" => Sampler::AlwaysOff,
+        "traceidratio" => Sampler::TraceIdRatioBased(ratio_or_default("traceidratio")),
+        "parentbased_always_on" => Sampler::ParentBased(Box::new(Sampler::AlwaysOn)),
+        "parentbased_always_off" => Sampler::ParentBased(Box::new(Sampler::AlwaysOff)),
+        "parentbased_traceidratio" => Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
+            ratio_or_default("parentbased_traceidratio"),
+        ))),
+        _ => {
+            eprintln!(
+                "[setup_tracing] Unknown sampler '{sampler_name}', defaulting to parentbased_always_on"
+            );
+            Sampler::ParentBased(Box::new(Sampler::AlwaysOn))
+        }
+    };
+
+    eprintln!(
+        "[setup_tracing] Sampler: {sampler_name}{}",
+        sampler_arg
+            .map(|r| format!(", ratio={r}"))
+            .unwrap_or_default()
+    );
+
+    sampler
+}
+
 /// Initialize the OTLP tracing layer if `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
 /// Returns `None` if tracing is not configured (no env var), in which case
 /// the subscriber runs with logging only.
@@ -86,8 +141,10 @@ where
         }
     };
 
+    let sampler = build_sampler();
     let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
         .with_batch_exporter(exporter)
+        .with_sampler(sampler)
         .with_resource(
             opentelemetry_sdk::Resource::builder()
                 .with_service_name(service_name)
@@ -149,10 +206,15 @@ pub fn register() -> Option<opentelemetry_sdk::trace::SdkTracerProvider> {
         None => (None, None),
     };
 
+    // Only export spans (info_span!, tracing::Span) to the OTel layer, not log
+    // events (info!, error!, warn!). Without this filter, every log statement in the
+    // codebase becomes an OTel event, overwhelming the batch exporter at high throughput.
+    let otel_filter = tracing_subscriber::filter::filter_fn(|metadata| metadata.is_span());
+
     tracing_subscriber::registry()
         .with(filter)
         .with(fmt_layer)
-        .with(otel_layer)
+        .with(otel_layer.with_filter(otel_filter))
         .init();
 
     std::panic::set_hook(Box::new(report_panic));
