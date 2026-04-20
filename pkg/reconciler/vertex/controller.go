@@ -320,6 +320,9 @@ func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Ver
 		vertex.Status.Replicas = uint32(desiredReplicas)
 		vertex.Status.LastScaledAt = metav1.Time{Time: time.Now()}
 	}
+	if vertex.Status.LastScaledAt.IsZero() {
+		vertex.Status.LastScaledAt = vertex.CreationTimestamp
+	}
 	if vertex.Status.Selector == "" {
 		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + vertex.Spec.PipelineName + "," + dfv1.KeyVertexName + "=" + vertex.Spec.Name)
 		vertex.Status.Selector = selector.String()

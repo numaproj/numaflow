@@ -304,6 +304,34 @@ func Test_orchestratePods(t *testing.T) {
 			assert.True(t, strings.HasPrefix(n, testObj.Name+"-mv-0") || strings.HasPrefix(n, testObj.Name+"-mv-1"))
 		}
 	})
+
+	t.Run("test lastScaledAt initialised to CreationTimestamp when zero", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		creationTime := time.Now()
+		testObj.CreationTimestamp = metav1.Time{Time: creationTime}
+		err := r.orchestratePods(context.TODO(), testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, creationTime.Unix(), testObj.Status.LastScaledAt.Unix())
+	})
+
+	t.Run("test lastScaledAt not overwritten when already set", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		testObj.CreationTimestamp = metav1.Time{Time: time.Now()}
+		// First call: creates pods and sets LastScaledAt (currentReplicas != desiredReplicas)
+		err := r.orchestratePods(context.TODO(), testObj)
+		assert.NoError(t, err)
+		// Overwrite with a known value now that replicas are aligned
+		existingScaledAt := time.Now().Add(-1 * time.Hour)
+		testObj.Status.LastScaledAt = metav1.Time{Time: existingScaledAt}
+		// Second call: currentReplicas == desiredReplicas, our guard must not overwrite
+		err = r.orchestratePods(context.TODO(), testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, existingScaledAt.Unix(), testObj.Status.LastScaledAt.Unix())
+	})
 }
 
 func Test_orchestrateFixedResources(t *testing.T) {
