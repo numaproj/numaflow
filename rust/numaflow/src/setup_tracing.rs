@@ -63,8 +63,8 @@ fn report_panic(panic_info: &PanicHookInfo<'_>) {
 fn build_sampler() -> opentelemetry_sdk::trace::Sampler {
     use opentelemetry_sdk::trace::Sampler;
 
-    let sampler_name = std::env::var("OTEL_TRACES_SAMPLER")
-        .unwrap_or_else(|_| "parentbased_always_on".into());
+    let sampler_name =
+        std::env::var("OTEL_TRACES_SAMPLER").unwrap_or_else(|_| "parentbased_always_on".into());
     let sampler_arg_raw = std::env::var("OTEL_TRACES_SAMPLER_ARG").ok();
     let sampler_arg = sampler_arg_raw
         .as_deref()
