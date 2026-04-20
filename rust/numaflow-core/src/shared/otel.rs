@@ -181,8 +181,8 @@ fn b3_to_traceparent(trace_id: &str, span_id: &str, sampled: Option<&str>) -> St
     };
 
     let flags = match sampled {
-        Some("1") | Some("true") => "01",
-        Some("0") | Some("false") => "00",
+        Some("1" | "true") => "01",
+        Some("0" | "false") => "00",
         Some("d") => "01", // debug = sampled
         _ => "01",         // default to sampled
     };

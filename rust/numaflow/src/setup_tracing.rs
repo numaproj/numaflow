@@ -96,7 +96,7 @@ where
         .build();
 
     use opentelemetry::trace::TracerProvider as _;
-    let tracer = tracer_provider.tracer("numaflow-core");
+    let tracer = tracer_provider.tracer("numaflow");
 
     // Set the global tracer provider so OTel API users (e.g., per-message sink.write
     // spans created via the OTel API directly) can access it.
@@ -126,13 +126,16 @@ pub fn register() -> Option<opentelemetry_sdk::trace::SdkTracerProvider> {
         "info"
     };
 
+    // Build filtering from default directives and allow `RUST_LOG` environment variable to override.
     let filter = EnvFilter::builder()
         .with_default_directive(default_log_level.parse().unwrap_or(Level::INFO.into()))
         .from_env_lossy();
 
     let fmt_layer = if debug_mode {
+        // Log in a human-readable format for local debugging/development.
         fmt::layer().boxed()
     } else {
+        // Log in a JSON format with flattened event fields.
         fmt::layer()
             .with_ansi(false)
             .json()

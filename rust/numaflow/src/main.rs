@@ -36,11 +36,10 @@ fn main() {
     let cpu_core_count = env::var("NUMAFLOW_CPU_REQUEST").unwrap_or_else(|_| "1".into());
     let worker_thread_count = cpu_core_count.parse::<usize>().inspect_err(|e| {
         // Use eprintln! because tracing subscriber is not yet initialized at this point
-        // (it requires the Tokio runtime for OTLP export).
         eprintln!("WARN: NUMAFLOW_CPU_REQUEST is not a valid unsigned integer ({e}). Worker thread count will be set to 1");
     }).unwrap_or(1).max(1);
 
-    // Build the Tokio runtime BEFORE initializing tracing. The OTLP tonic/gRPC
+    // Build the Tokio runtime before initializing tracing. The OTLP tonic/gRPC
     // exporter needs a Tokio runtime for its background tasks. By entering the
     // runtime context first, the tonic channel binds to this runtime.
     let rt = runtime::Builder::new_multi_thread()
@@ -68,7 +67,7 @@ fn main() {
         error!("{e:?}");
     }
 
-    // Flush buffered spans before process exit (both success and error paths).
+    // Flush buffered spans before process exit (this is done for both success and error paths).
     if let Some(provider) = tracer_provider {
         let _ = provider.shutdown();
     }
