@@ -6,6 +6,8 @@ images:
     kind: Pipeline
   - path: spec/vertices/sink/udsink/container/image
     kind: Pipeline
+  - path: spec/vertices/sink/onSuccess/udsink/container/image
+    kind: Pipeline
   - path: spec/vertices/sink/fallback/udsink/container/image
     kind: Pipeline
   - path: spec/vertices/source/transformer/container/image
@@ -22,6 +24,8 @@ images:
     kind: MonoVertex
   - path: spec/sink/udsink/container/image
     kind: MonoVertex
+  - path: spec/sink/onSuccess/udsink/container/image
+    kind: MonoVertex
   - path: spec/sink/fallback/udsink/container/image
     kind: MonoVertex
   - path: spec/pipeline/vertices/udf/container/image
@@ -29,6 +33,8 @@ images:
   - path: spec/pipeline/vertices/sidecars/image
     kind: ServingPipeline
   - path: spec/pipeline/vertices/sink/udsink/container/image
+    kind: ServingPipeline
+  - path: spec/pipeline/vertices/sink/onSuccess/udsink/container/image
     kind: ServingPipeline
   - path: spec/pipeline/vertices/sink/fallback/udsink/container/image
     kind: ServingPipeline
