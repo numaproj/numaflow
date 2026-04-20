@@ -3,13 +3,20 @@
 ## v1.7.5 (2026-04-20)
 
  * [a11afd24](https://github.com/numaproj/numaflow/commit/a11afd24464cea8c57641b5daa97aee8e569dafd) Update manifests to v1.7.5
- * [94090b6d](https://github.com/numaproj/numaflow/commit/94090b6dc29862f817fbc70911f489a3d4b834fd) chore(cherry-pick): downgrade health check error log to warn (#3108) (#3387)
- * [02cfc574](https://github.com/numaproj/numaflow/commit/02cfc57437da6a88c78ce4280cc77002cd31cd58) Cherry pick commits for release 1.7.5 (#3386)
+ * [555a4d5](https://github.com/numaproj/numaflow/commit/555a4d58b35e34f6c3c2dadc1f6f10382a032bd1) fix: Handle udsource disconnect when ACK is invoked (#3265)
+ * [6314713](https://github.com/numaproj/numaflow/commit/6314713f14140a2ff47490e23a27ce8feb391fe7) fix: start lastScaledAt as creationTime by default (#3358)
+ * [2e06966](https://github.com/numaproj/numaflow/commit/2e069661cb5d93e32f47219e59cb0b882c5af0eb) fix: Pod deletion (scale down) caused transient unhealthy vertex/mvtx (#3366)
+ * [92ec497](https://github.com/numaproj/numaflow/commit/92ec497d50a0c28ea4f2c4892f4975f222774af7) chore: downgrade health check error log to warn (#3108)
 
 ### Contributors
 
+ * Adarsh Jain
+ * Da.Sanchez
+ * Derek Wang
+ * Sreekanth
  * Vaibhav Kant Tiwari
- * Vaibhav Tiwari
+ * Vigith Maurice
+
 
 ## v1.7.4 (2026-03-13)
 
