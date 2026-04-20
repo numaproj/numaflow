@@ -79,7 +79,7 @@ impl MapBatchTask {
 
         for (result, (msg_handle, parent_info)) in results
             .into_iter()
-            .zip(self.read_batch.into_iter().zip(parent_infos.into_iter()))
+            .zip(self.read_batch.into_iter().zip(parent_infos))
         {
             match result {
                 Ok(results) => {

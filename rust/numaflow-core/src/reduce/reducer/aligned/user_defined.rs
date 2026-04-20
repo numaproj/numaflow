@@ -686,7 +686,7 @@ mod tests {
         assert_eq!(results.len(), 2);
 
         // Sort results by key for deterministic testing
-        results.sort_by(|a, b| a.message().keys.to_vec().cmp(&b.message().keys.to_vec()));
+        results.sort_by_key(|a| a.message().keys.to_vec());
 
         // Check key1 result
         let result0 = results.first().expect("Expected result for key1");
