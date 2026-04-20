@@ -401,6 +401,7 @@ mod tests {
     use bytes::{Bytes, BytesMut};
 
     use numaflow_shared::kv::jetstream::JetstreamKVStore;
+    use numaflow_testing::simplekvstore::SimpleKVStore;
 
     use super::*;
 
@@ -423,6 +424,65 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     fn create_ot_store(ot_bucket: Store, ot_bucket_name: &'static str) -> Arc<dyn KVStore> {
         Arc::new(JetstreamKVStore::new(ot_bucket, ot_bucket_name))
+    }
+
+    /// Helper to create a SimpleKVStore-backed ProcessorManager for unit tests.
+    async fn create_test_manager(
+        store: &SimpleKVStore,
+        partitions: Vec<u16>,
+        vertex_type: VertexType,
+        vertex_replica: u16,
+    ) -> ProcessorManager {
+        let ot_store: Arc<dyn KVStore> = Arc::new(store.clone());
+        let bucket_config = BucketConfig {
+            vertex: "test",
+            ot_bucket: "test-ot",
+            partitions,
+            delay: None,
+        };
+        ProcessorManager::new(ot_store, &bucket_config, vertex_type, vertex_replica)
+            .await
+            .unwrap()
+    }
+
+    /// Helper to serialize a WMB into Bytes for KV store puts.
+    fn wmb_bytes(watermark: i64, offset: i64, partition: u16) -> Bytes {
+        let wmb_bytes: BytesMut = WMB {
+            watermark,
+            offset,
+            idle: false,
+            partition,
+            processor_count: None,
+        }
+        .try_into()
+        .unwrap();
+        wmb_bytes.freeze()
+    }
+
+    /// Helper: wait until a condition on the processors map is met, or panic after timeout.
+    async fn wait_for<F>(
+        processors: &Arc<RwLock<HashMap<Bytes, Processor>>>,
+        timeout: Duration,
+        description: &str,
+        condition: F,
+    ) where
+        F: Fn(&HashMap<Bytes, Processor>) -> bool,
+    {
+        let result = tokio::time::timeout(timeout, async {
+            loop {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                let map = processors.read().expect("failed to acquire lock");
+                if condition(&map) {
+                    return;
+                }
+            }
+        })
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "Timed out after {timeout:?} waiting for: {description}"
+        );
     }
 
     #[cfg(feature = "nats-tests")]
@@ -741,5 +801,320 @@ mod tests {
             processor.timelines.contains_key(&1),
             "Timeline should exist for partition 1"
         );
+    }
+
+    /// Processor transitions from Active to InActive when it stops publishing WMBs.
+    #[tokio::test]
+    async fn test_processor_status_active_to_inactive() {
+        let store = SimpleKVStore::new("test_active_to_inactive");
+
+        // Prepopulate a processor in the store so it gets picked up during initialization
+        store.put("processor1", wmb_bytes(100, 1, 0)).await.unwrap();
+
+        let manager = create_test_manager(&store, vec![0], VertexType::MapUDF, 0).await;
+
+        // Verify the processor starts as Active (prepopulated with current time)
+        wait_for(
+            &manager.processors,
+            Duration::from_secs(2),
+            "processor1 to be Active",
+            |map| {
+                map.get(&Bytes::from("processor1"))
+                    .is_some_and(|p| p.status == Status::Active)
+            },
+        )
+        .await;
+
+        // Set last_seen_time to 10 seconds in the past (> 1x refresh rate of 5s, < 10x = 50s)
+        // This simulates the processor not publishing WMBs for more than the refresh interval.
+        {
+            let mut processors = manager.processors.write().expect("failed to acquire lock");
+            let processor = processors
+                .get_mut(&Bytes::from("processor1"))
+                .expect("processor should exist");
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64;
+            processor.update_last_seen_time(now - 10_000); // 10 seconds ago
+        }
+
+        // Wait for the refresher to mark it as InActive (next tick, up to 5s + buffer)
+        wait_for(
+            &manager.processors,
+            Duration::from_secs(10),
+            "processor1 to become InActive",
+            |map| {
+                map.get(&Bytes::from("processor1"))
+                    .is_some_and(|p| p.status == Status::InActive)
+            },
+        )
+        .await;
+    }
+
+    /// Processor transitions from InActive to Deleted when it has been gone for a long time.
+    #[tokio::test]
+    async fn test_processor_status_inactive_to_deleted() {
+        let store = SimpleKVStore::new("test_inactive_to_deleted");
+
+        // Prepopulate a processor
+        store.put("processor1", wmb_bytes(100, 1, 0)).await.unwrap();
+
+        let manager = create_test_manager(&store, vec![0], VertexType::MapUDF, 0).await;
+
+        // Wait for Active state first
+        wait_for(
+            &manager.processors,
+            Duration::from_secs(2),
+            "processor1 to be Active",
+            |map| {
+                map.get(&Bytes::from("processor1"))
+                    .is_some_and(|p| p.status == Status::Active)
+            },
+        )
+        .await;
+
+        // Set last_seen_time to 60 seconds in the past (> 10x refresh rate of 5s = 50s)
+        // This simulates the processor being gone for a very long time.
+        {
+            let mut processors = manager.processors.write().expect("failed to acquire lock");
+            let processor = processors
+                .get_mut(&Bytes::from("processor1"))
+                .expect("processor should exist");
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64;
+            processor.update_last_seen_time(now - 60_000); // 60 seconds ago
+        }
+
+        // The refresher should mark it as Deleted directly (skipping InActive since diff > 10x)
+        wait_for(
+            &manager.processors,
+            Duration::from_secs(10),
+            "processor1 to become Deleted",
+            |map| {
+                map.get(&Bytes::from("processor1"))
+                    .is_some_and(|p| p.status == Status::Deleted)
+            },
+        )
+        .await;
+    }
+
+    /// Processor re-activation from InActive to Active when a new WMB arrives.
+    #[tokio::test]
+    async fn test_processor_reactivation_inactive_to_active() {
+        let store = SimpleKVStore::new("test_reactivation");
+
+        // Prepopulate a processor
+        store.put("processor1", wmb_bytes(100, 1, 0)).await.unwrap();
+
+        let manager = create_test_manager(&store, vec![0], VertexType::MapUDF, 0).await;
+
+        // Wait for Active state first
+        wait_for(
+            &manager.processors,
+            Duration::from_secs(2),
+            "processor1 to be Active",
+            |map| {
+                map.get(&Bytes::from("processor1"))
+                    .is_some_and(|p| p.status == Status::Active)
+            },
+        )
+        .await;
+
+        // Force the processor to be InActive
+        {
+            let mut processors = manager.processors.write().expect("failed to acquire lock");
+            let processor = processors
+                .get_mut(&Bytes::from("processor1"))
+                .expect("processor should exist");
+            processor.set_status(Status::InActive);
+        }
+
+        // Publish a new WMB — the OT watcher should re-activate the processor
+        store.put("processor1", wmb_bytes(200, 2, 0)).await.unwrap();
+
+        // Wait for the OT watcher to process the new WMB and re-activate the processor
+        wait_for(
+            &manager.processors,
+            Duration::from_secs(5),
+            "processor1 to be re-activated to Active",
+            |map| {
+                map.get(&Bytes::from("processor1")).is_some_and(|p| {
+                    p.status == Status::Active
+                        && p.timelines
+                            .get(&0)
+                            .and_then(|t| t.get_head_wmb())
+                            .is_some_and(|wmb| wmb.watermark == 200 && wmb.offset == 2)
+                })
+            },
+        )
+        .await;
+    }
+
+    /// Deleted processors are NOT re-activated by new WMBs.
+    #[tokio::test]
+    async fn test_deleted_processor_not_reactivated() {
+        let store = SimpleKVStore::new("test_deleted_no_reactivation");
+
+        // Prepopulate a processor
+        store.put("processor1", wmb_bytes(100, 1, 0)).await.unwrap();
+
+        let manager = create_test_manager(&store, vec![0], VertexType::MapUDF, 0).await;
+
+        // Wait for Active state
+        wait_for(
+            &manager.processors,
+            Duration::from_secs(2),
+            "processor1 to be Active",
+            |map| {
+                map.get(&Bytes::from("processor1"))
+                    .is_some_and(|p| p.status == Status::Active)
+            },
+        )
+        .await;
+
+        // Mark it Deleted
+        {
+            let mut processors = manager.processors.write().expect("failed to acquire lock");
+            let processor = processors
+                .get_mut(&Bytes::from("processor1"))
+                .expect("processor should exist");
+            processor.set_status(Status::Deleted);
+        }
+
+        // Publish a new WMB
+        store.put("processor1", wmb_bytes(200, 2, 0)).await.unwrap();
+
+        // Give the OT watcher time to process the WMB
+        wait_for(
+            &manager.processors,
+            Duration::from_millis(500),
+            "processor1 to process the WMB",
+            |map| {
+                map.get(&Bytes::from("processor1"))
+                    .and_then(|p| p.timelines.get(&0))
+                    .is_some_and(|t| t.entries().len() > 1)
+            },
+        )
+        .await;
+
+        // The timeline should be updated but status should remain Deleted
+        let processors = manager.processors.read().expect("failed to acquire lock");
+        let processor = processors
+            .get(&Bytes::from("processor1"))
+            .expect("processor should exist");
+        assert_eq!(
+            processor.status,
+            Status::Deleted,
+            "Deleted processor should not be re-activated"
+        );
+        // The timeline IS still updated (WMBs are tracked regardless of status)
+        let head_wmb = processor
+            .timelines
+            .get(&0)
+            .and_then(|t| t.get_head_wmb())
+            .expect("timeline should have WMB");
+        assert_eq!(head_wmb.watermark, 200);
+        assert_eq!(head_wmb.offset, 2);
+    }
+
+    /// KVWatchOp::Delete marks the specific processor as Deleted.
+    #[tokio::test]
+    async fn test_kv_watch_delete_marks_processor_deleted() {
+        let store = SimpleKVStore::new("test_kv_delete");
+
+        // Prepopulate two processors
+        store.put("processor1", wmb_bytes(100, 1, 0)).await.unwrap();
+        store.put("processor2", wmb_bytes(200, 1, 0)).await.unwrap();
+
+        let manager = create_test_manager(&store, vec![0], VertexType::MapUDF, 0).await;
+
+        // Wait for both processors to be Active
+        wait_for(
+            &manager.processors,
+            Duration::from_secs(2),
+            "both processors to be Active",
+            |map| {
+                map.get(&Bytes::from("processor1"))
+                    .is_some_and(|p| p.status == Status::Active)
+                    && map
+                        .get(&Bytes::from("processor2"))
+                        .is_some_and(|p| p.status == Status::Active)
+            },
+        )
+        .await;
+
+        // Delete processor1's key from the KV store — triggers KVWatchOp::Delete
+        store.delete("processor1").await.unwrap();
+
+        // Wait for the OT watcher to process the Delete event
+        wait_for(
+            &manager.processors,
+            Duration::from_secs(5),
+            "processor1 to become Deleted after KV delete",
+            |map| {
+                map.get(&Bytes::from("processor1"))
+                    .is_some_and(|p| p.status == Status::Deleted)
+            },
+        )
+        .await;
+
+        // processor2 should remain Active
+        let processors = manager.processors.read().expect("failed to acquire lock");
+        assert_eq!(
+            processors.get(&Bytes::from("processor2")).unwrap().status,
+            Status::Active,
+            "processor2 should remain Active after processor1 is deleted"
+        );
+    }
+
+    /// KVWatchOp::Purge marks ALL processors as Deleted.
+    #[tokio::test]
+    async fn test_kv_watch_purge_marks_all_processors_deleted() {
+        let store = SimpleKVStore::new("test_kv_purge");
+
+        // Prepopulate three processors
+        store.put("processor1", wmb_bytes(100, 1, 0)).await.unwrap();
+        store.put("processor2", wmb_bytes(200, 1, 0)).await.unwrap();
+        store.put("processor3", wmb_bytes(300, 1, 0)).await.unwrap();
+
+        let manager = create_test_manager(&store, vec![0], VertexType::MapUDF, 0).await;
+
+        // Wait for all processors to be Active
+        wait_for(
+            &manager.processors,
+            Duration::from_secs(2),
+            "all three processors to be Active",
+            |map| {
+                ["processor1", "processor2", "processor3"]
+                    .iter()
+                    .all(|name| {
+                        map.get(&Bytes::from(*name))
+                            .is_some_and(|p| p.status == Status::Active)
+                    })
+            },
+        )
+        .await;
+
+        // Purge the KV store — triggers KVWatchOp::Purge
+        store.purge();
+
+        // Wait for the OT watcher to process the Purge event
+        wait_for(
+            &manager.processors,
+            Duration::from_secs(5),
+            "all processors to become Deleted after purge",
+            |map| {
+                ["processor1", "processor2", "processor3"]
+                    .iter()
+                    .all(|name| {
+                        map.get(&Bytes::from(*name))
+                            .is_some_and(|p| p.status == Status::Deleted)
+                    })
+            },
+        )
+        .await;
     }
 }

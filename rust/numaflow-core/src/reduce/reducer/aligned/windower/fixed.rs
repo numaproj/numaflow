@@ -91,28 +91,16 @@ impl FixedWindowManager {
     /// Closes any windows that can be closed because the Watermark has advanced beyond the window
     /// end time.
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
-        let mut result = Vec::new();
-
-        let windows_to_close = {
+        let windows_to_close: Vec<Window> = {
             let mut active_windows = self
                 .active_windows
                 .write()
                 .expect("Poisoned lock for active_windows");
-
-            let mut windows_to_close = Vec::new();
-            active_windows.retain(|window| {
-                if window.end_time <= watermark {
-                    windows_to_close.push(window.clone());
-                    false
-                } else {
-                    true
-                }
-            });
-
-            windows_to_close
+            active_windows
+                .extract_if(.., |window| window.end_time <= watermark)
+                .collect()
         };
 
-        // add the windows to closed_windows
         {
             let mut closed_windows = self
                 .closed_windows
@@ -123,14 +111,13 @@ impl FixedWindowManager {
             }
         }
 
-        for window in windows_to_close {
-            result.push(AlignedWindowMessage {
+        windows_to_close
+            .into_iter()
+            .map(|window| AlignedWindowMessage {
                 pnf_slot: window_to_pnf_slot(&window),
                 operation: AlignedWindowOperation::Close { window },
-            });
-        }
-
-        result
+            })
+            .collect()
     }
 
     /// Deletes a window after it is closed and GC is done.

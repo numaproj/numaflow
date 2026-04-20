@@ -206,6 +206,7 @@ impl ISBWatermarkPublisher {
 }
 
 #[cfg(test)]
+#[cfg(feature = "nats-tests")]
 mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -507,5 +508,1176 @@ mod tests {
             .delete_key_value(ot_bucket_name.to_string())
             .await
             .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod simple_kv_tests {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    use super::*;
+
+    use crate::config::pipeline::isb::Stream;
+    use crate::config::pipeline::watermark::BucketConfig;
+    use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
+    use crate::watermark::wmb::WMB;
+    use numaflow_shared::kv::KVStore;
+    use numaflow_testing::simplekvstore::SimpleKVStore;
+
+    /// A single publish step: stream, offset, watermark, idle flag, and optional processor count.
+    struct PublishStep {
+        stream: Stream,
+        offset: i64,
+        watermark: i64,
+        idle: bool,
+        processor_count: Option<u32>,
+    }
+
+    /// Expected WMB state after a sequence of publishes.
+    struct ExpectedWMB {
+        /// Which vertex store to check.
+        vertex: &'static str,
+        offset: i64,
+        watermark: i64,
+        idle: bool,
+        partition: u16,
+        processor_count: Option<u32>,
+    }
+
+    /// Describes a complete publish-then-verify scenario.
+    struct PublisherScenario {
+        name: &'static str,
+        processor_name: &'static str,
+        bucket_configs: Vec<BucketConfig>,
+        is_source: bool,
+        steps: Vec<PublishStep>,
+        expected: Vec<ExpectedWMB>,
+    }
+
+    /// Runs a PublisherScenario: creates stores and publisher, executes all publish steps,
+    /// then verifies the expected WMB in each vertex store.
+    async fn run_scenario(scenario: PublisherScenario) {
+        // Build OT stores from SimpleKVStore, one per unique vertex.
+        let mut ot_stores: HashMap<&'static str, Arc<dyn KVStore>> = HashMap::new();
+        for config in &scenario.bucket_configs {
+            if !ot_stores.contains_key(config.vertex) {
+                let store = SimpleKVStore::new(config.ot_bucket);
+                ot_stores.insert(config.vertex, Arc::new(store.clone()));
+            }
+        }
+
+        let mut publisher = ISBWatermarkPublisher::new(
+            scenario.processor_name.to_string(),
+            ot_stores.clone(),
+            &scenario.bucket_configs,
+            scenario.is_source,
+        );
+
+        for step in &scenario.steps {
+            publisher
+                .publish_watermark_with_processor_count(
+                    &step.stream,
+                    step.offset,
+                    step.watermark,
+                    step.idle,
+                    step.processor_count,
+                )
+                .await;
+        }
+
+        for expected in &scenario.expected {
+            let store = ot_stores.get(expected.vertex).unwrap_or_else(|| {
+                panic!(
+                    "{}: store for vertex '{}' not found",
+                    scenario.name, expected.vertex
+                )
+            });
+            let value = store
+                .get(scenario.processor_name)
+                .await
+                .unwrap_or_else(|e| panic!("{}: get failed: {e}", scenario.name));
+
+            let wmb: WMB = value
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{}: expected WMB in store for '{}'",
+                        scenario.name, expected.vertex
+                    )
+                })
+                .try_into()
+                .unwrap_or_else(|_| panic!("{}: failed to decode WMB", scenario.name));
+
+            assert_eq!(
+                wmb.offset, expected.offset,
+                "{}: offset mismatch",
+                scenario.name
+            );
+            assert_eq!(
+                wmb.watermark, expected.watermark,
+                "{}: watermark mismatch",
+                scenario.name
+            );
+            assert_eq!(wmb.idle, expected.idle, "{}: idle mismatch", scenario.name);
+            assert_eq!(
+                wmb.partition, expected.partition,
+                "{}: partition mismatch",
+                scenario.name
+            );
+            assert_eq!(
+                wmb.processor_count, expected.processor_count,
+                "{}: processor_count mismatch",
+                scenario.name
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Basic publish scenarios
+    // -----------------------------------------------------------------------
+
+    /// Publish a single watermark to one edge, one partition.
+    #[tokio::test]
+    async fn test_single_edge_single_partition_publish() {
+        run_scenario(PublisherScenario {
+            name: "single_edge_single_partition",
+            processor_name: "processor1",
+            bucket_configs: vec![BucketConfig {
+                vertex: "v1",
+                partitions: vec![0],
+                ot_bucket: "single_edge_single_partition_ot",
+                delay: None,
+            }],
+            is_source: false,
+            steps: vec![PublishStep {
+                stream: Stream {
+                    name: "v1-0",
+                    vertex: "v1",
+                    partition: 0,
+                },
+                offset: 1,
+                watermark: 100,
+                idle: false,
+                processor_count: None,
+            }],
+            expected: vec![ExpectedWMB {
+                vertex: "v1",
+                offset: 1,
+                watermark: 100,
+                idle: false,
+                partition: 0,
+                processor_count: None,
+            }],
+        })
+        .await;
+    }
+
+    /// Publish increasing watermarks, verify only the latest persists.
+    #[tokio::test]
+    async fn test_single_edge_increasing_watermarks() {
+        run_scenario(PublisherScenario {
+            name: "increasing_watermarks",
+            processor_name: "processor1",
+            bucket_configs: vec![BucketConfig {
+                vertex: "v1",
+                partitions: vec![0],
+                ot_bucket: "increasing_wm_ot",
+                delay: None,
+            }],
+            is_source: false,
+            steps: vec![
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 1,
+                    watermark: 100,
+                    idle: false,
+                    processor_count: None,
+                },
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 2,
+                    watermark: 200,
+                    idle: false,
+                    processor_count: None,
+                },
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 3,
+                    watermark: 300,
+                    idle: false,
+                    processor_count: None,
+                },
+            ],
+            expected: vec![ExpectedWMB {
+                vertex: "v1",
+                offset: 3,
+                watermark: 300,
+                idle: false,
+                partition: 0,
+                processor_count: None,
+            }],
+        })
+        .await;
+    }
+
+    /// Publish to two partitions on the same edge. Each partition tracks state independently,
+    /// but they share the same KV key (processor_name), so the last write wins in the store.
+    #[tokio::test]
+    async fn test_single_edge_two_partitions_independent_state() {
+        run_scenario(PublisherScenario {
+            name: "two_partitions_independent",
+            processor_name: "processor1",
+            bucket_configs: vec![BucketConfig {
+                vertex: "v1",
+                partitions: vec![0, 1],
+                ot_bucket: "two_part_ot",
+                delay: None,
+            }],
+            is_source: false,
+            steps: vec![
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 10,
+                    watermark: 500,
+                    idle: false,
+                    processor_count: None,
+                },
+                // Partition 1 can have a lower watermark - it's independent.
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-1",
+                        vertex: "v1",
+                        partition: 1,
+                    },
+                    offset: 3,
+                    watermark: 50,
+                    idle: false,
+                    processor_count: None,
+                },
+            ],
+            // The last write to the store wins (partition 1's publish was last).
+            expected: vec![ExpectedWMB {
+                vertex: "v1",
+                offset: 3,
+                watermark: 50,
+                idle: false,
+                partition: 1,
+                processor_count: None,
+            }],
+        })
+        .await;
+    }
+
+    /// Publish to two separate edges, verify each edge's store has the correct WMB.
+    #[tokio::test]
+    async fn test_multi_edge_publish() {
+        run_scenario(PublisherScenario {
+            name: "multi_edge",
+            processor_name: "processor1",
+            bucket_configs: vec![
+                BucketConfig {
+                    vertex: "v1",
+                    partitions: vec![0],
+                    ot_bucket: "multi_edge_v1_ot",
+                    delay: None,
+                },
+                BucketConfig {
+                    vertex: "v2",
+                    partitions: vec![0],
+                    ot_bucket: "multi_edge_v2_ot",
+                    delay: None,
+                },
+            ],
+            is_source: false,
+            steps: vec![
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 1,
+                    watermark: 100,
+                    idle: false,
+                    processor_count: None,
+                },
+                PublishStep {
+                    stream: Stream {
+                        name: "v2-0",
+                        vertex: "v2",
+                        partition: 0,
+                    },
+                    offset: 1,
+                    watermark: 200,
+                    idle: false,
+                    processor_count: None,
+                },
+            ],
+            expected: vec![
+                ExpectedWMB {
+                    vertex: "v1",
+                    offset: 1,
+                    watermark: 100,
+                    idle: false,
+                    partition: 0,
+                    processor_count: None,
+                },
+                ExpectedWMB {
+                    vertex: "v2",
+                    offset: 1,
+                    watermark: 200,
+                    idle: false,
+                    partition: 0,
+                    processor_count: None,
+                },
+            ],
+        })
+        .await;
+    }
+
+    /// Verify the idle flag is correctly propagated to the WMB.
+    #[tokio::test]
+    async fn test_idle_flag_propagated() {
+        run_scenario(PublisherScenario {
+            name: "idle_flag",
+            processor_name: "processor1",
+            bucket_configs: vec![BucketConfig {
+                vertex: "v1",
+                partitions: vec![0],
+                ot_bucket: "idle_flag_ot",
+                delay: None,
+            }],
+            is_source: false,
+            steps: vec![PublishStep {
+                stream: Stream {
+                    name: "v1-0",
+                    vertex: "v1",
+                    partition: 0,
+                },
+                offset: 1,
+                watermark: 100,
+                idle: true,
+                processor_count: None,
+            }],
+            expected: vec![ExpectedWMB {
+                vertex: "v1",
+                offset: 1,
+                watermark: 100,
+                idle: true,
+                partition: 0,
+                processor_count: None,
+            }],
+        })
+        .await;
+    }
+
+    // -----------------------------------------------------------------------
+    // Monotonicity and regression scenarios
+    // -----------------------------------------------------------------------
+
+    /// Higher offset with lower watermark: the publisher should keep the higher watermark
+    /// (regression correction). The published offset advances but watermark does not regress.
+    #[tokio::test]
+    async fn test_watermark_regression_keeps_higher_watermark() {
+        run_scenario(PublisherScenario {
+            name: "regression_keeps_higher_wm",
+            processor_name: "processor1",
+            bucket_configs: vec![BucketConfig {
+                vertex: "v1",
+                partitions: vec![0],
+                ot_bucket: "regression_ot",
+                delay: None,
+            }],
+            is_source: false,
+            steps: vec![
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 10,
+                    watermark: 200,
+                    idle: false,
+                    processor_count: None,
+                },
+                // Offset advances but watermark regresses — publisher should keep wm=200.
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 20,
+                    watermark: 100,
+                    idle: false,
+                    processor_count: None,
+                },
+            ],
+            expected: vec![ExpectedWMB {
+                vertex: "v1",
+                offset: 20,
+                watermark: 200,
+                idle: false,
+                partition: 0,
+                processor_count: None,
+            }],
+        })
+        .await;
+    }
+
+    /// Lower offset with higher watermark: offset should NOT regress, but watermark updates.
+    #[tokio::test]
+    async fn test_lower_offset_updates_watermark_only() {
+        run_scenario(PublisherScenario {
+            name: "lower_offset_higher_wm",
+            processor_name: "processor1",
+            bucket_configs: vec![BucketConfig {
+                vertex: "v1",
+                partitions: vec![0],
+                ot_bucket: "lower_off_ot",
+                delay: None,
+            }],
+            is_source: false,
+            steps: vec![
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 10,
+                    watermark: 100,
+                    idle: false,
+                    processor_count: None,
+                },
+                // Lower offset, higher watermark — offset stays at 10, watermark updates to 200.
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 5,
+                    watermark: 200,
+                    idle: false,
+                    processor_count: None,
+                },
+            ],
+            expected: vec![ExpectedWMB {
+                vertex: "v1",
+                offset: 10,
+                watermark: 200,
+                idle: false,
+                partition: 0,
+                processor_count: None,
+            }],
+        })
+        .await;
+    }
+
+    /// Lower offset with lower watermark: nothing changes (both are below tracked state).
+    #[tokio::test]
+    async fn test_lower_offset_lower_watermark_no_change() {
+        run_scenario(PublisherScenario {
+            name: "lower_both",
+            processor_name: "processor1",
+            bucket_configs: vec![BucketConfig {
+                vertex: "v1",
+                partitions: vec![0],
+                ot_bucket: "lower_both_ot",
+                delay: None,
+            }],
+            is_source: false,
+            steps: vec![
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 10,
+                    watermark: 200,
+                    idle: false,
+                    processor_count: None,
+                },
+                // Both lower — state unchanged
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 5,
+                    watermark: 100,
+                    idle: false,
+                    processor_count: None,
+                },
+            ],
+            expected: vec![ExpectedWMB {
+                vertex: "v1",
+                offset: 10,
+                watermark: 200,
+                idle: false,
+                partition: 0,
+                processor_count: None,
+            }],
+        })
+        .await;
+    }
+
+    /// Same offset, higher watermark: watermark should update, offset stays.
+    #[tokio::test]
+    async fn test_same_offset_higher_watermark() {
+        run_scenario(PublisherScenario {
+            name: "same_off_higher_wm",
+            processor_name: "processor1",
+            bucket_configs: vec![BucketConfig {
+                vertex: "v1",
+                partitions: vec![0],
+                ot_bucket: "same_off_higher_wm_ot",
+                delay: None,
+            }],
+            is_source: false,
+            steps: vec![
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 10,
+                    watermark: 100,
+                    idle: false,
+                    processor_count: None,
+                },
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 10,
+                    watermark: 200,
+                    idle: false,
+                    processor_count: None,
+                },
+            ],
+            expected: vec![ExpectedWMB {
+                vertex: "v1",
+                offset: 10,
+                watermark: 200,
+                idle: false,
+                partition: 0,
+                processor_count: None,
+            }],
+        })
+        .await;
+    }
+
+    /// Watermark of -1 (initial sentinel) should not cause regression detection.
+    /// The code checks `watermark != -1 && self.watermark > watermark`.
+    #[tokio::test]
+    async fn test_minus_one_watermark_not_treated_as_regression() {
+        run_scenario(PublisherScenario {
+            name: "minus_one_wm",
+            processor_name: "processor1",
+            bucket_configs: vec![BucketConfig {
+                vertex: "v1",
+                partitions: vec![0],
+                ot_bucket: "minus_one_wm_ot",
+                delay: None,
+            }],
+            is_source: false,
+            steps: vec![
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 1,
+                    watermark: 100,
+                    idle: false,
+                    processor_count: None,
+                },
+                // Offset advances, watermark is -1 (sentinel). Should keep wm=100.
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 2,
+                    watermark: -1,
+                    idle: false,
+                    processor_count: None,
+                },
+            ],
+            expected: vec![ExpectedWMB {
+                vertex: "v1",
+                offset: 2,
+                watermark: 100,
+                idle: false,
+                partition: 0,
+                processor_count: None,
+            }],
+        })
+        .await;
+    }
+
+    // -----------------------------------------------------------------------
+    // Processor count scenarios
+    // -----------------------------------------------------------------------
+
+    /// Verify processor_count is propagated to the WMB.
+    #[tokio::test]
+    async fn test_processor_count_propagated() {
+        run_scenario(PublisherScenario {
+            name: "processor_count",
+            processor_name: "processor1",
+            bucket_configs: vec![BucketConfig {
+                vertex: "v1",
+                partitions: vec![0],
+                ot_bucket: "proc_count_ot",
+                delay: None,
+            }],
+            is_source: true,
+            steps: vec![PublishStep {
+                stream: Stream {
+                    name: "v1-0",
+                    vertex: "v1",
+                    partition: 0,
+                },
+                offset: 1,
+                watermark: 100,
+                idle: false,
+                processor_count: Some(3),
+            }],
+            expected: vec![ExpectedWMB {
+                vertex: "v1",
+                offset: 1,
+                watermark: 100,
+                idle: false,
+                partition: 0,
+                processor_count: Some(3),
+            }],
+        })
+        .await;
+    }
+
+    /// Verify processor_count=None results in None in the WMB.
+    #[tokio::test]
+    async fn test_processor_count_none() {
+        run_scenario(PublisherScenario {
+            name: "processor_count_none",
+            processor_name: "processor1",
+            bucket_configs: vec![BucketConfig {
+                vertex: "v1",
+                partitions: vec![0],
+                ot_bucket: "proc_count_none_ot",
+                delay: None,
+            }],
+            is_source: true,
+            steps: vec![PublishStep {
+                stream: Stream {
+                    name: "v1-0",
+                    vertex: "v1",
+                    partition: 0,
+                },
+                offset: 1,
+                watermark: 100,
+                idle: false,
+                processor_count: None,
+            }],
+            expected: vec![ExpectedWMB {
+                vertex: "v1",
+                offset: 1,
+                watermark: 100,
+                idle: false,
+                partition: 0,
+                processor_count: None,
+            }],
+        })
+        .await;
+    }
+
+    // -----------------------------------------------------------------------
+    // Source publisher (is_source=true) behavior
+    // -----------------------------------------------------------------------
+
+    /// Source publishers suppress regression warnings but still keep the higher watermark.
+    #[tokio::test]
+    async fn test_source_publisher_regression_still_corrected() {
+        run_scenario(PublisherScenario {
+            name: "source_regression",
+            processor_name: "source-0",
+            bucket_configs: vec![BucketConfig {
+                vertex: "v1",
+                partitions: vec![0],
+                ot_bucket: "source_regression_ot",
+                delay: None,
+            }],
+            is_source: true,
+            steps: vec![
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 10,
+                    watermark: 200,
+                    idle: false,
+                    processor_count: None,
+                },
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 20,
+                    watermark: 50,
+                    idle: false,
+                    processor_count: None,
+                },
+            ],
+            expected: vec![ExpectedWMB {
+                vertex: "v1",
+                offset: 20,
+                watermark: 200,
+                idle: false,
+                partition: 0,
+                processor_count: None,
+            }],
+        })
+        .await;
+    }
+
+    // -----------------------------------------------------------------------
+    // Multi-edge multi-partition stress scenario
+    // -----------------------------------------------------------------------
+
+    /// Publish across 2 edges x 2 partitions, verify each edge has its correct final WMB.
+    #[tokio::test]
+    async fn test_multi_edge_multi_partition() {
+        run_scenario(PublisherScenario {
+            name: "multi_edge_multi_partition",
+            processor_name: "processor1",
+            bucket_configs: vec![
+                BucketConfig {
+                    vertex: "v1",
+                    partitions: vec![0, 1],
+                    ot_bucket: "memp_v1_ot",
+                    delay: None,
+                },
+                BucketConfig {
+                    vertex: "v2",
+                    partitions: vec![0, 1],
+                    ot_bucket: "memp_v2_ot",
+                    delay: None,
+                },
+            ],
+            is_source: false,
+            steps: vec![
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 1,
+                    watermark: 100,
+                    idle: false,
+                    processor_count: None,
+                },
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-1",
+                        vertex: "v1",
+                        partition: 1,
+                    },
+                    offset: 2,
+                    watermark: 150,
+                    idle: false,
+                    processor_count: None,
+                },
+                PublishStep {
+                    stream: Stream {
+                        name: "v2-0",
+                        vertex: "v2",
+                        partition: 0,
+                    },
+                    offset: 3,
+                    watermark: 200,
+                    idle: false,
+                    processor_count: None,
+                },
+                PublishStep {
+                    stream: Stream {
+                        name: "v2-1",
+                        vertex: "v2",
+                        partition: 1,
+                    },
+                    offset: 4,
+                    watermark: 250,
+                    idle: true,
+                    processor_count: None,
+                },
+            ],
+            // Last write per vertex store wins.
+            expected: vec![
+                ExpectedWMB {
+                    vertex: "v1",
+                    offset: 2,
+                    watermark: 150,
+                    idle: false,
+                    partition: 1,
+                    processor_count: None,
+                },
+                ExpectedWMB {
+                    vertex: "v2",
+                    offset: 4,
+                    watermark: 250,
+                    idle: true,
+                    partition: 1,
+                    processor_count: None,
+                },
+            ],
+        })
+        .await;
+    }
+
+    /// Transition from idle to active: publish idle, then non-idle on the same partition.
+    #[tokio::test]
+    async fn test_idle_to_active_transition() {
+        run_scenario(PublisherScenario {
+            name: "idle_to_active",
+            processor_name: "processor1",
+            bucket_configs: vec![BucketConfig {
+                vertex: "v1",
+                partitions: vec![0],
+                ot_bucket: "idle_to_active_ot",
+                delay: None,
+            }],
+            is_source: false,
+            steps: vec![
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 1,
+                    watermark: 100,
+                    idle: true,
+                    processor_count: None,
+                },
+                PublishStep {
+                    stream: Stream {
+                        name: "v1-0",
+                        vertex: "v1",
+                        partition: 0,
+                    },
+                    offset: 2,
+                    watermark: 200,
+                    idle: false,
+                    processor_count: None,
+                },
+            ],
+            expected: vec![ExpectedWMB {
+                vertex: "v1",
+                offset: 2,
+                watermark: 200,
+                idle: false,
+                partition: 0,
+                processor_count: None,
+            }],
+        })
+        .await;
+    }
+
+    // -----------------------------------------------------------------------
+    // KV store failure resilience
+    // -----------------------------------------------------------------------
+
+    /// When the KV store fails, the publisher should not panic and should continue
+    /// functioning on subsequent calls (failures are ignored).
+    #[tokio::test]
+    async fn test_kv_store_failure_is_resilient() {
+        let store = SimpleKVStore::new("kv_failure_ot");
+        store.error_injector().fail_puts(1); // first put will fail
+
+        let mut ot_stores: HashMap<&'static str, Arc<dyn KVStore>> = HashMap::new();
+        ot_stores.insert("v1", Arc::new(store.clone()));
+
+        let bucket_configs = vec![BucketConfig {
+            vertex: "v1",
+            partitions: vec![0],
+            ot_bucket: "kv_failure_ot",
+            delay: None,
+        }];
+
+        let mut publisher =
+            ISBWatermarkPublisher::new("processor1".to_string(), ot_stores, &bucket_configs, false);
+
+        let stream = Stream {
+            name: "v1-0",
+            vertex: "v1",
+            partition: 0,
+        };
+
+        // First publish fails silently.
+        publisher.publish_watermark(&stream, 1, 100, false).await;
+        let wmb = store.get("processor1").await.unwrap();
+        assert!(
+            wmb.is_none(),
+            "first publish should fail silently due to injected error"
+        );
+
+        // Second publish succeeds (error injector decremented to 0).
+        publisher.publish_watermark(&stream, 2, 200, false).await;
+        let wmb: WMB = store
+            .get("processor1")
+            .await
+            .unwrap()
+            .expect("second publish should succeed")
+            .try_into()
+            .unwrap();
+        assert_eq!(wmb.offset, 2);
+        assert_eq!(wmb.watermark, 200);
+    }
+
+    // -----------------------------------------------------------------------
+    // Delay-based throttling scenarios
+    // -----------------------------------------------------------------------
+
+    /// With a long delay configured, publishes within the window are suppressed.
+    #[tokio::test]
+    async fn test_delay_suppresses_publish_within_window() {
+        let store = SimpleKVStore::new("delay_suppress_ot");
+        let mut ot_stores: HashMap<&'static str, Arc<dyn KVStore>> = HashMap::new();
+        ot_stores.insert("v1", Arc::new(store.clone()));
+
+        let bucket_configs = vec![BucketConfig {
+            vertex: "v1",
+            partitions: vec![0],
+            ot_bucket: "delay_suppress_ot",
+            delay: Some(Duration::from_secs(60)),
+        }];
+
+        let mut publisher =
+            ISBWatermarkPublisher::new("processor1".to_string(), ot_stores, &bucket_configs, false);
+
+        let stream = Stream {
+            name: "v1-0",
+            vertex: "v1",
+            partition: 0,
+        };
+
+        // Default last_published_time = Instant::now(), so elapsed ≈ 0 < 60s.
+        // Publish is suppressed.
+        publisher.publish_watermark(&stream, 1, 100, false).await;
+
+        let wmb = store.get("processor1").await.unwrap();
+        assert!(
+            wmb.is_none(),
+            "publish should be suppressed within delay window"
+        );
+    }
+
+    /// After the delay has elapsed, the publish should go through.
+    #[tokio::test]
+    async fn test_delay_allows_publish_after_elapsed() {
+        let store = SimpleKVStore::new("delay_elapsed_ot");
+        let mut ot_stores: HashMap<&'static str, Arc<dyn KVStore>> = HashMap::new();
+        ot_stores.insert("v1", Arc::new(store.clone()));
+
+        let bucket_configs = vec![BucketConfig {
+            vertex: "v1",
+            partitions: vec![0],
+            ot_bucket: "delay_elapsed_ot",
+            delay: Some(Duration::from_millis(10)),
+        }];
+
+        let mut publisher =
+            ISBWatermarkPublisher::new("processor1".to_string(), ot_stores, &bucket_configs, false);
+
+        let stream = Stream {
+            name: "v1-0",
+            vertex: "v1",
+            partition: 0,
+        };
+
+        // Wait for delay to elapse, then publish.
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        publisher.publish_watermark(&stream, 1, 100, false).await;
+
+        let wmb: WMB = store
+            .get("processor1")
+            .await
+            .unwrap()
+            .expect("WMB should exist after delay elapsed")
+            .try_into()
+            .unwrap();
+        assert_eq!(wmb.watermark, 100);
+        assert_eq!(wmb.offset, 1);
+    }
+
+    /// With no delay (None), every publish goes through.
+    #[tokio::test]
+    async fn test_no_delay_always_publishes() {
+        let store = SimpleKVStore::new("no_delay_ot");
+        let mut ot_stores: HashMap<&'static str, Arc<dyn KVStore>> = HashMap::new();
+        ot_stores.insert("v1", Arc::new(store.clone()));
+
+        let bucket_configs = vec![BucketConfig {
+            vertex: "v1",
+            partitions: vec![0],
+            ot_bucket: "no_delay_ot",
+            delay: None,
+        }];
+
+        let mut publisher =
+            ISBWatermarkPublisher::new("processor1".to_string(), ot_stores, &bucket_configs, false);
+
+        let stream = Stream {
+            name: "v1-0",
+            vertex: "v1",
+            partition: 0,
+        };
+
+        publisher.publish_watermark(&stream, 1, 100, false).await;
+        let wmb: WMB = store
+            .get("processor1")
+            .await
+            .unwrap()
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert_eq!(wmb.watermark, 100);
+
+        publisher.publish_watermark(&stream, 2, 200, false).await;
+        let wmb: WMB = store
+            .get("processor1")
+            .await
+            .unwrap()
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert_eq!(wmb.watermark, 200);
+
+        publisher.publish_watermark(&stream, 3, 300, false).await;
+        let wmb: WMB = store
+            .get("processor1")
+            .await
+            .unwrap()
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert_eq!(wmb.watermark, 300);
+    }
+
+    /// Delay accumulates state: publishes within the window update tracked state, and
+    /// when the delay elapses, the best values are published.
+    #[tokio::test]
+    async fn test_delay_publishes_best_accumulated_state() {
+        let store = SimpleKVStore::new("delay_accum_ot");
+        let mut ot_stores: HashMap<&'static str, Arc<dyn KVStore>> = HashMap::new();
+        ot_stores.insert("v1", Arc::new(store.clone()));
+
+        let bucket_configs = vec![BucketConfig {
+            vertex: "v1",
+            partitions: vec![0],
+            ot_bucket: "delay_accum_ot",
+            delay: Some(Duration::from_millis(50)),
+        }];
+
+        let mut publisher =
+            ISBWatermarkPublisher::new("processor1".to_string(), ot_stores, &bucket_configs, false);
+
+        let stream = Stream {
+            name: "v1-0",
+            vertex: "v1",
+            partition: 0,
+        };
+
+        // Wait for initial delay to pass so first publish goes through.
+        tokio::time::sleep(Duration::from_millis(60)).await;
+
+        // First publish goes through.
+        publisher.publish_watermark(&stream, 1, 100, false).await;
+        let wmb: WMB = store
+            .get("processor1")
+            .await
+            .unwrap()
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert_eq!(wmb.offset, 1);
+        assert_eq!(wmb.watermark, 100);
+
+        // These are within the delay window — suppressed, but state accumulates.
+        publisher.publish_watermark(&stream, 5, 300, false).await;
+        publisher.publish_watermark(&stream, 10, 500, false).await;
+
+        // Store should still have the first publish.
+        let wmb: WMB = store
+            .get("processor1")
+            .await
+            .unwrap()
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert_eq!(wmb.offset, 1, "store should still have first publish");
+        assert_eq!(wmb.watermark, 100);
+
+        // Wait for delay to elapse, then publish again — should get best accumulated state.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        // publish again with lower offset and watermark to trigger accumulated state to be reflected
+        // in the store
+        publisher.publish_watermark(&stream, 1, 100, false).await;
+
+        let wmb: WMB = store
+            .get("processor1")
+            .await
+            .unwrap()
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert_eq!(wmb.offset, 10);
+        assert_eq!(wmb.watermark, 500);
+    }
+
+    #[tokio::test]
+    async fn test_last_published_state_delay_crossed() {
+        // No delay configured: always crossed.
+        let state = LastPublishedState::default();
+        assert!(state.delay_crossed());
+
+        // With delay, not yet elapsed.
+        let state = LastPublishedState {
+            delay: Some(Duration::from_secs(60)),
+            ..Default::default()
+        };
+        assert!(!state.delay_crossed());
     }
 }

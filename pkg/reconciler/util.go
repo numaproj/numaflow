@@ -47,6 +47,10 @@ func CheckPodsStatus(pods *corev1.PodList) (healthy bool, reason string, message
 // which would not end up with another reconciliation when it reaches the time limit,
 // but we have to trigger it explicitly.
 func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string, isTransientUnhealthy bool) {
+	// Skip pods that are terminating or already completed
+	if pod.DeletionTimestamp != nil || pod.Status.Phase == corev1.PodSucceeded {
+		return true, "", false
+	}
 
 	// check both container and initContainer statuses
 	healthy, reason, isTransientUnhealthy = checkContainerStatuses(pod.Status.ContainerStatuses)

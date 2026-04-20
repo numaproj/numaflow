@@ -48,9 +48,11 @@ impl<C: crate::typ::NumaflowTypeConfig> SourceForwarder<C> {
             .streaming_write(messages_stream, cln_token.clone())
             .await?;
 
+        // Cancel on panic (JoinError).
         let (reader_result, sink_writer_result) = tokio::try_join!(reader_handle, writer_handle)
             .map_err(|e| {
-                error!(?e, "Error while joining reader and sink writer");
+                error!(?e, "Reader or writer task panicked, cancelling token");
+                cln_token.cancel();
                 Error::Forwarder(format!("Error while joining reader and sink writer: {e}"))
             })?;
 

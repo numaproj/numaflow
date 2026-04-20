@@ -678,7 +678,7 @@ name = "backoff"
 version = "0.1.0"
 dependencies = [
  "pin-project",
- "rand 0.9.2",
+ "rand 0.9.4",
  "tokio",
 ]
 
@@ -2522,7 +2522,7 @@ dependencies = [
  "prost 0.14.1",
  "prost-types 0.14.1",
  "pulsar",
- "rand 0.9.2",
+ "rand 0.9.4",
  "rcgen",
  "reqwest 0.12.22",
  "rustls 0.23.31",
@@ -3346,7 +3346,7 @@ dependencies = [
  "bytes",
  "getrandom 0.3.3",
  "lru-slab",
- "rand 0.9.2",
+ "rand 0.9.4",
  "ring",
  "rustc-hash 2.1.1",
  "rustls 0.23.31",
@@ -3400,9 +3400,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.9.2"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6db2770f06117d490610c7488547d543617b21bfa07796d7a12f6f1bd53850d1"
+checksum = "44c5af06bb1b7d3216d91932aed5265164bf384dc89cd6ba05cf59a35f5f76ea"
 dependencies = [
  "rand_chacha 0.9.0",
  "rand_core 0.9.3",
@@ -3511,7 +3511,7 @@ dependencies = [
  "num-bigint",
  "percent-encoding",
  "pin-project-lite",
- "rand 0.9.2",
+ "rand 0.9.4",
  "rustls 0.23.31",
  "rustls-native-certs 0.8.1",
  "ryu",
@@ -4945,7 +4945,7 @@ checksum = "2f87b8aa10b915a06587d0dec516c282ff295b475d94abf425d62b57710070a2"
 dependencies = [
  "getrandom 0.3.3",
  "js-sys",
- "rand 0.9.2",
+ "rand 0.9.4",
  "wasm-bindgen",
 ]
 

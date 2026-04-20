@@ -2,7 +2,7 @@
 
 HTTP Source starts an HTTP service to accept POST requests in the Vertex Pod. By default, it listens on port 8443 with TLS enabled, with request URI `/vertices/{vertexName}`.
 
-A plain HTTP (non-TLS) server can also be enabled by explicitly setting `http` under `ports`.
+A plain HTTP (non-TLS) server can also be enabled by explicitly setting `ports.http`. By default, only HTTPS is exposed. When `ports.http` is set, both HTTPS and HTTP endpoints are exposed.
 
 A Pipeline with HTTP Source:
 
@@ -33,7 +33,7 @@ spec:
 
 ## Sending Data
 
-Data could be sent to an HTTP source through:
+Data can be sent to an HTTP source through:
 
 - ClusterIP Service (within the cluster)
 - Ingress or LoadBalancer Service (outside of the cluster)
@@ -41,7 +41,7 @@ Data could be sent to an HTTP source through:
 
 ### ClusterIP Service
 
-An HTTP Source Vertex can generate a `ClusterIP` Service if `service: true` is specified. The service name is in the format `{pipelineName}-{vertexName}`, so the HTTP Source can be accessed at `https://{pipelineName}-{vertexName}.{namespace}.svc:8443/vertices/{vertexName}` within the cluster.
+An HTTP Source Vertex can generate a `ClusterIP` Service if `service: true` is specified. The service name is in the format `{pipelineName}-{vertexName}`, so the HTTP Source can be accessed at `https://{pipelineName}-{vertexName}.{namespace}.svc:8443/vertices/{vertexName}` within the cluster by default.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -76,7 +76,7 @@ curl -kq -X POST -d "hello world" https://localhost:8443/vertices/in
 
 ## Plain HTTP (non-TLS)
 
-By default, the HTTP source only accepts HTTPS traffic. To also accept plain HTTP requests, explicitly set `ports.http`. The HTTPS server always starts on `ports.https` (default 8443); the HTTP server only starts when `ports.http` is set.
+By default, the HTTP source only accepts HTTPS traffic and listens on port 8443. To also accept plain HTTP requests, explicitly set `ports.http`. The HTTPS server always starts on `ports.https` (default 8443), and the HTTP server only starts when `ports.http` is set. When enabled, both servers run simultaneously.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -94,7 +94,7 @@ spec:
             # https: 8443    # optional, defaults to 8443
 ```
 
-When `service: true` is set alongside `httpPort`, the generated ClusterIP Service will expose both ports:
+When `service: true` is set alongside `ports.http`, the generated ClusterIP Service will expose both ports:
 
 | Port name | Port  | Protocol |
 |-----------|-------|----------|

@@ -172,30 +172,23 @@ impl AccumulatorWindowManager {
     /// when the watermark has progressed, and we need to close the windows that are inactive for
     /// longer than the timeout.
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<UnalignedWindowMessage> {
-        let mut result = Vec::new();
         let mut active_windows = self.active_windows.write().expect("Poisoned lock");
 
-        // Iterate and remove inactive windows
-        active_windows.retain(|_, window_state| {
-            let last_seen = *window_state
-                .last_seen_event_time
-                .read()
-                .expect("Poisoned lock");
-
-            if watermark > last_seen + self.timeout {
-                result.push(UnalignedWindowMessage {
-                    operation: UnalignedWindowOperation::Close {
-                        window: window_state.window.clone(),
-                    },
-                    pnf_slot: SHARED_PNF_SLOT,
-                });
-                false
-            } else {
-                true
-            }
-        });
-
-        result
+        active_windows
+            .extract_if(|_, window_state| {
+                let last_seen = *window_state
+                    .last_seen_event_time
+                    .read()
+                    .expect("Poisoned lock");
+                watermark > last_seen + self.timeout
+            })
+            .map(|(_, window_state)| UnalignedWindowMessage {
+                operation: UnalignedWindowOperation::Close {
+                    window: window_state.window.clone(),
+                },
+                pnf_slot: SHARED_PNF_SLOT,
+            })
+            .collect()
     }
 
     /// Deletes all the timestamps before the given end time for the window, actual delete happens
