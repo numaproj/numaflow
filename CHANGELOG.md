@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.7.5 (2026-04-20)
+
+ * [a11afd24](https://github.com/numaproj/numaflow/commit/a11afd24464cea8c57641b5daa97aee8e569dafd) Update manifests to v1.7.5
+ * [94090b6d](https://github.com/numaproj/numaflow/commit/94090b6dc29862f817fbc70911f489a3d4b834fd) chore(cherry-pick): downgrade health check error log to warn (#3108) (#3387)
+ * [02cfc574](https://github.com/numaproj/numaflow/commit/02cfc57437da6a88c78ce4280cc77002cd31cd58) Cherry pick commits for release 1.7.5 (#3386)
+
+### Contributors
+
+ * Vaibhav Kant Tiwari
+ * Vaibhav Tiwari
+
 ## v1.7.4 (2026-03-13)
 
  * [be04ae80](https://github.com/numaproj/numaflow/commit/be04ae805ed4a9742e9be1711e6271fc12548c1f) Update manifests to v1.7.4
