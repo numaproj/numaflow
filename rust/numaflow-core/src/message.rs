@@ -77,7 +77,7 @@ use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::OnceLock;
 use std::sync::atomic::AtomicUsize;
 use tracing::{error, warn};
 
@@ -135,7 +135,8 @@ struct AckHandle {
     /// mark_success is called. On drop: NAK if ref_count != 0, ACK if ref_count == 0.
     ref_count: AtomicUsize,
     /// Set by mark_failed to record why the message is being nacked.
-    failure_reason: Mutex<Option<String>>,
+    /// Uses OnceLock to capture only the first failure reason without locking overhead.
+    failure_reason: OnceLock<String>,
 }
 
 impl AckHandle {
@@ -143,7 +144,7 @@ impl AckHandle {
         Self {
             sender: Some(sender),
             ref_count: AtomicUsize::new(1),
-            failure_reason: Mutex::new(None),
+            failure_reason: OnceLock::new(),
         }
     }
 }
@@ -153,8 +154,8 @@ impl Drop for AckHandle {
         if let Some(sender) = self.sender.take() {
             // NAK if ref_count is not 0 (meaning not all references were marked as success)
             let ack = if self.ref_count.load(std::sync::atomic::Ordering::Relaxed) != 0 {
-                if let Some(reason) = self.failure_reason.lock().unwrap().as_deref() {
-                    error!(reason, "message nacked due to failure");
+                if let Some(reason) = self.failure_reason.get() {
+                    error!(reason = reason.as_str(), "message nacked due to failure");
                 }
                 ReadAck::Nak
             } else {
@@ -216,7 +217,7 @@ impl MessageHandle {
     /// ref_count is not decremented, so the message will be NAK'd when the AckHandle is dropped.
     /// The error is logged at NAK time.
     pub(crate) fn mark_failed(self, reason: impl fmt::Display) {
-        *self.ack_handle.failure_reason.lock().unwrap() = Some(reason.to_string());
+        let _ = self.ack_handle.failure_reason.set(reason.to_string());
     }
 
     /// Creates a new MessageHandle with a different message but sharing this handle's ack tracking.
@@ -254,7 +255,7 @@ impl From<Message> for MessageHandle {
             ack_handle: Arc::new(AckHandle {
                 sender: None,
                 ref_count: AtomicUsize::new(0), // Already "success" state
-                failure_reason: Mutex::new(None),
+                failure_reason: OnceLock::new(),
             }),
         }
     }

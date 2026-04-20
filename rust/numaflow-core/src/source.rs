@@ -516,8 +516,9 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 let read_time = read_start_time.elapsed().as_micros() as f64;
                 Self::record_batch_read_metrics(&pipeline_labels, mvtx_labels, read_time, msgs_len);
 
-                let mut ack_handles = vec![];
+                let mut msg_handles = vec![];
                 let mut ack_batch = Vec::with_capacity(msgs_len);
+
                 for message in messages.iter() {
                     Self::record_partition_read_metrics(
                         &pipeline_labels,
@@ -532,7 +533,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     let (ack_tx, ack_rx) = oneshot::channel();
                     // store the ack receiver in the batch to invoke ack later.
                     ack_batch.push((message.offset.clone(), ack_rx));
-                    ack_handles.push(MessageHandle::new(message.clone(), ack_tx));
+                    msg_handles.push(MessageHandle::new(message.clone(), ack_tx));
                 }
 
                 // start a background task to invoke ack on the source for the offsets that are acked.
@@ -569,9 +570,9 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 // transform_batch accepts MessageHandles and returns MessageHandles with ack
                 // tracking preserved — flatmap outputs share the parent's ack handle.
                 let mut msg_handles = match self.transformer.as_mut() {
-                    None => ack_handles,
+                    None => msg_handles,
                     Some(transformer) => match transformer
-                        .transform_batch(ack_handles, cln_token.clone())
+                        .transform_batch(msg_handles, cln_token.clone())
                         .await
                     {
                         Ok(handles) => handles,
