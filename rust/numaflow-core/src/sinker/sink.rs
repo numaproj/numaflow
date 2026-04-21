@@ -3,6 +3,8 @@ use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
 use crate::message::Message;
+use crate::shared::otel;
+use std::sync::Arc;
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
@@ -279,7 +281,7 @@ impl SinkWriter {
     /// Invokes the primary sink actor, handles fallback messages, serving messages, and errors.
     pub(crate) async fn write_to_sink(
         &mut self,
-        messages: Vec<Message>,
+        mut messages: Vec<Message>,
         cln_token: CancellationToken,
     ) -> Result<()> {
         if messages.is_empty() {
@@ -290,10 +292,70 @@ impl SinkWriter {
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();
 
+        // Distributed tracing (MonoVertex only): per-message `numaflow.monovertex.sink.write`
+        // spans created via the OTel SDK API (not tracing::Span — we need spans to stay alive
+        // across the batch UDF `.await` without being tied to a thread-local enter/exit guard).
+        // Each span's parent is the message's own `platform.process`. Each span's context is
+        // injected into sys_metadata["tracing_udf"] so the sink UDF creates `udf.sink.process`
+        // as its child. Spans are closed via an RAII guard that fires on every exit path
+        // (Ok, Err via `?`, panic, cancellation).
+        let _span_guard = if is_mono_vertex() {
+            use opentelemetry::trace::{SpanKind, TraceContextExt, Tracer};
+            let tracer = opentelemetry::global::tracer("numaflow-core");
+            let mut contexts: Vec<opentelemetry::Context> = Vec::with_capacity(messages.len());
+            for message in messages.iter_mut() {
+                let parent_cx = message
+                    .metadata
+                    .as_deref()
+                    .map(otel::extract_trace_context)
+                    .unwrap_or_else(opentelemetry::Context::current);
+                let msg_id = message.offset.to_string();
+                let sink_span = tracer
+                    .span_builder("numaflow.monovertex.sink.write")
+                    .with_kind(SpanKind::Client)
+                    .with_attributes(vec![
+                        opentelemetry::KeyValue::new(otel::ATTR_MESSAGING_SYSTEM, "numaflow"),
+                        opentelemetry::KeyValue::new(
+                            otel::ATTR_MESSAGING_OPERATION_NAME,
+                            "sink.write",
+                        ),
+                        opentelemetry::KeyValue::new(otel::ATTR_MESSAGING_MESSAGE_ID, msg_id),
+                        opentelemetry::KeyValue::new(otel::ATTR_NUMAFLOW_TOPOLOGY, "monovertex"),
+                        opentelemetry::KeyValue::new(
+                            otel::ATTR_NUMAFLOW_PIPELINE_NAME,
+                            crate::config::get_pipeline_name(),
+                        ),
+                        opentelemetry::KeyValue::new(
+                            otel::ATTR_NUMAFLOW_VERTEX_NAME,
+                            crate::config::get_vertex_name(),
+                        ),
+                    ])
+                    .start_with_context(&tracer, &parent_cx);
+                let sink_cx = opentelemetry::Context::current().with_span(sink_span);
+                if let Some(ref mut metadata) = message.metadata {
+                    otel::inject_context_into_metadata(
+                        Arc::make_mut(metadata),
+                        otel::TRACING_UDF_METADATA_KEY,
+                        &sink_cx,
+                    );
+                }
+                contexts.push(sink_cx);
+            }
+            Some(SinkSpanCloser(contexts))
+        } else {
+            None
+        };
+
         // Invoke primary sink to write messages
         let response = self
             .write_to_primary_sink(messages, cln_token.clone())
             .await?;
+
+        // Close per-message sink.write spans now so their duration covers only the primary
+        // sink UDF batch call — not the fallback/on_success/serving handling that follows.
+        // The guard still runs on early-returns above (e.g., write_to_primary_sink error via `?`),
+        // so spans are always closed on every path.
+        drop(_span_guard);
 
         if !response.failed.is_empty() {
             error!(
@@ -652,6 +714,19 @@ impl SinkWriter {
     }
 }
 
+/// RAII guard that closes per-message sink OTel spans on drop. Ensures spans are ended on
+/// every exit path from `write_to_sink` (success, early error via `?`, panic, cancellation).
+struct SinkSpanCloser(Vec<opentelemetry::Context>);
+
+impl Drop for SinkSpanCloser {
+    fn drop(&mut self) {
+        use opentelemetry::trace::TraceContextExt as _;
+        for cx in self.0.drain(..) {
+            cx.span().end();
+        }
+    }
+}
+
 /// Sends count of messages marked for explicit drop by the user
 /// Currently pub(crate) to allow usage by the bypass_router.
 pub(crate) fn send_drop_metrics(is_mono_vertex: bool, dropped_messages_count: usize) {
@@ -824,7 +899,7 @@ mod tests {
                         offset: format!("offset_{}", i).into(),
                         index: i as i32,
                     },
-                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx, None))),
                     ..Default::default()
                 }
             })
@@ -903,7 +978,7 @@ mod tests {
                         offset: format!("offset_{}", i).into(),
                         index: i as i32,
                     },
-                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx, None))),
                     ..Default::default()
                 }
             })
@@ -992,7 +1067,7 @@ mod tests {
                         offset: format!("offset_{}", i).into(),
                         index: i as i32,
                     },
-                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx, None))),
                     ..Default::default()
                 }
             })
@@ -1074,7 +1149,7 @@ mod tests {
                         offset: format!("offset_{}", i).into(),
                         index: i as i32,
                     },
-                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx, None))),
                     ..Default::default()
                 }
             })
@@ -1188,7 +1263,7 @@ mod tests {
                         index: i as i32,
                     },
                     headers: Arc::new(headers),
-                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx, None))),
                     ..Default::default()
                 }
             })

@@ -678,7 +678,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx, None))),
                 ..Default::default()
             };
             ack_rxs.push(ack_rx);
@@ -789,7 +789,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx, None))),
                 ..Default::default()
             };
             ack_rxs.push(ack_rx);
@@ -964,7 +964,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx, None))),
                 ..Default::default()
             };
             ack_rxs.push(ack_rx);
@@ -1061,7 +1061,7 @@ mod simple_buffer_tests {
             headers: Arc::new(HashMap::new()),
             metadata: None,
             is_late: false,
-            ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+            ack_handle: Some(Arc::new(AckHandle::new(ack_tx, None))),
         };
         (message, ack_rx)
     }

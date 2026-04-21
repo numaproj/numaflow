@@ -381,7 +381,7 @@ mod tests {
     ) -> (Message, Option<oneshot::Receiver<ReadAck>>) {
         let (ack_handle, ack_rx) = if with_ack_handle {
             let (tx, rx) = oneshot::channel();
-            (Some(Arc::new(AckHandle::new(tx))), Some(rx))
+            (Some(Arc::new(AckHandle::new(tx, None))), Some(rx))
         } else {
             (None, None)
         };
@@ -528,7 +528,7 @@ mod tests {
                         offset: format!("offset_{}", i).into(),
                         index: i as i32,
                     },
-                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx, None))),
                     ..Default::default()
                 }
             })

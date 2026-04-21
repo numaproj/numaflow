@@ -7,6 +7,7 @@ use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
 use crate::message::Message;
 use crate::monovertex::bypass_router::MvtxBypassRouter;
+use crate::shared::otel;
 use crate::tracker::Tracker;
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use std::collections::HashMap;
@@ -53,7 +54,61 @@ pub(in crate::mapper) struct MapBatchTask {
 impl MapBatchTask {
     /// Executes the batch map operation.
     /// Returns an error if any message in the batch fails to be processed.
-    pub async fn execute(self) -> Result<()> {
+    pub async fn execute(mut self) -> Result<()> {
+        // Distributed tracing (MonoVertex only): create per-message `numaflow.monovertex.map`
+        // spans via the OTel SDK API (not tracing::Span because we need them to stay alive across
+        // the batch UDF `.await` without being tied to a thread-local enter/exit guard). Each
+        // span's parent is that message's own `platform.process` (extracted from
+        // sys_metadata["tracing"]). Each span's context is injected into sys_metadata["tracing_udf"]
+        // so the UDF creates `udf.map.process` as its child. Spans are closed via an RAII guard
+        // after the batch UDF returns so they are ended on every exit path.
+        //
+        // Invariant: tracing_udf is removed from result messages below; on error, input messages
+        // are dropped, so tracing_udf never propagates further.
+        let _span_guard = if is_mono_vertex() {
+            use opentelemetry::trace::{SpanKind, TraceContextExt, Tracer};
+            let tracer = opentelemetry::global::tracer("numaflow-core");
+            let mut contexts: Vec<opentelemetry::Context> = Vec::with_capacity(self.batch.len());
+            for message in self.batch.iter_mut() {
+                let parent_cx = message
+                    .metadata
+                    .as_deref()
+                    .map(otel::extract_trace_context)
+                    .unwrap_or_else(opentelemetry::Context::current);
+                let msg_id = message.offset.to_string();
+                let map_span = tracer
+                    .span_builder("numaflow.monovertex.map")
+                    .with_kind(SpanKind::Internal)
+                    .with_attributes(vec![
+                        opentelemetry::KeyValue::new(otel::ATTR_MESSAGING_SYSTEM, "numaflow"),
+                        opentelemetry::KeyValue::new(otel::ATTR_MESSAGING_OPERATION_NAME, "map"),
+                        opentelemetry::KeyValue::new(otel::ATTR_MESSAGING_MESSAGE_ID, msg_id),
+                        opentelemetry::KeyValue::new(otel::ATTR_NUMAFLOW_TOPOLOGY, "monovertex"),
+                        opentelemetry::KeyValue::new(
+                            otel::ATTR_NUMAFLOW_PIPELINE_NAME,
+                            crate::config::get_pipeline_name(),
+                        ),
+                        opentelemetry::KeyValue::new(
+                            otel::ATTR_NUMAFLOW_VERTEX_NAME,
+                            crate::config::get_vertex_name(),
+                        ),
+                    ])
+                    .start_with_context(&tracer, &parent_cx);
+                let map_cx = opentelemetry::Context::current().with_span(map_span);
+                if let Some(ref mut metadata) = message.metadata {
+                    otel::inject_context_into_metadata(
+                        Arc::make_mut(metadata),
+                        otel::TRACING_UDF_METADATA_KEY,
+                        &map_cx,
+                    );
+                }
+                contexts.push(map_cx);
+            }
+            Some(SpanCloser(contexts))
+        } else {
+            None
+        };
+
         // Store parent message info for each message before sending to UDF
         let parent_infos: Vec<ParentMessageInfo> = self.batch.iter().map(|m| m.into()).collect();
 
@@ -68,15 +123,29 @@ impl MapBatchTask {
         // Call the UDF and get results directly
         let results = self.mapper.batch(requests, self.cln_token).await;
 
+        // Drop span guard now so spans are closed before returning. They will also close on any
+        // early-return from the error branch below.
+        drop(_span_guard);
+
         for (result, parent_info) in results.into_iter().zip(parent_infos) {
             match result {
                 Ok(results) => {
-                    // Convert raw results to Messages using parent info
+                    // Convert raw results to Messages using parent info.
+                    // Remove tracing_udf from each result (map stage is done).
                     let mapped_messages: Vec<Message> = results
                         .into_iter()
                         .enumerate()
                         .map(|(i, result)| {
-                            UserDefinedMessage(result, &parent_info, i as i32).into()
+                            let mut mapped_msg: Message =
+                                UserDefinedMessage(result, &parent_info, i as i32).into();
+                            if is_mono_vertex()
+                                && let Some(ref mut metadata) = mapped_msg.metadata
+                            {
+                                Arc::make_mut(metadata)
+                                    .sys_metadata
+                                    .remove(otel::TRACING_UDF_METADATA_KEY);
+                            }
+                            mapped_msg
                         })
                         .collect();
 
@@ -120,6 +189,19 @@ impl MapBatchTask {
             }
         }
         Ok(())
+    }
+}
+
+/// RAII guard that closes OTel spans on drop. Used by batch/stream mappers and sinker to
+/// guarantee per-message spans are ended on every exit path (success, error, panic).
+struct SpanCloser(Vec<opentelemetry::Context>);
+
+impl Drop for SpanCloser {
+    fn drop(&mut self) {
+        use opentelemetry::trace::TraceContextExt as _;
+        for cx in self.0.drain(..) {
+            cx.span().end();
+        }
     }
 }
 

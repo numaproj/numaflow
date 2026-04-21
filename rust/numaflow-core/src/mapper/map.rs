@@ -1003,7 +1003,7 @@ mod tests {
                     offset: i.to_string().into(),
                     index: i,
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx, None))),
                 ..Default::default()
             };
             input_tx.send(message).await.unwrap();
@@ -1099,7 +1099,7 @@ mod tests {
                     offset: "0".to_string().into(),
                     index: 0,
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx1))),
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx1, None))),
                 ..Default::default()
             },
             Message {
@@ -1115,7 +1115,7 @@ mod tests {
                     offset: "1".to_string().into(),
                     index: 1,
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx2))),
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx2, None))),
                 ..Default::default()
             },
         ];
@@ -1224,7 +1224,7 @@ mod tests {
                     offset: i.to_string().into(),
                     index: i,
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx, None))),
                 ..Default::default()
             };
             ack_rxs.push(ack_rx);
@@ -1269,7 +1269,7 @@ mod tests {
                 offset: i.to_string().into(),
                 index: i,
             },
-            ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
+            ack_handle: Some(Arc::new(AckHandle::new(ack_tx, None))),
             ..Default::default()
         }
     }
@@ -1361,7 +1361,7 @@ mod tests {
                     offset: "0".to_string().into(),
                     index: 0,
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx1))),
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx1, None))),
                 ..Default::default()
             },
             Message {
@@ -1377,7 +1377,7 @@ mod tests {
                     offset: "1".to_string().into(),
                     index: 1,
                 },
-                ack_handle: Some(Arc::new(AckHandle::new(ack_tx2))),
+                ack_handle: Some(Arc::new(AckHandle::new(ack_tx2, None))),
                 ..Default::default()
             },
         ];

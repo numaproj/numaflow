@@ -504,7 +504,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             Self::publish_read_metrics(&self.metric_labels, &message);
 
             let (ack_tx, ack_rx) = oneshot::channel();
-            message.ack_handle = Some(Arc::new(AckHandle::new(ack_tx)));
+            message.ack_handle = Some(Arc::new(AckHandle::new(ack_tx, None)));
 
             // Start message tracking and WIP loop
             self.start_message_tracking(

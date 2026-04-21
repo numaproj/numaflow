@@ -60,18 +60,52 @@ pub(crate) struct Message {
 
 /// AckHandle is used to send the ack/nak to the source but it is reference counted and makes sure
 /// when it is dropped, we send the ack/nak to the source.
-#[derive(Debug)]
+///
+/// It also holds the per-message `platform.process` tracing span (when distributed tracing is
+/// enabled). The span is set by the source after `AckHandle` is created (via
+/// [`set_pipeline_span`]) so the span's lifetime is tied to the full message lifecycle: it is
+/// dropped when the last `Arc<AckHandle>` clone is released (after ack/nak fires), which ends
+/// the span in the OTel backend with accurate duration.
 pub(crate) struct AckHandle {
     pub(crate) ack_handle: Option<oneshot::Sender<ReadAck>>,
     pub(crate) is_failed: AtomicBool,
+    /// Tracing span covering the full message lifecycle (created in source, dropped on ack).
+    /// Interior mutability is used because the span is set after construction.
+    pipeline_span: std::sync::Mutex<Option<tracing::Span>>,
+}
+
+impl fmt::Debug for AckHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AckHandle")
+            .field("ack_handle", &self.ack_handle)
+            .field("is_failed", &self.is_failed)
+            .finish()
+    }
 }
 
 impl AckHandle {
     /// create a new AckHandle for a message.
-    pub(crate) fn new(ack_handle: oneshot::Sender<ReadAck>) -> Self {
+    ///
+    /// `pipeline_span`: optional `platform.process` span to end on ack. Pass `None` from
+    /// code paths that don't create the platform tracing root (e.g., tests, ISB reader/writer,
+    /// bypass router). The source sets this via [`set_pipeline_span`] after creation.
+    pub(crate) fn new(
+        ack_handle: oneshot::Sender<ReadAck>,
+        pipeline_span: Option<tracing::Span>,
+    ) -> Self {
         Self {
             ack_handle: Some(ack_handle),
             is_failed: AtomicBool::new(false),
+            pipeline_span: std::sync::Mutex::new(pipeline_span),
+        }
+    }
+
+    /// Store the `platform.process` tracing span so it is dropped when this AckHandle is dropped.
+    /// Called by the source after creating the span.
+    #[allow(dead_code)] // Used when distributed tracing is enabled (OTEL_EXPORTER_OTLP_ENDPOINT set).
+    pub(crate) fn set_pipeline_span(&self, span: tracing::Span) {
+        if let Ok(mut guard) = self.pipeline_span.lock() {
+            *guard = Some(span);
         }
     }
 }

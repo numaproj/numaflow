@@ -189,3 +189,19 @@ fn b3_to_traceparent(trace_id: &str, span_id: &str, sampled: Option<&str>) -> St
 
     format!("00-{}-{}-{}", padded_trace_id, span_id, flags)
 }
+
+// ---------------------------------------------------------------------------
+// Platform span attribute keys
+// ---------------------------------------------------------------------------
+//
+// Attribute keys applied to every Numaflow platform span (OTel messaging semantic
+// conventions + Numaflow-specific). Values are set at each call site because
+// `tracing::info_span!` requires static attribute expressions and the OTel SDK API
+// (for batch/sink per-message spans) uses `KeyValue::new` at the call site.
+
+pub const ATTR_MESSAGING_SYSTEM: &str = "messaging.system";
+pub const ATTR_MESSAGING_OPERATION_NAME: &str = "messaging.operation.name";
+pub const ATTR_MESSAGING_MESSAGE_ID: &str = "messaging.message.id";
+pub const ATTR_NUMAFLOW_TOPOLOGY: &str = "numaflow.topology";
+pub const ATTR_NUMAFLOW_PIPELINE_NAME: &str = "numaflow.pipeline.name";
+pub const ATTR_NUMAFLOW_VERTEX_NAME: &str = "numaflow.vertex.name";
