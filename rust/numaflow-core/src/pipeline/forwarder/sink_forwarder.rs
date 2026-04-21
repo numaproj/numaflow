@@ -421,7 +421,6 @@ mod simple_buffer_tests {
                 headers: Arc::new(HashMap::new()),
                 metadata: None,
                 is_late: false,
-                ack_handle: None,
             };
             writer.write(msg).await.expect("write should succeed");
         }

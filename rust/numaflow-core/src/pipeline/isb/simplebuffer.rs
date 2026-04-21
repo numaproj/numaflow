@@ -138,7 +138,6 @@ fn convert_message(read_msg: ReadMessage) -> Message {
         headers: Arc::new(read_msg.headers),
         metadata: None,
         is_late: false,
-        ack_handle: None,
     }
 }
 
@@ -311,7 +310,6 @@ mod tests {
             headers: Arc::new(HashMap::new()),
             metadata: None,
             is_late: false,
-            ack_handle: None,
         }
     }
 

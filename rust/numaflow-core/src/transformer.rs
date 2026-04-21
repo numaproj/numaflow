@@ -9,17 +9,17 @@ use tonic::transport::Channel;
 use tonic::{Code, Status};
 use tracing::error;
 
-use crate::Result;
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
-use crate::message::Message;
+use crate::message::{Message, MessageHandle};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_metric_labels, pipeline_metrics,
 };
 use crate::tracker::Tracker;
 use crate::transformer::user_defined::UserDefinedTransformer;
+use crate::{Result, mark_success};
 
 /// User-Defined Transformer is a custom transformer that can be built by the user.
 ///
@@ -155,11 +155,13 @@ impl Transformer {
     }
 
     /// Transforms a batch of messages concurrently.
+    /// Accepts MessageHandles so that ack tracking flows through to the transformed outputs —
+    /// each output message shares the ack handle of its parent input (flatmap is handled correctly).
     pub(crate) async fn transform_batch(
         &self,
-        messages: Vec<Message>,
+        msg_handles: Vec<MessageHandle>,
         cln_token: CancellationToken,
-    ) -> Result<Vec<Message>> {
+    ) -> Result<Vec<MessageHandle>> {
         let batch_start_time = tokio::time::Instant::now();
         let transform_handle = self.sender.clone();
         let tracker = self.tracker.clone();
@@ -195,20 +197,24 @@ impl Transformer {
                 .source_forwarder
                 .transformer_read_total
                 .get_or_create(&labels)
-                .inc_by(messages.len() as u64);
+                .inc_by(msg_handles.len() as u64);
         }
 
-        let message_count = messages.len();
+        let message_count = msg_handles.len();
 
-        let transform_futs = messages.into_iter().map(|read_msg| {
+        let transform_futs = msg_handles.into_iter().map(|msg_handle| {
             let transform_handle = transform_handle.clone();
             let tracker = tracker.clone();
             let hard_shutdown_token = hard_shutdown_token.clone();
 
             async move {
-                let offset = read_msg.offset.clone();
-                let transformed_messages =
-                    Transformer::transform(transform_handle, read_msg, hard_shutdown_token).await?;
+                let offset = msg_handle.message().offset.clone();
+                let transformed_messages = Transformer::transform(
+                    transform_handle,
+                    msg_handle.message().clone(),
+                    hard_shutdown_token,
+                )
+                .await?;
 
                 // update the tracker with the number of responses for each message
                 tracker
@@ -221,7 +227,15 @@ impl Transformer {
                     )
                     .await?;
 
-                Ok::<Vec<Message>, Error>(transformed_messages)
+                // Fan out: each transformed message shares the parent's ack handle.
+                // mark_success on the parent decrements its ref_count contribution.
+                let output: Vec<MessageHandle> = transformed_messages
+                    .into_iter()
+                    .map(|m| msg_handle.with_message(m))
+                    .collect();
+
+                mark_success!(msg_handle);
+                Ok::<Vec<MessageHandle>, Error>(output)
             }
         });
 
@@ -229,11 +243,11 @@ impl Transformer {
         // This polls up to `concurrency` futures at a time, reducing scheduling overhead.
         let mut stream = stream::iter(transform_futs).buffered(self.concurrency);
 
-        let mut transformed_messages = Vec::with_capacity(message_count * 2);
+        let mut transformed_handles = Vec::with_capacity(message_count * 2);
 
         while let Some(result) = stream.next().await {
             match result {
-                Ok(mut msgs) => transformed_messages.append(&mut msgs),
+                Ok(mut handles) => transformed_handles.append(&mut handles),
                 Err(e) => {
                     // increment transform error metric for pipeline
                     // error here indicates that there was some problem in transformation
@@ -252,12 +266,12 @@ impl Transformer {
 
         // batch transformation was successful
         // send transformer metrics
-        let dropped_messages_count = transformed_messages
+        let dropped_messages_count = transformed_handles
             .iter()
-            .filter(|message| message.dropped())
+            .filter(|h| h.message().dropped())
             .count();
         let elapsed_time = batch_start_time.elapsed().as_micros() as f64;
-        let write_messages_count = transformed_messages.len() - dropped_messages_count;
+        let write_messages_count = transformed_handles.len() - dropped_messages_count;
         Self::send_transformer_metrics(
             dropped_messages_count,
             elapsed_time,
@@ -267,7 +281,7 @@ impl Transformer {
 
         // cleanup the shutdown handle
         shutdown_handle.abort();
-        Ok(transformed_messages)
+        Ok(transformed_handles)
     }
 
     fn send_transformer_metrics(
@@ -335,7 +349,7 @@ mod tests {
 
     use super::*;
     use crate::message::StringOffset;
-    use crate::message::{Message, MessageID, Offset};
+    use crate::message::{Message, MessageHandle, MessageID, Offset};
     use crate::shared::grpc::create_rpc_channel;
 
     struct SimpleTransformer;
@@ -470,7 +484,8 @@ mod tests {
                 },
                 ..Default::default()
             };
-            messages.push(message);
+            let (ack_tx, _ack_rx) = tokio::sync::oneshot::channel();
+            messages.push(MessageHandle::new(message, ack_tx));
         }
 
         let transformed_messages = transformer
@@ -478,7 +493,7 @@ mod tests {
             .await?;
 
         for (i, transformed_message) in transformed_messages.iter().enumerate() {
-            assert_eq!(transformed_message.value, format!("value_{}", i));
+            assert_eq!(transformed_message.message().value, format!("value_{}", i));
         }
 
         // we need to drop the transformer, because if there are any in-flight requests
@@ -550,8 +565,12 @@ mod tests {
             ..Default::default()
         };
 
+        let (ack_tx, _ack_rx) = tokio::sync::oneshot::channel();
         let result = transformer
-            .transform_batch(vec![message], CancellationToken::new())
+            .transform_batch(
+                vec![MessageHandle::new(message, ack_tx)],
+                CancellationToken::new(),
+            )
             .await;
         assert!(result.is_err(), "Expected an error due to panic");
         assert!(result.unwrap_err().to_string().contains("panic"));

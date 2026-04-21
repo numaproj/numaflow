@@ -1,4 +1,5 @@
 use crate::error::Result;
+use crate::mark_success;
 use crate::message::Message;
 use crate::pipeline::isb::reader::ISBReaderOrchestrator;
 use crate::reduce::wal::WalMessage;
@@ -137,20 +138,22 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
             .streaming_write(ReceiverStream::new(wal_rx))
             .await?;
 
-        while let Some(msg) = isb_stream.next().await {
-            // Send the message to WAL - it will be converted to bytes internally.
-            // The message will be kept alive until the write completes, then dropped
-            // (triggering ack via Arc<AckHandle>).
+        while let Some(read_msg) = isb_stream.next().await {
+            // Clone the message for downstream before passing MessageHandle to WAL
+            let message = read_msg.message().clone();
+
+            // Send the MessageHandle to WAL - WAL will ACK after successful write
             wal_tx
                 .send(SegmentWriteMessage::WriteMessage {
-                    message: msg.clone(),
+                    read_message: read_msg,
                 })
                 .await
                 .map_err(|_| {
                     crate::error::Error::Reduce("PBQ WAL writer: receiver dropped".to_string())
                 })?;
 
-            tx.send(msg).await.map_err(|_| {
+            // Send cloned message downstream
+            tx.send(message).await.map_err(|_| {
                 crate::error::Error::Reduce(
                     "PBQ ISB reader: downstream receiver dropped".to_string(),
                 )
@@ -188,13 +191,16 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
         let (mut isb_stream, isb_handle) = isb_reader.streaming_read(cancellation_token).await?;
 
         // Process messages from ISB stream
-        while let Some(msg) = isb_stream.next().await {
-            // Forward the message to the output channel
-            tx.send(msg).await.map_err(|_| {
+        while let Some(read_msg) = isb_stream.next().await {
+            // Extract the message and forward to output channel
+            let message = read_msg.message().clone();
+            tx.send(message).await.map_err(|_| {
                 crate::error::Error::Reduce(
                     "PBQ ISB reader: downstream receiver dropped".to_string(),
                 )
             })?;
+            // Mark the read message as success after processing
+            mark_success!(read_msg);
         }
 
         // Wait for the ISB reader task to complete
@@ -615,9 +621,11 @@ mod tests {
                 ..Default::default()
             };
 
-            tx.send(SegmentWriteMessage::WriteMessage { message })
-                .await
-                .unwrap();
+            tx.send(SegmentWriteMessage::WriteMessage {
+                read_message: message.into(),
+            })
+            .await
+            .unwrap();
         }
 
         drop(tx);

@@ -28,7 +28,7 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Result;
-use crate::message::{IntOffset, Message, Offset};
+use crate::message::{IntOffset, MessageHandle, Offset};
 use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::idle::source::SourceIdleDetector;
 use crate::watermark::processor::manager::ProcessorManager;
@@ -41,6 +41,26 @@ pub(crate) mod source_wm_fetcher;
 
 /// publisher for publishing the source watermark
 pub(crate) mod source_wm_publisher;
+
+/// The minimal information needed to compute and publish source watermarks.
+pub(crate) struct SourceWatermarkEntry {
+    pub(crate) partition_id: u16,
+    pub(crate) event_time_ms: i64,
+}
+
+impl From<&MessageHandle> for SourceWatermarkEntry {
+    fn from(handle: &MessageHandle) -> Self {
+        let msg = handle.message();
+        let partition_id = match &msg.offset {
+            Offset::Int(o) => o.partition_idx,
+            Offset::String(o) => o.partition_idx,
+        };
+        Self {
+            partition_id,
+            event_time_ms: msg.event_time.timestamp_millis(),
+        }
+    }
+}
 
 /// Shared state for SourceWatermarkHandle.
 /// Contains all computation logic and data structures.
@@ -76,21 +96,15 @@ impl SourceWatermarkState {
     /// Handles generating and publishing source watermark with computation
     async fn generate_and_publish_source_watermark(
         &mut self,
-        messages: Vec<Message>,
+        entries: &[SourceWatermarkEntry],
     ) -> Result<()> {
         // we need to build a hash-map of the lowest event time for each partition
         let partition_to_lowest_event_time =
-            messages.iter().fold(HashMap::new(), |mut acc, message| {
-                let partition_id = match &message.offset {
-                    Offset::Int(offset) => offset.partition_idx,
-                    Offset::String(offset) => offset.partition_idx,
-                };
-
-                let event_time = message.event_time.timestamp_millis();
-
-                let lowest_event_time = acc.entry(partition_id).or_insert(event_time);
-                if event_time < *lowest_event_time {
-                    *lowest_event_time = event_time;
+            entries.iter().fold(HashMap::new(), |mut acc, entry| {
+                let lowest_event_time =
+                    acc.entry(entry.partition_id).or_insert(entry.event_time_ms);
+                if entry.event_time_ms < *lowest_event_time {
+                    *lowest_event_time = entry.event_time_ms;
                 }
                 acc
             });
@@ -313,14 +327,15 @@ impl SourceWatermarkHandle {
         Ok(source_watermark_handle)
     }
 
-    /// Generates and Publishes the source watermark for the given messages.
-    pub(crate) async fn generate_and_publish_source_watermark(&self, messages: &[Message]) {
+    /// Generates and Publishes the source watermark for the given entries.
+    pub(crate) async fn generate_and_publish_source_watermark(
+        &self,
+        entries: &[SourceWatermarkEntry],
+    ) {
         // Acquire lock, perform operation, and release immediately
         let result = {
             let mut state = self.state.lock().await;
-            state
-                .generate_and_publish_source_watermark(messages.to_vec())
-                .await
+            state.generate_and_publish_source_watermark(entries).await
         };
 
         if let Err(e) = result {
@@ -427,14 +442,13 @@ mod tests {
     use async_nats::jetstream::kv::Config;
     use async_nats::jetstream::stream;
     use bytes::BytesMut;
-    use chrono::DateTime;
     use tokio::time::sleep;
 
     use super::*;
     use crate::config::pipeline::VertexType;
     use crate::config::pipeline::isb::BufferWriterConfig;
     use crate::config::pipeline::watermark::{BucketConfig, IdleConfig};
-    use crate::message::{IntOffset, Message};
+    use crate::message::IntOffset;
     use crate::watermark::wmb::WMB;
 
     #[cfg(feature = "nats-tests")]
@@ -476,27 +490,17 @@ mod tests {
         .await
         .expect("Failed to create source watermark handle");
 
-        let messages = vec![
-            Message {
-                offset: Offset::Int(IntOffset {
-                    offset: 1,
-                    partition_idx: 0,
-                }),
-                event_time: DateTime::from_timestamp_millis(60000).unwrap(),
-                ..Default::default()
-            },
-            Message {
-                offset: Offset::Int(IntOffset {
-                    offset: 2,
-                    partition_idx: 0,
-                }),
-                event_time: DateTime::from_timestamp_millis(70000).unwrap(),
-                ..Default::default()
-            },
-        ];
-
         handle
-            .generate_and_publish_source_watermark(&messages)
+            .generate_and_publish_source_watermark(&[
+                SourceWatermarkEntry {
+                    partition_id: 0,
+                    event_time_ms: 60000,
+                },
+                SourceWatermarkEntry {
+                    partition_id: 0,
+                    event_time_ms: 70000,
+                },
+            ])
             .await;
 
         // try getting the value for the processor from the ot bucket to make sure
@@ -626,27 +630,17 @@ mod tests {
 
         for i in 1..11 {
             // publish source watermarks before publishing edge watermarks
-            let messages = vec![
-                Message {
-                    offset: Offset::Int(IntOffset {
-                        offset: 1,
-                        partition_idx: 0,
-                    }),
-                    event_time: DateTime::from_timestamp_millis(10000 * i).unwrap(),
-                    ..Default::default()
-                },
-                Message {
-                    offset: Offset::Int(IntOffset {
-                        offset: 2,
-                        partition_idx: 0,
-                    }),
-                    event_time: DateTime::from_timestamp_millis(20000 * i).unwrap(),
-                    ..Default::default()
-                },
-            ];
-
             handle
-                .generate_and_publish_source_watermark(&messages)
+                .generate_and_publish_source_watermark(&[
+                    SourceWatermarkEntry {
+                        partition_id: 0,
+                        event_time_ms: 10000 * i,
+                    },
+                    SourceWatermarkEntry {
+                        partition_id: 0,
+                        event_time_ms: 20000 * i,
+                    },
+                ])
                 .await;
 
             let offset = Offset::Int(IntOffset {
@@ -932,18 +926,12 @@ mod tests {
         .await
         .expect("Failed to create SourceWatermarkHandle");
 
-        let messages = vec![Message {
-            offset: Offset::Int(IntOffset {
-                offset: 1,
-                partition_idx: 0,
-            }),
-            event_time: DateTime::from_timestamp_millis(100).unwrap(),
-            ..Default::default()
-        }];
-
         // generate some watermarks to make partition active
         handle
-            .generate_and_publish_source_watermark(&messages)
+            .generate_and_publish_source_watermark(&[SourceWatermarkEntry {
+                partition_id: 0,
+                event_time_ms: 100,
+            }])
             .await;
 
         // get ot bucket for source and publish some wmb entries

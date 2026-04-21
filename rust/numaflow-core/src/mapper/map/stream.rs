@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::Ordering;
 
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
-use crate::message::Message;
+use crate::message::{Message, MessageHandle};
+use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{OwnedSemaphorePermit, mpsc};
 use tokio_stream::StreamExt;
@@ -44,7 +44,7 @@ pub(in crate::mapper) struct StreamSenderMapState {
 pub(in crate::mapper) struct MapStreamTask {
     pub mapper: UserDefinedStreamMap,
     pub permit: OwnedSemaphorePermit,
-    pub message: Message,
+    pub msg_handle: MessageHandle,
     pub shared_ctx: Arc<SharedMapTaskContext>,
 }
 
@@ -64,9 +64,9 @@ impl MapStreamTask {
 
         // Store parent message info before sending to UDF
         // parent_info contains offset, so we don't need to clone it separately
-        let mut parent_info: ParentMessageInfo = (&self.message).into();
+        let mut parent_info: ParentMessageInfo = self.msg_handle.message().into();
 
-        let request: MapRequest = self.message.into();
+        let request: MapRequest = self.msg_handle.message().clone().into();
         update_udf_read_metric(self.shared_ctx.is_mono_vertex);
 
         // Call the UDF and get receiver for raw results
@@ -106,53 +106,49 @@ impl MapStreamTask {
                             .await
                             .expect("failed to update tracker");
 
-                        let bypassed =
+                        // Each downstream handle shares the original ack tracking — ACK is
+                        // deferred until all mapped messages are written to ISB/sink.
+                        let msg_handle = self.msg_handle.with_message(mapped_message);
+
+                        // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
+                        // If not bypassed, it returns Some(msg_handle) for us to send downstream.
+                        let msg_handle =
                             if let Some(ref bypass_router) = self.shared_ctx.bypass_router {
-                                bypass_router
-                                    .try_bypass(mapped_message.clone())
+                                match bypass_router
+                                    .try_bypass(msg_handle)
                                     .await
                                     .expect("failed to send message to bypass channel")
+                                {
+                                    Some(msg) => msg,
+                                    None => continue, // Message was bypassed, move to next
+                                }
                             } else {
-                                false
+                                msg_handle
                             };
 
-                        if !bypassed {
-                            self.shared_ctx
-                                .output_tx
-                                .send(mapped_message)
-                                .await
-                                .expect("failed to send response");
-                        }
+                        self.shared_ctx
+                            .output_tx
+                            .send(msg_handle)
+                            .await
+                            .expect("failed to send response");
                     }
                 }
                 Some(Err(e)) => {
                     error!(?e, "failed to map message");
-                    parent_info
-                        .ack_handle
-                        .as_ref()
-                        .expect("ack handle should be present")
-                        .is_failed
-                        .store(true, Ordering::Relaxed);
+                    mark_failed!(self.msg_handle, &e);
                     let _ = self.shared_ctx.error_tx.send(e).await;
                     return;
                 }
                 None => {
-                    // Channel closed. If no results were ever sent (current_index == 0),
-                    // this means the UDF stream may have closed unexpectedly (e.g., panic or gRPC
-                    // stream error where the sender was dropped without delivering an error).
-                    // Mark the message as failed so that it gets nacked.
-                    if parent_info.current_index == 0 {
-                        parent_info
-                            .ack_handle
-                            .as_ref()
-                            .expect("ack handle should be present")
-                            .is_failed
-                            .store(true, Ordering::Relaxed);
-                    }
+                    // Channel closed — stream ended cleanly (e.g., UDF returned empty results or
+                    // finished after sending all results). Fall through to mark_success below.
                     break;
                 }
             }
         }
+
+        // Decrement the original ref_count now that we've accounted for all downstream messages.
+        mark_success!(self.msg_handle);
     }
 }
 

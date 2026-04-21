@@ -16,7 +16,11 @@ use crate::config::get_vertex_name;
 use crate::config::pipeline::VertexType::ReduceUDF;
 use crate::config::pipeline::isb::{BufferReaderConfig, ISBConfig, Stream};
 use crate::error::Error;
-use crate::message::{AckHandle, IntOffset, Message, MessageType, Offset, ReadAck};
+#[cfg(test)]
+use crate::mark_success;
+#[cfg(test)]
+use crate::mark_success_batch;
+use crate::message::{IntOffset, Message, MessageHandle, MessageType, Offset, ReadAck};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
     jetstream_isb_metrics_labels, pipeline_metric_labels, pipeline_metrics,
@@ -114,14 +118,14 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         })
     }
 
-    /// Streaming read from ISB, returns a ReceiverStream and a JoinHandle for monitoring errors.
+    /// Streaming read from ISB, returns a ReceiverStream of MessageHandle and a JoinHandle for monitoring errors.
     pub(crate) async fn streaming_read(
         mut self,
         cancel: CancellationToken,
-    ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
+    ) -> Result<(ReceiverStream<MessageHandle>, JoinHandle<Result<()>>)> {
         let max_ack_pending = self.cfg.max_ack_pending;
         let batch_size = std::cmp::min(self.batch_size, max_ack_pending);
-        let (tx, rx) = mpsc::channel(batch_size);
+        let (tx, rx) = mpsc::channel::<MessageHandle>(batch_size);
 
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             let semaphore = Arc::new(Semaphore::new(max_ack_pending));
@@ -313,7 +317,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         vertex_type: &str,
         partition: u16,
         idle_wmb: WMB,
-        tx: &mpsc::Sender<Message>,
+        tx: &mpsc::Sender<MessageHandle>,
     ) -> Result<()> {
         if vertex_type != ReduceUDF.as_str() {
             return Ok(());
@@ -333,7 +337,9 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             },
             ..Default::default()
         };
-        tx.send(msg).await.map_err(|_| {
+
+        let read_msg: MessageHandle = msg.into();
+        tx.send(read_msg).await.map_err(|_| {
             Error::ISB(crate::pipeline::isb::error::ISBError::Other(
                 "Failed to send wmb message to channel".to_string(),
             ))
@@ -444,7 +450,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
     async fn handle_idle_watermarks(
         &mut self,
         batch_is_empty: bool,
-        tx: &mpsc::Sender<Message>,
+        tx: &mpsc::Sender<MessageHandle>,
     ) -> Result<()> {
         if batch_is_empty {
             if let Some(wm) = self.watermark.as_mut() {
@@ -482,7 +488,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
     async fn process_message_batch(
         &mut self,
         mut batch: Vec<Message>,
-        tx: &mpsc::Sender<Message>,
+        tx: &mpsc::Sender<MessageHandle>,
         permits: &mut tokio::sync::OwnedSemaphorePermit,
         cancel: CancellationToken,
         processing_start: Instant,
@@ -504,11 +510,11 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             Self::publish_read_metrics(&self.metric_labels, &message);
 
             let (ack_tx, ack_rx) = oneshot::channel();
-            message.ack_handle = Some(Arc::new(AckHandle::new(ack_tx)));
+            let read_message = MessageHandle::new(message, ack_tx);
 
             // Start message tracking and WIP loop
             self.start_message_tracking(
-                &message,
+                read_message.message(),
                 permits.split(1).expect("Failed to split permit"),
                 cancel.clone(),
                 processing_start,
@@ -516,8 +522,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             )
             .await?;
 
-            // Send message to channel
-            if tx.send(message).await.is_err() {
+            if tx.send(read_message).await.is_err() {
                 break;
             }
         }
@@ -800,7 +805,8 @@ mod tests {
             10,
             "Expected 10 messages from the jetstream reader"
         );
-        drop(buffer);
+        // Mark all messages as success to ACK them
+        mark_success_batch!(buffer);
 
         reader_cancel_token.cancel();
         js_reader_task.await.unwrap().unwrap();
@@ -901,9 +907,11 @@ mod tests {
         }
 
         for _ in 0..5 {
-            let Some(_val) = js_reader_rx.next().await else {
+            let Some(val) = js_reader_rx.next().await else {
                 break;
             };
+            // Mark as success to ACK the message
+            mark_success!(val);
         }
 
         // wait until the tracker becomes empty, don't wait more than 1 second
@@ -1059,14 +1067,21 @@ mod tests {
 
         // Verify the message was correctly decompressed
         assert_eq!(
-            received_message.value.len(),
+            received_message.message().value.len(),
             0,
             "Empty payload should remain empty after compression/decompression"
         );
-        assert_eq!(received_message.keys.as_ref(), &["empty_key".to_string()]);
-        assert_eq!(received_message.offset.to_string(), offset.to_string());
+        assert_eq!(
+            received_message.message().keys.as_ref(),
+            &["empty_key".to_string()]
+        );
+        assert_eq!(
+            received_message.message().offset.to_string(),
+            offset.to_string()
+        );
 
-        drop(received_message);
+        // Mark as success to ACK the message (this consumes the message)
+        mark_success!(received_message);
 
         reader_cancel_token.cancel();
         js_reader_task.await.unwrap().unwrap();
@@ -1373,14 +1388,12 @@ mod tests {
 #[cfg(test)]
 mod simplebuffer_tests {
     use super::*;
-    use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
-    use numaflow_testing::simplebuffer::SimpleBuffer;
-    use std::collections::HashMap;
-    use std::sync::atomic::Ordering;
-
     use crate::message::MessageID;
+    use crate::pipeline::isb::simplebuffer::{SimpleBufferAdapter, WithSimpleBuffer};
     use bytes::Bytes;
     use chrono::Utc;
+    use numaflow_testing::simplebuffer::SimpleBuffer;
+    use std::collections::HashMap;
     use tokio::time::sleep;
     use tokio_stream::StreamExt;
     use tokio_util::sync::CancellationToken;
@@ -1446,7 +1459,6 @@ mod simplebuffer_tests {
                 headers: Arc::new(HashMap::new()),
                 metadata: None,
                 is_late: false,
-                ack_handle: None,
             };
             writer.write(msg).await.expect("write should succeed");
         }
@@ -1471,8 +1483,10 @@ mod simplebuffer_tests {
         }
         assert_eq!(received.len(), 5, "Should receive all 5 messages");
 
-        // Ack all messages by dropping them (default behavior is ack on drop)
-        drop(received);
+        // Ack all messages by marking them as success
+        for msg in received {
+            mark_success!(msg);
+        }
 
         // Wait for tracker to become empty (all acks processed)
         tokio::time::timeout(Duration::from_secs(2), async {
@@ -1518,8 +1532,10 @@ mod simplebuffer_tests {
         );
         assert_eq!(received.len(), 3);
 
-        // Ack all messages by dropping
-        drop(received);
+        // Ack all messages by marking them as success
+        for msg in received {
+            mark_success!(msg);
+        }
 
         cancel.cancel();
         handle.await.unwrap().unwrap();
@@ -1667,8 +1683,8 @@ mod simplebuffer_tests {
         // Read message
         let msg = rx.next().await.expect("Should receive message");
 
-        // Ack by dropping msg (is_failed defaults to false)
-        drop(msg);
+        // Ack by marking as success
+        mark_success!(msg);
 
         // Tracker should become empty
         tokio::time::timeout(Duration::from_secs(2), async {
@@ -1697,12 +1713,9 @@ mod simplebuffer_tests {
 
         // Read message first time
         let msg1 = rx.next().await.expect("Should receive message first time");
-        let payload1 = msg1.value.clone();
+        let payload1 = msg1.message.value.clone();
 
-        // Nack it by setting is_failed and dropping
-        if let Some(h) = &msg1.ack_handle {
-            h.is_failed.store(true, Ordering::Relaxed);
-        }
+        // Nack it by dropping without calling mark_success (ref_count != 0 causes NAK on drop)
         drop(msg1);
 
         // After nacking, the message goes back to Pending state and will be refetched.
@@ -1713,12 +1726,12 @@ mod simplebuffer_tests {
             .expect("Stream should not end");
 
         assert_eq!(
-            msg2.value, payload1,
+            msg2.message.value, payload1,
             "Redelivered message should have same payload"
         );
 
-        // Ack it this time by dropping (is_failed defaults to false)
-        drop(msg2);
+        // Ack it this time by marking as success
+        mark_success!(msg2);
 
         // Wait for final ack
         let result = tokio::time::timeout(Duration::from_secs(1), async {
@@ -1755,8 +1768,10 @@ mod simplebuffer_tests {
         // Cancel while messages are inflight
         cancel.cancel();
 
-        // Ack messages after cancellation by dropping them
-        drop(messages);
+        // Ack messages after cancellation by marking them as success
+        for msg in messages {
+            mark_success!(msg);
+        }
 
         // Handle should complete (cleanup waits for inflight)
         let result = tokio::time::timeout(Duration::from_secs(2), handle)
@@ -1799,9 +1814,9 @@ mod simplebuffer_tests {
             "4th message should block due to backpressure"
         );
 
-        // Ack first message to free a permit by taking it out and dropping
+        // Ack first message to free a permit
         let first_msg = inflight.remove(0);
-        drop(first_msg);
+        mark_success!(first_msg);
 
         // Now 4th message should come through
         let fourth = tokio::time::timeout(Duration::from_millis(500), rx.next())
@@ -1810,8 +1825,10 @@ mod simplebuffer_tests {
             .expect("Stream should not end");
         inflight.push(fourth);
 
-        // Cleanup - ack remaining by dropping
-        drop(inflight);
+        // Cleanup - ack remaining
+        for msg in inflight {
+            mark_success!(msg);
+        }
 
         cancel.cancel();
         let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
@@ -1838,8 +1855,10 @@ mod simplebuffer_tests {
         }
         assert_eq!(messages.len(), 10);
 
-        // Drop all messages to trigger ack (is_failed defaults to false)
-        drop(messages);
+        // Ack all messages by marking as success
+        for msg in messages {
+            mark_success!(msg);
+        }
 
         // Wait for all ack operations to complete
         let result = tokio::time::timeout(Duration::from_secs(2), async {
