@@ -312,7 +312,7 @@ impl MapHandle {
             if !read_batch.is_empty()
                 && let Err(e) = (MapBatchTask {
                     mapper: ctx.batch_mapper.clone(),
-                    read_batch,
+                    msg_handles: read_batch,
                     output_tx: ctx.output_tx.clone(),
                     tracker: self.tracker.clone(),
                     bypass_router: ctx.bypass_router.clone(),

@@ -288,22 +288,22 @@ impl BypassRouterReceiver {
                     let mut primary_messages: Vec<Message> = vec![];
                     let mut fallback_messages: Vec<Message> = vec![];
                     let mut on_success_messages: Vec<Message> = vec![];
-                    let mut read_messages: Vec<MessageHandle> = vec![];
+                    let mut msg_handles: Vec<MessageHandle> = vec![];
 
                     // Convert MessageToSink to Message and collect MessageHandles for acking
                     for msg in batch {
                         match msg {
                             MessageToSink::Primary(read_msg) => {
                                 primary_messages.push(read_msg.message().clone());
-                                read_messages.push(read_msg);
+                                msg_handles.push(read_msg);
                             }
                             MessageToSink::Fallback(read_msg) => {
                                 fallback_messages.push(read_msg.message().clone());
-                                read_messages.push(read_msg);
+                                msg_handles.push(read_msg);
                             }
                             MessageToSink::OnSuccess(read_msg) => {
                                 on_success_messages.push(read_msg.message().clone());
-                                read_messages.push(read_msg);
+                                msg_handles.push(read_msg);
                             }
                         }
                     }
@@ -319,12 +319,12 @@ impl BypassRouterReceiver {
                     {
                         Ok(()) => {
                             // Successfully written to sink, ACK all messages
-                            mark_success_batch!(read_messages);
+                            mark_success_batch!(msg_handles);
                         }
                         Err(e) => {
                             error!(?e, "Error writing to sink, initiating shutdown.");
                             cln_token.cancel();
-                            for msg in read_messages {
+                            for msg in msg_handles {
                                 msg.mark_failed(&e);
                             }
                             self.final_result = Err(e);
@@ -341,7 +341,7 @@ impl BypassRouterReceiver {
     }
 
     /// Call the different write methods on the sink writer for different types of message vectors.
-    /// If any of the write methods fail, return immediately, ack_handles are marked as failed in the
+    /// If any of the write methods fail, return immediately, msg_handles are marked as failed in the
     /// caller.
     async fn perform_write(
         &mut self,

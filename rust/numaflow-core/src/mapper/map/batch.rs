@@ -43,7 +43,7 @@ pub(in crate::mapper) struct BatchSenderMapState {
 /// MapBatchTask encapsulates all the context needed to execute a batch map operation.
 pub(in crate::mapper) struct MapBatchTask {
     pub mapper: UserDefinedBatchMap,
-    pub read_batch: Vec<MessageHandle>,
+    pub msg_handles: Vec<MessageHandle>,
     pub output_tx: mpsc::Sender<MessageHandle>,
     pub tracker: Tracker,
     pub bypass_router: Option<MvtxBypassRouter>,
@@ -57,14 +57,14 @@ impl MapBatchTask {
     pub async fn execute(self) -> Result<()> {
         // Store parent message info for each message before sending to UDF
         let parent_infos: Vec<ParentMessageInfo> = self
-            .read_batch
+            .msg_handles
             .iter()
             .map(|rm| rm.message().into())
             .collect();
 
         // Convert Messages to MapRequests
         let requests: Vec<MapRequest> = self
-            .read_batch
+            .msg_handles
             .iter()
             .map(|rm| rm.message().clone().into())
             .collect();
@@ -79,7 +79,7 @@ impl MapBatchTask {
 
         for (result, (msg_handle, parent_info)) in results
             .into_iter()
-            .zip(self.read_batch.into_iter().zip(parent_infos))
+            .zip(self.msg_handles.into_iter().zip(parent_infos))
         {
             match result {
                 Ok(results) => {
