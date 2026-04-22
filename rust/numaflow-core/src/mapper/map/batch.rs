@@ -245,9 +245,9 @@ impl UserDefinedBatchMap {
             .remove(&msg_id);
 
         if let Some(sender) = sender_entry {
-            sender
-                .send(Ok(resp.results))
-                .expect("failed to send response");
+            // Receiver may have been dropped (caller cancelled / timed out). Not fatal —
+            // just ignore; panicking here would strand every other in-flight request.
+            let _ = sender.send(Ok(resp.results));
         }
     }
 
@@ -264,27 +264,38 @@ impl UserDefinedBatchMap {
         for (request, sender) in requests.into_iter().zip(senders) {
             let key = request.id.clone();
 
-            // only insert if we are able to send the message to the server
+            // Register the sender BEFORE sending the request so that a fast response cannot
+            // arrive at the response handler before our entry is visible in the map.
+            {
+                let mut senders_guard = self
+                    .senders
+                    .lock()
+                    .expect("failed to acquire poisoned lock");
+                if senders_guard.closed {
+                    let _ = sender.send(Err(Error::Mapper("mapper closed".to_string())));
+                    continue;
+                }
+                senders_guard.map.insert(key.clone(), sender);
+            }
+
             if let Err(e) = self.read_tx.send(request).await {
+                // Unregister so the response handler doesn't see a stale entry, and signal
+                // the caller directly via the sender we just removed.
+                let stale = self
+                    .senders
+                    .lock()
+                    .expect("failed to acquire poisoned lock")
+                    .map
+                    .remove(&key);
                 error!(?e, "Failed to send message to server");
-                let _ = sender.send(Err(Error::Mapper(format!(
-                    "failed to send message to batch map server: {e}"
-                ))));
+                if let Some(stale_sender) = stale {
+                    let _ = stale_sender.send(Err(Error::Mapper(format!(
+                        "failed to send message to batch map server: {e}"
+                    ))));
+                }
                 // Continue collecting results for remaining receivers
                 break;
             }
-
-            let mut senders_guard = self
-                .senders
-                .lock()
-                .expect("failed to acquire poisoned lock");
-
-            if senders_guard.closed {
-                let _ = sender.send(Err(Error::Mapper("mapper closed".to_string())));
-                continue;
-            }
-
-            senders_guard.map.insert(key, sender);
         }
 
         // send eot request
@@ -450,6 +461,75 @@ mod tests {
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
         drop(client);
 
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
+        Ok(())
+    }
+
+    // Regression for #3391: a single batch containing multiple MapRequests that share
+    // the same source offset but differ by index (fan-out siblings from a source
+    // transformer) must each get their own response routed back. Before the fix, the
+    // second sibling's sender overwrote the first in the pending-senders map and the
+    // first waiter resolved with `RecvError`.
+    #[tokio::test]
+    async fn test_fanout_sibling_ids_are_routed_independently() -> Result<(), Box<dyn Error>> {
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new()?;
+        let sock_file = tmp_dir.path().join("batch_map.sock");
+        let server_info_file = tmp_dir.path().join("batch_map-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            Server::new(SimpleBatchMap)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client =
+            UserDefinedBatchMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
+                .await?;
+
+        // 5 siblings of the same source offset; distinct only by index in the request id.
+        let fanout = 5;
+        let requests: Vec<_> = (0..fanout)
+            .map(|i| numaflow_pb::clients::map::MapRequest {
+                request: Some(numaflow_pb::clients::map::map_request::Request {
+                    keys: vec!["k".into()],
+                    value: format!("payload-{i}").into_bytes(),
+                    event_time: None,
+                    watermark: None,
+                    headers: Default::default(),
+                    metadata: None,
+                }),
+                id: format!("default-42-{i}"),
+                handshake: None,
+                status: None,
+            })
+            .collect();
+
+        let cln_token = tokio_util::sync::CancellationToken::new();
+        let results =
+            tokio::time::timeout(Duration::from_secs(5), client.batch(requests, cln_token)).await?;
+
+        assert_eq!(results.len(), fanout);
+        for (i, r) in results.iter().enumerate() {
+            assert!(r.is_ok(), "sibling {i} failed: {:?}", r.as_ref().err());
+            assert_eq!(r.as_ref().unwrap().len(), 1);
+        }
+
+        drop(client);
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");

@@ -232,28 +232,34 @@ impl UserDefinedUnaryMap {
         let (tx, rx) = oneshot::channel();
         let key = request.id.clone();
 
-        // only insert if we are able to send the message to the server
-        if let Err(e) = self.read_tx.send(request).await {
-            error!(?e, "Failed to send message to server");
-            return Err(Error::Mapper(format!(
-                "failed to send message to unary map server: {e}"
-            )));
-        }
-
-        // move the senders_guard out of the scope to drop the guard when done
+        // Register the sender BEFORE sending the request so that a fast response cannot
+        // arrive at the response handler before our entry is visible in the map.
         {
             let mut senders_guard = self
                 .senders
                 .lock()
                 .expect("failed to acquire poisoned lock");
-            if !senders_guard.closed {
-                senders_guard.map.insert(key.clone(), tx);
-            } else {
+            if senders_guard.closed {
                 let _ = tx
                     .send(Err(Error::Mapper("mapper closed".to_string())))
                     .inspect(|_| warn!("failed to send error to oneshot receiver"));
+                return Err(Error::Mapper("unary map is closed".to_string()));
             }
-        };
+            senders_guard.map.insert(key.clone(), tx);
+        }
+
+        if let Err(e) = self.read_tx.send(request).await {
+            // Unregister so the response handler doesn't see a stale entry.
+            self.senders
+                .lock()
+                .expect("failed to acquire poisoned lock")
+                .map
+                .remove(&key);
+            error!(?e, "Failed to send message to server");
+            return Err(Error::Mapper(format!(
+                "failed to send message to unary map server: {e}"
+            )));
+        }
 
         tokio::select! {
             result = rx => {
@@ -288,9 +294,9 @@ impl UserDefinedUnaryMap {
             .remove(&msg_id);
 
         if let Some(sender) = sender_entry {
-            sender
-                .send(Ok(resp.results))
-                .expect("failed to send response");
+            // Receiver may have been dropped (caller cancelled / timed out). Not fatal —
+            // just ignore; panicking here would strand every other in-flight request.
+            let _ = sender.send(Ok(resp.results));
         }
     }
 }
@@ -372,6 +378,88 @@ mod tests {
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
         drop(client);
 
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
+        Ok(())
+    }
+
+    // Regression for #3391: multiple in-flight MapRequests that share the same source
+    // offset but differ by index (fan-out siblings from a source transformer) must each
+    // get their own response routed back. Before the fix, the id was derived from the
+    // offset alone, so the second sibling's `tx` would overwrite the first in the
+    // pending-senders map and the first waiter would resolve with `RecvError`.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_fanout_sibling_ids_are_routed_independently() -> Result<(), Box<dyn Error>> {
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new()?;
+        let sock_file = tmp_dir.path().join("map.sock");
+        let server_info_file = tmp_dir.path().join("map-server-info");
+
+        let handle = {
+            let sock = sock_file.clone();
+            let info = server_info_file.clone();
+            tokio::spawn(async move {
+                map::Server::new(Cat)
+                    .with_socket_file(sock)
+                    .with_server_info_file(info)
+                    .start_with_shutdown(shutdown_rx)
+                    .await
+                    .expect("server failed");
+            })
+        };
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client =
+            UserDefinedUnaryMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
+                .await?;
+
+        // Fire 5 siblings for the same source offset concurrently.
+        let fanout = 5;
+        let cln_token = CancellationToken::new();
+        let mut handles = Vec::with_capacity(fanout);
+        for i in 0..fanout {
+            let req = numaflow_pb::clients::map::MapRequest {
+                request: Some(numaflow_pb::clients::map::map_request::Request {
+                    keys: vec!["k".into()],
+                    value: format!("payload-{i}").into_bytes(),
+                    event_time: None,
+                    watermark: None,
+                    headers: Default::default(),
+                    metadata: None,
+                }),
+                // Shared offset "42", distinct index — mirrors the MessageID::Display
+                // format produced by `From<Message> for MapRequest` after the fix.
+                id: format!("default-42-{i}"),
+                handshake: None,
+                status: None,
+            };
+            let client = client.clone();
+            let token = cln_token.clone();
+            handles.push(tokio::spawn(async move { client.unary(req, token).await }));
+        }
+
+        let mut ok_count = 0usize;
+        for h in handles {
+            let res = tokio::time::timeout(Duration::from_secs(5), h)
+                .await
+                .unwrap()?;
+            assert!(res.is_ok(), "sibling map request failed: {:?}", res.err());
+            assert_eq!(res.unwrap().len(), 1);
+            ok_count += 1;
+        }
+        assert_eq!(
+            ok_count, fanout,
+            "every fan-out sibling must get a response"
+        );
+
+        drop(client);
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");

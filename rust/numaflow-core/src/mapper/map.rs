@@ -473,7 +473,7 @@ impl From<Message> for MapRequest {
                 headers: Arc::unwrap_or_clone(message.headers),
                 metadata: message.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
             }),
-            id: message.offset.to_string(),
+            id: message.id.to_string(),
             handshake: None,
             status: None,
         }
@@ -1671,5 +1671,34 @@ mod tests {
     fn test_update_udf_process_time_metric_pipeline() {
         // Currently only ensuring that this should not panic
         update_udf_process_time_metric(false);
+    }
+
+    // Fan-out siblings (same source offset, distinct MessageID.index) must produce
+    // distinct MapRequest ids so the pending-senders map does not collide.
+    #[test]
+    fn test_map_request_id_unique_across_fanout_siblings() {
+        let make = |index: i32| Message {
+            typ: Default::default(),
+            keys: Arc::from(vec![]),
+            tags: None,
+            value: "v".into(),
+            offset: Offset::String(StringOffset::new("42".to_string(), 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "42".to_string().into(),
+                index,
+            },
+            ..Default::default()
+        };
+
+        let req_a: MapRequest = make(0).into();
+        let req_b: MapRequest = make(1).into();
+
+        assert_ne!(
+            req_a.id, req_b.id,
+            "fan-out siblings must produce distinct MapRequest ids"
+        );
     }
 }

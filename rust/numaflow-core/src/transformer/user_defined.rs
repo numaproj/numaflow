@@ -92,7 +92,7 @@ impl From<Message> for SourceTransformRequest {
     fn from(message: Message) -> Self {
         Self {
             request: Some(sourcetransformer::source_transform_request::Request {
-                id: message.offset.to_string(),
+                id: message.id.to_string(),
                 keys: message.keys.to_vec(),
                 value: message.value.to_vec(),
                 event_time: Some(prost_timestamp_from_utc(message.event_time)),
@@ -197,7 +197,7 @@ impl UserDefinedTransformer {
         message: Message,
         respond_to: oneshot::Sender<Result<Vec<Message>>>,
     ) {
-        let key = message.offset.clone().to_string();
+        let key = message.id.to_string();
 
         let msg_info = ParentMessageInfo {
             offset: message.offset.clone(),

@@ -217,8 +217,20 @@ impl UserDefinedStreamMap {
                         .lock()
                         .expect("failed to acquire poisoned lock")
                         .map
-                        .remove(&resp.id)
-                        .expect("map entry should always be present");
+                        .remove(&resp.id);
+
+                    let Some(response_sender) = response_sender else {
+                        // No pending sender for this id: either the server echoed an id we
+                        // never issued, or a bug in sender registration. Either way this is
+                        // an invariant violation — record it and keep the task alive so other
+                        // in-flight requests are not stranded.
+                        error!(
+                            id = %resp.id,
+                            "stream map response for unknown id; invariant violation",
+                        );
+                        update_udf_error_metric(is_mono_vertex());
+                        continue;
+                    };
 
                     // once we get eot, we can drop the sender to let the callee
                     // know that we are done sending responses
@@ -272,8 +284,35 @@ impl UserDefinedStreamMap {
 
         let key = request.id.clone();
 
-        // only insert if we are able to send the message to the server
+        // Register the sender BEFORE sending the request so that a fast response cannot
+        // arrive at the response handler before our entry is visible in the map.
+        let mapper_closed = {
+            let mut senders_guard = self
+                .senders
+                .lock()
+                .expect("failed to acquire poisoned lock");
+            if senders_guard.closed {
+                true
+            } else {
+                senders_guard.map.insert(key.clone(), tx.clone());
+                false
+            }
+        };
+
+        if mapper_closed {
+            let _ = tx
+                .send(Err(Error::Mapper("mapper closed".to_string())))
+                .await;
+            return rx;
+        }
+
         if let Err(e) = self.read_tx.send(request).await {
+            // Unregister so the response handler doesn't see a stale entry.
+            self.senders
+                .lock()
+                .expect("failed to acquire poisoned lock")
+                .map
+                .remove(&key);
             error!(?e, "Failed to send message to server");
             let _ = tx
                 .send(Err(Error::Mapper(format!(
@@ -282,26 +321,6 @@ impl UserDefinedStreamMap {
                 .await
                 .inspect(|_| warn!("failed to send error to oneshot receiver"));
             return rx;
-        }
-
-        // move the senders_guard out of the scope to drop the guard before sending the response
-        let mapper_closed = {
-            let mut senders_guard = self
-                .senders
-                .lock()
-                .expect("failed to acquire poisoned lock");
-            if !senders_guard.closed {
-                // Write the sender back to the map, because we need to send
-                // more responses for the same request
-                senders_guard.map.insert(key.clone(), tx.clone());
-            }
-            senders_guard.closed
-        };
-
-        if mapper_closed {
-            let _ = tx
-                .send(Err(Error::Mapper("mapper closed".to_string())))
-                .await;
         }
 
         rx
@@ -314,10 +333,12 @@ impl UserDefinedStreamMap {
         response_sender: mpsc::Sender<Result<StreamMapResponse>>,
         results: Vec<map::map_response::Result>,
     ) {
-        response_sender
-            .send(Ok(results))
-            .await
-            .expect("failed to send response");
+        // Receiver may have been dropped (caller cancelled / stream mapped out early).
+        // Not fatal — panicking here would strand every other in-flight stream request.
+        if response_sender.send(Ok(results)).await.is_err() {
+            warn!(id = %msg_id, "stream map response receiver dropped; skipping");
+            return;
+        }
 
         // move the senders_guard out of the scope to drop the guard before sending the response
         let mapper_closed = {
@@ -434,6 +455,86 @@ mod tests {
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
         drop(client);
 
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
+        Ok(())
+    }
+
+    // Regression for #3391: multiple in-flight stream MapRequests that share the same
+    // source offset but differ by index (fan-out siblings from a source transformer)
+    // must each get their own response stream routed back. Before the fix, the second
+    // sibling's mpsc sender overwrote the first in the pending-senders map and the
+    // `.expect("map entry should always be present")` on the duplicate-id response would
+    // panic the entire response-reader task, stranding every other in-flight request.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_fanout_sibling_ids_are_routed_independently() -> Result<(), Box<dyn Error>> {
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new()?;
+        let sock_file = tmp_dir.path().join("map_stream.sock");
+        let server_info_file = tmp_dir.path().join("map_stream-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            mapstream::Server::new(FlatmapStream)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client =
+            UserDefinedStreamMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?))
+                .await?;
+
+        // Fire 5 siblings for the same source offset concurrently. FlatmapStream splits on
+        // commas, so each sibling produces 3 response chunks.
+        let fanout = 5;
+        let cln_token = tokio_util::sync::CancellationToken::new();
+        let mut handles = Vec::with_capacity(fanout);
+        for i in 0..fanout {
+            let req = numaflow_pb::clients::map::MapRequest {
+                request: Some(numaflow_pb::clients::map::map_request::Request {
+                    keys: vec!["k".into()],
+                    value: "test,map,stream".into(),
+                    event_time: None,
+                    watermark: None,
+                    headers: Default::default(),
+                    metadata: None,
+                }),
+                id: format!("default-42-{i}"),
+                handshake: None,
+                status: None,
+            };
+            let client = client.clone();
+            let token = cln_token.clone();
+            handles.push(tokio::spawn(async move {
+                let mut rx = client.stream(req, token).await;
+                let mut total = 0usize;
+                while let Some(resp) = rx.recv().await {
+                    total += resp?.len();
+                }
+                Ok::<_, crate::error::Error>(total)
+            }));
+        }
+
+        for (i, h) in handles.into_iter().enumerate() {
+            let total = tokio::time::timeout(Duration::from_secs(5), h)
+                .await
+                .unwrap()??;
+            assert_eq!(total, 3, "sibling {i} did not receive 3 stream chunks");
+        }
+
+        drop(client);
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");
