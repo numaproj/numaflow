@@ -12,7 +12,7 @@ use opentelemetry::propagation::{Extractor, Injector};
 use crate::metadata::KeyValueGroup;
 
 /// Key under which W3C trace context is stored in `sys_metadata`.
-/// Always holds the `platform.process` span context — the shared parent
+/// Always holds the `platform.process` span context - the shared parent
 /// that makes source.read, map, and sink.write siblings.
 pub const TRACING_METADATA_KEY: &str = "tracing";
 
@@ -172,7 +172,7 @@ fn get_header_case_insensitive<'a>(
 ///
 /// Format: `{version}-{trace_id}-{span_id}-{trace_flags}`
 /// - Pads 64-bit trace IDs to 128-bit (left-pads with zeros)
-/// - Maps sampled: "1"/"true" → "01", "0"/"false" → "00", default → "01"
+/// - Maps sampled: "1"/"true" -> "01", "0"/"false" -> "00", default -> "01"
 fn b3_to_traceparent(trace_id: &str, span_id: &str, sampled: Option<&str>) -> String {
     let padded_trace_id = if trace_id.len() <= 16 {
         format!("{:0>32}", trace_id)

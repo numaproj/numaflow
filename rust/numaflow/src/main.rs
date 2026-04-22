@@ -5,7 +5,7 @@ use std::error::Error;
 use tokio::task::JoinHandle;
 use tokio::{runtime, signal};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 mod setup_tracing;
 
@@ -34,10 +34,10 @@ fn main() {
     // User may specify a higher value by setting NUMAFLOW_CPU_REQUEST in `containerTemplate.env`
     // section for the vertex.
     let cpu_core_count = env::var("NUMAFLOW_CPU_REQUEST").unwrap_or_else(|_| "1".into());
-    let worker_thread_count = cpu_core_count.parse::<usize>().inspect_err(|e| {
-        // Use eprintln! because tracing subscriber is not yet initialized at this point
-        eprintln!("WARN: NUMAFLOW_CPU_REQUEST is not a valid unsigned integer ({e}). Worker thread count will be set to 1");
-    }).unwrap_or(1).max(1);
+    // Parse the CPU request; defer logging any error until after the tracing
+    // subscriber is installed below so it flows through the normal log pipeline.
+    let cpu_parse_result = cpu_core_count.parse::<usize>();
+    let worker_thread_count = cpu_parse_result.as_ref().copied().unwrap_or(1).max(1);
 
     // Build the Tokio runtime before initializing tracing. The OTLP tonic/gRPC
     // exporter needs a Tokio runtime for its background tasks. By entering the
@@ -52,6 +52,10 @@ fn main() {
     // a tonic gRPC channel for OTLP export) can use this runtime.
     let _rt_guard = rt.enter();
     let tracer_provider = setup_tracing::register();
+
+    if let Err(ref e) = cpu_parse_result {
+        warn!(integer_conversion_error=?e, "NUMAFLOW_CPU_REQUEST is not a valid unsigned integer. Worker thread count will be set to 1");
+    }
 
     info!(
         VERSION_INFO,

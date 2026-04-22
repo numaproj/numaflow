@@ -172,7 +172,7 @@ where
 }
 
 /// Initialize the tracing subscriber with optional OTLP export.
-/// Returns the `SdkTracerProvider` handle if OTLP is enabled — the caller
+/// Returns the `SdkTracerProvider` handle if OTLP is enabled - the caller
 /// must keep it alive and call `.shutdown()` before process exit to flush
 /// buffered spans.
 pub fn register() -> Option<opentelemetry_sdk::trace::SdkTracerProvider> {
