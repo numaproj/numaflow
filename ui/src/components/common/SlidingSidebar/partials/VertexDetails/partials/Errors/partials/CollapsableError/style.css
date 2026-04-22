@@ -9,6 +9,7 @@
   margin: 1rem 0;
   gap: 1rem;
   align-items: center;
+  min-width: 0;
 }
 
 .collapsable-error-common-title-text {
@@ -31,6 +32,7 @@
   height: 100%;
   padding: 2rem 0;
   gap: 1rem;
+  min-width: 0;
 }
 
 .collapsable-error-accordion-details-title {
@@ -41,5 +43,7 @@
 .collapsable-error-accordion-details-title-content {
   font-size: 1.4rem;
   height: 30rem;
-  overflow: scroll;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
 }
