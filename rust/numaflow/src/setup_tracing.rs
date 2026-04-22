@@ -171,11 +171,25 @@ where
     Some((otel_layer, tracer_provider))
 }
 
+/// RAII guard that flushes buffered spans by shutting down the provider
+/// on drop. Must be dropped while the Tokio runtime is still alive.
+pub struct TracerProviderGuard(Option<opentelemetry_sdk::trace::SdkTracerProvider>);
+
+impl Drop for TracerProviderGuard {
+    fn drop(&mut self) {
+        if let Some(provider) = self.0.take()
+            && let Err(e) = provider.shutdown()
+        {
+            eprintln!("[setup_tracing] Failed to shut down tracer provider: {e}");
+        }
+    }
+}
+
 /// Initialize the tracing subscriber with optional OTLP export.
-/// Returns the `SdkTracerProvider` handle if OTLP is enabled - the caller
-/// must keep it alive and call `.shutdown()` before process exit to flush
-/// buffered spans.
-pub fn register() -> Option<opentelemetry_sdk::trace::SdkTracerProvider> {
+/// Returns a `TracerProviderGuard` that will flush buffered spans on drop.
+/// Callers must bind it (e.g., `let _guard = register();`) rather than
+/// discard it, or the provider will shut down immediately.
+pub fn register() -> TracerProviderGuard {
     let debug_mode = std::env::var("NUMAFLOW_DEBUG").is_ok_and(|v| v.to_lowercase() == "true");
     let default_log_level = if debug_mode {
         "debug,h2::codec=info" // "h2::codec" is too noisy
@@ -219,5 +233,5 @@ pub fn register() -> Option<opentelemetry_sdk::trace::SdkTracerProvider> {
 
     std::panic::set_hook(Box::new(report_panic));
 
-    tracer_provider
+    TracerProviderGuard(tracer_provider)
 }

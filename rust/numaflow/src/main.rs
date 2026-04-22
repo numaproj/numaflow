@@ -15,7 +15,8 @@ mod cmdline;
 const VERSION_INFO: &str = env!("NUMAFLOW_VERSION_INFO");
 const ENV_MONO_VERTEX_NAME: &str = "NUMAFLOW_MONO_VERTEX_NAME";
 
-fn main() {
+/// Returns `std::process::ExitCode` so destructors run (e.g., the tracer guard flushes buffered spans).
+fn main() -> std::process::ExitCode {
     // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()
@@ -50,8 +51,10 @@ fn main() {
 
     // Enter the runtime context so that tracing initialization (which may create
     // a tonic gRPC channel for OTLP export) can use this runtime.
+    // Drop order at end of main is reverse of declaration: _tracer_guard drops first
+    // (flushing spans via the still-live runtime), then _rt_guard, then rt.
     let _rt_guard = rt.enter();
-    let tracer_provider = setup_tracing::register();
+    let _tracer_guard = setup_tracing::register();
 
     if let Err(ref e) = cpu_parse_result {
         warn!(integer_conversion_error=?e, "NUMAFLOW_CPU_REQUEST is not a valid unsigned integer. Worker thread count will be set to 1");
@@ -67,20 +70,16 @@ fn main() {
 
     let run_result = rt.block_on(async move { run(cli).await });
 
-    if let Err(ref e) = run_result {
-        error!("{e:?}");
+    match run_result {
+        Err(e) => {
+            error!("{e:?}");
+            std::process::ExitCode::FAILURE
+        }
+        Ok(()) => {
+            info!("Exited.");
+            std::process::ExitCode::SUCCESS
+        }
     }
-
-    // Flush buffered spans before process exit (this is done for both success and error paths).
-    if let Some(provider) = tracer_provider {
-        let _ = provider.shutdown();
-    }
-
-    if run_result.is_err() {
-        std::process::exit(1);
-    }
-
-    info!("Exited.");
 }
 
 async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
