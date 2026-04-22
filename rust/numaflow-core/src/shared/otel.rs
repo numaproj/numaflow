@@ -7,6 +7,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use opentelemetry::global;
 use opentelemetry::propagation::{Extractor, Injector};
 
 use crate::metadata::KeyValueGroup;
@@ -52,7 +53,6 @@ impl Injector for MetadataInjector<'_> {
 
 /// Ensures the global text map propagator is set to W3C Trace Context.
 pub(crate) fn ensure_propagator() {
-    use opentelemetry::global;
     let propagator = opentelemetry_sdk::propagation::TraceContextPropagator::new();
     global::set_text_map_propagator(propagator);
     tracing::info!("W3C TraceContext propagator installed");
@@ -63,7 +63,6 @@ pub(crate) fn ensure_propagator() {
 pub(crate) fn extract_trace_context(
     metadata: &crate::metadata::Metadata,
 ) -> opentelemetry::Context {
-    use opentelemetry::global;
     match metadata.sys_metadata.get(TRACING_METADATA_KEY) {
         Some(kvg) => {
             let extractor = MetadataExtractor(kvg);
@@ -82,8 +81,6 @@ pub(crate) fn inject_context_into_metadata(
     key: &str,
     cx: &opentelemetry::Context,
 ) {
-    use opentelemetry::global;
-
     let kvg = metadata
         .sys_metadata
         .entry(key.to_string())
@@ -129,8 +126,6 @@ impl Extractor for HeaderExtractor<'_> {
 pub(crate) fn extract_trace_context_from_headers(
     headers: &Arc<HashMap<String, String>>,
 ) -> opentelemetry::Context {
-    use opentelemetry::global;
-
     // Check for W3C traceparent header first
     if get_header_case_insensitive(headers, "traceparent").is_some() {
         let extractor = HeaderExtractor(headers.as_ref());

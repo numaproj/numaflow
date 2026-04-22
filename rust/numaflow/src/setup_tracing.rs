@@ -157,7 +157,9 @@ where
 
     // Set the global tracer provider so OTel API users (e.g., per-message sink.write
     // spans created via the OTel API directly) can access it.
-    // We clone here because we also return the provider for explicit shutdown.
+    // `.clone()` is an Arc refcount bump: the global handle and the returned handle
+    // share the same underlying span queue and exporter, so `shutdown()` on either
+    // (done via `TracerProviderGuard`'s drop) flushes and tears down both.
     opentelemetry::global::set_tracer_provider(tracer_provider.clone());
 
     // Set W3C Trace Context propagator for context propagation via sys_metadata.
