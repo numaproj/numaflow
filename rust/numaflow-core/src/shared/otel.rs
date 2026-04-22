@@ -61,7 +61,11 @@ pub(crate) fn extract_trace_context(
             let extractor = MetadataExtractor(kvg);
             global::get_text_map_propagator(|prop| prop.extract(&extractor))
         }
-        None => opentelemetry::Context::current(),
+        // No propagated trace: return a fresh root context rather than
+        // `Context::current()`, which would inherit the ambient context of the
+        // current task (e.g. a surrounding span) and graft this message onto
+        // an unrelated parent.
+        None => opentelemetry::Context::new(),
     }
 }
 
@@ -112,10 +116,10 @@ impl Extractor for HeaderExtractor<'_> {
 /// Extracts an OpenTelemetry [`Context`] from incoming message headers.
 ///
 /// Checks for W3C `traceparent` first, then B3 multi-headers
-/// (`X-B3-TraceId`, `X-B3-SpanId`, `X-B3-Sampled`). If B3 headers are found,
+/// (`X-B3-TraceId`, `X-B3-SpanId`, `X-B3-Sampled`, `X-B3-Flags`). If B3 headers are found,
 /// converts them to W3C `traceparent` format before extraction.
 ///
-/// Returns `Context::current()` (root) if no trace headers are present.
+/// Returns a fresh root context if no trace headers are present.
 pub(crate) fn extract_trace_context_from_headers(
     headers: &Arc<HashMap<String, String>>,
 ) -> opentelemetry::Context {
@@ -131,7 +135,10 @@ pub(crate) fn extract_trace_context_from_headers(
 
     if let (Some(trace_id), Some(span_id)) = (trace_id, span_id) {
         let sampled = get_header_case_insensitive(headers, "X-B3-Sampled");
-        let traceparent = b3_to_traceparent(trace_id, span_id, sampled);
+        // B3 debug is carried in X-B3-Flags: 1 (not in X-B3-Sampled).
+        // If present, it forces recording regardless of the sampled header.
+        let debug = get_header_case_insensitive(headers, "X-B3-Flags") == Some("1");
+        let traceparent = b3_to_traceparent(trace_id, span_id, sampled, debug);
 
         let mut synthetic = HashMap::new();
         synthetic.insert("traceparent".to_string(), traceparent);
@@ -139,7 +146,8 @@ pub(crate) fn extract_trace_context_from_headers(
         return global::get_text_map_propagator(|prop| prop.extract(&extractor));
     }
 
-    opentelemetry::Context::current()
+    // No upstream trace headers: fresh root context, not the ambient one.
+    opentelemetry::Context::new()
 }
 
 /// Case-insensitive header lookup.
@@ -160,19 +168,29 @@ fn get_header_case_insensitive<'a>(
 ///
 /// Format: `{version}-{trace_id}-{span_id}-{trace_flags}`
 /// - Pads 64-bit trace IDs to 128-bit (left-pads with zeros)
-/// - Maps sampled: "1"/"true" -> "01", "0"/"false" -> "00", default -> "01"
-fn b3_to_traceparent(trace_id: &str, span_id: &str, sampled: Option<&str>) -> String {
+/// - Maps sampled: "1"/"true" -> "01", "0"/"false"/absent -> "00"
+/// - Maps debug (`X-B3-Flags: 1`) -> "01"
+///
+/// B3 treats an absent `X-B3-Sampled` header as "deferred" (downstream decides),
+/// which has no equivalent in W3C's two-state trace-flags. We collapse absent to
+/// `00` (not sampled) rather than `01` to avoid unexpectedly force-sampling every
+/// B3-without-sampled trace and amplifying trace volume past the configured
+/// sampler ratio.
+fn b3_to_traceparent(trace_id: &str, span_id: &str, sampled: Option<&str>, debug: bool) -> String {
     let padded_trace_id = if trace_id.len() <= 16 {
         format!("{:0>32}", trace_id)
     } else {
         trace_id.to_string()
     };
 
-    let flags = match sampled {
-        Some("1" | "true") => "01",
-        Some("0" | "false") => "00",
-        Some("d") => "01", // debug = sampled
-        _ => "01",         // default to sampled
+    let flags = if debug {
+        "01" // B3 debug forces recording
+    } else {
+        match sampled {
+            Some("1" | "true") => "01",
+            Some("0" | "false") => "00",
+            _ => "00", // absent: B3 defers; don't force-sample
+        }
     };
 
     format!("00-{}-{}-{}", padded_trace_id, span_id, flags)
