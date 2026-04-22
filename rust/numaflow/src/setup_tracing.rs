@@ -1,3 +1,4 @@
+use opentelemetry_sdk::trace::Sampler;
 use tracing::Level;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -61,18 +62,24 @@ fn report_panic(panic_info: &PanicHookInfo<'_>) {
 /// Supported samplers: `always_on`, `always_off`, `traceidratio`,
 /// `parentbased_always_on`, `parentbased_always_off`, `parentbased_traceidratio`.
 fn build_sampler() -> opentelemetry_sdk::trace::Sampler {
-    use opentelemetry_sdk::trace::Sampler;
-
     let sampler_name =
         std::env::var("OTEL_TRACES_SAMPLER").unwrap_or_else(|_| "parentbased_always_on".into());
     let sampler_arg_raw = std::env::var("OTEL_TRACES_SAMPLER_ARG").ok();
-    let sampler_arg = sampler_arg_raw
-        .as_deref()
-        .and_then(|v| v.parse::<f64>().ok());
+    build_sampler_from(&sampler_name, sampler_arg_raw.as_deref())
+}
+
+/// Pure helper that builds a [`Sampler`] from already-resolved inputs.
+/// Extracted from `build_sampler` so it can be unit-tested without mutating
+/// the process env.
+fn build_sampler_from(
+    sampler_name: &str,
+    sampler_arg_raw: Option<&str>,
+) -> opentelemetry_sdk::trace::Sampler {
+    let sampler_arg = sampler_arg_raw.and_then(|v| v.parse::<f64>().ok());
 
     let ratio_or_default = |sampler_kind: &str| {
         sampler_arg.unwrap_or_else(|| {
-            if let Some(raw) = sampler_arg_raw.as_deref() {
+            if let Some(raw) = sampler_arg_raw {
                 eprintln!(
                     "[setup_tracing] Invalid OTEL_TRACES_SAMPLER_ARG='{raw}' for sampler '{sampler_kind}', defaulting ratio to 1.0"
                 );
@@ -81,7 +88,7 @@ fn build_sampler() -> opentelemetry_sdk::trace::Sampler {
         })
     };
 
-    let sampler = match sampler_name.as_str() {
+    let sampler = match sampler_name {
         "always_on" => Sampler::AlwaysOn,
         "always_off" => Sampler::AlwaysOff,
         "traceidratio" => Sampler::TraceIdRatioBased(ratio_or_default("traceidratio")),
@@ -120,6 +127,8 @@ fn init_otlp_layer<S>(
 where
     S: tracing::Subscriber + for<'span> tracing_subscriber::registry::LookupSpan<'span>,
 {
+    use opentelemetry_otlp::WithExportConfig;
+
     let otlp_endpoint = std::env::var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
         .or_else(|_| std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT"))
         .ok()?;
@@ -128,7 +137,6 @@ where
         "[setup_tracing] Configuring OTLP exporter: endpoint={otlp_endpoint}, service_name={service_name}"
     );
 
-    use opentelemetry_otlp::WithExportConfig;
     let exporter = match opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
         .with_endpoint(&otlp_endpoint)
@@ -237,4 +245,221 @@ pub fn register() -> TracerProviderGuard {
     std::panic::set_hook(Box::new(report_panic));
 
     TracerProviderGuard(tracer_provider)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use opentelemetry::{
+        Context,
+        trace::{
+            SamplingDecision, SpanContext, SpanId, SpanKind, TraceContextExt, TraceFlags, TraceId,
+            TraceState,
+        },
+    };
+    use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider, ShouldSample};
+
+    fn sampling_decision(
+        sampler: &Sampler,
+        parent_context: Option<&Context>,
+        trace_id: TraceId,
+    ) -> SamplingDecision {
+        sampler
+            .should_sample(
+                parent_context,
+                trace_id,
+                "test-span",
+                &SpanKind::Internal,
+                &[],
+                &[],
+            )
+            .decision
+    }
+
+    fn trace_id_at_probability_boundary(prob: f64, just_below_boundary: bool) -> TraceId {
+        let upper_bound = (prob.max(0.0) * (1u64 << 63) as f64) as u64;
+        let rnd = if just_below_boundary {
+            upper_bound.saturating_sub(1)
+        } else {
+            upper_bound
+        };
+
+        TraceId::from((rnd as u128) << 1)
+    }
+
+    fn parent_context(sampled: bool) -> Context {
+        let trace_flags = if sampled {
+            TraceFlags::SAMPLED
+        } else {
+            TraceFlags::default()
+        };
+
+        Context::new().with_remote_span_context(SpanContext::new(
+            TraceId::from(1u128),
+            SpanId::from(1u64),
+            trace_flags,
+            true,
+            TraceState::default(),
+        ))
+    }
+
+    #[test]
+    fn sampler_always_on() {
+        assert!(matches!(
+            build_sampler_from("always_on", None),
+            Sampler::AlwaysOn
+        ));
+    }
+
+    #[test]
+    fn sampler_always_off() {
+        assert!(matches!(
+            build_sampler_from("always_off", None),
+            Sampler::AlwaysOff
+        ));
+    }
+
+    #[test]
+    fn sampler_traceidratio_parses_arg() {
+        let sampler = build_sampler_from("traceidratio", Some("0.25"));
+        assert!(matches!(&sampler, Sampler::TraceIdRatioBased(_)));
+        assert_eq!(
+            sampling_decision(&sampler, None, trace_id_at_probability_boundary(0.25, true)),
+            SamplingDecision::RecordAndSample
+        );
+        assert_eq!(
+            sampling_decision(
+                &sampler,
+                None,
+                trace_id_at_probability_boundary(0.25, false)
+            ),
+            SamplingDecision::Drop
+        );
+    }
+
+    #[test]
+    fn sampler_traceidratio_defaults_to_1_when_arg_missing() {
+        let sampler = build_sampler_from("traceidratio", None);
+        assert!(matches!(&sampler, Sampler::TraceIdRatioBased(_)));
+        assert_eq!(
+            sampling_decision(&sampler, None, TraceId::from(u128::MAX)),
+            SamplingDecision::RecordAndSample
+        );
+    }
+
+    #[test]
+    fn sampler_traceidratio_defaults_to_1_when_arg_unparsable() {
+        let sampler = build_sampler_from("traceidratio", Some("not-a-number"));
+        assert!(matches!(&sampler, Sampler::TraceIdRatioBased(_)));
+        assert_eq!(
+            sampling_decision(&sampler, None, TraceId::from(u128::MAX)),
+            SamplingDecision::RecordAndSample
+        );
+    }
+
+    #[test]
+    fn sampler_parentbased_always_on() {
+        let sampler = build_sampler_from("parentbased_always_on", None);
+        let sampled_parent = parent_context(true);
+        let unsampled_parent = parent_context(false);
+
+        assert!(matches!(&sampler, Sampler::ParentBased(_)));
+        assert_eq!(
+            sampling_decision(&sampler, None, TraceId::from(u128::MAX)),
+            SamplingDecision::RecordAndSample
+        );
+        assert_eq!(
+            sampling_decision(&sampler, Some(&sampled_parent), TraceId::from(u128::MAX)),
+            SamplingDecision::RecordAndSample
+        );
+        assert_eq!(
+            sampling_decision(&sampler, Some(&unsampled_parent), TraceId::from(u128::MAX)),
+            SamplingDecision::Drop
+        );
+    }
+
+    #[test]
+    fn sampler_parentbased_always_off() {
+        let sampler = build_sampler_from("parentbased_always_off", None);
+        let sampled_parent = parent_context(true);
+
+        assert!(matches!(&sampler, Sampler::ParentBased(_)));
+        assert_eq!(
+            sampling_decision(&sampler, None, TraceId::from(1u128)),
+            SamplingDecision::Drop
+        );
+        assert_eq!(
+            sampling_decision(&sampler, Some(&sampled_parent), TraceId::from(1u128)),
+            SamplingDecision::RecordAndSample
+        );
+    }
+
+    #[test]
+    fn sampler_parentbased_traceidratio_with_arg() {
+        let sampler = build_sampler_from("parentbased_traceidratio", Some("0.1"));
+        let sampled_parent = parent_context(true);
+        let unsampled_parent = parent_context(false);
+
+        assert!(matches!(&sampler, Sampler::ParentBased(_)));
+        assert_eq!(
+            sampling_decision(&sampler, None, trace_id_at_probability_boundary(0.1, true)),
+            SamplingDecision::RecordAndSample
+        );
+        assert_eq!(
+            sampling_decision(&sampler, None, trace_id_at_probability_boundary(0.1, false)),
+            SamplingDecision::Drop
+        );
+        assert_eq!(
+            sampling_decision(
+                &sampler,
+                Some(&sampled_parent),
+                trace_id_at_probability_boundary(0.1, false),
+            ),
+            SamplingDecision::RecordAndSample
+        );
+        assert_eq!(
+            sampling_decision(
+                &sampler,
+                Some(&unsampled_parent),
+                trace_id_at_probability_boundary(0.1, true),
+            ),
+            SamplingDecision::Drop
+        );
+    }
+
+    #[test]
+    fn sampler_unknown_name_falls_back_to_parentbased_always_on() {
+        let sampler = build_sampler_from("nonsense", None);
+        let unsampled_parent = parent_context(false);
+
+        assert!(matches!(&sampler, Sampler::ParentBased(_)));
+        assert_eq!(
+            sampling_decision(&sampler, None, TraceId::from(u128::MAX)),
+            SamplingDecision::RecordAndSample
+        );
+        assert_eq!(
+            sampling_decision(&sampler, Some(&unsampled_parent), TraceId::from(u128::MAX)),
+            SamplingDecision::Drop
+        );
+    }
+
+    #[test]
+    fn tracer_provider_guard_drop_without_provider_is_noop() {
+        // Guard holding None must not panic on drop (the path taken when
+        // OTLP is not configured).
+        let guard = TracerProviderGuard(None);
+        drop(guard);
+    }
+
+    #[test]
+    fn tracer_provider_guard_drop_with_provider_shuts_down_cleanly() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("tokio runtime should build");
+        let _runtime_guard = runtime.enter();
+
+        let guard = TracerProviderGuard(Some(SdkTracerProvider::builder().build()));
+        drop(guard);
+    }
 }

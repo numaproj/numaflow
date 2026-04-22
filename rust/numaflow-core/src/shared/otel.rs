@@ -13,8 +13,8 @@ use opentelemetry::propagation::{Extractor, Injector};
 use crate::metadata::KeyValueGroup;
 
 /// Key under which W3C trace context is stored in `sys_metadata`.
-/// Always holds the `platform.process` span context - the shared parent
-/// that makes source.read, map, and sink.write siblings.
+/// Always holds the shared `platform.process` parent context for downstream
+/// platform spans (for example source, map, and sink spans).
 pub const TRACING_METADATA_KEY: &str = "tracing";
 
 /// Key under which the current stage's span context is stored for UDF consumption.
@@ -52,7 +52,7 @@ impl Injector for MetadataInjector<'_> {
 }
 
 /// Extracts an OpenTelemetry [`Context`] from a message's sys_metadata.
-/// Returns `Context::current()` (root) if the tracing key is absent.
+/// Returns a fresh root context if the tracing key is absent.
 pub(crate) fn extract_trace_context(
     metadata: &crate::metadata::Metadata,
 ) -> opentelemetry::Context {
@@ -194,4 +194,284 @@ fn b3_to_traceparent(trace_id: &str, span_id: &str, sampled: Option<&str>, debug
     };
 
     format!("00-{}-{}-{}", padded_trace_id, span_id, flags)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::Bytes;
+    use opentelemetry::propagation::{Extractor, Injector};
+    use opentelemetry::trace::TraceContextExt;
+    use std::sync::Once;
+
+    /// Install the W3C propagator once per test process. Tests that rely on
+    /// `extract`/`inject` going through the real propagator must call this.
+    fn init_propagator() {
+        static INIT: Once = Once::new();
+        INIT.call_once(|| {
+            opentelemetry::global::set_text_map_propagator(
+                opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+            );
+        });
+    }
+
+    fn kvg_with(pairs: &[(&str, &str)]) -> KeyValueGroup {
+        let mut kv = HashMap::new();
+        for (k, v) in pairs {
+            kv.insert((*k).to_string(), Bytes::from(v.as_bytes().to_vec()));
+        }
+        KeyValueGroup { key_value: kv }
+    }
+
+    fn context_from_traceparent(traceparent: &str) -> opentelemetry::Context {
+        let carrier = kvg_with(&[("traceparent", traceparent)]);
+        global::get_text_map_propagator(|prop| prop.extract(&MetadataExtractor(&carrier)))
+    }
+
+    #[test]
+    fn metadata_extractor_reads_utf8_values() {
+        let kvg = kvg_with(&[("traceparent", "abc"), ("tracestate", "k=v")]);
+        let ex = MetadataExtractor(&kvg);
+        assert_eq!(ex.get("traceparent"), Some("abc"));
+        assert_eq!(ex.get("tracestate"), Some("k=v"));
+        assert_eq!(ex.get("missing"), None);
+
+        let mut keys = ex.keys();
+        keys.sort();
+        assert_eq!(keys, vec!["traceparent", "tracestate"]);
+    }
+
+    #[test]
+    fn metadata_extractor_returns_none_for_non_utf8() {
+        let mut kv = HashMap::new();
+        kv.insert("traceparent".to_string(), Bytes::from(vec![0xff, 0xfe]));
+        let kvg = KeyValueGroup { key_value: kv };
+        assert_eq!(MetadataExtractor(&kvg).get("traceparent"), None);
+    }
+
+    #[test]
+    fn metadata_injector_sets_value() {
+        let mut kvg = KeyValueGroup {
+            key_value: HashMap::new(),
+        };
+        MetadataInjector(&mut kvg).set("traceparent", "tp-value".to_string());
+        assert_eq!(
+            kvg.key_value.get("traceparent").map(|b| b.as_ref()),
+            Some(b"tp-value".as_slice())
+        );
+    }
+
+    #[test]
+    fn extract_trace_context_absent_key_returns_fresh_root() {
+        init_propagator();
+        let ambient_cx =
+            context_from_traceparent("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01");
+        let ambient_sc = ambient_cx.span().span_context().clone();
+        let _ambient_guard = ambient_cx.attach();
+
+        let meta = crate::metadata::Metadata::default();
+        let cx = extract_trace_context(&meta);
+        let span = cx.span();
+        let sc = span.span_context();
+
+        // Fresh root: no valid remote span context and no inheritance from the
+        // ambient test context.
+        assert!(!sc.is_valid());
+        assert_ne!(sc.trace_id(), ambient_sc.trace_id());
+        assert_ne!(sc.span_id(), ambient_sc.span_id());
+    }
+
+    #[test]
+    fn extract_trace_context_roundtrips_with_inject() {
+        init_propagator();
+
+        // Build a parent context from a known traceparent so we can assert on specific IDs.
+        let parent_tp = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+        let parent_kvg = kvg_with(&[("traceparent", parent_tp)]);
+        let parent_cx =
+            global::get_text_map_propagator(|prop| prop.extract(&MetadataExtractor(&parent_kvg)));
+        let parent_span = parent_cx.span();
+        let parent_sc = parent_span.span_context().clone();
+        drop(parent_span); // release the SpanRef borrow on parent_cx
+        assert!(parent_sc.is_valid(), "parent must parse to valid context");
+
+        // Inject into a fresh Metadata under the "tracing" key, then extract back.
+        let mut meta = crate::metadata::Metadata::default();
+        inject_context_into_metadata(&mut meta, TRACING_METADATA_KEY, &parent_cx);
+        assert!(meta.sys_metadata.contains_key(TRACING_METADATA_KEY));
+
+        let extracted_cx = extract_trace_context(&meta);
+        let extracted_span = extracted_cx.span();
+        let extracted_sc = extracted_span.span_context();
+        assert!(extracted_sc.is_valid());
+        assert_eq!(extracted_sc.trace_id(), parent_sc.trace_id());
+        assert_eq!(extracted_sc.span_id(), parent_sc.span_id());
+    }
+
+    #[test]
+    fn header_extractor_case_insensitive_fallback() {
+        let mut h = HashMap::new();
+        h.insert("X-B3-TraceId".to_string(), "abc".to_string());
+
+        let ex = HeaderExtractor(&h);
+        assert_eq!(ex.get("X-B3-TraceId"), Some("abc")); // exact match
+        assert_eq!(ex.get("x-b3-traceid"), Some("abc")); // case-insensitive
+        assert_eq!(ex.get("missing"), None);
+    }
+
+    #[test]
+    fn extract_from_headers_no_trace_returns_fresh_root() {
+        init_propagator();
+        let ambient_cx =
+            context_from_traceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
+        let ambient_sc = ambient_cx.span().span_context().clone();
+        let _ambient_guard = ambient_cx.attach();
+
+        let headers = Arc::new(HashMap::new());
+        let cx = extract_trace_context_from_headers(&headers);
+        let span = cx.span();
+        let sc = span.span_context();
+
+        assert!(!sc.is_valid());
+        assert_ne!(sc.trace_id(), ambient_sc.trace_id());
+        assert_ne!(sc.span_id(), ambient_sc.span_id());
+    }
+
+    #[test]
+    fn extract_from_headers_w3c_traceparent() {
+        init_propagator();
+        let mut h = HashMap::new();
+        h.insert(
+            "traceparent".to_string(),
+            "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01".to_string(),
+        );
+        let headers = Arc::new(h);
+
+        let cx = extract_trace_context_from_headers(&headers);
+        let span = cx.span();
+        let sc = span.span_context();
+        assert!(sc.is_valid());
+        assert_eq!(
+            sc.trace_id().to_string(),
+            "0af7651916cd43dd8448eb211c80319c"
+        );
+        assert_eq!(sc.span_id().to_string(), "b7ad6b7169203331");
+        assert!(sc.is_sampled());
+    }
+
+    #[test]
+    fn extract_from_headers_b3_multi_header_sampled() {
+        init_propagator();
+        let mut h = HashMap::new();
+        h.insert(
+            "X-B3-TraceId".to_string(),
+            "0af7651916cd43dd8448eb211c80319c".to_string(),
+        );
+        h.insert("X-B3-SpanId".to_string(), "b7ad6b7169203331".to_string());
+        h.insert("X-B3-Sampled".to_string(), "1".to_string());
+        let headers = Arc::new(h);
+
+        let cx = extract_trace_context_from_headers(&headers);
+        let span = cx.span();
+        let sc = span.span_context();
+        assert!(sc.is_valid());
+        assert_eq!(
+            sc.trace_id().to_string(),
+            "0af7651916cd43dd8448eb211c80319c"
+        );
+        assert_eq!(sc.span_id().to_string(), "b7ad6b7169203331");
+        assert!(sc.is_sampled());
+    }
+
+    #[test]
+    fn extract_from_headers_b3_debug_flag_forces_sampled() {
+        init_propagator();
+        let mut h = HashMap::new();
+        h.insert(
+            "X-B3-TraceId".to_string(),
+            "0af7651916cd43dd8448eb211c80319c".to_string(),
+        );
+        h.insert("X-B3-SpanId".to_string(), "b7ad6b7169203331".to_string());
+        h.insert("X-B3-Sampled".to_string(), "0".to_string());
+        h.insert("X-B3-Flags".to_string(), "1".to_string());
+        let headers = Arc::new(h);
+
+        let cx = extract_trace_context_from_headers(&headers);
+        let span = cx.span();
+        let sc = span.span_context();
+        assert!(sc.is_valid());
+        assert_eq!(
+            sc.trace_id().to_string(),
+            "0af7651916cd43dd8448eb211c80319c"
+        );
+        assert_eq!(sc.span_id().to_string(), "b7ad6b7169203331");
+        assert!(sc.is_sampled());
+    }
+
+    #[test]
+    fn extract_from_headers_b3_missing_span_id_falls_through() {
+        init_propagator();
+        let mut h = HashMap::new();
+        h.insert("X-B3-TraceId".to_string(), "abc".to_string());
+        // No X-B3-SpanId.
+        let headers = Arc::new(h);
+
+        let cx = extract_trace_context_from_headers(&headers);
+        assert!(!cx.span().span_context().is_valid());
+    }
+
+    #[test]
+    fn b3_pads_64bit_trace_id_to_128bit() {
+        let tp = b3_to_traceparent("b7ad6b7169203331", "b7ad6b7169203331", Some("1"), false);
+        assert_eq!(
+            tp,
+            "00-0000000000000000b7ad6b7169203331-b7ad6b7169203331-01"
+        );
+    }
+
+    #[test]
+    fn b3_preserves_128bit_trace_id() {
+        let tp = b3_to_traceparent(
+            "0af7651916cd43dd8448eb211c80319c",
+            "b7ad6b7169203331",
+            Some("1"),
+            false,
+        );
+        assert_eq!(
+            tp,
+            "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+        );
+    }
+
+    #[test]
+    fn b3_sampled_flag_mapping() {
+        let tid = "0af7651916cd43dd8448eb211c80319c";
+        let sid = "b7ad6b7169203331";
+
+        // Sampled=1/true -> 01.
+        assert!(b3_to_traceparent(tid, sid, Some("1"), false).ends_with("-01"));
+        assert!(b3_to_traceparent(tid, sid, Some("true"), false).ends_with("-01"));
+
+        // Sampled=0/false -> 00.
+        assert!(b3_to_traceparent(tid, sid, Some("0"), false).ends_with("-00"));
+        assert!(b3_to_traceparent(tid, sid, Some("false"), false).ends_with("-00"));
+
+        // Absent -> 00 (B3 deferral collapsed to not-sampled to avoid volume blowup).
+        assert!(b3_to_traceparent(tid, sid, None, false).ends_with("-00"));
+
+        // Unknown value -> 00 (same default as absent).
+        assert!(b3_to_traceparent(tid, sid, Some("weird"), false).ends_with("-00"));
+    }
+
+    #[test]
+    fn b3_debug_flag_forces_sampled_regardless_of_sampled_header() {
+        let tid = "0af7651916cd43dd8448eb211c80319c";
+        let sid = "b7ad6b7169203331";
+
+        // debug=true beats sampled=0/absent.
+        assert!(b3_to_traceparent(tid, sid, Some("0"), true).ends_with("-01"));
+        assert!(b3_to_traceparent(tid, sid, None, true).ends_with("-01"));
+        // debug=false + sampled=1 still samples.
+        assert!(b3_to_traceparent(tid, sid, Some("1"), false).ends_with("-01"));
+    }
 }
