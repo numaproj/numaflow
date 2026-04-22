@@ -51,13 +51,6 @@ impl Injector for MetadataInjector<'_> {
     }
 }
 
-/// Ensures the global text map propagator is set to W3C Trace Context.
-pub(crate) fn ensure_propagator() {
-    let propagator = opentelemetry_sdk::propagation::TraceContextPropagator::new();
-    global::set_text_map_propagator(propagator);
-    tracing::info!("W3C TraceContext propagator installed");
-}
-
 /// Extracts an OpenTelemetry [`Context`] from a message's sys_metadata.
 /// Returns `Context::current()` (root) if the tracing key is absent.
 pub(crate) fn extract_trace_context(

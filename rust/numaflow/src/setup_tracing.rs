@@ -175,6 +175,7 @@ where
 
 /// RAII guard that flushes buffered spans by shutting down the provider
 /// on drop. Must be dropped while the Tokio runtime is still alive.
+#[must_use = "binding drops the guard immediately and flushes; hold it with `let _guard = ...` for the duration of the program"]
 pub struct TracerProviderGuard(Option<opentelemetry_sdk::trace::SdkTracerProvider>);
 
 impl Drop for TracerProviderGuard {
