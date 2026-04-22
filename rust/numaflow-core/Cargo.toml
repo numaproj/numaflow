@@ -19,6 +19,9 @@ tokio.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+tracing-opentelemetry.workspace = true
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true, features = ["rt-tokio"] }
 numaflow-pulsar.workspace = true
 numaflow-monitor.workspace = true
 numaflow-nats.workspace = true

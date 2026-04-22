@@ -15,8 +15,8 @@ mod cmdline;
 const VERSION_INFO: &str = env!("NUMAFLOW_VERSION_INFO");
 const ENV_MONO_VERTEX_NAME: &str = "NUMAFLOW_MONO_VERTEX_NAME";
 
-fn main() {
-    setup_tracing::register();
+/// Returns `std::process::ExitCode` so destructors run (e.g., the tracer guard flushes buffered spans).
+fn main() -> std::process::ExitCode {
     // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()
@@ -35,15 +35,30 @@ fn main() {
     // User may specify a higher value by setting NUMAFLOW_CPU_REQUEST in `containerTemplate.env`
     // section for the vertex.
     let cpu_core_count = env::var("NUMAFLOW_CPU_REQUEST").unwrap_or_else(|_| "1".into());
-    let worker_thread_count = cpu_core_count.parse::<usize>().inspect_err(|e| {
-        warn!(integer_conversion_error=?e, "The value of NUMAFLOW_CPU_REQUEST environment variable should be a valid unsigned integer. Worker thread count will be set to 1");
-    }).unwrap_or(1).max(1);
+    // Parse the CPU request; defer logging any error until after the tracing
+    // subscriber is installed below so it flows through the normal log pipeline.
+    let cpu_parse_result = cpu_core_count.parse::<usize>();
+    let worker_thread_count = cpu_parse_result.as_ref().copied().unwrap_or(1).max(1);
 
+    // Build the Tokio runtime before initializing tracing. The OTLP tonic/gRPC
+    // exporter needs a Tokio runtime for its background tasks. By entering the
+    // runtime context first, the tonic channel binds to this runtime.
     let rt = runtime::Builder::new_multi_thread()
         .enable_all()
         .worker_threads(worker_thread_count)
         .build()
         .unwrap();
+
+    // Enter the runtime context so that tracing initialization (which may create
+    // a tonic gRPC channel for OTLP export) can use this runtime.
+    // Drop order at end of main is reverse of declaration: _tracer_guard drops first
+    // (flushing spans via the still-live runtime), then _rt_guard, then rt.
+    let _rt_guard = rt.enter();
+    let _tracer_guard = setup_tracing::register();
+
+    if let Err(ref e) = cpu_parse_result {
+        warn!(integer_conversion_error=?e, "NUMAFLOW_CPU_REQUEST is not a valid unsigned integer. Worker thread count will be set to 1");
+    }
 
     info!(
         VERSION_INFO,
@@ -53,14 +68,18 @@ fn main() {
 
     let cli = cmdline::root_cli();
 
-    rt.block_on(async move {
-        if let Err(e) = run(cli).await {
-            error!("{e:?}");
-            std::process::exit(1);
-        }
-    });
+    let run_result = rt.block_on(async move { run(cli).await });
 
-    info!("Exited.");
+    match run_result {
+        Err(e) => {
+            error!("{e:?}");
+            std::process::ExitCode::FAILURE
+        }
+        Ok(()) => {
+            info!("Exited.");
+            std::process::ExitCode::SUCCESS
+        }
+    }
 }
 
 async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
