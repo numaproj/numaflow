@@ -290,9 +290,10 @@ mod tests {
         let parent_kvg = kvg_with(&[("traceparent", parent_tp)]);
         let parent_cx =
             global::get_text_map_propagator(|prop| prop.extract(&MetadataExtractor(&parent_kvg)));
-        let parent_span = parent_cx.span();
-        let parent_sc = parent_span.span_context().clone();
-        drop(parent_span); // release the SpanRef borrow on parent_cx
+        let parent_sc = {
+            let parent_span = parent_cx.span();
+            parent_span.span_context().clone()
+        };
         assert!(parent_sc.is_valid(), "parent must parse to valid context");
 
         // Inject into a fresh Metadata under the "tracing" key, then extract back.
