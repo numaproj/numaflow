@@ -596,6 +596,13 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         .await;
 
                     let watermark = watermark_handle.fetch_source_watermark().await;
+                    info!(
+                        fetched_wm = watermark.timestamp_millis(),
+                        batch_min_event_time = msg_handles.iter().map(|m| m.message().event_time.timestamp_millis()).min(),
+                        batch_max_event_time = msg_handles.iter().map(|m| m.message().event_time.timestamp_millis()).max(),
+                        batch_size = msg_handles.len(),
+                        "is_late check inputs"
+                    );
                     // set is_late on messages that arrived after the watermark
                     for msg_handle in msg_handles.iter_mut() {
                         if msg_handle.message().event_time < watermark {

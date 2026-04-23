@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use tracing::info;
 
 /// Interval for logging watermark summary
-const WATERMARK_LOG_INTERVAL: Duration = Duration::from_secs(60);
+const WATERMARK_LOG_INTERVAL: Duration = Duration::from_secs(5);
 
 /// SourceWatermarkFetcher is the watermark fetcher for the source.
 pub struct SourceWatermarkFetcher {
