@@ -20,7 +20,7 @@
   margin-top: 0;
   height: 100%;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto;
   box-sizing: border-box;
 }
 
