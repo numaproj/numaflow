@@ -13,6 +13,7 @@ use crate::metrics::{
     mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::monovertex::bypass_router::MvtxBypassRouter;
+use crate::shared::otel;
 use crate::source::http::CoreHttpSource;
 use crate::tracker::Tracker;
 use crate::{
@@ -28,6 +29,8 @@ use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SqsSource;
 use numaflow_throttling::RateLimiter;
+use opentelemetry::trace::{SpanKind, TraceContextExt as _};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
@@ -39,6 +42,7 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::warn;
 use tracing::{error, info};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 /// [User-Defined Source] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -72,6 +76,61 @@ const MAX_ACK_PENDING: usize = 10000;
 const ACK_RETRY_INTERVAL: u64 = 100;
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 const NACK_RETRY_ATTEMPTS: usize = 1200; // 100ms apart, total=2 minutes
+
+/// Tracks per-message source dispatch OTel spans keyed by message offset.
+///
+/// The source creates a topology-specific dispatch span per input message before
+/// tracker insert, transform, and downstream send. On the success path, each span
+/// is ended either when the last downstream message for that input offset is
+/// bypassed/sent, or immediately after transform if that input produced no outputs.
+///
+/// Any spans that remain in the map at end-of-iteration (for example, due to a
+/// transformer error that breaks the outer loop before all messages are dispatched)
+/// are closed by the RAII `Drop` impl, ensuring no span is leaked.
+struct SourceDispatchSpans {
+    spans: HashMap<crate::message::Offset, opentelemetry::Context>,
+}
+
+impl SourceDispatchSpans {
+    fn new() -> Self {
+        Self {
+            spans: HashMap::new(),
+        }
+    }
+
+    fn insert(&mut self, offset: crate::message::Offset, cx: opentelemetry::Context) {
+        self.spans.insert(offset, cx);
+    }
+
+    /// End dispatch spans for input offsets that produced no downstream messages.
+    fn end_without_outputs(&mut self, output_counts: &HashMap<crate::message::Offset, usize>) {
+        let offsets_without_outputs: Vec<_> = self
+            .spans
+            .keys()
+            .filter(|offset| !output_counts.contains_key(*offset))
+            .cloned()
+            .collect();
+
+        for offset in offsets_without_outputs {
+            self.end(&offset);
+        }
+    }
+
+    /// End the dispatch span for a specific message (called as message is dispatched downstream).
+    fn end(&mut self, offset: &crate::message::Offset) {
+        if let Some(cx) = self.spans.remove(offset) {
+            cx.span().end();
+        }
+    }
+}
+
+impl Drop for SourceDispatchSpans {
+    fn drop(&mut self) {
+        for (_, cx) in self.spans.drain() {
+            cx.span().end();
+        }
+    }
+}
 
 /// Represents the partition information returned by a source.
 /// Contains both the active partitions being processed and optionally the total number of partitions.
@@ -499,7 +558,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 }
 
                 let read_start_time = Instant::now();
-                let messages = match Self::read(self.sender.clone()).await {
+                let mut messages = match Self::read(self.sender.clone()).await {
                     Some(Ok(messages)) => messages,
                     None => {
                         info!("Source returned None (end of stream). Stopping the source.");
@@ -519,7 +578,26 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 let mut msg_handles = vec![];
                 let mut ack_batch = Vec::with_capacity(msgs_len);
 
-                for message in messages.iter() {
+                // Tracing: hold per-message `source.dispatch` span contexts keyed
+                // by source offset. Spans are created before tracker insert and closed only
+                // after the last downstream message for that source offset is bypassed/sent.
+                // This keeps the span honest even when the transformer fans one input message
+                // out into multiple outputs.
+                //
+                // Any messages whose dispatch spans are still in the map at end-of-iteration
+                // (e.g., transformer error that breaks the outer loop) have their spans
+                // closed by the RAII guard when the map is dropped.
+                let mut dispatch_spans = SourceDispatchSpans::new();
+                // Read-only parent contexts for `source.transform`; `dispatch_spans` remains the
+                // sole owner responsible for ending `source.dispatch`.
+                let mut dispatch_parent_contexts = if is_mono_vertex() && self.transformer.is_some()
+                {
+                    Some(HashMap::with_capacity(msgs_len))
+                } else {
+                    None
+                };
+
+                for message in messages.iter_mut() {
                     Self::record_partition_read_metrics(
                         &pipeline_labels,
                         mvtx_labels,
@@ -527,13 +605,82 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         message.value.len(),
                     );
 
+                    // - Create `numaflow.vertex.process` root span for this message's full lifecycle.
+                    //   Parent: upstream trace context from message headers (W3C or B3), if present.
+                    //   The span is stored in MessageHandle's AckHandle and dropped on ack, giving
+                    //   accurate duration.
+                    // - Create a topology-specific `source.dispatch` child span covering per-message
+                    //   source-stage work (tracker insert + optional `source.transform` child span +
+                    //   watermark + downstream bypass/send). It is closed after the last message for
+                    //   this source offset leaves the source stage, or by the RAII guard on error.
+                    //   Note: this span measures the per-message source-stage dispatch work, NOT
+                    //   source read latency.
+                    // - Inject `vertex.process` context into sys_metadata["tracing"] so that map
+                    //   and sink become siblings of `source.dispatch` under `vertex.process`.
+                    let platform_span = if is_mono_vertex() {
+                        let upstream_cx =
+                            otel::extract_trace_context_from_headers(&message.headers);
+                        let msg_id = message.offset.to_string();
+                        let platform_span = tracing::info_span!(
+                            "numaflow.vertex.process",
+                            otel.kind = "INTERNAL",
+                            { otel::ATTR_MESSAGING_SYSTEM } = "numaflow",
+                            { otel::ATTR_MESSAGING_OPERATION_NAME } =
+                                otel::TraceTopology::MonoVertex.root_operation_name(),
+                            { otel::ATTR_MESSAGING_MESSAGE_ID } = %msg_id,
+                            { otel::ATTR_NUMAFLOW_TOPOLOGY } = otel::TraceTopology::MonoVertex.as_str(),
+                            { otel::ATTR_NUMAFLOW_PIPELINE_NAME } =
+                                crate::config::get_pipeline_name(),
+                            { otel::ATTR_NUMAFLOW_VERTEX_NAME } =
+                                crate::config::get_vertex_name(),
+                        );
+                        {
+                            let _ = platform_span.set_parent(upstream_cx);
+                        }
+
+                        // Inject vertex.process context into sys_metadata["tracing"] so
+                        // downstream stages (map, sink) become siblings under this root.
+                        let platform_cx = { platform_span.context() };
+                        let metadata = message
+                            .metadata
+                            .get_or_insert_with(|| Arc::new(crate::metadata::Metadata::default()));
+                        otel::inject_context_into_metadata(
+                            Arc::make_mut(metadata),
+                            otel::TRACING_METADATA_KEY,
+                            &platform_cx,
+                        );
+
+                        // Create source.dispatch as an OTel SDK span (child of vertex.process).
+                        // It stays alive until we dispatch this message downstream (or the RAII
+                        // guard drops on error). Tracked by offset.
+                        let dispatch_cx = otel::start_platform_child_span(
+                            "numaflow.monovertex.source.dispatch",
+                            SpanKind::Producer,
+                            &platform_cx,
+                            otel::TraceTopology::MonoVertex,
+                            "source.dispatch",
+                            msg_id,
+                        );
+                        if let Some(ref mut parent_contexts) = dispatch_parent_contexts {
+                            parent_contexts.insert(message.offset.clone(), dispatch_cx.clone());
+                        }
+                        dispatch_spans.insert(message.offset.clone(), dispatch_cx);
+
+                        Some(platform_span)
+                    } else {
+                        None
+                    };
                     // insert the message (with offset) into the tracker.
                     self.tracker.insert(message).await?;
 
                     let (ack_tx, ack_rx) = oneshot::channel();
                     // store the ack receiver in the batch to invoke ack later.
                     ack_batch.push((message.offset.clone(), ack_rx));
-                    msg_handles.push(MessageHandle::new(message.clone(), ack_tx));
+                    let msg_handle = MessageHandle::new(message.clone(), ack_tx);
+                    if let Some(span) = platform_span {
+                        msg_handle.set_pipeline_span(span);
+                    }
+                    msg_handles.push(msg_handle);
                 }
 
                 // start a background task to invoke ack on the source for the offsets that are acked.
@@ -572,7 +719,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 let mut msg_handles = match self.transformer.as_mut() {
                     None => msg_handles,
                     Some(transformer) => match transformer
-                        .transform_batch(msg_handles, cln_token.clone())
+                        .transform_batch(
+                            msg_handles,
+                            cln_token.clone(),
+                            dispatch_parent_contexts.as_ref(),
+                        )
                         .await
                     {
                         Ok(handles) => handles,
@@ -587,6 +738,18 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         }
                     },
                 };
+
+                let mut remaining_dispatches = HashMap::with_capacity(msg_handles.len());
+                for msg_handle in &msg_handles {
+                    *remaining_dispatches
+                        .entry(msg_handle.message().offset.clone())
+                        .or_insert(0usize) += 1;
+                }
+
+                // If a source input produced no downstream messages (for example, the transformer
+                // filtered it out), close its dispatch span now so it does not stay open for the
+                // rest of the batch's watermark/send work.
+                dispatch_spans.end_without_outputs(&remaining_dispatches);
 
                 if let Some(watermark_handle) = self.watermark_handle.as_mut() {
                     let entries: Vec<SourceWatermarkEntry> =
@@ -606,26 +769,54 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
                 // write the messages to downstream as MessageHandles.
                 for read_message in msg_handles.into_iter() {
+                    let offset = read_message.message().offset.clone();
                     // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
                     // If not bypassed, it returns Some(read_message) for us to send downstream.
-                    let read_message = if let Some(ref bypass_router) = bypass_router {
+                    let maybe_read_message = if let Some(ref bypass_router) = bypass_router {
                         match bypass_router
                             .try_bypass(read_message)
                             .await
                             .expect("failed to send message to bypass channel")
                         {
                             Some(msg) => msg,
-                            None => continue, // Message was bypassed, move to next
+                            None => {
+                                let should_end_dispatch = remaining_dispatches
+                                    .get_mut(&offset)
+                                    .map(|remaining| {
+                                        *remaining -= 1;
+                                        *remaining == 0
+                                    })
+                                    .unwrap_or(false);
+                                if should_end_dispatch {
+                                    remaining_dispatches.remove(&offset);
+                                    dispatch_spans.end(&offset);
+                                }
+                                continue;
+                            }
                         }
                     } else {
                         read_message
                     };
 
                     messages_tx
-                        .send(read_message)
+                        .send(maybe_read_message)
                         .await
                         .expect("send should not fail");
+
+                    let should_end_dispatch = remaining_dispatches
+                        .get_mut(&offset)
+                        .map(|remaining| {
+                            *remaining -= 1;
+                            *remaining == 0
+                        })
+                        .unwrap_or(false);
+                    if should_end_dispatch {
+                        remaining_dispatches.remove(&offset);
+                        dispatch_spans.end(&offset);
+                    }
                 }
+                // dispatch_spans drops here — any remaining (shouldn't happen on success path)
+                // get closed by the RAII Drop impl.
             }
 
             info!(status=?result, "Source stopped, waiting for inflight messages to be acked/nacked");

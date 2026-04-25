@@ -7,9 +7,11 @@ use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
 use crate::monovertex::bypass_router::MvtxBypassRouter;
+use crate::shared::otel;
 use crate::tracker::Tracker;
 use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
+use opentelemetry::trace::SpanKind;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -54,7 +56,7 @@ pub(in crate::mapper) struct MapBatchTask {
 impl MapBatchTask {
     /// Executes the batch map operation.
     /// Returns an error if any message in the batch fails to be processed.
-    pub async fn execute(self) -> Result<()> {
+    pub async fn execute(mut self) -> Result<()> {
         // Store parent message info for each message before sending to UDF
         let parent_infos: Vec<ParentMessageInfo> = self
             .msg_handles
@@ -62,20 +64,59 @@ impl MapBatchTask {
             .map(|rm| rm.message().into())
             .collect();
 
-        // Convert Messages to MapRequests
-        let requests: Vec<MapRequest> = self
-            .msg_handles
-            .iter()
-            .map(|rm| rm.message().clone().into())
-            .collect();
+        let results = {
+            // Create per-message topology-specific map spans via the OTel SDK API.
+            // Each span's parent is that message's `vertex.process` context (from
+            // sys_metadata["tracing"]). We inject the map span context into
+            // sys_metadata["tracing_udf"] so the UDF creates its processing span as a child.
+            // Lexical scope ends spans after the batch UDF call.
+            //
+            // Invariant: tracing_udf is removed from result messages below; on error, input
+            // messages are dropped, so tracing_udf never propagates further.
+            let _span_guard = if is_mono_vertex() {
+                let mut contexts: Vec<opentelemetry::Context> =
+                    Vec::with_capacity(self.msg_handles.len());
+                for msg_handle in self.msg_handles.iter_mut() {
+                    let message = msg_handle.message_mut();
+                    let parent_cx = otel::parent_context_from_metadata(message.metadata.as_deref());
+                    let msg_id = message.offset.to_string();
+                    let map_cx = otel::start_platform_child_span(
+                        "numaflow.monovertex.map",
+                        SpanKind::Internal,
+                        &parent_cx,
+                        otel::TraceTopology::MonoVertex,
+                        "map",
+                        msg_id,
+                    );
+                    if let Some(ref mut metadata) = message.metadata {
+                        otel::inject_context_into_metadata(
+                            Arc::make_mut(metadata),
+                            otel::TRACING_UDF_METADATA_KEY,
+                            &map_cx,
+                        );
+                    }
+                    contexts.push(map_cx);
+                }
+                Some(otel::ContextSpanGuard::new(contexts))
+            } else {
+                None
+            };
 
-        // Update read metrics for each request
-        for _ in &requests {
-            update_udf_read_metric(self.is_mono_vertex);
-        }
+            // Convert Messages to MapRequests
+            let requests: Vec<MapRequest> = self
+                .msg_handles
+                .iter()
+                .map(|rm| rm.message().clone().into())
+                .collect();
 
-        // Call the UDF and get results directly
-        let results = self.mapper.batch(requests, self.cln_token).await;
+            // Update read metrics for each request
+            for _ in &requests {
+                update_udf_read_metric(self.is_mono_vertex);
+            }
+
+            // Call the UDF and get results directly
+            self.mapper.batch(requests, self.cln_token).await
+        };
 
         for (result, (msg_handle, parent_info)) in results
             .into_iter()
@@ -83,12 +124,22 @@ impl MapBatchTask {
         {
             match result {
                 Ok(results) => {
-                    // Convert raw results to Messages using parent info
+                    // Convert raw results to Messages using parent info.
+                    // Remove tracing_udf from each result (map stage is done).
                     let mapped_messages: Vec<Message> = results
                         .into_iter()
                         .enumerate()
                         .map(|(i, result)| {
-                            UserDefinedMessage(result, &parent_info, i as i32).into()
+                            let mut mapped_msg: Message =
+                                UserDefinedMessage(result, &parent_info, i as i32).into();
+                            if is_mono_vertex()
+                                && let Some(ref mut metadata) = mapped_msg.metadata
+                            {
+                                Arc::make_mut(metadata)
+                                    .sys_metadata
+                                    .remove(otel::TRACING_UDF_METADATA_KEY);
+                            }
+                            mapped_msg
                         })
                         .collect();
 

@@ -7,6 +7,7 @@ use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
+use crate::shared::otel;
 use crate::sinker::actor::{SinkActorMessage, SinkActorResponse};
 use crate::{Result, mark_failed_batch};
 use numaflow_kafka::sink::KafkaSink;
@@ -15,7 +16,9 @@ use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
 use numaflow_pulsar::sink::Sink as PulsarSink;
 use numaflow_sqs::sink::SqsSink;
+use opentelemetry::trace::SpanKind;
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -280,7 +283,7 @@ impl SinkWriter {
     /// Invokes the primary sink actor, handles fallback messages, serving messages, and errors.
     pub(crate) async fn write_to_sink(
         &mut self,
-        messages: Vec<Message>,
+        mut messages: Vec<Message>,
         cln_token: CancellationToken,
     ) -> Result<()> {
         if messages.is_empty() {
@@ -291,10 +294,29 @@ impl SinkWriter {
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();
 
-        // Invoke primary sink to write messages
-        let response = self
-            .write_to_primary_sink(messages, cln_token.clone())
-            .await?;
+        // Tracing: per-message primary sink stage spans.
+        // Span lifetime is scoped to only the primary sink actor call.
+        let mut response = {
+            let _span_guard = if is_mono_vertex() {
+                Some(inject_sink_stage_spans(
+                    &mut messages,
+                    otel::TraceTopology::MonoVertex,
+                    SinkWriteStage::Primary,
+                ))
+            } else {
+                None
+            };
+            self.write_to_primary_sink(messages, cln_token.clone())
+                .await?
+        };
+
+        // Strip tracing_udf from response messages so fallback/on_success/serving sinks
+        // don't inherit the primary sink stage span as a parent.
+        if is_mono_vertex() {
+            strip_tracing_udf(&mut response.fallback);
+            strip_tracing_udf(&mut response.on_success);
+            strip_tracing_udf(&mut response.serving);
+        }
 
         if !response.failed.is_empty() {
             error!(
@@ -346,7 +368,7 @@ impl SinkWriter {
     /// Write messages to the OnSuccess Sink.
     pub(crate) async fn write_to_on_success(
         &mut self,
-        messages: Vec<Message>,
+        mut messages: Vec<Message>,
         cln_token: CancellationToken,
     ) -> Result<()> {
         if messages.is_empty() {
@@ -357,10 +379,21 @@ impl SinkWriter {
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();
 
-        // Invoke on_success sink actor (with retry logic inside)
-        let on_success_response = self
-            .write_to_on_success_sink(messages, cln_token.clone())
-            .await?;
+        // Tracing: per-message on-success sink stage spans.
+        // Span lifetime is scoped to only the on-success sink actor call.
+        let on_success_response = {
+            let _span_guard = if is_mono_vertex() && self.on_success_sink_handle.is_some() {
+                Some(inject_sink_stage_spans(
+                    &mut messages,
+                    otel::TraceTopology::MonoVertex,
+                    SinkWriteStage::OnSuccess,
+                ))
+            } else {
+                None
+            };
+            self.write_to_on_success_sink(messages, cln_token.clone())
+                .await?
+        };
 
         // Check if fallback returned fallback or serving status (not allowed)
         if !on_success_response.fallback.is_empty() {
@@ -392,7 +425,7 @@ impl SinkWriter {
     /// Write the messages to the Fallback Sink.
     pub(crate) async fn write_to_fallback(
         &mut self,
-        messages: Vec<Message>,
+        mut messages: Vec<Message>,
         cln_token: CancellationToken,
     ) -> Result<()> {
         if messages.is_empty() {
@@ -403,8 +436,20 @@ impl SinkWriter {
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();
 
-        // Invoke fallback sink actor (with retry logic inside)
-        let fb_response = self.write_to_fb_sink(messages, cln_token.clone()).await?;
+        // Tracing: per-message fallback sink stage spans.
+        // Span lifetime is scoped to only the fallback sink actor call.
+        let fb_response = {
+            let _span_guard = if is_mono_vertex() && self.fb_sink_handle.is_some() {
+                Some(inject_sink_stage_spans(
+                    &mut messages,
+                    otel::TraceTopology::MonoVertex,
+                    SinkWriteStage::Fallback,
+                ))
+            } else {
+                None
+            };
+            self.write_to_fb_sink(messages, cln_token.clone()).await?
+        };
 
         // Check if fallback returned fallback or serving status (not allowed)
         if !fb_response.fallback.is_empty() {
@@ -653,6 +698,85 @@ impl SinkWriter {
     }
 }
 
+/// RAII guard that closes per-message sink stage OTel spans on drop.
+type SinkSpanCloser = otel::ContextSpanGuard;
+
+/// Stage-specific sink write span type for tracing.
+#[derive(Clone, Copy)]
+enum SinkWriteStage {
+    Primary,
+    Fallback,
+    OnSuccess,
+}
+
+impl SinkWriteStage {
+    fn span_name(self, topology: otel::TraceTopology) -> &'static str {
+        match topology {
+            otel::TraceTopology::MonoVertex => match self {
+                Self::Primary => "numaflow.monovertex.sink.write",
+                Self::Fallback => "numaflow.monovertex.sink.fallback",
+                Self::OnSuccess => "numaflow.monovertex.sink.on_success",
+            },
+            otel::TraceTopology::Pipeline => match self {
+                Self::Primary => "numaflow.pipeline.sink.write",
+                Self::Fallback => "numaflow.pipeline.sink.fallback",
+                Self::OnSuccess => "numaflow.pipeline.sink.on_success",
+            },
+        }
+    }
+
+    fn operation_name(self) -> &'static str {
+        match self {
+            Self::Primary => "sink.write",
+            Self::Fallback => "sink.fallback",
+            Self::OnSuccess => "sink.on_success",
+        }
+    }
+}
+
+/// Inject stage-local sink span context into messages and return a guard that closes spans on drop.
+fn inject_sink_stage_spans(
+    messages: &mut [Message],
+    topology: otel::TraceTopology,
+    stage: SinkWriteStage,
+) -> SinkSpanCloser {
+    let mut contexts = Vec::with_capacity(messages.len());
+    for message in messages.iter_mut() {
+        let parent_cx = otel::parent_context_from_metadata(message.metadata.as_deref());
+        let msg_id = message.offset.to_string();
+        let sink_cx = otel::start_platform_child_span(
+            stage.span_name(topology),
+            SpanKind::Client,
+            &parent_cx,
+            topology,
+            stage.operation_name(),
+            msg_id,
+        );
+        if let Some(ref mut metadata) = message.metadata {
+            otel::inject_context_into_metadata(
+                Arc::make_mut(metadata),
+                otel::TRACING_UDF_METADATA_KEY,
+                &sink_cx,
+            );
+        }
+        contexts.push(sink_cx);
+    }
+
+    otel::ContextSpanGuard::new(contexts)
+}
+
+/// Removes `tracing_udf` from each message's sys_metadata so downstream sinks
+/// (fallback, on_success, serving) don't inherit the previous sink stage span.
+fn strip_tracing_udf(messages: &mut [Message]) {
+    for msg in messages.iter_mut() {
+        if let Some(ref mut metadata) = msg.metadata {
+            Arc::make_mut(metadata)
+                .sys_metadata
+                .remove(otel::TRACING_UDF_METADATA_KEY);
+        }
+    }
+}
+
 /// Sends count of messages marked for explicit drop by the user
 /// Currently pub(crate) to allow usage by the bypass_router.
 pub(crate) fn send_drop_metrics(is_mono_vertex: bool, dropped_messages_count: usize) {
@@ -721,6 +845,7 @@ mod tests {
     use super::*;
     use crate::config::pipeline::NatsStoreConfig;
     use crate::message::{IntOffset, Message, MessageHandle, MessageID, Offset, ReadAck};
+    use crate::metadata::{KeyValueGroup, Metadata};
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::serve::nats::NatsServingStore;
     use crate::tracker::Tracker;
@@ -1266,6 +1391,36 @@ mod tests {
         assert_eq!(
             results.first().unwrap().status,
             ResponseStatusFromSink::Success
+        );
+    }
+
+    #[test]
+    fn test_strip_tracing_udf_removes_stage_context() {
+        let mut sys_metadata = HashMap::new();
+        sys_metadata.insert(
+            otel::TRACING_UDF_METADATA_KEY.to_string(),
+            KeyValueGroup {
+                key_value: HashMap::new(),
+            },
+        );
+
+        let mut message = Message {
+            metadata: Some(Arc::new(Metadata {
+                previous_vertex: String::new(),
+                sys_metadata,
+                user_metadata: HashMap::new(),
+            })),
+            ..Default::default()
+        };
+
+        strip_tracing_udf(std::slice::from_mut(&mut message));
+
+        let metadata = message.metadata.expect("metadata should still exist");
+        assert!(
+            !metadata
+                .sys_metadata
+                .contains_key(otel::TRACING_UDF_METADATA_KEY),
+            "tracing_udf should be removed from downstream messages"
         );
     }
 

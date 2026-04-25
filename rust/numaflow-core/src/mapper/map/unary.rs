@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
+use crate::shared::otel;
 use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
@@ -13,7 +14,8 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
-use tracing::{error, warn};
+use tracing::{Instrument, error, warn};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use super::{
     ParentMessageInfo, SharedMapTaskContext, UserDefinedMessage, create_response_stream,
@@ -59,9 +61,59 @@ impl MapUnaryTask {
     }
 
     /// Executes the unary map operation.
+    ///
+    /// With distributed tracing, extracts the `vertex.process` context from
+    /// `sys_metadata["tracing"]`, creates a topology-specific map span as its child,
+    /// and instruments the actual UDF call with that span so the span duration covers
+    /// the map stage.
     async fn execute(self) {
+        // Pipeline wiring can reuse this pattern when map spans are enabled there.
+        if is_mono_vertex() {
+            let parent_cx =
+                otel::parent_context_from_metadata(self.msg_handle.message().metadata.as_deref());
+
+            let msg_id = self.msg_handle.message().offset.to_string();
+            let map_span = tracing::info_span!(
+                "numaflow.monovertex.map",
+                otel.kind = "INTERNAL",
+                { otel::ATTR_MESSAGING_SYSTEM } = "numaflow",
+                { otel::ATTR_MESSAGING_OPERATION_NAME } = "map",
+                { otel::ATTR_MESSAGING_MESSAGE_ID } = %msg_id,
+                { otel::ATTR_NUMAFLOW_TOPOLOGY } = otel::TraceTopology::MonoVertex.as_str(),
+                { otel::ATTR_NUMAFLOW_PIPELINE_NAME } = crate::config::get_pipeline_name(),
+                { otel::ATTR_NUMAFLOW_VERTEX_NAME } = crate::config::get_vertex_name(),
+            );
+            let _ = map_span.set_parent(parent_cx);
+            self.execute_inner().instrument(map_span).await;
+        } else {
+            self.execute_inner().await;
+        }
+    }
+
+    /// The core unary map execution. When called under `.instrument(map_span)`, the current
+    /// tracing context is the map span — we inject it into `sys_metadata["tracing_udf"]` so the
+    /// UDF sees the map span as its parent. The key is removed from result messages before they
+    /// leave the mapper.
+    async fn execute_inner(mut self) {
         // Hold the permit until the task completes
         let _permit = self.permit;
+
+        // Tracing: inject the current `map` span's context into
+        // sys_metadata["tracing_udf"] so the UDF creates its processing span as a child.
+        // Note: `sys_metadata["tracing"]` is NOT overwritten — it still holds `vertex.process`.
+        // tracing_udf is written to the input message here and removed from every
+        // result message below. On UDF error, we return early without producing result messages,
+        // and the input message is dropped — so tracing_udf never propagates downstream.
+        if is_mono_vertex()
+            && let Some(ref mut metadata) = self.msg_handle.message_mut().metadata
+        {
+            let map_cx = tracing::Span::current().context();
+            otel::inject_context_into_metadata(
+                Arc::make_mut(metadata),
+                otel::TRACING_UDF_METADATA_KEY,
+                &map_cx,
+            );
+        }
 
         // Store parent message info before sending to UDF
         // parent_info contains offset, so we don't need to clone it separately
@@ -85,12 +137,22 @@ impl MapUnaryTask {
             }
         };
 
-        // Convert raw results to Messages using parent info
-        // Pre-allocate with exact capacity to avoid reallocations
+        // Convert raw results to Messages using parent info.
+        // The UserDefinedMessage -> Message conversion copies sys_metadata from parent (so
+        // vertex.process context stays in "tracing"). We remove tracing_udf here because the
+        // map stage is done — downstream sink will inject its own tracing_udf.
         let results_len = results.len();
         let mut mapped_messages: Vec<Message> = Vec::with_capacity(results_len);
         for (i, result) in results.into_iter().enumerate() {
-            mapped_messages.push(UserDefinedMessage(result, &parent_info, i as i32).into());
+            let mut mapped_msg: Message = UserDefinedMessage(result, &parent_info, i as i32).into();
+            if is_mono_vertex()
+                && let Some(ref mut metadata) = mapped_msg.metadata
+            {
+                Arc::make_mut(metadata)
+                    .sys_metadata
+                    .remove(otel::TRACING_UDF_METADATA_KEY);
+            }
+            mapped_messages.push(mapped_msg);
         }
 
         update_udf_write_metric(

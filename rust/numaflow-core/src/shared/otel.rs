@@ -9,16 +9,17 @@ use std::sync::Arc;
 
 use opentelemetry::global;
 use opentelemetry::propagation::{Extractor, Injector};
+use opentelemetry::trace::{TraceContextExt as _, Tracer};
 
-use crate::metadata::KeyValueGroup;
+use crate::metadata::{KeyValueGroup, Metadata};
 
 /// Key under which W3C trace context is stored in `sys_metadata`.
-/// Always holds the shared `platform.process` parent context for downstream
-/// platform spans (for example source, map, and sink spans).
+/// Always holds the propagated `vertex.process` context for downstream
+/// Numaflow-managed spans (for example source, map, and sink spans).
 pub const TRACING_METADATA_KEY: &str = "tracing";
 
 /// Key under which the current stage's span context is stored for UDF consumption.
-/// The UDF reads this key to see the platform stage (e.g., map) as its parent.
+/// The UDF reads this key to see the current Numaflow stage as its parent.
 /// Written before calling the UDF, removed after the UDF returns.
 pub const TRACING_UDF_METADATA_KEY: &str = "tracing_udf";
 
@@ -71,7 +72,7 @@ pub(crate) fn extract_trace_context(
 
 /// Injects a specific OpenTelemetry [`Context`] into a named sys_metadata key.
 ///
-/// Used to inject `platform.process` context into `"tracing"` (preserving the root)
+/// Used to inject `vertex.process` context into `"tracing"` (preserving the root)
 /// and stage-specific context into `"tracing_udf"` (for UDF parent).
 pub(crate) fn inject_context_into_metadata(
     metadata: &mut crate::metadata::Metadata,
@@ -194,6 +195,107 @@ fn b3_to_traceparent(trace_id: &str, span_id: &str, sampled: Option<&str>, debug
     };
 
     format!("00-{}-{}-{}", padded_trace_id, span_id, flags)
+}
+
+// Attribute keys applied to every Numaflow-managed span (OTel messaging semantic
+// conventions + Numaflow-specific). Values are set at each call site because
+// `tracing::info_span!` requires static attribute expressions and the OTel SDK API
+// (for batch/sink per-message spans) uses `KeyValue::new` at the call site.
+pub const ATTR_MESSAGING_SYSTEM: &str = "messaging.system";
+pub const ATTR_MESSAGING_OPERATION_NAME: &str = "messaging.operation.name";
+pub const ATTR_MESSAGING_MESSAGE_ID: &str = "messaging.message.id";
+pub const ATTR_NUMAFLOW_TOPOLOGY: &str = "numaflow.topology";
+pub const ATTR_NUMAFLOW_PIPELINE_NAME: &str = "numaflow.pipeline.name";
+pub const ATTR_NUMAFLOW_VERTEX_NAME: &str = "numaflow.vertex.name";
+
+/// Topology attribute value attached to Numaflow-managed tracing spans.
+///
+/// This is intentionally separate from `CustomResourceType`: tracing only needs
+/// the lightweight topology label, not the full resource configuration.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum TraceTopology {
+    MonoVertex,
+    #[allow(dead_code)]
+    Pipeline,
+}
+
+impl TraceTopology {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::MonoVertex => "monovertex",
+            Self::Pipeline => "pipeline",
+        }
+    }
+
+    pub(crate) fn root_operation_name(self) -> &'static str {
+        match self {
+            Self::MonoVertex => "monovertex.process",
+            Self::Pipeline => "pipeline.process",
+        }
+    }
+}
+
+/// Builds the common OTel attributes used on Numaflow-managed spans.
+pub(crate) fn build_platform_attributes(
+    topology: TraceTopology,
+    operation_name: &'static str,
+    message_id: String,
+) -> Vec<opentelemetry::KeyValue> {
+    vec![
+        opentelemetry::KeyValue::new(ATTR_MESSAGING_SYSTEM, "numaflow"),
+        opentelemetry::KeyValue::new(ATTR_MESSAGING_OPERATION_NAME, operation_name),
+        opentelemetry::KeyValue::new(ATTR_MESSAGING_MESSAGE_ID, message_id),
+        opentelemetry::KeyValue::new(ATTR_NUMAFLOW_TOPOLOGY, topology.as_str()),
+        opentelemetry::KeyValue::new(
+            ATTR_NUMAFLOW_PIPELINE_NAME,
+            crate::config::get_pipeline_name(),
+        ),
+        opentelemetry::KeyValue::new(ATTR_NUMAFLOW_VERTEX_NAME, crate::config::get_vertex_name()),
+    ]
+}
+
+/// Returns the propagated parent context from metadata, or a fresh root if absent.
+pub(crate) fn parent_context_from_metadata(metadata: Option<&Metadata>) -> opentelemetry::Context {
+    metadata.map(extract_trace_context).unwrap_or_default()
+}
+
+/// RAII guard that ends all contained OTel spans when dropped.
+pub(crate) struct ContextSpanGuard(Vec<opentelemetry::Context>);
+
+impl ContextSpanGuard {
+    pub(crate) fn new(contexts: Vec<opentelemetry::Context>) -> Self {
+        Self(contexts)
+    }
+}
+
+impl Drop for ContextSpanGuard {
+    fn drop(&mut self) {
+        for cx in self.0.drain(..) {
+            cx.span().end();
+        }
+    }
+}
+
+/// Starts an OTel SDK child span with standard Numaflow attributes.
+pub(crate) fn start_platform_child_span(
+    span_name: &'static str,
+    kind: opentelemetry::trace::SpanKind,
+    parent_cx: &opentelemetry::Context,
+    topology: TraceTopology,
+    operation_name: &'static str,
+    message_id: String,
+) -> opentelemetry::Context {
+    let tracer = opentelemetry::global::tracer("numaflow-core");
+    let span = tracer
+        .span_builder(span_name)
+        .with_kind(kind)
+        .with_attributes(build_platform_attributes(
+            topology,
+            operation_name,
+            message_id,
+        ))
+        .start_with_context(&tracer, parent_cx);
+    opentelemetry::Context::current().with_span(span)
 }
 
 #[cfg(test)]

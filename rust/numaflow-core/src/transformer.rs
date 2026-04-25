@@ -2,6 +2,8 @@ use bytes::Bytes;
 use futures::stream::{self, StreamExt};
 use numaflow_monitor::runtime;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use opentelemetry::trace::{SpanKind, TraceContextExt as _};
+use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -12,11 +14,12 @@ use tracing::error;
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
-use crate::message::{Message, MessageHandle};
+use crate::message::{Message, MessageHandle, Offset};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_metric_labels, pipeline_metrics,
 };
+use crate::shared::otel;
 use crate::tracker::Tracker;
 use crate::transformer::user_defined::UserDefinedTransformer;
 use crate::{Result, mark_success};
@@ -65,6 +68,47 @@ impl TransformerActor {
     async fn run(mut self) {
         while let Some(msg) = self.receiver.recv().await {
             self.handle_message(msg).await;
+        }
+    }
+}
+
+/// RAII guard for the per-input `source.transform` span.
+///
+/// The span is a child of the input message's `source.dispatch` span and measures the transformer
+/// UDF round-trip for that specific source message, not the whole batch. It closes on success,
+/// error, or cancellation.
+struct SourceTransformSpan(Option<opentelemetry::Context>);
+
+impl SourceTransformSpan {
+    fn new(parent_cx: Option<opentelemetry::Context>, msg_id: String) -> Self {
+        let Some(parent_cx) = parent_cx else {
+            return Self(None);
+        };
+
+        Self(Some(otel::start_platform_child_span(
+            "numaflow.monovertex.source.transform",
+            SpanKind::Internal,
+            &parent_cx,
+            otel::TraceTopology::MonoVertex,
+            "source.transform",
+            msg_id,
+        )))
+    }
+
+    fn record_output_count(&self, output_count: usize) {
+        if let Some(cx) = &self.0 {
+            cx.span().set_attribute(opentelemetry::KeyValue::new(
+                "numaflow.source.transform.output_count",
+                output_count as i64,
+            ));
+        }
+    }
+}
+
+impl Drop for SourceTransformSpan {
+    fn drop(&mut self) {
+        if let Some(cx) = self.0.take() {
+            cx.span().end();
         }
     }
 }
@@ -161,6 +205,7 @@ impl Transformer {
         &self,
         msg_handles: Vec<MessageHandle>,
         cln_token: CancellationToken,
+        dispatch_parent_contexts: Option<&HashMap<Offset, opentelemetry::Context>>,
     ) -> Result<Vec<MessageHandle>> {
         let batch_start_time = tokio::time::Instant::now();
         let transform_handle = self.sender.clone();
@@ -206,15 +251,17 @@ impl Transformer {
             let transform_handle = transform_handle.clone();
             let tracker = tracker.clone();
             let hard_shutdown_token = hard_shutdown_token.clone();
+            let read_msg = msg_handle.message().clone();
+            let source_transform_parent = dispatch_parent_contexts
+                .and_then(|parent_contexts| parent_contexts.get(&read_msg.offset).cloned());
 
             async move {
-                let offset = msg_handle.message().offset.clone();
-                let transformed_messages = Transformer::transform(
-                    transform_handle,
-                    msg_handle.message().clone(),
-                    hard_shutdown_token,
-                )
-                .await?;
+                let offset = read_msg.offset.clone();
+                let source_transform_span =
+                    SourceTransformSpan::new(source_transform_parent, offset.to_string());
+                let transformed_messages =
+                    Transformer::transform(transform_handle, read_msg, hard_shutdown_token).await?;
+                source_transform_span.record_output_count(transformed_messages.len());
 
                 // update the tracker with the number of responses for each message
                 tracker
@@ -489,7 +536,7 @@ mod tests {
         }
 
         let transformed_messages = transformer
-            .transform_batch(messages, CancellationToken::new())
+            .transform_batch(messages, CancellationToken::new(), None)
             .await?;
 
         for (i, transformed_message) in transformed_messages.iter().enumerate() {
@@ -570,6 +617,7 @@ mod tests {
             .transform_batch(
                 vec![MessageHandle::new(message, ack_tx)],
                 CancellationToken::new(),
+                None,
             )
             .await;
         assert!(result.is_err(), "Expected an error due to panic");

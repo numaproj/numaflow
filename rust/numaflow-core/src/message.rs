@@ -77,6 +77,7 @@ use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::OnceLock;
 use std::sync::atomic::AtomicUsize;
 use tracing::{error, warn};
@@ -137,6 +138,9 @@ struct AckHandle {
     /// Set by mark_failed to record why the message is being nacked.
     /// Uses OnceLock to capture only the first failure reason without locking overhead.
     failure_reason: OnceLock<String>,
+    /// Tracing span covering the full message lifecycle (created in source, dropped on ack).
+    /// Interior mutability is used because the span is set after construction.
+    pipeline_span: Mutex<Option<tracing::Span>>,
 }
 
 impl AckHandle {
@@ -145,6 +149,16 @@ impl AckHandle {
             sender: Some(sender),
             ref_count: AtomicUsize::new(1),
             failure_reason: OnceLock::new(),
+            pipeline_span: Mutex::new(None),
+        }
+    }
+
+    /// Store the local `vertex.process` tracing span so it is dropped when this AckHandle is
+    /// dropped. The span covers the message lifecycle owned by this AckHandle; each topology
+    /// decides where that lifecycle starts and ends.
+    pub(crate) fn set_pipeline_span(&self, span: tracing::Span) {
+        if let Ok(mut guard) = self.pipeline_span.lock() {
+            *guard = Some(span);
         }
     }
 }
@@ -242,6 +256,11 @@ impl MessageHandle {
     pub(crate) fn message_mut(&mut self) -> &mut Message {
         &mut self.message
     }
+
+    /// Store the per-message platform tracing span so its lifetime follows this message handle.
+    pub(crate) fn set_pipeline_span(&self, span: tracing::Span) {
+        self.ack_handle.set_pipeline_span(span);
+    }
 }
 
 /// Converts a [Message] into a [MessageHandle] without ack tracking.
@@ -256,6 +275,7 @@ impl From<Message> for MessageHandle {
                 sender: None,
                 ref_count: AtomicUsize::new(0), // Already "success" state
                 failure_reason: OnceLock::new(),
+                pipeline_span: Mutex::new(None),
             }),
         }
     }

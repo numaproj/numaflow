@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
+use crate::shared::otel;
 use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{OwnedSemaphorePermit, mpsc};
@@ -13,7 +14,8 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
-use tracing::{error, warn};
+use tracing::{Instrument, error, warn};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use super::{
     ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
@@ -58,9 +60,48 @@ impl MapStreamTask {
     }
 
     /// Executes the stream map operation.
+    ///
+    /// With distributed tracing, wraps the receive loop with a topology-specific
+    /// map span so its duration covers the full stream UDF interaction.
     async fn execute(self) {
+        if is_mono_vertex() {
+            let parent_cx =
+                otel::parent_context_from_metadata(self.msg_handle.message().metadata.as_deref());
+            let msg_id = self.msg_handle.message().offset.to_string();
+            let map_span = tracing::info_span!(
+                "numaflow.monovertex.map",
+                otel.kind = "INTERNAL",
+                { otel::ATTR_MESSAGING_SYSTEM } = "numaflow",
+                { otel::ATTR_MESSAGING_OPERATION_NAME } = "map",
+                { otel::ATTR_MESSAGING_MESSAGE_ID } = %msg_id,
+                { otel::ATTR_NUMAFLOW_TOPOLOGY } = otel::TraceTopology::MonoVertex.as_str(),
+                { otel::ATTR_NUMAFLOW_PIPELINE_NAME } = crate::config::get_pipeline_name(),
+                { otel::ATTR_NUMAFLOW_VERTEX_NAME } = crate::config::get_vertex_name(),
+            );
+            let _ = map_span.set_parent(parent_cx);
+            self.execute_inner().instrument(map_span).await;
+        } else {
+            self.execute_inner().await;
+        }
+    }
+
+    async fn execute_inner(mut self) {
         // Hold the permit until the task completes
         let _permit = self.permit;
+
+        // Tracing: inject current `map` span context into
+        // sys_metadata["tracing_udf"] so the UDF creates its processing span as a child.
+        // sys_metadata["tracing"] remains unchanged (holds vertex.process).
+        if is_mono_vertex()
+            && let Some(ref mut metadata) = self.msg_handle.message_mut().metadata
+        {
+            let map_cx = tracing::Span::current().context();
+            otel::inject_context_into_metadata(
+                Arc::make_mut(metadata),
+                otel::TRACING_UDF_METADATA_KEY,
+                &map_cx,
+            );
+        }
 
         // Store parent message info before sending to UDF
         // parent_info contains offset, so we don't need to clone it separately
@@ -88,12 +129,20 @@ impl MapStreamTask {
             let result = receiver.recv().await;
             match result {
                 Some(Ok(results)) => {
-                    // Convert raw results to Messages using parent info
+                    // Convert raw results to Messages using parent info.
+                    // Remove tracing_udf from each result (map stage is done).
                     for result in results {
-                        let mapped_message: Message =
+                        let mut mapped_message: Message =
                             UserDefinedMessage(result, &parent_info, parent_info.current_index)
                                 .into();
                         parent_info.current_index += 1;
+                        if is_mono_vertex()
+                            && let Some(ref mut metadata) = mapped_message.metadata
+                        {
+                            Arc::make_mut(metadata)
+                                .sys_metadata
+                                .remove(otel::TRACING_UDF_METADATA_KEY);
+                        }
 
                         update_udf_write_only_metric(self.shared_ctx.is_mono_vertex);
 
