@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use numaflow_nats::jetstream::{
     JetstreamSource, JetstreamSourceConfig, Message as JetstreamMessage,
 };
@@ -32,6 +33,7 @@ impl From<JetstreamMessage> for Message {
                 vertex_name: get_vertex_name().to_string().into(),
                 offset: offset.to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             headers: Arc::new(message.headers),
             // Set default metadata so that metadata is always present.

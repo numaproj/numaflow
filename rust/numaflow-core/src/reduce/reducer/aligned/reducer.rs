@@ -838,6 +838,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -855,6 +856,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "1".to_string().into(),
                 index: 1,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -872,6 +874,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "2".to_string().into(),
                 index: 2,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -889,6 +892,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "2".to_string().into(),
                 index: 2,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1098,6 +1102,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1115,6 +1120,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "1".to_string().into(),
                 index: 1,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1132,6 +1138,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "2".to_string().into(),
                 index: 2,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1149,6 +1156,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "3".to_string().into(),
                 index: 3,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1362,6 +1370,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1379,6 +1388,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "1".to_string().into(),
                 index: 1,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1396,6 +1406,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "2".to_string().into(),
                 index: 2,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1413,6 +1424,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "3".to_string().into(),
                 index: 3,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1430,6 +1442,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "4".to_string().into(),
                 index: 4,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1447,6 +1460,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "5".to_string().into(),
                 index: 5,
+                path: Bytes::new(),
             },
             ..Default::default()
         };

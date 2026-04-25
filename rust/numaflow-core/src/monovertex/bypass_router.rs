@@ -396,6 +396,7 @@ mod tests {
                 vertex_name: "vertex".to_string().into(),
                 offset: format!("offset_{}", id).into(),
                 index: id,
+                path: Bytes::new(),
             },
             headers: Arc::new(HashMap::new()),
             metadata: None,
@@ -532,6 +533,7 @@ mod tests {
                         vertex_name: "vertex".to_string().into(),
                         offset: format!("offset_{}", i).into(),
                         index: i as i32,
+                        path: Bytes::new(),
                     },
                     ..Default::default()
                 };

@@ -108,6 +108,7 @@ mod tests {
                     vertex_name: "vertex".to_string().into(),
                     offset: i.to_string().into(),
                     index: i as i32,
+                    path: Bytes::new(),
                 },
                 headers: Arc::new(headers),
                 ..Default::default()

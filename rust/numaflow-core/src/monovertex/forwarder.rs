@@ -631,6 +631,7 @@ mod tests {
 
         let sink_log = SinkLog::new();
         let sink_counter = sink_log.count();
+        let sink_ids = sink_log.ids();
 
         let sink_handle =
             SinkTestHandle::create_sink(SinkType::UserDefined(sink_log), None, None, batch_size)
@@ -649,6 +650,17 @@ mod tests {
         assert_eq!(
             actual, expected_sink_count,
             "sink received {actual} messages, expected {expected_sink_count}",
+        );
+
+        // Assert pairwise uniqueness: every MessageID arriving at the sink must be unique.
+        // Downstream stages dedupe on MessageID.to_string(), so collisions cause message drops.
+        let ids: Vec<String> = sink_ids.lock().unwrap().clone();
+        let unique: std::collections::HashSet<&String> = ids.iter().collect();
+        assert_eq!(
+            unique.len(),
+            ids.len(),
+            "duplicate sink ids detected (bug: fanout siblings share the same id): {:?}",
+            ids,
         );
     }
 
@@ -701,6 +713,7 @@ mod tests {
 
         let sink_log = SinkLog::new();
         let sink_counter = sink_log.count();
+        let sink_ids = sink_log.ids();
 
         let sink_handle =
             SinkTestHandle::create_sink(SinkType::UserDefined(sink_log), None, None, batch_size)
@@ -719,6 +732,17 @@ mod tests {
         assert_eq!(
             actual, expected_sink_count,
             "sink received {actual} messages, expected {expected_sink_count}",
+        );
+
+        // Assert pairwise uniqueness: every MessageID arriving at the sink must be unique.
+        // Downstream stages dedupe on MessageID.to_string(), so collisions cause message drops.
+        let ids: Vec<String> = sink_ids.lock().unwrap().clone();
+        let unique: std::collections::HashSet<&String> = ids.iter().collect();
+        assert_eq!(
+            unique.len(),
+            ids.len(),
+            "duplicate sink ids detected (bug: fanout siblings share the same id): {:?}",
+            ids,
         );
     }
 
@@ -855,17 +879,23 @@ mod tests {
 
     struct SinkLog {
         messages_received: Arc<AtomicUsize>,
+        received_ids: Arc<std::sync::Mutex<Vec<String>>>,
     }
 
     impl SinkLog {
         fn new() -> Self {
             Self {
                 messages_received: Arc::new(AtomicUsize::new(0)),
+                received_ids: Arc::new(std::sync::Mutex::new(Vec::new())),
             }
         }
 
         fn count(&self) -> Arc<AtomicUsize> {
             Arc::clone(&self.messages_received)
+        }
+
+        fn ids(&self) -> Arc<std::sync::Mutex<Vec<String>>> {
+            Arc::clone(&self.received_ids)
         }
     }
 
@@ -881,6 +911,7 @@ mod tests {
                 let response = match std::str::from_utf8(&datum.value) {
                     Ok(_) => {
                         self.messages_received.fetch_add(1, Ordering::SeqCst);
+                        self.received_ids.lock().unwrap().push(datum.id.clone());
                         println!(
                             "Message Count: {}",
                             self.messages_received.load(Ordering::SeqCst)

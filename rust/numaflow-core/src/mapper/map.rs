@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{Semaphore, mpsc};
@@ -16,7 +17,7 @@ use tracing::{error, info, warn};
 use crate::config::pipeline::map::MapMode;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{self, Error};
-use crate::message::{Message, MessageHandle, MessageID, Offset};
+use crate::message::{Message, MessageHandle, MessageID, MessagePath, Offset};
 use crate::metadata::Metadata;
 use crate::shared::grpc::prost_timestamp_from_utc;
 use crate::tracker::Tracker;
@@ -445,6 +446,10 @@ pub(crate) struct ParentMessageInfo {
     /// one response for a single request.
     pub(crate) current_index: i32,
     pub(crate) metadata: Option<Arc<Metadata>>,
+    /// Path that should be assigned to children: parent.path with parent.index
+    /// varint-appended. Computed once when the request is built so it's not
+    /// recomputed for each emitted child.
+    pub(crate) child_path: Bytes,
 }
 
 impl From<&Message> for ParentMessageInfo {
@@ -457,6 +462,7 @@ impl From<&Message> for ParentMessageInfo {
             start_time: Instant::now(),
             current_index: 0,
             metadata: message.metadata.clone(),
+            child_path: MessagePath::push(&message.id.path, message.id.index),
         }
     }
 }
@@ -473,7 +479,7 @@ impl From<Message> for MapRequest {
                 headers: Arc::unwrap_or_clone(message.headers),
                 metadata: message.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
             }),
-            id: message.offset.to_string(),
+            id: message.id.to_string(),
             handshake: None,
             status: None,
         }
@@ -491,6 +497,7 @@ impl From<UserDefinedMessage<'_>> for Message {
                 vertex_name: get_vertex_name().to_string().into(),
                 index: value.2,
                 offset: value.1.offset.to_string().into(),
+                path: value.1.child_path.clone(),
             },
             keys: Arc::from(value.0.keys),
             tags: Some(Arc::from(value.0.tags)),
@@ -633,6 +640,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -757,6 +765,7 @@ mod tests {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "0".to_string().into(),
                     index: 0,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             }
@@ -773,6 +782,7 @@ mod tests {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "1".to_string().into(),
                     index: 1,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             }
@@ -882,6 +892,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             ..Default::default()
         }
@@ -985,6 +996,7 @@ mod tests {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: i.to_string().into(),
                     index: i,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };
@@ -1081,6 +1093,7 @@ mod tests {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "0".to_string().into(),
                     index: 0,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             },
@@ -1100,6 +1113,7 @@ mod tests {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "1".to_string().into(),
                     index: 1,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             },
@@ -1209,6 +1223,7 @@ mod tests {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: i.to_string().into(),
                     index: i,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };
@@ -1255,6 +1270,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: i.to_string().into(),
                 index: i,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1346,6 +1362,7 @@ mod tests {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "0".to_string().into(),
                     index: 0,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             },
@@ -1365,6 +1382,7 @@ mod tests {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "1".to_string().into(),
                     index: 1,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             },
@@ -1609,6 +1627,7 @@ mod tests {
             start_time: std::time::Instant::now(),
             current_index: 0,
             metadata: None,
+            child_path: Bytes::new(),
         };
 
         update_udf_write_metric(true, &msg_info, 5);
@@ -1642,6 +1661,7 @@ mod tests {
             start_time: std::time::Instant::now(),
             current_index: 0,
             metadata: None,
+            child_path: Bytes::new(),
         };
 
         update_udf_write_metric(false, &msg_info, 5);

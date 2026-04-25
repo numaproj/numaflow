@@ -285,7 +285,14 @@ type MessageID struct {
 	// Offset is the offset of the message
 	Offset string `protobuf:"bytes,2,opt,name=offset,proto3" json:"offset,omitempty"`
 	// Index is the index of a flatmap message.
-	Index         int32 `protobuf:"varint,3,opt,name=index,proto3" json:"index,omitempty"`
+	Index int32 `protobuf:"varint,3,opt,name=index,proto3" json:"index,omitempty"`
+	// Path is the lineage of upstream flatmap indices that produced this message.
+	// Each entry is a varint-encoded i32 (encoded as u32 varint, since the index is
+	// always non-negative). Concatenated varints, no leading length byte; the
+	// containing bytes' length carries the array length. An empty path identifies
+	// a freshly-minted lineage (source reads, reduce/accumulator/session outputs,
+	// sink fallback wrappers).
+	Path          []byte `protobuf:"bytes,4,opt,name=path,proto3" json:"path,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -339,6 +346,13 @@ func (x *MessageID) GetIndex() int32 {
 		return x.Index
 	}
 	return 0
+}
+
+func (x *MessageID) GetPath() []byte {
+	if x != nil {
+		return x.Path
+	}
+	return nil
 }
 
 // Body is the body of the message
@@ -588,12 +602,13 @@ const file_pkg_apis_proto_isb_message_proto_rawDesc = "" +
 	"\bmetadata\x18\x06 \x01(\v2\x12.metadata.MetadataR\bmetadata\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"Z\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"n\n" +
 	"\tMessageID\x12\x1f\n" +
 	"\vvertex_name\x18\x01 \x01(\tR\n" +
 	"vertexName\x12\x16\n" +
 	"\x06offset\x18\x02 \x01(\tR\x06offset\x12\x14\n" +
-	"\x05index\x18\x03 \x01(\x05R\x05index\" \n" +
+	"\x05index\x18\x03 \x01(\x05R\x05index\x12\x12\n" +
+	"\x04path\x18\x04 \x01(\fR\x04path\" \n" +
 	"\x04Body\x12\x18\n" +
 	"\apayload\x18\x01 \x01(\fR\apayload\"M\n" +
 	"\aMessage\x12#\n" +

@@ -53,6 +53,14 @@ pub struct MessageId {
     /// Index is the index of a flatmap message.
     #[prost(int32, tag = "3")]
     pub index: i32,
+    /// Path is the lineage of upstream flatmap indices that produced this message.
+    /// Each entry is a varint-encoded i32 (encoded as u32 varint, since the index is
+    /// always non-negative). Concatenated varints, no leading length byte; the
+    /// containing bytes' length carries the array length. An empty path identifies
+    /// a freshly-minted lineage (source reads, reduce/accumulator/session outputs,
+    /// sink fallback wrappers).
+    #[prost(bytes = "vec", tag = "4")]
+    pub path: ::prost::alloc::vec::Vec<u8>,
 }
 /// Body is the body of the message
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]

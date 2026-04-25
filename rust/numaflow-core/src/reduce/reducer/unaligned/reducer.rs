@@ -803,6 +803,7 @@ mod tests {
     use crate::typ::WithoutRateLimiter;
     use async_nats::jetstream::consumer::PullConsumer;
     use async_nats::jetstream::{self, consumer, stream};
+    use bytes::Bytes;
     use chrono::{TimeZone, Utc};
     use numaflow::shared::ServerExtras;
     use numaflow::{accumulator, session_reduce};
@@ -1065,6 +1066,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1082,6 +1084,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "1".to_string().into(),
                 index: 1,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1099,6 +1102,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "2".to_string().into(),
                 index: 2,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1302,6 +1306,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1318,6 +1323,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "1".to_string().into(),
                 index: 1,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1335,6 +1341,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "2".to_string().into(),
                 index: 2,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1351,6 +1358,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "3".to_string().into(),
                 index: 3,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1368,6 +1376,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "4".to_string().into(),
                 index: 4,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1603,6 +1612,7 @@ mod tests {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: i.to_string().into(),
                     index: i as i32,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };
@@ -1821,6 +1831,7 @@ mod tests {
                     vertex_name: "id-one".to_string().into(),
                     offset: i.to_string().into(),
                     index: i as i32,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };
@@ -1837,6 +1848,7 @@ mod tests {
                     vertex_name: "id-two".to_string().into(),
                     offset: i.to_string().into(),
                     index: i as i32,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };
@@ -2072,6 +2084,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -2089,6 +2102,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "1".to_string().into(),
                 index: 1,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -2106,6 +2120,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "2".to_string().into(),
                 index: 2,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -2123,6 +2138,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "3".to_string().into(),
                 index: 3,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -2140,6 +2156,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "4".to_string().into(),
                 index: 4,
+                path: Bytes::new(),
             },
             ..Default::default()
         };

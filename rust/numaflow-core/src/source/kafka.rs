@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_kafka::source::{KafkaMessage, KafkaSource, KafkaSourceConfig};
 use tracing::info;
@@ -48,6 +49,7 @@ impl TryFrom<KafkaMessage> for Message {
                 vertex_name: get_vertex_name().to_string().into(),
                 offset: offset.to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             headers: Arc::new(message.headers),
             // Set default metadata so that metadata is always present.

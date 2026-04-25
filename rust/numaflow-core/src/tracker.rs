@@ -390,6 +390,7 @@ mod tests {
                 vertex_name: "in".into(),
                 offset: Bytes::from_static(b"0"),
                 index: 1,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -430,6 +431,7 @@ mod tests {
                 vertex_name: "in".into(),
                 offset: Bytes::from_static(b"offset1"),
                 index: 1,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -486,6 +488,7 @@ mod tests {
                 vertex_name: "in".into(),
                 offset: Bytes::from_static(b"offset1"),
                 index: 1,
+                path: Bytes::new(),
             },
             headers: Arc::new(headers),
             metadata: Some(Arc::new(Metadata {
@@ -560,6 +563,7 @@ mod tests {
                 vertex_name: "in".into(),
                 offset: Bytes::from_static(b"offset1"),
                 index: 1,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -576,6 +580,7 @@ mod tests {
                 vertex_name: "in".into(),
                 offset: Bytes::from_static(b"offset2"),
                 index: 2,
+                path: Bytes::new(),
             },
             ..Default::default()
         };

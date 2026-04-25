@@ -21,6 +21,9 @@ use tracing::{debug, error, info};
 const ROTATE_IF_STALE_DURATION: chrono::Duration = chrono::Duration::seconds(30);
 
 /// The Command that has to be operated on the Segment.
+// MessageHandle is intentionally large (it carries the full Message payload); boxing it here
+// would require updating every constructor call site with no semantic benefit.
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum SegmentWriteMessage {
     /// Writes a message to the WAL. The message will be converted to bytes internally.
     /// After successful write, mark_success() is called on the MessageHandle to ACK.

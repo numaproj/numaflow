@@ -226,7 +226,7 @@ mod tests {
     use crate::tracker::Tracker;
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
-    use bytes::BytesMut;
+    use bytes::{Bytes, BytesMut};
     use chrono::Utc;
     use std::sync::Arc;
     use std::time::Duration;
@@ -320,6 +320,7 @@ mod tests {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };
@@ -475,6 +476,7 @@ mod tests {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };
@@ -617,6 +619,7 @@ mod tests {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("wal_offset_{}", i).into(),
                     index: i as i32,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };
@@ -734,6 +737,7 @@ mod tests {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("isb_offset_{}", i).into(),
                     index: i as i32,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };

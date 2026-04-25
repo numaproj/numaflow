@@ -65,6 +65,11 @@ impl JSWrappedMessage {
             self.partition_idx,
         ));
 
+        // Extract path from the proto's MessageId before moving other header fields.
+        // ISB readers are pass-through: they preserve the upstream lineage path rather
+        // than resetting it to empty.
+        let proto_path: Bytes = header.id.map(|id| id.path.into()).unwrap_or_default();
+
         Ok(Message {
             typ: header.kind.into(),
             keys: Arc::from(header.keys.into_boxed_slice()),
@@ -84,6 +89,7 @@ impl JSWrappedMessage {
                 vertex_name: self.vertex_name.into(),
                 offset: offset.to_string().into(),
                 index: 0,
+                path: proto_path,
             },
             headers: Arc::new(header.headers),
             watermark: None,
@@ -398,6 +404,7 @@ mod tests {
                 vertex_name: "vertex".to_string().into(),
                 offset: "offset_1".into(),
                 index: 0,
+                path: Bytes::new(),
             },
             ..Default::default()
         };

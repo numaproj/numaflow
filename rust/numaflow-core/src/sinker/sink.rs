@@ -726,6 +726,7 @@ mod tests {
     use crate::tracker::Tracker;
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
+    use bytes::Bytes;
     use chrono::{TimeZone, Utc};
     use numaflow::shared::ServerExtras;
     use numaflow::sink;
@@ -788,6 +789,7 @@ mod tests {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             })
@@ -824,6 +826,7 @@ mod tests {
                         vertex_name: "vertex".to_string().into(),
                         offset: format!("offset_{}", i).into(),
                         index: i as i32,
+                        path: Bytes::new(),
                     },
                     ..Default::default()
                 };
@@ -903,6 +906,7 @@ mod tests {
                         vertex_name: "vertex".to_string().into(),
                         offset: format!("offset_{}", i).into(),
                         index: i as i32,
+                        path: Bytes::new(),
                     },
                     ..Default::default()
                 };
@@ -992,6 +996,7 @@ mod tests {
                         vertex_name: "vertex".to_string().into(),
                         offset: format!("offset_{}", i).into(),
                         index: i as i32,
+                        path: Bytes::new(),
                     },
                     ..Default::default()
                 };
@@ -1074,6 +1079,7 @@ mod tests {
                         vertex_name: "vertex".to_string().into(),
                         offset: format!("offset_{}", i).into(),
                         index: i as i32,
+                        path: Bytes::new(),
                     },
                     ..Default::default()
                 };
@@ -1187,6 +1193,7 @@ mod tests {
                         vertex_name: "vertex".to_string().into(),
                         offset: "123".to_string().into(),
                         index: i as i32,
+                        path: Bytes::new(),
                     },
                     headers: Arc::new(headers),
                     ..Default::default()
@@ -1233,6 +1240,7 @@ mod tests {
                 vertex_name: "vertex".to_string().into(),
                 offset: "123".to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             ..Default::default()
         };

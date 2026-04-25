@@ -101,6 +101,7 @@ mod tests {
                 vertex_name: "test-vertex".to_string().into(),
                 offset: id.to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             headers: Arc::new(headers),
             ..Default::default()
@@ -372,6 +373,7 @@ mod tests {
                 vertex_name: "test-vertex".to_string().into(),
                 offset: "large-msg".to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             headers: Arc::new(HashMap::new()),
             ..Default::default()

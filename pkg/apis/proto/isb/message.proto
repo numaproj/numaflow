@@ -68,6 +68,13 @@ message MessageID {
   string offset = 2;
   // Index is the index of a flatmap message.
   int32 index = 3;
+  // Path is the lineage of upstream flatmap indices that produced this message.
+  // Each entry is a varint-encoded i32 (encoded as u32 varint, since the index is
+  // always non-negative). Concatenated varints, no leading length byte; the
+  // containing bytes' length carries the array length. An empty path identifies
+  // a freshly-minted lineage (source reads, reduce/accumulator/session outputs,
+  // sink fallback wrappers).
+  bytes path = 4;
 }
 
 // Body is the body of the message

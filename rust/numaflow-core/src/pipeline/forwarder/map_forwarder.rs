@@ -383,6 +383,7 @@ mod tests {
     };
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
+    use bytes::Bytes;
     use numaflow::map;
     use numaflow::shared::ServerExtras;
     use std::time::Duration;
@@ -478,6 +479,7 @@ mod tests {
                     vertex_name: "vertex".to_string().into(),
                     offset: "123".to_string().into(),
                     index: 0,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };

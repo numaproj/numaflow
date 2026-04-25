@@ -6,6 +6,7 @@ use crate::message::Message;
 use crate::message::{MessageID, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::source::SourceReader;
+use bytes::Bytes;
 use numaflow_nats::nats::{NatsMessage, NatsSource, NatsSourceConfig};
 
 use super::SourceAcker;
@@ -34,6 +35,7 @@ impl From<NatsMessage> for Message {
                 vertex_name: get_vertex_name().to_string().into(),
                 offset: offset.to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             headers: Default::default(),
             // Set default metadata so that metadata is always present.

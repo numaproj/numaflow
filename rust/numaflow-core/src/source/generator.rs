@@ -193,6 +193,7 @@ mod stream_generator {
                     vertex_name: get_vertex_name().to_string().into(),
                     offset: offset.to_string().into(),
                     index: Default::default(),
+                    path: Bytes::new(),
                 },
                 headers: Default::default(),
                 // Set default metadata so that metadata is always present.

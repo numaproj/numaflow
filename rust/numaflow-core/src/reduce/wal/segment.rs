@@ -119,6 +119,7 @@ mod tests {
     use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
     use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
     use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
+    use bytes::Bytes;
     use chrono::{TimeZone, Utc};
     use std::sync::Arc;
     use std::time::Duration;
@@ -197,6 +198,7 @@ mod tests {
                     vertex_name: "test-vertex".to_string().into(),
                     offset: i.to_string().into(),
                     index: 0,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };
@@ -348,6 +350,7 @@ mod tests {
                     vertex_name: "test-vertex".to_string().into(),
                     offset: i.to_string().into(),
                     index: 0,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };

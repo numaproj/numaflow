@@ -463,6 +463,8 @@ pub(crate) struct MessageID {
     pub(crate) offset: Bytes,
     /// Index is used to identify the index of the message in case of flatmap.
     pub(crate) index: i32,
+    /// Lineage of upstream flatmap indices, varint-encoded. Empty = freshly-minted lineage.
+    pub(crate) path: Bytes,
 }
 
 impl Default for MessageID {
@@ -471,6 +473,7 @@ impl Default for MessageID {
             vertex_name: Bytes::new(),
             offset: Bytes::new(),
             index: 0,
+            path: Bytes::new(),
         }
     }
 }
@@ -481,6 +484,7 @@ impl From<numaflow_pb::objects::isb::MessageId> for MessageID {
             vertex_name: id.vertex_name.into(),
             offset: id.offset.into(),
             index: id.index,
+            path: id.path.into(),
         }
     }
 }
@@ -491,9 +495,11 @@ impl From<MessageID> for numaflow_pb::objects::isb::MessageId {
             vertex_name: String::from_utf8_lossy(&id.vertex_name).to_string(),
             offset: String::from_utf8_lossy(&id.offset).to_string(),
             index: id.index,
+            path: id.path.to_vec(),
         }
     }
 }
+
 impl fmt::Display for MessageID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -502,7 +508,51 @@ impl fmt::Display for MessageID {
             std::str::from_utf8(&self.vertex_name).expect("it should be valid utf-8"),
             std::str::from_utf8(&self.offset).expect("it should be valid utf-8"),
             self.index
-        )
+        )?;
+        for p in MessagePath::iter(&self.path) {
+            write!(f, "-{}", p)?;
+        }
+        Ok(())
+    }
+}
+
+/// Helper for encoding/decoding the lineage `path` on `MessageID`.
+/// Wire format: concatenated varints (u32-varint per entry, since indices
+/// are non-negative). No leading length byte; the buffer's own length
+/// carries the array length.
+pub(crate) struct MessagePath;
+
+impl MessagePath {
+    /// Append `idx` (varint-encoded) to `parent_path` and return a new `Bytes`.
+    /// Used by mapper and transformer when emitting children.
+    pub(crate) fn push(parent_path: &Bytes, idx: i32) -> Bytes {
+        let mut buf = bytes::BytesMut::with_capacity(parent_path.len() + 10);
+        buf.extend_from_slice(parent_path);
+        prost::encoding::encode_varint(idx as u32 as u64, &mut buf);
+        buf.freeze()
+    }
+
+    /// Iterate the i32 entries in a path buffer, in order.
+    pub(crate) fn iter(path: &Bytes) -> impl Iterator<Item = i32> + '_ {
+        MessagePathIter { buf: path.clone() }
+    }
+}
+
+struct MessagePathIter {
+    buf: Bytes,
+}
+
+impl Iterator for MessagePathIter {
+    type Item = i32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.buf.is_empty() {
+            return None;
+        }
+        match prost::encoding::decode_varint(&mut self.buf) {
+            Ok(v) => Some(v as u32 as i32),
+            Err(_) => None,
+        }
     }
 }
 
@@ -575,8 +625,52 @@ mod tests {
             vertex_name: "vertex".to_string().into(),
             offset: "123".to_string().into(),
             index: 0,
+            path: Bytes::new(),
         };
         assert_eq!(format!("{}", message_id), "vertex-123-0");
+    }
+
+    #[test]
+    fn message_path_round_trip() {
+        // Empty path has no entries.
+        let p0 = Bytes::new();
+        assert!(MessagePath::iter(&p0).next().is_none());
+
+        // Single entry round-trips correctly.
+        let p1 = MessagePath::push(&p0, 7);
+        let v1: Vec<i32> = MessagePath::iter(&p1).collect();
+        assert_eq!(v1, vec![7]);
+
+        // Large index (> 127) exercises multi-byte varint encoding.
+        let p2 = MessagePath::push(&p1, 200_000);
+        let p3 = MessagePath::push(&p2, 0);
+        let v3: Vec<i32> = MessagePath::iter(&p3).collect();
+        assert_eq!(v3, vec![7, 200_000, 0]);
+    }
+
+    #[test]
+    fn message_id_display_with_empty_path_is_unchanged() {
+        let id = MessageID {
+            vertex_name: "v".into(),
+            offset: "o".into(),
+            index: 3,
+            path: Bytes::new(),
+        };
+        // Must exactly match the pre-path format: "{vertex_name}-{offset}-{index}"
+        assert_eq!(id.to_string(), "v-o-3");
+    }
+
+    #[test]
+    fn message_id_display_with_path_appends_suffixes() {
+        let path = MessagePath::push(&MessagePath::push(&Bytes::new(), 7), 2);
+        let id = MessageID {
+            vertex_name: "v".into(),
+            offset: "o".into(),
+            index: 5,
+            path,
+        };
+        // Format: "{vertex_name}-{offset}-{index}-{p0}-{p1}-...-{pN}"
+        assert_eq!(id.to_string(), "v-o-5-7-2");
     }
 
     #[test]
@@ -596,6 +690,7 @@ mod tests {
                 vertex_name: "vertex".to_string().into(),
                 offset: "123".to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -631,11 +726,13 @@ mod tests {
             vertex_name: "vertex".to_string(),
             offset: "123".to_string(),
             index: 0,
+            path: vec![],
         };
         let message_id: MessageID = proto_id.into();
         assert_eq!(message_id.vertex_name, "vertex");
         assert_eq!(message_id.offset, "123");
         assert_eq!(message_id.index, 0);
+        assert!(message_id.path.is_empty());
     }
 
     #[test]
@@ -644,11 +741,13 @@ mod tests {
             vertex_name: "vertex".to_string().into(),
             offset: "123".to_string().into(),
             index: 0,
+            path: Bytes::new(),
         };
         let proto_id: MessageId = message_id.into();
         assert_eq!(proto_id.vertex_name, "vertex");
         assert_eq!(proto_id.offset, "123");
         assert_eq!(proto_id.index, 0);
+        assert!(proto_id.path.is_empty());
     }
 
     #[test]

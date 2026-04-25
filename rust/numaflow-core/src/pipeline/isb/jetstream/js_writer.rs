@@ -585,6 +585,7 @@ mod tests {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };
@@ -612,6 +613,7 @@ mod tests {
                 vertex_name: "vertex".to_string().into(),
                 offset: "offset_test".to_string().into(),
                 index: 100,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -681,6 +683,7 @@ mod tests {
                 vertex_name: "vertex".to_string().into(),
                 offset: "offset_test".to_string().into(),
                 index: 1,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -756,6 +759,7 @@ mod tests {
                 vertex_name: "vertex".to_string().into(),
                 offset: "offset_test".to_string().into(),
                 index: 1,
+                path: Bytes::new(),
             },
             ..Default::default()
         };

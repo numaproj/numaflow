@@ -6,6 +6,7 @@ use crate::message::{Message, MessageID, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::source;
 use crate::source::{SourceAcker, SourceReader};
+use bytes::Bytes;
 use numaflow_http::HttpMessage;
 use std::sync::Arc;
 use tracing::error;
@@ -36,6 +37,7 @@ impl From<HttpMessage> for Message {
                 vertex_name: get_vertex_name().to_string().into(),
                 offset: value.id.into(),
                 index: 0,
+                path: Bytes::new(),
             },
             headers: Arc::new(value.headers),
             // Set default metadata so that metadata is always present.

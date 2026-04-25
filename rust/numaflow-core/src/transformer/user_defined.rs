@@ -10,9 +10,11 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
+use bytes::Bytes;
+
 use crate::config::get_vertex_name;
 use crate::error::{Error, Result};
-use crate::message::{Message, MessageID, Offset};
+use crate::message::{Message, MessageID, MessagePath, Offset};
 use crate::metadata::Metadata;
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 
@@ -25,6 +27,10 @@ struct ParentMessageInfo {
     is_late: bool,
     headers: Arc<HashMap<String, String>>,
     metadata: Option<Arc<Metadata>>,
+    /// Path that should be assigned to children: parent.path with parent.index
+    /// varint-appended. Computed once when the request is built so it's not
+    /// recomputed for each emitted child.
+    child_path: Bytes,
 }
 
 // we are passing the reference for msg info because we can have more than 1 response for a single request and
@@ -43,6 +49,7 @@ impl From<UserDefinedTransformerMessage<'_>> for Message {
                 vertex_name: get_vertex_name().to_string().into(),
                 index: value.2,
                 offset: value.1.offset.clone().to_string().into(),
+                path: value.1.child_path.clone(),
             },
             keys: Arc::from(value.0.keys),
             tags: Some(Arc::from(value.0.tags)),
@@ -204,6 +211,7 @@ impl UserDefinedTransformer {
             headers: Arc::clone(&message.headers),
             is_late: message.is_late,
             metadata: message.metadata.clone(),
+            child_path: MessagePath::push(&message.id.path, message.id.index),
         };
 
         self.senders
@@ -284,6 +292,7 @@ mod tests {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -330,6 +339,7 @@ mod tests {
                 vertex_name: "vertex".to_string().into(),
                 offset: "123".to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             ..Default::default()
         };

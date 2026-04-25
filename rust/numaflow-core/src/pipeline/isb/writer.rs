@@ -608,6 +608,7 @@ mod tests {
     use async_nats::jetstream;
     use async_nats::jetstream::consumer::{self, Config, Consumer};
     use async_nats::jetstream::stream;
+    use bytes::Bytes;
     use chrono::Utc;
     use numaflow_models::models::{ForwardConditions, TagConditions};
     use tokio::sync::mpsc;
@@ -706,6 +707,7 @@ mod tests {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };
@@ -817,6 +819,7 @@ mod tests {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };
@@ -992,6 +995,7 @@ mod tests {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };
@@ -1086,6 +1090,7 @@ mod simple_buffer_tests {
                 vertex_name: "test".into(),
                 index: id as i32,
                 offset: format!("offset-{}", id).into(),
+                path: Bytes::new(),
             },
             headers: Arc::new(HashMap::new()),
             metadata: None,
@@ -1910,6 +1915,7 @@ mod simple_buffer_tests {
                 vertex_name: "test".into(),
                 index: 0,
                 offset: Bytes::from(offset.to_string()),
+                path: Bytes::new(),
             },
             headers: Arc::new(HashMap::new()),
             metadata: None,

@@ -417,6 +417,7 @@ mod simple_buffer_tests {
                     vertex_name: "test-in".into(),
                     index: i as i32,
                     offset: format!("{}", i).into(),
+                    path: Bytes::new(),
                 },
                 headers: Arc::new(HashMap::new()),
                 metadata: None,
@@ -885,6 +886,7 @@ mod tests {
     use crate::pipeline::pipeline::isb::BufferReaderConfig;
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
+    use bytes::Bytes;
 
     // e2e test for sink forwarder, reads from multi-partitioned buffer and
     // writes to sink.
@@ -936,6 +938,7 @@ mod tests {
                     vertex_name: "vertex".to_string().into(),
                     offset: "123".to_string().into(),
                     index: 0,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };

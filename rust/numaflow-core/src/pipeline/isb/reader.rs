@@ -334,6 +334,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                 vertex_name: get_vertex_name().to_string().into(),
                 offset: idle_wmb.offset.to_string().into(),
                 index: 0,
+                path: bytes::Bytes::new(),
             },
             ..Default::default()
         };
@@ -782,6 +783,7 @@ mod tests {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };
@@ -895,6 +897,7 @@ mod tests {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("{}-0", i + 1).into(),
                     index: i as i32,
+                    path: Bytes::new(),
                 },
                 ..Default::default()
             };
@@ -1051,6 +1054,7 @@ mod tests {
                 vertex_name: "vertex".to_string().into(),
                 offset: "offset_1".into(),
                 index: 0,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1133,6 +1137,7 @@ mod tests {
                 vertex_name: "vertex".to_string().into(),
                 offset: "offset_1".into(),
                 index: 0,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1280,6 +1285,7 @@ mod tests {
                 vertex_name: "vertex".to_string().into(),
                 offset: "offset_1".into(),
                 index: 0,
+                path: Bytes::new(),
             },
             ..Default::default()
         };
@@ -1455,6 +1461,7 @@ mod simplebuffer_tests {
                     vertex_name: "test".into(),
                     index: i as i32,
                     offset: format!("{}", i).into(),
+                    path: Bytes::new(),
                 },
                 headers: Arc::new(HashMap::new()),
                 metadata: None,

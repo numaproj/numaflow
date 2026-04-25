@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use bytes::Bytes;
 use numaflow_pulsar::source::{PulsarMessage, PulsarSource, PulsarSourceConfig};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
@@ -27,6 +28,7 @@ impl TryFrom<PulsarMessage> for Message {
                 vertex_name: get_vertex_name().to_string().into(),
                 offset: offset.to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             headers: Arc::new(message.headers),
             // Set default metadata so that metadata is always present.

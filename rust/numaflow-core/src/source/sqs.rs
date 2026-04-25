@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use bytes::Bytes;
 use numaflow_sqs::source::{SqsMessage, SqsSource, SqsSourceBuilder, SqsSourceConfig};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
@@ -45,6 +46,7 @@ impl TryFrom<SqsMessage> for Message {
                 vertex_name: get_vertex_name().to_string().into(),
                 offset: offset.to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             headers: Arc::new(message.system_attributes),
             metadata,

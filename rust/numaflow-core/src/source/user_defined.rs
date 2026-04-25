@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
+use bytes::Bytes;
 use numaflow_pb::clients::source;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::source::{
@@ -169,6 +170,7 @@ impl TryFrom<read_response::Result> for Message {
                 vertex_name: config::get_vertex_name().to_string().into(),
                 offset: source_offset.to_string().into(),
                 index: 0,
+                path: Bytes::new(),
             },
             headers: Arc::new(result.headers),
             watermark: None,
