@@ -445,6 +445,10 @@ pub(crate) struct ParentMessageInfo {
     /// one response for a single request.
     pub(crate) current_index: i32,
     pub(crate) metadata: Option<Arc<Metadata>>,
+    /// The index from the parent message's MessageID. Used to disambiguate sibling messages that
+    /// share the same offset (e.g. fan-out from a source transformer). Encoded into the child's
+    /// offset so collisions are impossible across fanned-out siblings.
+    pub(crate) parent_index: i32,
 }
 
 impl From<&Message> for ParentMessageInfo {
@@ -457,6 +461,7 @@ impl From<&Message> for ParentMessageInfo {
             start_time: Instant::now(),
             current_index: 0,
             metadata: message.metadata.clone(),
+            parent_index: message.id.index,
         }
     }
 }
@@ -473,7 +478,7 @@ impl From<Message> for MapRequest {
                 headers: Arc::unwrap_or_clone(message.headers),
                 metadata: message.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
             }),
-            id: message.offset.to_string(),
+            id: message.id.to_string(),
             handshake: None,
             status: None,
         }
@@ -490,7 +495,7 @@ impl From<UserDefinedMessage<'_>> for Message {
             id: MessageID {
                 vertex_name: get_vertex_name().to_string().into(),
                 index: value.2,
-                offset: value.1.offset.to_string().into(),
+                offset: format!("{}-{}", value.1.offset, value.1.parent_index).into(),
             },
             keys: Arc::from(value.0.keys),
             tags: Some(Arc::from(value.0.tags)),
@@ -1609,6 +1614,7 @@ mod tests {
             start_time: std::time::Instant::now(),
             current_index: 0,
             metadata: None,
+            parent_index: 0,
         };
 
         update_udf_write_metric(true, &msg_info, 5);
@@ -1642,6 +1648,7 @@ mod tests {
             start_time: std::time::Instant::now(),
             current_index: 0,
             metadata: None,
+            parent_index: 0,
         };
 
         update_udf_write_metric(false, &msg_info, 5);
