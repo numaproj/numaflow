@@ -601,8 +601,8 @@ mod tests {
     /// derived from the parent offset only. Expected sink throughput is
     /// `source_count * FAN_OUT_SIZE`; with the bug present the sink sees
     /// roughly `source_count` messages.
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_source_transformer_fanout_with_map_loses_messages() {
+    #[tokio::test]
+    async fn test_source_transformer_fanout_with_map() {
         let cln_token = CancellationToken::new();
         let tracker = Tracker::new(None, cln_token.clone());
         let batch_size = 10;
@@ -620,6 +620,74 @@ mod tests {
 
         let mapper_handle = MapperTestHandle::create_mapper(
             Cat,
+            tracker,
+            MapMode::Unary,
+            batch_size,
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            10,
+        )
+        .await;
+
+        let sink_log = SinkLog::new();
+        let sink_counter = sink_log.count();
+
+        let sink_handle =
+            SinkTestHandle::create_sink(SinkType::UserDefined(sink_log), None, None, batch_size)
+                .await;
+
+        start_forwarder_test(
+            source_handle,
+            Some(mapper_handle),
+            sink_handle,
+            None,
+            cln_token,
+        )
+        .await;
+
+        let actual = sink_counter.load(Ordering::SeqCst);
+        assert_eq!(
+            actual, expected_sink_count,
+            "sink received {actual} messages, expected {expected_sink_count}",
+        );
+    }
+
+    struct FanOutCat;
+
+    #[tonic::async_trait]
+    impl map::Mapper for FanOutCat {
+        async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
+            let payload = String::from_utf8_lossy(&input.value).into_owned();
+            (1..=FAN_OUT_SIZE)
+                .map(|i| {
+                    let out = format!("{payload}-{i}").into_bytes();
+                    map::Message::new(out)
+                        .with_keys(input.keys.clone())
+                        .with_tags(vec![])
+                })
+                .collect()
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_source_transformer_fanout_with_map_fanout() {
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let batch_size = 10;
+        let source_count: usize = 100;
+        let expected_sink_count = source_count * FAN_OUT_SIZE * FAN_OUT_SIZE;
+
+        let source_handle = SourceTestHandle::create_ud_source(
+            SimpleSource::new(source_count),
+            Some(FanOutTransformer),
+            batch_size,
+            cln_token.clone(),
+            tracker.clone(),
+        )
+        .await;
+
+        let mapper_handle = MapperTestHandle::create_mapper(
+            FanOutCat,
             tracker,
             MapMode::Unary,
             batch_size,
