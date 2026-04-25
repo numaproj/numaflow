@@ -670,7 +670,7 @@ mod tests {
     }
 
     /// This scenario builds upon the scenario tested in `test_source_transformer_fanout_with_map`.
-    /// The source transformer is a flatmap followed by a flatmap map udf. 
+    /// The source transformer is a flatmap followed by a flatmap map udf.
     #[tokio::test]
     async fn test_source_transformer_fanout_with_map_fanout() {
         let cln_token = CancellationToken::new();
