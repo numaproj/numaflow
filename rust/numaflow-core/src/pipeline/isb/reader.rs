@@ -504,6 +504,30 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             if let Some(wm) = self.watermark.as_mut() {
                 let watermark = wm.fetch_watermark(message.offset.clone()).await;
                 message.watermark = Some(watermark);
+
+                // TEMP (diagnostic): when fetch_watermark returns a watermark
+                // greater than this data message's own event_time, it is the
+                // precondition for the reducer's "Old message popped up" drop.
+                // Dump the timeline so we can see which WMB caused it.
+                if matches!(message.typ, MessageType::Data)
+                    && watermark.timestamp_millis() > message.event_time.timestamp_millis()
+                {
+                    let partition_idx = match &message.offset {
+                        Offset::Int(o) => o.partition_idx,
+                        Offset::String(o) => o.partition_idx,
+                    };
+                    let timeline = wm.dump_timelines(partition_idx).await;
+                    warn!(
+                        offset = ?message.offset,
+                        partition_idx,
+                        event_time = message.event_time.timestamp_millis(),
+                        fetched_watermark = watermark.timestamp_millis(),
+                        delta_ms = watermark.timestamp_millis()
+                            - message.event_time.timestamp_millis(),
+                        timeline = %timeline,
+                        "WATERMARK_DIVERGENCE: fetch_watermark > event_time for data message"
+                    );
+                }
             }
 
             // Publish read metrics

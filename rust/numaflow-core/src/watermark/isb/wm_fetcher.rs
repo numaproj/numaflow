@@ -53,6 +53,12 @@ impl ISBWatermarkFetcher {
         })
     }
 
+    /// TEMP (diagnostic): expose processor managers so the handle can dump
+    /// per-partition timeline state for watermark-divergence debugging.
+    pub(crate) fn processor_managers(&self) -> &HashMap<&'static str, ProcessorManager> {
+        &self.processor_managers
+    }
+
     /// Fetches the watermark for the given offset and partition.
     pub(crate) fn fetch_watermark(&mut self, offset: i64, partition_idx: u16) -> Watermark {
         // Iterate over all the processor managers and get the smallest watermark. (join case)

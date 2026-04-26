@@ -334,6 +334,42 @@ impl ISBWatermarkHandle {
         Ok(isb_watermark_handle)
     }
 
+    /// TEMP (diagnostic): dumps the per-edge, per-processor timeline state for
+    /// the given partition. Used to diagnose watermark divergence — e.g. when
+    /// `fetch_watermark(O)` returns a watermark greater than the message's
+    /// own event_time, this dump reveals which WMB(s) in the timeline have
+    /// `offset < O` and a stale/advanced watermark.
+    pub(crate) async fn dump_timelines(&self, partition_idx: u16) -> String {
+        let state = self.state.lock().await;
+        let mut out = String::new();
+        for (edge, pm) in state.fetcher.processor_managers().iter() {
+            out.push_str(&format!("edge={edge} "));
+            let processors = pm.processors.read().expect("failed to acquire lock");
+            for (name, p) in processors.iter() {
+                let entries: Vec<String> = p
+                    .timelines
+                    .get(&partition_idx)
+                    .map(|tl| {
+                        tl.entries()
+                            .iter()
+                            .map(|w| {
+                                format!("(wm={},off={},idle={})", w.watermark, w.offset, w.idle)
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                out.push_str(&format!(
+                    "{}({:?})[p{}:[{}]] ",
+                    String::from_utf8_lossy(name),
+                    p.status,
+                    partition_idx,
+                    entries.join("->"),
+                ));
+            }
+        }
+        out
+    }
+
     /// Fetches the watermark for the given offset, if we are not able to compute the watermark we
     /// return -1.
     pub(crate) async fn fetch_watermark(&self, offset: Offset) -> Watermark {
