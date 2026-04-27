@@ -544,6 +544,27 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     msg_handles.push(MessageHandle::new(message.clone(), ack_tx));
                 }
 
+                // TEMP (diagnostic): snapshot the tracker post-insert. The
+                // (count, min_et, max_et) tuple shows how spread out unacked
+                // messages' event_times are at this moment. If batches arrive
+                // interleaved (two readers ~51s apart), we'd expect max_et -
+                // min_et to grow large — direct evidence that the source is
+                // holding messages whose event_time is far below the
+                // most-recently-published per-batch min watermark.
+                let (inflight_count, min_inflight_et, max_inflight_et) =
+                    self.tracker.inflight_summary().await;
+                warn!(
+                    batch_size = msg_handles.len(),
+                    inflight_count,
+                    min_inflight_event_time = ?min_inflight_et,
+                    max_inflight_event_time = ?max_inflight_et,
+                    inflight_span_ms = match (min_inflight_et, max_inflight_et) {
+                        (Some(min), Some(max)) => Some(max - min),
+                        _ => None,
+                    },
+                    "SOURCE_TRACKER_INFLIGHT"
+                );
+
                 // start a background task to invoke ack on the source for the offsets that are acked.
                 // if read ahead is disabled, acquire the semaphore permit before invoking ack so that
                 // we wait for all the inflight messages to be acked before reading the next batch.

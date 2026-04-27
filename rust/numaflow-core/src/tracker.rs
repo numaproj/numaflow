@@ -29,6 +29,11 @@ struct TrackerEntry {
     serving_callback_info: Option<ServingCallbackInfo>,
     /// Watermark for the message
     watermark: Option<DateTime<Utc>>,
+    /// TEMP (diagnostic): event_time of the tracked message in milliseconds.
+    /// Populated from `Message::event_time` at insert. Used to evaluate
+    /// `min_unacked_event_time` — the value the source watermark publisher
+    /// *should* be using instead of per-batch min event_time.
+    event_time_ms: i64,
 }
 
 /// TrackerState holds the mutable state of the tracker.
@@ -211,9 +216,30 @@ impl Tracker {
             TrackerEntry {
                 serving_callback_info: callback_info,
                 watermark: message.watermark,
+                event_time_ms: message.event_time.timestamp_millis(),
             },
         );
         Ok(())
+    }
+
+    /// TEMP (diagnostic): returns (count, min_event_time_ms, max_event_time_ms)
+    /// across all in-flight (un-acked) tracker entries. Used by the source's
+    /// main loop to log SOURCE_TRACKER_INFLIGHT — direct evidence of how much
+    /// event_time spread exists in unacked messages, which is what a
+    /// "min-of-unacked" watermark formulation would use.
+    pub(crate) async fn inflight_summary(&self) -> (usize, Option<i64>, Option<i64>) {
+        let state = self.state.read().await;
+        let mut count = 0usize;
+        let mut min_et: Option<i64> = None;
+        let mut max_et: Option<i64> = None;
+        for partition_entries in state.entries.values() {
+            for entry in partition_entries.values() {
+                count += 1;
+                min_et = Some(min_et.map_or(entry.event_time_ms, |v| v.min(entry.event_time_ms)));
+                max_et = Some(max_et.map_or(entry.event_time_ms, |v| v.max(entry.event_time_ms)));
+            }
+        }
+        (count, min_et, max_et)
     }
 
     /// Informs the tracker that a new message has been generated. The tracker should contain

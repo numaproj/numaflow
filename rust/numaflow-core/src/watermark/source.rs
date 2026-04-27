@@ -106,16 +106,32 @@ impl SourceWatermarkState {
         &mut self,
         entries: &[SourceWatermarkEntry],
     ) -> Result<()> {
-        // we need to build a hash-map of the lowest event time for each partition
-        let partition_to_lowest_event_time =
-            entries.iter().fold(HashMap::new(), |mut acc, entry| {
-                let lowest_event_time =
-                    acc.entry(entry.partition_id).or_insert(entry.event_time_ms);
-                if entry.event_time_ms < *lowest_event_time {
-                    *lowest_event_time = entry.event_time_ms;
-                }
-                acc
-            });
+        // we need to build a hash-map of the lowest event time for each partition.
+        // TEMP (diagnostic): also track the max and per-partition count so we
+        // can emit BATCH_PUBLISH_RANGE — non-monotonic mins between successive
+        // fires are direct evidence of the interleaved-reader hypothesis.
+        let mut partition_to_lowest_event_time: HashMap<u16, i64> = HashMap::new();
+        let mut partition_to_highest_event_time: HashMap<u16, i64> = HashMap::new();
+        let mut partition_to_count: HashMap<u16, usize> = HashMap::new();
+        for entry in entries {
+            partition_to_lowest_event_time
+                .entry(entry.partition_id)
+                .and_modify(|v| {
+                    if entry.event_time_ms < *v {
+                        *v = entry.event_time_ms;
+                    }
+                })
+                .or_insert(entry.event_time_ms);
+            partition_to_highest_event_time
+                .entry(entry.partition_id)
+                .and_modify(|v| {
+                    if entry.event_time_ms > *v {
+                        *v = entry.event_time_ms;
+                    }
+                })
+                .or_insert(entry.event_time_ms);
+            *partition_to_count.entry(entry.partition_id).or_insert(0) += 1;
+        }
 
         if partition_to_lowest_event_time.is_empty() {
             return Ok(());
@@ -123,6 +139,20 @@ impl SourceWatermarkState {
 
         // Publish the watermark for each partition
         for (partition, event_time) in partition_to_lowest_event_time {
+            let batch_max = partition_to_highest_event_time
+                .get(&partition)
+                .copied()
+                .unwrap_or(event_time);
+            let batch_size = partition_to_count.get(&partition).copied().unwrap_or(0);
+            warn!(
+                partition,
+                batch_min_event_time = event_time,
+                batch_max_event_time = batch_max,
+                batch_span_ms = batch_max - event_time,
+                batch_size,
+                "BATCH_PUBLISH_RANGE"
+            );
+
             self.publisher
                 .publish_source_watermark(partition, event_time, false)
                 .await;
