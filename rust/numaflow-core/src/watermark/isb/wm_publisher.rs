@@ -177,6 +177,15 @@ impl ISBWatermarkPublisher {
             );
         }
 
+        if regressed && !idle {
+            warn!(
+                incoming = watermark,
+                clamped_to = publish_watermark,
+                offset,
+                "Data WMB clamped up by LastPublishedState"
+            );
+        }
+
         // Only publish when delay is crossed
         if !last_state.delay_crossed() {
             return;

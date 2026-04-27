@@ -146,6 +146,9 @@ impl SourceWatermarkState {
                 msg_event_time = message.event_time.timestamp_millis(),
                 msg_watermark = message.watermark.take().unwrap().timestamp_millis(),
                 src_watemark = watermark.timestamp_millis(),
+                offset = offset.offset,
+                input_partition = input_partition,
+                offset_partition = offset.partition_idx,
                 "Source publishing late message: msg_event_time < src_watermark"
             );
         }
