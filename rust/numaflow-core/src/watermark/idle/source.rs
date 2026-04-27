@@ -32,6 +32,10 @@ struct PartitionIdleState {
     last_wm_published_time: DateTime<Utc>,
     /// updated_ts tracks when we last received data (for idle threshold check)
     updated_ts: DateTime<Utc>,
+    /// TEMP (diagnostic): tracks whether the partition was considered idle
+    /// the last time `compute_watermark` ran. Used to log SOURCE_PARTITION_IDLE_TRANSITION
+    /// only when the value flips, instead of on every step-interval tick.
+    last_idle_state: Option<bool>,
 }
 
 impl PartitionIdleState {
@@ -40,6 +44,7 @@ impl PartitionIdleState {
         Self {
             updated_ts: Utc::now(),
             last_wm_published_time: default_time,
+            last_idle_state: None,
         }
     }
 }
@@ -164,8 +169,34 @@ impl SourceIdleDetector {
     pub(crate) fn compute_watermark(&mut self, partition: u16, computed_wm: i64) -> i64 {
         self.ensure_partition(partition);
 
+        let is_idle = self.is_partition_idle(partition);
+
+        // TEMP (diagnostic): log when the partition's idle state flips. Helps
+        // pinpoint when the idle path starts/stops incrementing the watermark.
+        // Critical for the "source-OT pumped during idle gap" hypothesis: a
+        // gap in data flips this to true, idle-path increments accumulate,
+        // and on resumption the published source-OT head is far ahead of
+        // actual data event_times.
+        let was_idle = self
+            .partition_states
+            .get(&partition)
+            .and_then(|s| s.last_idle_state);
+        if was_idle != Some(is_idle) {
+            warn!(
+                partition,
+                new_is_idle = is_idle,
+                was_idle = ?was_idle,
+                computed_wm,
+                threshold_ms = self.config.threshold.as_millis() as i64,
+                "SOURCE_PARTITION_IDLE_TRANSITION"
+            );
+            if let Some(state) = self.partition_states.get_mut(&partition) {
+                state.last_idle_state = Some(is_idle);
+            }
+        }
+
         // If partition is not idle, just return the current watermark and update publish time
-        if !self.is_partition_idle(partition) {
+        if !is_idle {
             if let Some(state) = self.partition_states.get_mut(&partition) {
                 state.last_wm_published_time = Utc::now();
             }
@@ -181,10 +212,12 @@ impl SourceIdleDetector {
             return self.get_partition_idling_from_init_wm(partition);
         }
 
-        let mut idle_wm = computed_wm + increment_by;
+        let proposed_wm = computed_wm + increment_by;
         // do not assign future timestamps for WM.
         // this could happen if step interval and increment-by are set aggressively
         let now = Utc::now().timestamp_millis();
+        let mut idle_wm = proposed_wm;
+        let mut capped = false;
         if idle_wm > now {
             warn!(
                 ?idle_wm,
@@ -192,7 +225,21 @@ impl SourceIdleDetector {
                 "idle config is aggressive (reduce step/increment-by), wm > now(), resetting to now()"
             );
             idle_wm = now;
+            capped = true;
         }
+
+        // TEMP (diagnostic): log every idle increment tick. Counted up these
+        // tell us the total amount the idle path has pushed source-OT past
+        // actual data event_times — the suspected pump magnitude.
+        warn!(
+            partition,
+            base_wm = computed_wm,
+            increment_by_ms = increment_by,
+            proposed_wm,
+            final_wm = idle_wm,
+            capped,
+            "IDLE_INCREMENT"
+        );
 
         if let Some(state) = self.partition_states.get_mut(&partition) {
             state.last_wm_published_time = Utc::now();

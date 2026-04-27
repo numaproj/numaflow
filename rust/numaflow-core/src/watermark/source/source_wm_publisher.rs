@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Utc;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
@@ -113,11 +113,25 @@ impl SourceWatermarkPublisher {
             self.publishers.insert(processor_name.clone(), publisher);
         }
 
+        // TEMP (diagnostic): capture the raw watermark passed in, before
+        // max_delay subtraction. The "idle/heartbeat path" (idle=false but
+        // partition not actually idle) passes the already-subtracted head
+        // value as `raw_wm`; subtracting `max_delay` again here creates an
+        // artificial regression that downstream `update()` clamps.
+        let raw_wm = watermark;
         // subtract the max delay from the watermark, since we are publishing from source itself
         // if the watermark is not idle.
         if !idle && watermark != -1 {
             watermark -= self.max_delay.as_millis() as i64
         };
+        warn!(
+            partition,
+            idle,
+            raw_wm,
+            adjusted_wm = watermark,
+            max_delay_ms = self.max_delay.as_millis() as i64,
+            "SOURCE_WM_PUBLISH"
+        );
 
         self.publishers
             .get_mut(&processor_name)

@@ -181,6 +181,8 @@ impl ISBWatermarkPublisher {
 
         if regressed && !idle {
             warn!(
+                stream_vertex = stream.vertex,
+                stream_partition = stream.partition,
                 incoming = watermark,
                 clamped_to = publish_watermark,
                 offset,
