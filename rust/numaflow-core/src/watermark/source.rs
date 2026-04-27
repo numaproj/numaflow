@@ -29,6 +29,7 @@ use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Result;
 use crate::message::{IntOffset, Message, MessageHandle, Offset};
+use crate::pipeline::isb::writer::PendingPafTracker;
 use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::idle::source::SourceIdleDetector;
 use crate::watermark::processor::manager::ProcessorManager;
@@ -74,6 +75,12 @@ struct SourceWatermarkState {
     /// Cache of partitions that have been active during the current interval.
     /// Used for ISB idle watermark publishing.
     active_input_partitions: HashMap<u16, bool>,
+    /// TEMP (diagnostic): shared with the ISBWriterOrchestrator. Read at
+    /// ISB-idle-publish time to annotate `ISB_IDLE_PUBLISH` logs with the
+    /// number of in-flight PAFs and the oldest pending event_time. Lets us
+    /// tell whether the head_wm being pumped onto ISB OT overshoots messages
+    /// whose PUB has not yet ack'd.
+    pending_pafs: Option<Arc<PendingPafTracker>>,
 }
 
 impl SourceWatermarkState {
@@ -90,6 +97,7 @@ impl SourceWatermarkState {
             isb_idle_manager,
             source_idle_manager,
             active_input_partitions: HashMap::new(),
+            pending_pafs: None,
         }
     }
 
@@ -135,7 +143,7 @@ impl SourceWatermarkState {
         stream: Stream,
         offset: IntOffset,
         input_partition: u16,
-        mut message: Message,
+        message: Message,
     ) -> Result<()> {
         // Fetch the source watermark
         let watermark = self.fetcher.fetch_source_watermark(Some(offset.offset));
@@ -144,11 +152,12 @@ impl SourceWatermarkState {
         {
             warn!(
                 msg_event_time = message.event_time.timestamp_millis(),
-                msg_watermark = message.watermark.take().unwrap().timestamp_millis(),
-                src_watemark = watermark.timestamp_millis(),
+                src_watermark = watermark.timestamp_millis(),
                 offset = offset.offset,
-                input_partition = input_partition,
+                input_partition,
                 offset_partition = offset.partition_idx,
+                is_late = message.is_late,
+                delta_ms = watermark.timestamp_millis() - message.event_time.timestamp_millis(),
                 "Source publishing late message: msg_event_time < src_watermark"
             );
         }
@@ -216,6 +225,21 @@ impl SourceWatermarkState {
         // Fetch streams where step interval has passed since last publish
         let streams_needing_publish = self.isb_idle_manager.fetch_streams_needing_publish().await;
 
+        // TEMP (diagnostic): snapshot the in-flight PAF picture and the source-OT
+        // timeline at the moment we're about to publish idle WMBs. These are the
+        // load-bearing fields for the LastPublishedState-pre-pump theory: if
+        // `compute_wm` overshoots `oldest_pending_event_time` by tens of seconds
+        // here, the idle WMB we're about to publish will pump LastPublishedState
+        // to a value the slow PAF's data WMB cannot match.
+        let (pending_paf_count, oldest_pending_event_time, oldest_pending_age_ms) = self
+            .pending_pafs
+            .as_ref()
+            .map(|t| t.summary())
+            .unwrap_or((0, None, None));
+        let delta_compute_wm_vs_oldest_pending =
+            oldest_pending_event_time.map(|et| compute_wm.timestamp_millis() - et);
+        let source_timeline = build_source_timeline_dump(&self.fetcher);
+
         for stream in streams_needing_publish.iter() {
             let offset = self
                 .isb_idle_manager
@@ -224,6 +248,21 @@ impl SourceWatermarkState {
                 .unwrap_or(-1);
 
             for partition in self.active_input_partitions.keys() {
+                warn!(
+                    stream_name = stream.name,
+                    stream_vertex = stream.vertex,
+                    stream_partition = stream.partition,
+                    input_partition = *partition,
+                    idle_offset = offset,
+                    compute_wm = compute_wm.timestamp_millis(),
+                    streams_needing_publish_count = streams_needing_publish.len(),
+                    pending_paf_count,
+                    oldest_pending_event_time = ?oldest_pending_event_time,
+                    oldest_pending_age_ms = ?oldest_pending_age_ms,
+                    delta_compute_wm_vs_oldest_pending = ?delta_compute_wm_vs_oldest_pending,
+                    source_timeline = %source_timeline,
+                    "ISB_IDLE_PUBLISH: pumping head_wm onto ISB OT (suspected LastPublishedState pre-pump source)"
+                );
                 // Publish watermark - KV entry timestamp is updated automatically
                 self.publisher
                     .publish_isb_watermark(
@@ -447,6 +486,58 @@ impl SourceWatermarkHandle {
 
         state.publisher.initialize_active_partitions(partitions);
     }
+
+    /// TEMP (diagnostic): dumps the source-OT processor timelines. Intended
+    /// for use by diagnostic logs that want to show what
+    /// `fetch_source_watermark` is reading from at the moment a divergence
+    /// is observed (e.g. SLOW_PAF or Data WMB clamped sites). The
+    /// `ISB_IDLE_PUBLISH` site uses the free helper directly while already
+    /// holding the state lock.
+    #[allow(dead_code)]
+    pub(crate) async fn dump_source_timeline(&self) -> String {
+        let state = self.state.lock().await;
+        build_source_timeline_dump(&state.fetcher)
+    }
+
+    /// TEMP (diagnostic): attaches the writer's PendingPafTracker so the ISB
+    /// idle path can annotate `ISB_IDLE_PUBLISH` logs with in-flight PAF stats.
+    /// Called by `ISBWriterOrchestrator::streaming_write` at startup.
+    pub(crate) async fn attach_pending_paf_tracker(&self, tracker: Arc<PendingPafTracker>) {
+        let mut state = self.state.lock().await;
+        state.pending_pafs = Some(tracker);
+    }
+}
+
+/// TEMP (diagnostic): renders the source-OT processor timelines as a single
+/// line. Free function so it can be invoked both from inside the state lock
+/// (e.g. from `publish_isb_idle_watermark`) and from outside via
+/// `SourceWatermarkHandle::dump_source_timeline`.
+fn build_source_timeline_dump(fetcher: &SourceWatermarkFetcher) -> String {
+    let mut out = String::new();
+    let processors = fetcher
+        .processor_manager
+        .processors
+        .read()
+        .expect("source-OT processors lock poisoned");
+    for (_, processor) in processors.iter() {
+        let entries: Vec<String> = processor
+            .timelines
+            .get(&0)
+            .map(|tl| {
+                tl.entries()
+                    .iter()
+                    .map(|w| format!("(wm={},off={},idle={})", w.watermark, w.offset, w.idle))
+                    .collect()
+            })
+            .unwrap_or_default();
+        out.push_str(&format!(
+            "{}({:?})[{}] ",
+            String::from_utf8_lossy(&processor.name),
+            processor.status,
+            entries.join("->")
+        ));
+    }
+    out
 }
 
 #[cfg(test)]

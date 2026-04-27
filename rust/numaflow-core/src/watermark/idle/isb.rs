@@ -18,11 +18,11 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use bytes::BytesMut;
-use chrono::{DateTime, Utc};
-
 use crate::config::pipeline::ToVertexConfig;
 use crate::config::pipeline::isb::Stream;
+use bytes::BytesMut;
+use chrono::{DateTime, Utc};
+use tracing::warn;
 
 /// State of each partition in the ISB. It has the information required to identify whether the
 /// partition is idling or not.
@@ -188,9 +188,19 @@ impl ISBIdleDetector {
                 partitions
                     .iter()
                     .filter(|partition| {
-                        Utc::now().timestamp_millis()
-                            - partition.last_wm_published_time.timestamp_millis()
-                            > self.idle_timeout.as_millis() as i64
+                        let elapsed = Utc::now().timestamp_millis()
+                            - partition.last_wm_published_time.timestamp_millis();
+                        let needs = elapsed > self.idle_timeout.as_millis() as i64;
+                        if needs {
+                            warn!(
+                                stream = ?partition.stream,
+                                idle_for_ms = elapsed,
+                                idle_timeout_ms = self.idle_timeout.as_millis() as i64,
+                                wmb_msg_offset = ?partition.wmb_msg_offset,
+                                "ISB_STREAM_NEEDS_IDLE_PUBLISH"
+                            );
+                        }
+                        needs
                     })
                     .map(|partition| partition.stream.clone())
             })

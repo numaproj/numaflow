@@ -1,5 +1,6 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex as StdMutex};
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
@@ -46,12 +47,68 @@ type MetricLabels = Arc<Vec<(String, String)>>;
 /// Type alias for stream metric labels map
 type StreamMetricLabelsMap = Arc<HashMap<&'static str, MetricLabels>>;
 
+/// TEMP (diagnostic): tracker for in-flight PAFs. Each entry is keyed by a
+/// monotonic id assigned at PUB-submit time and holds the (dispatch_instant,
+/// event_time_ms) of the message whose PAF is pending. Shared between the
+/// writer (registers/deregisters) and the source watermark handle (reads the
+/// summary at idle-publish time so we can correlate the head_wm being pumped
+/// onto ISB OT with the oldest in-flight message's event_time).
+pub(crate) struct PendingPafTracker {
+    map: StdMutex<BTreeMap<u64, (Instant, i64)>>,
+    next_id: AtomicU64,
+}
+
+impl PendingPafTracker {
+    pub(crate) fn new() -> Self {
+        Self {
+            map: StdMutex::new(BTreeMap::new()),
+            next_id: AtomicU64::new(0),
+        }
+    }
+
+    /// Registers a new in-flight PAF. Returns the id used to deregister it
+    /// once the PAF resolves.
+    pub(crate) fn register(&self, dispatch_instant: Instant, event_time_ms: i64) -> u64 {
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        self.map
+            .lock()
+            .expect("pending_pafs lock poisoned")
+            .insert(id, (dispatch_instant, event_time_ms));
+        id
+    }
+
+    /// Deregisters a previously-registered PAF (idempotent).
+    pub(crate) fn deregister(&self, id: u64) {
+        self.map
+            .lock()
+            .expect("pending_pafs lock poisoned")
+            .remove(&id);
+    }
+
+    /// Returns (count, oldest_event_time_ms, oldest_age_ms).
+    /// `oldest_event_time_ms` is the smallest event_time among in-flight PAFs.
+    /// `oldest_age_ms` is the largest dispatch-to-now elapsed among in-flight PAFs.
+    pub(crate) fn summary(&self) -> (usize, Option<i64>, Option<u64>) {
+        let map = self.map.lock().expect("pending_pafs lock poisoned");
+        let count = map.len();
+        let oldest_event_time = map.values().map(|(_, et)| *et).min();
+        let oldest_age_ms = map
+            .values()
+            .map(|(t, _)| t.elapsed().as_millis() as u64)
+            .max();
+        (count, oldest_event_time, oldest_age_ms)
+    }
+}
+
 /// Result of a successful async write operation to a stream.
 /// Contains the pending write (boxed future) that needs to be awaited.
 struct PendingWriteResult {
     stream: Stream,
     paf: PendingWrite,
     write_start: Instant,
+    /// TEMP (diagnostic): id under which this PAF was registered with
+    /// `PendingPafTracker`; used to deregister it on resolution.
+    paf_id: u64,
 }
 
 /// ISBWriteTask encapsulates all the context needed to execute a write operation per message.
@@ -163,6 +220,10 @@ pub(crate) struct ISBWriterOrchestrator<C: NumaflowTypeConfig> {
     /// Cached metric labels per stream to avoid repeated allocations
     /// HashMap: stream_name -> labels
     stream_metric_labels: StreamMetricLabelsMap,
+    /// TEMP (diagnostic): tracker of in-flight PAFs. Read by the source
+    /// watermark handle's idle path to annotate ISB_IDLE_PUBLISH logs with
+    /// pending count and oldest pending event_time.
+    pending_pafs: Arc<PendingPafTracker>,
 }
 
 /// Manual Clone implementation for ISBWriterOrchestrator.
@@ -177,6 +238,7 @@ impl<C: NumaflowTypeConfig> Clone for ISBWriterOrchestrator<C> {
             paf_concurrency: self.paf_concurrency,
             vertex_type: self.vertex_type,
             stream_metric_labels: Arc::clone(&self.stream_metric_labels),
+            pending_pafs: Arc::clone(&self.pending_pafs),
         }
     }
 }
@@ -205,6 +267,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
             paf_concurrency: components.paf_concurrency,
             vertex_type: components.vertex_type,
             stream_metric_labels: Arc::new(stream_metric_labels),
+            pending_pafs: Arc::new(PendingPafTracker::new()),
         }
     }
 
@@ -216,6 +279,16 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
         messages_stream: ReceiverStream<MessageHandle>,
         cln_token: CancellationToken,
     ) -> Result<JoinHandle<Result<()>>> {
+        // TEMP (diagnostic): wire the pending-PAF tracker into the source
+        // watermark handle so the ISB idle path can annotate its logs with
+        // in-flight PAF stats. Only meaningful when the watermark handle is
+        // the Source variant (origin of the bug).
+        if let Some(WatermarkHandle::Source(handle)) = &self.watermark_handle {
+            handle
+                .attach_pending_paf_tracker(Arc::clone(&self.pending_pafs))
+                .await;
+        }
+
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             let mut messages_stream = messages_stream;
 
@@ -365,10 +438,17 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
             // Use the trait's async_write method which returns immediately with a PAF
             match writer.async_write(message.clone()).await {
                 Ok(paf) => {
+                    // TEMP (diagnostic): register this in-flight PAF with the
+                    // tracker so the source watermark handle's idle path can
+                    // observe (count, oldest_event_time) at the moment of pump.
+                    let paf_id = self
+                        .pending_pafs
+                        .register(write_start, message.event_time.timestamp_millis());
                     return Some(PendingWriteResult {
                         stream: stream.clone(),
                         paf,
                         write_start,
+                        paf_id,
                     });
                 }
                 Err(WriteError::BufferFull) => {
@@ -494,6 +574,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
             // PAF errors out into the retry path.
             let stream_for_log = write_result.stream.clone();
             let write_start = write_result.write_start;
+            let paf_id = write_result.paf_id;
 
             // The paf is a boxed future - await it directly
             let resolve_result = match write_result.paf.await {
@@ -513,6 +594,11 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
                         .await
                 }
             };
+
+            // TEMP (diagnostic): the PAF (or its retry fallback) has settled,
+            // so this entry is no longer "in flight" — remove it from the
+            // tracker before downstream watermark logic runs.
+            self.pending_pafs.deregister(paf_id);
 
             // TEMP (diagnostic): if PAF resolution (or fallback retry) took
             // longer than the slow threshold, log it. This is the precondition

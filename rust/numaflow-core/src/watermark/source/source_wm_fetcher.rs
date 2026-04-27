@@ -14,7 +14,7 @@ const WATERMARK_LOG_INTERVAL: Duration = Duration::from_secs(5);
 
 /// SourceWatermarkFetcher is the watermark fetcher for the source.
 pub struct SourceWatermarkFetcher {
-    processor_manager: ProcessorManager,
+    pub processor_manager: ProcessorManager,
     last_log_time: Instant,
 }
 

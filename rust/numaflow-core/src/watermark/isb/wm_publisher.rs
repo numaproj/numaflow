@@ -163,6 +163,8 @@ impl ISBWatermarkPublisher {
             .get_mut(&stream.partition)
             .expect("should have partition");
 
+        let prev_wm = last_state.watermark;
+        let prev_offset = last_state.offset;
         // Update state with incoming values, get the best (highest) values to publish.
         // This handles out-of-order data - we always track the best watermark and offset.
         let (publish_offset, publish_watermark, regressed) = last_state.update(offset, watermark);
@@ -182,7 +184,24 @@ impl ISBWatermarkPublisher {
                 incoming = watermark,
                 clamped_to = publish_watermark,
                 offset,
+                delta_ms = publish_watermark - watermark,
+                last_state_offset = prev_offset,
                 "Data WMB clamped up by LastPublishedState"
+            );
+        }
+
+        // NEW: capture idle-WMB pump events
+        if idle && publish_watermark > prev_wm && watermark != -1 {
+            warn!(
+                stream_vertex = stream.vertex,
+                stream_partition = stream.partition,
+                prev_wm,
+                new_wm = publish_watermark,
+                prev_offset,
+                new_offset = publish_offset,
+                incoming = watermark,
+                delta_ms = publish_watermark - prev_wm,
+                "LAST_PUBLISHED_STATE_PUMP: idle WMB advanced LastPublishedState"
             );
         }
 
