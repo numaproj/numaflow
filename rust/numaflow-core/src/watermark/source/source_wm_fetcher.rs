@@ -7,7 +7,7 @@
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::wmb::Watermark;
 use std::time::{Duration, Instant};
-use tracing::info;
+use tracing::{info, warn};
 
 /// Interval for logging watermark summary
 const WATERMARK_LOG_INTERVAL: Duration = Duration::from_secs(5);
@@ -16,6 +16,13 @@ const WATERMARK_LOG_INTERVAL: Duration = Duration::from_secs(5);
 pub struct SourceWatermarkFetcher {
     pub processor_manager: ProcessorManager,
     last_log_time: Instant,
+    /// TEMP (diagnostic): rolling max of values returned by
+    /// `fetch_source_watermark`. Used to detect non-monotonic returns —
+    /// i.e. cases where the `min` over active processors decreases due to
+    /// processor active/inactive transitions or new processors appearing
+    /// with lower head_wm. This is the load-bearing observable for the
+    /// "data-WMB clamps data-WMB" hypothesis.
+    last_returned_wm: i64,
 }
 
 impl SourceWatermarkFetcher {
@@ -24,6 +31,7 @@ impl SourceWatermarkFetcher {
         SourceWatermarkFetcher {
             processor_manager,
             last_log_time: Instant::now() - WATERMARK_LOG_INTERVAL,
+            last_returned_wm: -1,
         }
     }
 
@@ -42,6 +50,11 @@ impl SourceWatermarkFetcher {
         let mut active_processor_count = 0u32;
         let mut max_expected_count: Option<u32> = None;
 
+        // TEMP (diagnostic): collect per-processor head_wm + status snapshot
+        // so we can attach it to NON_MONOTONIC fires below. Cheap, since the
+        // processor count is small (number of source input partitions).
+        let mut proc_snapshot: Vec<(String, i64, &'static str)> = Vec::new();
+
         let processors = self
             .processor_manager
             .processors
@@ -49,6 +62,24 @@ impl SourceWatermarkFetcher {
             .expect("failed to acquire lock");
 
         for (_, processor) in processors.iter() {
+            let status_str = if processor.is_active() {
+                "active"
+            } else if processor.is_deleted() {
+                "deleted"
+            } else {
+                "inactive"
+            };
+            let head_wm_for_snap = processor
+                .timelines
+                .get(&0)
+                .map(|t| t.get_head_watermark())
+                .unwrap_or(-1);
+            proc_snapshot.push((
+                String::from_utf8_lossy(&processor.name).to_string(),
+                head_wm_for_snap,
+                status_str,
+            ));
+
             // We only consider active processors.
             if !processor.is_active() {
                 continue;
@@ -91,6 +122,27 @@ impl SourceWatermarkFetcher {
 
         if min_wm == i64::MAX {
             min_wm = -1;
+        }
+
+        // TEMP (diagnostic): non-monotonic fetch detector. If the value we're
+        // about to return is less than the running max we've ever returned,
+        // a processor active/inactive transition (or a newly-observed
+        // processor with lagging head) has caused `min` over active
+        // processors to decrease. This is the suspected cause of data-WMB
+        // clamps under the refined hypothesis.
+        if min_wm != -1 && min_wm < self.last_returned_wm {
+            warn!(
+                previous_max = self.last_returned_wm,
+                current = min_wm,
+                delta_ms = self.last_returned_wm - min_wm,
+                active_processor_count,
+                offset = ?offset,
+                proc_snapshot = ?proc_snapshot,
+                "FETCH_SOURCE_WATERMARK_NON_MONOTONIC: source-OT min head decreased"
+            );
+        }
+        if min_wm > self.last_returned_wm {
+            self.last_returned_wm = min_wm;
         }
 
         let watermark =

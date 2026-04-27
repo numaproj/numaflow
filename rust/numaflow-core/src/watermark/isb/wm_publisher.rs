@@ -205,6 +205,27 @@ impl ISBWatermarkPublisher {
             );
         }
 
+        // TEMP (diagnostic): capture data-WMB advance events. Counterpart to
+        // LAST_PUBLISHED_STATE_PUMP — fires when a non-idle (data) publish
+        // advances LastPublishedState. Under the refined hypothesis, these
+        // advances are what later get clamped: a data publish at t1 advances
+        // LastPublishedState to T_high (because fetch_source_watermark
+        // returned T_high then), and a later data publish at t2 sees a lower
+        // fetched value (T_low) and gets clamped back up to T_high.
+        if !idle && publish_watermark > prev_wm && watermark != -1 {
+            warn!(
+                stream_vertex = stream.vertex,
+                stream_partition = stream.partition,
+                prev_wm,
+                new_wm = publish_watermark,
+                prev_offset,
+                new_offset = publish_offset,
+                incoming = watermark,
+                delta_ms = publish_watermark - prev_wm,
+                "LAST_PUBLISHED_STATE_ADVANCE: data WMB advanced LastPublishedState"
+            );
+        }
+
         // Only publish when delay is crossed
         if !last_state.delay_crossed() {
             return;

@@ -36,6 +36,33 @@ pub(crate) enum Status {
     Deleted,
 }
 
+/// TEMP (diagnostic): emit a structured `PROCESSOR_STATUS_CHANGE` warn log
+/// whenever a processor transitions between statuses. Critical for the
+/// "fetch_source_watermark non-monotonic" hypothesis: an InActive→Active
+/// transition can re-include a processor whose head_wm lags the others,
+/// causing the `min` over active processors to drop. The `head_wm` field
+/// (partition 0, since source has only partition 0) lets us correlate
+/// transitions with subsequent FETCH_SOURCE_WATERMARK_NON_MONOTONIC events.
+fn log_status_change(processor: &Processor, new_status: &Status, reason: &'static str) {
+    if &processor.status == new_status {
+        return;
+    }
+    let head_wm = processor
+        .timelines
+        .get(&0)
+        .map(|t| t.get_head_watermark())
+        .unwrap_or(-1);
+    warn!(
+        processor_name = ?String::from_utf8_lossy(&processor.name),
+        previous_status = ?processor.status,
+        new_status = ?new_status,
+        head_wm,
+        last_seen_time = processor.last_seen_time,
+        reason,
+        "PROCESSOR_STATUS_CHANGE"
+    );
+}
+
 /// Processor is the smallest unit of entity (from which we fetch data) that does inorder processing
 /// or contains inorder data. It tracks OT for all the partitions of the from-buffer.
 pub(crate) struct Processor {
@@ -279,19 +306,12 @@ impl ProcessorManager {
                     d if d > refresh_rate_millis => Status::InActive,
                     _ => Status::Active,
                 };
-                // Log when status changes to inactive or deleted
-                if new_status != processor.status
-                    && (new_status == Status::InActive || new_status == Status::Deleted)
-                {
-                    info!(
-                        processor = ?String::from_utf8_lossy(&processor.name),
-                        old_status = ?processor.status,
-                        new_status = ?new_status,
-                        behind_ms = diff,
-                        last_seen = processor.last_seen_time,
-                        "Processor status change"
-                    );
-                }
+                // TEMP (diagnostic): replaces the prior info!-level log; now
+                // emits PROCESSOR_STATUS_CHANGE for every transition (incl.
+                // Inactive→Active induced by refresh, though in practice
+                // refresh almost never causes upward transitions since
+                // last_seen_time is updated by the watcher path).
+                log_status_change(processor, &new_status, "refresh_liveness_check");
                 processor.set_status(new_status);
             }
         }
@@ -343,8 +363,11 @@ impl ProcessorManager {
                         processor.update_last_seen_time(kv.created);
                     }
 
-                    // If processor was inactive, mark it as active since we received a WMB
+                    // If processor was inactive, mark it as active since we received a WMB.
+                    // TEMP (diagnostic): this is THE transition we care about for the refined
+                    // hypothesis — re-including a stale-head processor in the min set.
                     if !processor.is_active() && !processor.is_deleted() {
+                        log_status_change(processor, &Status::Active, "ot_watcher_put_reactivate");
                         processor.set_status(Status::Active);
                     }
 
@@ -371,6 +394,7 @@ impl ProcessorManager {
                     let processor_name = Bytes::from(kv.key);
                     let mut processors = processors.write().expect("failed to acquire lock");
                     if let Some(processor) = processors.get_mut(&processor_name) {
+                        log_status_change(processor, &Status::Deleted, "ot_watcher_kv_delete");
                         processor.set_status(Status::Deleted);
                     }
                 }
@@ -378,6 +402,7 @@ impl ProcessorManager {
                     // When the bucket is purged, mark all processors as deleted
                     let mut processors = processors.write().expect("failed to acquire lock");
                     for processor in processors.values_mut() {
+                        log_status_change(processor, &Status::Deleted, "ot_watcher_kv_purge");
                         processor.set_status(Status::Deleted);
                     }
                 }
