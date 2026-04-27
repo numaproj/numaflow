@@ -27,6 +27,14 @@ use crate::{Result, mark_failed};
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 
+/// TEMP (diagnostic): threshold above which PAF resolution is considered "slow"
+/// for the purpose of watermark-divergence diagnosis. Set to match the
+/// `idleSource.threshold` typically used in pipeline watermark configs (5s) —
+/// any PAF whose dispatch-to-resolve time exceeds this is overlapping with the
+/// window in which idle watermark advancement could have started, and is the
+/// candidate for stamping a stale-but-advanced watermark on its WMB.
+const SLOW_PAF_THRESHOLD: Duration = Duration::from_secs(5);
+
 /// Type alias for metric labels
 type MetricLabels = Arc<Vec<(String, String)>>;
 /// Type alias for stream metric labels map
@@ -455,6 +463,12 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
         let mut offsets = Vec::new();
 
         for write_result in write_results {
+            // TEMP (diagnostic): capture stream + dispatch timestamp before
+            // moving `paf` out, so we can measure resolve elapsed even if the
+            // PAF errors out into the retry path.
+            let stream_for_log = write_result.stream.clone();
+            let write_start = write_result.write_start;
+
             // The paf is a boxed future - await it directly
             let resolve_result = match write_result.paf.await {
                 Ok(result) => Ok(result),
@@ -473,6 +487,29 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
                         .await
                 }
             };
+
+            // TEMP (diagnostic): if PAF resolution (or fallback retry) took
+            // longer than the slow threshold, log it. This is the precondition
+            // for stage-3 fetch_source_watermark to see an idle-advanced value
+            // and stamp a stale-but-elevated watermark onto this offset's WMB.
+            let resolve_elapsed = write_start.elapsed();
+            if resolve_elapsed >= SLOW_PAF_THRESHOLD {
+                let resolved_offset = match &resolve_result {
+                    Ok(wr) => format!("{:?}", wr.offset),
+                    Err(e) => format!("err({e:?})"),
+                };
+                warn!(
+                    stream = ?stream_for_log,
+                    elapsed_ms = resolve_elapsed.as_millis() as u64,
+                    threshold_ms = SLOW_PAF_THRESHOLD.as_millis() as u64,
+                    resolved_offset = %resolved_offset,
+                    message_event_time = message.event_time.timestamp_millis(),
+                    message_id = ?message.id,
+                    "SLOW_PAF: dispatch-to-resolve exceeded slow threshold; \
+                     stage-3 watermark publish may stamp this offset with an \
+                     idle-advanced watermark"
+                );
+            }
 
             // Handle the resolve result
             if let Some(offset) =
