@@ -28,7 +28,7 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Result;
-use crate::message::{IntOffset, MessageHandle, Offset};
+use crate::message::{IntOffset, Message, MessageHandle, Offset};
 use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::idle::source::SourceIdleDetector;
 use crate::watermark::processor::manager::ProcessorManager;
@@ -135,9 +135,20 @@ impl SourceWatermarkState {
         stream: Stream,
         offset: IntOffset,
         input_partition: u16,
+        mut message: Message,
     ) -> Result<()> {
         // Fetch the source watermark
         let watermark = self.fetcher.fetch_source_watermark(Some(offset.offset));
+
+        if message.event_time.timestamp_millis() < watermark.timestamp_millis() && !message.is_late
+        {
+            warn!(
+                msg_event_time = message.event_time.timestamp_millis(),
+                msg_watermark = message.watermark.take().unwrap().timestamp_millis(),
+                src_watemark = watermark.timestamp_millis(),
+                "Source publishing late message: msg_event_time < src_watermark"
+            );
+        }
 
         // Publish the watermark
         self.publisher
@@ -349,6 +360,7 @@ impl SourceWatermarkHandle {
         stream: Stream,
         offset: Offset,
         input_partition: u16,
+        message: Message,
     ) {
         let Offset::Int(offset) = offset else {
             warn!(?offset, "Invalid offset type, cannot publish watermark");
@@ -359,7 +371,7 @@ impl SourceWatermarkHandle {
         let result = {
             let mut state = self.state.lock().await;
             state
-                .publish_source_isb_watermark(stream, offset, input_partition)
+                .publish_source_isb_watermark(stream, offset, input_partition, message)
                 .await
         };
 
@@ -648,7 +660,7 @@ mod tests {
                 partition_idx: 0,
             });
             handle
-                .publish_source_isb_watermark(stream.clone(), offset, 0)
+                .publish_source_isb_watermark(stream.clone(), offset, 0, Message::default())
                 .await;
         }
 
