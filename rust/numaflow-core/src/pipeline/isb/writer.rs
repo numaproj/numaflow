@@ -35,6 +35,12 @@ const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 /// candidate for stamping a stale-but-advanced watermark on its WMB.
 const SLOW_PAF_THRESHOLD: Duration = Duration::from_secs(5);
 
+/// TEMP (diagnostic): threshold above which the orchestrator's
+/// `acquire_owned()` call on the paf_concurrency semaphore is considered
+/// anomalously blocked. 1s is well below `idleSource.threshold` so we catch
+/// the start of semaphore exhaustion before idle fires.
+const WRITER_PERMIT_BLOCKED_THRESHOLD: Duration = Duration::from_secs(1);
+
 /// Type alias for metric labels
 type MetricLabels = Arc<Vec<(String, String)>>;
 /// Type alias for stream metric labels map
@@ -214,6 +220,15 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
             let mut messages_stream = messages_stream;
 
             while let Some(msg_handle) = messages_stream.next().await {
+                // TEMP (diagnostic): measure how long acquire_owned blocks.
+                // If this is >= threshold, the paf_concurrency semaphore was
+                // exhausted (i.e., paf_concurrency tasks are simultaneously
+                // stuck on `paf.await`), which is the upstream cause of any
+                // SOURCE_SEND_BACKPRESSURE the source sees. Together with the
+                // SLOW_PAF logs, this completes the chain: slow PAFs → all
+                // permits held → acquire_owned blocks → mpsc fills → source
+                // send blocks → source idle detector fires.
+                let acquire_start = Instant::now();
                 // Acquire permit for structured concurrency
                 let permit = match Arc::clone(&self.sem).acquire_owned().await {
                     Ok(permit) => permit,
@@ -225,6 +240,17 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
                         )));
                     }
                 };
+                let acquire_elapsed = acquire_start.elapsed();
+                if acquire_elapsed >= WRITER_PERMIT_BLOCKED_THRESHOLD {
+                    warn!(
+                        elapsed_ms = acquire_elapsed.as_millis() as u64,
+                        threshold_ms = WRITER_PERMIT_BLOCKED_THRESHOLD.as_millis() as u64,
+                        paf_concurrency = self.paf_concurrency,
+                        "WRITER_PERMIT_BLOCKED: acquire_owned blocked for >= \
+                         threshold; paf_concurrency semaphore exhausted, all \
+                         in-flight write tasks are likely awaiting slow PAFs"
+                    );
+                }
 
                 // Spawn the write task
                 ISBWriteTask {

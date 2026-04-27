@@ -68,6 +68,14 @@ pub(crate) mod test_utils;
 use crate::transformer::Transformer;
 use crate::watermark::source::{SourceWatermarkEntry, SourceWatermarkHandle};
 
+/// TEMP (diagnostic): threshold above which `messages_tx.send(...)` blocking
+/// is considered anomalous backpressure for the purpose of confirming whether
+/// PAF slowness is the cause of source idle. 1s is well below
+/// `idleSource.threshold` (typically 5s) so it catches graduated backpressure
+/// before idle fires, allowing the operator to correlate the start of
+/// backpressure with the start of the idle window.
+const SOURCE_SEND_BACKPRESSURE_THRESHOLD: Duration = Duration::from_secs(1);
+
 const MAX_ACK_PENDING: usize = 10000;
 const ACK_RETRY_INTERVAL: u64 = 100;
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
@@ -634,10 +642,29 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         read_message
                     };
 
+                    // TEMP (diagnostic): measure messages_tx.send blocking
+                    // duration. If this blocks for >= the threshold, the
+                    // downstream (ISB writer) is backpressured — typically
+                    // because its paf_concurrency semaphore is exhausted by
+                    // tasks awaiting slow PAFs. While the source is blocked
+                    // here, source_idle_manager.reset(...) is not being
+                    // called, so the source idle detector will eventually
+                    // fire and start advancing the watermark.
+                    let send_start = Instant::now();
                     messages_tx
                         .send(read_message)
                         .await
                         .expect("send should not fail");
+                    let send_elapsed = send_start.elapsed();
+                    if send_elapsed >= SOURCE_SEND_BACKPRESSURE_THRESHOLD {
+                        warn!(
+                            elapsed_ms = send_elapsed.as_millis() as u64,
+                            threshold_ms = SOURCE_SEND_BACKPRESSURE_THRESHOLD.as_millis() as u64,
+                            "SOURCE_SEND_BACKPRESSURE: messages_tx.send blocked \
+                             for >= threshold; source emission stalled, idle \
+                             detector may fire if this persists past idleSource.threshold"
+                        );
+                    }
                 }
             }
 
