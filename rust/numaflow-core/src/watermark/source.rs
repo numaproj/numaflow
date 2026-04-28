@@ -21,8 +21,8 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-use numaflow_shared::kv::KVStore;
 use numaflow_shared::kv::jetstream::JetstreamKVStore;
+use numaflow_shared::kv::KVStore;
 
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
@@ -116,7 +116,7 @@ impl SourceWatermarkState {
         // Publish the watermark for each partition
         for (partition, event_time) in partition_to_lowest_event_time {
             self.publisher
-                .publish_source_watermark(partition, event_time, false)
+                .publish_source_watermark(partition, event_time, false, "generate_and_publish_source_watermark->".into())
                 .await;
 
             // cache the active input partitions, we need it for publishing isb idle watermark
@@ -136,6 +136,7 @@ impl SourceWatermarkState {
         offset: IntOffset,
         input_partition: u16,
         message: Message,
+        publisher_code_path: String,
     ) -> Result<()> {
         // Fetch the source watermark
         let watermark = self.fetcher.fetch_source_watermark(Some(offset.offset));
@@ -168,6 +169,7 @@ impl SourceWatermarkState {
                 offset.offset,
                 watermark.timestamp_millis(),
                 false,
+                publisher_code_path + "publish_source_isb_watermark->".into()
             )
             .await;
 
@@ -205,7 +207,7 @@ impl SourceWatermarkState {
 
             // Publish source watermark for this partition
             self.publisher
-                .publish_source_watermark(partition, wm_value, is_idle)
+                .publish_source_watermark(partition, wm_value, is_idle, "tick->publish_source_idle_watermark->".into())
                 .await;
         }
 
@@ -239,6 +241,7 @@ impl SourceWatermarkState {
                         offset,
                         compute_wm.timestamp_millis(),
                         true,
+                        "tick->publish_isb_idle_watermark->".into(),
                     )
                     .await;
             }
@@ -371,6 +374,7 @@ impl SourceWatermarkHandle {
         offset: Offset,
         input_partition: u16,
         message: Message,
+        publisher_code_path: String,
     ) {
         let Offset::Int(offset) = offset else {
             warn!(?offset, "Invalid offset type, cannot publish watermark");
@@ -381,7 +385,7 @@ impl SourceWatermarkHandle {
         let result = {
             let mut state = self.state.lock().await;
             state
-                .publish_source_isb_watermark(stream, offset, input_partition, message)
+                .publish_source_isb_watermark(stream, offset, input_partition, message, publisher_code_path + "publish_source_isb_watermark->")
                 .await
         };
 
@@ -467,9 +471,9 @@ mod tests {
     use tokio::time::sleep;
 
     use super::*;
-    use crate::config::pipeline::VertexType;
     use crate::config::pipeline::isb::BufferWriterConfig;
     use crate::config::pipeline::watermark::{BucketConfig, IdleConfig};
+    use crate::config::pipeline::VertexType;
     use crate::message::IntOffset;
     use crate::watermark::wmb::WMB;
 
@@ -670,7 +674,7 @@ mod tests {
                 partition_idx: 0,
             });
             handle
-                .publish_source_isb_watermark(stream.clone(), offset, 0, Message::default())
+                .publish_source_isb_watermark(stream.clone(), offset, 0, Message::default(), "".into())
                 .await;
         }
 

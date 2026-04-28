@@ -16,8 +16,8 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
-use numaflow_shared::kv::KVStore;
 use numaflow_shared::kv::jetstream::JetstreamKVStore;
+use numaflow_shared::kv::KVStore;
 
 /// SourcePublisher is the watermark publisher for the source vertex.
 pub(crate) struct SourceWatermarkPublisher {
@@ -94,6 +94,7 @@ impl SourceWatermarkPublisher {
         partition: u16,
         mut watermark: i64,
         idle: bool,
+        publisher_code_path: String,
     ) {
         // for source, we do partition-based watermark publishing rather than pod-based, hence
         // the processing entity is the partition itself. We create a publisher for each partition
@@ -138,6 +139,7 @@ impl SourceWatermarkPublisher {
                 watermark,
                 idle,
                 self.processor_count,
+                publisher_code_path + "publish_source_watermark->",
             )
             .await;
     }
@@ -151,6 +153,7 @@ impl SourceWatermarkPublisher {
         offset: i64,
         watermark: i64,
         idle: bool,
+        publisher_code_path: String,
     ) {
         let processor_name = format!("{}-{}", self.source_config.vertex, input_partition);
         // In source, since we do partition-based watermark publishing rather than pod-based, we
@@ -172,7 +175,7 @@ impl SourceWatermarkPublisher {
         self.publishers
             .get_mut(&processor_name)
             .expect("Publisher not found")
-            .publish_watermark(stream, offset, watermark, idle)
+            .publish_watermark(stream, offset, watermark, idle, publisher_code_path + "publish_isb_watermark->")
             .await;
     }
 
@@ -280,7 +283,7 @@ mod tests {
 
         // Publish source watermark for partition 0
         source_publisher
-            .publish_source_watermark(0, 100, false)
+            .publish_source_watermark(0, 100, false, "".into())
             .await;
 
         let ot_bucket = js_context
@@ -364,7 +367,7 @@ mod tests {
 
         // Publish edge watermark for partition 0
         source_publisher
-            .publish_isb_watermark(0, &stream, 1, 200, false)
+            .publish_isb_watermark(0, &stream, 1, 200, false, "".into())
             .await;
 
         let ot_bucket = js_context
@@ -429,7 +432,7 @@ mod tests {
 
         // Publish source watermark for partition 0 with idle flag set to true
         source_publisher
-            .publish_source_watermark(0, 100, true)
+            .publish_source_watermark(0, 100, true, "".into())
             .await;
 
         let ot_bucket = js_context
@@ -514,7 +517,7 @@ mod tests {
 
         // Publish edge watermark for partition 0 with idle flag set to true
         source_publisher
-            .publish_isb_watermark(0, &stream, 1, 200, true)
+            .publish_isb_watermark(0, &stream, 1, 200, true, "".into())
             .await;
 
         let ot_bucket = js_context

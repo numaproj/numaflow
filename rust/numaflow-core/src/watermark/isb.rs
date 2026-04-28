@@ -24,8 +24,8 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-use numaflow_shared::kv::KVStore;
 use numaflow_shared::kv::jetstream::JetstreamKVStore;
+use numaflow_shared::kv::KVStore;
 
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::{BucketConfig, EdgeWatermarkConfig};
@@ -38,7 +38,7 @@ use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::isb::wm_fetcher::ISBWatermarkFetcher;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
 use crate::watermark::processor::manager::ProcessorManager;
-use crate::watermark::wmb::{WMB, Watermark};
+use crate::watermark::wmb::{Watermark, WMB};
 
 pub(crate) mod wm_fetcher;
 pub(crate) mod wm_publisher;
@@ -108,13 +108,13 @@ impl ISBWatermarkState {
     }
 
     /// publishes the watermark for the given stream and offset
-    async fn publish_watermark(&mut self, stream: Stream, offset: IntOffset) {
+    async fn publish_watermark(&mut self, stream: Stream, offset: IntOffset, publisher_code_path: String) {
         // Compute the minimum watermark
         let min_wm = self.compute_min_watermark().await;
 
         // Publish the watermark
         self.publisher
-            .publish_watermark(&stream, offset.offset, min_wm.timestamp_millis(), false)
+            .publish_watermark(&stream, offset.offset, min_wm.timestamp_millis(), false, publisher_code_path + "publish_watermark->".into())
             .await;
 
         // Reset idle state for this stream
@@ -153,7 +153,7 @@ impl ISBWatermarkState {
             if let Ok(offset) = self.idle_manager.fetch_idle_offset(stream).await {
                 // publish the watermark
                 self.publisher
-                    .publish_watermark(stream, offset, min_wm.timestamp_millis(), true)
+                    .publish_watermark(stream, offset, min_wm.timestamp_millis(), true, "tick->publish_idle_watermark->".into())
                     .await;
 
                 self.idle_manager.update_idle_metadata(stream, offset).await;
@@ -369,7 +369,7 @@ impl ISBWatermarkHandle {
     }
 
     /// publish_watermark publishes the watermark for the given stream and offset.
-    pub(crate) async fn publish_watermark(&self, stream: Stream, offset: Offset) {
+    pub(crate) async fn publish_watermark(&self, stream: Stream, offset: Offset, publisher_code_path: String) {
         let Offset::Int(offset) = offset else {
             warn!(?offset, "Invalid offset type, cannot publish watermark");
             return;
@@ -377,7 +377,7 @@ impl ISBWatermarkHandle {
 
         // Acquire lock, perform operation, and release immediately
         let mut state = self.state.lock().await;
-        state.publish_watermark(stream, offset).await;
+        state.publish_watermark(stream, offset, publisher_code_path + "publish_watermark->").await;
     }
 
     /// publishes the idle watermark for the downstream idle partitions.
@@ -580,6 +580,7 @@ mod tests {
                     offset: 1,
                     partition_idx: 0,
                 }),
+                "".into()
             )
             .await;
 
@@ -628,7 +629,7 @@ mod tests {
                 Offset::Int(IntOffset {
                     offset: 2,
                     partition_idx: 0,
-                }),
+                }),"".into()
             )
             .await;
 
@@ -751,7 +752,7 @@ mod tests {
                         Offset::Int(IntOffset {
                             offset: i,
                             partition_idx: 0,
-                        }),
+                        }),"".into()
                     )
                     .await;
 
@@ -999,7 +1000,7 @@ mod tests {
                     Offset::Int(IntOffset {
                         offset: i,
                         partition_idx: 0,
-                    }),
+                    }),"".into()
                 )
                 .await;
 
