@@ -222,10 +222,6 @@ flowchart TB
     PIW -. "🔍 LOG 1: Source stamping ISB-OT WMB<br/>with watermark ahead of message event_time" .- LOG1[ ]
     RM -. "🔍 LOG 2: WATERMARK_DIVERGENCE<br/>fetch_watermark > event_time for data message" .- LOG2[ ]
     DROP -. "🔍 EXISTING LOG: Old message popped up" .- LOG3[ ]
-
-    style LOG1 fill:#ffe6cc,stroke:#d79b00
-    style LOG2 fill:#ffe6cc,stroke:#d79b00
-    style LOG3 fill:#ffe6cc,stroke:#d79b00
 ```
 
 The two new orange logs (LOG 1 and LOG 2) form the cause-side and reader-side observations of the bug; the blue LOG 3 is the existing reducer-side effect.
