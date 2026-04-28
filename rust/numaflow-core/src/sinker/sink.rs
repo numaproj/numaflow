@@ -293,11 +293,13 @@ impl SinkWriter {
         let write_start_time = time::Instant::now();
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();
+        // Note: remove is_mono_vertex check once we implement pipeline tracing.
+        let tracing_enabled = is_mono_vertex() && otel::tracing_enabled();
 
         // Tracing: per-message primary sink stage spans.
         // Span lifetime is scoped to only the primary sink actor call.
         let mut response = {
-            let _span_guard = if is_mono_vertex() {
+            let _span_guard = if tracing_enabled {
                 Some(inject_sink_stage_spans(
                     &mut messages,
                     otel::TraceTopology::MonoVertex,
@@ -312,7 +314,7 @@ impl SinkWriter {
 
         // Strip tracing_udf from response messages so fallback/on_success/serving sinks
         // don't inherit the primary sink stage span as a parent.
-        if is_mono_vertex() {
+        if tracing_enabled {
             strip_tracing_udf(&mut response.fallback);
             strip_tracing_udf(&mut response.on_success);
             strip_tracing_udf(&mut response.serving);
@@ -378,11 +380,13 @@ impl SinkWriter {
         let on_success_sink_start = time::Instant::now();
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();
+        // Note: remove is_mono_vertex check once we implement pipeline tracing.
+        let tracing_enabled = is_mono_vertex() && otel::tracing_enabled();
 
         // Tracing: per-message on-success sink stage spans.
         // Span lifetime is scoped to only the on-success sink actor call.
         let on_success_response = {
-            let _span_guard = if is_mono_vertex() && self.on_success_sink_handle.is_some() {
+            let _span_guard = if tracing_enabled && self.on_success_sink_handle.is_some() {
                 Some(inject_sink_stage_spans(
                     &mut messages,
                     otel::TraceTopology::MonoVertex,
@@ -435,11 +439,13 @@ impl SinkWriter {
         let fallback_sink_start = time::Instant::now();
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();
+        // Note: remove is_mono_vertex check once we implement pipeline tracing.
+        let tracing_enabled = is_mono_vertex() && otel::tracing_enabled();
 
         // Tracing: per-message fallback sink stage spans.
         // Span lifetime is scoped to only the fallback sink actor call.
         let fb_response = {
-            let _span_guard = if is_mono_vertex() && self.fb_sink_handle.is_some() {
+            let _span_guard = if tracing_enabled && self.fb_sink_handle.is_some() {
                 Some(inject_sink_stage_spans(
                     &mut messages,
                     otel::TraceTopology::MonoVertex,

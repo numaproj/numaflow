@@ -7,6 +7,9 @@ use tracing_subscriber::{Layer, filter::EnvFilter, fmt};
 use std::backtrace::{Backtrace, BacktraceStatus};
 use std::panic::PanicHookInfo;
 
+const DEFAULT_TRACES_SAMPLER: &str = "parentbased_traceidratio";
+const DEFAULT_TRACES_SAMPLER_ARG: &str = "0.1";
+
 /// Panic hook to send panic info to `tracing` instead of stderr.
 /// Without this, a panic will be logged to stderr as:
 /// ```
@@ -56,24 +59,46 @@ fn report_panic(panic_info: &PanicHookInfo<'_>) {
 
 /// Build a sampler from standard OTel environment variables.
 ///
-/// - `OTEL_TRACES_SAMPLER`: sampler type (default: `parentbased_always_on`)
-/// - `OTEL_TRACES_SAMPLER_ARG`: sampler argument (e.g., `0.1` for 10%)
+/// - `OTEL_TRACES_SAMPLER`: sampler type (default: `parentbased_traceidratio`)
+/// - `OTEL_TRACES_SAMPLER_ARG`: sampler argument (default: `0.1` for 10%)
 ///
 /// Supported samplers: `always_on`, `always_off`, `traceidratio`,
 /// `parentbased_always_on`, `parentbased_always_off`, `parentbased_traceidratio`.
 fn build_sampler() -> opentelemetry_sdk::trace::Sampler {
-    let sampler_name =
-        std::env::var("OTEL_TRACES_SAMPLER").unwrap_or_else(|_| "parentbased_always_on".into());
+    let sampler_name = std::env::var("OTEL_TRACES_SAMPLER").ok();
     let sampler_arg_raw = std::env::var("OTEL_TRACES_SAMPLER_ARG").ok();
-    build_sampler_from(&sampler_name, sampler_arg_raw.as_deref())
+    build_sampler_from_env(sampler_name.as_deref(), sampler_arg_raw.as_deref())
+}
+
+fn build_sampler_from_env(
+    sampler_name: Option<&str>,
+    sampler_arg_raw: Option<&str>,
+) -> opentelemetry_sdk::trace::Sampler {
+    let using_default_sampler = sampler_name.is_none();
+    let sampler_name = sampler_name.unwrap_or(DEFAULT_TRACES_SAMPLER);
+    let sampler_arg_raw = sampler_arg_raw.or_else(|| {
+        using_default_sampler
+            .then_some(DEFAULT_TRACES_SAMPLER_ARG)
+            .filter(|_| sampler_name == DEFAULT_TRACES_SAMPLER)
+    });
+    build_sampler_from_inner(sampler_name, sampler_arg_raw, using_default_sampler)
 }
 
 /// Pure helper that builds a [`Sampler`] from already-resolved inputs.
 /// Extracted from `build_sampler` so it can be unit-tested without mutating
 /// the process env.
+#[cfg(test)]
 fn build_sampler_from(
     sampler_name: &str,
     sampler_arg_raw: Option<&str>,
+) -> opentelemetry_sdk::trace::Sampler {
+    build_sampler_from_inner(sampler_name, sampler_arg_raw, false)
+}
+
+fn build_sampler_from_inner(
+    sampler_name: &str,
+    sampler_arg_raw: Option<&str>,
+    using_default_sampler: bool,
 ) -> opentelemetry_sdk::trace::Sampler {
     let sampler_arg = sampler_arg_raw.and_then(|v| v.parse::<f64>().ok());
 
@@ -106,10 +131,15 @@ fn build_sampler_from(
     };
 
     eprintln!(
-        "[setup_tracing] Sampler: {sampler_name}{}",
+        "[setup_tracing] Sampler: {sampler_name}{}{}",
         sampler_arg
             .map(|r| format!(", ratio={r}"))
-            .unwrap_or_default()
+            .unwrap_or_default(),
+        if using_default_sampler {
+            " (default)"
+        } else {
+            ""
+        }
     );
 
     sampler
@@ -227,8 +257,14 @@ pub fn register() -> TracerProviderGuard {
 
     let service_name = std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "platform".into());
     let (otel_layer, tracer_provider) = match init_otlp_layer(service_name) {
-        Some((layer, provider)) => (Some(layer), Some(provider)),
-        None => (None, None),
+        Some((layer, provider)) => {
+            numaflow_core::set_otel_tracing_enabled(true);
+            (Some(layer), Some(provider))
+        }
+        None => {
+            numaflow_core::set_otel_tracing_enabled(false);
+            (None, None)
+        }
     };
 
     // Only export spans (info_span!, tracing::Span) to the OTel layer, not log
@@ -422,6 +458,38 @@ mod tests {
                 &sampler,
                 Some(&unsampled_parent),
                 trace_id_at_probability_boundary(0.1, true),
+            ),
+            SamplingDecision::Drop
+        );
+    }
+
+    #[test]
+    fn sampler_env_defaults_to_parentbased_traceidratio_at_ten_percent() {
+        let sampler = build_sampler_from_env(None, None);
+        assert!(matches!(&sampler, Sampler::ParentBased(_)));
+        assert_eq!(
+            sampling_decision(&sampler, None, trace_id_at_probability_boundary(0.1, true)),
+            SamplingDecision::RecordAndSample
+        );
+        assert_eq!(
+            sampling_decision(&sampler, None, trace_id_at_probability_boundary(0.1, false)),
+            SamplingDecision::Drop
+        );
+    }
+
+    #[test]
+    fn sampler_env_uses_arg_with_default_sampler_name() {
+        let sampler = build_sampler_from_env(None, Some("0.25"));
+        assert!(matches!(&sampler, Sampler::ParentBased(_)));
+        assert_eq!(
+            sampling_decision(&sampler, None, trace_id_at_probability_boundary(0.25, true)),
+            SamplingDecision::RecordAndSample
+        );
+        assert_eq!(
+            sampling_decision(
+                &sampler,
+                None,
+                trace_id_at_probability_boundary(0.25, false)
             ),
             SamplingDecision::Drop
         );

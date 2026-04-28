@@ -6,12 +6,27 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use opentelemetry::global;
 use opentelemetry::propagation::{Extractor, Injector};
 use opentelemetry::trace::{TraceContextExt as _, Tracer};
 
 use crate::metadata::{KeyValueGroup, Metadata};
+
+static TRACING_ENABLED: AtomicBool = AtomicBool::new(false);
+
+/// Enable or disable tracing spans and context propagation.
+/// This is set by the binary after OTLP initialization succeeds. When disabled,
+/// code that creates tracing spans skips trace metadata work entirely.
+pub(crate) fn set_tracing_enabled(enabled: bool) {
+    TRACING_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+/// Returns whether tracing spans should be created.
+pub(crate) fn tracing_enabled() -> bool {
+    TRACING_ENABLED.load(Ordering::Relaxed)
+}
 
 /// Key under which W3C trace context is stored in `sys_metadata`.
 /// Always holds the propagated `vertex.process` context for downstream

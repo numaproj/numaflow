@@ -81,6 +81,10 @@ struct SourceTransformSpan(Option<opentelemetry::Context>);
 
 impl SourceTransformSpan {
     fn new(parent_cx: Option<opentelemetry::Context>, msg_id: String) -> Self {
+        if !otel::tracing_enabled() {
+            return Self(None);
+        }
+
         let Some(parent_cx) = parent_cx else {
             return Self(None);
         };

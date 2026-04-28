@@ -57,6 +57,9 @@ impl MapBatchTask {
     /// Executes the batch map operation.
     /// Returns an error if any message in the batch fails to be processed.
     pub async fn execute(mut self) -> Result<()> {
+        // Note: remove is_mono_vertex check once we implement pipeline tracing.
+        let tracing_enabled = is_mono_vertex() && otel::tracing_enabled();
+
         // Store parent message info for each message before sending to UDF
         let parent_infos: Vec<ParentMessageInfo> = self
             .msg_handles
@@ -73,7 +76,7 @@ impl MapBatchTask {
             //
             // Invariant: tracing_udf is removed from result messages below; on error, input
             // messages are dropped, so tracing_udf never propagates further.
-            let _span_guard = if is_mono_vertex() {
+            let _span_guard = if tracing_enabled {
                 let mut contexts: Vec<opentelemetry::Context> =
                     Vec::with_capacity(self.msg_handles.len());
                 for msg_handle in self.msg_handles.iter_mut() {
@@ -132,9 +135,7 @@ impl MapBatchTask {
                         .map(|(i, result)| {
                             let mut mapped_msg: Message =
                                 UserDefinedMessage(result, &parent_info, i as i32).into();
-                            if is_mono_vertex()
-                                && let Some(ref mut metadata) = mapped_msg.metadata
-                            {
+                            if tracing_enabled && let Some(ref mut metadata) = mapped_msg.metadata {
                                 Arc::make_mut(metadata)
                                     .sys_metadata
                                     .remove(otel::TRACING_UDF_METADATA_KEY);

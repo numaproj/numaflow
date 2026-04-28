@@ -64,7 +64,7 @@ impl MapStreamTask {
     /// With distributed tracing, wraps the receive loop with a topology-specific
     /// map span so its duration covers the full stream UDF interaction.
     async fn execute(self) {
-        if is_mono_vertex() {
+        if is_mono_vertex() && otel::tracing_enabled() {
             let parent_cx =
                 otel::parent_context_from_metadata(self.msg_handle.message().metadata.as_deref());
             let msg_id = self.msg_handle.message().offset.to_string();
@@ -93,6 +93,7 @@ impl MapStreamTask {
         // sys_metadata["tracing_udf"] so the UDF creates its processing span as a child.
         // sys_metadata["tracing"] remains unchanged (holds vertex.process).
         if is_mono_vertex()
+            && otel::tracing_enabled()
             && let Some(ref mut metadata) = self.msg_handle.message_mut().metadata
         {
             let map_cx = tracing::Span::current().context();
@@ -137,6 +138,7 @@ impl MapStreamTask {
                                 .into();
                         parent_info.current_index += 1;
                         if is_mono_vertex()
+                            && otel::tracing_enabled()
                             && let Some(ref mut metadata) = mapped_message.metadata
                         {
                             Arc::make_mut(metadata)

@@ -68,7 +68,7 @@ impl MapUnaryTask {
     /// the map stage.
     async fn execute(self) {
         // Pipeline wiring can reuse this pattern when map spans are enabled there.
-        if is_mono_vertex() {
+        if is_mono_vertex() && otel::tracing_enabled() {
             let parent_cx =
                 otel::parent_context_from_metadata(self.msg_handle.message().metadata.as_deref());
 
@@ -105,6 +105,7 @@ impl MapUnaryTask {
         // result message below. On UDF error, we return early without producing result messages,
         // and the input message is dropped — so tracing_udf never propagates downstream.
         if is_mono_vertex()
+            && otel::tracing_enabled()
             && let Some(ref mut metadata) = self.msg_handle.message_mut().metadata
         {
             let map_cx = tracing::Span::current().context();
@@ -146,6 +147,7 @@ impl MapUnaryTask {
         for (i, result) in results.into_iter().enumerate() {
             let mut mapped_msg: Message = UserDefinedMessage(result, &parent_info, i as i32).into();
             if is_mono_vertex()
+                && otel::tracing_enabled()
                 && let Some(ref mut metadata) = mapped_msg.metadata
             {
                 Arc::make_mut(metadata)

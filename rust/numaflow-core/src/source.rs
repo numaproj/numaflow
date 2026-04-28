@@ -587,10 +587,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 // Any messages whose dispatch spans are still in the map at end-of-iteration
                 // (e.g., transformer error that breaks the outer loop) have their spans
                 // closed by the RAII guard when the map is dropped.
+                // Note: remove is_mono_vertex check once we implement pipeline tracing.
+                let tracing_enabled = is_mono_vertex() && otel::tracing_enabled();
                 let mut dispatch_spans = SourceDispatchSpans::new();
                 // Read-only parent contexts for `source.transform`; `dispatch_spans` remains the
                 // sole owner responsible for ending `source.dispatch`.
-                let mut dispatch_parent_contexts = if is_mono_vertex() && self.transformer.is_some()
+                let mut dispatch_parent_contexts = if tracing_enabled && self.transformer.is_some()
                 {
                     Some(HashMap::with_capacity(msgs_len))
                 } else {
@@ -617,7 +619,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     //   source read latency.
                     // - Inject `vertex.process` context into sys_metadata["tracing"] so that map
                     //   and sink become siblings of `source.dispatch` under `vertex.process`.
-                    let platform_span = if is_mono_vertex() {
+                    let platform_span = if tracing_enabled {
                         let upstream_cx =
                             otel::extract_trace_context_from_headers(&message.headers);
                         let msg_id = message.offset.to_string();
