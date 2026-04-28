@@ -225,7 +225,7 @@ flowchart TB
 
     style LOG1 fill:#ffe6cc,stroke:#d79b00
     style LOG2 fill:#ffe6cc,stroke:#d79b00
-    style LOG3 fill:#dae8fc,stroke:#6c8ebf
+    style LOG3 fill:#ffe6cc,stroke:#d79b00
 ```
 
 The two new orange logs (LOG 1 and LOG 2) form the cause-side and reader-side observations of the bug; the blue LOG 3 is the existing reducer-side effect.
@@ -385,14 +385,10 @@ flowchart TB
     D -->|LOG 1 fires| E[ISB-OT WMB stamped<br/>with overshooting watermark]
     E --> F[Reducer-side reader fetches that WMB]
     F -->|LOG 2 fires| G[message.watermark = poisoned value]
-    G --> H[Reducer.current_watermark advances<br/>via current_watermark.max(msg.watermark)]
+    G --> H[Reducer.current_watermark advances<br/>via maximum of (current_watermark, msg.watermark)]
     H --> I[Other in-flight messages: event_time &lt; current_watermark]
     I -->|LOG 3 fires| J["Old message popped up<br/>DROP"]
     J --> K[Validation framework: corrupted++]
-
-    style E fill:#ffcccc
-    style J fill:#ffcccc
-    style K fill:#ffcccc
 ```
 
 The data-driven version, applied to the verification run:
@@ -453,8 +449,6 @@ flowchart LR
     B["msg.event_time"] --> M
     M --> C["watermark stamped<br/>on ISB-OT WMB"]
     C --> D["Always ≤ msg.event_time<br/>⇒ never poisons downstream"]
-
-    style D fill:#d5e8d4
 ```
 
 ### Fix 2 — snapshot at PUB-submit time
