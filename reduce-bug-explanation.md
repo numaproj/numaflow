@@ -385,7 +385,7 @@ flowchart TB
     D -->|LOG 1 fires| E[ISB-OT WMB stamped<br/>with overshooting watermark]
     E --> F[Reducer-side reader fetches that WMB]
     F -->|LOG 2 fires| G[message.watermark = poisoned value]
-    G --> H[Reducer.current_watermark advances<br/>via maximum of (current_watermark, msg.watermark)]
+    G --> H[Reducer.current_watermark advances<br/>via maximum of \(current_watermark, msg.watermark\)]
     H --> I[Other in-flight messages: event_time &lt; current_watermark]
     I -->|LOG 3 fires| J["Old message popped up<br/>DROP"]
     J --> K[Validation framework: corrupted++]
