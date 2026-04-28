@@ -76,11 +76,8 @@ fn build_sampler_from_env(
 ) -> opentelemetry_sdk::trace::Sampler {
     let using_default_sampler = sampler_name.is_none();
     let sampler_name = sampler_name.unwrap_or(DEFAULT_TRACES_SAMPLER);
-    let sampler_arg_raw = sampler_arg_raw.or_else(|| {
-        using_default_sampler
-            .then_some(DEFAULT_TRACES_SAMPLER_ARG)
-            .filter(|_| sampler_name == DEFAULT_TRACES_SAMPLER)
-    });
+    let sampler_arg_raw =
+        sampler_arg_raw.or_else(|| using_default_sampler.then_some(DEFAULT_TRACES_SAMPLER_ARG));
     build_sampler_from_inner(sampler_name, sampler_arg_raw, using_default_sampler)
 }
 
@@ -492,6 +489,16 @@ mod tests {
                 trace_id_at_probability_boundary(0.25, false)
             ),
             SamplingDecision::Drop
+        );
+    }
+
+    #[test]
+    fn sampler_env_explicit_parentbased_traceidratio_without_arg_defaults_to_one() {
+        let sampler = build_sampler_from_env(Some("parentbased_traceidratio"), None);
+        assert!(matches!(&sampler, Sampler::ParentBased(_)));
+        assert_eq!(
+            sampling_decision(&sampler, None, TraceId::from(u128::MAX)),
+            SamplingDecision::RecordAndSample
         );
     }
 
