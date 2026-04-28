@@ -590,7 +590,12 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
                         Offset::String(offset) => offset.partition_idx,
                     };
                     handle
-                        .publish_source_isb_watermark(stream, offset, input_partition)
+                        .publish_source_isb_watermark(
+                            stream,
+                            offset,
+                            input_partition,
+                            message.clone(),
+                        )
                         .await;
                 }
             }

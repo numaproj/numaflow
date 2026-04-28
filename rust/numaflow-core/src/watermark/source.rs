@@ -28,7 +28,7 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Result;
-use crate::message::{IntOffset, MessageHandle, Offset};
+use crate::message::{IntOffset, Message, MessageHandle, Offset};
 use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::idle::source::SourceIdleDetector;
 use crate::watermark::processor::manager::ProcessorManager;
@@ -135,9 +135,30 @@ impl SourceWatermarkState {
         stream: Stream,
         offset: IntOffset,
         input_partition: u16,
+        message: Message,
     ) -> Result<()> {
         // Fetch the source watermark
         let watermark = self.fetcher.fetch_source_watermark(Some(offset.offset));
+
+        // Detect when the source is about to stamp an ISB-OT WMB with a watermark
+        // greater than the message's own event_time. This indicates that the
+        // source-OT head advanced between the time this message was PUB'd to ISB
+        // and the time its PAF resolved (the moment we got here). The resulting
+        // WMB will poison downstream readers' watermark fetches and cause the
+        // reducer to drop messages with the "Old message popped up" error.
+        // The `!message.is_late` filter excludes messages already known to be
+        // late at read time (a separate code path).
+        if message.event_time.timestamp_millis() < watermark.timestamp_millis() && !message.is_late
+        {
+            warn!(
+                offset = offset.offset,
+                input_partition,
+                msg_event_time = message.event_time.timestamp_millis(),
+                src_watermark = watermark.timestamp_millis(),
+                delta_ms = watermark.timestamp_millis() - message.event_time.timestamp_millis(),
+                "Source stamping ISB-OT WMB with watermark ahead of message event_time"
+            );
+        }
 
         // Publish the watermark
         self.publisher
@@ -349,6 +370,7 @@ impl SourceWatermarkHandle {
         stream: Stream,
         offset: Offset,
         input_partition: u16,
+        message: Message,
     ) {
         let Offset::Int(offset) = offset else {
             warn!(?offset, "Invalid offset type, cannot publish watermark");
@@ -359,7 +381,7 @@ impl SourceWatermarkHandle {
         let result = {
             let mut state = self.state.lock().await;
             state
-                .publish_source_isb_watermark(stream, offset, input_partition)
+                .publish_source_isb_watermark(stream, offset, input_partition, message)
                 .await
         };
 
@@ -648,7 +670,7 @@ mod tests {
                 partition_idx: 0,
             });
             handle
-                .publish_source_isb_watermark(stream.clone(), offset, 0)
+                .publish_source_isb_watermark(stream.clone(), offset, 0, Message::default())
                 .await;
         }
 

@@ -504,6 +504,26 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             if let Some(wm) = self.watermark.as_mut() {
                 let watermark = wm.fetch_watermark(message.offset.clone()).await;
                 message.watermark = Some(watermark);
+
+                // Detect when the watermark fetched from ISB-OT for this message's offset
+                // is greater than the message's own event_time. The reducer treats msg.watermark
+                // as authoritative ("no more messages with event_time below this will arrive on
+                // this stream"), so a watermark stamped above the message's own event_time
+                // poisons downstream processing — current_watermark.max(msg.watermark) pulls the
+                // reducer's watermark up past valid messages, which then drop with the
+                // "Old message popped up" error.
+                if matches!(message.typ, MessageType::Data)
+                    && watermark.timestamp_millis() > message.event_time.timestamp_millis()
+                {
+                    warn!(
+                        offset = ?message.offset,
+                        event_time = message.event_time.timestamp_millis(),
+                        fetched_watermark = watermark.timestamp_millis(),
+                        delta_ms = watermark.timestamp_millis()
+                            - message.event_time.timestamp_millis(),
+                        "WATERMARK_DIVERGENCE: fetch_watermark > event_time for data message"
+                    );
+                }
             }
 
             // Publish read metrics
