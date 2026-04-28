@@ -161,7 +161,12 @@ impl SourceIdleDetector {
     /// Computes and returns the watermark value to publish for a partition.
     /// If partition is idle, increments the watermark. Otherwise returns the current value.
     /// Also updates the last published time.
-    pub(crate) fn compute_watermark(&mut self, partition: u16, computed_wm: i64) -> i64 {
+    pub(crate) fn compute_watermark(
+        &mut self,
+        partition: u16,
+        computed_wm: i64,
+        min_inflight_event_time: i64,
+    ) -> i64 {
         self.ensure_partition(partition);
 
         // If partition is not idle, just return the current watermark and update publish time
@@ -197,7 +202,7 @@ impl SourceIdleDetector {
         if let Some(state) = self.partition_states.get_mut(&partition) {
             state.last_wm_published_time = Utc::now();
         }
-        idle_wm
+        idle_wm.min(min_inflight_event_time)
     }
 }
 
@@ -269,11 +274,11 @@ mod tests {
         }
 
         // When idle with computed_wm = -1, should return -1 (no init_source_delay)
-        let wm = manager.compute_watermark(TEST_PARTITION, -1);
+        let wm = manager.compute_watermark(TEST_PARTITION, -1, -1);
         assert_eq!(wm, -1);
 
         // When idle with a valid computed_wm, should increment
-        let wm = manager.compute_watermark(TEST_PARTITION, 1000);
+        let wm = manager.compute_watermark(TEST_PARTITION, 1000, 1000);
         assert_eq!(wm, 1010);
     }
 
@@ -289,7 +294,7 @@ mod tests {
         manager.initialize_partitions(&[TEST_PARTITION]);
 
         // Partition is not idle, should return current watermark without increment
-        let wm = manager.compute_watermark(TEST_PARTITION, 1000);
+        let wm = manager.compute_watermark(TEST_PARTITION, 1000, 1000);
         assert_eq!(wm, 1000);
     }
 
@@ -312,7 +317,7 @@ mod tests {
 
         // Partition is idle, computed_wm = -1, but init_source_delay (200ms) hasn't passed
         // since updated_ts was only 100ms ago. Should return -1.
-        let wm = manager.compute_watermark(TEST_PARTITION, -1);
+        let wm = manager.compute_watermark(TEST_PARTITION, -1, -1);
         assert_eq!(wm, -1);
 
         // Now set updated_ts to 300ms ago so init_source_delay (200ms) has passed
@@ -321,7 +326,7 @@ mod tests {
         }
 
         // Since init_source_delay has passed, should return current time
-        let wm = manager.compute_watermark(TEST_PARTITION, -1);
+        let wm = manager.compute_watermark(TEST_PARTITION, -1, -1);
         let expected_wm = manager
             .partition_states
             .get(&TEST_PARTITION)
@@ -331,7 +336,7 @@ mod tests {
         assert_eq!(wm, expected_wm);
 
         // With a valid computed_wm, should increment
-        let wm = manager.compute_watermark(TEST_PARTITION, 1000);
+        let wm = manager.compute_watermark(TEST_PARTITION, 1000, 1000);
         assert_eq!(wm, 1010);
     }
 
@@ -354,7 +359,7 @@ mod tests {
         );
 
         // After computing watermark (which updates last published time), should be empty
-        manager.compute_watermark(TEST_PARTITION, 1000);
+        manager.compute_watermark(TEST_PARTITION, 1000, 1000);
         assert!(manager.partitions_needing_publish().is_empty());
 
         // After step interval passes, should include the partition again

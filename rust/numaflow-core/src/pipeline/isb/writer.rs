@@ -3,9 +3,9 @@ use std::sync::Arc;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
-use tokio::time::{sleep, Duration, Instant};
-use tokio_stream::wrappers::ReceiverStream;
+use tokio::time::{Duration, Instant, sleep};
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
@@ -15,15 +15,15 @@ use crate::error::Error;
 use crate::mark_success;
 use crate::message::{Message, MessageHandle, Offset};
 use crate::metrics::{
-    pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
-    PIPELINE_PARTITION_NAME_LABEL,
+    PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_metric_labels,
+    pipeline_metrics,
 };
 use crate::pipeline::isb::error::ISBError;
 use crate::pipeline::isb::{ISBWriter, PendingWrite, WriteError, WriteResult};
 use crate::shared::forward;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::WatermarkHandle;
-use crate::{mark_failed, Result};
+use crate::{Result, mark_failed};
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 
@@ -583,7 +583,13 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
         for (stream, offset) in offsets {
             match watermark_handle {
                 WatermarkHandle::ISB(handle) => {
-                    handle.publish_watermark(stream, offset, publisher_code_path.clone() + "publish_watermarks_for_offsets->").await;
+                    handle
+                        .publish_watermark(
+                            stream,
+                            offset,
+                            publisher_code_path.clone() + "publish_watermarks_for_offsets->",
+                        )
+                        .await;
                 }
                 WatermarkHandle::Source(handle) => {
                     let input_partition = match &message.offset {

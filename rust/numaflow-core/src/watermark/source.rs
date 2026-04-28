@@ -29,6 +29,7 @@ use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Result;
 use crate::message::{IntOffset, Message, MessageHandle, Offset};
+use crate::tracker::Tracker;
 use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::idle::source::SourceIdleDetector;
 use crate::watermark::processor::manager::ProcessorManager;
@@ -74,6 +75,7 @@ struct SourceWatermarkState {
     /// Cache of partitions that have been active during the current interval.
     /// Used for ISB idle watermark publishing.
     active_input_partitions: HashMap<u16, bool>,
+    tracker: Tracker,
 }
 
 impl SourceWatermarkState {
@@ -83,6 +85,7 @@ impl SourceWatermarkState {
         fetcher: SourceWatermarkFetcher,
         isb_idle_manager: ISBIdleDetector,
         source_idle_manager: SourceIdleDetector,
+        tracker: Tracker,
     ) -> Self {
         Self {
             publisher,
@@ -90,6 +93,7 @@ impl SourceWatermarkState {
             isb_idle_manager,
             source_idle_manager,
             active_input_partitions: HashMap::new(),
+            tracker,
         }
     }
 
@@ -116,7 +120,12 @@ impl SourceWatermarkState {
         // Publish the watermark for each partition
         for (partition, event_time) in partition_to_lowest_event_time {
             self.publisher
-                .publish_source_watermark(partition, event_time, false, "generate_and_publish_source_watermark->".into())
+                .publish_source_watermark(
+                    partition,
+                    event_time,
+                    false,
+                    "generate_and_publish_source_watermark->".into(),
+                )
                 .await;
 
             // cache the active input partitions, we need it for publishing isb idle watermark
@@ -169,7 +178,7 @@ impl SourceWatermarkState {
                 offset.offset,
                 watermark.timestamp_millis(),
                 false,
-                publisher_code_path + "publish_source_isb_watermark->".into()
+                publisher_code_path + "publish_source_isb_watermark->",
             )
             .await;
 
@@ -195,19 +204,37 @@ impl SourceWatermarkState {
         // publish to update KV entry timestamp which signals liveness to downstream vertices)
         let compute_wm = self.fetcher.fetch_source_watermark(None);
 
+        // Fetch min event_time from inflight messages. 
+        let min_inflight_event_time = match self
+            .tracker
+            .lowest_event_time()
+            .await
+            .map(|v| v.timestamp_millis())
+        {
+            Ok(-1) | Err(_) => i64::MAX,
+            Ok(ts) => ts,
+        };
+
         // Process each partition that needs publishing
         for partition in partitions_needing_publish {
             // Check if this partition is truly idle (threshold passed)
             let is_idle = self.source_idle_manager.is_partition_idle(partition);
 
             // Compute the watermark value for this partition
-            let wm_value = self
-                .source_idle_manager
-                .compute_watermark(partition, compute_wm.timestamp_millis());
+            let wm_value = self.source_idle_manager.compute_watermark(
+                partition,
+                compute_wm.timestamp_millis(),
+                min_inflight_event_time,
+            );
 
             // Publish source watermark for this partition
             self.publisher
-                .publish_source_watermark(partition, wm_value, is_idle, "tick->publish_source_idle_watermark->".into())
+                .publish_source_watermark(
+                    partition,
+                    wm_value,
+                    is_idle,
+                    "tick->publish_source_idle_watermark->".into(),
+                )
                 .await;
         }
 
@@ -284,6 +311,7 @@ impl SourceWatermarkHandle {
         to_vertex_configs: &[ToVertexConfig],
         config: &SourceWatermarkConfig,
         cln_token: CancellationToken,
+        tracker: Tracker,
     ) -> Result<Self> {
         // Use step_interval from idle_config as the unified WMB delay
         let wmb_delay = config.idle_config.step_interval;
@@ -322,8 +350,13 @@ impl SourceWatermarkHandle {
         let isb_idle_manager =
             ISBIdleDetector::new(wmb_delay, to_vertex_configs, js_context.clone()).await;
 
-        let state =
-            SourceWatermarkState::new(publisher, fetcher, isb_idle_manager, source_idle_manager);
+        let state = SourceWatermarkState::new(
+            publisher,
+            fetcher,
+            isb_idle_manager,
+            source_idle_manager,
+            tracker,
+        );
 
         let source_watermark_handle = Self {
             state: Arc::new(Mutex::new(state)),
@@ -385,7 +418,13 @@ impl SourceWatermarkHandle {
         let result = {
             let mut state = self.state.lock().await;
             state
-                .publish_source_isb_watermark(stream, offset, input_partition, message, publisher_code_path + "publish_source_isb_watermark->")
+                .publish_source_isb_watermark(
+                    stream,
+                    offset,
+                    input_partition,
+                    message,
+                    publisher_code_path + "publish_source_isb_watermark->",
+                )
                 .await
         };
 
@@ -462,20 +501,18 @@ impl SourceWatermarkHandle {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
-    use async_nats::jetstream;
-    use async_nats::jetstream::kv::Config;
-    use async_nats::jetstream::stream;
-    use bytes::BytesMut;
-    use tokio::time::sleep;
-
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
     use crate::config::pipeline::watermark::{BucketConfig, IdleConfig};
     use crate::config::pipeline::VertexType;
     use crate::message::IntOffset;
     use crate::watermark::wmb::WMB;
+    use async_nats::jetstream;
+    use async_nats::jetstream::kv::Config;
+    use async_nats::jetstream::stream;
+    use bytes::BytesMut;
+    use std::time::Duration;
+    use tokio::time::sleep;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -507,11 +544,14 @@ mod tests {
             .await
             .unwrap();
 
+        let cln_token = CancellationToken::new();
+
         let handle = SourceWatermarkHandle::new(
             js_context.clone(),
             Default::default(),
             &source_config,
-            CancellationToken::new(),
+            cln_token.clone(),
+            Tracker::new(None, cln_token),
         )
         .await
         .expect("Failed to create source watermark handle");
@@ -620,6 +660,8 @@ mod tests {
             .await
             .unwrap();
 
+        let cln_token = CancellationToken::new();
+
         let handle = SourceWatermarkHandle::new(
             js_context.clone(),
             &[ToVertexConfig {
@@ -638,7 +680,8 @@ mod tests {
                 ordered_processing_enabled: false,
             }],
             &source_config,
-            CancellationToken::new(),
+            cln_token.clone(),
+            Tracker::new(None, cln_token),
         )
         .await
         .expect("Failed to create source watermark handle");
@@ -674,7 +717,13 @@ mod tests {
                 partition_idx: 0,
             });
             handle
-                .publish_source_isb_watermark(stream.clone(), offset, 0, Message::default(), "".into())
+                .publish_source_isb_watermark(
+                    stream.clone(),
+                    offset,
+                    0,
+                    Message::default(),
+                    "".into(),
+                )
                 .await;
         }
 
@@ -785,6 +834,8 @@ mod tests {
             init_source_delay: None,
         };
 
+        let cln_token = CancellationToken::new();
+
         let handle = SourceWatermarkHandle::new(
             js_context.clone(),
             &to_vertex_configs,
@@ -794,7 +845,8 @@ mod tests {
                 to_vertex_bucket_config: vec![to_vertex_bucket_config],
                 idle_config: source_idle_config,
             },
-            CancellationToken::new(),
+            cln_token.clone(),
+            Tracker::new(None, cln_token.clone()),
         )
         .await
         .expect("Failed to create SourceWatermarkHandle");
@@ -938,6 +990,8 @@ mod tests {
             init_source_delay: None,
         };
 
+        let cln_token = CancellationToken::new();
+
         let handle = SourceWatermarkHandle::new(
             js_context.clone(),
             &to_vertex_configs,
@@ -947,7 +1001,8 @@ mod tests {
                 to_vertex_bucket_config: vec![to_vertex_bucket_config],
                 idle_config: source_idle_config,
             },
-            CancellationToken::new(),
+            cln_token.clone(),
+            Tracker::new(None, cln_token.clone()),
         )
         .await
         .expect("Failed to create SourceWatermarkHandle");
@@ -1075,11 +1130,14 @@ mod tests {
             .await
             .unwrap();
 
+        let cln_token = CancellationToken::new();
+
         let handle = SourceWatermarkHandle::new(
             js_context.clone(),
             Default::default(),
             &source_config,
-            CancellationToken::new(),
+            cln_token.clone(),
+            Tracker::new(None, cln_token.clone()),
         )
         .await
         .expect("Failed to create source watermark handle");

@@ -138,7 +138,15 @@ impl ISBWatermarkPublisher {
         idle: bool,
         publisher_code_path: String,
     ) {
-        self.publish_watermark_with_processor_count(stream, offset, watermark, idle, None, publisher_code_path + "publish_watermark->").await;
+        self.publish_watermark_with_processor_count(
+            stream,
+            offset,
+            watermark,
+            idle,
+            None,
+            publisher_code_path + "publish_watermark->",
+        )
+        .await;
     }
 
     /// publish_watermark_with_processor_count publishes the watermark with an optional processor count.
@@ -231,8 +239,8 @@ mod tests {
     use crate::config::pipeline::watermark::BucketConfig;
     use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
     use crate::watermark::wmb::WMB;
-    use numaflow_shared::kv::jetstream::JetstreamKVStore;
     use numaflow_shared::kv::KVStore;
+    use numaflow_shared::kv::jetstream::JetstreamKVStore;
 
     /// Helper to create OT KV stores from bucket configs for testing
     #[cfg(feature = "nats-tests")]
@@ -416,9 +424,13 @@ mod tests {
             partition: 0,
         };
 
-        publisher.publish_watermark(&stream1, 1, 100, false, "".into()).await;
+        publisher
+            .publish_watermark(&stream1, 1, 100, false, "".into())
+            .await;
 
-        publisher.publish_watermark(&stream2, 1, 200, false, "".into()).await;
+        publisher
+            .publish_watermark(&stream2, 1, 200, false, "".into())
+            .await;
 
         let ot_bucket_v1 = js_context
             .get_key_value(ot_bucket_name_v1)
@@ -498,7 +510,9 @@ mod tests {
         };
 
         // Publish watermark with idle flag set to true
-        publisher.publish_watermark(&stream, 1, 100, true, "".into()).await;
+        publisher
+            .publish_watermark(&stream, 1, 100, true, "".into())
+            .await;
 
         let ot_bucket = js_context
             .get_key_value(ot_bucket_name)
@@ -1459,7 +1473,9 @@ mod simple_kv_tests {
         };
 
         // First publish fails silently.
-        publisher.publish_watermark(&stream, 1, 100, false, "".into()).await;
+        publisher
+            .publish_watermark(&stream, 1, 100, false, "".into())
+            .await;
         let wmb = store.get("processor1").await.unwrap();
         assert!(
             wmb.is_none(),
@@ -1467,7 +1483,9 @@ mod simple_kv_tests {
         );
 
         // Second publish succeeds (error injector decremented to 0).
-        publisher.publish_watermark(&stream, 2, 200, false, "".into()).await;
+        publisher
+            .publish_watermark(&stream, 2, 200, false, "".into())
+            .await;
         let wmb: WMB = store
             .get("processor1")
             .await
@@ -1508,7 +1526,9 @@ mod simple_kv_tests {
 
         // Default last_published_time = Instant::now(), so elapsed ≈ 0 < 60s.
         // Publish is suppressed.
-        publisher.publish_watermark(&stream, 1, 100, false, "".into()).await;
+        publisher
+            .publish_watermark(&stream, 1, 100, false, "".into())
+            .await;
 
         let wmb = store.get("processor1").await.unwrap();
         assert!(
@@ -1543,7 +1563,9 @@ mod simple_kv_tests {
         // Wait for delay to elapse, then publish.
         tokio::time::sleep(Duration::from_millis(20)).await;
 
-        publisher.publish_watermark(&stream, 1, 100, false, "".into()).await;
+        publisher
+            .publish_watermark(&stream, 1, 100, false, "".into())
+            .await;
 
         let wmb: WMB = store
             .get("processor1")
@@ -1579,7 +1601,9 @@ mod simple_kv_tests {
             partition: 0,
         };
 
-        publisher.publish_watermark(&stream, 1, 100, false, "".into()).await;
+        publisher
+            .publish_watermark(&stream, 1, 100, false, "".into())
+            .await;
         let wmb: WMB = store
             .get("processor1")
             .await
@@ -1589,7 +1613,9 @@ mod simple_kv_tests {
             .unwrap();
         assert_eq!(wmb.watermark, 100);
 
-        publisher.publish_watermark(&stream, 2, 200, false, "".into()).await;
+        publisher
+            .publish_watermark(&stream, 2, 200, false, "".into())
+            .await;
         let wmb: WMB = store
             .get("processor1")
             .await
@@ -1599,7 +1625,9 @@ mod simple_kv_tests {
             .unwrap();
         assert_eq!(wmb.watermark, 200);
 
-        publisher.publish_watermark(&stream, 3, 300, false, "".into()).await;
+        publisher
+            .publish_watermark(&stream, 3, 300, false, "".into())
+            .await;
         let wmb: WMB = store
             .get("processor1")
             .await
@@ -1638,7 +1666,9 @@ mod simple_kv_tests {
         tokio::time::sleep(Duration::from_millis(60)).await;
 
         // First publish goes through.
-        publisher.publish_watermark(&stream, 1, 100, false, "".into()).await;
+        publisher
+            .publish_watermark(&stream, 1, 100, false, "".into())
+            .await;
         let wmb: WMB = store
             .get("processor1")
             .await
@@ -1650,8 +1680,12 @@ mod simple_kv_tests {
         assert_eq!(wmb.watermark, 100);
 
         // These are within the delay window — suppressed, but state accumulates.
-        publisher.publish_watermark(&stream, 5, 300, false, "".into()).await;
-        publisher.publish_watermark(&stream, 10, 500, false, "".into()).await;
+        publisher
+            .publish_watermark(&stream, 5, 300, false, "".into())
+            .await;
+        publisher
+            .publish_watermark(&stream, 10, 500, false, "".into())
+            .await;
 
         // Store should still have the first publish.
         let wmb: WMB = store
@@ -1668,7 +1702,9 @@ mod simple_kv_tests {
         tokio::time::sleep(Duration::from_millis(200)).await;
         // publish again with lower offset and watermark to trigger accumulated state to be reflected
         // in the store
-        publisher.publish_watermark(&stream, 1, 100, false, "".into()).await;
+        publisher
+            .publish_watermark(&stream, 1, 100, false, "".into())
+            .await;
 
         let wmb: WMB = store
             .get("processor1")

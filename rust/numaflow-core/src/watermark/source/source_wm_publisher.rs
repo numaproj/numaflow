@@ -16,8 +16,8 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
-use numaflow_shared::kv::jetstream::JetstreamKVStore;
 use numaflow_shared::kv::KVStore;
+use numaflow_shared::kv::jetstream::JetstreamKVStore;
 
 /// SourcePublisher is the watermark publisher for the source vertex.
 pub(crate) struct SourceWatermarkPublisher {
@@ -175,7 +175,13 @@ impl SourceWatermarkPublisher {
         self.publishers
             .get_mut(&processor_name)
             .expect("Publisher not found")
-            .publish_watermark(stream, offset, watermark, idle, publisher_code_path + "publish_isb_watermark->")
+            .publish_watermark(
+                stream,
+                offset,
+                watermark,
+                idle,
+                publisher_code_path + "publish_isb_watermark->",
+            )
             .await;
     }
 
