@@ -343,15 +343,12 @@ impl Tracker {
     /// Returns the lowest event_time among all the tracked offsets.
     pub(crate) async fn lowest_event_time(&self) -> Result<DateTime<Utc>> {
         let state = self.state.read().await;
-        // Get the lowest watermark across all partitions
+        // Get the lowest event_time across all partitions
         let event_time = state
             .entries
             .values()
-            .filter_map(|partition_entries| {
-                partition_entries
-                    .first_key_value()
-                    .map(|(_, entry)| entry.event_time)
-            })
+            .flat_map(|partition_entries| partition_entries.values())
+            .map(|entry| entry.event_time)
             .min();
         Ok(event_time.unwrap_or(DateTime::from_timestamp_millis(-1).unwrap()))
     }

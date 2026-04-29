@@ -21,8 +21,8 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-use numaflow_shared::kv::jetstream::JetstreamKVStore;
 use numaflow_shared::kv::KVStore;
+use numaflow_shared::kv::jetstream::JetstreamKVStore;
 
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
@@ -204,7 +204,7 @@ impl SourceWatermarkState {
         // publish to update KV entry timestamp which signals liveness to downstream vertices)
         let compute_wm = self.fetcher.fetch_source_watermark(None);
 
-        // Fetch min event_time from inflight messages. 
+        // Fetch min event_time from inflight messages.
         let min_inflight_event_time = match self
             .tracker
             .lowest_event_time()
@@ -502,9 +502,9 @@ impl SourceWatermarkHandle {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::pipeline::VertexType;
     use crate::config::pipeline::isb::BufferWriterConfig;
     use crate::config::pipeline::watermark::{BucketConfig, IdleConfig};
-    use crate::config::pipeline::VertexType;
     use crate::message::IntOffset;
     use crate::watermark::wmb::WMB;
     use async_nats::jetstream;
