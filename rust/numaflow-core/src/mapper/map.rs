@@ -455,7 +455,7 @@ impl From<&Message> for ParentMessageInfo {
             headers: Arc::clone(&message.headers),
             is_late: message.is_late,
             start_time: Instant::now(),
-            current_index: 0,
+            current_index: message.id.index,
             metadata: message.metadata.clone(),
         }
     }
