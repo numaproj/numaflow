@@ -274,11 +274,11 @@ mod tests {
         }
 
         // When idle with computed_wm = -1, should return -1 (no init_source_delay)
-        let wm = manager.compute_watermark(TEST_PARTITION, -1, -1);
+        let wm = manager.compute_watermark(TEST_PARTITION, -1, i64::MAX);
         assert_eq!(wm, -1);
 
         // When idle with a valid computed_wm, should increment
-        let wm = manager.compute_watermark(TEST_PARTITION, 1000, 1000);
+        let wm = manager.compute_watermark(TEST_PARTITION, 1000, i64::MAX);
         assert_eq!(wm, 1010);
     }
 
@@ -294,7 +294,7 @@ mod tests {
         manager.initialize_partitions(&[TEST_PARTITION]);
 
         // Partition is not idle, should return current watermark without increment
-        let wm = manager.compute_watermark(TEST_PARTITION, 1000, 1000);
+        let wm = manager.compute_watermark(TEST_PARTITION, 1000, i64::MAX);
         assert_eq!(wm, 1000);
     }
 
@@ -317,7 +317,7 @@ mod tests {
 
         // Partition is idle, computed_wm = -1, but init_source_delay (200ms) hasn't passed
         // since updated_ts was only 100ms ago. Should return -1.
-        let wm = manager.compute_watermark(TEST_PARTITION, -1, -1);
+        let wm = manager.compute_watermark(TEST_PARTITION, -1, i64::MAX);
         assert_eq!(wm, -1);
 
         // Now set updated_ts to 300ms ago so init_source_delay (200ms) has passed
@@ -326,7 +326,7 @@ mod tests {
         }
 
         // Since init_source_delay has passed, should return current time
-        let wm = manager.compute_watermark(TEST_PARTITION, -1, -1);
+        let wm = manager.compute_watermark(TEST_PARTITION, -1, i64::MAX);
         let expected_wm = manager
             .partition_states
             .get(&TEST_PARTITION)
@@ -336,7 +336,7 @@ mod tests {
         assert_eq!(wm, expected_wm);
 
         // With a valid computed_wm, should increment
-        let wm = manager.compute_watermark(TEST_PARTITION, 1000, 1000);
+        let wm = manager.compute_watermark(TEST_PARTITION, 1000, i64::MAX);
         assert_eq!(wm, 1010);
     }
 
@@ -359,7 +359,7 @@ mod tests {
         );
 
         // After computing watermark (which updates last published time), should be empty
-        manager.compute_watermark(TEST_PARTITION, 1000, 1000);
+        manager.compute_watermark(TEST_PARTITION, 1000, i64::MAX);
         assert!(manager.partitions_needing_publish().is_empty());
 
         // After step interval passes, should include the partition again
