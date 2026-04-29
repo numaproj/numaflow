@@ -3,11 +3,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
-use numaflow_pb::clients::map::{self, map_client::MapClient, MapRequest, MapResponse};
-use tokio::sync::{mpsc, Semaphore};
+use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
+use tokio::sync::{Semaphore, mpsc};
 use tokio::task::JoinHandle;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
@@ -563,9 +563,9 @@ mod tests {
     use crate::mapper::test_utils::MapperTestHandle;
     use crate::message::ReadAck;
     use crate::{
+        Result,
         message::{MessageHandle, MessageID, Offset, StringOffset},
         shared::grpc::create_rpc_channel,
-        Result,
     };
     use futures::StreamExt;
     use numaflow::shared::ServerExtras;
