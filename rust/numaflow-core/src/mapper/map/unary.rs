@@ -63,12 +63,12 @@ impl MapUnaryTask {
 
     /// Executes the unary map operation.
     ///
-    /// With distributed tracing, extracts the `vertex.process` context from
-    /// `sys_metadata["tracing"]`, creates a topology-specific map span as its child,
-    /// and instruments the actual UDF call with that span so the span duration covers
-    /// the map stage.
+    /// With tracing enabled, extracts the `vertex.process` context from
+    /// `sys_metadata["tracing"]`, creates a map span as its child,
+    /// and instruments the actual UDF call with that span,
+    /// so the span duration covers the map stage.
     async fn execute(self) {
-        // Pipeline wiring can reuse this pattern when map spans are enabled there.
+        // Note: remove is_mono_vertex check once we implement pipeline tracing.
         if is_mono_vertex() && otel::tracing_enabled() {
             let parent_cx =
                 otel::parent_context_from_metadata(self.msg_handle.message().metadata.as_deref());

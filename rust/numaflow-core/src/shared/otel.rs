@@ -29,12 +29,12 @@ pub(crate) fn tracing_enabled() -> bool {
 }
 
 /// Key under which W3C trace context is stored in `sys_metadata`.
-/// Always holds the propagated `vertex.process` context for downstream
-/// Numaflow-managed spans (for example source, map, and sink spans).
+/// Always holds the shared `vertex.process` parent context for downstream
+/// platform spans (for example source, map, and sink spans).
 pub const TRACING_METADATA_KEY: &str = "tracing";
 
 /// Key under which the current stage's span context is stored for UDF consumption.
-/// The UDF reads this key to see the current Numaflow stage as its parent.
+/// The UDF reads this key to see the current platform stage as its parent.
 /// Written before calling the UDF, removed after the UDF returns.
 pub const TRACING_UDF_METADATA_KEY: &str = "tracing_udf";
 

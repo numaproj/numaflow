@@ -69,7 +69,7 @@ impl MapBatchTask {
             .collect();
 
         let results = {
-            // Create per-message topology-specific map spans via the OTel SDK API.
+            // Create per-message map spans via the OTel SDK API.
             // Each span's parent is that message's `vertex.process` context (from
             // sys_metadata["tracing"]). We inject the map span context into
             // sys_metadata["tracing_udf"] so the UDF creates its processing span as a child.

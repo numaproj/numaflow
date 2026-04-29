@@ -60,10 +60,11 @@ impl MapStreamTask {
     }
 
     /// Executes the stream map operation.
-    ///
-    /// With distributed tracing, wraps the receive loop with a topology-specific
-    /// map span so its duration covers the full stream UDF interaction.
+    /// With tracing enabled, wraps the stream map receive loop in a map span.
+    /// The span covers the full UDF interaction, from sending the input request
+    /// until the UDF response stream closes.
     async fn execute(self) {
+        // Note: remove is_mono_vertex check once we implement pipeline tracing.
         if is_mono_vertex() && otel::tracing_enabled() {
             let parent_cx =
                 otel::parent_context_from_metadata(self.msg_handle.message().metadata.as_deref());
