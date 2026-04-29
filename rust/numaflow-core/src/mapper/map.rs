@@ -3,11 +3,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
-use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
-use tokio::sync::{Semaphore, mpsc};
+use numaflow_pb::clients::map::{self, map_client::MapClient, MapRequest, MapResponse};
+use tokio::sync::{mpsc, Semaphore};
 use tokio::task::JoinHandle;
-use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
@@ -441,14 +441,11 @@ pub(crate) struct ParentMessageInfo {
     pub(crate) is_late: bool,
     pub(crate) headers: Arc<HashMap<String, String>>,
     pub(crate) start_time: Instant,
-    /// this remains 0 for all except map-streaming because in map-streaming there could be more than
-    /// one response for a single request.
+    /// Used to disambiguate sibling messages that share the same offset.
+    /// Also used for propagating this index as part of offset to maintain
+    /// uniqueness across transformer-map combination (e.g. fan-out from a source transformer).
     pub(crate) current_index: i32,
     pub(crate) metadata: Option<Arc<Metadata>>,
-    /// The index from the parent message's MessageID. Used to disambiguate sibling messages that
-    /// share the same offset (e.g. fan-out from a source transformer). Encoded into the child's
-    /// offset so collisions are impossible across fanned-out siblings.
-    pub(crate) parent_index: i32,
 }
 
 impl From<&Message> for ParentMessageInfo {
@@ -459,9 +456,8 @@ impl From<&Message> for ParentMessageInfo {
             headers: Arc::clone(&message.headers),
             is_late: message.is_late,
             start_time: Instant::now(),
-            current_index: 0,
+            current_index: message.id.index,
             metadata: message.metadata.clone(),
-            parent_index: message.id.index,
         }
     }
 }
@@ -495,7 +491,7 @@ impl From<UserDefinedMessage<'_>> for Message {
             id: MessageID {
                 vertex_name: get_vertex_name().to_string().into(),
                 index: value.2,
-                offset: format!("{}-{}", value.1.offset, value.1.parent_index).into(),
+                offset: format!("{}-{}", value.1.offset, value.1.current_index).into(),
             },
             keys: Arc::from(value.0.keys),
             tags: Some(Arc::from(value.0.tags)),
@@ -567,9 +563,9 @@ mod tests {
     use crate::mapper::test_utils::MapperTestHandle;
     use crate::message::ReadAck;
     use crate::{
-        Result,
         message::{MessageHandle, MessageID, Offset, StringOffset},
         shared::grpc::create_rpc_channel,
+        Result,
     };
     use futures::StreamExt;
     use numaflow::shared::ServerExtras;
@@ -1614,7 +1610,6 @@ mod tests {
             start_time: std::time::Instant::now(),
             current_index: 0,
             metadata: None,
-            parent_index: 0,
         };
 
         update_udf_write_metric(true, &msg_info, 5);
@@ -1648,7 +1643,6 @@ mod tests {
             start_time: std::time::Instant::now(),
             current_index: 0,
             metadata: None,
-            parent_index: 0,
         };
 
         update_udf_write_metric(false, &msg_info, 5);
