@@ -1093,7 +1093,9 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
 #[cfg(test)]
 mod tests {
+    use super::SourceDispatchSpans;
     use crate::mark_success;
+    use crate::message::{IntOffset as CoreIntOffset, Offset as CoreOffset};
     use crate::shared::grpc::create_rpc_channel;
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
@@ -1103,6 +1105,7 @@ mod tests {
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;
+    use std::collections::HashMap;
     use std::collections::HashSet;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
@@ -1209,6 +1212,46 @@ mod tests {
         async fn partitions(&self) -> Option<Vec<i32>> {
             Some(vec![1, 2])
         }
+    }
+
+    fn core_offset(offset: i64) -> CoreOffset {
+        CoreOffset::Int(CoreIntOffset::new(offset, 0))
+    }
+
+    #[test]
+    fn source_dispatch_spans_end_without_outputs_removes_filtered_offsets() {
+        let kept = core_offset(1);
+        let filtered = core_offset(2);
+        let mut spans = SourceDispatchSpans::new();
+        spans.insert(kept.clone(), opentelemetry::Context::new());
+        spans.insert(filtered.clone(), opentelemetry::Context::new());
+
+        let output_counts = HashMap::from([(kept.clone(), 1)]);
+        spans.end_without_outputs(&output_counts);
+
+        assert!(spans.spans.contains_key(&kept));
+        assert!(!spans.spans.contains_key(&filtered));
+    }
+
+    #[test]
+    fn source_dispatch_spans_end_is_idempotent_for_unknown_offsets() {
+        let known = core_offset(1);
+        let unknown = core_offset(2);
+        let mut spans = SourceDispatchSpans::new();
+        spans.insert(known.clone(), opentelemetry::Context::new());
+
+        spans.end(&unknown);
+        assert!(spans.spans.contains_key(&known));
+
+        spans.end(&known);
+        spans.end(&known);
+        assert!(spans.spans.is_empty());
+    }
+
+    #[test]
+    fn source_dispatch_spans_drop_with_remaining_spans_is_safe() {
+        let mut spans = SourceDispatchSpans::new();
+        spans.insert(core_offset(1), opentelemetry::Context::new());
     }
 
     #[tokio::test]

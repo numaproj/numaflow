@@ -417,6 +417,22 @@ mod tests {
         }
     }
 
+    #[test]
+    fn source_transform_span_without_parent_is_inert() {
+        let span = SourceTransformSpan::new(None, "msg-1".to_string());
+        assert!(span.0.is_none());
+        span.record_output_count(1);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn source_transform_span_disabled_tracing_is_inert() {
+        otel::set_tracing_enabled(false);
+        let span = SourceTransformSpan::new(Some(opentelemetry::Context::new()), "msg-1".into());
+        assert!(span.0.is_none());
+        span.record_output_count(1);
+    }
+
     #[tokio::test]
     async fn transformer_operations() -> Result<()> {
         let (shutdown_tx, shutdown_rx) = oneshot::channel();

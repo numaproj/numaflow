@@ -863,6 +863,7 @@ mod tests {
     use numaflow_pb::clients::sink::{SinkRequest, SinkResponse};
     use std::collections::HashMap;
     use std::sync::Arc;
+    use std::sync::Once;
     use tokio::sync::mpsc::Receiver;
     use tokio::time::{Duration, sleep};
     use tokio_util::sync::CancellationToken;
@@ -895,6 +896,113 @@ mod tests {
             }
             responses
         }
+    }
+
+    fn init_test_propagator() {
+        static INIT: Once = Once::new();
+        INIT.call_once(|| {
+            opentelemetry::global::set_text_map_propagator(
+                opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+            );
+        });
+    }
+
+    fn test_message_with_metadata(offset: i64) -> Message {
+        Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key".to_string()]),
+            tags: None,
+            value: format!("message {offset}").as_bytes().to_vec().into(),
+            offset: Offset::Int(IntOffset::new(offset, 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: format!("offset_{offset}").into(),
+                index: offset as i32,
+            },
+            metadata: Some(Arc::new(Metadata::default())),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn sink_write_stage_names_and_operations_match_topology() {
+        assert_eq!(
+            SinkWriteStage::Primary.span_name(otel::TraceTopology::MonoVertex),
+            "numaflow.monovertex.sink.write"
+        );
+        assert_eq!(
+            SinkWriteStage::Fallback.span_name(otel::TraceTopology::MonoVertex),
+            "numaflow.monovertex.sink.fallback"
+        );
+        assert_eq!(
+            SinkWriteStage::OnSuccess.span_name(otel::TraceTopology::MonoVertex),
+            "numaflow.monovertex.sink.on_success"
+        );
+        assert_eq!(
+            SinkWriteStage::Primary.span_name(otel::TraceTopology::Pipeline),
+            "numaflow.pipeline.sink.write"
+        );
+        assert_eq!(SinkWriteStage::Primary.operation_name(), "sink.write");
+        assert_eq!(SinkWriteStage::Fallback.operation_name(), "sink.fallback");
+        assert_eq!(
+            SinkWriteStage::OnSuccess.operation_name(),
+            "sink.on_success"
+        );
+    }
+
+    #[test]
+    fn inject_sink_stage_spans_adds_tracing_udf_metadata() {
+        init_test_propagator();
+        let mut messages = vec![test_message_with_metadata(1), test_message_with_metadata(2)];
+
+        let _guard = inject_sink_stage_spans(
+            &mut messages,
+            otel::TraceTopology::MonoVertex,
+            SinkWriteStage::Primary,
+        );
+
+        for message in messages {
+            let metadata = message.metadata.expect("metadata should exist");
+            assert!(
+                metadata
+                    .sys_metadata
+                    .contains_key(otel::TRACING_UDF_METADATA_KEY)
+            );
+        }
+    }
+
+    #[test]
+    fn inject_sink_stage_spans_preserves_unrelated_metadata() {
+        init_test_propagator();
+        let mut message = test_message_with_metadata(1);
+        Arc::make_mut(message.metadata.as_mut().expect("metadata should exist"))
+            .sys_metadata
+            .insert(
+                "unrelated".to_string(),
+                KeyValueGroup {
+                    key_value: HashMap::from([("k".to_string(), "v".into())]),
+                },
+            );
+        let mut messages = vec![message];
+
+        let _guard = inject_sink_stage_spans(
+            &mut messages,
+            otel::TraceTopology::MonoVertex,
+            SinkWriteStage::Fallback,
+        );
+
+        let metadata = messages
+            .first()
+            .and_then(|msg| msg.metadata.as_deref())
+            .expect("metadata should exist");
+        assert!(metadata.sys_metadata.contains_key("unrelated"));
+        assert!(
+            metadata
+                .sys_metadata
+                .contains_key(otel::TRACING_UDF_METADATA_KEY)
+        );
     }
 
     #[tokio::test]

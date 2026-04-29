@@ -19,6 +19,7 @@ use crate::error::{self, Error};
 use crate::message::{Message, MessageHandle, MessageID, Offset};
 use crate::metadata::Metadata;
 use crate::shared::grpc::prost_timestamp_from_utc;
+use crate::shared::otel;
 use crate::tracker::Tracker;
 
 pub(super) mod batch;
@@ -556,6 +557,14 @@ async fn create_response_stream(
     Ok(resp_stream)
 }
 
+/// Remove tracing_udf metadata from the message if tracing is enabled.
+fn remove_tracing_udf_if_enabled(message: &mut Message, tracing_enabled: bool) {
+    if tracing_enabled && let Some(ref mut metadata) = message.metadata {
+        Arc::make_mut(metadata)
+            .sys_metadata
+            .remove(otel::TRACING_UDF_METADATA_KEY);
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

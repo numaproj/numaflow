@@ -346,6 +346,56 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
+    fn tracing_enabled_flag_tracks_configured_state() {
+        set_tracing_enabled(false);
+        assert!(!tracing_enabled());
+
+        set_tracing_enabled(true);
+        assert!(tracing_enabled());
+
+        set_tracing_enabled(false);
+        assert!(!tracing_enabled());
+    }
+
+    #[test]
+    fn build_platform_attributes_contains_common_keys() {
+        let attrs =
+            build_platform_attributes(TraceTopology::MonoVertex, "map", "msg-1".to_string());
+        let values: HashMap<_, _> = attrs
+            .iter()
+            .map(|kv| (kv.key.as_str(), kv.value.to_string()))
+            .collect();
+
+        assert_eq!(
+            values.get(ATTR_MESSAGING_SYSTEM).map(String::as_str),
+            Some("numaflow")
+        );
+        assert_eq!(
+            values
+                .get(ATTR_MESSAGING_OPERATION_NAME)
+                .map(String::as_str),
+            Some("map")
+        );
+        assert_eq!(
+            values.get(ATTR_MESSAGING_MESSAGE_ID).map(String::as_str),
+            Some("msg-1")
+        );
+        assert_eq!(
+            values.get(ATTR_NUMAFLOW_TOPOLOGY).map(String::as_str),
+            Some("monovertex")
+        );
+        assert!(values.contains_key(ATTR_NUMAFLOW_PIPELINE_NAME));
+        assert!(values.contains_key(ATTR_NUMAFLOW_VERTEX_NAME));
+    }
+
+    #[test]
+    fn context_span_guard_drop_is_safe_for_empty_and_root_contexts() {
+        ContextSpanGuard::new(Vec::new());
+        ContextSpanGuard::new(vec![opentelemetry::Context::new()]);
+    }
+
+    #[test]
     fn metadata_extractor_reads_utf8_values() {
         let kvg = kvg_with(&[("traceparent", "abc"), ("tracestate", "k=v")]);
         let ex = MetadataExtractor(&kvg);
