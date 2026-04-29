@@ -1,7 +1,6 @@
 use super::{
-    ParentMessageInfo, UserDefinedMessage, create_response_stream, remove_tracing_udf_if_enabled,
-    update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
-    update_udf_write_metric,
+    ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_error_metric,
+    update_udf_process_time_metric, update_udf_read_metric, update_udf_write_metric,
 };
 use crate::config::is_mono_vertex;
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
@@ -12,7 +11,6 @@ use crate::shared::otel;
 use crate::tracker::Tracker;
 use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
-use opentelemetry::trace::SpanKind;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -77,8 +75,15 @@ impl MapBatchTask {
             //
             // Invariant: tracing_udf is removed from result messages below; on error, input
             // messages are dropped, so tracing_udf never propagates further.
-            let _span_guard =
-                inject_batch_map_spans_if_enabled(&mut self.msg_handles, tracing_enabled);
+            let _span_guard = if tracing_enabled {
+                Some(otel::inject_stage_spans(
+                    &mut self.msg_handles,
+                    otel::TraceTopology::MonoVertex,
+                    otel::TraceStage::Map,
+                ))
+            } else {
+                None
+            };
 
             // Convert Messages to MapRequests
             let requests: Vec<MapRequest> = self
@@ -110,7 +115,9 @@ impl MapBatchTask {
                         .map(|(i, result)| {
                             let mut mapped_msg: Message =
                                 UserDefinedMessage(result, &parent_info, i as i32).into();
-                            remove_tracing_udf_if_enabled(&mut mapped_msg, tracing_enabled);
+                            if tracing_enabled {
+                                mapped_msg.strip_tracing_udf();
+                            }
                             mapped_msg
                         })
                         .collect();
@@ -171,40 +178,6 @@ impl MapBatchTask {
 
         Ok(())
     }
-}
-
-fn inject_batch_map_spans_if_enabled(
-    msg_handles: &mut [MessageHandle],
-    tracing_enabled: bool,
-) -> Option<otel::ContextSpanGuard> {
-    if !tracing_enabled {
-        return None;
-    }
-
-    let mut contexts: Vec<opentelemetry::Context> = Vec::with_capacity(msg_handles.len());
-    for msg_handle in msg_handles.iter_mut() {
-        let message = msg_handle.message_mut();
-        let parent_cx = otel::parent_context_from_metadata(message.metadata.as_deref());
-        let msg_id = message.offset.to_string();
-        let map_cx = otel::start_platform_child_span(
-            "numaflow.monovertex.map",
-            SpanKind::Internal,
-            &parent_cx,
-            otel::TraceTopology::MonoVertex,
-            "map",
-            msg_id,
-        );
-        if let Some(ref mut metadata) = message.metadata {
-            otel::inject_context_into_metadata(
-                Arc::make_mut(metadata),
-                otel::TRACING_UDF_METADATA_KEY,
-                &map_cx,
-            );
-        }
-        contexts.push(map_cx);
-    }
-
-    Some(otel::ContextSpanGuard::new(contexts))
 }
 
 /// UserDefinedBatchMap is a grpc client that sends batch requests to the map server
@@ -385,20 +358,13 @@ impl UserDefinedBatchMap {
 
 #[cfg(test)]
 mod tests {
-    use super::{inject_batch_map_spans_if_enabled, remove_tracing_udf_if_enabled};
     use crate::mapper::map::batch::UserDefinedBatchMap;
-    use crate::message::{Message, MessageHandle};
-    use crate::metadata::{KeyValueGroup, Metadata};
     use crate::shared::grpc::create_rpc_channel;
-    use crate::shared::otel;
-    use bytes::Bytes;
     use numaflow::batchmap;
     use numaflow::batchmap::Server;
     use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::map::map_client::MapClient;
-    use std::collections::HashMap;
     use std::error::Error;
-    use std::sync::Arc;
     use std::time::Duration;
     use tempfile::TempDir;
 
@@ -422,65 +388,6 @@ mod tests {
             }
             responses
         }
-    }
-
-    fn message_with_tracing_udf() -> Message {
-        let mut metadata = Metadata::default();
-        metadata.sys_metadata.insert(
-            otel::TRACING_UDF_METADATA_KEY.to_string(),
-            KeyValueGroup {
-                key_value: HashMap::from([(
-                    "traceparent".to_string(),
-                    Bytes::from_static(b"traceparent"),
-                )]),
-            },
-        );
-
-        Message {
-            metadata: Some(Arc::new(metadata)),
-            ..Default::default()
-        }
-    }
-
-    fn message_with_empty_metadata() -> Message {
-        Message {
-            metadata: Some(Arc::new(Metadata::default())),
-            ..Default::default()
-        }
-    }
-
-    fn has_tracing_udf(message: &Message) -> bool {
-        message.metadata.as_deref().is_some_and(|metadata| {
-            metadata
-                .sys_metadata
-                .contains_key(otel::TRACING_UDF_METADATA_KEY)
-        })
-    }
-
-    #[test]
-    fn remove_tracing_udf_helper_removes_only_when_enabled() {
-        let mut enabled_message = message_with_tracing_udf();
-        remove_tracing_udf_if_enabled(&mut enabled_message, true);
-        assert!(!has_tracing_udf(&enabled_message));
-
-        let mut disabled_message = message_with_tracing_udf();
-        remove_tracing_udf_if_enabled(&mut disabled_message, false);
-        assert!(has_tracing_udf(&disabled_message));
-    }
-
-    #[test]
-    fn disabled_batch_map_spans_do_not_inject_tracing_udf() {
-        let (ack_tx, _ack_rx) = tokio::sync::oneshot::channel();
-        let mut handles = vec![MessageHandle::new(message_with_empty_metadata(), ack_tx)];
-
-        let guard = inject_batch_map_spans_if_enabled(&mut handles, false);
-
-        assert!(guard.is_none());
-        let message = handles
-            .first()
-            .expect("one handle should be present")
-            .message();
-        assert!(!has_tracing_udf(message));
     }
 
     #[tokio::test]

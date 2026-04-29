@@ -16,9 +16,7 @@ use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
 use numaflow_pulsar::sink::Sink as PulsarSink;
 use numaflow_sqs::sink::SqsSink;
-use opentelemetry::trace::SpanKind;
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -300,10 +298,10 @@ impl SinkWriter {
         // Span lifetime is scoped to only the primary sink actor call.
         let mut response = {
             let _span_guard = if tracing_enabled {
-                Some(inject_sink_stage_spans(
+                Some(otel::inject_stage_spans(
                     &mut messages,
                     otel::TraceTopology::MonoVertex,
-                    SinkWriteStage::Primary,
+                    otel::TraceStage::Sink(otel::SinkStage::Primary),
                 ))
             } else {
                 None
@@ -315,9 +313,18 @@ impl SinkWriter {
         // Strip tracing_udf from response messages so fallback/on_success/serving sinks
         // don't inherit the primary sink stage span as a parent.
         if tracing_enabled {
-            strip_tracing_udf(&mut response.fallback);
-            strip_tracing_udf(&mut response.on_success);
-            strip_tracing_udf(&mut response.serving);
+            response
+                .fallback
+                .iter_mut()
+                .for_each(|m| m.strip_tracing_udf());
+            response
+                .on_success
+                .iter_mut()
+                .for_each(|m| m.strip_tracing_udf());
+            response
+                .serving
+                .iter_mut()
+                .for_each(|m| m.strip_tracing_udf());
         }
 
         if !response.failed.is_empty() {
@@ -387,10 +394,10 @@ impl SinkWriter {
         // Span lifetime is scoped to only the on-success sink actor call.
         let on_success_response = {
             let _span_guard = if tracing_enabled && self.on_success_sink_handle.is_some() {
-                Some(inject_sink_stage_spans(
+                Some(otel::inject_stage_spans(
                     &mut messages,
                     otel::TraceTopology::MonoVertex,
-                    SinkWriteStage::OnSuccess,
+                    otel::TraceStage::Sink(otel::SinkStage::OnSuccess),
                 ))
             } else {
                 None
@@ -446,10 +453,10 @@ impl SinkWriter {
         // Span lifetime is scoped to only the fallback sink actor call.
         let fb_response = {
             let _span_guard = if tracing_enabled && self.fb_sink_handle.is_some() {
-                Some(inject_sink_stage_spans(
+                Some(otel::inject_stage_spans(
                     &mut messages,
                     otel::TraceTopology::MonoVertex,
-                    SinkWriteStage::Fallback,
+                    otel::TraceStage::Sink(otel::SinkStage::Fallback),
                 ))
             } else {
                 None
@@ -704,85 +711,6 @@ impl SinkWriter {
     }
 }
 
-/// RAII guard that closes per-message sink stage OTel spans on drop.
-type SinkSpanCloser = otel::ContextSpanGuard;
-
-/// Stage-specific sink write span type for tracing.
-#[derive(Clone, Copy)]
-enum SinkWriteStage {
-    Primary,
-    Fallback,
-    OnSuccess,
-}
-
-impl SinkWriteStage {
-    fn span_name(self, topology: otel::TraceTopology) -> &'static str {
-        match topology {
-            otel::TraceTopology::MonoVertex => match self {
-                Self::Primary => "numaflow.monovertex.sink.write",
-                Self::Fallback => "numaflow.monovertex.sink.fallback",
-                Self::OnSuccess => "numaflow.monovertex.sink.on_success",
-            },
-            otel::TraceTopology::Pipeline => match self {
-                Self::Primary => "numaflow.pipeline.sink.write",
-                Self::Fallback => "numaflow.pipeline.sink.fallback",
-                Self::OnSuccess => "numaflow.pipeline.sink.on_success",
-            },
-        }
-    }
-
-    fn operation_name(self) -> &'static str {
-        match self {
-            Self::Primary => "sink.write",
-            Self::Fallback => "sink.fallback",
-            Self::OnSuccess => "sink.on_success",
-        }
-    }
-}
-
-/// Inject stage-local sink span context into messages and return a guard that closes spans on drop.
-fn inject_sink_stage_spans(
-    messages: &mut [Message],
-    topology: otel::TraceTopology,
-    stage: SinkWriteStage,
-) -> SinkSpanCloser {
-    let mut contexts = Vec::with_capacity(messages.len());
-    for message in messages.iter_mut() {
-        let parent_cx = otel::parent_context_from_metadata(message.metadata.as_deref());
-        let msg_id = message.offset.to_string();
-        let sink_cx = otel::start_platform_child_span(
-            stage.span_name(topology),
-            SpanKind::Client,
-            &parent_cx,
-            topology,
-            stage.operation_name(),
-            msg_id,
-        );
-        if let Some(ref mut metadata) = message.metadata {
-            otel::inject_context_into_metadata(
-                Arc::make_mut(metadata),
-                otel::TRACING_UDF_METADATA_KEY,
-                &sink_cx,
-            );
-        }
-        contexts.push(sink_cx);
-    }
-
-    otel::ContextSpanGuard::new(contexts)
-}
-
-/// Removes `tracing_udf` from each message's sys_metadata so downstream sinks
-/// (fallback, on_success, serving) don't inherit the previous sink stage span.
-fn strip_tracing_udf(messages: &mut [Message]) {
-    for msg in messages.iter_mut() {
-        if let Some(ref mut metadata) = msg.metadata {
-            Arc::make_mut(metadata)
-                .sys_metadata
-                .remove(otel::TRACING_UDF_METADATA_KEY);
-        }
-    }
-}
-
 /// Sends count of messages marked for explicit drop by the user
 /// Currently pub(crate) to allow usage by the bypass_router.
 pub(crate) fn send_drop_metrics(is_mono_vertex: bool, dropped_messages_count: usize) {
@@ -927,40 +855,14 @@ mod tests {
     }
 
     #[test]
-    fn sink_write_stage_names_and_operations_match_topology() {
-        assert_eq!(
-            SinkWriteStage::Primary.span_name(otel::TraceTopology::MonoVertex),
-            "numaflow.monovertex.sink.write"
-        );
-        assert_eq!(
-            SinkWriteStage::Fallback.span_name(otel::TraceTopology::MonoVertex),
-            "numaflow.monovertex.sink.fallback"
-        );
-        assert_eq!(
-            SinkWriteStage::OnSuccess.span_name(otel::TraceTopology::MonoVertex),
-            "numaflow.monovertex.sink.on_success"
-        );
-        assert_eq!(
-            SinkWriteStage::Primary.span_name(otel::TraceTopology::Pipeline),
-            "numaflow.pipeline.sink.write"
-        );
-        assert_eq!(SinkWriteStage::Primary.operation_name(), "sink.write");
-        assert_eq!(SinkWriteStage::Fallback.operation_name(), "sink.fallback");
-        assert_eq!(
-            SinkWriteStage::OnSuccess.operation_name(),
-            "sink.on_success"
-        );
-    }
-
-    #[test]
-    fn inject_sink_stage_spans_adds_tracing_udf_metadata() {
+    fn inject_stage_spans_adds_tracing_udf_metadata() {
         init_test_propagator();
         let mut messages = vec![test_message_with_metadata(1), test_message_with_metadata(2)];
 
-        let _guard = inject_sink_stage_spans(
+        let _guard = otel::inject_stage_spans(
             &mut messages,
             otel::TraceTopology::MonoVertex,
-            SinkWriteStage::Primary,
+            otel::TraceStage::Sink(otel::SinkStage::Primary),
         );
 
         for message in messages {
@@ -974,7 +876,7 @@ mod tests {
     }
 
     #[test]
-    fn inject_sink_stage_spans_preserves_unrelated_metadata() {
+    fn inject_stage_spans_preserves_unrelated_metadata() {
         init_test_propagator();
         let mut message = test_message_with_metadata(1);
         Arc::make_mut(message.metadata.as_mut().expect("metadata should exist"))
@@ -987,10 +889,10 @@ mod tests {
             );
         let mut messages = vec![message];
 
-        let _guard = inject_sink_stage_spans(
+        let _guard = otel::inject_stage_spans(
             &mut messages,
             otel::TraceTopology::MonoVertex,
-            SinkWriteStage::Fallback,
+            otel::TraceStage::Sink(otel::SinkStage::Fallback),
         );
 
         let metadata = messages
@@ -1527,7 +1429,7 @@ mod tests {
             ..Default::default()
         };
 
-        strip_tracing_udf(std::slice::from_mut(&mut message));
+        message.strip_tracing_udf();
 
         let metadata = message.metadata.expect("metadata should still exist");
         assert!(

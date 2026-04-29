@@ -29,7 +29,6 @@ use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SqsSource;
 use numaflow_throttling::RateLimiter;
-use opentelemetry::trace::{SpanKind, TraceContextExt as _};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::OwnedSemaphorePermit;
@@ -76,61 +75,6 @@ const MAX_ACK_PENDING: usize = 10000;
 const ACK_RETRY_INTERVAL: u64 = 100;
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 const NACK_RETRY_ATTEMPTS: usize = 1200; // 100ms apart, total=2 minutes
-
-/// Tracks per-message source dispatch OTel spans keyed by message offset.
-///
-/// The source creates a topology-specific dispatch span per input message before
-/// tracker insert, transform, and downstream send. On the success path, each span
-/// is ended either when the last downstream message for that input offset is
-/// bypassed/sent, or immediately after transform if that input produced no outputs.
-///
-/// Any spans that remain in the map at end-of-iteration (for example, due to a
-/// transformer error that breaks the outer loop before all messages are dispatched)
-/// are closed by the RAII `Drop` impl, ensuring no span is leaked.
-struct SourceDispatchSpans {
-    spans: HashMap<crate::message::Offset, opentelemetry::Context>,
-}
-
-impl SourceDispatchSpans {
-    fn new() -> Self {
-        Self {
-            spans: HashMap::new(),
-        }
-    }
-
-    fn insert(&mut self, offset: crate::message::Offset, cx: opentelemetry::Context) {
-        self.spans.insert(offset, cx);
-    }
-
-    /// End dispatch spans for input offsets that produced no downstream messages.
-    fn end_without_outputs(&mut self, output_counts: &HashMap<crate::message::Offset, usize>) {
-        let offsets_without_outputs: Vec<_> = self
-            .spans
-            .keys()
-            .filter(|offset| !output_counts.contains_key(*offset))
-            .cloned()
-            .collect();
-
-        for offset in offsets_without_outputs {
-            self.end(&offset);
-        }
-    }
-
-    /// End the dispatch span for a specific message (called as message is dispatched downstream).
-    fn end(&mut self, offset: &crate::message::Offset) {
-        if let Some(cx) = self.spans.remove(offset) {
-            cx.span().end();
-        }
-    }
-}
-
-impl Drop for SourceDispatchSpans {
-    fn drop(&mut self) {
-        for (_, cx) in self.spans.drain() {
-            cx.span().end();
-        }
-    }
-}
 
 /// Represents the partition information returned by a source.
 /// Contains both the active partitions being processed and optionally the total number of partitions.
@@ -589,7 +533,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 // closed by the RAII guard when the map is dropped.
                 // Note: remove is_mono_vertex check once we implement pipeline tracing.
                 let tracing_enabled = is_mono_vertex() && otel::tracing_enabled();
-                let mut dispatch_spans = SourceDispatchSpans::new();
+                let mut dispatch_spans = otel::SourceDispatchSpans::new();
                 // Read-only parent contexts for `source.transform`; `dispatch_spans` remains the
                 // sole owner responsible for ending `source.dispatch`.
                 let mut dispatch_parent_contexts = if tracing_enabled && self.transformer.is_some()
@@ -655,14 +599,13 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         // Create source.dispatch as an OTel SDK span (child of vertex.process).
                         // It stays alive until we dispatch this message downstream (or the RAII
                         // guard drops on error). Tracked by offset.
-                        let dispatch_cx = otel::start_platform_child_span(
-                            "numaflow.monovertex.source.dispatch",
-                            SpanKind::Producer,
-                            &platform_cx,
+                        let dispatch_spec: otel::SpanSpec = (
                             otel::TraceTopology::MonoVertex,
-                            "source.dispatch",
-                            msg_id,
-                        );
+                            otel::TraceStage::SourceDispatch,
+                        )
+                            .into();
+                        let dispatch_cx =
+                            otel::start_child_span_from_spec(&platform_cx, msg_id, &dispatch_spec);
                         if let Some(ref mut parent_contexts) = dispatch_parent_contexts {
                             parent_contexts.insert(message.offset.clone(), dispatch_cx.clone());
                         }
@@ -1093,10 +1036,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
 #[cfg(test)]
 mod tests {
-    use super::SourceDispatchSpans;
     use crate::mark_success;
     use crate::message::{IntOffset as CoreIntOffset, Offset as CoreOffset};
     use crate::shared::grpc::create_rpc_channel;
+    use crate::shared::otel::SourceDispatchSpans;
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
     use crate::tracker::Tracker;
@@ -1229,8 +1172,8 @@ mod tests {
         let output_counts = HashMap::from([(kept.clone(), 1)]);
         spans.end_without_outputs(&output_counts);
 
-        assert!(spans.spans.contains_key(&kept));
-        assert!(!spans.spans.contains_key(&filtered));
+        assert!(spans.contains(&kept));
+        assert!(!spans.contains(&filtered));
     }
 
     #[test]
@@ -1241,11 +1184,11 @@ mod tests {
         spans.insert(known.clone(), opentelemetry::Context::new());
 
         spans.end(&unknown);
-        assert!(spans.spans.contains_key(&known));
+        assert!(spans.contains(&known));
 
         spans.end(&known);
         spans.end(&known);
-        assert!(spans.spans.is_empty());
+        assert!(spans.is_empty());
     }
 
     #[test]

@@ -12,6 +12,7 @@ use opentelemetry::global;
 use opentelemetry::propagation::{Extractor, Injector};
 use opentelemetry::trace::{TraceContextExt as _, Tracer};
 
+use crate::message::Message;
 use crate::metadata::{KeyValueGroup, Metadata};
 
 static TRACING_ENABLED: AtomicBool = AtomicBool::new(false);
@@ -311,6 +312,255 @@ pub(crate) fn start_platform_child_span(
         ))
         .start_with_context(&tracer, parent_cx);
     opentelemetry::Context::current().with_span(span)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SinkStage {
+    Primary,
+    Fallback,
+    OnSuccess,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum TraceStage {
+    SourceDispatch,
+    SourceTransform,
+    Map,
+    Sink(SinkStage),
+}
+
+pub(crate) struct SpanSpec {
+    pub topology: TraceTopology,
+    pub span_name: &'static str,
+    pub operation_name: &'static str,
+    pub kind: opentelemetry::trace::SpanKind,
+}
+
+impl From<(TraceTopology, TraceStage)> for SpanSpec {
+    fn from((topology, stage): (TraceTopology, TraceStage)) -> Self {
+        use opentelemetry::trace::SpanKind;
+        match (topology, stage) {
+            (TraceTopology::MonoVertex, TraceStage::SourceDispatch) => SpanSpec {
+                topology,
+                span_name: "numaflow.monovertex.source.dispatch",
+                operation_name: "source.dispatch",
+                kind: SpanKind::Producer,
+            },
+            (TraceTopology::Pipeline, TraceStage::SourceDispatch) => SpanSpec {
+                topology,
+                span_name: "numaflow.pipeline.source.dispatch",
+                operation_name: "source.dispatch",
+                kind: SpanKind::Producer,
+            },
+            (TraceTopology::MonoVertex, TraceStage::SourceTransform) => SpanSpec {
+                topology,
+                span_name: "numaflow.monovertex.source.transform",
+                operation_name: "source.transform",
+                kind: SpanKind::Internal,
+            },
+            (TraceTopology::Pipeline, TraceStage::SourceTransform) => SpanSpec {
+                topology,
+                span_name: "numaflow.pipeline.source.transform",
+                operation_name: "source.transform",
+                kind: SpanKind::Internal,
+            },
+            (TraceTopology::MonoVertex, TraceStage::Map) => SpanSpec {
+                topology,
+                span_name: "numaflow.monovertex.map",
+                operation_name: "map",
+                kind: SpanKind::Internal,
+            },
+            (TraceTopology::Pipeline, TraceStage::Map) => SpanSpec {
+                topology,
+                span_name: "numaflow.pipeline.map",
+                operation_name: "map",
+                kind: SpanKind::Internal,
+            },
+            (TraceTopology::MonoVertex, TraceStage::Sink(SinkStage::Primary)) => SpanSpec {
+                topology,
+                span_name: "numaflow.monovertex.sink.write",
+                operation_name: "sink.write",
+                kind: SpanKind::Client,
+            },
+            (TraceTopology::MonoVertex, TraceStage::Sink(SinkStage::Fallback)) => SpanSpec {
+                topology,
+                span_name: "numaflow.monovertex.sink.fallback",
+                operation_name: "sink.fallback",
+                kind: SpanKind::Client,
+            },
+            (TraceTopology::MonoVertex, TraceStage::Sink(SinkStage::OnSuccess)) => SpanSpec {
+                topology,
+                span_name: "numaflow.monovertex.sink.on_success",
+                operation_name: "sink.on_success",
+                kind: SpanKind::Client,
+            },
+            (TraceTopology::Pipeline, TraceStage::Sink(SinkStage::Primary)) => SpanSpec {
+                topology,
+                span_name: "numaflow.pipeline.sink.write",
+                operation_name: "sink.write",
+                kind: SpanKind::Client,
+            },
+            (TraceTopology::Pipeline, TraceStage::Sink(SinkStage::Fallback)) => SpanSpec {
+                topology,
+                span_name: "numaflow.pipeline.sink.fallback",
+                operation_name: "sink.fallback",
+                kind: SpanKind::Client,
+            },
+            (TraceTopology::Pipeline, TraceStage::Sink(SinkStage::OnSuccess)) => SpanSpec {
+                topology,
+                span_name: "numaflow.pipeline.sink.on_success",
+                operation_name: "sink.on_success",
+                kind: SpanKind::Client,
+            },
+        }
+    }
+}
+
+pub(crate) fn start_child_span_from_spec(
+    parent_cx: &opentelemetry::Context,
+    message_id: String,
+    spec: &SpanSpec,
+) -> opentelemetry::Context {
+    start_platform_child_span(
+        spec.span_name,
+        spec.kind.clone(),
+        parent_cx,
+        spec.topology,
+        spec.operation_name,
+        message_id,
+    )
+}
+
+pub(crate) trait MessageTarget {
+    fn message_mut(&mut self) -> &mut Message;
+}
+
+pub(crate) fn inject_stage_spans<T: MessageTarget>(
+    targets: &mut [T],
+    topology: TraceTopology,
+    stage: TraceStage,
+) -> ContextSpanGuard {
+    let spec: SpanSpec = (topology, stage).into();
+    let mut contexts = Vec::with_capacity(targets.len());
+    for target in targets.iter_mut() {
+        let message = target.message_mut();
+        let parent_cx = parent_context_from_metadata(message.metadata.as_deref());
+        let msg_id = message.offset.to_string();
+        let cx = start_child_span_from_spec(&parent_cx, msg_id, &spec);
+        message.inject_tracing_udf(&cx);
+        contexts.push(cx);
+    }
+    ContextSpanGuard::new(contexts)
+}
+
+/// Tracks per-message source dispatch OTel spans keyed by message offset.
+///
+/// The source creates a topology-specific dispatch span per input message before
+/// tracker insert, transform, and downstream send. On the success path, each span
+/// is ended either when the last downstream message for that input offset is
+/// bypassed/sent, or immediately after transform if that input produced no outputs.
+///
+/// Any spans that remain in the map at end-of-iteration (for example, due to a
+/// transformer error that breaks the outer loop before all messages are dispatched)
+/// are closed by the RAII `Drop` impl, ensuring no span is leaked.
+pub(crate) struct SourceDispatchSpans {
+    spans: HashMap<crate::message::Offset, opentelemetry::Context>,
+}
+
+impl SourceDispatchSpans {
+    pub(crate) fn new() -> Self {
+        Self {
+            spans: HashMap::new(),
+        }
+    }
+
+    pub(crate) fn insert(&mut self, offset: crate::message::Offset, cx: opentelemetry::Context) {
+        self.spans.insert(offset, cx);
+    }
+
+    pub(crate) fn end_without_outputs(
+        &mut self,
+        output_counts: &HashMap<crate::message::Offset, usize>,
+    ) {
+        let offsets_without_outputs: Vec<_> = self
+            .spans
+            .keys()
+            .filter(|offset| !output_counts.contains_key(*offset))
+            .cloned()
+            .collect();
+
+        for offset in offsets_without_outputs {
+            self.end(&offset);
+        }
+    }
+
+    pub(crate) fn end(&mut self, offset: &crate::message::Offset) {
+        if let Some(cx) = self.spans.remove(offset) {
+            cx.span().end();
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn contains(&self, offset: &crate::message::Offset) -> bool {
+        self.spans.contains_key(offset)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.spans.is_empty()
+    }
+}
+
+impl Drop for SourceDispatchSpans {
+    fn drop(&mut self) {
+        for (_, cx) in self.spans.drain() {
+            cx.span().end();
+        }
+    }
+}
+
+/// RAII guard for the per-input `source.transform` span.
+///
+/// The span is a child of the input message's `source.dispatch` span and measures the transformer
+/// UDF round-trip for that specific source message, not the whole batch. It closes on success,
+/// error, or cancellation.
+pub(crate) struct SourceTransformSpan(Option<opentelemetry::Context>);
+
+impl SourceTransformSpan {
+    pub(crate) fn new(parent_cx: Option<opentelemetry::Context>, msg_id: String) -> Self {
+        if !tracing_enabled() {
+            return Self(None);
+        }
+
+        let Some(parent_cx) = parent_cx else {
+            return Self(None);
+        };
+
+        let spec: SpanSpec = (TraceTopology::MonoVertex, TraceStage::SourceTransform).into();
+        Self(Some(start_child_span_from_spec(&parent_cx, msg_id, &spec)))
+    }
+
+    pub(crate) fn record_output_count(&self, output_count: usize) {
+        if let Some(cx) = &self.0 {
+            cx.span().set_attribute(opentelemetry::KeyValue::new(
+                "numaflow.source.transform.output_count",
+                output_count as i64,
+            ));
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_active(&self) -> bool {
+        self.0.is_some()
+    }
+}
+
+impl Drop for SourceTransformSpan {
+    fn drop(&mut self) {
+        if let Some(cx) = self.0.take() {
+            cx.span().end();
+        }
+    }
 }
 
 #[cfg(test)]
@@ -641,5 +891,177 @@ mod tests {
         assert!(b3_to_traceparent(tid, sid, None, true).ends_with("-01"));
         // debug=false + sampled=1 still samples.
         assert!(b3_to_traceparent(tid, sid, Some("1"), false).ends_with("-01"));
+    }
+
+    mod span_spec_tests {
+        use super::*;
+        use opentelemetry::trace::SpanKind;
+
+        fn spec(topology: TraceTopology, stage: TraceStage) -> SpanSpec {
+            (topology, stage).into()
+        }
+
+        #[test]
+        fn monovertex_source_dispatch() {
+            let s = spec(TraceTopology::MonoVertex, TraceStage::SourceDispatch);
+            assert_eq!(s.span_name, "numaflow.monovertex.source.dispatch");
+            assert_eq!(s.operation_name, "source.dispatch");
+            assert!(matches!(s.kind, SpanKind::Producer));
+            assert!(matches!(s.topology, TraceTopology::MonoVertex));
+        }
+
+        #[test]
+        fn pipeline_source_dispatch() {
+            let s = spec(TraceTopology::Pipeline, TraceStage::SourceDispatch);
+            assert_eq!(s.span_name, "numaflow.pipeline.source.dispatch");
+            assert_eq!(s.operation_name, "source.dispatch");
+            assert!(matches!(s.kind, SpanKind::Producer));
+            assert!(matches!(s.topology, TraceTopology::Pipeline));
+        }
+
+        #[test]
+        fn monovertex_source_transform() {
+            let s = spec(TraceTopology::MonoVertex, TraceStage::SourceTransform);
+            assert_eq!(s.span_name, "numaflow.monovertex.source.transform");
+            assert_eq!(s.operation_name, "source.transform");
+            assert!(matches!(s.kind, SpanKind::Internal));
+        }
+
+        #[test]
+        fn pipeline_source_transform() {
+            let s = spec(TraceTopology::Pipeline, TraceStage::SourceTransform);
+            assert_eq!(s.span_name, "numaflow.pipeline.source.transform");
+            assert_eq!(s.operation_name, "source.transform");
+            assert!(matches!(s.kind, SpanKind::Internal));
+        }
+
+        #[test]
+        fn monovertex_map() {
+            let s = spec(TraceTopology::MonoVertex, TraceStage::Map);
+            assert_eq!(s.span_name, "numaflow.monovertex.map");
+            assert_eq!(s.operation_name, "map");
+            assert!(matches!(s.kind, SpanKind::Internal));
+        }
+
+        #[test]
+        fn pipeline_map() {
+            let s = spec(TraceTopology::Pipeline, TraceStage::Map);
+            assert_eq!(s.span_name, "numaflow.pipeline.map");
+            assert_eq!(s.operation_name, "map");
+            assert!(matches!(s.kind, SpanKind::Internal));
+        }
+
+        #[test]
+        fn monovertex_sink_primary() {
+            let s = spec(
+                TraceTopology::MonoVertex,
+                TraceStage::Sink(SinkStage::Primary),
+            );
+            assert_eq!(s.span_name, "numaflow.monovertex.sink.write");
+            assert_eq!(s.operation_name, "sink.write");
+            assert!(matches!(s.kind, SpanKind::Client));
+        }
+
+        #[test]
+        fn monovertex_sink_fallback() {
+            let s = spec(
+                TraceTopology::MonoVertex,
+                TraceStage::Sink(SinkStage::Fallback),
+            );
+            assert_eq!(s.span_name, "numaflow.monovertex.sink.fallback");
+            assert_eq!(s.operation_name, "sink.fallback");
+            assert!(matches!(s.kind, SpanKind::Client));
+        }
+
+        #[test]
+        fn monovertex_sink_on_success() {
+            let s = spec(
+                TraceTopology::MonoVertex,
+                TraceStage::Sink(SinkStage::OnSuccess),
+            );
+            assert_eq!(s.span_name, "numaflow.monovertex.sink.on_success");
+            assert_eq!(s.operation_name, "sink.on_success");
+            assert!(matches!(s.kind, SpanKind::Client));
+        }
+
+        #[test]
+        fn pipeline_sink_primary() {
+            let s = spec(
+                TraceTopology::Pipeline,
+                TraceStage::Sink(SinkStage::Primary),
+            );
+            assert_eq!(s.span_name, "numaflow.pipeline.sink.write");
+            assert_eq!(s.operation_name, "sink.write");
+            assert!(matches!(s.kind, SpanKind::Client));
+        }
+
+        #[test]
+        fn pipeline_sink_fallback() {
+            let s = spec(
+                TraceTopology::Pipeline,
+                TraceStage::Sink(SinkStage::Fallback),
+            );
+            assert_eq!(s.span_name, "numaflow.pipeline.sink.fallback");
+            assert_eq!(s.operation_name, "sink.fallback");
+            assert!(matches!(s.kind, SpanKind::Client));
+        }
+
+        #[test]
+        fn pipeline_sink_on_success() {
+            let s = spec(
+                TraceTopology::Pipeline,
+                TraceStage::Sink(SinkStage::OnSuccess),
+            );
+            assert_eq!(s.span_name, "numaflow.pipeline.sink.on_success");
+            assert_eq!(s.operation_name, "sink.on_success");
+            assert!(matches!(s.kind, SpanKind::Client));
+        }
+
+        #[test]
+        fn operation_name_is_topology_independent() {
+            let stages = [
+                TraceStage::SourceDispatch,
+                TraceStage::SourceTransform,
+                TraceStage::Map,
+                TraceStage::Sink(SinkStage::Primary),
+                TraceStage::Sink(SinkStage::Fallback),
+                TraceStage::Sink(SinkStage::OnSuccess),
+            ];
+            for stage in stages {
+                let mv = spec(TraceTopology::MonoVertex, stage);
+                let pl = spec(TraceTopology::Pipeline, stage);
+                assert_eq!(
+                    mv.operation_name, pl.operation_name,
+                    "operation_name should be the same across topologies for {:?}",
+                    mv.operation_name
+                );
+            }
+        }
+
+        #[test]
+        fn span_names_contain_topology_prefix() {
+            let stages = [
+                TraceStage::SourceDispatch,
+                TraceStage::SourceTransform,
+                TraceStage::Map,
+                TraceStage::Sink(SinkStage::Primary),
+                TraceStage::Sink(SinkStage::Fallback),
+                TraceStage::Sink(SinkStage::OnSuccess),
+            ];
+            for stage in stages {
+                let mv = spec(TraceTopology::MonoVertex, stage);
+                let pl = spec(TraceTopology::Pipeline, stage);
+                assert!(
+                    mv.span_name.contains("monovertex"),
+                    "MonoVertex span_name should contain 'monovertex': {}",
+                    mv.span_name
+                );
+                assert!(
+                    pl.span_name.contains("pipeline"),
+                    "Pipeline span_name should contain 'pipeline': {}",
+                    pl.span_name
+                );
+            }
+        }
     }
 }

@@ -2,7 +2,6 @@ use bytes::Bytes;
 use futures::stream::{self, StreamExt};
 use numaflow_monitor::runtime;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use opentelemetry::trace::{SpanKind, TraceContextExt as _};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
@@ -68,51 +67,6 @@ impl TransformerActor {
     async fn run(mut self) {
         while let Some(msg) = self.receiver.recv().await {
             self.handle_message(msg).await;
-        }
-    }
-}
-
-/// RAII guard for the per-input `source.transform` span.
-///
-/// The span is a child of the input message's `source.dispatch` span and measures the transformer
-/// UDF round-trip for that specific source message, not the whole batch. It closes on success,
-/// error, or cancellation.
-struct SourceTransformSpan(Option<opentelemetry::Context>);
-
-impl SourceTransformSpan {
-    fn new(parent_cx: Option<opentelemetry::Context>, msg_id: String) -> Self {
-        if !otel::tracing_enabled() {
-            return Self(None);
-        }
-
-        let Some(parent_cx) = parent_cx else {
-            return Self(None);
-        };
-
-        Self(Some(otel::start_platform_child_span(
-            "numaflow.monovertex.source.transform",
-            SpanKind::Internal,
-            &parent_cx,
-            otel::TraceTopology::MonoVertex,
-            "source.transform",
-            msg_id,
-        )))
-    }
-
-    fn record_output_count(&self, output_count: usize) {
-        if let Some(cx) = &self.0 {
-            cx.span().set_attribute(opentelemetry::KeyValue::new(
-                "numaflow.source.transform.output_count",
-                output_count as i64,
-            ));
-        }
-    }
-}
-
-impl Drop for SourceTransformSpan {
-    fn drop(&mut self) {
-        if let Some(cx) = self.0.take() {
-            cx.span().end();
         }
     }
 }
@@ -262,7 +216,7 @@ impl Transformer {
             async move {
                 let offset = read_msg.offset.clone();
                 let source_transform_span =
-                    SourceTransformSpan::new(source_transform_parent, offset.to_string());
+                    otel::SourceTransformSpan::new(source_transform_parent, offset.to_string());
                 let transformed_messages =
                     Transformer::transform(transform_handle, read_msg, hard_shutdown_token).await?;
                 source_transform_span.record_output_count(transformed_messages.len());
@@ -419,8 +373,8 @@ mod tests {
 
     #[test]
     fn source_transform_span_without_parent_is_inert() {
-        let span = SourceTransformSpan::new(None, "msg-1".to_string());
-        assert!(span.0.is_none());
+        let span = otel::SourceTransformSpan::new(None, "msg-1".to_string());
+        assert!(!span.is_active());
         span.record_output_count(1);
     }
 
@@ -428,8 +382,9 @@ mod tests {
     #[serial_test::serial]
     fn source_transform_span_disabled_tracing_is_inert() {
         otel::set_tracing_enabled(false);
-        let span = SourceTransformSpan::new(Some(opentelemetry::Context::new()), "msg-1".into());
-        assert!(span.0.is_none());
+        let span =
+            otel::SourceTransformSpan::new(Some(opentelemetry::Context::new()), "msg-1".into());
+        assert!(!span.is_active());
         span.record_output_count(1);
     }
 

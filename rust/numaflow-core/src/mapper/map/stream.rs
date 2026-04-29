@@ -19,8 +19,8 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use super::{
     ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
-    create_response_stream, remove_tracing_udf_if_enabled, update_udf_error_metric,
-    update_udf_process_time_metric, update_udf_read_metric, update_udf_write_only_metric,
+    create_response_stream, update_udf_error_metric, update_udf_process_time_metric,
+    update_udf_read_metric, update_udf_write_only_metric,
 };
 
 /// Type alias for the stream response - raw results from the UDF
@@ -94,13 +94,9 @@ impl MapStreamTask {
         // Tracing: inject current `map` span context into
         // sys_metadata["tracing_udf"] so the UDF creates its processing span as a child.
         // sys_metadata["tracing"] remains unchanged (holds vertex.process).
-        if tracing_enabled && let Some(ref mut metadata) = self.msg_handle.message_mut().metadata {
+        if tracing_enabled {
             let map_cx = tracing::Span::current().context();
-            otel::inject_context_into_metadata(
-                Arc::make_mut(metadata),
-                otel::TRACING_UDF_METADATA_KEY,
-                &map_cx,
-            );
+            self.msg_handle.message_mut().inject_tracing_udf(&map_cx);
         }
 
         // Store parent message info before sending to UDF
@@ -136,7 +132,9 @@ impl MapStreamTask {
                             UserDefinedMessage(result, &parent_info, parent_info.current_index)
                                 .into();
                         parent_info.current_index += 1;
-                        remove_tracing_udf_if_enabled(&mut mapped_message, tracing_enabled);
+                        if tracing_enabled {
+                            mapped_message.strip_tracing_udf();
+                        }
 
                         update_udf_write_only_metric(self.shared_ctx.is_mono_vertex);
 
@@ -383,19 +381,12 @@ impl UserDefinedStreamMap {
 
 #[cfg(test)]
 mod tests {
-    use super::remove_tracing_udf_if_enabled;
     use crate::mapper::map::stream::UserDefinedStreamMap;
-    use crate::message::Message;
-    use crate::metadata::{KeyValueGroup, Metadata};
     use crate::shared::grpc::create_rpc_channel;
-    use crate::shared::otel;
-    use bytes::Bytes;
     use numaflow::mapstream;
     use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::map::map_client::MapClient;
-    use std::collections::HashMap;
     use std::error::Error;
-    use std::sync::Arc;
     use std::time::Duration;
     use tempfile::TempDir;
 
@@ -420,43 +411,6 @@ mod tests {
                 }
             }
         }
-    }
-
-    fn message_with_tracing_udf() -> Message {
-        let mut metadata = Metadata::default();
-        metadata.sys_metadata.insert(
-            otel::TRACING_UDF_METADATA_KEY.to_string(),
-            KeyValueGroup {
-                key_value: HashMap::from([(
-                    "traceparent".to_string(),
-                    Bytes::from_static(b"traceparent"),
-                )]),
-            },
-        );
-
-        Message {
-            metadata: Some(Arc::new(metadata)),
-            ..Default::default()
-        }
-    }
-
-    fn has_tracing_udf(message: &Message) -> bool {
-        message.metadata.as_deref().is_some_and(|metadata| {
-            metadata
-                .sys_metadata
-                .contains_key(otel::TRACING_UDF_METADATA_KEY)
-        })
-    }
-
-    #[test]
-    fn remove_tracing_udf_helper_removes_only_when_enabled() {
-        let mut enabled_message = message_with_tracing_udf();
-        remove_tracing_udf_if_enabled(&mut enabled_message, true);
-        assert!(!has_tracing_udf(&enabled_message));
-
-        let mut disabled_message = message_with_tracing_udf();
-        remove_tracing_udf_if_enabled(&mut disabled_message, false);
-        assert!(has_tracing_udf(&disabled_message));
     }
 
     #[tokio::test]

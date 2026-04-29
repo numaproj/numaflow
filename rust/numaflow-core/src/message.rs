@@ -392,6 +392,36 @@ impl Message {
             .as_ref()
             .is_some_and(|tags| tags.contains(&DROP.to_string()))
     }
+
+    pub(crate) fn strip_tracing_udf(&mut self) {
+        if let Some(ref mut metadata) = self.metadata {
+            Arc::make_mut(metadata)
+                .sys_metadata
+                .remove(crate::shared::otel::TRACING_UDF_METADATA_KEY);
+        }
+    }
+
+    pub(crate) fn inject_tracing_udf(&mut self, cx: &opentelemetry::Context) {
+        if let Some(ref mut metadata) = self.metadata {
+            crate::shared::otel::inject_context_into_metadata(
+                Arc::make_mut(metadata),
+                crate::shared::otel::TRACING_UDF_METADATA_KEY,
+                cx,
+            );
+        }
+    }
+}
+
+impl crate::shared::otel::MessageTarget for Message {
+    fn message_mut(&mut self) -> &mut Message {
+        self
+    }
+}
+
+impl crate::shared::otel::MessageTarget for MessageHandle {
+    fn message_mut(&mut self) -> &mut Message {
+        MessageHandle::message_mut(self)
+    }
 }
 
 /// IntOffset is integer based offset enum type.
@@ -758,5 +788,78 @@ mod tests {
         // Should receive NAK since not all were marked as success
         let result = ack_rx.await.unwrap();
         assert_eq!(result, ReadAck::Nak);
+    }
+
+    fn message_with_metadata() -> Message {
+        Message {
+            metadata: Some(Arc::new(Metadata::default())),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn strip_tracing_udf_removes_key() {
+        use crate::metadata::KeyValueGroup;
+        use crate::shared::otel::TRACING_UDF_METADATA_KEY;
+
+        let mut msg = message_with_metadata();
+        Arc::make_mut(msg.metadata.as_mut().unwrap())
+            .sys_metadata
+            .insert(
+                TRACING_UDF_METADATA_KEY.to_string(),
+                KeyValueGroup {
+                    key_value: HashMap::new(),
+                },
+            );
+        assert!(
+            msg.metadata
+                .as_ref()
+                .unwrap()
+                .sys_metadata
+                .contains_key(TRACING_UDF_METADATA_KEY)
+        );
+
+        msg.strip_tracing_udf();
+
+        assert!(
+            !msg.metadata
+                .as_ref()
+                .unwrap()
+                .sys_metadata
+                .contains_key(TRACING_UDF_METADATA_KEY)
+        );
+    }
+
+    #[test]
+    fn strip_tracing_udf_noop_without_metadata() {
+        let mut msg = Message::default();
+        assert!(msg.metadata.is_none());
+        msg.strip_tracing_udf();
+        assert!(msg.metadata.is_none());
+    }
+
+    #[test]
+    fn inject_tracing_udf_adds_key() {
+        use crate::shared::otel::TRACING_UDF_METADATA_KEY;
+
+        let mut msg = message_with_metadata();
+        assert!(
+            !msg.metadata
+                .as_ref()
+                .unwrap()
+                .sys_metadata
+                .contains_key(TRACING_UDF_METADATA_KEY)
+        );
+
+        let cx = opentelemetry::Context::new();
+        msg.inject_tracing_udf(&cx);
+
+        assert!(
+            msg.metadata
+                .as_ref()
+                .unwrap()
+                .sys_metadata
+                .contains_key(TRACING_UDF_METADATA_KEY)
+        );
     }
 }
