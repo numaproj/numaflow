@@ -15,7 +15,6 @@ use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
 use tracing::{Instrument, error, warn};
-use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use super::{
     ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
@@ -65,24 +64,14 @@ impl MapStreamTask {
     /// until the UDF response stream closes.
     async fn execute(self) {
         // Note: remove is_mono_vertex check once we implement pipeline tracing.
-        if is_mono_vertex() && otel::tracing_enabled() {
-            let parent_cx =
-                otel::parent_context_from_metadata(self.msg_handle.message().metadata.as_deref());
-            let msg_id = self.msg_handle.message().offset.to_string();
-            let map_span = tracing::info_span!(
-                "numaflow.monovertex.map",
-                otel.kind = "INTERNAL",
-                { otel::ATTR_MESSAGING_SYSTEM } = "numaflow",
-                { otel::ATTR_MESSAGING_OPERATION_NAME } = "map",
-                { otel::ATTR_MESSAGING_MESSAGE_ID } = %msg_id,
-                { otel::ATTR_NUMAFLOW_TOPOLOGY } = otel::TraceTopology::MonoVertex.as_str(),
-                { otel::ATTR_NUMAFLOW_PIPELINE_NAME } = crate::config::get_pipeline_name(),
-                { otel::ATTR_NUMAFLOW_VERTEX_NAME } = crate::config::get_vertex_name(),
-            );
-            let _ = map_span.set_parent(parent_cx);
-            self.execute_inner().instrument(map_span).await;
+        let map_span = if is_mono_vertex() {
+            otel::start_map_tracing_span(self.msg_handle.message(), otel::TraceTopology::MonoVertex)
         } else {
-            self.execute_inner().await;
+            None
+        };
+        match map_span {
+            Some(span) => self.execute_inner().instrument(span).await,
+            None => self.execute_inner().await,
         }
     }
 
@@ -95,8 +84,7 @@ impl MapStreamTask {
         // sys_metadata["tracing_udf"] so the UDF creates its processing span as a child.
         // sys_metadata["tracing"] remains unchanged (holds vertex.process).
         if tracing_enabled {
-            let map_cx = tracing::Span::current().context();
-            self.msg_handle.message_mut().inject_tracing_udf(&map_cx);
+            otel::inject_current_span_as_udf_parent(self.msg_handle.message_mut());
         }
 
         // Store parent message info before sending to UDF

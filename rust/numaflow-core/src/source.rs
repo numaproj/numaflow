@@ -41,7 +41,6 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::warn;
 use tracing::{error, info};
-use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 /// [User-Defined Source] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -564,54 +563,15 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     // - Inject `vertex.process` context into sys_metadata["tracing"] so that map
                     //   and sink become siblings of `source.dispatch` under `vertex.process`.
                     let platform_span = if tracing_enabled {
-                        let upstream_cx =
-                            otel::extract_trace_context_from_headers(&message.headers);
-                        let msg_id = message.offset.to_string();
-                        let platform_span = tracing::info_span!(
-                            "numaflow.vertex.process",
-                            otel.kind = "INTERNAL",
-                            { otel::ATTR_MESSAGING_SYSTEM } = "numaflow",
-                            { otel::ATTR_MESSAGING_OPERATION_NAME } =
-                                otel::TraceTopology::MonoVertex.root_operation_name(),
-                            { otel::ATTR_MESSAGING_MESSAGE_ID } = %msg_id,
-                            { otel::ATTR_NUMAFLOW_TOPOLOGY } = otel::TraceTopology::MonoVertex.as_str(),
-                            { otel::ATTR_NUMAFLOW_PIPELINE_NAME } =
-                                crate::config::get_pipeline_name(),
-                            { otel::ATTR_NUMAFLOW_VERTEX_NAME } =
-                                crate::config::get_vertex_name(),
-                        );
-                        {
-                            let _ = platform_span.set_parent(upstream_cx);
-                        }
-
-                        // Inject vertex.process context into sys_metadata["tracing"] so
-                        // downstream stages (map, sink) become siblings under this root.
-                        let platform_cx = { platform_span.context() };
-                        let metadata = message
-                            .metadata
-                            .get_or_insert_with(|| Arc::new(crate::metadata::Metadata::default()));
-                        otel::inject_context_into_metadata(
-                            Arc::make_mut(metadata),
-                            otel::TRACING_METADATA_KEY,
-                            &platform_cx,
-                        );
-
-                        // Create source.dispatch as an OTel SDK span (child of vertex.process).
-                        // It stays alive until we dispatch this message downstream (or the RAII
-                        // guard drops on error). Tracked by offset.
-                        let dispatch_spec: otel::SpanSpec = (
-                            otel::TraceTopology::MonoVertex,
-                            otel::TraceStage::SourceDispatch,
-                        )
-                            .into();
-                        let dispatch_cx =
-                            otel::start_child_span_from_spec(&platform_cx, msg_id, &dispatch_spec);
-                        if let Some(ref mut parent_contexts) = dispatch_parent_contexts {
-                            parent_contexts.insert(message.offset.clone(), dispatch_cx.clone());
-                        }
-                        dispatch_spans.insert(message.offset.clone(), dispatch_cx);
-
-                        Some(platform_span)
+                        otel::start_source_message_spans(message, otel::TraceTopology::MonoVertex)
+                            .map(|spans| {
+                                if let Some(ref mut parent_contexts) = dispatch_parent_contexts {
+                                    parent_contexts
+                                        .insert(message.offset.clone(), spans.dispatch_cx.clone());
+                                }
+                                dispatch_spans.insert(message.offset.clone(), spans.dispatch_cx);
+                                spans.platform_span
+                            })
                     } else {
                         None
                     };
