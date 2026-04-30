@@ -11,6 +11,11 @@ pub(crate) mod create_components;
 /// Shared methods for forwarding messages.
 pub(crate) mod forward;
 
+/// OpenTelemetry propagation helpers for distributed tracing.
+/// Functions in this module are consumed by span creation code in source, mapper, and sinker.
+#[allow(dead_code)]
+pub(crate) mod otel;
+
 /// Test server framework: helpers for spinning up numaflow SDK gRPC servers in tests.
 #[cfg(test)]
 pub(crate) mod test_utils;

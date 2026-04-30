@@ -183,8 +183,8 @@ impl ISBIdleDetector {
             .expect("Failed to get read lock");
 
         read_guard
-            .iter()
-            .flat_map(|(_, partitions)| {
+            .values()
+            .flat_map(|partitions| {
                 partitions
                     .iter()
                     .filter(|partition| {
@@ -192,7 +192,7 @@ impl ISBIdleDetector {
                             - partition.last_wm_published_time.timestamp_millis()
                             > self.idle_timeout.as_millis() as i64
                     })
-                    .map(move |partition| partition.stream.clone())
+                    .map(|partition| partition.stream.clone())
             })
             .collect()
     }

@@ -1,11 +1,11 @@
-use crate::message::Message;
+use crate::mark_success;
+use crate::message::MessageHandle;
 use crate::reduce::wal::error::WalResult;
 use crate::reduce::wal::segment::WalType;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::atomic::Ordering;
 use tokio::io::BufWriter;
 use tokio::task::JoinHandle;
 use tokio::{
@@ -23,12 +23,8 @@ const ROTATE_IF_STALE_DURATION: chrono::Duration = chrono::Duration::seconds(30)
 /// The Command that has to be operated on the Segment.
 pub(crate) enum SegmentWriteMessage {
     /// Writes a message to the WAL. The message will be converted to bytes internally.
-    /// The message is kept alive until the write completes, ensuring Arc<AckHandle> is not
-    /// dropped prematurely.
-    WriteMessage {
-        /// Message to be written. Will be dropped after successful write.
-        message: Message,
-    },
+    /// After successful write, mark_success() is called on the MessageHandle to ACK.
+    WriteMessage { read_message: MessageHandle },
     /// Writes GC Events to the WAL
     WriteGcEvent {
         /// Raw data to be written to the WAL.
@@ -138,33 +134,32 @@ impl SegmentWriteActor {
     /// we should exit upon errors.
     async fn handle_message(&mut self, msg: SegmentWriteMessage) -> WalResult<()> {
         match msg {
-            SegmentWriteMessage::WriteMessage { message } => {
+            SegmentWriteMessage::WriteMessage { read_message } => {
                 // Convert message to bytes
                 let data: Bytes = crate::reduce::wal::WalMessage {
-                    message: message.clone(),
+                    message: read_message.message().clone(),
                 }
                 .try_into()
                 .expect("Failed to convert message to bytes");
 
-                // Message is dropped here after successful write, triggering ack/nack.
-                return match self.write_data(data).await {
-                    Ok(_) => Ok(()),
+                // Write to WAL and ACK on success
+                match self.write_data(data).await {
+                    Ok(_) => {
+                        // Successfully written to WAL, ACK the message
+                        mark_success!(read_message);
+                        Ok(())
+                    }
                     Err(e) => {
-                        // message failed to write to WAL, mark it as failed so that it gets nacked.
                         error!(?e, "Failed to write message to WAL");
-                        message
-                            .ack_handle
-                            .as_ref()
-                            .expect("ack handle should be present")
-                            .is_failed
-                            .store(true, Ordering::Relaxed);
+                        read_message.mark_failed(&e);
                         Err(e)
                     }
-                };
+                }
             }
             SegmentWriteMessage::WriteGcEvent { data } => {
                 // Just write the raw data
                 self.write_data(data).await?;
+                Ok(())
             }
             SegmentWriteMessage::Rotate { on_size } => {
                 // Rotate if forced (`on_size` is false) OR if size threshold is met
@@ -177,9 +172,9 @@ impl SegmentWriteActor {
                         "Skipping rotation: size threshold not met and not forced."
                     );
                 }
+                Ok(())
             }
         }
-        Ok(())
     }
 
     /// Writes the data to the Segment.
@@ -419,7 +414,9 @@ mod tests {
             ..Default::default()
         };
         wal_tx
-            .send(SegmentWriteMessage::WriteMessage { message: msg1 })
+            .send(SegmentWriteMessage::WriteMessage {
+                read_message: msg1.into(),
+            })
             .await
             .unwrap();
 
@@ -429,7 +426,9 @@ mod tests {
             ..Default::default()
         };
         wal_tx
-            .send(SegmentWriteMessage::WriteMessage { message: msg2 })
+            .send(SegmentWriteMessage::WriteMessage {
+                read_message: msg2.into(),
+            })
             .await
             .unwrap();
 
@@ -441,7 +440,9 @@ mod tests {
             ..Default::default()
         };
         wal_tx
-            .send(SegmentWriteMessage::WriteMessage { message: msg3 })
+            .send(SegmentWriteMessage::WriteMessage {
+                read_message: msg3.into(),
+            })
             .await
             .unwrap();
 
@@ -452,7 +453,9 @@ mod tests {
             ..Default::default()
         };
         wal_tx
-            .send(SegmentWriteMessage::WriteMessage { message: msg4 })
+            .send(SegmentWriteMessage::WriteMessage {
+                read_message: msg4.into(),
+            })
             .await
             .unwrap();
 
@@ -462,7 +465,9 @@ mod tests {
             ..Default::default()
         };
         wal_tx
-            .send(SegmentWriteMessage::WriteMessage { message: msg5 })
+            .send(SegmentWriteMessage::WriteMessage {
+                read_message: msg5.into(),
+            })
             .await
             .unwrap();
 
@@ -472,7 +477,9 @@ mod tests {
             ..Default::default()
         };
         wal_tx
-            .send(SegmentWriteMessage::WriteMessage { message: msg6 })
+            .send(SegmentWriteMessage::WriteMessage {
+                read_message: msg6.into(),
+            })
             .await
             .unwrap();
 
@@ -538,7 +545,9 @@ mod tests {
             ..Default::default()
         };
         wal_tx
-            .send(SegmentWriteMessage::WriteMessage { message: msg1 })
+            .send(SegmentWriteMessage::WriteMessage {
+                read_message: msg1.into(),
+            })
             .await
             .unwrap();
 
@@ -594,7 +603,9 @@ mod tests {
             ..Default::default()
         };
         wal_tx
-            .send(SegmentWriteMessage::WriteMessage { message: msg1 })
+            .send(SegmentWriteMessage::WriteMessage {
+                read_message: msg1.into(),
+            })
             .await
             .unwrap();
 
@@ -611,7 +622,9 @@ mod tests {
             ..Default::default()
         };
         wal_tx
-            .send(SegmentWriteMessage::WriteMessage { message: msg2 })
+            .send(SegmentWriteMessage::WriteMessage {
+                read_message: msg2.into(),
+            })
             .await
             .unwrap();
 
@@ -683,7 +696,9 @@ mod tests {
             ..Default::default()
         };
         wal_tx
-            .send(SegmentWriteMessage::WriteMessage { message: msg1 })
+            .send(SegmentWriteMessage::WriteMessage {
+                read_message: msg1.into(),
+            })
             .await
             .unwrap();
 
@@ -697,7 +712,9 @@ mod tests {
             ..Default::default()
         };
         wal_tx
-            .send(SegmentWriteMessage::WriteMessage { message: msg2 })
+            .send(SegmentWriteMessage::WriteMessage {
+                read_message: msg2.into(),
+            })
             .await
             .unwrap();
 

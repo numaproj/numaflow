@@ -44,11 +44,12 @@ use crate::config::is_mono_vertex;
 use crate::config::monovertex::BypassConditions;
 use crate::error;
 use crate::error::Error;
-use crate::message::Message;
+use crate::mark_success;
+use crate::mark_success_batch;
+use crate::message::{Message, MessageHandle};
 use crate::shared::forward::should_forward;
 use crate::sinker::sink::{SinkWriter, send_drop_metrics};
 use numaflow_models::models::ForwardConditions;
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::pin;
 use tokio::sync::mpsc;
@@ -62,9 +63,9 @@ use tracing::info;
 /// appropriate sink based on the bypass condition.
 #[derive(Debug, Clone)]
 pub enum MessageToSink {
-    Primary(Message),
-    Fallback(Message),
-    OnSuccess(Message),
+    Primary(MessageHandle),
+    Fallback(MessageHandle),
+    OnSuccess(MessageHandle),
 }
 
 /// Returns a reference to the inner message wrapped by the enum.
@@ -73,7 +74,7 @@ impl MessageToSink {
         match self {
             MessageToSink::Primary(msg)
             | MessageToSink::Fallback(msg)
-            | MessageToSink::OnSuccess(msg) => msg,
+            | MessageToSink::OnSuccess(msg) => msg.message(),
         }
     }
 }
@@ -153,33 +154,38 @@ impl MvtxBypassRouter {
 
     /// Checks if the message should be bypassed based on the bypass conditions and routes it to
     /// the appropriate sink.
-    /// Returns a boolean wrapped in a Result. Returns Ok(true) if the message was bypassed,
-    /// Ok(false) if the message was not bypassed, and Err if the messages supposed to be bypassed
-    /// but there was an error in sending the message to the bypass channel.
-    pub(crate) async fn try_bypass(&self, msg: Message) -> error::Result<bool> {
+    ///
+    /// Takes ownership of the MessageHandle. Returns:
+    /// - `Ok(None)` if the message was bypassed (sent to bypass channel, caller should not process further)
+    /// - `Ok(Some(message_handle))` if the message was not bypassed (caller should continue processing)
+    /// - `Err` if the message was supposed to be bypassed but there was an error sending to bypass channel
+    pub(crate) async fn try_bypass(
+        &self,
+        message_handle: MessageHandle,
+    ) -> error::Result<Option<MessageHandle>> {
         for bypass_condition in self.bypass_conditions.clone() {
             match bypass_condition {
                 BypassConditionState::Sink(sink) => {
-                    if should_forward(msg.tags.clone(), Some(sink)) {
-                        return self.route(MessageToSink::Primary(msg)).await.map(|_| true);
+                    if should_forward(message_handle.message().tags.clone(), Some(sink)) {
+                        self.route(MessageToSink::Primary(message_handle)).await?;
+                        return Ok(None);
                     }
                 }
                 BypassConditionState::Fallback(fallback) => {
-                    if should_forward(msg.tags.clone(), Some(fallback)) {
-                        return self.route(MessageToSink::Fallback(msg)).await.map(|_| true);
+                    if should_forward(message_handle.message().tags.clone(), Some(fallback)) {
+                        self.route(MessageToSink::Fallback(message_handle)).await?;
+                        return Ok(None);
                     }
                 }
                 BypassConditionState::OnSuccess(on_success) => {
-                    if should_forward(msg.tags.clone(), Some(on_success)) {
-                        return self
-                            .route(MessageToSink::OnSuccess(msg))
-                            .await
-                            .map(|_| true);
+                    if should_forward(message_handle.message().tags.clone(), Some(on_success)) {
+                        self.route(MessageToSink::OnSuccess(message_handle)).await?;
+                        return Ok(None);
                     }
                 }
             }
         }
-        Ok(false)
+        Ok(Some(message_handle))
     }
 
     /// [route] method calls the bypass_tx send method.
@@ -247,28 +253,32 @@ impl BypassRouterReceiver {
                 // Main processing loop
                 while let Some(batch) = chunk_stream.next().await {
                     // we are in shutting down mode, we will not be writing to any sink,
-                    // mark the messages as failed, and on Drop they will be nack'ed.
+                    // messages will be nack'ed.
                     if self.shutting_down_on_err {
-                        for msg in &batch {
-                            match msg {
-                                MessageToSink::Primary(msg)
-                                | MessageToSink::Fallback(msg)
-                                | MessageToSink::OnSuccess(msg) => msg.ack_handle.as_ref(),
-                            }
-                            .expect("ack handle should be present")
-                            .is_failed
-                            .store(true, Ordering::Relaxed);
+                        for msg in batch {
+                            let handle = match msg {
+                                MessageToSink::Primary(h)
+                                | MessageToSink::Fallback(h)
+                                | MessageToSink::OnSuccess(h) => h,
+                            };
+                            handle.mark_failed(self.final_result.as_ref().unwrap_err());
                         }
                         continue;
                     }
 
-                    // filter out messages that are marked for drop
-                    let original_len = batch.len();
-                    let batch: Vec<_> = batch
-                        .into_iter()
-                        .filter(|msg| !msg.inner().dropped())
-                        .collect();
-                    let dropped_message_count = original_len - batch.len();
+                    // Separate messages marked for drop from those to be forwarded.
+                    // Dropped messages must be ACK'd — drop is a successful outcome.
+                    let (to_drop, batch): (Vec<_>, Vec<_>) =
+                        batch.into_iter().partition(|msg| msg.inner().dropped());
+                    let dropped_message_count = to_drop.len();
+                    for msg in to_drop {
+                        let handle = match msg {
+                            MessageToSink::Primary(h)
+                            | MessageToSink::Fallback(h)
+                            | MessageToSink::OnSuccess(h) => h,
+                        };
+                        mark_success!(handle);
+                    }
 
                     // skip if all were dropped
                     if batch.is_empty() {
@@ -278,28 +288,27 @@ impl BypassRouterReceiver {
                     let mut primary_messages: Vec<Message> = vec![];
                     let mut fallback_messages: Vec<Message> = vec![];
                     let mut on_success_messages: Vec<Message> = vec![];
-                    let mut ack_handles = vec![];
+                    let mut msg_handles: Vec<MessageHandle> = vec![];
 
-                    // Convert MessageToSink to Message and create respective
-                    // vectors of Messages and ack handles
+                    // Convert MessageToSink to Message and collect MessageHandles for acking
                     for msg in batch {
                         match msg {
-                            MessageToSink::Primary(msg) => {
-                                ack_handles.push(msg.ack_handle.clone());
-                                primary_messages.push(msg);
+                            MessageToSink::Primary(read_msg) => {
+                                primary_messages.push(read_msg.message().clone());
+                                msg_handles.push(read_msg);
                             }
-                            MessageToSink::Fallback(msg) => {
-                                ack_handles.push(msg.ack_handle.clone());
-                                fallback_messages.push(msg)
+                            MessageToSink::Fallback(read_msg) => {
+                                fallback_messages.push(read_msg.message().clone());
+                                msg_handles.push(read_msg);
                             }
-                            MessageToSink::OnSuccess(msg) => {
-                                ack_handles.push(msg.ack_handle.clone());
-                                on_success_messages.push(msg)
+                            MessageToSink::OnSuccess(read_msg) => {
+                                on_success_messages.push(read_msg.message().clone());
+                                msg_handles.push(read_msg);
                             }
                         }
                     }
 
-                    if let Err(e) = self
+                    match self
                         .perform_write(
                             primary_messages,
                             fallback_messages,
@@ -308,19 +317,19 @@ impl BypassRouterReceiver {
                         )
                         .await
                     {
-                        error!(?e, "Error writing to sink, initiating shutdown.");
-                        cln_token.cancel();
-
-                        for ack_handle in ack_handles {
-                            ack_handle
-                                .as_ref()
-                                .expect("ack handle should be present")
-                                .is_failed
-                                .store(true, Ordering::Relaxed);
+                        Ok(()) => {
+                            // Successfully written to sink, ACK all messages
+                            mark_success_batch!(msg_handles);
                         }
-
-                        self.final_result = Err(e);
-                        self.shutting_down_on_err = true;
+                        Err(e) => {
+                            error!(?e, "Error writing to sink, initiating shutdown.");
+                            cln_token.cancel();
+                            for msg in msg_handles {
+                                msg.mark_failed(&e);
+                            }
+                            self.final_result = Err(e);
+                            self.shutting_down_on_err = true;
+                        }
                     }
                     send_drop_metrics(is_mono_vertex(), dropped_message_count);
                 }
@@ -332,7 +341,7 @@ impl BypassRouterReceiver {
     }
 
     /// Call the different write methods on the sink writer for different types of message vectors.
-    /// If any of the write methods fail, return immediately, ack_handles are marked as failed in the
+    /// If any of the write methods fail, return immediately, msg_handles are marked as failed in the
     /// caller.
     async fn perform_write(
         &mut self,
@@ -357,7 +366,7 @@ impl BypassRouterReceiver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{AckHandle, IntOffset, MessageID, Offset, ReadAck};
+    use crate::message::{IntOffset, MessageID, Offset, ReadAck};
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
     use crate::tracker::Tracker;
@@ -373,20 +382,9 @@ mod tests {
     use tokio::sync::mpsc::Receiver;
     use tokio::sync::oneshot;
 
-    /// Creates a test message with optional tags and ack handle.
-    fn create_test_message(
-        id: i32,
-        tags: Option<Vec<String>>,
-        with_ack_handle: bool,
-    ) -> (Message, Option<oneshot::Receiver<ReadAck>>) {
-        let (ack_handle, ack_rx) = if with_ack_handle {
-            let (tx, rx) = oneshot::channel();
-            (Some(Arc::new(AckHandle::new(tx))), Some(rx))
-        } else {
-            (None, None)
-        };
-
-        let msg = Message {
+    /// Creates a test message with optional tags.
+    fn create_test_message(id: i32, tags: Option<Vec<String>>) -> Message {
+        Message {
             typ: Default::default(),
             keys: Arc::from(vec![format!("key_{}", id)]),
             tags: tags.map(Arc::from),
@@ -402,22 +400,31 @@ mod tests {
             headers: Arc::new(HashMap::new()),
             metadata: None,
             is_late: false,
-            ack_handle,
-        };
-        (msg, ack_rx)
+        }
+    }
+
+    /// Creates a test MessageHandle with optional tags and ack handle.
+    fn create_test_read_message(
+        id: i32,
+        tags: Option<Vec<String>>,
+    ) -> (MessageHandle, oneshot::Receiver<ReadAck>) {
+        let msg = create_test_message(id, tags);
+        let (ack_tx, ack_rx) = oneshot::channel();
+        (MessageHandle::new(msg, ack_tx), ack_rx)
     }
 
     // ==================== MessageToSink Tests ====================
 
     #[test]
     fn test_message_to_sink_inner() {
-        let (msg, _) = create_test_message(1, None, false);
+        let msg = create_test_message(1, None);
+        let (read_msg, _ack_rx) = create_test_read_message(1, None);
 
         // Test all variants return the correct inner message
         for msg_to_sink in [
-            MessageToSink::Primary(msg.clone()),
-            MessageToSink::Fallback(msg.clone()),
-            MessageToSink::OnSuccess(msg.clone()),
+            MessageToSink::Primary(read_msg.clone()),
+            MessageToSink::Fallback(read_msg.clone()),
+            MessageToSink::OnSuccess(read_msg.clone()),
         ] {
             assert_eq!(msg_to_sink.inner().id, msg.id);
             assert_eq!(msg_to_sink.inner().value, msg.value);
@@ -511,11 +518,9 @@ mod tests {
         .await;
 
         let mut ack_rxs = vec![];
-        let messages: Vec<Message> = (0..10)
+        let messages: Vec<MessageHandle> = (0..10)
             .map(|i| {
-                let (ack_tx, ack_rx) = oneshot::channel();
-                ack_rxs.push(ack_rx);
-                Message {
+                let message = Message {
                     typ: Default::default(),
                     keys: Arc::from(vec![format!("key_{}", i)]),
                     tags: Some(Arc::from(vec![DROP.to_string()])),
@@ -528,9 +533,12 @@ mod tests {
                         offset: format!("offset_{}", i).into(),
                         index: i as i32,
                     },
-                    ack_handle: Some(Arc::new(AckHandle::new(ack_tx))),
                     ..Default::default()
-                }
+                };
+                let (ack_tx, ack_rx) = oneshot::channel();
+                let handle = MessageHandle::new(message, ack_tx);
+                ack_rxs.push(ack_rx);
+                handle
             })
             .collect();
 

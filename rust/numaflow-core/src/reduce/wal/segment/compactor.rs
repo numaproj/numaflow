@@ -779,9 +779,11 @@ mod tests {
             };
 
             // Send message - conversion to bytes happens internally
-            tx.send(SegmentWriteMessage::WriteMessage { message })
-                .await
-                .unwrap();
+            tx.send(SegmentWriteMessage::WriteMessage {
+                read_message: message.into(),
+            })
+            .await
+            .unwrap();
 
             // Rotate every 100 messages to create 10 files
             if i % 100 == 0 {
@@ -954,13 +956,13 @@ mod tests {
 
         // Write the messages to the WAL - conversion to bytes happens internally
         tx.send(SegmentWriteMessage::WriteMessage {
-            message: before_message,
+            read_message: before_message.into(),
         })
         .await
         .map_err(|e| format!("Failed to send data: {e}"))?;
 
         tx.send(SegmentWriteMessage::WriteMessage {
-            message: after_message,
+            read_message: after_message.into(),
         })
         .await
         .map_err(|e| format!("Failed to send data: {e}"))?;
@@ -1210,7 +1212,7 @@ mod tests {
         {
             // Send message - conversion to bytes happens internally
             tx.send(SegmentWriteMessage::WriteMessage {
-                message: message.clone(),
+                read_message: message.clone().into(),
             })
             .await
             .map_err(|e| format!("Failed to send data: {e}"))?;

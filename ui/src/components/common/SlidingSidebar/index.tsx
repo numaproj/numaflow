@@ -314,7 +314,10 @@ export function SlidingSidebar({
           paddingLeft: "1.6rem",
           width: "100%",
           height: "calc(100% - 10.8rem)",
-          overflowX: "scroll",
+          overflowX: "hidden",
+          overflowY: "auto",
+          minWidth: 0,
+          boxSizing: "border-box",
         }}
       >
         <Box

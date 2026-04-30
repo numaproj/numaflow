@@ -170,8 +170,10 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
                     // accumulator acts like a Global Window.
                     let window = response.window.clone().expect("Window not set in response");
                     let window : Window = window.into();
+                    // Send to ISB writer (message is converted to MessageHandle via From trait)
+                    let message: Message = response.into();
                     writer_tx
-                        .send(response.into())
+                        .send(message.into())
                         .await
                         .expect("Failed to send response to writer");
 
@@ -285,8 +287,10 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
                         continue;
                     }
 
+                    // Send to ISB writer (message is converted to MessageHandle via From trait)
+                    let message: Message = response.into();
                     writer_tx
-                        .send(response.into())
+                        .send(message.into())
                         .await
                         .expect("Failed to send response to writer");
                 }

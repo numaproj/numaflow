@@ -49,7 +49,6 @@ impl TryFrom<SqsMessage> for Message {
             headers: Arc::new(message.system_attributes),
             metadata,
             is_late: false,
-            ack_handle: None,
         })
     }
 }
