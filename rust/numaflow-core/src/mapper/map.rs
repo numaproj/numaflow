@@ -441,8 +441,9 @@ pub(crate) struct ParentMessageInfo {
     pub(crate) is_late: bool,
     pub(crate) headers: Arc<HashMap<String, String>>,
     pub(crate) start_time: Instant,
-    /// this remains 0 for all except map-streaming because in map-streaming there could be more than
-    /// one response for a single request.
+    /// Used to disambiguate sibling messages that share the same offset.
+    /// Also used for propagating this index as part of offset to maintain
+    /// uniqueness across transformer-map combination (e.g. fan-out from a source transformer).
     pub(crate) current_index: i32,
     pub(crate) metadata: Option<Arc<Metadata>>,
 }
@@ -473,7 +474,7 @@ impl From<Message> for MapRequest {
                 headers: Arc::unwrap_or_clone(message.headers),
                 metadata: message.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
             }),
-            id: message.offset.to_string(),
+            id: message.id.to_string(),
             handshake: None,
             status: None,
         }
@@ -490,7 +491,7 @@ impl From<UserDefinedMessage<'_>> for Message {
             id: MessageID {
                 vertex_name: get_vertex_name().to_string().into(),
                 index: value.2,
-                offset: value.1.offset.to_string().into(),
+                offset: format!("{}-{}", value.1.offset, value.1.current_index).into(),
             },
             keys: Arc::from(value.0.keys),
             tags: Some(Arc::from(value.0.tags)),
