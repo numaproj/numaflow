@@ -1,7 +1,7 @@
 use crate::config::pipeline::VERTEX_TYPE_REDUCE_UDF;
 use crate::error::Result;
 use crate::mark_success;
-use crate::message::Message;
+use crate::message::{Message, MessageType};
 use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 use crate::pipeline::isb::reader::ISBReaderOrchestrator;
 use crate::reduce::wal::WalMessage;
@@ -116,14 +116,18 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
             let msg: WalMessage = msg.try_into().map_err(|e| {
                 crate::error::Error::Reduce(format!("Failed to parse WAL message: {e}"))
             })?;
-            messages_tx.send(msg.into()).await.map_err(|_| {
+            let message: Message = msg.into();
+            let is_data = message.typ == MessageType::Data;
+            messages_tx.send(message).await.map_err(|_| {
                 crate::error::Error::Reduce("PBQ WAL replay: receiver dropped".to_string())
             })?;
-            pipeline_metrics()
-                .reduce
-                .pbq_write_total
-                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
-                .inc();
+            if is_data {
+                pipeline_metrics()
+                    .reduce
+                    .pbq_write_total
+                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                    .inc();
+            }
             replayed_count += 1;
         }
 
@@ -160,16 +164,19 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
                 })?;
 
             // Send cloned message downstream
+            let is_data = message.typ == MessageType::Data;
             tx.send(message).await.map_err(|_| {
                 crate::error::Error::Reduce(
                     "PBQ ISB reader: downstream receiver dropped".to_string(),
                 )
             })?;
-            pipeline_metrics()
-                .reduce
-                .pbq_write_total
-                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
-                .inc();
+            if is_data {
+                pipeline_metrics()
+                    .reduce
+                    .pbq_write_total
+                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                    .inc();
+            }
         }
 
         isb_handle
@@ -206,16 +213,19 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
         while let Some(read_msg) = isb_stream.next().await {
             // Extract the message and forward to output channel
             let message = read_msg.message().clone();
+            let is_data = message.typ == MessageType::Data;
             tx.send(message).await.map_err(|_| {
                 crate::error::Error::Reduce(
                     "PBQ ISB reader: downstream receiver dropped".to_string(),
                 )
             })?;
-            pipeline_metrics()
-                .reduce
-                .pbq_write_total
-                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
-                .inc();
+            if is_data {
+                pipeline_metrics()
+                    .reduce
+                    .pbq_write_total
+                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                    .inc();
+            }
             // Mark the read message as success after processing
             mark_success!(read_msg);
         }
