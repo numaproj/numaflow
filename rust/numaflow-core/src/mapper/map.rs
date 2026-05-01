@@ -442,10 +442,11 @@ pub(crate) struct ParentMessageInfo {
     pub(crate) headers: Arc<HashMap<String, String>>,
     pub(crate) start_time: Instant,
     /// Used to disambiguate sibling messages that share the same offset.
-    /// Also used for propagating this index as part of offset to maintain
-    /// uniqueness across transformer-map combination (e.g. fan-out from a source transformer).
     pub(crate) current_index: i32,
     pub(crate) metadata: Option<Arc<Metadata>>,
+    /// Used for propagating this index as part of vertex_name to maintain
+    /// uniqueness across transformer-map combination (e.g. fan-out from a source transformer).
+    pub(crate) parent_index: i32,
 }
 
 impl From<&Message> for ParentMessageInfo {
@@ -456,8 +457,9 @@ impl From<&Message> for ParentMessageInfo {
             headers: Arc::clone(&message.headers),
             is_late: message.is_late,
             start_time: Instant::now(),
-            current_index: message.id.index,
+            current_index: 0,
             metadata: message.metadata.clone(),
+            parent_index: message.id.index,
         }
     }
 }
@@ -489,9 +491,9 @@ impl From<UserDefinedMessage<'_>> for Message {
         Message {
             typ: Default::default(),
             id: MessageID {
-                vertex_name: get_vertex_name().to_string().into(),
+                vertex_name: format!("{}-{}", get_vertex_name(), value.1.parent_index).into(),
                 index: value.2,
-                offset: format!("{}-{}", value.1.offset, value.1.current_index).into(),
+                offset: value.1.offset.to_string().into(),
             },
             keys: Arc::from(value.0.keys),
             tags: Some(Arc::from(value.0.tags)),
@@ -1610,6 +1612,7 @@ mod tests {
             start_time: std::time::Instant::now(),
             current_index: 0,
             metadata: None,
+            parent_index: 0,
         };
 
         update_udf_write_metric(true, &msg_info, 5);
@@ -1643,6 +1646,7 @@ mod tests {
             start_time: std::time::Instant::now(),
             current_index: 0,
             metadata: None,
+            parent_index: 0,
         };
 
         update_udf_write_metric(false, &msg_info, 5);
