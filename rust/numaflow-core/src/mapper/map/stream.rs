@@ -229,16 +229,41 @@ impl UserDefinedStreamMap {
                     }
 
                     if let Some(response_sender) = response_sender_entry {
-                        Self::process_stream_response(
-                            &sender_map,
-                            resp.id,
-                            response_sender,
-                            resp.results,
-                        )
-                        .await
+                        // move the senders_guard out of the scope to drop the guard before sending the response
+                        // Insert the sender back into the SenderMap to avoid yielding back control
+                        // to the tokio runtime during send on the actual sender
+                        let mapper_closed = {
+                            let mut senders_guard =
+                                sender_map.lock().expect("failed to acquire poisoned lock");
+                            if !senders_guard.closed {
+                                // Write the sender back to the map, because we need to send
+                                // more responses for the same request
+                                senders_guard
+                                    .map
+                                    .insert(resp.id.clone(), response_sender.clone());
+                            }
+                            senders_guard.closed
+                        };
+
+                        if mapper_closed {
+                            let _ = response_sender
+                                .send(Err(Error::Mapper("mapper closed".to_string())))
+                                .await;
+                        }
+
+                        if let Err(e) = response_sender.send(Ok(resp.results)).await {
+                            error!(?e, "Failed to send map response to stream actor");
+                            {
+                                sender_map
+                                    .lock()
+                                    .expect("failed to acquire poisoned lock")
+                                    .map
+                                    .remove(&resp.id);
+                            }
+                        }
                     } else {
                         warn!(
-                            ?resp,
+                            ?resp.id,
                             "No such req/resp ID found in StreamResponseSenderMap. \
                             No further responses will be streamed for this ID"
                         );
@@ -329,36 +354,6 @@ impl UserDefinedStreamMap {
         }
 
         rx
-    }
-
-    /// Processes stream responses and sends them to the appropriate mpsc sender
-    async fn process_stream_response(
-        sender_map: &Arc<Mutex<StreamSenderMapState>>,
-        msg_id: String,
-        response_sender: mpsc::Sender<Result<StreamMapResponse>>,
-        results: Vec<map::map_response::Result>,
-    ) {
-        response_sender
-            .send(Ok(results))
-            .await
-            .expect("failed to send response");
-
-        // move the senders_guard out of the scope to drop the guard before sending the response
-        let mapper_closed = {
-            let mut senders_guard = sender_map.lock().expect("failed to acquire poisoned lock");
-            if !senders_guard.closed {
-                // Write the sender back to the map, because we need to send
-                // more responses for the same request
-                senders_guard.map.insert(msg_id, response_sender.clone());
-            }
-            senders_guard.closed
-        };
-
-        if mapper_closed {
-            let _ = response_sender
-                .send(Err(Error::Mapper("mapper closed".to_string())))
-                .await;
-        }
     }
 }
 
