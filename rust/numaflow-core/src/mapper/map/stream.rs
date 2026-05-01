@@ -213,12 +213,13 @@ impl UserDefinedStreamMap {
         while let Some(resp) = resp_stream.next().await {
             match resp {
                 Ok(resp) => {
-                    let response_sender = sender_map
-                        .lock()
-                        .expect("failed to acquire poisoned lock")
-                        .map
-                        .remove(&resp.id)
-                        .expect("map entry should always be present");
+                    let response_sender_entry = {
+                        sender_map
+                            .lock()
+                            .expect("failed to acquire poisoned lock")
+                            .map
+                            .remove(&resp.id)
+                    };
 
                     // once we get eot, we can drop the sender to let the callee
                     // know that we are done sending responses
@@ -227,13 +228,21 @@ impl UserDefinedStreamMap {
                         continue;
                     }
 
-                    Self::process_stream_response(
-                        &sender_map,
-                        resp.id,
-                        response_sender,
-                        resp.results,
-                    )
-                    .await
+                    if let Some(response_sender) = response_sender_entry {
+                        Self::process_stream_response(
+                            &sender_map,
+                            resp.id,
+                            response_sender,
+                            resp.results,
+                        )
+                        .await
+                    } else {
+                        warn!(
+                            ?resp,
+                            "No such req/resp ID found in StreamResponseSenderMap. \
+                            No further responses will be streamed for this ID"
+                        );
+                    }
                 }
                 Err(e) => {
                     error!(?e, "Error reading message from stream map gRPC stream");
@@ -272,19 +281,10 @@ impl UserDefinedStreamMap {
 
         let key = request.id.clone();
 
-        // only insert if we are able to send the message to the server
-        if let Err(e) = self.read_tx.send(request).await {
-            error!(?e, "Failed to send message to server");
-            let _ = tx
-                .send(Err(Error::Mapper(format!(
-                    "failed to send message to stream map server: {e}"
-                ))))
-                .await
-                .inspect(|_| warn!("failed to send error to oneshot receiver"));
-            return rx;
-        }
-
-        // move the senders_guard out of the scope to drop the guard before sending the response
+        // Move the senders_guard out of the scope to drop the guard before sending the response
+        // Do this before we send the message to the server to avoid the race condition
+        // where the server processes the message faster than the corresponding sender
+        // is added to the SenderMap.
         let mapper_closed = {
             let mut senders_guard = self
                 .senders
@@ -302,6 +302,30 @@ impl UserDefinedStreamMap {
             let _ = tx
                 .send(Err(Error::Mapper("mapper closed".to_string())))
                 .await;
+        }
+
+        // only insert if we are able to send the message to the server
+        if let Err(e) = self.read_tx.send(request).await {
+            error!(?e, "Failed to send message to map stream udf server");
+            // We should ideally remove the resp.id from the SenderMap to
+            // avoid potential memory leaks. We don't care about the return value
+            // since we already have access to the 'tx'
+            {
+                let _ = self
+                    .senders
+                    .lock()
+                    .expect("failed to acquire poisoned lock")
+                    .map
+                    .remove(&key);
+            };
+
+            // send error on 'tx'
+            let _ = tx
+                .send(Err(Error::Mapper(format!(
+                    "failed to send message to map stream server: {e}"
+                ))))
+                .await
+                .inspect(|_| warn!("failed to send error to receiver"));
         }
 
         rx

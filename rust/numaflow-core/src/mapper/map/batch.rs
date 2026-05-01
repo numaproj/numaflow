@@ -19,7 +19,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
-use tracing::error;
+use tracing::{error, warn};
 
 /// Type alias for the batch response - raw results from the UDF
 pub(in crate::mapper) type BatchMapResponse = Vec<map::map_response::Result>;
@@ -223,7 +223,7 @@ impl UserDefinedBatchMap {
                         continue;
                     }
 
-                    Self::process_response(&sender_map, resp).await
+                    Self::process_response(&sender_map, resp)
                 }
                 Err(e) => {
                     error!(?e, "Error reading message from batch map gRPC stream");
@@ -235,19 +235,26 @@ impl UserDefinedBatchMap {
 
     /// Processes the response from the server and sends it to the appropriate oneshot sender
     /// based on the message id entry in the map.
-    async fn process_response(sender_map: &Arc<Mutex<BatchSenderMapState>>, resp: MapResponse) {
+    fn process_response(sender_map: &Arc<Mutex<BatchSenderMapState>>, resp: MapResponse) {
         let msg_id = resp.id;
 
-        let sender_entry = sender_map
-            .lock()
-            .expect("failed to acquire poisoned lock")
-            .map
-            .remove(&msg_id);
+        let sender_entry = {
+            sender_map
+                .lock()
+                .expect("failed to acquire poisoned lock")
+                .map
+                .remove(&msg_id)
+        };
 
         if let Some(sender) = sender_entry {
             sender
                 .send(Ok(resp.results))
                 .expect("failed to send response");
+        } else {
+            warn!(
+                ?msg_id,
+                "No such req/resp ID found in batch ResponseSenderMap"
+            );
         }
     }
 
@@ -264,27 +271,50 @@ impl UserDefinedBatchMap {
         for (request, sender) in requests.into_iter().zip(senders) {
             let key = request.id.clone();
 
-            // only insert if we are able to send the message to the server
+            // Move the senders_guard out of the scope to drop the guard when done.
+            // Do this before we send the message to the server to avoid the race condition
+            // where the server processes the message faster than the corresponding sender
+            // is added to the SenderMap.
+            {
+                let mut senders_guard = self
+                    .senders
+                    .lock()
+                    .expect("failed to acquire poisoned lock");
+                if !senders_guard.closed {
+                    senders_guard.map.insert(key.clone(), sender);
+                } else {
+                    let _ = sender
+                        .send(Err(Error::Mapper("batch mapper closed".to_string())))
+                        .inspect(|_| warn!("failed to send error to oneshot receiver"));
+                    continue;
+                }
+            };
+
+            // send the message to the server
             if let Err(e) = self.read_tx.send(request).await {
                 error!(?e, "Failed to send message to server");
-                let _ = sender.send(Err(Error::Mapper(format!(
-                    "failed to send message to batch map server: {e}"
-                ))));
+                // We should ideally remove the resp.id from the SenderMap to
+                // avoid potential memory leaks.
+                let sender_entry = {
+                    self.senders
+                        .lock()
+                        .expect("failed to acquire poisoned lock")
+                        .map
+                        .remove(&key)
+                };
+
+                // We should send error on the sender so the first receiver receiving the error
+                // returns early with the collected results.
+                if let Some(sender) = sender_entry {
+                    let _ = sender
+                        .send(Err(Error::Mapper(format!(
+                            "failed to send message to batch map server: {e}"
+                        ))))
+                        .inspect(|_| warn!("failed to send error to oneshot receiver"));
+                }
                 // Continue collecting results for remaining receivers
                 break;
             }
-
-            let mut senders_guard = self
-                .senders
-                .lock()
-                .expect("failed to acquire poisoned lock");
-
-            if senders_guard.closed {
-                let _ = sender.send(Err(Error::Mapper("mapper closed".to_string())));
-                continue;
-            }
-
-            senders_guard.map.insert(key, sender);
         }
 
         // send eot request

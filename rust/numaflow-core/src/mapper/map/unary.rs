@@ -206,7 +206,7 @@ impl UserDefinedUnaryMap {
     ) {
         while let Some(resp) = resp_stream.next().await {
             match resp {
-                Ok(resp) => Self::process_unary_response(&sender_map, resp).await,
+                Ok(resp) => Self::process_unary_response(&sender_map, resp),
                 Err(e) => {
                     error!(?e, "Error reading message from unary map gRPC stream");
                     Self::broadcast_error(&sender_map, e);
@@ -232,15 +232,10 @@ impl UserDefinedUnaryMap {
         let (tx, rx) = oneshot::channel();
         let key = request.id.clone();
 
-        // only insert if we are able to send the message to the server
-        if let Err(e) = self.read_tx.send(request).await {
-            error!(?e, "Failed to send message to server");
-            return Err(Error::Mapper(format!(
-                "failed to send message to unary map server: {e}"
-            )));
-        }
-
-        // move the senders_guard out of the scope to drop the guard when done
+        // Move the senders_guard out of the scope to drop the guard when done
+        // Do this before we send the message to the server to avoid the race condition
+        // where the server processes the message faster than the corresponding sender
+        // is added to the SenderMap.
         {
             let mut senders_guard = self
                 .senders
@@ -254,6 +249,25 @@ impl UserDefinedUnaryMap {
                     .inspect(|_| warn!("failed to send error to oneshot receiver"));
             }
         };
+
+        // send message to the server
+        if let Err(e) = self.read_tx.send(request).await {
+            error!(?e, "Failed to send message to server");
+            // We should remove the resp.id from the SenderMap to avoid potential
+            // memory leaks. We don't care about sending the error on the sender popped
+            // from the map since we're returning early with error anyway.
+            {
+                let _ = self
+                    .senders
+                    .lock()
+                    .expect("failed to acquire poisoned lock")
+                    .map
+                    .remove(&key);
+            };
+            return Err(Error::Mapper(format!(
+                "failed to send message to unary map server: {e}"
+            )));
+        }
 
         tokio::select! {
             result = rx => {
@@ -275,22 +289,29 @@ impl UserDefinedUnaryMap {
 
     /// Processes the response from the server and sends it to the appropriate oneshot sender
     /// based on the message id entry in the map.
-    pub(super) async fn process_unary_response(
+    pub(super) fn process_unary_response(
         sender_map: &Arc<Mutex<UnarySenderMapState>>,
         resp: MapResponse,
     ) {
         let msg_id = resp.id;
 
-        let sender_entry = sender_map
-            .lock()
-            .expect("failed to acquire poisoned lock")
-            .map
-            .remove(&msg_id);
+        let sender_entry = {
+            sender_map
+                .lock()
+                .expect("failed to acquire poisoned lock")
+                .map
+                .remove(&msg_id)
+        };
 
         if let Some(sender) = sender_entry {
             sender
                 .send(Ok(resp.results))
                 .expect("failed to send response");
+        } else {
+            warn!(
+                ?msg_id,
+                "No such req/resp ID found in unary ResponseSenderMap"
+            );
         }
     }
 }
