@@ -2440,6 +2440,13 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#reduce-metrics" class="md-nav__link">
+    Reduce Metrics
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#fallback-sink-metrics" class="md-nav__link">
     Fallback Sink Metrics
   </a>
@@ -3031,6 +3038,13 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#reduce-metrics" class="md-nav__link">
+    Reduce Metrics
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#fallback-sink-metrics" class="md-nav__link">
     Fallback Sink Metrics
   </a>
@@ -3526,6 +3540,59 @@
 </tr>
 </tbody>
 </table>
+<h3 id="reduce-metrics">Reduce Metrics<a class="headerlink" href="#reduce-metrics" title="Permanent link">&para;</a></h3>
+<p>These metrics are specific to reduce (windowed aggregation) vertices.</p>
+<table>
+<thead>
+<tr>
+<th>Metric name</th>
+<th>Metric type</th>
+<th>Additional Labels</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>reduce_active_windows</code></td>
+<td>Gauge</td>
+<td></td>
+<td>Number of currently open reduce windows</td>
+</tr>
+<tr>
+<td><code>reduce_closed_windows</code></td>
+<td>Gauge</td>
+<td></td>
+<td>Number of closed windows awaiting GC</td>
+</tr>
+<tr>
+<td><code>reduce_watermark_lag</code></td>
+<td>Gauge</td>
+<td></td>
+<td>Difference between wall clock and watermark, in milliseconds</td>
+</tr>
+<tr>
+<td><code>reduce_window_processing_time</code></td>
+<td>Histogram</td>
+<td></td>
+<td>Window open-to-close latency, in microseconds</td>
+</tr>
+<tr>
+<td><code>reduce_pnf_process_time</code></td>
+<td>Histogram</td>
+<td></td>
+<td>UDF reduce function execution time per window, in microseconds</td>
+</tr>
+<tr>
+<td><code>reduce_pbq_write</code></td>
+<td>Counter</td>
+<td></td>
+<td>Total data messages written to PBQ</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> All reduce metrics carry the standard pipeline common labels (<code>pipeline</code>, <code>vertex</code>, <code>replica</code>) with <code>vertex_type</code> always set to <code>ReduceUDF</code>.</p>
+</blockquote>
 <h3 id="fallback-sink-metrics">Fallback Sink Metrics<a class="headerlink" href="#fallback-sink-metrics" title="Permanent link">&para;</a></h3>
 <p>These metrics are specific to sink vertices with a fallback sink configured.</p>
 <table>
