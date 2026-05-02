@@ -100,13 +100,12 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
                 .client
                 .reduce_fn(message_stream, result_tx, cln_token)
                 .await;
-            if result.is_ok() {
-                pipeline_metrics()
-                    .reduce
-                    .pnf_process_time
-                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
-                    .observe(udf_start.elapsed().as_micros() as f64);
-            }
+            // recorded unconditionally; error/cancellation paths return below before window_processing_time
+            pipeline_metrics()
+                .reduce
+                .pnf_process_time
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                .observe(udf_start.elapsed().as_micros() as f64);
 
             if let Err(e) = result {
                 // Check if this is a cancellation error
@@ -519,7 +518,7 @@ impl<C: NumaflowTypeConfig> AlignedReducer<C> {
                                         // Only close windows if the idle watermark is greater than current watermark
                                         if idle_watermark > self.current_watermark {
                                             self.current_watermark = idle_watermark;
-                                            let lag = Utc::now().timestamp_millis() - self.current_watermark.timestamp_millis();
+                                            let lag = (Utc::now().timestamp_millis() - self.current_watermark.timestamp_millis()).max(0);
                                             pipeline_metrics()
                                                 .reduce
                                                 .watermark_lag
@@ -631,7 +630,8 @@ impl<C: NumaflowTypeConfig> AlignedReducer<C> {
 
         // Update watermark lag gauge (skip -1 sentinel)
         if self.current_watermark.timestamp_millis() != -1 {
-            let lag = Utc::now().timestamp_millis() - self.current_watermark.timestamp_millis();
+            let lag =
+                (Utc::now().timestamp_millis() - self.current_watermark.timestamp_millis()).max(0);
             pipeline_metrics()
                 .reduce
                 .watermark_lag

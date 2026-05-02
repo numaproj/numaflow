@@ -372,6 +372,17 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
         for (_keys, window) in self.tracked_windows.drain() {
             self.window_manager.delete_window(window);
         }
+        // update gauges immediately so the metric reflects GC without waiting for the next message
+        pipeline_metrics()
+            .reduce
+            .active_windows
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+            .set(self.window_manager.active_window_count() as i64);
+        pipeline_metrics()
+            .reduce
+            .closed_windows
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+            .set(self.window_manager.closed_window_count() as i64);
     }
 }
 
@@ -626,7 +637,7 @@ impl<C: NumaflowTypeConfig> UnalignedReducer<C> {
                                         // Only close windows if the idle watermark is greater than current watermark
                                         if idle_watermark > self.current_watermark {
                                             self.current_watermark = idle_watermark;
-                                            let lag = Utc::now().timestamp_millis() - self.current_watermark.timestamp_millis();
+                                            let lag = (Utc::now().timestamp_millis() - self.current_watermark.timestamp_millis()).max(0);
                                             pipeline_metrics()
                                                 .reduce
                                                 .watermark_lag
@@ -753,7 +764,8 @@ impl<C: NumaflowTypeConfig> UnalignedReducer<C> {
 
         // Update watermark lag gauge (skip -1 sentinel)
         if self.current_watermark.timestamp_millis() != -1 {
-            let lag = Utc::now().timestamp_millis() - self.current_watermark.timestamp_millis();
+            let lag =
+                (Utc::now().timestamp_millis() - self.current_watermark.timestamp_millis()).max(0);
             pipeline_metrics()
                 .reduce
                 .watermark_lag
