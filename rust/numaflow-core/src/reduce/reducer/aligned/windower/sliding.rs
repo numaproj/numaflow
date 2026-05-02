@@ -223,6 +223,22 @@ impl SlidingWindowManager {
             .cloned()
     }
 
+    /// Returns the number of currently active windows.
+    pub(crate) fn active_window_count(&self) -> usize {
+        self.active_windows
+            .read()
+            .expect("Poisoned lock for active_windows")
+            .len()
+    }
+
+    /// Returns the number of closed windows awaiting GC.
+    pub(crate) fn closed_window_count(&self) -> usize {
+        self.closed_windows
+            .read()
+            .expect("Poisoned lock for closed_windows")
+            .len()
+    }
+
     /// Helper method to format sorted window information for logging.
     fn format_windows_for_log(windows: &[ProtoWindow]) -> String {
         let formatted_windows: String = windows
