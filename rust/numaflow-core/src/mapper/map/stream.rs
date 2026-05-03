@@ -252,14 +252,25 @@ impl UserDefinedStreamMap {
                         }
 
                         if let Err(e) = response_sender.send(Ok(resp.results)).await {
-                            error!(?e, "Failed to send map response to stream actor");
+                            error!(
+                                ?e,
+                                "Failed to send map response to stream task. Exiting receiver task"
+                            );
                             {
-                                sender_map
-                                    .lock()
-                                    .expect("failed to acquire poisoned lock")
-                                    .map
-                                    .remove(&resp.id);
+                                let mut sender_guard =
+                                    sender_map.lock().expect("failed to acquire poisoned lock");
+
+                                // Remove the sender to avoid keeping the corresponding receiver waiting
+                                sender_guard.map.remove(&resp.id);
+
+                                // Mark the sender map closed for any further insertions
+                                sender_guard.closed = true;
                             }
+
+                            // Encountered error during sending message back to the stream execute task
+                            // Exit out of the receiver task to let any future senders error out and teardown
+                            // the map stream client
+                            break;
                         }
                     } else {
                         warn!(
@@ -282,6 +293,9 @@ impl UserDefinedStreamMap {
             tonic::Status::aborted("receiver stream dropped"),
         )
         .await;
+
+        // TODO: REMOVE
+        error!(?resp_stream, "udf receiver stream dropped");
     }
 
     /// Sends a request to the UDF and returns a receiver for raw response results.

@@ -247,9 +247,10 @@ impl UserDefinedBatchMap {
         };
 
         if let Some(sender) = sender_entry {
-            sender
-                .send(Ok(resp.results))
-                .expect("failed to send response");
+            sender.send(Ok(resp.results)).expect(
+                "Failed to send server response from receiver to batch task. \
+                Receiver will shutdown now",
+            );
         } else {
             warn!(
                 ?msg_id,
