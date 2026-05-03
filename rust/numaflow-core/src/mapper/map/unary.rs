@@ -304,9 +304,14 @@ impl UserDefinedUnaryMap {
         };
 
         if let Some(sender) = sender_entry {
-            sender
-                .send(Ok(resp.results))
-                .expect("failed to send response");
+            // Capture the error encountered during sending results back to unary task
+            // instead of crashing the background receiver task.
+            if let Err(e) = sender.send(Ok(resp.results)) {
+                error!(
+                    ?e,
+                    "Failed to send results from server to unary task on oneshot channel"
+                );
+            }
         } else {
             warn!(
                 ?msg_id,
