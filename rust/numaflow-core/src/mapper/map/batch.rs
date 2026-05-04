@@ -226,6 +226,7 @@ impl UserDefinedBatchMap {
                     if let Err(e) = Self::process_response(&sender_map, resp) {
                         error!("received error while processing batch response: {}. \
                         Exiting receiver task", e);
+                        Self::broadcast_error(&sender_map, tonic::Status::aborted("receiver stream dropped"));
                         break;
                     }
                 }
