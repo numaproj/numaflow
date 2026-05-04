@@ -1,6 +1,6 @@
 use super::{
-    create_response_stream, update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
-    update_udf_write_metric, ParentMessageInfo, UserDefinedMessage,
+    ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_error_metric,
+    update_udf_process_time_metric, update_udf_read_metric, update_udf_write_metric,
 };
 use crate::config::is_mono_vertex;
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
@@ -9,7 +9,7 @@ use crate::message::{Message, MessageHandle};
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::tracker::Tracker;
 use crate::{mark_failed, mark_success};
-use numaflow_pb::clients::map::{self, map_client::MapClient, MapRequest, MapResponse};
+use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -17,8 +17,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
-use tonic::transport::Channel;
 use tonic::Streaming;
+use tonic::transport::Channel;
 use tracing::{error, warn};
 
 /// Type alias for the batch response - raw results from the UDF
@@ -224,8 +224,11 @@ impl UserDefinedBatchMap {
                     }
 
                     if let Err(e) = Self::process_response(&sender_map, resp) {
-                        error!("received error while processing batch response: {}. \
-                        Exiting receiver task", e);
+                        error!(
+                            "received error while processing batch response: {}. \
+                        Exiting receiver task",
+                            e
+                        );
                         break;
                     }
                 }
@@ -236,12 +239,18 @@ impl UserDefinedBatchMap {
             }
         }
 
-        Self::broadcast_error(&sender_map, tonic::Status::aborted("receiver stream dropped"));
+        Self::broadcast_error(
+            &sender_map,
+            tonic::Status::aborted("receiver stream dropped"),
+        );
     }
 
     /// Processes the response from the server and sends it to the appropriate oneshot sender
     /// based on the message id entry in the map.
-    fn process_response(sender_map: &Arc<Mutex<BatchSenderMapState>>, resp: MapResponse) -> Result<()> {
+    fn process_response(
+        sender_map: &Arc<Mutex<BatchSenderMapState>>,
+        resp: MapResponse,
+    ) -> Result<()> {
         let msg_id = resp.id;
 
         let sender_entry = {
@@ -258,7 +267,10 @@ impl UserDefinedBatchMap {
                 Receiver will shutdown now",
             );
         } else {
-            return Err(Error::Mapper(format!("No such req/resp ID found in batch ResponseSenderMap: {}", msg_id)));
+            return Err(Error::Mapper(format!(
+                "No such req/resp ID found in batch ResponseSenderMap: {}",
+                msg_id
+            )));
         }
         Ok(())
     }
