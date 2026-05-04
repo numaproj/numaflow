@@ -226,7 +226,6 @@ impl UserDefinedBatchMap {
                     if let Err(e) = Self::process_response(&sender_map, resp) {
                         error!("received error while processing batch response: {}. \
                         Exiting receiver task", e);
-                        Self::broadcast_error(&sender_map, tonic::Status::aborted("receiver stream dropped"));
                         break;
                     }
                 }
@@ -236,6 +235,8 @@ impl UserDefinedBatchMap {
                 }
             }
         }
+
+        Self::broadcast_error(&sender_map, tonic::Status::aborted("receiver stream dropped"));
     }
 
     /// Processes the response from the server and sends it to the appropriate oneshot sender
