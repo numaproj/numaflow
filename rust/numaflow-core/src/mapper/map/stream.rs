@@ -213,6 +213,7 @@ impl UserDefinedStreamMap {
         while let Some(resp) = resp_stream.next().await {
             match resp {
                 Ok(resp) => {
+                    // TODO: move this whole block into a process_response method
                     let response_sender_entry = {
                         sender_map
                             .lock()
@@ -267,17 +268,26 @@ impl UserDefinedStreamMap {
                                 sender_guard.closed = true;
                             }
 
-                            // Encountered error during sending message back to the stream execute task
                             // Exit out of the receiver task to let any future senders error out and teardown
                             // the map stream client
                             break;
                         }
                     } else {
-                        warn!(
+                        error!(
                             ?resp.id,
                             "No such req/resp ID found in StreamResponseSenderMap. \
-                            No further responses will be streamed for this ID"
+                            Exiting receiver task"
                         );
+                        {
+                            // Mark the sender map closed for any further insertions
+                            sender_map
+                                .lock()
+                                .expect("failed to acquire poisoned lock")
+                                .closed = true;
+                        }
+                        // Exit out of the receiver task to let any future senders error
+                        // out and teardown the map stream client
+                        break;
                     }
                 }
                 Err(e) => {
@@ -295,7 +305,7 @@ impl UserDefinedStreamMap {
         .await;
 
         // TODO: REMOVE
-        error!(?resp_stream, "udf receiver stream dropped");
+        warn!(?resp_stream, "udf receiver stream dropped");
     }
 
     /// Sends a request to the UDF and returns a receiver for raw response results.
@@ -346,9 +356,9 @@ impl UserDefinedStreamMap {
         // only insert if we are able to send the message to the server
         if let Err(e) = self.read_tx.send(request).await {
             error!(?e, "Failed to send message to map stream udf server");
-            // We should ideally remove the resp.id from the SenderMap to
-            // avoid potential memory leaks. We don't care about the return value
-            // since we already have access to the 'tx'
+            // We should ideally remove the resp.id from the SenderMap to avoid potential
+            // memory leaks as well as to avoid holding the corresponding receiver waiting.
+            // We don't care about the return value since we already have access to the 'tx'
             {
                 let _ = self
                     .senders

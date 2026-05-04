@@ -254,7 +254,8 @@ impl UserDefinedUnaryMap {
         if let Err(e) = self.read_tx.send(request).await {
             error!(?e, "Failed to send message to server");
             // We should remove the resp.id from the SenderMap to avoid potential
-            // memory leaks. We don't care about sending the error on the sender popped
+            // memory leaks as well as to avoid holding the corresponding receiver waiting.
+            // We don't care about sending the error on the sender popped
             // from the map since we're returning early with error anyway.
             {
                 let _ = self

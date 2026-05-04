@@ -294,8 +294,8 @@ impl UserDefinedBatchMap {
             // send the message to the server
             if let Err(e) = self.read_tx.send(request).await {
                 error!(?e, "Failed to send message to server");
-                // We should ideally remove the resp.id from the SenderMap to
-                // avoid potential memory leaks.
+                // We should ideally remove the resp.id from the SenderMap to avoid potential
+                // memory leaks as well as to avoid holding the corresponding receiver waiting
                 let sender_entry = {
                     self.senders
                         .lock()
