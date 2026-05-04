@@ -3,9 +3,9 @@ use std::sync::Arc;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
-use tokio::time::{sleep, Duration, Instant};
-use tokio_stream::wrappers::ReceiverStream;
+use tokio::time::{Duration, Instant, sleep};
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
@@ -15,15 +15,15 @@ use crate::error::Error;
 use crate::mark_success;
 use crate::message::{Message, MessageHandle, Offset};
 use crate::metrics::{
-    pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
-    PIPELINE_PARTITION_NAME_LABEL,
+    PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_metric_labels,
+    pipeline_metrics,
 };
 use crate::pipeline::isb::error::ISBError;
 use crate::pipeline::isb::{ISBWriter, PendingWrite, WriteError, WriteResult};
 use crate::shared::forward;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::WatermarkHandle;
-use crate::{mark_failed, Result};
+use crate::{Result, mark_failed};
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 
@@ -91,7 +91,8 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
 
         let n = write_results.len();
 
-        let write_results = write_results.into_iter()
+        let write_results = write_results
+            .into_iter()
             .filter(|result| result.is_some())
             .flatten()
             .collect::<Vec<_>>();
@@ -278,14 +279,15 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
             let stream = Self::determine_target_stream(message, vertex);
 
             // Write to the stream with retry logic
-            results.push(self
-                .write_to_stream(
+            results.push(
+                self.write_to_stream(
                     message,
                     &stream,
                     vertex.writer_config.buffer_full_strategy.clone(),
                     cln_token.clone(),
                 )
-                .await);
+                .await,
+            );
         }
 
         // Handle empty results (conditional forwarding not met or all writes failed)
@@ -2088,13 +2090,8 @@ mod simple_buffer_tests {
             ))
         }
 
-        async fn write(
-            &self,
-            _message: Message,
-        ) -> std::result::Result<WriteResult, WriteError> {
-            Err(WriteError::WriteFailed(
-                "induced write failure".to_string(),
-            ))
+        async fn write(&self, _message: Message) -> std::result::Result<WriteResult, WriteError> {
+            Err(WriteError::WriteFailed("induced write failure".to_string()))
         }
 
         fn name(&self) -> &'static str {
