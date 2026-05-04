@@ -6,18 +6,18 @@ use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
 use crate::{mark_failed, mark_success};
-use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
-use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
+use numaflow_pb::clients::map::{self, map_client::MapClient, MapRequest, MapResponse};
+use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
-use tonic::Streaming;
 use tonic::transport::Channel;
+use tonic::Streaming;
 use tracing::{error, warn};
 
 use super::{
-    ParentMessageInfo, SharedMapTaskContext, UserDefinedMessage, create_response_stream,
-    update_udf_error_metric, update_udf_read_metric, update_udf_write_metric,
+    create_response_stream, update_udf_error_metric, update_udf_read_metric, update_udf_write_metric,
+    ParentMessageInfo, SharedMapTaskContext, UserDefinedMessage,
 };
 
 /// Type alias for the response - raw results from the UDF
@@ -314,10 +314,13 @@ impl UserDefinedUnaryMap {
         };
 
         if let Some(sender) = sender_entry {
-            sender.send(Ok(resp.results)).expect(
-                "Failed to send server response from receiver to unary task. \
-                Receiver will shutdown now",
-            );
+            if let Err(e) = sender.send(Ok(resp.results)) {
+                return Err(Error::Mapper(format!(
+                    "Failed to send server response from receiver to unary task \
+                    for ID: {} with error: {:?}. Receiver should shutdown now",
+                    msg_id, e
+                )));
+            };
         } else {
             return Err(Error::Mapper(format!(
                 "No such req/resp ID found in unary ResponseSenderMap: {}",
