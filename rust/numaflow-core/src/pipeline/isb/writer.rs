@@ -3,9 +3,9 @@ use std::sync::Arc;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
-use tokio::time::{Duration, Instant, sleep};
-use tokio_stream::StreamExt;
+use tokio::time::{sleep, Duration, Instant};
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
@@ -15,15 +15,15 @@ use crate::error::Error;
 use crate::mark_success;
 use crate::message::{Message, MessageHandle, Offset};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_metric_labels,
-    pipeline_metrics,
+    pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL,
 };
 use crate::pipeline::isb::error::ISBError;
 use crate::pipeline::isb::{ISBWriter, PendingWrite, WriteError, WriteResult};
 use crate::shared::forward;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::WatermarkHandle;
-use crate::{Result, mark_failed};
+use crate::{mark_failed, Result};
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 
@@ -90,6 +90,29 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
             .await;
 
         let n = write_results.len();
+
+        let write_results = write_results.into_iter()
+            .filter(|result| result.is_some())
+            .flatten()
+            .collect::<Vec<_>>();
+
+        if write_results.len() != n {
+            warn!(
+                expected = n,
+                actual = write_results.len(),
+                "Either some message writes will be discarded or the token has been cancelled"
+            );
+            mark_failed!(
+                self.msg_handle,
+                format!(
+                    "Either some message writes will be discarded or \
+                    the token has been cancelled: {}/{} writes would be made",
+                    write_results.len(),
+                    n
+                )
+            );
+            return;
+        }
 
         // Resolve all PAFs
         let resolved_offsets = self
@@ -242,7 +265,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
         &self,
         message: &Message,
         cln_token: CancellationToken,
-    ) -> Vec<PendingWriteResult> {
+    ) -> Vec<Option<PendingWriteResult>> {
         let mut results = vec![];
 
         for vertex in &*self.config {
@@ -255,17 +278,14 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
             let stream = Self::determine_target_stream(message, vertex);
 
             // Write to the stream with retry logic
-            if let Some(write_result) = self
+            results.push(self
                 .write_to_stream(
                     message,
                     &stream,
                     vertex.writer_config.buffer_full_strategy.clone(),
                     cln_token.clone(),
                 )
-                .await
-            {
-                results.push(write_result);
-            }
+                .await);
         }
 
         // Handle empty results (conditional forwarding not met or all writes failed)
@@ -2050,5 +2070,143 @@ mod simple_buffer_tests {
                 "Single partition unordered must always be partition 0"
             );
         }
+    }
+
+    // ==================== Cancellation-during-retry bug ====================
+
+    /// https://github.com/numaproj/numaflow/issues/3403
+    #[derive(Clone, Debug)]
+    struct AlwaysFailWriter;
+
+    impl ISBWriter for AlwaysFailWriter {
+        async fn async_write(
+            &self,
+            _message: Message,
+        ) -> std::result::Result<PendingWrite, WriteError> {
+            Err(WriteError::WriteFailed(
+                "induced async_write failure".to_string(),
+            ))
+        }
+
+        async fn write(
+            &self,
+            _message: Message,
+        ) -> std::result::Result<WriteResult, WriteError> {
+            Err(WriteError::WriteFailed(
+                "induced write failure".to_string(),
+            ))
+        }
+
+        fn name(&self) -> &'static str {
+            "always-fail"
+        }
+    }
+
+    /// Stub reader that satisfies `NumaflowTypeConfig::ISBReader`. Never instantiated
+    /// at runtime — `ISBWriterOrchestrator` only uses the writer associated type.
+    #[derive(Clone, Debug)]
+    struct UnusedReader;
+
+    impl crate::pipeline::isb::ISBReader for UnusedReader {
+        async fn fetch(&self, _max: usize, _timeout: Duration) -> Result<Vec<Message>> {
+            Ok(vec![])
+        }
+        async fn ack(&self, _offset: &Offset) -> Result<()> {
+            Ok(())
+        }
+        async fn nack(&self, _offset: &Offset) -> Result<()> {
+            Ok(())
+        }
+        async fn pending(&self) -> Result<Option<usize>> {
+            Ok(None)
+        }
+        fn name(&self) -> &'static str {
+            "unused"
+        }
+        async fn mark_wip(&self, _offset: &Offset) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    #[derive(Clone)]
+    struct WithAlwaysFailWriter;
+
+    impl NumaflowTypeConfig for WithAlwaysFailWriter {
+        type RateLimiter = numaflow_throttling::NoOpRateLimiter;
+        type ISBReader = UnusedReader;
+        type ISBWriter = AlwaysFailWriter;
+    }
+
+    /// Reproduces the cancellation-during-retry bug in
+    /// `ISBWriterOrchestrator::write_to_stream` (https://github.com/numaproj/numaflow/issues/3403).
+    ///
+    /// At-least-once requires `ReadAck::Nak` so the source can redeliver after
+    /// a graceful shutdown / restart.
+    #[tokio::test]
+    async fn test_cancellation_during_retry_should_nak_not_ack() {
+        let cancel = CancellationToken::new();
+        let stream = Stream::new("always-fail", "test-vertex", 0);
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            // Default is RetryUntilSuccess; we want async_write's WriteFailed
+            // to drive the retry loop in write_to_stream.
+            ..Default::default()
+        };
+
+        let mut writers = HashMap::new();
+        writers.insert(stream.name, AlwaysFailWriter);
+
+        let components = ISBWriterOrchestratorComponents {
+            config: vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config,
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+                ordered_processing_enabled: false,
+            }],
+            writers,
+            paf_concurrency: 10,
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+        };
+
+        let orchestrator = ISBWriterOrchestrator::<WithAlwaysFailWriter>::new(components);
+
+        let (tx, rx) = mpsc::channel(1);
+        let messages_stream = ReceiverStream::new(rx);
+
+        let handle = orchestrator
+            .streaming_write(messages_stream, cancel.clone())
+            .await
+            .unwrap();
+
+        let (msg, ack_rx) = create_test_message(1, "hello", None);
+        tx.send(msg).await.unwrap();
+
+        // Give the spawned ISBWriteTask a chance to enter the retry loop.
+        // DEFAULT_RETRY_INTERVAL_MILLIS = 10ms, so a few iterations land here.
+        sleep(Duration::from_millis(50)).await;
+
+        // Trigger the buggy path: cancellation observed during retry → write_to_stream
+        // returns None → execute() conflates with intentional drop → mark_success.
+        cancel.cancel();
+        drop(tx);
+
+        // Bound the wait so the test fails (instead of hanging) if the bug ever
+        // changes shape and the ack channel never fires.
+        let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
+            .await
+            .expect("ack channel should produce a result within 2s")
+            .expect("ack_tx should still be alive");
+
+        // EXPECTED: cancelled-during-retry NAKs so the source can redeliver.
+        assert_eq!(
+            ack,
+            ReadAck::Nak,
+            "Cancellation during retry must NAK to preserve at-least-once. Got ACK"
+        );
+
+        handle.await.unwrap().unwrap();
     }
 }
