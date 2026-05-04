@@ -213,80 +213,8 @@ impl UserDefinedStreamMap {
         while let Some(resp) = resp_stream.next().await {
             match resp {
                 Ok(resp) => {
-                    // TODO: move this whole block into a process_response method
-                    let response_sender_entry = {
-                        sender_map
-                            .lock()
-                            .expect("failed to acquire poisoned lock")
-                            .map
-                            .remove(&resp.id)
-                    };
-
-                    // once we get eot, we can drop the sender to let the callee
-                    // know that we are done sending responses
-                    if let Some(map::TransmissionStatus { eot: true }) = resp.status {
-                        update_udf_process_time_metric(is_mono_vertex());
-                        continue;
-                    }
-
-                    if let Some(response_sender) = response_sender_entry {
-                        // move the senders_guard out of the scope to drop the guard before sending the response
-                        // Insert the sender back into the SenderMap to avoid yielding back control
-                        // to the tokio runtime during send on the actual sender
-                        let mapper_closed = {
-                            let mut senders_guard =
-                                sender_map.lock().expect("failed to acquire poisoned lock");
-                            if !senders_guard.closed {
-                                // Write the sender back to the map, because we need to send
-                                // more responses for the same request
-                                senders_guard
-                                    .map
-                                    .insert(resp.id.clone(), response_sender.clone());
-                            }
-                            senders_guard.closed
-                        };
-
-                        if mapper_closed {
-                            let _ = response_sender
-                                .send(Err(Error::Mapper("mapper closed".to_string())))
-                                .await;
-                        }
-
-                        if let Err(e) = response_sender.send(Ok(resp.results)).await {
-                            error!(
-                                ?e,
-                                "Failed to send map response to stream task. Exiting receiver task"
-                            );
-                            {
-                                let mut sender_guard =
-                                    sender_map.lock().expect("failed to acquire poisoned lock");
-
-                                // Remove the sender to avoid keeping the corresponding receiver waiting
-                                sender_guard.map.remove(&resp.id);
-
-                                // Mark the sender map closed for any further insertions
-                                sender_guard.closed = true;
-                            }
-
-                            // Exit out of the receiver task to let any future senders error out and teardown
-                            // the map stream client
-                            break;
-                        }
-                    } else {
-                        error!(
-                            ?resp.id,
-                            "No such req/resp ID found in StreamResponseSenderMap. \
-                            Exiting receiver task"
-                        );
-                        {
-                            // Mark the sender map closed for any further insertions
-                            sender_map
-                                .lock()
-                                .expect("failed to acquire poisoned lock")
-                                .closed = true;
-                        }
-                        // Exit out of the receiver task to let any future senders error
-                        // out and teardown the map stream client
+                    if let Err(e) = Self::process_response(&sender_map, resp).await {
+                        error!("received error while processing stream response: {}", e);
                         break;
                     }
                 }
@@ -297,15 +225,93 @@ impl UserDefinedStreamMap {
             }
         }
 
-        // broadcast error for all pending senders that might've gotten added while the stream was draining
+        // broadcast error for all pending senders that might've gotten
+        // added while the stream was draining
         Self::broadcast_error(
             &sender_map,
             tonic::Status::aborted("receiver stream dropped"),
         )
         .await;
+    }
 
-        // TODO: REMOVE
-        warn!(?resp_stream, "udf receiver stream dropped");
+    async fn process_response(
+        sender_map: &Arc<Mutex<StreamSenderMapState>>,
+        resp: MapResponse,
+    ) -> Result<()> {
+        let response_sender_entry = {
+            sender_map
+                .lock()
+                .expect("failed to acquire poisoned lock")
+                .map
+                .remove(&resp.id)
+        };
+
+        // once we get eot, we can drop the sender to let the callee
+        // know that we are done sending responses
+        if let Some(map::TransmissionStatus { eot: true }) = resp.status {
+            update_udf_process_time_metric(is_mono_vertex());
+            return Ok(());
+        }
+
+        if let Some(response_sender) = response_sender_entry {
+            // move the senders_guard out of the scope to drop the guard before sending the response
+            // Insert the sender back into the SenderMap to avoid yielding back control
+            // to the tokio runtime during send on the actual sender
+            let mapper_closed = {
+                let mut senders_guard = sender_map.lock().expect("failed to acquire poisoned lock");
+                if !senders_guard.closed {
+                    // Write the sender back to the map, because we need to send
+                    // more responses for the same request
+                    senders_guard
+                        .map
+                        .insert(resp.id.clone(), response_sender.clone());
+                }
+                senders_guard.closed
+            };
+
+            if mapper_closed {
+                let _ = response_sender
+                    .send(Err(Error::Mapper("mapper closed".to_string())))
+                    .await;
+            }
+
+            if let Err(e) = response_sender.send(Ok(resp.results)).await {
+                {
+                    let mut sender_guard =
+                        sender_map.lock().expect("failed to acquire poisoned lock");
+
+                    // Remove the sender to avoid keeping the corresponding receiver waiting
+                    sender_guard.map.remove(&resp.id);
+
+                    // Mark the sender map closed for any further insertions
+                    sender_guard.closed = true;
+                }
+
+                // Initiate exit out of the receiver task to let any future senders
+                // error out and teardown the map stream client
+                return Err(Error::Mapper(format!(
+                    "Failed to send map response to stream task due to error: {:?}. Exiting receiver task",
+                    e
+                )));
+            }
+        } else {
+            {
+                // Mark the sender map closed for any further insertions
+                sender_map
+                    .lock()
+                    .expect("failed to acquire poisoned lock")
+                    .closed = true;
+            }
+            // Initiate exit out of the receiver task to let any future senders
+            // error out and teardown the map stream client
+            return Err(Error::Mapper(format!(
+                "No such req/resp ID found in StreamResponseSenderMap: {}. \
+                            Exiting receiver task",
+                resp.id
+            )));
+        }
+
+        Ok(())
     }
 
     /// Sends a request to the UDF and returns a receiver for raw response results.
