@@ -29,6 +29,8 @@ struct TrackerEntry {
     serving_callback_info: Option<ServingCallbackInfo>,
     /// Watermark for the message
     watermark: Option<DateTime<Utc>>,
+    /// EventTime for the message
+    event_time: DateTime<Utc>,
 }
 
 /// TrackerState holds the mutable state of the tracker.
@@ -211,6 +213,7 @@ impl Tracker {
             TrackerEntry {
                 serving_callback_info: callback_info,
                 watermark: message.watermark,
+                event_time: message.event_time,
             },
         );
         Ok(())
@@ -335,6 +338,19 @@ impl Tracker {
             })
             .min();
         Ok(watermark.unwrap_or(DateTime::from_timestamp_millis(-1).unwrap()))
+    }
+
+    /// Returns the lowest event_time among all the tracked offsets.
+    pub(crate) async fn lowest_event_time(&self) -> Result<DateTime<Utc>> {
+        let state = self.state.read().await;
+        // Get the lowest event_time across all partitions
+        let event_time = state
+            .entries
+            .values()
+            .flat_map(|partition_entries| partition_entries.values())
+            .map(|entry| entry.event_time)
+            .min();
+        Ok(event_time.unwrap_or(DateTime::from_timestamp_millis(-1).unwrap()))
     }
 
     /// Sets the idle status of the tracker. Setting idle offset to None means the partition is not

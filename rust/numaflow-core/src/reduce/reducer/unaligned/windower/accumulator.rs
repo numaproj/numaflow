@@ -211,6 +211,11 @@ impl AccumulatorWindowManager {
             .filter_map(|window_state| window_state.oldest_timestamp())
             .min()
     }
+
+    /// Returns the number of currently active windows (unique key slots).
+    pub(crate) fn active_window_count(&self) -> usize {
+        self.active_windows.read().expect("Poisoned lock").len()
+    }
 }
 
 #[cfg(test)]

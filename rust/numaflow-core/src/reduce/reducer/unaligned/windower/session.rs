@@ -419,6 +419,21 @@ impl SessionWindowManager {
             .map(|window| window.end_time)
             .min()
     }
+
+    /// Returns the total number of currently active windows across all keys.
+    pub(crate) fn active_window_count(&self) -> usize {
+        self.active_windows
+            .read()
+            .expect("Poisoned lock")
+            .values()
+            .map(|s| s.len())
+            .sum()
+    }
+
+    /// Returns the number of closed windows awaiting GC.
+    pub(crate) fn closed_window_count(&self) -> usize {
+        self.closed_windows.read().expect("Poisoned lock").len()
+    }
 }
 
 #[cfg(test)]
