@@ -224,12 +224,7 @@ impl UserDefinedBatchMap {
                     }
 
                     if let Err(e) = Self::process_response(&sender_map, resp) {
-                        error!(
-                            "received error while processing batch response: {}. \
-                        Exiting receiver task",
-                            e
-                        );
-                        break;
+                        warn!("received error while processing batch response: {}", e);
                     }
                 }
                 Err(e) => {
@@ -262,11 +257,10 @@ impl UserDefinedBatchMap {
         };
 
         if let Some(sender) = sender_entry {
-            if let Err(e) = sender.send(Ok(resp.results)) {
+            if sender.send(Ok(resp.results)).is_err() {
                 return Err(Error::Mapper(format!(
-                    "Failed to send server response from receiver to batch task \
-                    for ID: {} with error: {:?}. Receiver should shutdown now",
-                    msg_id, e
+                    "Failed to send server response from receiver to batch task for ID: {}",
+                    msg_id
                 )));
             };
         } else {
@@ -312,7 +306,7 @@ impl UserDefinedBatchMap {
 
             // send the message to the server
             if let Err(e) = self.read_tx.send(request).await {
-                error!(?e, "Failed to send message to server");
+                warn!(?e, "Failed to send message to server");
                 // We should ideally remove the resp.id from the SenderMap to avoid potential
                 // memory leaks as well as to avoid holding the corresponding receiver waiting
                 let sender_entry = {

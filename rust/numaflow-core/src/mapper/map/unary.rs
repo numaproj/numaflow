@@ -210,10 +210,9 @@ impl UserDefinedUnaryMap {
                     if let Err(e) = Self::process_unary_response(&sender_map, resp) {
                         error!(
                             "received error while processing unary response: {}. \
-                        Exiting receiver task",
+                            Exiting receiver task",
                             e
                         );
-                        break;
                     }
                 }
                 Err(e) => {
@@ -317,7 +316,7 @@ impl UserDefinedUnaryMap {
             if let Err(e) = sender.send(Ok(resp.results)) {
                 return Err(Error::Mapper(format!(
                     "Failed to send server response from receiver to unary task \
-                    for ID: {} with error: {:?}. Receiver should shutdown now",
+                    for ID: {} with error: {:?}",
                     msg_id, e
                 )));
             };

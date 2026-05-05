@@ -214,8 +214,7 @@ impl UserDefinedStreamMap {
             match resp {
                 Ok(resp) => {
                     if let Err(e) = Self::process_response(&sender_map, resp).await {
-                        error!("received error while processing stream response: {}", e);
-                        break;
+                        warn!("received error while processing stream response: {}", e);
                     }
                 }
                 Err(e) => {
@@ -234,6 +233,13 @@ impl UserDefinedStreamMap {
         .await;
     }
 
+    /// This method processes the response received from the stream map udf server
+    ///
+    /// The reason this method hasn't been subdivided is that we don't want to yield
+    /// back to the tokio runtime at any point between these three operations:
+    /// * remove id from sender map
+    /// * check for EOT
+    /// * re-insert id into sender map
     async fn process_response(
         sender_map: &Arc<Mutex<StreamSenderMapState>>,
         resp: MapResponse,
@@ -275,38 +281,23 @@ impl UserDefinedStreamMap {
                     .await;
             }
 
-            if let Err(e) = response_sender.send(Ok(resp.results)).await {
+            if response_sender.send(Ok(resp.results)).await.is_err() {
                 {
                     let mut sender_guard =
                         sender_map.lock().expect("failed to acquire poisoned lock");
 
                     // Remove the sender to avoid keeping the corresponding receiver waiting
                     sender_guard.map.remove(&resp.id);
-
-                    // Mark the sender map closed for any further insertions
-                    sender_guard.closed = true;
                 }
 
-                // Initiate exit out of the receiver task to let any future senders
-                // error out and teardown the map stream client
                 return Err(Error::Mapper(format!(
-                    "Failed to send map response to stream task due to error: {:?}. Exiting receiver task",
-                    e
+                    "Failed to send map response to stream task for ID: {:?}",
+                    resp.id
                 )));
             }
         } else {
-            {
-                // Mark the sender map closed for any further insertions
-                sender_map
-                    .lock()
-                    .expect("failed to acquire poisoned lock")
-                    .closed = true;
-            }
-            // Initiate exit out of the receiver task to let any future senders
-            // error out and teardown the map stream client
             return Err(Error::Mapper(format!(
-                "No such req/resp ID found in StreamResponseSenderMap: {}. \
-                            Exiting receiver task",
+                "No such req/resp ID found in StreamResponseSenderMap: {}",
                 resp.id
             )));
         }
