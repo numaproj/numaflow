@@ -1392,7 +1392,7 @@ mod simple_buffer_tests {
         cancel.cancel();
         drop(tx);
 
-        // Message should be acked (we exit the loop on cancel)
+        // Message should be nacked (we exit the loop on cancel)
         let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
             .await
             .expect("Should receive nack")
