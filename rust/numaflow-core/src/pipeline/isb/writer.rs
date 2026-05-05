@@ -40,6 +40,16 @@ struct PendingWriteResult {
     write_start: Instant,
 }
 
+/// Outcome of a single `write_to_stream` call.
+enum WriteOutcome {
+    /// Write succeeded; contains the PAF to resolve.
+    Success(PendingWriteResult),
+    /// Message intentionally dropped via DiscardLatest strategy. Source should ACK.
+    Dropped,
+    /// CancellationToken fired during retry. Source must NAK so the message is redelivered.
+    Cancelled,
+}
+
 /// ISBWriteTask encapsulates all the context needed to execute a write operation per message.
 /// Similar to MapUnaryTask, it spawns as a tokio task and calls mark_success() at the end.
 struct ISBWriteTask<C: NumaflowTypeConfig> {
@@ -89,47 +99,43 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
             .route_and_write_message(&message, self.cln_token.clone())
             .await;
 
-        let n = write_results.len();
+        // Partition outcomes: cancellations must NAK, drops are intentional (ACK), successes proceed.
+        let mut successes = vec![];
+        let mut cancelled_count = 0usize;
+        for outcome in write_results {
+            match outcome {
+                WriteOutcome::Success(paf) => successes.push(paf),
+                WriteOutcome::Dropped => {}
+                WriteOutcome::Cancelled => cancelled_count += 1,
+            }
+        }
 
-        // Filter results for which we got Some(PAF)
-        let write_results = write_results
-            .into_iter()
-            .filter(|result| result.is_some())
-            .flatten()
-            .collect::<Vec<_>>();
-
-        // If there were some writes for which we didn't get any PAF (got None)
-        // It means that write for that message was either:
-        // * Discarded for some vertex due to DiscardLatest strategy
-        // * Token cancellation was triggered during ISB write
-        if write_results.len() != n {
+        if cancelled_count > 0 {
             warn!(
-                expected = n,
-                actual = write_results.len(),
-                "Either some message writes will be discarded or the token has been cancelled"
+                cancelled = cancelled_count,
+                "Shutdown signal received during write retry, message will be NAK'd for redelivery"
             );
             mark_failed!(
                 self.msg_handle,
                 format!(
-                    "Either some message writes will be discarded or \
-                    the token has been cancelled: {}/{} writes would be made",
-                    write_results.len(),
-                    n
+                    "Token cancelled during ISB write: {cancelled_count} write(s) did not complete"
                 )
             );
             return;
         }
 
+        let expected_writes = successes.len();
+
         // Resolve all PAFs
         let resolved_offsets = self
             .orchestrator
-            .resolve_all_pafs(write_results, &message, self.cln_token.clone())
+            .resolve_all_pafs(successes, &message, self.cln_token.clone())
             .await;
 
         // If any of the writes failed, NAK the message
-        if resolved_offsets.len() != n {
+        if resolved_offsets.len() != expected_writes {
             warn!(
-                expected = n,
+                expected = expected_writes,
                 actual = resolved_offsets.len(),
                 "Some writes failed during PAF resolution, message will be NAK'd"
             );
@@ -138,7 +144,7 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
                 format!(
                     "PAF resolution failed: {}/{} writes succeeded",
                     resolved_offsets.len(),
-                    n
+                    expected_writes
                 )
             );
             return;
@@ -266,12 +272,12 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
     }
 
     /// Routes a message to appropriate streams and writes to each.
-    /// Returns a list of PendingWriteResults (one per successful write) with PAFs to be resolved.
+    /// Returns one `WriteOutcome` per matched downstream vertex.
     async fn route_and_write_message(
         &self,
         message: &Message,
         cln_token: CancellationToken,
-    ) -> Vec<Option<PendingWriteResult>> {
+    ) -> Vec<WriteOutcome> {
         let mut results = vec![];
 
         for vertex in &*self.config {
@@ -338,15 +344,16 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
     }
 
     /// Writes a message to a single stream with retry logic.
-    /// Returns None if the message should be dropped (DiscardLatest + buffer full or cancelled).
-    /// On success, returns a PendingWriteResult containing the PAF that needs to be resolved.
+    /// Returns `WriteOutcome::Dropped` when DiscardLatest is configured and the buffer is full.
+    /// Returns `WriteOutcome::Cancelled` when the cancellation token fires during a retry.
+    /// On success, returns `WriteOutcome::Success` with the PAF that needs to be resolved.
     async fn write_to_stream(
         &self,
         message: &Message,
         stream: &Stream,
         buffer_full_strategy: BufferFullStrategy,
         cln_token: CancellationToken,
-    ) -> Option<PendingWriteResult> {
+    ) -> WriteOutcome {
         let writer = self
             .writers
             .get(stream.name)
@@ -358,7 +365,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
             // Use the trait's async_write method which returns immediately with a PAF
             match writer.async_write(message.clone()).await {
                 Ok(paf) => {
-                    return Some(PendingWriteResult {
+                    return WriteOutcome::Success(PendingWriteResult {
                         stream: stream.clone(),
                         paf,
                         write_start,
@@ -380,7 +387,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
                                 "buffer-full",
                                 message.value.len(),
                             );
-                            return None;
+                            return WriteOutcome::Dropped;
                         }
                         BufferFullStrategy::RetryUntilSuccess => {
                             // Continue retrying
@@ -395,7 +402,7 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
 
             if cln_token.is_cancelled() {
                 error!("Shutdown signal received, exiting write loop");
-                return None;
+                return WriteOutcome::Cancelled;
             }
 
             // Sleep to avoid busy looping
@@ -1259,9 +1266,9 @@ mod simple_buffer_tests {
         tx.send(msg).await.unwrap();
         drop(tx);
 
-        // Message should still be acked (dropped messages are considered processed)
+        // Message should be acked: DiscardLatest is an intentional drop, not a failure.
         let ack = ack_rx.await.unwrap();
-        assert_eq!(ack, ReadAck::Nak);
+        assert_eq!(ack, ReadAck::Ack);
 
         handle.await.unwrap().unwrap();
 
@@ -1385,7 +1392,7 @@ mod simple_buffer_tests {
         cancel.cancel();
         drop(tx);
 
-        // Message should be acked (we exit the loop on cancel)
+        // Message should be nacked (we exit the loop on cancel)
         let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
             .await
             .expect("Should receive nack")
