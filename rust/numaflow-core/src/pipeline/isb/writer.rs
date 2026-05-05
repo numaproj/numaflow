@@ -91,12 +91,17 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
 
         let n = write_results.len();
 
+        // Filter results for which we got Some(PAF)
         let write_results = write_results
             .into_iter()
             .filter(|result| result.is_some())
             .flatten()
             .collect::<Vec<_>>();
 
+        // If there were some writes for which we didn't get any PAF (got None)
+        // It means that write for that message was either:
+        // * Discarded for some vertex due to DiscardLatest strategy
+        // * Token cancellation was triggered during ISB write
         if write_results.len() != n {
             warn!(
                 expected = n,
@@ -1256,7 +1261,7 @@ mod simple_buffer_tests {
 
         // Message should still be acked (dropped messages are considered processed)
         let ack = ack_rx.await.unwrap();
-        assert_eq!(ack, ReadAck::Ack);
+        assert_eq!(ack, ReadAck::Nak);
 
         handle.await.unwrap().unwrap();
 
@@ -1383,9 +1388,9 @@ mod simple_buffer_tests {
         // Message should be acked (we exit the loop on cancel)
         let ack = tokio::time::timeout(Duration::from_secs(2), ack_rx)
             .await
-            .expect("Should receive ack")
+            .expect("Should receive nack")
             .unwrap();
-        assert_eq!(ack, ReadAck::Ack);
+        assert_eq!(ack, ReadAck::Nak);
 
         handle.await.unwrap().unwrap();
         assert_eq!(adapter.pending_count(), 0);
