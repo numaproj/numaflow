@@ -168,7 +168,7 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 	if ctrlResult, err := mr.checkChildrenResourceStatus(ctx, monoVtx); err != nil {
 		return ctrlResult, fmt.Errorf("failed to check mono vertex children resource status, %w", err)
 	} else {
-		return ctrl.Result{}, nil
+		return ctrlResult, nil
 	}
 }
 
