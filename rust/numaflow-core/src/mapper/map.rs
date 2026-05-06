@@ -235,6 +235,7 @@ impl MapHandle {
                 biased;
                 Some(error) = ctx.error_rx.recv() => {
                     error!(?error, "error received while performing map operation");
+                    // we only cancel when we get the first error
                     if self.final_result.is_ok() {
                         upstream_cln_token.cancel();
                         self.shutting_down_on_err = true;
