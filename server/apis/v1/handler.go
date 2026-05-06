@@ -323,12 +323,10 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 			h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, failed to get the status of the mono vertex %s, %s", monoVertex.Name, err.Error()))
 			return
 		}
-		// if the mono vertex is healthy, increment the active count, otherwise increment the inactive count
-		// TODO - add more status types for mono vertex and update the logic here
-		if status == dfv1.MonoVertexStatusHealthy {
-			summary.monoVertexSummary.Active.increment(status)
-		} else {
+		if status == dfv1.MonoVertexStatusInactive {
 			summary.monoVertexSummary.Inactive++
+		} else {
+			summary.monoVertexSummary.Active.increment(status)
 		}
 		namespaceSummaryMap[monoVertex.Namespace] = summary
 	}
@@ -1513,8 +1511,21 @@ func getIsbServiceStatus(isbsvc *dfv1.InterStepBufferService) (string, error) {
 }
 
 func getMonoVertexStatus(mvt *dfv1.MonoVertex) (string, error) {
-	// TODO - add more logic to determine the status of a mono vertex
-	return dfv1.MonoVertexStatusHealthy, nil
+	switch mvt.Status.Phase {
+	case dfv1.MonoVertexPhaseUnknown:
+		return dfv1.MonoVertexStatusInactive, nil
+	case dfv1.MonoVertexPhaseFailed:
+		return dfv1.MonoVertexStatusCritical, nil
+	case dfv1.MonoVertexPhasePaused:
+		return dfv1.MonoVertexStatusInactive, nil
+	case dfv1.MonoVertexPhaseRunning:
+		if !mvt.Status.IsHealthy() {
+			return dfv1.MonoVertexStatusWarning, nil
+		}
+		return dfv1.MonoVertexStatusHealthy, nil
+	default:
+		return dfv1.MonoVertexStatusHealthy, nil
+	}
 }
 
 // validatePipelineSpec is used to validate the pipeline spec during create and update
