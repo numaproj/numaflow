@@ -194,7 +194,8 @@ impl MapHandle {
                         bypass_router,
                         batch_mapper: batch_mapper.clone(),
                     };
-                    self.process_batch_messages(input_stream, ctx).await;
+                    self.process_batch_messages(input_stream, ctx, cln_token)
+                        .await;
                 }
             }
 
@@ -294,6 +295,7 @@ impl MapHandle {
         &mut self,
         input_stream: ReceiverStream<MessageHandle>,
         ctx: BatchMapContext,
+        upstream_cln_token: CancellationToken,
     ) {
         let timeout_duration = self.read_timeout;
         let chunked_stream = input_stream.chunks_timeout(self.batch_size, timeout_duration);
@@ -326,7 +328,7 @@ impl MapHandle {
                 .await
             {
                 error!(?e, "error received while performing batch map operation");
-                ctx.cln_token.cancel();
+                upstream_cln_token.cancel();
                 self.shutting_down_on_err = true;
                 self.final_result = Err(e);
             }
