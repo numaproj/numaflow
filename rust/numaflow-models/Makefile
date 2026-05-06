@@ -7,7 +7,8 @@ SDK_VERSION := $(shell if [[ "$(VERSION)" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*  ]]; the
 # Somehow type-mappings stopped working starting from v7.4.0
 GENERATOR_VERSION := v7.3.0
 
-DOCKER = docker run --rm --user $(shell id -u):$(shell id -g) -v `pwd -P`:/base --workdir /base
+DOCKER_BIN := $(shell command -v docker 2>/dev/null || command -v podman 2>/dev/null)
+DOCKER = $(DOCKER_BIN) run --rm --user $(shell id -u):$(shell id -g) -v `pwd -P`:/base --workdir /base
 
 publish: generate
 	echo TODO
