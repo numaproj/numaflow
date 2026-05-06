@@ -181,20 +181,21 @@ impl MapHandle {
                     let ctx = ConcurrentMapContext {
                         error_rx,
                         semaphore: Arc::clone(&semaphore),
-                        cln_token,
                         concurrent_mapper: concurrent_mapper.clone(),
                         shared_ctx,
                     };
-                    self.process_concurrent_messages(input_stream, ctx).await?;
+                    self.process_concurrent_messages(input_stream, ctx, cln_token)
+                        .await?;
                 }
                 MapperType::Batch(batch_mapper) => {
                     let ctx = BatchMapContext {
                         output_tx,
-                        cln_token,
+                        cln_token: hard_shutdown_token,
                         bypass_router,
                         batch_mapper: batch_mapper.clone(),
                     };
-                    self.process_batch_messages(input_stream, ctx).await;
+                    self.process_batch_messages(input_stream, ctx, cln_token)
+                        .await;
                 }
             }
 
@@ -224,6 +225,7 @@ impl MapHandle {
         &mut self,
         input_stream: ReceiverStream<MessageHandle>,
         mut ctx: ConcurrentMapContext,
+        upstream_cln_token: CancellationToken,
     ) -> error::Result<()> {
         let mut input_stream = input_stream;
         loop {
@@ -234,14 +236,16 @@ impl MapHandle {
                 biased;
                 Some(error) = ctx.error_rx.recv() => {
                     error!(?error, "error received while performing map operation");
-
-                    // Store only the first Grpc error (root cause). Ignore Mapper errors (like "mapper closed") which are consequences.
-                    if matches!(error, Error::Grpc(_)) && self.final_result.is_ok() {
-                        // cancel the token to let the upstream know that we are shutting down so
-                        // that they stop sending new messages.
-                        ctx.cln_token.cancel();
-                        self.final_result = Err(error);
+                    // we only cancel when we get the first error
+                    if self.final_result.is_ok() {
+                        upstream_cln_token.cancel();
                         self.shutting_down_on_err = true;
+                        self.final_result = Err(error);
+                    } else {
+                        // store the final grpc error
+                        if matches!(error, Error::Grpc(_)) {
+                            self.final_result = Err(error);
+                        }
                     }
                 },
                 read_msg = input_stream.next() => {
@@ -291,6 +295,7 @@ impl MapHandle {
         &mut self,
         input_stream: ReceiverStream<MessageHandle>,
         ctx: BatchMapContext,
+        upstream_cln_token: CancellationToken,
     ) {
         let timeout_duration = self.read_timeout;
         let chunked_stream = input_stream.chunks_timeout(self.batch_size, timeout_duration);
@@ -323,7 +328,7 @@ impl MapHandle {
                 .await
             {
                 error!(?e, "error received while performing batch map operation");
-                ctx.cln_token.cancel();
+                upstream_cln_token.cancel();
                 self.shutting_down_on_err = true;
                 self.final_result = Err(e);
             }
@@ -345,7 +350,6 @@ pub(in crate::mapper) struct SharedMapTaskContext {
 struct ConcurrentMapContext {
     error_rx: mpsc::Receiver<Error>,
     semaphore: Arc<Semaphore>,
-    cln_token: CancellationToken,
     concurrent_mapper: ConcurrentMapper,
     shared_ctx: Arc<SharedMapTaskContext>,
 }
