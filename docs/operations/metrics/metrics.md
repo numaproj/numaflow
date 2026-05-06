@@ -66,7 +66,7 @@ These metrics are specific to reduce (windowed aggregation) vertices.
 | `reduce_watermark_lag`               | Gauge       |                   | Difference between wall clock and watermark, in milliseconds         |
 | `reduce_window_processing_time`      | Histogram   |                   | Window open-to-close latency, in microseconds                        |
 | `reduce_pnf_process_time`            | Histogram   |                   | UDF reduce function execution time per window, in microseconds       |
-| `reduce_pbq_write`                   | Counter     |                   | Total data messages written to PBQ |
+| `reduce_pbq_write_total`             | Counter     |                   | Total data messages written to PBQ |
 
 > **Note:** All reduce metrics carry the standard pipeline common labels (`pipeline`, `vertex`, `replica`) with `vertex_type` always set to `ReduceUDF`.
 
