@@ -190,7 +190,7 @@ impl MapHandle {
                 MapperType::Batch(batch_mapper) => {
                     let ctx = BatchMapContext {
                         output_tx,
-                        cln_token,
+                        cln_token: hard_shutdown_token,
                         bypass_router,
                         batch_mapper: batch_mapper.clone(),
                     };
