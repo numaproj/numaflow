@@ -181,16 +181,16 @@ impl MapHandle {
                     let ctx = ConcurrentMapContext {
                         error_rx,
                         semaphore: Arc::clone(&semaphore),
-                        cln_token,
                         concurrent_mapper: concurrent_mapper.clone(),
                         shared_ctx,
                     };
-                    self.process_concurrent_messages(input_stream, ctx).await?;
+                    self.process_concurrent_messages(input_stream, ctx, cln_token)
+                        .await?;
                 }
                 MapperType::Batch(batch_mapper) => {
                     let ctx = BatchMapContext {
                         output_tx,
-                        cln_token,
+                        cln_token: hard_shutdown_token,
                         bypass_router,
                         batch_mapper: batch_mapper.clone(),
                     };
@@ -224,6 +224,7 @@ impl MapHandle {
         &mut self,
         input_stream: ReceiverStream<MessageHandle>,
         mut ctx: ConcurrentMapContext,
+        upstream_cln_token: CancellationToken,
     ) -> error::Result<()> {
         let mut input_stream = input_stream;
         loop {
@@ -234,14 +235,15 @@ impl MapHandle {
                 biased;
                 Some(error) = ctx.error_rx.recv() => {
                     error!(?error, "error received while performing map operation");
-
-                    // Store only the first Grpc error (root cause). Ignore Mapper errors (like "mapper closed") which are consequences.
-                    if matches!(error, Error::Grpc(_)) && self.final_result.is_ok() {
-                        // cancel the token to let the upstream know that we are shutting down so
-                        // that they stop sending new messages.
-                        ctx.cln_token.cancel();
-                        self.final_result = Err(error);
+                    if self.final_result.is_ok() {
+                        upstream_cln_token.cancel();
                         self.shutting_down_on_err = true;
+                        self.final_result = Err(error);
+                    } else {
+                        // store the final grpc error
+                        if matches!(error, Error::Grpc(_)) {
+                            self.final_result = Err(error);
+                        }
                     }
                 },
                 read_msg = input_stream.next() => {
@@ -345,7 +347,6 @@ pub(in crate::mapper) struct SharedMapTaskContext {
 struct ConcurrentMapContext {
     error_rx: mpsc::Receiver<Error>,
     semaphore: Arc<Semaphore>,
-    cln_token: CancellationToken,
     concurrent_mapper: ConcurrentMapper,
     shared_ctx: Arc<SharedMapTaskContext>,
 }

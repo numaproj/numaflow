@@ -361,9 +361,7 @@ mod tests {
 
         let cln_token = CancellationToken::new();
         let results =
-            tokio::time::timeout(Duration::from_secs(2), client.unary(request, cln_token))
-                .await
-                .unwrap();
+            tokio::time::timeout(Duration::from_secs(2), client.unary(request, cln_token)).await?;
 
         assert!(results.is_ok());
         assert_eq!(results?.len(), 1);
