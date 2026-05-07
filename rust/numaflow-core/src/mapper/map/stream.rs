@@ -279,6 +279,7 @@ impl UserDefinedStreamMap {
                 let _ = response_sender
                     .send(Err(Error::Mapper("mapper closed".to_string())))
                     .await;
+                return Ok(());
             }
 
             if response_sender.send(Ok(resp.results)).await.is_err() {
