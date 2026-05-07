@@ -46,6 +46,7 @@ type metricsHttpClient interface {
 type PipelineMetadataQuery struct {
 	daemon.UnimplementedDaemonServiceServer
 	isbSvcClient         isbsvc.ISBService
+	isbSvcType           v1alpha1.ISBSvcType
 	pipeline             *v1alpha1.Pipeline
 	httpClient           metricsHttpClient
 	watermarkService     *watermark.HTTPWatermarkService
@@ -60,13 +61,15 @@ func NewPipelineMetadataQuery(
 	isbSvcClient isbsvc.ISBService,
 	pipeline *v1alpha1.Pipeline,
 	rater rater.Ratable,
-	pipelineRuntimeCache runtimeinfo.PipelineRuntimeCache) (*PipelineMetadataQuery, error) {
+	pipelineRuntimeCache runtimeinfo.PipelineRuntimeCache,
+	isbSvcType v1alpha1.ISBSvcType) (*PipelineMetadataQuery, error) {
 
 	// Create HTTP watermark service
 	watermarkService := watermark.NewHTTPWatermarkService(ctx, pipeline)
 
 	ps := PipelineMetadataQuery{
 		isbSvcClient: isbSvcClient,
+		isbSvcType:   isbSvcType,
 		pipeline:     pipeline,
 		httpClient: &http.Client{
 			Transport: &http.Transport{
@@ -76,7 +79,7 @@ func NewPipelineMetadataQuery(
 		},
 		watermarkService:     watermarkService,
 		rater:                rater,
-		healthChecker:        NewHealthChecker(pipeline, isbSvcClient),
+		healthChecker:        NewHealthChecker(pipeline, isbSvcClient, isbSvcType),
 		pipelineRuntimeCache: pipelineRuntimeCache,
 	}
 	return &ps, nil
@@ -96,7 +99,7 @@ func (ps *PipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, requ
 
 // ListBuffers is used to obtain the all the edge buffers information of a pipeline
 func (ps *PipelineMetadataQuery) ListBuffers(ctx context.Context, req *daemon.ListBuffersRequest) (*daemon.ListBuffersResponse, error) {
-	resp, err := listBuffers(ctx, ps.pipeline, ps.isbSvcClient)
+	resp, _, err := listBuffers(ctx, ps.pipeline, ps.isbSvcClient)
 	if err != nil {
 		return nil, err
 	}
@@ -231,22 +234,28 @@ func getBufferLimits(pl *v1alpha1.Pipeline, v v1alpha1.AbstractVertex) (bufferLe
 	return bufferLength, bufferUsageLimit
 }
 
-// listBuffers returns the list of ISB buffers for the pipeline and their information
-// We use the isbSvcClient to get the buffer information
-func listBuffers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (*daemon.ListBuffersResponse, error) {
+// listBuffers returns the list of ISB buffers for the pipeline and their information.
+//
+// It returns both the gRPC-shaped response (used by the public ListBuffers RPC
+// and the health checker's buffer-usage logic) and the slice of internal
+// isbsvc.BufferInfo values. The latter carries rich JetStream-only fields
+// that are needed by the daemon's structured ISB-state logger but are
+// deliberately not exposed on the gRPC proto.
+func listBuffers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) (*daemon.ListBuffersResponse, []*isbsvc.BufferInfo, error) {
 	log := logging.FromContext(ctx)
 	resp := new(daemon.ListBuffersResponse)
 
 	buffers := []*daemon.BufferInfo{}
+	internal := []*isbsvc.BufferInfo{}
 	for _, buffer := range pipeline.GetAllBuffers() {
 		bufferInfo, err := isbSvcClient.GetBufferInfo(ctx, buffer)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get information of buffer %q", buffer)
+			return nil, nil, fmt.Errorf("failed to get information of buffer %q", buffer)
 		}
 		log.Debugf("Buffer %s has bufferInfo %+v", buffer, bufferInfo)
 		v := pipeline.FindVertexWithBuffer(buffer)
 		if v == nil {
-			return nil, fmt.Errorf("unexpected error, buffer %q not found from the pipeline", buffer)
+			return nil, nil, fmt.Errorf("unexpected error, buffer %q not found from the pipeline", buffer)
 		}
 		bufferLength, bufferUsageLimit := getBufferLimits(pipeline, *v)
 		usage := float64(bufferInfo.TotalMessages) / float64(bufferLength)
@@ -265,9 +274,10 @@ func listBuffers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient 
 			IsFull:           wrapperspb.Bool(usage >= bufferUsageLimit),
 		}
 		buffers = append(buffers, b)
+		internal = append(internal, bufferInfo)
 	}
 	resp.Buffers = buffers
-	return resp, nil
+	return resp, internal, nil
 }
 
 // StartHealthCheck starts the health check for the pipeline using the health checker

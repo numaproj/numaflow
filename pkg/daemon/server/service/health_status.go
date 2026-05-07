@@ -120,17 +120,19 @@ type HealthChecker struct {
 	// Add a field for the health status.
 	currentDataStatus *dataHealthResponse
 	isbSvcClient      isbsvc.ISBService
+	isbSvcType        v1alpha1.ISBSvcType
 	pipeline          *v1alpha1.Pipeline
 	timelineData      map[string]*sharedqueue.OverflowQueue[*timelineEntry]
 	statusLock        *sync.RWMutex
 }
 
 // NewHealthChecker creates a new object HealthChecker struct type.
-func NewHealthChecker(pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService) *HealthChecker {
+func NewHealthChecker(pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBService, isbSvcType v1alpha1.ISBSvcType) *HealthChecker {
 	// Return a new HealthChecker struct instance.
 	return &HealthChecker{
 		currentDataStatus: defaultDataHealthResponse,
 		isbSvcClient:      isbSvcClient,
+		isbSvcType:        isbSvcType,
 		pipeline:          pipeline,
 		timelineData:      make(map[string]*sharedqueue.OverflowQueue[*timelineEntry]),
 		statusLock:        &sync.RWMutex{},
@@ -175,37 +177,56 @@ func (hc *HealthChecker) setCurrentHealth(status *dataHealthResponse) {
 
 // startHealthCheck starts the health check for the pipeline.
 // The ticks are generated at the interval of healthTimeStep.
+//
+// On every successful tick, after the health computation, the same
+// already-fetched buffer state is also handed off to logISBSnapshot
+// (event="periodic") so the daemon emits one structured ISB-state
+// log line per tick. When the parent context is cancelled (daemon
+// shutdown), one final logISBSnapshot is emitted with
+// event="shutdown_snapshot", using a fresh 5s-timeout context so it
+// can complete even though the parent ctx is already done.
 func (hc *HealthChecker) startHealthCheck(ctx context.Context) {
 	logger := logging.FromContext(ctx)
-	// Goroutine to listen for ticks
-	// At every tick, check and update the health status of the pipeline.
-	// If the context is done, return.
-	// Create a ticker to generate ticks at the interval of healthTimeStep.
 	ticker := time.NewTicker(healthTimeStep)
 	defer ticker.Stop()
 	for {
 		select {
-		// If the ticker ticks, check and update the health status of the pipeline.
 		case <-ticker.C:
-			// Get the current health status of the pipeline.
-			criticality, err := hc.getPipelineVertexDataCriticality(ctx)
+			criticality, internal, err := hc.getPipelineVertexDataCriticality(ctx)
 			logger.Debugw("Health check", zap.Any("criticality", criticality))
 			if err != nil {
-				// If there is an error, set the current health status to unknown.
-				// as we are not able to determine the health of the pipeline.
 				logger.Errorw("Failed to vertex data criticality", zap.Error(err))
 				hc.setCurrentHealth(defaultDataHealthResponse)
 			} else {
-				// convert the vertex state to pipeline state
 				pipelineState := convertVertexStateToPipelineState(criticality)
-				// update the current health status of the pipeline
 				hc.setCurrentHealth(pipelineState)
+				logISBSnapshot(ctx, hc.pipeline, hc.isbSvcType, "periodic", internal)
 			}
-		// If the context is done, return.
 		case <-ctx.Done():
+			hc.emitShutdownSnapshot()
 			return
 		}
 	}
+}
+
+// emitShutdownSnapshot best-effort emits a final "ISB snapshot" log
+// line tagged event="shutdown_snapshot" before the daemon process
+// exits. It uses a fresh 5s-timeout context (the parent context is
+// already cancelled by SIGTERM at this point). On any error the
+// snapshot is skipped with a warning — shutdown must never block on
+// this.
+func (hc *HealthChecker) emitShutdownSnapshot() {
+	logger := logging.NewLogger().Named("isb-info-logger").With("pipeline", hc.pipeline.Name)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ctx = logging.WithLogger(ctx, logger)
+
+	_, internal, err := listBuffers(ctx, hc.pipeline, hc.isbSvcClient)
+	if err != nil {
+		logger.Warnw("ISB snapshot at shutdown unavailable", zap.Error(err))
+		return
+	}
+	logISBSnapshot(ctx, hc.pipeline, hc.isbSvcType, "shutdown_snapshot", internal)
 }
 
 // getPipelineVertexDataCriticality is used to provide the data criticality of the pipeline
@@ -223,11 +244,11 @@ func (hc *HealthChecker) startHealthCheck(ctx context.Context) {
 // If this average is greater than the critical threshold, we return the critical status
 // If this average is greater than the warning threshold, we return the warning status
 // If this average is less than the warning threshold, we return the ok status
-func (hc *HealthChecker) getPipelineVertexDataCriticality(ctx context.Context) ([]*vertexState, error) {
+func (hc *HealthChecker) getPipelineVertexDataCriticality(ctx context.Context) ([]*vertexState, []*isbsvc.BufferInfo, error) {
 	// Fetch the buffer information for the pipeline
-	buffers, err := listBuffers(ctx, hc.pipeline, hc.isbSvcClient)
+	buffers, internal, err := listBuffers(ctx, hc.pipeline, hc.isbSvcClient)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// update the usage timeline for all the ISBs used in the pipeline
 	hc.updateUsageTimeline(buffers.Buffers)
@@ -252,7 +273,7 @@ func (hc *HealthChecker) getPipelineVertexDataCriticality(ctx context.Context) (
 		// add the vertex state to the list of vertex states
 		vertexState = append(vertexState, currentVertexState)
 	}
-	return vertexState, nil
+	return vertexState, internal, nil
 }
 
 // updateUsageTimeline is used to update the usage timeline for a given buffer list

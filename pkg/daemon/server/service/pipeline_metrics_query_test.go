@@ -114,7 +114,7 @@ func TestGetVertexMetrics(t *testing.T) {
 		Spec:       v1alpha1.PipelineSpec{Vertices: []v1alpha1.AbstractVertex{{Name: vertexName, Partitions: &vertexPartition}}},
 	}
 	client, _ := isbsvc.NewISBJetStreamSvc(jsc)
-	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(context.Background(), client, pipeline, &mockRater_TestGetVertexMetrics{}, nil)
+	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(context.Background(), client, pipeline, &mockRater_TestGetVertexMetrics{}, nil, v1alpha1.ISBSvcTypeJetStream)
 	assert.NoError(t, err)
 
 	metricsResponse := `# HELP vertex_pending_messages Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.
@@ -182,7 +182,7 @@ func TestGetBuffer(t *testing.T) {
 	}
 
 	ms := &mockIsbSvcClient{}
-	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(context.Background(), ms, pipeline, nil, nil)
+	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(context.Background(), ms, pipeline, nil, nil, v1alpha1.ISBSvcTypeJetStream)
 	assert.NoError(t, err)
 
 	bufferName := "numaflow-system-simple-pipeline-cat-0"
@@ -223,7 +223,7 @@ func TestListBuffers(t *testing.T) {
 	}
 
 	ms := &mockIsbSvcClient{}
-	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(context.Background(), ms, pipeline, nil, nil)
+	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(context.Background(), ms, pipeline, nil, nil, v1alpha1.ISBSvcTypeJetStream)
 	assert.NoError(t, err)
 
 	req := &daemon.ListBuffersRequest{Pipeline: pipelineName}
@@ -231,4 +231,11 @@ func TestListBuffers(t *testing.T) {
 	resp, err := pipelineMetricsQueryService.ListBuffers(context.Background(), req)
 	assert.NoError(t, err)
 	assert.Equal(t, len(resp.Buffers), 2)
+
+	// Direct call to the internal helper exposes the rich slice.
+	gRPCResp, internal, err := listBuffers(context.Background(), pipeline, ms)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(gRPCResp.Buffers))
+	assert.Equal(t, 2, len(internal))
+	assert.Equal(t, gRPCResp.Buffers[0].BufferName, internal[0].Name)
 }

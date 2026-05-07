@@ -190,7 +190,7 @@ func (ds *daemonServer) newGRPCServer(
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
-	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(ctx, isbSvcClient, ds.pipeline, rater, pipelineRuntimeCache)
+	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(ctx, isbSvcClient, ds.pipeline, rater, pipelineRuntimeCache, ds.isbSvcType)
 	if err != nil {
 		return nil, err
 	}

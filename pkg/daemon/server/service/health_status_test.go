@@ -95,7 +95,7 @@ func TestNewHealthChecker(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hc := NewHealthChecker(tt.pipeline, tt.isbSvc)
+			hc := NewHealthChecker(tt.pipeline, tt.isbSvc, v1alpha1.ISBSvcTypeJetStream)
 			assert.NotNil(t, hc)
 			assert.Equal(t, defaultDataHealthResponse, hc.currentDataStatus)
 			assert.Equal(t, tt.isbSvc, hc.isbSvcClient)
