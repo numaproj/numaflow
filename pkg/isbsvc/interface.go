@@ -49,12 +49,27 @@ func WithConfig(conf string) CreateOption {
 	}
 }
 
-// BufferInfo wraps the buffer state information
+// BufferInfo wraps the buffer state information.
+//
+// The "rich" fields below are populated only by the JetStream
+// implementation and are used internally by the daemon for
+// structured ISB-state logging. They are NOT serialised onto the
+// gRPC `daemon.BufferInfo` proto and so do not constitute a public
+// API surface.
 type BufferInfo struct {
 	Name            string
 	PendingCount    int64
 	AckPendingCount int64
 	TotalMessages   int64
+
+	// Rich JetStream-only fields (zero for non-JetStream backends).
+	StreamFirstSeq             int64
+	StreamLastSeq              int64
+	StreamBytes                int64
+	ConsumerNumRedelivered     int64
+	ConsumerNumWaiting         int64
+	ConsumerDeliveredStreamSeq int64
+	ConsumerAckFloorStreamSeq  int64
 }
 
 func JetStreamOTKVName(bucketName string) string {
