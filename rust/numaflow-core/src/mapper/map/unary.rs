@@ -254,7 +254,7 @@ impl UserDefinedUnaryMap {
             } else {
                 let _ = tx
                     .send(Err(Error::Mapper("mapper closed".to_string())))
-                    .inspect(|_| warn!("failed to send error to oneshot receiver"));
+                    .inspect_err(|_| warn!("failed to send error to oneshot receiver"));
             }
         };
 

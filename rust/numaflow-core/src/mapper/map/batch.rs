@@ -299,7 +299,7 @@ impl UserDefinedBatchMap {
                 } else {
                     let _ = sender
                         .send(Err(Error::Mapper("batch mapper closed".to_string())))
-                        .inspect(|_| warn!("failed to send error to oneshot receiver"));
+                        .inspect_err(|_| warn!("failed to send error to oneshot receiver"));
                     continue;
                 }
             };
@@ -324,7 +324,7 @@ impl UserDefinedBatchMap {
                         .send(Err(Error::Mapper(format!(
                             "failed to send message to batch map server: {e}"
                         ))))
-                        .inspect(|_| warn!("failed to send error to oneshot receiver"));
+                        .inspect_err(|_| warn!("failed to send error to oneshot receiver"));
                 }
                 // Continue collecting results for remaining receivers
                 break;

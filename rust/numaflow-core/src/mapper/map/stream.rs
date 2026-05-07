@@ -371,7 +371,7 @@ impl UserDefinedStreamMap {
                     "failed to send message to map stream server: {e}"
                 ))))
                 .await
-                .inspect(|_| warn!("failed to send error to receiver"));
+                .inspect_err(|_| warn!("failed to send error to receiver"));
         }
 
         rx
