@@ -83,6 +83,7 @@ func TestJetstreamSvc_GetBufferInfo(t *testing.T) {
 	assert.Equal(t, int64(0), info.PendingCount)
 	assert.Equal(t, int64(0), info.AckPendingCount)
 	assert.Equal(t, int64(0), info.TotalMessages)
+	assert.Equal(t, int64(0), info.StreamMsgs)
 	assert.Equal(t, int64(0), info.StreamFirstSeq)
 	assert.Equal(t, int64(0), info.StreamLastSeq)
 	assert.Equal(t, int64(0), info.StreamBytes)
@@ -99,6 +100,7 @@ func TestJetstreamSvc_GetBufferInfo(t *testing.T) {
 
 	info, err = isbSvc.GetBufferInfo(ctx, buffer)
 	assert.NoError(t, err)
+	assert.Equal(t, int64(3), info.StreamMsgs)
 	assert.Equal(t, int64(1), info.StreamFirstSeq)
 	assert.Equal(t, int64(3), info.StreamLastSeq)
 	assert.Greater(t, info.StreamBytes, int64(0))

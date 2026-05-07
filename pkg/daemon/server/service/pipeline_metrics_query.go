@@ -85,8 +85,15 @@ func NewPipelineMetadataQuery(
 	return &ps, nil
 }
 
-// Stop stops the pipeline metadata query and cleans up resources
+// Stop stops the pipeline metadata query and cleans up resources.
+// It emits the shutdown ISB snapshot before tearing down the watermark
+// service, ensuring the NATS connection is still alive when the snapshot
+// is taken. By Go's LIFO defer ordering, this Stop() call (deferred in
+// daemonServer.Run) fires before natsClientPool.CloseAll().
 func (ps *PipelineMetadataQuery) Stop() {
+	if ps.healthChecker != nil {
+		ps.healthChecker.emitShutdownSnapshot()
+	}
 	if ps.watermarkService != nil {
 		ps.watermarkService.Stop()
 	}

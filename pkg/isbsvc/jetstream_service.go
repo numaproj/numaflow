@@ -348,6 +348,7 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 		AckPendingCount: int64(consumer.NumAckPending),
 		TotalMessages:   totalMessages,
 
+		StreamMsgs:                 int64(stream.State.Msgs),
 		StreamFirstSeq:             int64(stream.State.FirstSeq),
 		StreamLastSeq:              int64(stream.State.LastSeq),
 		StreamBytes:                int64(stream.State.Bytes),

@@ -47,10 +47,14 @@ func newPipelineFixture() *v1alpha1.Pipeline {
 
 func newBufferInfoFixture(name string) *isbsvc.BufferInfo {
 	return &isbsvc.BufferInfo{
-		Name:                       name,
-		PendingCount:               5,
-		AckPendingCount:            2,
+		Name:            name,
+		PendingCount:    5,
+		AckPendingCount: 2,
+		// TotalMessages is the conditional value (LimitsPolicy: NumPending+NumAckPending).
+		// StreamMsgs is the unconditional physical stream depth. They are intentionally
+		// distinct so tests can verify the logger reads StreamMsgs and not TotalMessages.
 		TotalMessages:              7,
+		StreamMsgs:                 50,
 		StreamFirstSeq:             1,
 		StreamLastSeq:              100,
 		StreamBytes:                4096,
@@ -93,6 +97,8 @@ func TestLogISBSnapshot_Periodic(t *testing.T) {
 	assert.True(t, ok)
 	assert.Contains(t, first, "buffer")
 	assert.Contains(t, first, "vertex")
+	// stream_msgs must come from StreamMsgs (50), not TotalMessages (7).
+	assert.EqualValues(t, 50, first["stream_msgs"])
 	assert.EqualValues(t, 5, first["pending"])
 	assert.EqualValues(t, 2, first["ack_pending"])
 	assert.EqualValues(t, 100, first["stream_last_seq"])

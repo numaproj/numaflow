@@ -181,10 +181,10 @@ func (hc *HealthChecker) setCurrentHealth(status *dataHealthResponse) {
 // On every successful tick, after the health computation, the same
 // already-fetched buffer state is also handed off to logISBSnapshot
 // (event="periodic") so the daemon emits one structured ISB-state
-// log line per tick. When the parent context is cancelled (daemon
-// shutdown), one final logISBSnapshot is emitted with
-// event="shutdown_snapshot", using a fresh 5s-timeout context so it
-// can complete even though the parent ctx is already done.
+// log line per tick. The shutdown snapshot is NOT emitted from this
+// loop; it is emitted by PipelineMetadataQuery.Stop() during the
+// daemon's deferred shutdown sequence, before the NATS connection is
+// closed.
 func (hc *HealthChecker) startHealthCheck(ctx context.Context) {
 	logger := logging.FromContext(ctx)
 	ticker := time.NewTicker(healthTimeStep)
@@ -203,18 +203,23 @@ func (hc *HealthChecker) startHealthCheck(ctx context.Context) {
 				logISBSnapshot(ctx, hc.pipeline, hc.isbSvcType, "periodic", internal)
 			}
 		case <-ctx.Done():
-			hc.emitShutdownSnapshot()
 			return
 		}
 	}
 }
 
 // emitShutdownSnapshot best-effort emits a final "ISB snapshot" log
-// line tagged event="shutdown_snapshot" before the daemon process
-// exits. It uses a fresh 5s-timeout context (the parent context is
-// already cancelled by SIGTERM at this point). On any error the
-// snapshot is skipped with a warning — shutdown must never block on
-// this.
+// line tagged event="shutdown_snapshot". It is invoked from
+// PipelineMetadataQuery.Stop() during the daemon's deferred shutdown
+// sequence, while the NATS connection is still alive (Stop() fires
+// before natsClientPool.CloseAll() by LIFO defer order).
+//
+// A fresh 5s-timeout context is used as a defensive upper bound on
+// context-aware code paths. The actual bound on the underlying NATS
+// RPCs (StreamInfo / ConsumerInfo) is the NATS connection's own
+// per-request timeout (typically ~2s), which is not configurable
+// through this context. On any error the snapshot is skipped with a
+// warning — shutdown must never block on this.
 func (hc *HealthChecker) emitShutdownSnapshot() {
 	logger := logging.NewLogger().Named("isb-info-logger").With("pipeline", hc.pipeline.Name)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -63,6 +63,12 @@ type BufferInfo struct {
 	TotalMessages   int64
 
 	// Rich JetStream-only fields (zero for non-JetStream backends).
+	// StreamMsgs is the physical message count in the stream
+	// (= stream.State.Msgs), populated unconditionally. It is distinct
+	// from TotalMessages which, under LimitsPolicy (the Numaflow
+	// default), returns the logical unacked count
+	// (NumPending + NumAckPending) rather than the physical stream depth.
+	StreamMsgs                 int64
 	StreamFirstSeq             int64
 	StreamLastSeq              int64
 	StreamBytes                int64

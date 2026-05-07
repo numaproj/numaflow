@@ -54,7 +54,7 @@ func logISBSnapshot(
 		bufferEntries = append(bufferEntries, map[string]any{
 			"buffer":               b.Name,
 			"vertex":               vertexName,
-			"stream_msgs":          b.TotalMessages,
+			"stream_msgs":          b.StreamMsgs,
 			"stream_first_seq":     b.StreamFirstSeq,
 			"stream_last_seq":      b.StreamLastSeq,
 			"stream_bytes":         b.StreamBytes,
