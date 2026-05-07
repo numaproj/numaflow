@@ -323,7 +323,8 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 			h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, failed to get the status of the mono vertex %s, %s", monoVertex.Name, err.Error()))
 			return
 		}
-		if status == dfv1.MonoVertexStatusInactive {
+		// MonoVertices with inactive or unknown status are not actively processing data
+		if status == dfv1.MonoVertexStatusInactive || status == dfv1.MonoVertexStatusUnknown {
 			summary.monoVertexSummary.Inactive++
 		} else {
 			summary.monoVertexSummary.Active.increment(status)
@@ -1513,12 +1514,18 @@ func getIsbServiceStatus(isbsvc *dfv1.InterStepBufferService) (string, error) {
 func getMonoVertexStatus(mvt *dfv1.MonoVertex) (string, error) {
 	switch mvt.Status.Phase {
 	case dfv1.MonoVertexPhaseUnknown:
-		return dfv1.MonoVertexStatusInactive, nil
+		// Phase not yet set by the controller — reconciliation is pending
+		return dfv1.MonoVertexStatusUnknown, nil
 	case dfv1.MonoVertexPhaseFailed:
 		return dfv1.MonoVertexStatusCritical, nil
 	case dfv1.MonoVertexPhasePaused:
 		return dfv1.MonoVertexStatusInactive, nil
 	case dfv1.MonoVertexPhaseRunning:
+		// Check desired phase to catch the pausing-in-progress case:
+		// the user has requested a pause but the controller has not yet updated Status.Phase
+		if mvt.Spec.Lifecycle.GetDesiredPhase() == dfv1.MonoVertexPhasePaused {
+			return dfv1.MonoVertexStatusInactive, nil
+		}
 		if !mvt.Status.IsHealthy() {
 			return dfv1.MonoVertexStatusWarning, nil
 		}

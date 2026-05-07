@@ -1156,6 +1156,20 @@ func TestGetMonoVertexStatus(t *testing.T) {
 				mvt.Status.InitConditions()
 				return mvt
 			}(),
+			expected: dfv1.MonoVertexStatusUnknown,
+		},
+		{
+			name: "running but pausing in progress",
+			mvt: func() *dfv1.MonoVertex {
+				mvt := &dfv1.MonoVertex{}
+				mvt.Status.InitConditions()
+				mvt.Status.MarkPhaseRunning()
+				mvt.Status.MarkDeployed()
+				mvt.Status.MarkDaemonHealthy()
+				mvt.Status.MarkPodHealthy("Running", "all pods are healthy")
+				mvt.Spec.Lifecycle.DesiredPhase = dfv1.MonoVertexPhasePaused
+				return mvt
+			}(),
 			expected: dfv1.MonoVertexStatusInactive,
 		},
 	}
