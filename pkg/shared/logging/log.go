@@ -24,7 +24,11 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// NewLogger returns a new zap.SugaredLogger
+// NewLogger returns a new zap.SugaredLogger.
+// Log level can be overridden at runtime via the NUMAFLOW_LOG_LEVEL env var
+// (accepts any zapcore level: debug, info, warn, error, dpanic, panic, fatal).
+// NUMAFLOW_DEBUG=true selects the development preset (console encoder, debug level).
+// NUMAFLOW_LOG_LEVEL overrides the level chosen by NUMAFLOW_DEBUG; invalid values are silently ignored.
 func NewLogger() *zap.SugaredLogger {
 	var config zap.Config
 	debugMode, ok := os.LookupEnv("NUMAFLOW_DEBUG")
@@ -33,7 +37,13 @@ func NewLogger() *zap.SugaredLogger {
 	} else {
 		config = zap.NewProductionConfig()
 	}
-	// Config customization goes here if any
+	// NUMAFLOW_LOG_LEVEL overrides the level set by the preset above.
+	// Invalid values are silently ignored so a typo in a manifest does not crash the pod.
+	if lvlStr, ok := os.LookupEnv("NUMAFLOW_LOG_LEVEL"); ok {
+		if lvl, err := zapcore.ParseLevel(lvlStr); err == nil {
+			config.Level = zap.NewAtomicLevelAt(lvl)
+		}
+	}
 	config.EncoderConfig.EncodeTime = zapcore.RFC3339NanoTimeEncoder
 	config.OutputPaths = []string{"stdout"}
 	logger, err := config.Build()

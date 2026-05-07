@@ -270,7 +270,11 @@ func (r *Rater) getPodMetrics(podName string) map[string]*dto.MetricFamily {
 func (r *Rater) getPodReadCounts(podName string, result map[string]*dto.MetricFamily) *PodMetricsCount {
 	value, ok := result[monoVtxReadMetricName]
 	if !ok || value == nil || len(value.GetMetric()) == 0 {
-		r.log.Infof("[Pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", podName, monoVtxReadMetricName)
+		// Logged at debug because this fires on every rater tick when the queue is idle (no messages
+		// ever read since pod start), since the Rust prometheus client only registers a counter after
+		// it is first incremented.
+		// To suppress, set NUMAFLOW_LOG_LEVEL=warn on the daemon container.
+		r.log.Debugf("[Pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", podName, monoVtxReadMetricName)
 		return nil
 	}
 
@@ -293,7 +297,9 @@ func (r *Rater) getPodPendingCounts(podName string, result map[string]*dto.Metri
 		podPendingCount := &PodMetricsCount{podName, metricsList[0].Gauge.GetValue()}
 		return podPendingCount
 	} else {
-		r.log.Infof("[Pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", podName, monoVtxPendingRawMetric)
+		// Same rationale as getPodReadCounts: gauge may not be emitted yet on an idle pod.
+		// To suppress, set NUMAFLOW_LOG_LEVEL=warn on the daemon container.
+		r.log.Debugf("[Pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", podName, monoVtxPendingRawMetric)
 	}
 	return nil
 }
