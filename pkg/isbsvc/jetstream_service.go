@@ -337,11 +337,24 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 	if stream.Config.Retention == nats.LimitsPolicy {
 		totalMessages = int64(consumer.NumPending) + int64(consumer.NumAckPending)
 	}
+	// NATS exposes these as uint64/int. The int64 cast matches the BufferInfo
+	// type and is acceptable here because these fields are consumed for
+	// structured logging only — values exceeding math.MaxInt64 (>9.2 EB for
+	// Bytes, >9.2 quintillion for sequence numbers) would already be
+	// pathological for a Numaflow ISB.
 	bufferInfo := &BufferInfo{
 		Name:            buffer,
 		PendingCount:    int64(consumer.NumPending),
 		AckPendingCount: int64(consumer.NumAckPending),
 		TotalMessages:   totalMessages,
+
+		StreamFirstSeq:             int64(stream.State.FirstSeq),
+		StreamLastSeq:              int64(stream.State.LastSeq),
+		StreamBytes:                int64(stream.State.Bytes),
+		ConsumerNumRedelivered:     int64(consumer.NumRedelivered),
+		ConsumerNumWaiting:         int64(consumer.NumWaiting),
+		ConsumerDeliveredStreamSeq: int64(consumer.Delivered.Stream),
+		ConsumerAckFloorStreamSeq:  int64(consumer.AckFloor.Stream),
 	}
 	return bufferInfo, nil
 }

@@ -58,13 +58,16 @@ func TestJetstreamSvc_GetBufferInfo(t *testing.T) {
 
 	// add stream
 	_, err = jsCtx.AddStream(&nats.StreamConfig{
-		Name: "test-buffer",
+		Name:     "test-buffer",
+		Subjects: []string{"test-buffer"},
 	})
 	assert.NoError(t, err)
 
 	// add consumer
 	_, err = jsCtx.AddConsumer("test-buffer", &nats.ConsumerConfig{
-		Name: "test-buffer",
+		Durable:       "test-buffer",
+		AckPolicy:     nats.AckExplicitPolicy,
+		FilterSubject: "test-buffer",
 	})
 	assert.NoError(t, err)
 
@@ -72,10 +75,37 @@ func TestJetstreamSvc_GetBufferInfo(t *testing.T) {
 	assert.NoError(t, err)
 
 	buffer := "test-buffer"
+
+	// Empty-state baseline.
 	info, err := isbSvc.GetBufferInfo(ctx, buffer)
 	assert.NoError(t, err)
 	assert.Equal(t, buffer, info.Name)
 	assert.Equal(t, int64(0), info.PendingCount)
 	assert.Equal(t, int64(0), info.AckPendingCount)
 	assert.Equal(t, int64(0), info.TotalMessages)
+	assert.Equal(t, int64(0), info.StreamFirstSeq)
+	assert.Equal(t, int64(0), info.StreamLastSeq)
+	assert.Equal(t, int64(0), info.StreamBytes)
+	assert.Equal(t, int64(0), info.ConsumerNumRedelivered)
+	assert.Equal(t, int64(0), info.ConsumerNumWaiting)
+	assert.Equal(t, int64(0), info.ConsumerDeliveredStreamSeq)
+	assert.Equal(t, int64(0), info.ConsumerAckFloorStreamSeq)
+
+	// Publish 3 messages so stream state has content.
+	for i := 0; i < 3; i++ {
+		_, err = jsCtx.Publish("test-buffer", []byte("hello"))
+		assert.NoError(t, err)
+	}
+
+	info, err = isbSvc.GetBufferInfo(ctx, buffer)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), info.StreamFirstSeq)
+	assert.Equal(t, int64(3), info.StreamLastSeq)
+	assert.Greater(t, info.StreamBytes, int64(0))
+	// Nothing has been delivered/acked yet.
+	assert.Equal(t, int64(3), info.PendingCount)
+	assert.Equal(t, int64(0), info.AckPendingCount)
+	assert.Equal(t, int64(0), info.ConsumerDeliveredStreamSeq)
+	assert.Equal(t, int64(0), info.ConsumerAckFloorStreamSeq)
+	assert.Equal(t, int64(0), info.ConsumerNumRedelivered)
 }
