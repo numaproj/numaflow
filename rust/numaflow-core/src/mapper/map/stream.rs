@@ -381,14 +381,20 @@ impl UserDefinedStreamMap {
 
 #[cfg(test)]
 mod tests {
-    use crate::mapper::map::stream::UserDefinedStreamMap;
+    use crate::error::Error as MapError;
+    use crate::mapper::map::stream::{StreamSenderMapState, UserDefinedStreamMap};
     use crate::shared::grpc::create_rpc_channel;
     use numaflow::mapstream;
     use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::map::map_client::MapClient;
+    use numaflow_pb::clients::map::{MapRequest, MapResponse, TransmissionStatus};
     use std::error::Error;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tempfile::TempDir;
+    use tokio::sync::mpsc;
+    use tokio_util::sync::CancellationToken;
+    use tokio_util::task::AbortOnDropHandle;
 
     struct FlatmapStream;
 
@@ -484,5 +490,188 @@ mod tests {
             "Expected gRPC server to have shut down"
         );
         Ok(())
+    }
+
+    fn make_response(id: &str, eot: bool) -> MapResponse {
+        MapResponse {
+            results: vec![],
+            id: id.to_string(),
+            handshake: None,
+            status: if eot {
+                Some(TransmissionStatus { eot: true })
+            } else {
+                None
+            },
+        }
+    }
+
+    #[tokio::test]
+    async fn process_response_returns_error_when_no_sender_entry() {
+        let sender_map = Arc::new(Mutex::new(StreamSenderMapState::default()));
+
+        let result =
+            UserDefinedStreamMap::process_response(&sender_map, make_response("missing", false))
+                .await;
+
+        let err = result.expect_err("expected error when sender entry missing");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(
+            err.to_string()
+                .contains("No such req/resp ID found in StreamResponseSenderMap"),
+            "unexpected error message: {err}"
+        );
+        assert!(sender_map.lock().unwrap().map.is_empty());
+    }
+
+    #[tokio::test]
+    async fn process_response_returns_error_when_response_sender_send_fails() {
+        let sender_map = Arc::new(Mutex::new(StreamSenderMapState::default()));
+        let (tx, rx) = mpsc::channel(1);
+        // Drop the receiver so the next send on tx fails.
+        drop(rx);
+        sender_map.lock().unwrap().map.insert("0".to_string(), tx);
+
+        let result =
+            UserDefinedStreamMap::process_response(&sender_map, make_response("0", false)).await;
+
+        let err = result.expect_err("expected error when send to response sender fails");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(
+            err.to_string()
+                .contains("Failed to send map response to stream task"),
+            "unexpected error message: {err}"
+        );
+        // The entry must be removed so the wrapper does not leak senders.
+        assert!(
+            !sender_map.lock().unwrap().map.contains_key("0"),
+            "sender entry should have been removed after send failure"
+        );
+    }
+
+    #[tokio::test]
+    async fn process_response_signals_closed_mapper_on_response_sender() {
+        let sender_map = Arc::new(Mutex::new(StreamSenderMapState::default()));
+        let (tx, mut rx) = mpsc::channel(1);
+        {
+            let mut guard = sender_map.lock().unwrap();
+            guard.map.insert("0".to_string(), tx);
+            guard.closed = true;
+        }
+
+        let result =
+            UserDefinedStreamMap::process_response(&sender_map, make_response("0", false)).await;
+        assert!(result.is_ok(), "expected Ok when mapper is closed");
+
+        // Caller should see a "mapper closed" error on the response channel.
+        let received = rx.recv().await.expect("expected error on response channel");
+        let err = received.expect_err("expected Err variant");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(err.to_string().contains("mapper closed"));
+
+        // Closed-mapper path must not re-insert the sender.
+        assert!(
+            !sender_map.lock().unwrap().map.contains_key("0"),
+            "sender should not be re-inserted when mapper is closed"
+        );
+    }
+
+    #[tokio::test]
+    async fn process_response_drops_sender_on_eot_without_error() {
+        let sender_map = Arc::new(Mutex::new(StreamSenderMapState::default()));
+        let (tx, mut rx) = mpsc::channel(1);
+        sender_map.lock().unwrap().map.insert("0".to_string(), tx);
+
+        let result =
+            UserDefinedStreamMap::process_response(&sender_map, make_response("0", true)).await;
+        assert!(result.is_ok(), "EOT path should return Ok");
+
+        // EOT does not deliver a payload to the response sender.
+        assert!(matches!(
+            rx.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty | mpsc::error::TryRecvError::Disconnected)
+        ));
+
+        // EOT removes the sender from the map (and never re-inserts it),
+        // letting the corresponding receiver loop terminate.
+        assert!(
+            !sender_map.lock().unwrap().map.contains_key("0"),
+            "sender entry should be removed after EOT"
+        );
+    }
+
+    #[tokio::test]
+    async fn broadcast_error_marks_closed_and_errors_all_senders() {
+        let sender_map = Arc::new(Mutex::new(StreamSenderMapState::default()));
+        let (tx_a, mut rx_a) = mpsc::channel(1);
+        let (tx_b, mut rx_b) = mpsc::channel(1);
+        {
+            let mut guard = sender_map.lock().unwrap();
+            guard.map.insert("a".to_string(), tx_a);
+            guard.map.insert("b".to_string(), tx_b);
+        }
+
+        UserDefinedStreamMap::broadcast_error(&sender_map, tonic::Status::aborted("test")).await;
+
+        {
+            let guard = sender_map.lock().unwrap();
+            assert!(guard.closed, "broadcast_error should set closed = true");
+            assert!(guard.map.is_empty(), "all senders should be drained");
+        }
+
+        for rx in [&mut rx_a, &mut rx_b] {
+            let received = rx.recv().await.expect("expected error broadcast");
+            let err = received.expect_err("expected Err variant");
+            assert!(matches!(err, MapError::Grpc(_)));
+        }
+    }
+
+    #[tokio::test]
+    async fn stream_method_cleans_up_on_read_tx_send_failure() {
+        // Build a UserDefinedStreamMap whose read_tx receiver has been dropped,
+        // so that read_tx.send(..) inside `stream` fails immediately.
+        let (read_tx, read_rx) = mpsc::channel::<MapRequest>(10);
+        drop(read_rx);
+
+        let dummy_handle = tokio::spawn(async {});
+        let _abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+
+        let senders = Arc::new(Mutex::new(StreamSenderMapState::default()));
+        let mapper = UserDefinedStreamMap {
+            read_tx,
+            senders: Arc::clone(&senders),
+            _handle: _abort_handle,
+        };
+
+        let request = MapRequest {
+            request: Some(numaflow_pb::clients::map::map_request::Request {
+                keys: vec!["k".into()],
+                value: b"v".to_vec(),
+                event_time: None,
+                watermark: None,
+                headers: Default::default(),
+                metadata: None,
+            }),
+            id: "42".to_string(),
+            handshake: None,
+            status: None,
+        };
+
+        let mut rx = mapper.stream(request, CancellationToken::new()).await;
+
+        // The receiver must observe the read_tx failure as a Mapper error.
+        let first = rx.recv().await.expect("expected error on stream rx");
+        let err = first.expect_err("expected Err variant");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(
+            err.to_string()
+                .contains("failed to send message to map stream server"),
+            "unexpected error message: {err}"
+        );
+
+        // The senders map must no longer contain the failed request id.
+        assert!(
+            !senders.lock().unwrap().map.contains_key("42"),
+            "senders map should be cleaned up on read_tx send failure"
+        );
     }
 }
