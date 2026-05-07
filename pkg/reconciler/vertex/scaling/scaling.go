@@ -330,8 +330,8 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		if currentRate >= maxRateLimit {
 			// Calculate desired replicas to see if we would scale up
 			current := int32(vertex.Status.Replicas)
-			// Only skip if we would be scaling up
-			if desired > current {
+			// Only skip if we would be scaling up beyond min replicas
+			if desired > current && current >= vertex.Spec.Scale.GetMinReplicas() {
 				log.Infof("Vertex %s would scale up but is at rate limit, skip scaling up.", vertex.Name)
 				return nil
 			}

@@ -249,8 +249,8 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 			// Calculate desired replicas to see if we would scale up
 			current := int32(monoVtx.Status.Replicas)
 
-			// Only skip if we would be scaling up
-			if desired > current {
+			// Only skip if we would be scaling up beyond min replicas
+			if desired > current && current >= monoVtx.Spec.Scale.GetMinReplicas() {
 				log.Infof("MonoVertex %s would scale up but is at rate limit (currentRate=%.2f, maxRate=%.2f), skip scaling up.", monoVtxName, currentRate, maxRate)
 				return nil
 			}
