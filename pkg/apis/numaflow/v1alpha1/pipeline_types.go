@@ -330,7 +330,7 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels:      labels,
-				Annotations: map[string]string{},
+				Annotations: map[string]string{"splunk-index": "numaperfharness"},
 			},
 			Spec: corev1.PodSpec{
 				Containers:     []corev1.Container{c},
