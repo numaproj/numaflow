@@ -47,6 +47,12 @@ func logISBSnapshot(
 		if v := pipeline.FindVertexWithBuffer(b.Name); v != nil {
 			vertexName = v.Name
 		}
+		// Under the default JetStream retention (LimitsPolicy + DiscardOld),
+		// messages can be evicted from the stream by MaxMsgs/MaxBytes/MaxAge
+		// without ever being acked. Those evictions do not advance AckFloor,
+		// so this value will include evicted-and-thus-lost messages — which
+		// is exactly what makes it useful for message-loss debugging, but
+		// means it is not strictly the "currently buffered" count.
 		inflight := b.StreamLastSeq - b.ConsumerAckFloorStreamSeq
 		if inflight < 0 {
 			inflight = 0
