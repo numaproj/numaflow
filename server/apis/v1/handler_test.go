@@ -1096,3 +1096,99 @@ func TestHandler_IsNotSidecarContainer(t *testing.T) {
 		})
 	}
 }
+
+func TestGetMonoVertexStatus(t *testing.T) {
+	tests := []struct {
+		name     string
+		mvt      *dfv1.MonoVertex
+		expected string
+	}{
+		{
+			name: "running and healthy",
+			mvt: func() *dfv1.MonoVertex {
+				mvt := &dfv1.MonoVertex{}
+				mvt.Status.InitConditions()
+				mvt.Status.MarkPhaseRunning()
+				mvt.Status.MarkDeployed()
+				mvt.Status.MarkDaemonHealthy()
+				mvt.Status.MarkPodHealthy("Running", "all pods are healthy")
+				return mvt
+			}(),
+			expected: dfv1.MonoVertexStatusHealthy,
+		},
+		{
+			name: "running but daemon unhealthy",
+			mvt: func() *dfv1.MonoVertex {
+				mvt := &dfv1.MonoVertex{}
+				mvt.Status.InitConditions()
+				mvt.Status.MarkPhaseRunning()
+				mvt.Status.MarkDeployed()
+				mvt.Status.MarkDaemonUnHealthy("DaemonFailed", "daemon not responding")
+				mvt.Status.MarkPodHealthy("Running", "all pods are healthy")
+				return mvt
+			}(),
+			expected: dfv1.MonoVertexStatusWarning,
+		},
+		{
+			name: "paused",
+			mvt: func() *dfv1.MonoVertex {
+				mvt := &dfv1.MonoVertex{}
+				mvt.Status.InitConditions()
+				mvt.Status.MarkPhasePaused()
+				return mvt
+			}(),
+			expected: dfv1.MonoVertexStatusInactive,
+		},
+		{
+			name: "failed",
+			mvt: func() *dfv1.MonoVertex {
+				mvt := &dfv1.MonoVertex{}
+				mvt.Status.InitConditions()
+				mvt.Status.MarkPhaseFailed("DeployFailed", "deployment error")
+				return mvt
+			}(),
+			expected: dfv1.MonoVertexStatusCritical,
+		},
+		{
+			name: "unknown phase",
+			mvt: func() *dfv1.MonoVertex {
+				mvt := &dfv1.MonoVertex{}
+				mvt.Status.InitConditions()
+				return mvt
+			}(),
+			expected: dfv1.MonoVertexStatusUnknown,
+		},
+		{
+			name: "running but pausing in progress",
+			mvt: func() *dfv1.MonoVertex {
+				mvt := &dfv1.MonoVertex{}
+				mvt.Status.InitConditions()
+				mvt.Status.MarkPhaseRunning()
+				mvt.Status.MarkDeployed()
+				mvt.Status.MarkDaemonHealthy()
+				mvt.Status.MarkPodHealthy("Running", "all pods are healthy")
+				mvt.Spec.Lifecycle.DesiredPhase = dfv1.MonoVertexPhasePaused
+				return mvt
+			}(),
+			expected: dfv1.MonoVertexStatusInactive,
+		},
+		{
+			name: "unhandled phase (e.g. Pausing or Deleting)",
+			mvt: func() *dfv1.MonoVertex {
+				mvt := &dfv1.MonoVertex{}
+				mvt.Status.InitConditions()
+				mvt.Status.Phase = "Pausing"
+				return mvt
+			}(),
+			expected: dfv1.MonoVertexStatusUnknown,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status, err := getMonoVertexStatus(tt.mvt)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, status)
+		})
+	}
+}
