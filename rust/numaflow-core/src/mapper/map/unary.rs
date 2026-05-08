@@ -206,7 +206,15 @@ impl UserDefinedUnaryMap {
     ) {
         while let Some(resp) = resp_stream.next().await {
             match resp {
-                Ok(resp) => Self::process_unary_response(&sender_map, resp).await,
+                Ok(resp) => {
+                    if let Err(e) = Self::process_unary_response(&sender_map, resp) {
+                        error!(
+                            "received error while processing unary response: {}. \
+                            Exiting receiver task",
+                            e
+                        );
+                    }
+                }
                 Err(e) => {
                     error!(?e, "Error reading message from unary map gRPC stream");
                     Self::broadcast_error(&sender_map, e);
@@ -232,15 +240,10 @@ impl UserDefinedUnaryMap {
         let (tx, rx) = oneshot::channel();
         let key = request.id.clone();
 
-        // only insert if we are able to send the message to the server
-        if let Err(e) = self.read_tx.send(request).await {
-            error!(?e, "Failed to send message to server");
-            return Err(Error::Mapper(format!(
-                "failed to send message to unary map server: {e}"
-            )));
-        }
-
-        // move the senders_guard out of the scope to drop the guard when done
+        // Move the senders_guard out of the scope to drop the guard when done
+        // Do this before we send the message to the server to avoid the race condition
+        // where the server processes the message faster than the corresponding sender
+        // is added to the SenderMap.
         {
             let mut senders_guard = self
                 .senders
@@ -251,9 +254,29 @@ impl UserDefinedUnaryMap {
             } else {
                 let _ = tx
                     .send(Err(Error::Mapper("mapper closed".to_string())))
-                    .inspect(|_| warn!("failed to send error to oneshot receiver"));
+                    .inspect_err(|_| warn!("failed to send error to oneshot receiver"));
             }
         };
+
+        // send message to the server
+        if let Err(e) = self.read_tx.send(request).await {
+            error!(?e, "Failed to send message to server");
+            // We should remove the resp.id from the SenderMap to avoid potential
+            // memory leaks as well as to avoid holding the corresponding receiver waiting.
+            // We don't care about sending the error on the sender popped
+            // from the map since we're returning early with error anyway.
+            {
+                let _ = self
+                    .senders
+                    .lock()
+                    .expect("failed to acquire poisoned lock")
+                    .map
+                    .remove(&key);
+            };
+            return Err(Error::Mapper(format!(
+                "failed to send message to unary map server: {e}"
+            )));
+        }
 
         tokio::select! {
             result = rx => {
@@ -275,37 +298,55 @@ impl UserDefinedUnaryMap {
 
     /// Processes the response from the server and sends it to the appropriate oneshot sender
     /// based on the message id entry in the map.
-    pub(super) async fn process_unary_response(
+    pub(super) fn process_unary_response(
         sender_map: &Arc<Mutex<UnarySenderMapState>>,
         resp: MapResponse,
-    ) {
+    ) -> Result<()> {
         let msg_id = resp.id;
 
-        let sender_entry = sender_map
-            .lock()
-            .expect("failed to acquire poisoned lock")
-            .map
-            .remove(&msg_id);
+        let sender_entry = {
+            sender_map
+                .lock()
+                .expect("failed to acquire poisoned lock")
+                .map
+                .remove(&msg_id)
+        };
 
         if let Some(sender) = sender_entry {
-            sender
-                .send(Ok(resp.results))
-                .expect("failed to send response");
+            if let Err(e) = sender.send(Ok(resp.results)) {
+                return Err(Error::Mapper(format!(
+                    "Failed to send server response from receiver to unary task \
+                    for ID: {} with error: {:?}",
+                    msg_id, e
+                )));
+            };
+        } else {
+            return Err(Error::Mapper(format!(
+                "No such req/resp ID found in unary ResponseSenderMap: {}",
+                msg_id
+            )));
         }
+
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::mapper::map::unary::UserDefinedUnaryMap;
+    use crate::error::Error as MapError;
+    use crate::mapper::map::unary::{UnarySenderMapState, UserDefinedUnaryMap};
     use crate::shared::grpc::create_rpc_channel;
     use numaflow::map;
     use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::map::map_client::MapClient;
+    use numaflow_pb::clients::map::{MapRequest, MapResponse};
     use std::error::Error;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tempfile::TempDir;
+    use tokio::sync::{mpsc, oneshot};
     use tokio_util::sync::CancellationToken;
+    use tokio_util::task::AbortOnDropHandle;
 
     struct Cat;
 
@@ -379,5 +420,122 @@ mod tests {
             "Expected gRPC server to have shut down"
         );
         Ok(())
+    }
+
+    fn make_response(id: &str) -> MapResponse {
+        MapResponse {
+            results: vec![],
+            id: id.to_string(),
+            handshake: None,
+            status: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn process_unary_response_returns_error_when_no_sender_entry() {
+        let sender_map = Arc::new(Mutex::new(UnarySenderMapState::default()));
+
+        let result =
+            UserDefinedUnaryMap::process_unary_response(&sender_map, make_response("missing"));
+
+        let err = result.expect_err("expected error when sender entry missing");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(
+            err.to_string()
+                .contains("No such req/resp ID found in unary ResponseSenderMap"),
+            "unexpected error message: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn process_unary_response_returns_error_when_oneshot_send_fails() {
+        let sender_map = Arc::new(Mutex::new(UnarySenderMapState::default()));
+        let (tx, rx) = oneshot::channel();
+        // Drop the receiver so the next send on tx fails.
+        drop(rx);
+        sender_map.lock().unwrap().map.insert("0".to_string(), tx);
+
+        let result = UserDefinedUnaryMap::process_unary_response(&sender_map, make_response("0"));
+
+        let err = result.expect_err("expected error when oneshot send fails");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(
+            err.to_string()
+                .contains("Failed to send server response from receiver to unary task"),
+            "unexpected error message: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn broadcast_error_marks_closed_and_errors_all_senders() {
+        let sender_map = Arc::new(Mutex::new(UnarySenderMapState::default()));
+        let (tx_a, rx_a) = oneshot::channel();
+        let (tx_b, rx_b) = oneshot::channel();
+        {
+            let mut guard = sender_map.lock().unwrap();
+            guard.map.insert("a".to_string(), tx_a);
+            guard.map.insert("b".to_string(), tx_b);
+        }
+
+        UserDefinedUnaryMap::broadcast_error(&sender_map, tonic::Status::aborted("test"));
+
+        {
+            let guard = sender_map.lock().unwrap();
+            assert!(guard.closed, "broadcast_error should set closed = true");
+            assert!(guard.map.is_empty(), "all senders should be drained");
+        }
+
+        for rx in [rx_a, rx_b] {
+            let received = rx.await.expect("oneshot sender should have delivered");
+            let err = received.expect_err("expected Err variant");
+            assert!(matches!(err, MapError::Grpc(_)));
+        }
+    }
+
+    #[tokio::test]
+    async fn unary_method_cleans_up_on_read_tx_send_failure() {
+        // Build a UserDefinedUnaryMap whose read_tx receiver has been dropped,
+        // so that read_tx.send(..) inside `unary` fails immediately.
+        let (read_tx, read_rx) = mpsc::channel::<MapRequest>(10);
+        drop(read_rx);
+
+        let dummy_handle = tokio::spawn(async {});
+        let _abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+
+        let senders = Arc::new(Mutex::new(UnarySenderMapState::default()));
+        let mapper = UserDefinedUnaryMap {
+            read_tx,
+            senders: Arc::clone(&senders),
+            _handle: _abort_handle,
+        };
+
+        let request = MapRequest {
+            request: Some(numaflow_pb::clients::map::map_request::Request {
+                keys: vec!["k".into()],
+                value: b"v".to_vec(),
+                event_time: None,
+                watermark: None,
+                headers: Default::default(),
+                metadata: None,
+            }),
+            id: "42".to_string(),
+            handshake: None,
+            status: None,
+        };
+
+        let result = mapper.unary(request, CancellationToken::new()).await;
+        let err = result.expect_err("expected Mapper error from unary()");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(
+            err.to_string()
+                .contains("failed to send message to unary map server"),
+            "unexpected error message: {err}"
+        );
+
+        // The senders map must no longer contain the failed request id.
+        assert!(
+            !senders.lock().unwrap().map.contains_key("42"),
+            "senders map should be cleaned up on read_tx send failure"
+        );
     }
 }
