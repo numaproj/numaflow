@@ -1172,6 +1172,16 @@ func TestGetMonoVertexStatus(t *testing.T) {
 			}(),
 			expected: dfv1.MonoVertexStatusInactive,
 		},
+		{
+			name: "unhandled phase (e.g. Pausing or Deleting)",
+			mvt: func() *dfv1.MonoVertex {
+				mvt := &dfv1.MonoVertex{}
+				mvt.Status.InitConditions()
+				mvt.Status.Phase = "Pausing"
+				return mvt
+			}(),
+			expected: dfv1.MonoVertexStatusUnknown,
+		},
 	}
 
 	for _, tt := range tests {

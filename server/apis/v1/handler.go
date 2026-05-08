@@ -1531,7 +1531,8 @@ func getMonoVertexStatus(mvt *dfv1.MonoVertex) (string, error) {
 		}
 		return dfv1.MonoVertexStatusHealthy, nil
 	default:
-		return dfv1.MonoVertexStatusHealthy, nil
+		// Unhandled phase (e.g. Pausing, Deleting) — status is not deterministic
+		return dfv1.MonoVertexStatusUnknown, nil
 	}
 }
 
