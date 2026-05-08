@@ -275,7 +275,10 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 			h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, %s", err.Error()))
 			return
 		}
-		if status == dfv1.PipelineStatusInactive {
+		// Pipelines with inactive, unknown, or deleting status are not actively processing data
+		if status == dfv1.PipelineStatusInactive ||
+			status == dfv1.PipelineStatusUnknown ||
+			status == dfv1.PipelineStatusDeleting {
 			summary.pipelineSummary.Inactive++
 		} else {
 			summary.pipelineSummary.Active.increment(status)
@@ -1480,16 +1483,33 @@ func getMonoVertices(h *handler, namespace string) (MonoVertices, error) {
 // TODO(API): Change the Daemon service to return the consolidated status of the pipeline
 // to save on multiple calls to the daemon service
 func getPipelineStatus(pipeline *dfv1.Pipeline) (string, error) {
-	retStatus := dfv1.PipelineStatusHealthy
-	// Check if the pipeline is paused, if so, return inactive status
-	if pipeline.GetDesiredPhase() == dfv1.PipelinePhasePaused {
-		retStatus = dfv1.PipelineStatusInactive
-	} else if pipeline.GetDesiredPhase() == dfv1.PipelinePhaseRunning {
-		retStatus = dfv1.PipelineStatusHealthy
-	} else if pipeline.GetDesiredPhase() == dfv1.PipelinePhaseFailed {
-		retStatus = dfv1.PipelineStatusCritical
+	switch pipeline.Status.Phase {
+	case dfv1.PipelinePhaseUnknown:
+		// Phase not yet set by the controller — reconciliation is pending
+		return dfv1.PipelineStatusUnknown, nil
+	case dfv1.PipelinePhaseFailed:
+		return dfv1.PipelineStatusCritical, nil
+	case dfv1.PipelinePhasePaused:
+		return dfv1.PipelineStatusInactive, nil
+	case dfv1.PipelinePhaseRunning:
+		// Check desired phase to catch the pausing-in-progress case:
+		// the user has requested a pause but the controller has not yet updated Status.Phase
+		if pipeline.GetDesiredPhase() == dfv1.PipelinePhasePaused {
+			return dfv1.PipelineStatusInactive, nil
+		}
+		if !pipeline.Status.IsHealthy() {
+			return dfv1.PipelineStatusWarning, nil
+		}
+		return dfv1.PipelineStatusHealthy, nil
+	case dfv1.PipelinePhasePausing:
+		// Pipeline is draining before pausing — treat as inactive
+		return dfv1.PipelineStatusInactive, nil
+	case dfv1.PipelinePhaseDeleting:
+		return dfv1.PipelineStatusDeleting, nil
+	default:
+		// Unhandled phase — status is not deterministic
+		return dfv1.PipelineStatusUnknown, nil
 	}
-	return retStatus, nil
 }
 
 // getIsbServiceStatus determines the status of a given InterStepBufferService
