@@ -110,4 +110,31 @@ func TestJetstreamSvc_GetBufferInfo(t *testing.T) {
 	assert.Equal(t, int64(0), info.ConsumerDeliveredStreamSeq)
 	assert.Equal(t, int64(0), info.ConsumerAckFloorStreamSeq)
 	assert.Equal(t, int64(0), info.ConsumerNumRedelivered)
+
+	// Stream config snapshot — the test stream was created with default
+	// nats.StreamConfig (zero-valued Retention/Discard), which the NATS
+	// server interprets as LimitsPolicy + DiscardOld. The exact integer
+	// values for unlimited fields are server-defined (typically 0 or -1
+	// returned as-is); only assert that the strings render correctly.
+	assert.Equal(t, "limits", info.StreamRetention)
+	assert.Equal(t, "old", info.StreamDiscard)
+	// Defaults are unlimited; the server may report 0 or -1. Either way
+	// the field must be populated (i.e. parseable as int64) — accept both.
+	assert.True(t, info.StreamMaxMsgs == 0 || info.StreamMaxMsgs == -1,
+		"unexpected StreamMaxMsgs: %d", info.StreamMaxMsgs)
+	assert.True(t, info.StreamMaxBytes == 0 || info.StreamMaxBytes == -1,
+		"unexpected StreamMaxBytes: %d", info.StreamMaxBytes)
+	assert.GreaterOrEqual(t, info.StreamMaxAgeSec, int64(0))
+	assert.GreaterOrEqual(t, info.StreamDuplicatesSec, int64(0))
+}
+
+func TestRetentionAndDiscardPolicyStringHelpers(t *testing.T) {
+	assert.Equal(t, "limits", retentionPolicyString(nats.LimitsPolicy))
+	assert.Equal(t, "interest", retentionPolicyString(nats.InterestPolicy))
+	assert.Equal(t, "workqueue", retentionPolicyString(nats.WorkQueuePolicy))
+	assert.Equal(t, "unknown", retentionPolicyString(nats.RetentionPolicy(99)))
+
+	assert.Equal(t, "old", discardPolicyString(nats.DiscardOld))
+	assert.Equal(t, "new", discardPolicyString(nats.DiscardNew))
+	assert.Equal(t, "unknown", discardPolicyString(nats.DiscardPolicy(99)))
 }

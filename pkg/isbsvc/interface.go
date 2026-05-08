@@ -76,6 +76,18 @@ type BufferInfo struct {
 	ConsumerNumWaiting         int64
 	ConsumerDeliveredStreamSeq int64
 	ConsumerAckFloorStreamSeq  int64
+
+	// Stream config — captured per snapshot to make every ISB-snapshot
+	// log line self-contained and to enable detection of retention-driven
+	// message loss when the stream is using LimitsPolicy + DiscardOld.
+	// Durations are stored as integer seconds rather than time.Duration
+	// because Duration.String() ("72h0m0s") is awkward in Splunk filters.
+	StreamRetention     string // "limits" | "interest" | "workqueue" | "unknown"
+	StreamDiscard       string // "old" | "new" | "unknown"
+	StreamMaxMsgs       int64  // -1 if unlimited
+	StreamMaxBytes      int64  // -1 if unlimited
+	StreamMaxAgeSec     int64  // 0 if unlimited
+	StreamDuplicatesSec int64  // 0 if dedup is disabled
 }
 
 func JetStreamOTKVName(bucketName string) string {

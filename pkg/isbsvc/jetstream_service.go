@@ -356,8 +356,49 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 		ConsumerNumWaiting:         int64(consumer.NumWaiting),
 		ConsumerDeliveredStreamSeq: int64(consumer.Delivered.Stream),
 		ConsumerAckFloorStreamSeq:  int64(consumer.AckFloor.Stream),
+
+		// Stream config snapshot. These are static under normal operation
+		// but captured every tick so each log line is self-contained and
+		// any config change (ISBService spec edit) is reflected within
+		// one tick.
+		StreamRetention:     retentionPolicyString(stream.Config.Retention),
+		StreamDiscard:       discardPolicyString(stream.Config.Discard),
+		StreamMaxMsgs:       stream.Config.MaxMsgs,
+		StreamMaxBytes:      stream.Config.MaxBytes,
+		StreamMaxAgeSec:     int64(stream.Config.MaxAge / time.Second),
+		StreamDuplicatesSec: int64(stream.Config.Duplicates / time.Second),
 	}
 	return bufferInfo, nil
+}
+
+// retentionPolicyString renders a nats.RetentionPolicy as a stable
+// lowercase string suitable for structured logging and Splunk filters.
+// Returns "unknown" rather than panicking if the upstream nats library
+// adds a new policy variant.
+func retentionPolicyString(r nats.RetentionPolicy) string {
+	switch r {
+	case nats.LimitsPolicy:
+		return "limits"
+	case nats.InterestPolicy:
+		return "interest"
+	case nats.WorkQueuePolicy:
+		return "workqueue"
+	default:
+		return "unknown"
+	}
+}
+
+// discardPolicyString renders a nats.DiscardPolicy as a stable lowercase
+// string. See retentionPolicyString for rationale.
+func discardPolicyString(d nats.DiscardPolicy) string {
+	switch d {
+	case nats.DiscardOld:
+		return "old"
+	case nats.DiscardNew:
+		return "new"
+	default:
+		return "unknown"
+	}
 }
 
 func JetStreamName(bufferName string) string {

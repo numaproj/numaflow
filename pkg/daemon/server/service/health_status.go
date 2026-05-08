@@ -115,6 +115,15 @@ var defaultDataHealthResponse = newDataHealthResponse(v1alpha1.PipelineStatusUnk
 	"Pipeline data flow is in an unknown state",
 	"D4")
 
+// snapshotState carries the per-buffer state needed to compute
+// inter-tick deltas for retention-drop detection. Updated after each
+// "ISB snapshot" emission inside logISBSnapshot.
+type snapshotState struct {
+	streamFirstSeq            int64
+	consumerAckFloorStreamSeq int64
+	streamLastSeq             int64
+}
+
 // HealthChecker is the struct type for health checker.
 type HealthChecker struct {
 	// Add a field for the health status.
@@ -124,6 +133,16 @@ type HealthChecker struct {
 	pipeline          *v1alpha1.Pipeline
 	timelineData      map[string]*sharedqueue.OverflowQueue[*timelineEntry]
 	statusLock        *sync.RWMutex
+
+	// prevSnapshot holds the per-buffer stream/consumer state from the
+	// most recent "ISB snapshot" emission. Used by logISBSnapshot to
+	// detect retention-driven evictions (StreamFirstSeq advancing past
+	// the previous tick's ConsumerAckFloorStreamSeq) which under
+	// LimitsPolicy + DiscardOld silently drop unacked messages.
+	// The map is keyed by buffer name. Bound by the number of buffers
+	// in the pipeline (~tens), so total memory is negligible.
+	prevSnapshot map[string]*snapshotState
+	snapshotLock *sync.Mutex
 }
 
 // NewHealthChecker creates a new object HealthChecker struct type.
@@ -136,6 +155,8 @@ func NewHealthChecker(pipeline *v1alpha1.Pipeline, isbSvcClient isbsvc.ISBServic
 		pipeline:          pipeline,
 		timelineData:      make(map[string]*sharedqueue.OverflowQueue[*timelineEntry]),
 		statusLock:        &sync.RWMutex{},
+		prevSnapshot:      make(map[string]*snapshotState),
+		snapshotLock:      &sync.Mutex{},
 	}
 }
 
@@ -200,7 +221,7 @@ func (hc *HealthChecker) startHealthCheck(ctx context.Context) {
 			} else {
 				pipelineState := convertVertexStateToPipelineState(criticality)
 				hc.setCurrentHealth(pipelineState)
-				logISBSnapshot(ctx, hc.pipeline, hc.isbSvcType, "periodic", internal)
+				logISBSnapshot(ctx, hc.pipeline, hc.isbSvcType, "periodic", internal, hc.prevSnapshot, hc.snapshotLock)
 			}
 		case <-ctx.Done():
 			return
@@ -231,7 +252,7 @@ func (hc *HealthChecker) emitShutdownSnapshot() {
 		logger.Warnw("ISB snapshot at shutdown unavailable", zap.Error(err))
 		return
 	}
-	logISBSnapshot(ctx, hc.pipeline, hc.isbSvcType, "shutdown_snapshot", internal)
+	logISBSnapshot(ctx, hc.pipeline, hc.isbSvcType, "shutdown_snapshot", internal, hc.prevSnapshot, hc.snapshotLock)
 }
 
 // getPipelineVertexDataCriticality is used to provide the data criticality of the pipeline
