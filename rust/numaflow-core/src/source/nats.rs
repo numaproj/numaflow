@@ -39,7 +39,6 @@ impl From<NatsMessage> for Message {
             // Set default metadata so that metadata is always present.
             metadata: Some(Arc::new(Metadata::default())),
             is_late: false,
-            ack_handle: None,
         }
     }
 }
@@ -57,8 +56,11 @@ impl SourceReader for NatsSource {
         }
     }
 
-    async fn partitions(&mut self) -> crate::Result<Vec<u16>> {
-        Ok(vec![*get_vertex_replica()])
+    async fn partitions(&mut self) -> crate::Result<super::SourcePartitions> {
+        Ok(super::SourcePartitions::new(
+            vec![*get_vertex_replica()],
+            None,
+        ))
     }
 }
 

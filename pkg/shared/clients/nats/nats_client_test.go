@@ -32,9 +32,9 @@ import (
 
 func TestNewNATSClient(t *testing.T) {
 	// Setting up environment variables for the test
-	os.Setenv(dfv1.EnvISBSvcJetStreamURL, "nats://localhost:4222")
-	os.Setenv(dfv1.EnvISBSvcJetStreamUser, "user")
-	os.Setenv(dfv1.EnvISBSvcJetStreamPassword, "password")
+	_ = os.Setenv(dfv1.EnvISBSvcJetStreamURL, "nats://localhost:4222")
+	_ = os.Setenv(dfv1.EnvISBSvcJetStreamUser, "user")
+	_ = os.Setenv(dfv1.EnvISBSvcJetStreamPassword, "password")
 	defer os.Clearenv()
 
 	log := zap.NewNop().Sugar()

@@ -146,7 +146,11 @@ func (v Vertex) GetServiceObjs() []*corev1.Service {
 	}
 	svcs := []*corev1.Service{v.getServiceObj(v.GetHeadlessServiceName(), true, ports)}
 	if x := v.Spec.Source; x != nil && x.HTTP != nil && x.HTTP.Service {
-		svcs = append(svcs, v.getServiceObj(v.Name, false, map[string]int32{VertexHTTPSPortName: VertexHTTPSPort}))
+		httpSvcPorts := map[string]int32{VertexHTTPSPortName: x.HTTP.GetHTTPSPort()}
+		if x.HTTP.IsHTTPConfigured() {
+			httpSvcPorts[VertexHTTPPortName] = x.HTTP.GetHTTPPort()
+		}
+		svcs = append(svcs, v.getServiceObj(v.Name, false, httpSvcPorts))
 	}
 	return svcs
 }
@@ -407,7 +411,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		InitContainers: initContainers,
 		Containers:     append(containers, v.Spec.Sidecars...),
 	}
-	v.Spec.AbstractPodTemplate.ApplyToPodSpec(spec)
+	v.Spec.ApplyToPodSpec(spec)
 	if v.Spec.ContainerTemplate != nil {
 		v.Spec.ContainerTemplate.ApplyToNumaflowContainers(spec.Containers)
 	}

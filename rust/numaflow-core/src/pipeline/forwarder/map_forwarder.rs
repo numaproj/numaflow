@@ -68,10 +68,14 @@ impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
             .streaming_write(mapped_messages_stream, cln_token.clone())
             .await?;
 
-        // Join the reader, mapper, and writer
+        // Join the reader, mapper, and writer. Cancel on panic (JoinError).
         let (reader_result, mapper_result, writer_result) =
             tokio::try_join!(reader_handle, mapper_handle, writer_handle).map_err(|e| {
-                error!(?e, "Error while joining reader, mapper, and writer");
+                error!(
+                    ?e,
+                    "Reader, mapper, or writer task panicked, cancelling token"
+                );
+                cln_token.cancel();
                 Error::Forwarder(format!(
                     "Error while joining reader, mapper, and writer: {e}"
                 ))
@@ -245,9 +249,11 @@ pub async fn start_map_forwarder(
     )
     .await;
 
-    let results = try_join_all(forwarder_tasks)
-        .await
-        .map_err(|e| Error::Forwarder(e.to_string()))?;
+    let results = try_join_all(forwarder_tasks).await.map_err(|e| {
+        error!(?e, "A forwarder task panicked, cancelling token");
+        cln_token.cancel();
+        Error::Forwarder(e.to_string())
+    })?;
 
     for result in results {
         info!(?result, "Forwarder task completed");

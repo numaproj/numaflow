@@ -17,7 +17,7 @@ impl TryFrom<KafkaMessage> for Message {
     fn try_from(message: KafkaMessage) -> crate::Result<Self> {
         let offset = Offset::String(StringOffset::new(
             format!("{}:{}:{}", message.topic, message.partition, message.offset),
-            message.partition as u16,
+            message.global_partition_id,
         ));
 
         // Use Kafka timestamp if available, otherwise fall back to current time
@@ -53,7 +53,6 @@ impl TryFrom<KafkaMessage> for Message {
             // Set default metadata so that metadata is always present.
             metadata: Some(Arc::new(Metadata::default())),
             is_late: false,
-            ack_handle: None,
         })
     }
 }
@@ -97,9 +96,12 @@ impl source::SourceReader for KafkaSource {
         }
     }
 
-    async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
-        let partitions = self.partitions_info().await?;
-        Ok(partitions.into_iter().map(|p| p as u16).collect())
+    async fn partitions(&mut self) -> crate::error::Result<source::SourcePartitions> {
+        let partitions_info = self.partitions_info().await?;
+        Ok(source::SourcePartitions::new(
+            partitions_info.active_partitions,
+            Some(partitions_info.total_partitions),
+        ))
     }
 }
 
@@ -175,6 +177,7 @@ mod tests {
             topic: "test_topic".to_string(),
             value: Bytes::from("test_value"),
             partition: 1,
+            global_partition_id: 1,
             offset: 42,
             key: Some("test_key".to_string()),
             headers: {
@@ -202,6 +205,7 @@ mod tests {
             topic: "test_topic".to_string(),
             value: Bytes::from("test_value"),
             partition: 1,
+            global_partition_id: 1,
             offset: 42,
             key: None,
             headers: HashMap::new(),
@@ -227,6 +231,7 @@ mod tests {
             topic: "test_topic".to_string(),
             value: Bytes::from("test_value"),
             partition: 1,
+            global_partition_id: 1,
             offset: 42,
             key: None,
             headers: HashMap::new(),
@@ -282,8 +287,6 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(source.partitions().await.unwrap(), vec![0]);
-
         // Test SourceReader::read
         let messages = source.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 20, "Should read 20 messages in a batch");
@@ -301,6 +304,11 @@ mod tests {
                 .value,
             Bytes::from("message 19")
         );
+
+        // Query partition info after reading messages
+        let source_partitions = source.partitions().await.unwrap();
+        assert_eq!(source_partitions.active_partitions, vec![0]);
+        assert_eq!(source_partitions.total_partitions, Some(1));
 
         // Test SourceAcker::ack
         let offsets: Vec<Offset> = messages.iter().map(|msg| msg.offset.clone()).collect();

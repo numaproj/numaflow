@@ -198,18 +198,11 @@ impl SessionWindowManager {
         let mut closed_windows_by_key = HashMap::new();
 
         for (key, window_set) in all_windows.iter_mut() {
-            // First collect expired windows to avoid borrowing issues
             let expired_windows: Vec<Window> = window_set
-                .iter()
-                .filter(|window| window.end_time <= watermark)
-                .cloned()
+                .extract_if(.., |window| window.end_time <= watermark)
                 .collect();
 
             if !expired_windows.is_empty() {
-                // Remove expired windows from the set
-                for window in &expired_windows {
-                    window_set.remove(window);
-                }
                 closed_windows_by_key.insert(key.clone(), expired_windows);
             }
         }
@@ -425,6 +418,21 @@ impl SessionWindowManager {
             .filter_map(|windows| windows.iter().next())
             .map(|window| window.end_time)
             .min()
+    }
+
+    /// Returns the total number of currently active windows across all keys.
+    pub(crate) fn active_window_count(&self) -> usize {
+        self.active_windows
+            .read()
+            .expect("Poisoned lock")
+            .values()
+            .map(|s| s.len())
+            .sum()
+    }
+
+    /// Returns the number of closed windows awaiting GC.
+    pub(crate) fn closed_window_count(&self) -> usize {
+        self.closed_windows.read().expect("Poisoned lock").len()
     }
 }
 

@@ -51,7 +51,7 @@ func TestJetStreamGetStatefulSetSpec(t *testing.T) {
 		assert.Equal(t, "b", spec.Selector.MatchLabels["a"])
 		assert.Equal(t, 3, int(*spec.Replicas))
 		assert.Equal(t, "config-volume", spec.Template.Spec.Volumes[1].Name)
-		assert.Equal(t, 1, len(spec.Template.Spec.Volumes[1].VolumeSource.Projected.Sources[1].Secret.Items))
+		assert.Equal(t, 1, len(spec.Template.Spec.Volumes[1].Projected.Sources[1].Secret.Items))
 		assert.Equal(t, int32(4321), spec.Template.Spec.Containers[0].Ports[0].ContainerPort)
 		assert.Equal(t, int32(3333), spec.Template.Spec.Containers[0].Ports[1].ContainerPort)
 		assert.Equal(t, int32(2341), spec.Template.Spec.Containers[0].Ports[2].ContainerPort)
@@ -87,7 +87,7 @@ func TestJetStreamGetStatefulSetSpec(t *testing.T) {
 		}
 		spec := s.GetStatefulSetSpec(req)
 		assert.Equal(t, "config-volume", spec.Template.Spec.Volumes[1].Name)
-		assert.Equal(t, 7, len(spec.Template.Spec.Volumes[1].VolumeSource.Projected.Sources[1].Secret.Items))
+		assert.Equal(t, 7, len(spec.Template.Spec.Volumes[1].Projected.Sources[1].Secret.Items))
 	})
 
 	t.Run("with customized containers", func(t *testing.T) {

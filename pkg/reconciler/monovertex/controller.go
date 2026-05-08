@@ -69,7 +69,7 @@ func (mr *monoVertexReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if err := mr.client.Get(ctx, req.NamespacedName, monoVtx); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Clean up metrics here, since there's no finalizer defined for MonoVertex objects, best effort
-			cleanupMetrics(req.NamespacedName.Namespace, req.NamespacedName.Name)
+			cleanupMetrics(req.Namespace, req.Name)
 			return ctrl.Result{}, nil
 		}
 		mr.logger.Errorw("Unable to get MonoVertex", zap.Any("request", req), zap.Error(err))
@@ -168,7 +168,7 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 	if ctrlResult, err := mr.checkChildrenResourceStatus(ctx, monoVtx); err != nil {
 		return ctrlResult, fmt.Errorf("failed to check mono vertex children resource status, %w", err)
 	} else {
-		return ctrl.Result{}, nil
+		return ctrlResult, nil
 	}
 }
 
@@ -306,6 +306,9 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "ReplicasScaled", "Replicas changed from %d to %d", currentReplicas, desiredReplicas)
 		monoVtx.Status.Replicas = uint32(desiredReplicas)
 		monoVtx.Status.LastScaledAt = metav1.Time{Time: time.Now()}
+	}
+	if monoVtx.Status.LastScaledAt.IsZero() {
+		monoVtx.Status.LastScaledAt = monoVtx.CreationTimestamp
 	}
 	if monoVtx.Status.Selector == "" {
 		selector, _ := labels.Parse(dfv1.KeyComponent + "=" + dfv1.ComponentMonoVertex + "," + dfv1.KeyMonoVertexName + "=" + monoVtx.Name)

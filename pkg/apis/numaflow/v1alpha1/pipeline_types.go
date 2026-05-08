@@ -341,7 +341,7 @@ func (p Pipeline) GetDaemonDeploymentObj(req GetDaemonDeploymentReq) (*appv1.Dep
 	if p.Spec.Templates != nil && p.Spec.Templates.DaemonTemplate != nil {
 		dt := p.Spec.Templates.DaemonTemplate
 		spec.Replicas = dt.Replicas
-		dt.AbstractPodTemplate.ApplyToPodTemplateSpec(&spec.Template)
+		dt.ApplyToPodTemplateSpec(&spec.Template)
 		if dt.ContainerTemplate != nil {
 			dt.ContainerTemplate.ApplyToNumaflowContainers(spec.Template.Spec.Containers)
 		}

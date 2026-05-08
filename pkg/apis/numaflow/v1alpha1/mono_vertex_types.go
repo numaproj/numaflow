@@ -126,7 +126,11 @@ func (mv MonoVertex) GetServiceObjs() []*corev1.Service {
 	}
 	svcs := []*corev1.Service{mv.getServiceObj(mv.GetHeadlessServiceName(), true, ports)}
 	if x := mv.Spec.Source; x != nil && x.HTTP != nil && x.HTTP.Service {
-		svcs = append(svcs, mv.getServiceObj(mv.Name, false, map[string]int32{VertexHTTPSPortName: VertexHTTPSPort}))
+		httpSvcPorts := map[string]int32{VertexHTTPSPortName: x.HTTP.GetHTTPSPort()}
+		if x.HTTP.IsHTTPConfigured() {
+			httpSvcPorts[VertexHTTPPortName] = x.HTTP.GetHTTPPort()
+		}
+		svcs = append(svcs, mv.getServiceObj(mv.Name, false, httpSvcPorts))
 	}
 	return svcs
 }
@@ -292,7 +296,7 @@ func (mv MonoVertex) GetDaemonDeploymentObj(req GetMonoVertexDaemonDeploymentReq
 	}
 	if dt := mv.Spec.DaemonTemplate; dt != nil {
 		spec.Replicas = dt.Replicas
-		dt.AbstractPodTemplate.ApplyToPodTemplateSpec(&spec.Template)
+		dt.ApplyToPodTemplateSpec(&spec.Template)
 		if dt.ContainerTemplate != nil {
 			dt.ContainerTemplate.ApplyToNumaflowContainers(spec.Template.Spec.Containers)
 		}
@@ -469,7 +473,7 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 		InitContainers: initContainers,
 		Containers:     append(containers, mv.Spec.Sidecars...),
 	}
-	mv.Spec.AbstractPodTemplate.ApplyToPodSpec(spec)
+	mv.Spec.ApplyToPodSpec(spec)
 	if mv.Spec.ContainerTemplate != nil {
 		mv.Spec.ContainerTemplate.ApplyToNumaflowContainers(spec.Containers)
 	}

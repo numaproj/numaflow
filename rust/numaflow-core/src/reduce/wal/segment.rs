@@ -202,9 +202,11 @@ mod tests {
             };
 
             // Send message - conversion to bytes happens internally
-            tx.send(SegmentWriteMessage::WriteMessage { message })
-                .await
-                .unwrap();
+            tx.send(SegmentWriteMessage::WriteMessage {
+                read_message: message.into(),
+            })
+            .await
+            .unwrap();
         }
 
         drop(tx);
@@ -351,9 +353,11 @@ mod tests {
             };
 
             // Send message - conversion to bytes happens internally
-            tx.send(SegmentWriteMessage::WriteMessage { message })
-                .await
-                .unwrap();
+            tx.send(SegmentWriteMessage::WriteMessage {
+                read_message: message.into(),
+            })
+            .await
+            .unwrap();
         }
 
         drop(tx);

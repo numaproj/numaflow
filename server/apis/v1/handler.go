@@ -162,7 +162,8 @@ func (h *handler) AuthInfo(c *gin.Context) {
 		return
 	}
 
-	if loginType == "dex" {
+	switch loginType {
+	case "dex":
 		cookies := c.Request.Cookies()
 		userIdentityTokenStr, err := common.JoinCookies(common.UserIdentityCookieName, cookies)
 		if err != nil {
@@ -198,7 +199,7 @@ func (h *handler) AuthInfo(c *gin.Context) {
 		res := authn.NewUserInfo(&claims, userInfo.IDToken, userInfo.RefreshToken)
 		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, res))
 		return
-	} else if loginType == "local" {
+	case "local":
 		userIdentityTokenStr, err := c.Cookie(common.JWTCookieName)
 		if err != nil {
 			errMsg := fmt.Sprintf("User is not authenticated, err: %s", err.Error())
@@ -322,12 +323,11 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 			h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, failed to get the status of the mono vertex %s, %s", monoVertex.Name, err.Error()))
 			return
 		}
-		// if the mono vertex is healthy, increment the active count, otherwise increment the inactive count
-		// TODO - add more status types for mono vertex and update the logic here
-		if status == dfv1.MonoVertexStatusHealthy {
-			summary.monoVertexSummary.Active.increment(status)
-		} else {
+		// MonoVertices with inactive or unknown status are not actively processing data
+		if status == dfv1.MonoVertexStatusInactive || status == dfv1.MonoVertexStatusUnknown {
 			summary.monoVertexSummary.Inactive++
+		} else {
+			summary.monoVertexSummary.Active.increment(status)
 		}
 		namespaceSummaryMap[monoVertex.Namespace] = summary
 	}
@@ -937,7 +937,9 @@ func (h *handler) PodLogs(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("Failed to get pod logs: %s", err.Error()))
 		return
 	}
-	defer stream.Close()
+	defer func(stream io.ReadCloser) {
+		_ = stream.Close()
+	}(stream)
 
 	// Stream the logs back to the client
 	h.streamLogs(c, stream)
@@ -1044,7 +1046,7 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 		defaultTimeObject time.Time
 	)
 	for _, event := range events.Items {
-		if event.LastTimestamp.Time == defaultTimeObject {
+		if event.LastTimestamp.Time.Equal(defaultTimeObject) {
 			continue
 		}
 		if (objType == "" && objName == "") ||
@@ -1510,8 +1512,28 @@ func getIsbServiceStatus(isbsvc *dfv1.InterStepBufferService) (string, error) {
 }
 
 func getMonoVertexStatus(mvt *dfv1.MonoVertex) (string, error) {
-	// TODO - add more logic to determine the status of a mono vertex
-	return dfv1.MonoVertexStatusHealthy, nil
+	switch mvt.Status.Phase {
+	case dfv1.MonoVertexPhaseUnknown:
+		// Phase not yet set by the controller — reconciliation is pending
+		return dfv1.MonoVertexStatusUnknown, nil
+	case dfv1.MonoVertexPhaseFailed:
+		return dfv1.MonoVertexStatusCritical, nil
+	case dfv1.MonoVertexPhasePaused:
+		return dfv1.MonoVertexStatusInactive, nil
+	case dfv1.MonoVertexPhaseRunning:
+		// Check desired phase to catch the pausing-in-progress case:
+		// the user has requested a pause but the controller has not yet updated Status.Phase
+		if mvt.Spec.Lifecycle.GetDesiredPhase() == dfv1.MonoVertexPhasePaused {
+			return dfv1.MonoVertexStatusInactive, nil
+		}
+		if !mvt.Status.IsHealthy() {
+			return dfv1.MonoVertexStatusWarning, nil
+		}
+		return dfv1.MonoVertexStatusHealthy, nil
+	default:
+		// Unhandled phase (e.g. Pausing, Deleting) — status is not deterministic
+		return dfv1.MonoVertexStatusUnknown, nil
+	}
 }
 
 // validatePipelineSpec is used to validate the pipeline spec during create and update

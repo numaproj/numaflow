@@ -162,7 +162,6 @@ mod unit_tests {
             headers: Arc::new(headers.clone()),
             metadata: None,
             is_late: false,
-            ack_handle: None,
         };
 
         let sink_msg: SqsSinkMessage = msg.try_into().unwrap();
@@ -221,7 +220,6 @@ mod unit_tests {
             headers: Arc::new(headers),
             metadata: Some(Arc::new(metadata)),
             is_late: false,
-            ack_handle: None,
         };
 
         let sink_msg: SqsSinkMessage = msg.try_into().unwrap();
@@ -285,7 +283,6 @@ mod unit_tests {
             headers: Arc::new(headers),
             metadata: Some(Arc::new(metadata)),
             is_late: false,
-            ack_handle: None,
         };
 
         let sink_msg: SqsSinkMessage = msg.try_into().unwrap();
@@ -474,11 +471,16 @@ pub mod tests {
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let (src_read, src_ack, lag_reader) =
-            new_source(client, 5, Duration::from_millis(100), cln_token, true)
-                .await
-                .map_err(|e| panic!("failed to create source reader: {:?}", e))
-                .unwrap();
+        let (src_read, src_ack, lag_reader) = new_source(
+            client,
+            5,
+            Duration::from_millis(100),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
         (
             Source::new(
                 5,
@@ -487,6 +489,7 @@ pub mod tests {
                 true,
                 None,
                 None,
+                cln_token,
                 None,
             )
             .await,

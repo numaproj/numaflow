@@ -7,7 +7,7 @@
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
-use crate::message::{AckHandle, ReadAck};
+use crate::message::{MessageHandle, ReadAck};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, SOURCE_PARTITION_NAME_LABEL, monovertex_metrics,
     mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
@@ -29,7 +29,6 @@ use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SqsSource;
 use numaflow_throttling::RateLimiter;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::sync::{mpsc, oneshot};
@@ -67,12 +66,35 @@ pub(crate) mod kafka;
 pub(crate) mod test_utils;
 
 use crate::transformer::Transformer;
-use crate::watermark::source::SourceWatermarkHandle;
+use crate::watermark::source::{SourceWatermarkEntry, SourceWatermarkHandle};
 
 const MAX_ACK_PENDING: usize = 10000;
 const ACK_RETRY_INTERVAL: u64 = 100;
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 const NACK_RETRY_ATTEMPTS: usize = 1200; // 100ms apart, total=2 minutes
+
+/// Represents the partition information returned by a source.
+/// Contains both the active partitions being processed and optionally the total number of partitions.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct SourcePartitions {
+    /// The list of active partitions being processed by this source instance.
+    pub active_partitions: Vec<u16>,
+    /// The total number of partitions in the source (if known).
+    /// This is used for watermark stability to know when all processors have reported.
+    /// Sources that don't support partitions (e.g., generator, HTTP) should set this to None.
+    pub total_partitions: Option<u32>,
+}
+
+impl SourcePartitions {
+    /// Creates a new SourcePartitions with the given active partitions and optional total partitions.
+    /// Sources that don't support partitions should pass `None` for `total_partitions`.
+    pub fn new(active_partitions: Vec<u16>, total_partitions: Option<u32>) -> Self {
+        Self {
+            active_partitions,
+            total_partitions,
+        }
+    }
+}
 
 /// Set of Read related items that has to be implemented to become a Source.
 /// Uses `trait_variant::make` to generate an object-safe `SourceReader` trait with `Send` bound.
@@ -85,8 +107,9 @@ pub(crate) trait LocalSourceReader {
     /// Read messages from the source. Returns None when the stream has ended.
     async fn read(&mut self) -> Option<Result<Vec<Message>>>;
 
-    /// number of partitions processed by this source.
-    async fn partitions(&mut self) -> Result<Vec<u16>>;
+    /// Returns partition information for this source, including active partitions
+    /// and optionally the total number of partitions.
+    async fn partitions(&mut self) -> Result<SourcePartitions>;
 }
 
 /// Set of Ack related items that has to be implemented to become a Source.
@@ -141,7 +164,7 @@ enum ActorMessage {
         respond_to: oneshot::Sender<Result<Option<usize>>>,
     },
     Partitions {
-        respond_to: oneshot::Sender<Result<Vec<u16>>>,
+        respond_to: oneshot::Sender<Result<SourcePartitions>>,
     },
 }
 
@@ -230,8 +253,12 @@ pub(crate) struct Source<C: crate::typ::NumaflowTypeConfig> {
     rate_limiter: Option<C::RateLimiter>,
 }
 
+/// Interval for refreshing source partitions (10 seconds)
+const PARTITION_REFRESH_INTERVAL: Duration = Duration::from_secs(10);
+
 impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     /// Create a new StreamingSource. It starts the read and ack actors in the background.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn new(
         batch_size: usize,
         src_type: SourceType,
@@ -239,6 +266,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         read_ahead: bool,
         transformer: Option<Transformer>,
         watermark_handle: Option<SourceWatermarkHandle>,
+        cln_token: CancellationToken,
         rate_limiter: Option<C::RateLimiter>,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(batch_size);
@@ -311,13 +339,31 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             }
         };
 
-        // initialize the active partitions in the watermark actor to indicate the partitions to which
-        // the watermark should be published.
-        let active_partitions = Self::partitions(sender.clone()).await.unwrap_or_default();
-        if let Some(watermark_handle) = &watermark_handle {
-            watermark_handle
-                .initialize_active_partitions(active_partitions)
-                .await;
+        // Start a background task to periodically refresh partitions from the source.
+        // This handles dynamic partition changes (e.g., Kafka partition rebalancing).
+        // The interval ticks immediately on first call, so this also initializes the active partitions.
+        if let Some(wm_handle) = watermark_handle.clone() {
+            let source_sender = sender.clone();
+            tokio::spawn(async move {
+                let mut interval_ticker = tokio::time::interval(PARTITION_REFRESH_INTERVAL);
+                loop {
+                    tokio::select! {
+                        _ = interval_ticker.tick() => {
+                            if let Ok(partitions) = Self::partitions(source_sender.clone()).await {
+                                wm_handle
+                                    .initialize_active_partitions(
+                                        partitions.active_partitions,
+                                        partitions.total_partitions,
+                                    )
+                                    .await;
+                            }
+                        }
+                        _ = cln_token.cancelled() => {
+                            break;
+                        }
+                    }
+                }
+            });
         }
 
         Self {
@@ -390,7 +436,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     }
 
     /// get the source partitions from which the source is reading from.
-    async fn partitions(source_handle: mpsc::Sender<ActorMessage>) -> Result<Vec<u16>> {
+    async fn partitions(source_handle: mpsc::Sender<ActorMessage>) -> Result<SourcePartitions> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Partitions { respond_to: sender };
         // Ignore send errors. If send fails, so does the recv.await below. There's no reason
@@ -401,13 +447,13 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
-    /// Starts streaming messages from the source. It returns a stream of messages and
+    /// Starts streaming messages from the source. It returns a stream of MessageHandles and
     /// a handle to the spawned task.
     pub(crate) fn streaming_read(
         mut self,
         cln_token: CancellationToken,
         bypass_router: Option<MvtxBypassRouter>,
-    ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
+    ) -> Result<(ReceiverStream<MessageHandle>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.read_batch_size);
 
         let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
@@ -453,7 +499,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 }
 
                 let read_start_time = Instant::now();
-                let mut messages = match Self::read(self.sender.clone()).await {
+                let messages = match Self::read(self.sender.clone()).await {
                     Some(Ok(messages)) => messages,
                     None => {
                         info!("Source returned None (end of stream). Stopping the source.");
@@ -470,23 +516,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 let read_time = read_start_time.elapsed().as_micros() as f64;
                 Self::record_batch_read_metrics(&pipeline_labels, mvtx_labels, read_time, msgs_len);
 
-                // attempt to publish idle watermark since we are not able to read any message from
-                // the source.
-                if msgs_len == 0
-                    && let Some(watermark_handle) = self.watermark_handle.as_mut()
-                {
-                    watermark_handle
-                        .publish_source_idle_watermark(
-                            Self::partitions(self.sender.clone())
-                                .await
-                                .unwrap_or_default(),
-                        )
-                        .await;
-                }
-
-                let mut ack_handles = vec![];
+                let mut msg_handles = vec![];
                 let mut ack_batch = Vec::with_capacity(msgs_len);
-                for message in messages.iter_mut() {
+
+                for message in messages.iter() {
                     Self::record_partition_read_metrics(
                         &pipeline_labels,
                         mvtx_labels,
@@ -494,15 +527,13 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         message.value.len(),
                     );
 
-                    let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
-                    message.ack_handle = Some(Arc::new(AckHandle::new(resp_ack_tx)));
-
-                    // insert the offset and the ack one shot in the tracker.
+                    // insert the message (with offset) into the tracker.
                     self.tracker.insert(message).await?;
 
-                    // store the ack one shot in the batch to invoke ack later.
-                    ack_batch.push((message.offset.clone(), resp_ack_rx));
-                    ack_handles.push(message.ack_handle.clone());
+                    let (ack_tx, ack_rx) = oneshot::channel();
+                    // store the ack receiver in the batch to invoke ack later.
+                    ack_batch.push((message.offset.clone(), ack_rx));
+                    msg_handles.push(MessageHandle::new(message.clone(), ack_tx));
                 }
 
                 // start a background task to invoke ack on the source for the offsets that are acked.
@@ -536,25 +567,21 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
                 // transform the batch if the transformer is present, this need not
                 // be streaming because transformation should be fast operation.
-                let mut messages = match self.transformer.as_mut() {
-                    None => messages,
+                // transform_batch accepts MessageHandles and returns MessageHandles with ack
+                // tracking preserved — flatmap outputs share the parent's ack handle.
+                let mut msg_handles = match self.transformer.as_mut() {
+                    None => msg_handles,
                     Some(transformer) => match transformer
-                        .transform_batch(messages, cln_token.clone())
+                        .transform_batch(msg_handles, cln_token.clone())
                         .await
                     {
-                        Ok(messages) => messages,
+                        Ok(handles) => handles,
                         Err(e) => {
                             error!(
                                 ?e,
                                 "Error while transforming messages, sending nack to the batch"
                             );
-                            for ack_handle in ack_handles {
-                                ack_handle
-                                    .as_ref()
-                                    .expect("ack handle should be present")
-                                    .is_failed
-                                    .store(true, Ordering::Relaxed);
-                            }
+                            // handles dropped without mark_success, causing NAK
                             result = Err(e);
                             break;
                         }
@@ -562,36 +589,45 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 };
 
                 if let Some(watermark_handle) = self.watermark_handle.as_mut() {
+                    let entries: Vec<SourceWatermarkEntry> =
+                        msg_handles.iter().map(SourceWatermarkEntry::from).collect();
                     watermark_handle
-                        .generate_and_publish_source_watermark(&messages)
+                        .generate_and_publish_source_watermark(&entries)
                         .await;
 
                     let watermark = watermark_handle.fetch_source_watermark().await;
-                    // compare with the event time of the message and set is_late
-                    for message in messages.iter_mut() {
-                        message.is_late = message.event_time < watermark;
+                    // set is_late on messages that arrived after the watermark
+                    for msg_handle in msg_handles.iter_mut() {
+                        if msg_handle.message().event_time < watermark {
+                            msg_handle.message_mut().is_late = true;
+                        }
                     }
                 }
 
-                // write the messages to downstream.
-                for message in messages {
-                    let bypassed = if let Some(ref bypass_router) = bypass_router {
-                        bypass_router
-                            .try_bypass(message.clone())
+                // write the messages to downstream as MessageHandles.
+                for read_message in msg_handles.into_iter() {
+                    // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
+                    // If not bypassed, it returns Some(read_message) for us to send downstream.
+                    let read_message = if let Some(ref bypass_router) = bypass_router {
+                        match bypass_router
+                            .try_bypass(read_message)
                             .await
                             .expect("failed to send message to bypass channel")
+                        {
+                            Some(msg) => msg,
+                            None => continue, // Message was bypassed, move to next
+                        }
                     } else {
-                        false
+                        read_message
                     };
 
-                    if !bypassed {
-                        messages_tx
-                            .send(message)
-                            .await
-                            .expect("send should not fail");
-                    }
+                    messages_tx
+                        .send(read_message)
+                        .await
+                        .expect("send should not fail");
                 }
             }
+
             info!(status=?result, "Source stopped, waiting for inflight messages to be acked/nacked");
             // wait for all the ack tasks to be completed before stopping the source, since we give
             // a permit for each ack task all the permits should be released when the ack tasks are
@@ -864,6 +900,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
 #[cfg(test)]
 mod tests {
+    use crate::mark_success;
     use crate::shared::grpc::create_rpc_channel;
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
@@ -1027,6 +1064,7 @@ mod tests {
             true,
             None,
             None,
+            cln_token.clone(),
             None,
         )
         .await;
@@ -1042,12 +1080,14 @@ mod tests {
         // we should read all the 100 messages
         for i in 0..100 {
             let message = stream.next().await.unwrap();
-            assert_eq!(message.value, "hello".as_bytes());
-            offsets.push(message.offset.clone());
+            assert_eq!(message.message.value, "hello".as_bytes());
+            offsets.push(message.message.offset.clone());
 
-            // only store the last 50 messages, rest will be dropped and acknowledged.
+            // store last 50 messages; ACK the first 50 explicitly.
             if i >= 50 {
                 messages.push(message);
+            } else {
+                mark_success!(message);
             }
         }
 
@@ -1065,24 +1105,21 @@ mod tests {
 
         assert!(x.is_ok(), "Timeout occurred before pending became 50");
 
-        let partitions = Source::<crate::typ::WithoutRateLimiter>::partitions(sender.clone())
-            .await
-            .unwrap();
-        assert_eq!(partitions, vec![1, 2]);
+        let source_partitions =
+            Source::<crate::typ::WithoutRateLimiter>::partitions(sender.clone())
+                .await
+                .unwrap();
+        assert_eq!(source_partitions.active_partitions, vec![1, 2]);
 
-        for message in messages.into_iter() {
-            // set failed to true so that the message is nacked
-            message
-                .ack_handle
-                .unwrap()
-                .is_failed
-                .store(true, Ordering::Relaxed);
-        }
+        // Drop messages without calling mark_success() to cause NAK
+        drop(messages);
 
         // read should return 50 nacked messages
         for _ in 0..50 {
             let message = stream.next().await.unwrap();
-            assert_eq!(message.value, "hello".as_bytes());
+            assert_eq!(message.message.value, "hello".as_bytes());
+            // Mark as success so they get ACK'd (pending goes to 0)
+            mark_success!(message);
         }
 
         // pending should be 0 now

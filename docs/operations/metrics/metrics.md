@@ -55,6 +55,21 @@ These metrics are specific to map/UDF vertices.
 | `forwarder_udf_error_total`    | Counter     |                   | Total number of UDF errors                                        |
 | `forwarder_udf_processing_time` | Histogram  |                   | Processing times of User-Defined Functions (UDFs), in microseconds |
 
+### Reduce Metrics
+
+These metrics are specific to reduce (windowed aggregation) vertices.
+
+| Metric name                          | Metric type | Additional Labels | Description                                                          |
+|--------------------------------------|-------------|-------------------|----------------------------------------------------------------------|
+| `reduce_active_windows`              | Gauge       |                   | Number of currently open reduce windows                              |
+| `reduce_closed_windows`              | Gauge       |                   | Number of closed windows awaiting GC                                 |
+| `reduce_watermark_lag`               | Gauge       |                   | Difference between wall clock and watermark, in milliseconds         |
+| `reduce_window_processing_time`      | Histogram   |                   | Window open-to-close latency, in microseconds                        |
+| `reduce_pnf_process_time`            | Histogram   |                   | UDF reduce function execution time per window, in microseconds       |
+| `reduce_pbq_write_total`             | Counter     |                   | Total data messages written to PBQ |
+
+> **Note:** All reduce metrics carry the standard pipeline common labels (`pipeline`, `vertex`, `replica`) with `vertex_type` always set to `ReduceUDF`.
+
 ### Fallback Sink Metrics
 
 These metrics are specific to sink vertices with a fallback sink configured.

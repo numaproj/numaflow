@@ -1026,6 +1026,11 @@ func (in *HTTPSource) DeepCopyInto(out *HTTPSource) {
 		*out = new(Authorization)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Ports != nil {
+		in, out := &in.Ports, &out.Ports
+		*out = new(Ports)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 

@@ -1,7 +1,8 @@
+use crate::config::pipeline::VERTEX_TYPE_REDUCE_UDF;
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::message::{Message, MessageType};
-use crate::metrics::{pipeline_drop_metric_labels, pipeline_metrics};
+use crate::metrics::{pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics};
 use crate::pipeline::isb::writer::ISBWriterOrchestrator;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::reduce::reducer::aligned::windower::{
@@ -13,10 +14,9 @@ use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::wal::GcEvent;
 use std::collections::HashMap;
-use std::marker::PhantomData;
 use std::ops::Sub;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
@@ -45,7 +45,7 @@ struct ReduceTask<C: NumaflowTypeConfig> {
     error_tx: mpsc::Sender<Error>,
     window: Window,
     window_manager: AlignedWindowManager,
-    _marker: PhantomData<C>,
+    window_open_time: Instant,
 }
 
 impl<C: NumaflowTypeConfig> ReduceTask<C> {
@@ -65,7 +65,7 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
             error_tx,
             window,
             window_manager,
-            _marker: PhantomData,
+            window_open_time: Instant::now(),
         }
     }
 
@@ -95,10 +95,17 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
             // Call the reduce function. This is a blocking call and will return only once the window
             // is closed, cancellation is detected, or on error. The output is sent to the result_tx
             // channel which is consumed by the writer task and published to JetStream.
+            let udf_start = Instant::now();
             let result = self
                 .client
                 .reduce_fn(message_stream, result_tx, cln_token)
                 .await;
+            // recorded unconditionally; error/cancellation paths return below before window_processing_time
+            pipeline_metrics()
+                .reduce
+                .pnf_process_time
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                .observe(udf_start.elapsed().as_micros() as f64);
 
             if let Err(e) = result {
                 // Check if this is a cancellation error
@@ -129,9 +136,23 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
                 .oldest_window()
                 .expect("no oldest window found");
 
+            // Record window processing time (open to results-written)
+            pipeline_metrics()
+                .reduce
+                .window_processing_time
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                .observe(self.window_open_time.elapsed().as_micros() as f64);
+
             // we can safely delete the window from the window manager since the results are
             // successfully written to jetstream and watermark is published.
             self.window_manager.gc_window(self.window.clone());
+
+            // Update closed windows gauge after GC removes the window
+            pipeline_metrics()
+                .reduce
+                .closed_windows
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                .set(self.window_manager.closed_window_count() as i64);
 
             // now that the processing is done, we can add this window to the GC WAL.
             let Some(gc_wal_tx) = &self.gc_wal_tx else {
@@ -185,7 +206,6 @@ struct AlignedReduceActor<C: NumaflowTypeConfig> {
     window_manager: AlignedWindowManager,
     /// Cancellation token to signal tasks to stop
     cln_token: CancellationToken,
-    _marker: PhantomData<C>,
 }
 
 impl<C: NumaflowTypeConfig> AlignedReduceActor<C> {
@@ -228,7 +248,6 @@ impl<C: NumaflowTypeConfig> AlignedReduceActor<C> {
             gc_wal_tx,
             window_manager,
             cln_token,
-            _marker: PhantomData,
         }
     }
 
@@ -285,6 +304,13 @@ impl<C: NumaflowTypeConfig> AlignedReduceActor<C> {
                 task_handle,
             },
         );
+
+        // Update active windows gauge
+        pipeline_metrics()
+            .reduce
+            .active_windows
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+            .set(self.window_manager.active_window_count() as i64);
 
         // Send the open command with the first message
         if let Err(e) = message_tx.send(window_msg).await
@@ -345,6 +371,18 @@ impl<C: NumaflowTypeConfig> AlignedReduceActor<C> {
             return;
         };
 
+        // Update active and closed windows gauges
+        pipeline_metrics()
+            .reduce
+            .active_windows
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+            .set(self.window_manager.active_window_count() as i64);
+        pipeline_metrics()
+            .reduce
+            .closed_windows
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+            .set(self.window_manager.closed_window_count() as i64);
+
         // we don't need to write the close message to the client, stream closing
         // is considered as close for aligned windows.
         // Drop the sender to signal completion
@@ -378,7 +416,6 @@ pub(crate) struct AlignedReducer<C: NumaflowTypeConfig> {
     keyed: bool,
     /// Graceful shutdown timeout duration.
     graceful_timeout: Duration,
-    _marker: PhantomData<C>,
 }
 
 impl<C: NumaflowTypeConfig> AlignedReducer<C> {
@@ -403,7 +440,6 @@ impl<C: NumaflowTypeConfig> AlignedReducer<C> {
             graceful_timeout,
             shutting_down_on_err: false,
             final_result: Ok(()),
-            _marker: PhantomData,
         }
     }
 
@@ -482,6 +518,12 @@ impl<C: NumaflowTypeConfig> AlignedReducer<C> {
                                         // Only close windows if the idle watermark is greater than current watermark
                                         if idle_watermark > self.current_watermark {
                                             self.current_watermark = idle_watermark;
+                                            let lag = (Utc::now().timestamp_millis() - self.current_watermark.timestamp_millis()).max(0);
+                                            pipeline_metrics()
+                                                .reduce
+                                                .watermark_lag
+                                                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                                                .set(lag as f64);
                                             self.close_windows_with_watermark(idle_watermark, &actor_tx).await;
                                         }
                                     }
@@ -585,6 +627,17 @@ impl<C: NumaflowTypeConfig> AlignedReducer<C> {
             msg.watermark
                 .unwrap_or(DateTime::from_timestamp_millis(-1).expect("Invalid timestamp")),
         );
+
+        // Update watermark lag gauge (skip -1 sentinel)
+        if self.current_watermark.timestamp_millis() != -1 {
+            let lag =
+                (Utc::now().timestamp_millis() - self.current_watermark.timestamp_millis()).max(0);
+            pipeline_metrics()
+                .reduce
+                .watermark_lag
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                .set(lag as f64);
+        }
 
         // Handle late messages
         if msg.is_late {

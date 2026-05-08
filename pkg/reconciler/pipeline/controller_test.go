@@ -1059,11 +1059,11 @@ func Test_copyVertexTemplate(t *testing.T) {
 		vtx := &dfv1.AbstractVertex{}
 		copyVertexTemplate(pl, vtx)
 		assert.Nil(t, vtx.Metadata)
-		assert.Nil(t, vtx.AbstractPodTemplate.Affinity)
-		assert.Nil(t, vtx.AbstractPodTemplate.Tolerations)
-		assert.Nil(t, vtx.AbstractPodTemplate.Priority)
-		assert.Nil(t, vtx.AbstractPodTemplate.DNSConfig)
-		assert.Nil(t, vtx.AbstractPodTemplate.SecurityContext)
+		assert.Nil(t, vtx.Affinity)
+		assert.Nil(t, vtx.Tolerations)
+		assert.Nil(t, vtx.Priority)
+		assert.Nil(t, vtx.DNSConfig)
+		assert.Nil(t, vtx.SecurityContext)
 	})
 
 	t.Run("template defined with no vertex customization", func(t *testing.T) {

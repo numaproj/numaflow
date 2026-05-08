@@ -5,9 +5,10 @@ use super::{
 use crate::config::is_mono_vertex;
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
-use crate::message::Message;
+use crate::message::{Message, MessageHandle};
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::tracker::Tracker;
+use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -18,7 +19,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
-use tracing::error;
+use tracing::{error, warn};
 
 /// Type alias for the batch response - raw results from the UDF
 pub(in crate::mapper) type BatchMapResponse = Vec<map::map_response::Result>;
@@ -42,8 +43,8 @@ pub(in crate::mapper) struct BatchSenderMapState {
 /// MapBatchTask encapsulates all the context needed to execute a batch map operation.
 pub(in crate::mapper) struct MapBatchTask {
     pub mapper: UserDefinedBatchMap,
-    pub batch: Vec<Message>,
-    pub output_tx: mpsc::Sender<Message>,
+    pub msg_handles: Vec<MessageHandle>,
+    pub output_tx: mpsc::Sender<MessageHandle>,
     pub tracker: Tracker,
     pub bypass_router: Option<MvtxBypassRouter>,
     pub is_mono_vertex: bool,
@@ -55,10 +56,18 @@ impl MapBatchTask {
     /// Returns an error if any message in the batch fails to be processed.
     pub async fn execute(self) -> Result<()> {
         // Store parent message info for each message before sending to UDF
-        let parent_infos: Vec<ParentMessageInfo> = self.batch.iter().map(|m| m.into()).collect();
+        let parent_infos: Vec<ParentMessageInfo> = self
+            .msg_handles
+            .iter()
+            .map(|rm| rm.message().into())
+            .collect();
 
         // Convert Messages to MapRequests
-        let requests: Vec<MapRequest> = self.batch.into_iter().map(|m| m.into()).collect();
+        let requests: Vec<MapRequest> = self
+            .msg_handles
+            .iter()
+            .map(|rm| rm.message().clone().into())
+            .collect();
 
         // Update read metrics for each request
         for _ in &requests {
@@ -68,7 +77,10 @@ impl MapBatchTask {
         // Call the UDF and get results directly
         let results = self.mapper.batch(requests, self.cln_token).await;
 
-        for (result, parent_info) in results.into_iter().zip(parent_infos.into_iter()) {
+        for (result, (msg_handle, parent_info)) in results
+            .into_iter()
+            .zip(self.msg_handles.into_iter().zip(parent_infos))
+        {
             match result {
                 Ok(results) => {
                     // Convert raw results to Messages using parent info
@@ -96,29 +108,44 @@ impl MapBatchTask {
                         .await?;
 
                     for mapped_message in mapped_messages {
-                        let bypassed = if let Some(ref bypass_router) = self.bypass_router {
-                            bypass_router
-                                .try_bypass(mapped_message.clone())
+                        // Each downstream handle shares the original ack tracking — ACK is
+                        // deferred until all mapped messages are written to ISB/sink.
+                        let downstream_handle = msg_handle.with_message(mapped_message);
+
+                        // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
+                        // If not bypassed, it returns Some(downstream_handle) for us to send downstream.
+                        let downstream_handle = if let Some(ref bypass_router) = self.bypass_router
+                        {
+                            match bypass_router
+                                .try_bypass(downstream_handle)
                                 .await
                                 .expect("failed to send message to bypass channel")
+                            {
+                                Some(msg) => msg,
+                                None => continue, // Message was bypassed, move to next
+                            }
                         } else {
-                            false
+                            downstream_handle
                         };
 
-                        if !bypassed {
-                            self.output_tx
-                                .send(mapped_message)
-                                .await
-                                .expect("failed to send response");
-                        }
+                        self.output_tx
+                            .send(downstream_handle)
+                            .await
+                            .expect("failed to send response");
                     }
+
+                    // Decrement the original ref_count for this message now that all downstream
+                    // handles have been created and sent.
+                    mark_success!(msg_handle);
                 }
                 Err(e) => {
                     error!(err=?e, "failed to map message");
+                    mark_failed!(msg_handle, &e);
                     return Err(e);
                 }
             }
         }
+
         Ok(())
     }
 }
@@ -196,7 +223,9 @@ impl UserDefinedBatchMap {
                         continue;
                     }
 
-                    Self::process_response(&sender_map, resp).await
+                    if let Err(e) = Self::process_response(&sender_map, resp) {
+                        warn!("received error while processing batch response: {}", e);
+                    }
                 }
                 Err(e) => {
                     error!(?e, "Error reading message from batch map gRPC stream");
@@ -204,24 +233,43 @@ impl UserDefinedBatchMap {
                 }
             }
         }
+
+        Self::broadcast_error(
+            &sender_map,
+            tonic::Status::aborted("receiver stream dropped"),
+        );
     }
 
     /// Processes the response from the server and sends it to the appropriate oneshot sender
     /// based on the message id entry in the map.
-    async fn process_response(sender_map: &Arc<Mutex<BatchSenderMapState>>, resp: MapResponse) {
+    fn process_response(
+        sender_map: &Arc<Mutex<BatchSenderMapState>>,
+        resp: MapResponse,
+    ) -> Result<()> {
         let msg_id = resp.id;
 
-        let sender_entry = sender_map
-            .lock()
-            .expect("failed to acquire poisoned lock")
-            .map
-            .remove(&msg_id);
+        let sender_entry = {
+            sender_map
+                .lock()
+                .expect("failed to acquire poisoned lock")
+                .map
+                .remove(&msg_id)
+        };
 
         if let Some(sender) = sender_entry {
-            sender
-                .send(Ok(resp.results))
-                .expect("failed to send response");
+            if sender.send(Ok(resp.results)).is_err() {
+                return Err(Error::Mapper(format!(
+                    "Failed to send server response from receiver to batch task for ID: {}",
+                    msg_id
+                )));
+            };
+        } else {
+            return Err(Error::Mapper(format!(
+                "No such req/resp ID found in batch ResponseSenderMap: {}",
+                msg_id
+            )));
         }
+        Ok(())
     }
 
     /// Sends a batch of messages to the UDF and returns the raw response results.
@@ -237,27 +285,50 @@ impl UserDefinedBatchMap {
         for (request, sender) in requests.into_iter().zip(senders) {
             let key = request.id.clone();
 
-            // only insert if we are able to send the message to the server
+            // Move the senders_guard out of the scope to drop the guard when done.
+            // Do this before we send the message to the server to avoid the race condition
+            // where the server processes the message faster than the corresponding sender
+            // is added to the SenderMap.
+            {
+                let mut senders_guard = self
+                    .senders
+                    .lock()
+                    .expect("failed to acquire poisoned lock");
+                if !senders_guard.closed {
+                    senders_guard.map.insert(key.clone(), sender);
+                } else {
+                    let _ = sender
+                        .send(Err(Error::Mapper("batch mapper closed".to_string())))
+                        .inspect_err(|_| warn!("failed to send error to oneshot receiver"));
+                    continue;
+                }
+            };
+
+            // send the message to the server
             if let Err(e) = self.read_tx.send(request).await {
-                error!(?e, "Failed to send message to server");
-                let _ = sender.send(Err(Error::Mapper(format!(
-                    "failed to send message to batch map server: {e}"
-                ))));
+                warn!(?e, "Failed to send message to server");
+                // We should ideally remove the resp.id from the SenderMap to avoid potential
+                // memory leaks as well as to avoid holding the corresponding receiver waiting
+                let sender_entry = {
+                    self.senders
+                        .lock()
+                        .expect("failed to acquire poisoned lock")
+                        .map
+                        .remove(&key)
+                };
+
+                // We should send error on the sender so the first receiver receiving the error
+                // returns early with the collected results.
+                if let Some(sender) = sender_entry {
+                    let _ = sender
+                        .send(Err(Error::Mapper(format!(
+                            "failed to send message to batch map server: {e}"
+                        ))))
+                        .inspect_err(|_| warn!("failed to send error to oneshot receiver"));
+                }
                 // Continue collecting results for remaining receivers
                 break;
             }
-
-            let mut senders_guard = self
-                .senders
-                .lock()
-                .expect("failed to acquire poisoned lock");
-
-            if senders_guard.closed {
-                let _ = sender.send(Err(Error::Mapper("mapper closed".to_string())));
-                continue;
-            }
-
-            senders_guard.map.insert(key, sender);
         }
 
         // send eot request
@@ -301,15 +372,21 @@ impl UserDefinedBatchMap {
 
 #[cfg(test)]
 mod tests {
-    use crate::mapper::map::batch::UserDefinedBatchMap;
+    use crate::error::Error as MapError;
+    use crate::mapper::map::batch::{BatchSenderMapState, UserDefinedBatchMap};
     use crate::shared::grpc::create_rpc_channel;
     use numaflow::batchmap;
     use numaflow::batchmap::Server;
     use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::map::map_client::MapClient;
+    use numaflow_pb::clients::map::{MapRequest, MapResponse};
     use std::error::Error;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tempfile::TempDir;
+    use tokio::sync::{mpsc, oneshot};
+    use tokio_util::sync::CancellationToken;
+    use tokio_util::task::AbortOnDropHandle;
 
     struct SimpleBatchMap;
 
@@ -432,5 +509,128 @@ mod tests {
             "Expected gRPC server to have shut down"
         );
         Ok(())
+    }
+
+    fn make_response(id: &str) -> MapResponse {
+        MapResponse {
+            results: vec![],
+            id: id.to_string(),
+            handshake: None,
+            status: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn process_response_returns_error_when_no_sender_entry() {
+        let sender_map = Arc::new(Mutex::new(BatchSenderMapState::default()));
+
+        let result = UserDefinedBatchMap::process_response(&sender_map, make_response("missing"));
+
+        let err = result.expect_err("expected error when sender entry missing");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(
+            err.to_string()
+                .contains("No such req/resp ID found in batch ResponseSenderMap"),
+            "unexpected error message: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn process_response_returns_error_when_oneshot_send_fails() {
+        let sender_map = Arc::new(Mutex::new(BatchSenderMapState::default()));
+        let (tx, rx) = oneshot::channel();
+        // Drop the receiver so the next send on tx fails.
+        drop(rx);
+        sender_map.lock().unwrap().map.insert("0".to_string(), tx);
+
+        let result = UserDefinedBatchMap::process_response(&sender_map, make_response("0"));
+
+        let err = result.expect_err("expected error when oneshot send fails");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(
+            err.to_string()
+                .contains("Failed to send server response from receiver to batch task"),
+            "unexpected error message: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn broadcast_error_marks_closed_and_errors_all_senders() {
+        let sender_map = Arc::new(Mutex::new(BatchSenderMapState::default()));
+        let (tx_a, rx_a) = oneshot::channel();
+        let (tx_b, rx_b) = oneshot::channel();
+        {
+            let mut guard = sender_map.lock().unwrap();
+            guard.map.insert("a".to_string(), tx_a);
+            guard.map.insert("b".to_string(), tx_b);
+        }
+
+        UserDefinedBatchMap::broadcast_error(&sender_map, tonic::Status::aborted("test"));
+
+        {
+            let guard = sender_map.lock().unwrap();
+            assert!(guard.closed, "broadcast_error should set closed = true");
+            assert!(guard.map.is_empty(), "all senders should be drained");
+        }
+
+        for rx in [rx_a, rx_b] {
+            let received = rx.await.expect("oneshot sender should have delivered");
+            let err = received.expect_err("expected Err variant");
+            assert!(matches!(err, MapError::Grpc(_)));
+        }
+    }
+
+    #[tokio::test]
+    async fn batch_method_cleans_up_on_read_tx_send_failure() {
+        // Build a UserDefinedBatchMap whose read_tx receiver has been dropped,
+        // so that read_tx.send(..) inside `batch` fails immediately.
+        let (read_tx, read_rx) = mpsc::channel::<MapRequest>(10);
+        drop(read_rx);
+
+        let dummy_handle = tokio::spawn(async {});
+        let _abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+
+        let senders = Arc::new(Mutex::new(BatchSenderMapState::default()));
+        let mapper = UserDefinedBatchMap {
+            read_tx,
+            senders: Arc::clone(&senders),
+            _handle: _abort_handle,
+        };
+
+        let request = MapRequest {
+            request: Some(numaflow_pb::clients::map::map_request::Request {
+                keys: vec!["k".into()],
+                value: b"v".to_vec(),
+                event_time: None,
+                watermark: None,
+                headers: Default::default(),
+                metadata: None,
+            }),
+            id: "42".to_string(),
+            handshake: None,
+            status: None,
+        };
+
+        let results = mapper.batch(vec![request], CancellationToken::new()).await;
+
+        // batch() returns vec![error] on first failure (early return).
+        assert_eq!(results.len(), 1);
+        let err = results
+            .into_iter()
+            .next()
+            .unwrap()
+            .expect_err("expected Mapper error from batch()");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(
+            err.to_string()
+                .contains("failed to send message to batch map server"),
+            "unexpected error message: {err}"
+        );
+
+        // The senders map must no longer contain the failed request id.
+        assert!(
+            !senders.lock().unwrap().map.contains_key("42"),
+            "senders map should be cleaned up on read_tx send failure"
+        );
     }
 }

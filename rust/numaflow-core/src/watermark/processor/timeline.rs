@@ -56,7 +56,7 @@ impl OffsetTimeline {
             node.offset.cmp(&element_node.offset),
         ) {
             (Ordering::Equal, Ordering::Greater) => {
-                element_node.offset = node.offset;
+                self.watermarks.push_front(node);
             }
             (Ordering::Equal, _) => {
                 debug!(
@@ -140,30 +140,35 @@ mod tests {
             offset: 1,
             idle: false,
             partition: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 200,
             offset: 2,
             idle: false,
             partition: 0,
+            processor_count: None,
         };
         let wmb3 = WMB {
             watermark: 250,
             offset: 3,
             idle: false,
             partition: 0,
+            processor_count: None,
         };
         let wmb4 = WMB {
             watermark: 250,
             offset: 4,
             idle: false,
             partition: 0,
+            processor_count: None,
         };
         let wmb5 = WMB {
             watermark: 300,
             offset: 5,
             idle: false,
             partition: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -194,36 +199,42 @@ mod tests {
             offset: 62,
             idle: false,
             partition: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 100,
             offset: 65,
             idle: false,
             partition: 0,
+            processor_count: None,
         };
         let wmb3 = WMB {
             watermark: 200,
             offset: 63, // out of order should not be considered
             idle: false,
             partition: 0,
+            processor_count: None,
         };
         let wmb4 = WMB {
             watermark: 250,
             offset: 70,
             idle: false,
             partition: 0,
+            processor_count: None,
         };
         let wmb5 = WMB {
             watermark: 250,
             offset: 80,
             idle: false,
             partition: 0,
+            processor_count: None,
         };
         let wmb6 = WMB {
             watermark: 300,
             offset: 86,
             idle: false,
             partition: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -255,30 +266,35 @@ mod tests {
             offset: 1,
             idle: false,
             partition: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 100,
             offset: 2,
             idle: false,
             partition: 0,
+            processor_count: None,
         };
         let wmb3 = WMB {
             watermark: 100,
             offset: 3,
             idle: false,
             partition: 0,
+            processor_count: None,
         };
         let wmb4 = WMB {
             watermark: 100,
             offset: 4,
             idle: false,
             partition: 0,
+            processor_count: None,
         };
         let wmb5 = WMB {
             watermark: 100,
             offset: 5,
             idle: false,
             partition: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -300,7 +316,7 @@ mod tests {
 
         // only one entry, so should return -1
         let event_time = timeline.get_event_time(5);
-        assert_eq!(event_time, -1);
+        assert_eq!(event_time, 100);
     }
 
     #[tokio::test]
@@ -311,18 +327,21 @@ mod tests {
             offset: 1,
             idle: false,
             partition: 0,
+            processor_count: None,
         };
         let wmb2 = WMB {
             watermark: 200,
             offset: 2,
             idle: false,
             partition: 1,
+            processor_count: None,
         };
         let wmb3 = WMB {
             watermark: 150,
             offset: 3,
             idle: true,
             partition: 0,
+            processor_count: None,
         };
 
         timeline.put(wmb1);
@@ -341,6 +360,7 @@ mod tests {
             offset: 4,
             idle: true,
             partition: 0,
+            processor_count: None,
         };
 
         timeline.put(idle_wmb);
@@ -356,6 +376,7 @@ mod tests {
             offset: 5,
             idle: true,
             partition: 0,
+            processor_count: None,
         };
 
         timeline.put(idle_wmb);
@@ -364,5 +385,115 @@ mod tests {
 
         let head_watermark = timeline.get_head_watermark();
         assert_eq!(head_watermark, 250);
+    }
+
+    fn wmb(watermark: i64, offset: i64) -> WMB {
+        WMB {
+            watermark,
+            offset,
+            idle: false,
+            partition: 0,
+            processor_count: None,
+        }
+    }
+
+    /// get_event_time when the input offset is smaller than every entry's offset.
+    /// No WMB satisfies `w.offset < input_offset`, so the result should be -1.
+    #[tokio::test]
+    async fn test_get_event_time_offset_smaller_than_all_entries() {
+        let mut timeline = OffsetTimeline::new(10);
+        timeline.put(wmb(100, 10));
+        timeline.put(wmb(200, 20));
+        timeline.put(wmb(300, 30));
+
+        assert_eq!(timeline.get_event_time(5), -1);
+        assert_eq!(timeline.get_event_time(10), -1);
+    }
+
+    /// get_event_time when the input offset is larger than every entry's offset.
+    /// The first entry checked (the head, which has the highest watermark) satisfies
+    /// `w.offset < input_offset`, so it returns the highest watermark.
+    #[tokio::test]
+    async fn test_get_event_time_offset_larger_than_all_entries() {
+        let mut timeline = OffsetTimeline::new(10);
+        timeline.put(wmb(100, 10));
+        timeline.put(wmb(200, 20));
+        timeline.put(wmb(300, 30));
+
+        // offset=50 is larger than every entry. The iterator finds the head (offset=30)
+        // first since the deque is sorted highest-to-lowest, returning watermark=300.
+        assert_eq!(timeline.get_event_time(50), 300);
+    }
+
+    /// Watermark regression: inserting a WMB with a watermark smaller
+    /// than the head should be silently ignored. The timeline remains unchanged.
+    #[tokio::test]
+    async fn test_watermark_regression_ignored() {
+        let mut timeline = OffsetTimeline::new(10);
+        timeline.put(wmb(100, 5));
+        timeline.put(wmb(200, 10));
+
+        // Try inserting a WMB with a lower watermark — case 5 (Less, _).
+        timeline.put(wmb(150, 15));
+
+        // Head should still be the previous head, unchanged.
+        assert_eq!(timeline.get_head_watermark(), 200);
+        assert_eq!(timeline.get_head_offset(), 10);
+
+        // The regressed entry should not appear anywhere in the timeline.
+        // get_event_time(16) should find offset=10 first (the head), returning 200.
+        assert_eq!(timeline.get_event_time(16), 200);
+    }
+
+    /// Same watermark, smaller offset: the new WMB should be skipped.
+    /// The head remains the entry with the larger offset.
+    #[tokio::test]
+    async fn test_same_watermark_smaller_offset_skipped() {
+        let mut timeline = OffsetTimeline::new(10);
+        timeline.put(wmb(100, 5));
+        timeline.put(wmb(200, 10));
+
+        // Same watermark as head (200), but smaller offset (7) — case (Equal, Less).
+        timeline.put(wmb(200, 7));
+
+        // Head should be unchanged.
+        assert_eq!(timeline.get_head_watermark(), 200);
+        assert_eq!(timeline.get_head_offset(), 10);
+
+        // Also verify equal offset is skipped — case (Equal, Equal).
+        timeline.put(wmb(200, 10));
+        assert_eq!(timeline.get_head_offset(), 10);
+
+        // The deque should not have grown beyond the original insertions + capacity defaults.
+        // 2 real entries + 10 initial defaults = 12, but capacity is 10 so trimmed to 10.
+        assert_eq!(timeline.entries().len(), 10);
+    }
+
+    /// Greater watermark, equal offset: the head WMB's watermark is
+    /// mutated in-place without adding a new entry to the deque.
+    #[tokio::test]
+    async fn test_greater_watermark_equal_offset_in_place_mutation() {
+        let mut timeline = OffsetTimeline::new(10);
+        timeline.put(wmb(100, 5));
+        timeline.put(wmb(200, 10));
+
+        let len_before = timeline.entries().len();
+
+        // Greater watermark (250), same offset (10) — case (Greater, Equal).
+        // This should mutate the head's watermark in-place.
+        timeline.put(WMB {
+            watermark: 250,
+            offset: 10,
+            idle: false,
+            partition: 0,
+            processor_count: None,
+        });
+
+        // Watermark should be updated.
+        assert_eq!(timeline.get_head_watermark(), 250);
+        // Offset should remain the same.
+        assert_eq!(timeline.get_head_offset(), 10);
+        // Deque length should NOT have increased (in-place mutation, no push_front).
+        assert_eq!(timeline.entries().len(), len_before);
     }
 }

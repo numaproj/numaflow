@@ -789,6 +789,54 @@ func Test_reconcile(t *testing.T) {
 		assert.Equal(t, uint32(20), testObj.Status.Replicas)
 		assert.Equal(t, uint32(5), testObj.Status.UpdatedReplicas)
 	})
+
+	t.Run("test lastScaledAt initialised to CreationTimestamp when zero", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		err := cl.Create(ctx, testIsbSvc)
+		assert.Nil(t, err)
+		testPl := testPipeline.DeepCopy()
+		err = cl.Create(ctx, testPl)
+		assert.Nil(t, err)
+		r := fakeReconciler(t, cl)
+		testObj := testVertex.DeepCopy()
+		creationTime := time.Now()
+		testObj.CreationTimestamp = metav1.Time{Time: creationTime}
+		testObj.Spec.Sink = &dfv1.Sink{}
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, creationTime.Unix(), testObj.Status.LastScaledAt.Unix())
+	})
+
+	t.Run("test lastScaledAt not overwritten when already set", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		err := cl.Create(ctx, testIsbSvc)
+		assert.Nil(t, err)
+		testPl := testPipeline.DeepCopy()
+		err = cl.Create(ctx, testPl)
+		assert.Nil(t, err)
+		r := fakeReconciler(t, cl)
+		testObj := testVertex.DeepCopy()
+		testObj.CreationTimestamp = metav1.Time{Time: time.Now()}
+		testObj.Spec.Sink = &dfv1.Sink{}
+		// First reconcile: creates pod and sets LastScaledAt (currentReplicas != desiredReplicas)
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		// Overwrite with a known value now that replicas are aligned
+		existingScaledAt := time.Now().Add(-1 * time.Hour)
+		testObj.Status.LastScaledAt = metav1.Time{Time: existingScaledAt}
+		// Second reconcile: currentReplicas == desiredReplicas, our guard must not overwrite
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, existingScaledAt.Unix(), testObj.Status.LastScaledAt.Unix())
+	})
 }
 
 func Test_reconcileEvents(t *testing.T) {

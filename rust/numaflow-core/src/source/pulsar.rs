@@ -32,7 +32,6 @@ impl TryFrom<PulsarMessage> for Message {
             // Set default metadata so that metadata is always present.
             metadata: Some(Arc::new(Metadata::default())),
             is_late: false,
-            ack_handle: None,
         })
     }
 }
@@ -80,8 +79,12 @@ impl source::SourceReader for PulsarSource {
         }
     }
 
-    async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
-        Ok(self.partitions_vec())
+    async fn partitions(&mut self) -> crate::error::Result<source::SourcePartitions> {
+        let partitions = self.partitions_vec();
+        // For Pulsar with shared subscriptions, there's no partition assignment like Kafka.
+        // Each vertex replica is treated as a separate "partition" for watermark purposes.
+        // total_partitions is None because we don't know the total replica count at runtime.
+        Ok(source::SourcePartitions::new(partitions, None))
     }
 }
 

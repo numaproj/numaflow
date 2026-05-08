@@ -68,10 +68,12 @@ impl<C: NumaflowTypeConfig> ReduceForwarder<C> {
             }
         };
 
-        // Join the pbq and reducer
+        // Join the pbq and reducer. If either task panics (JoinError), cancel the token so the
+        // other task is not left hanging.
         let (pbq_result, processor_result) = tokio::try_join!(pbq_handle, processor_handle)
             .map_err(|e| {
-                error!(?e, "Error while joining PBQ reader and reducer");
+                error!(?e, "PBQ or reducer task panicked, cancelling token");
+                cln_token.cancel();
                 crate::error::Error::Forwarder(format!(
                     "Error while joining PBQ reader and reducer: {e}"
                 ))
@@ -1112,7 +1114,6 @@ mod tests {
                     vertex: "input-vertex",
                     partitions: vec![0],
                     ot_bucket,
-                    hb_bucket,
                     delay: Some(Duration::from_millis(100)),
                 }],
                 to_vertex_config: vec![],

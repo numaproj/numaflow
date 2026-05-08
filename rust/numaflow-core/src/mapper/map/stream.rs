@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::Ordering;
 
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
-use crate::message::Message;
+use crate::message::{Message, MessageHandle};
+use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{OwnedSemaphorePermit, mpsc};
 use tokio_stream::StreamExt;
@@ -44,7 +44,7 @@ pub(in crate::mapper) struct StreamSenderMapState {
 pub(in crate::mapper) struct MapStreamTask {
     pub mapper: UserDefinedStreamMap,
     pub permit: OwnedSemaphorePermit,
-    pub message: Message,
+    pub msg_handle: MessageHandle,
     pub shared_ctx: Arc<SharedMapTaskContext>,
 }
 
@@ -64,9 +64,9 @@ impl MapStreamTask {
 
         // Store parent message info before sending to UDF
         // parent_info contains offset, so we don't need to clone it separately
-        let mut parent_info: ParentMessageInfo = (&self.message).into();
+        let mut parent_info: ParentMessageInfo = self.msg_handle.message().into();
 
-        let request: MapRequest = self.message.into();
+        let request: MapRequest = self.msg_handle.message().clone().into();
         update_udf_read_metric(self.shared_ctx.is_mono_vertex);
 
         // Call the UDF and get receiver for raw results
@@ -106,53 +106,49 @@ impl MapStreamTask {
                             .await
                             .expect("failed to update tracker");
 
-                        let bypassed =
+                        // Each downstream handle shares the original ack tracking — ACK is
+                        // deferred until all mapped messages are written to ISB/sink.
+                        let msg_handle = self.msg_handle.with_message(mapped_message);
+
+                        // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
+                        // If not bypassed, it returns Some(msg_handle) for us to send downstream.
+                        let msg_handle =
                             if let Some(ref bypass_router) = self.shared_ctx.bypass_router {
-                                bypass_router
-                                    .try_bypass(mapped_message.clone())
+                                match bypass_router
+                                    .try_bypass(msg_handle)
                                     .await
                                     .expect("failed to send message to bypass channel")
+                                {
+                                    Some(msg) => msg,
+                                    None => continue, // Message was bypassed, move to next
+                                }
                             } else {
-                                false
+                                msg_handle
                             };
 
-                        if !bypassed {
-                            self.shared_ctx
-                                .output_tx
-                                .send(mapped_message)
-                                .await
-                                .expect("failed to send response");
-                        }
+                        self.shared_ctx
+                            .output_tx
+                            .send(msg_handle)
+                            .await
+                            .expect("failed to send response");
                     }
                 }
                 Some(Err(e)) => {
                     error!(?e, "failed to map message");
-                    parent_info
-                        .ack_handle
-                        .as_ref()
-                        .expect("ack handle should be present")
-                        .is_failed
-                        .store(true, Ordering::Relaxed);
+                    mark_failed!(self.msg_handle, &e);
                     let _ = self.shared_ctx.error_tx.send(e).await;
                     return;
                 }
                 None => {
-                    // Channel closed. If no results were ever sent (current_index == 0),
-                    // this means the UDF stream may have closed unexpectedly (e.g., panic or gRPC
-                    // stream error where the sender was dropped without delivering an error).
-                    // Mark the message as failed so that it gets nacked.
-                    if parent_info.current_index == 0 {
-                        parent_info
-                            .ack_handle
-                            .as_ref()
-                            .expect("ack handle should be present")
-                            .is_failed
-                            .store(true, Ordering::Relaxed);
-                    }
+                    // Channel closed — stream ended cleanly (e.g., UDF returned empty results or
+                    // finished after sending all results). Fall through to mark_success below.
                     break;
                 }
             }
         }
+
+        // Decrement the original ref_count now that we've accounted for all downstream messages.
+        mark_success!(self.msg_handle);
     }
 }
 
@@ -217,27 +213,9 @@ impl UserDefinedStreamMap {
         while let Some(resp) = resp_stream.next().await {
             match resp {
                 Ok(resp) => {
-                    let response_sender = sender_map
-                        .lock()
-                        .expect("failed to acquire poisoned lock")
-                        .map
-                        .remove(&resp.id)
-                        .expect("map entry should always be present");
-
-                    // once we get eot, we can drop the sender to let the callee
-                    // know that we are done sending responses
-                    if let Some(map::TransmissionStatus { eot: true }) = resp.status {
-                        update_udf_process_time_metric(is_mono_vertex());
-                        continue;
+                    if let Err(e) = Self::process_response(&sender_map, resp).await {
+                        warn!("received error while processing stream response: {}", e);
                     }
-
-                    Self::process_stream_response(
-                        &sender_map,
-                        resp.id,
-                        response_sender,
-                        resp.results,
-                    )
-                    .await
                 }
                 Err(e) => {
                     error!(?e, "Error reading message from stream map gRPC stream");
@@ -246,12 +224,86 @@ impl UserDefinedStreamMap {
             }
         }
 
-        // broadcast error for all pending senders that might've gotten added while the stream was draining
+        // broadcast error for all pending senders that might've gotten
+        // added while the stream was draining
         Self::broadcast_error(
             &sender_map,
             tonic::Status::aborted("receiver stream dropped"),
         )
         .await;
+    }
+
+    /// This method processes the response received from the stream map udf server
+    ///
+    /// The reason this method hasn't been subdivided is that we don't want to yield
+    /// back to the tokio runtime at any point between these three operations:
+    /// * remove id from sender map
+    /// * check for EOT
+    /// * re-insert id into sender map
+    async fn process_response(
+        sender_map: &Arc<Mutex<StreamSenderMapState>>,
+        resp: MapResponse,
+    ) -> Result<()> {
+        let response_sender_entry = {
+            sender_map
+                .lock()
+                .expect("failed to acquire poisoned lock")
+                .map
+                .remove(&resp.id)
+        };
+
+        // once we get eot, we can drop the sender to let the callee
+        // know that we are done sending responses
+        if let Some(map::TransmissionStatus { eot: true }) = resp.status {
+            update_udf_process_time_metric(is_mono_vertex());
+            return Ok(());
+        }
+
+        if let Some(response_sender) = response_sender_entry {
+            // move the senders_guard out of the scope to drop the guard before sending the response
+            // Insert the sender back into the SenderMap to avoid yielding back control
+            // to the tokio runtime during send on the actual sender
+            let mapper_closed = {
+                let mut senders_guard = sender_map.lock().expect("failed to acquire poisoned lock");
+                if !senders_guard.closed {
+                    // Write the sender back to the map, because we need to send
+                    // more responses for the same request
+                    senders_guard
+                        .map
+                        .insert(resp.id.clone(), response_sender.clone());
+                }
+                senders_guard.closed
+            };
+
+            if mapper_closed {
+                let _ = response_sender
+                    .send(Err(Error::Mapper("mapper closed".to_string())))
+                    .await;
+                return Ok(());
+            }
+
+            if response_sender.send(Ok(resp.results)).await.is_err() {
+                {
+                    let mut sender_guard =
+                        sender_map.lock().expect("failed to acquire poisoned lock");
+
+                    // Remove the sender to avoid keeping the corresponding receiver waiting
+                    sender_guard.map.remove(&resp.id);
+                }
+
+                return Err(Error::Mapper(format!(
+                    "Failed to send map response to stream task for ID: {:?}",
+                    resp.id
+                )));
+            }
+        } else {
+            return Err(Error::Mapper(format!(
+                "No such req/resp ID found in StreamResponseSenderMap: {}",
+                resp.id
+            )));
+        }
+
+        Ok(())
     }
 
     /// Sends a request to the UDF and returns a receiver for raw response results.
@@ -276,19 +328,10 @@ impl UserDefinedStreamMap {
 
         let key = request.id.clone();
 
-        // only insert if we are able to send the message to the server
-        if let Err(e) = self.read_tx.send(request).await {
-            error!(?e, "Failed to send message to server");
-            let _ = tx
-                .send(Err(Error::Mapper(format!(
-                    "failed to send message to stream map server: {e}"
-                ))))
-                .await
-                .inspect(|_| warn!("failed to send error to oneshot receiver"));
-            return rx;
-        }
-
-        // move the senders_guard out of the scope to drop the guard before sending the response
+        // Move the senders_guard out of the scope to drop the guard before sending the response
+        // Do this before we send the message to the server to avoid the race condition
+        // where the server processes the message faster than the corresponding sender
+        // is added to the SenderMap.
         let mapper_closed = {
             let mut senders_guard = self
                 .senders
@@ -308,50 +351,50 @@ impl UserDefinedStreamMap {
                 .await;
         }
 
-        rx
-    }
+        // only insert if we are able to send the message to the server
+        if let Err(e) = self.read_tx.send(request).await {
+            error!(?e, "Failed to send message to map stream udf server");
+            // We should ideally remove the resp.id from the SenderMap to avoid potential
+            // memory leaks as well as to avoid holding the corresponding receiver waiting.
+            // We don't care about the return value since we already have access to the 'tx'
+            {
+                let _ = self
+                    .senders
+                    .lock()
+                    .expect("failed to acquire poisoned lock")
+                    .map
+                    .remove(&key);
+            };
 
-    /// Processes stream responses and sends them to the appropriate mpsc sender
-    async fn process_stream_response(
-        sender_map: &Arc<Mutex<StreamSenderMapState>>,
-        msg_id: String,
-        response_sender: mpsc::Sender<Result<StreamMapResponse>>,
-        results: Vec<map::map_response::Result>,
-    ) {
-        response_sender
-            .send(Ok(results))
-            .await
-            .expect("failed to send response");
-
-        // move the senders_guard out of the scope to drop the guard before sending the response
-        let mapper_closed = {
-            let mut senders_guard = sender_map.lock().expect("failed to acquire poisoned lock");
-            if !senders_guard.closed {
-                // Write the sender back to the map, because we need to send
-                // more responses for the same request
-                senders_guard.map.insert(msg_id, response_sender.clone());
-            }
-            senders_guard.closed
-        };
-
-        if mapper_closed {
-            let _ = response_sender
-                .send(Err(Error::Mapper("mapper closed".to_string())))
-                .await;
+            // send error on 'tx'
+            let _ = tx
+                .send(Err(Error::Mapper(format!(
+                    "failed to send message to map stream server: {e}"
+                ))))
+                .await
+                .inspect_err(|_| warn!("failed to send error to receiver"));
         }
+
+        rx
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::mapper::map::stream::UserDefinedStreamMap;
+    use crate::error::Error as MapError;
+    use crate::mapper::map::stream::{StreamSenderMapState, UserDefinedStreamMap};
     use crate::shared::grpc::create_rpc_channel;
     use numaflow::mapstream;
     use numaflow::shared::ServerExtras;
     use numaflow_pb::clients::map::map_client::MapClient;
+    use numaflow_pb::clients::map::{MapRequest, MapResponse, TransmissionStatus};
     use std::error::Error;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tempfile::TempDir;
+    use tokio::sync::mpsc;
+    use tokio_util::sync::CancellationToken;
+    use tokio_util::task::AbortOnDropHandle;
 
     struct FlatmapStream;
 
@@ -447,5 +490,188 @@ mod tests {
             "Expected gRPC server to have shut down"
         );
         Ok(())
+    }
+
+    fn make_response(id: &str, eot: bool) -> MapResponse {
+        MapResponse {
+            results: vec![],
+            id: id.to_string(),
+            handshake: None,
+            status: if eot {
+                Some(TransmissionStatus { eot: true })
+            } else {
+                None
+            },
+        }
+    }
+
+    #[tokio::test]
+    async fn process_response_returns_error_when_no_sender_entry() {
+        let sender_map = Arc::new(Mutex::new(StreamSenderMapState::default()));
+
+        let result =
+            UserDefinedStreamMap::process_response(&sender_map, make_response("missing", false))
+                .await;
+
+        let err = result.expect_err("expected error when sender entry missing");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(
+            err.to_string()
+                .contains("No such req/resp ID found in StreamResponseSenderMap"),
+            "unexpected error message: {err}"
+        );
+        assert!(sender_map.lock().unwrap().map.is_empty());
+    }
+
+    #[tokio::test]
+    async fn process_response_returns_error_when_response_sender_send_fails() {
+        let sender_map = Arc::new(Mutex::new(StreamSenderMapState::default()));
+        let (tx, rx) = mpsc::channel(1);
+        // Drop the receiver so the next send on tx fails.
+        drop(rx);
+        sender_map.lock().unwrap().map.insert("0".to_string(), tx);
+
+        let result =
+            UserDefinedStreamMap::process_response(&sender_map, make_response("0", false)).await;
+
+        let err = result.expect_err("expected error when send to response sender fails");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(
+            err.to_string()
+                .contains("Failed to send map response to stream task"),
+            "unexpected error message: {err}"
+        );
+        // The entry must be removed so the wrapper does not leak senders.
+        assert!(
+            !sender_map.lock().unwrap().map.contains_key("0"),
+            "sender entry should have been removed after send failure"
+        );
+    }
+
+    #[tokio::test]
+    async fn process_response_signals_closed_mapper_on_response_sender() {
+        let sender_map = Arc::new(Mutex::new(StreamSenderMapState::default()));
+        let (tx, mut rx) = mpsc::channel(1);
+        {
+            let mut guard = sender_map.lock().unwrap();
+            guard.map.insert("0".to_string(), tx);
+            guard.closed = true;
+        }
+
+        let result =
+            UserDefinedStreamMap::process_response(&sender_map, make_response("0", false)).await;
+        assert!(result.is_ok(), "expected Ok when mapper is closed");
+
+        // Caller should see a "mapper closed" error on the response channel.
+        let received = rx.recv().await.expect("expected error on response channel");
+        let err = received.expect_err("expected Err variant");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(err.to_string().contains("mapper closed"));
+
+        // Closed-mapper path must not re-insert the sender.
+        assert!(
+            !sender_map.lock().unwrap().map.contains_key("0"),
+            "sender should not be re-inserted when mapper is closed"
+        );
+    }
+
+    #[tokio::test]
+    async fn process_response_drops_sender_on_eot_without_error() {
+        let sender_map = Arc::new(Mutex::new(StreamSenderMapState::default()));
+        let (tx, mut rx) = mpsc::channel(1);
+        sender_map.lock().unwrap().map.insert("0".to_string(), tx);
+
+        let result =
+            UserDefinedStreamMap::process_response(&sender_map, make_response("0", true)).await;
+        assert!(result.is_ok(), "EOT path should return Ok");
+
+        // EOT does not deliver a payload to the response sender.
+        assert!(matches!(
+            rx.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty | mpsc::error::TryRecvError::Disconnected)
+        ));
+
+        // EOT removes the sender from the map (and never re-inserts it),
+        // letting the corresponding receiver loop terminate.
+        assert!(
+            !sender_map.lock().unwrap().map.contains_key("0"),
+            "sender entry should be removed after EOT"
+        );
+    }
+
+    #[tokio::test]
+    async fn broadcast_error_marks_closed_and_errors_all_senders() {
+        let sender_map = Arc::new(Mutex::new(StreamSenderMapState::default()));
+        let (tx_a, mut rx_a) = mpsc::channel(1);
+        let (tx_b, mut rx_b) = mpsc::channel(1);
+        {
+            let mut guard = sender_map.lock().unwrap();
+            guard.map.insert("a".to_string(), tx_a);
+            guard.map.insert("b".to_string(), tx_b);
+        }
+
+        UserDefinedStreamMap::broadcast_error(&sender_map, tonic::Status::aborted("test")).await;
+
+        {
+            let guard = sender_map.lock().unwrap();
+            assert!(guard.closed, "broadcast_error should set closed = true");
+            assert!(guard.map.is_empty(), "all senders should be drained");
+        }
+
+        for rx in [&mut rx_a, &mut rx_b] {
+            let received = rx.recv().await.expect("expected error broadcast");
+            let err = received.expect_err("expected Err variant");
+            assert!(matches!(err, MapError::Grpc(_)));
+        }
+    }
+
+    #[tokio::test]
+    async fn stream_method_cleans_up_on_read_tx_send_failure() {
+        // Build a UserDefinedStreamMap whose read_tx receiver has been dropped,
+        // so that read_tx.send(..) inside `stream` fails immediately.
+        let (read_tx, read_rx) = mpsc::channel::<MapRequest>(10);
+        drop(read_rx);
+
+        let dummy_handle = tokio::spawn(async {});
+        let _abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+
+        let senders = Arc::new(Mutex::new(StreamSenderMapState::default()));
+        let mapper = UserDefinedStreamMap {
+            read_tx,
+            senders: Arc::clone(&senders),
+            _handle: _abort_handle,
+        };
+
+        let request = MapRequest {
+            request: Some(numaflow_pb::clients::map::map_request::Request {
+                keys: vec!["k".into()],
+                value: b"v".to_vec(),
+                event_time: None,
+                watermark: None,
+                headers: Default::default(),
+                metadata: None,
+            }),
+            id: "42".to_string(),
+            handshake: None,
+            status: None,
+        };
+
+        let mut rx = mapper.stream(request, CancellationToken::new()).await;
+
+        // The receiver must observe the read_tx failure as a Mapper error.
+        let first = rx.recv().await.expect("expected error on stream rx");
+        let err = first.expect_err("expected Err variant");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(
+            err.to_string()
+                .contains("failed to send message to map stream server"),
+            "unexpected error message: {err}"
+        );
+
+        // The senders map must no longer contain the failed request id.
+        assert!(
+            !senders.lock().unwrap().map.contains_key("42"),
+            "senders map should be cleaned up on read_tx send failure"
+        );
     }
 }

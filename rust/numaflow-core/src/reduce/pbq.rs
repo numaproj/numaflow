@@ -1,5 +1,8 @@
+use crate::config::pipeline::VERTEX_TYPE_REDUCE_UDF;
 use crate::error::Result;
-use crate::message::Message;
+use crate::mark_success;
+use crate::message::{Message, MessageType};
+use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 use crate::pipeline::isb::reader::ISBReaderOrchestrator;
 use crate::reduce::wal::WalMessage;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
@@ -11,7 +14,7 @@ use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{error, info};
 
 /// WAL for storing the data. If None, we will not persist the data.
 #[allow(clippy::upper_case_acronyms)]
@@ -65,15 +68,17 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (tx, rx) = mpsc::channel(100);
 
-        let handle = if let Some(wal) = self.wal {
-            tokio::spawn(async move {
-                Self::read_isb_with_wal(self.isb_reader, wal, tx, cancellation_token).await
+        let handle = tokio::spawn(async move {
+            let result = if let Some(wal) = self.wal {
+                Self::read_isb_with_wal(self.isb_reader, wal, tx, cancellation_token.clone()).await
+            } else {
+                Self::read_isb_without_wal(self.isb_reader, tx, cancellation_token.clone()).await
+            };
+            result.inspect_err(|e| {
+                error!(?e, "PBQ encountered a critical error, cancelling token");
+                cancellation_token.cancel();
             })
-        } else {
-            tokio::spawn(async move {
-                Self::read_isb_without_wal(self.isb_reader, tx, cancellation_token).await
-            })
-        };
+        });
 
         Ok((ReceiverStream::new(rx), handle))
     }
@@ -108,11 +113,21 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
 
         // Process replayed messages
         while let Some(msg) = wal_rx.recv().await {
-            let msg: WalMessage = msg.try_into().expect("Failed to parse WAL message");
-            messages_tx
-                .send(msg.into())
-                .await
-                .expect("Receiver dropped");
+            let msg: WalMessage = msg.try_into().map_err(|e| {
+                crate::error::Error::Reduce(format!("Failed to parse WAL message: {e}"))
+            })?;
+            let message: Message = msg.into();
+            let is_data = message.typ == MessageType::Data;
+            messages_tx.send(message).await.map_err(|_| {
+                crate::error::Error::Reduce("PBQ WAL replay: receiver dropped".to_string())
+            })?;
+            if is_data {
+                pipeline_metrics()
+                    .reduce
+                    .pbq_write_total
+                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                    .inc();
+            }
             replayed_count += 1;
         }
 
@@ -134,28 +149,53 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
             .streaming_write(ReceiverStream::new(wal_rx))
             .await?;
 
-        while let Some(msg) = isb_stream.next().await {
-            // Send the message to WAL - it will be converted to bytes internally.
-            // The message will be kept alive until the write completes, then dropped
-            // (triggering ack via Arc<AckHandle>).
+        while let Some(read_msg) = isb_stream.next().await {
+            // Clone the message for downstream before passing MessageHandle to WAL
+            let message = read_msg.message().clone();
+
+            // Send the MessageHandle to WAL - WAL will ACK after successful write
             wal_tx
                 .send(SegmentWriteMessage::WriteMessage {
-                    message: msg.clone(),
+                    read_message: read_msg,
                 })
                 .await
-                .expect("Receiver dropped");
+                .map_err(|_| {
+                    crate::error::Error::Reduce("PBQ WAL writer: receiver dropped".to_string())
+                })?;
 
-            tx.send(msg).await.expect("Receiver dropped");
+            // Send cloned message downstream
+            let is_data = message.typ == MessageType::Data;
+            tx.send(message).await.map_err(|_| {
+                crate::error::Error::Reduce(
+                    "PBQ ISB reader: downstream receiver dropped".to_string(),
+                )
+            })?;
+            if is_data {
+                pipeline_metrics()
+                    .reduce
+                    .pbq_write_total
+                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                    .inc();
+            }
         }
 
-        isb_handle.await.expect("task failed")?;
+        isb_handle
+            .await
+            .map_err(|e| crate::error::Error::Reduce(format!("ISB reader task panicked: {e}")))?
+            .map_err(|e| crate::error::Error::Reduce(format!("ISB reader task failed: {e}")))?;
 
         // drop the sender to signal the wal eof and wait for the wal task to exit gracefully
         drop(wal_tx);
-        wal_handle.await.expect("task failed")?;
+        wal_handle
+            .await
+            .map_err(|e| crate::error::Error::Reduce(format!("WAL writer task panicked: {e}")))?
+            .map_err(|e| crate::error::Error::Reduce(format!("WAL writer task failed: {e}")))?;
 
         // Wait for compaction task to exit gracefully
-        compaction_handle.await.expect("task failed")?;
+        compaction_handle
+            .await
+            .map_err(|e| crate::error::Error::Reduce(format!("Compaction task panicked: {e}")))?
+            .map_err(|e| crate::error::Error::Reduce(format!("Compaction task failed: {e}")))?;
 
         info!("PBQ streaming read completed");
         Ok(())
@@ -170,13 +210,31 @@ impl<C: NumaflowTypeConfig> PBQ<C> {
         let (mut isb_stream, isb_handle) = isb_reader.streaming_read(cancellation_token).await?;
 
         // Process messages from ISB stream
-        while let Some(msg) = isb_stream.next().await {
-            // Forward the message to the output channel
-            tx.send(msg).await.expect("Receiver dropped");
+        while let Some(read_msg) = isb_stream.next().await {
+            // Extract the message and forward to output channel
+            let message = read_msg.message().clone();
+            let is_data = message.typ == MessageType::Data;
+            tx.send(message).await.map_err(|_| {
+                crate::error::Error::Reduce(
+                    "PBQ ISB reader: downstream receiver dropped".to_string(),
+                )
+            })?;
+            if is_data {
+                pipeline_metrics()
+                    .reduce
+                    .pbq_write_total
+                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_REDUCE_UDF))
+                    .inc();
+            }
+            // Mark the read message as success after processing
+            mark_success!(read_msg);
         }
 
         // Wait for the ISB reader task to complete
-        isb_handle.await.expect("ISB reader task failed")?;
+        isb_handle
+            .await
+            .map_err(|e| crate::error::Error::Reduce(format!("ISB reader task panicked: {e}")))?
+            .map_err(|e| crate::error::Error::Reduce(format!("ISB reader task failed: {e}")))?;
 
         Ok(())
     }
@@ -590,9 +648,11 @@ mod tests {
                 ..Default::default()
             };
 
-            tx.send(SegmentWriteMessage::WriteMessage { message })
-                .await
-                .unwrap();
+            tx.send(SegmentWriteMessage::WriteMessage {
+                read_message: message.into(),
+            })
+            .await
+            .unwrap();
         }
 
         drop(tx);

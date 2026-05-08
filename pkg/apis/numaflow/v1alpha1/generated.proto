@@ -697,6 +697,11 @@ message HTTPSource {
   // Whether to create a ClusterIP Service
   // +optional
   optional bool service = 2;
+
+  // Ports to listen on. HTTPS always runs on port 8443 by default.
+  // To enable plain HTTP, set ports.http explicitly.
+  // +optional
+  optional Ports ports = 3;
 }
 
 message IdleSource {

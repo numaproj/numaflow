@@ -7,6 +7,7 @@ use crate::metrics::{
 };
 use crate::pipeline::PipelineContext;
 
+use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::pipeline::isb::writer::{ISBWriterOrchestrator, ISBWriterOrchestratorComponents};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
@@ -48,9 +49,11 @@ impl<C: crate::typ::NumaflowTypeConfig> SourceForwarder<C> {
             .streaming_write(messages_stream, cln_token.clone())
             .await?;
 
+        // Cancel on panic (JoinError).
         let (reader_result, sink_writer_result) = tokio::try_join!(reader_handle, writer_handle)
             .map_err(|e| {
-                error!(?e, "Error while joining reader and sink writer");
+                error!(?e, "Reader or writer task panicked, cancelling token");
+                cln_token.cancel();
                 Error::Forwarder(format!("Error while joining reader and sink writer: {e}"))
             })?;
 
@@ -71,7 +74,6 @@ pub(crate) async fn start_source_forwarder(
     js_context: Context,
     config: PipelineConfig,
     source_config: SourceVtxConfig,
-    source_watermark_handle: Option<SourceWatermarkHandle>,
 ) -> error::Result<()> {
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
         Some(
@@ -88,6 +90,22 @@ pub(crate) async fn start_source_forwarder(
     };
 
     let tracker = Tracker::new(serving_callback_handler, cln_token.clone());
+
+    // create watermark handle, if watermark is enabled
+    // Uses idle_config.step_interval (default 100ms) as the unified heartbeat interval
+    let source_watermark_handle = match &config.watermark_config {
+        Some(WatermarkConfig::Source(source_config)) => Some(
+            SourceWatermarkHandle::new(
+                js_context.clone(),
+                &config.to_vertex_config,
+                source_config,
+                cln_token.clone(),
+                tracker.clone(),
+            )
+            .await?,
+        ),
+        _ => None,
+    };
 
     // Create the ISB factory from the JetStream context
     use crate::pipeline::isb::ISBFactory;
@@ -899,6 +917,7 @@ mod tests {
             true,
             Some(transformer),
             None,
+            cln_token.clone(),
             None,
         )
         .await;
@@ -1114,9 +1133,6 @@ mod tests {
                 panic!("Expected source vertex config");
             };
 
-        // For this test, we don't have watermark config, so watermark handle is None
-        let source_watermark_handle = None;
-
         let cancellation_token = CancellationToken::new();
         let forwarder_task = tokio::spawn({
             let cancellation_token = cancellation_token.clone();
@@ -1127,7 +1143,6 @@ mod tests {
                     context,
                     pipeline_config,
                     source_vtx_config,
-                    source_watermark_handle,
                 )
                 .await
                 .unwrap();

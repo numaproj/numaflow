@@ -41,6 +41,10 @@ pub struct KVEntry {
     pub value: Bytes,
     /// The operation that triggered this entry
     pub operation: KVWatchOp,
+    /// The time the data was put in the bucket (epoch milliseconds).
+    /// This is provided by the KV store (e.g., JetStream) and can be used
+    /// for processor liveness detection.
+    pub created: i64,
 }
 
 /// Type alias for the watch stream.

@@ -62,6 +62,7 @@ const MVTX_REGISTRY_GLOBAL_PREFIX: &str = "monovtx";
 // Prefixes for the sub-registries
 const SINK_REGISTRY_PREFIX: &str = "sink";
 const FALLBACK_SINK_REGISTRY_PREFIX: &str = "fallback_sink";
+const REDUCE_REGISTRY_PREFIX: &str = "reduce";
 const ON_SUCCESS_SINK_REGISTRY_PREFIX: &str = "onsuccess_sink";
 const TRANSFORMER_REGISTRY_PREFIX: &str = "transformer";
 const UDF_REGISTRY_PREFIX: &str = "udf";
@@ -149,6 +150,14 @@ const SINK_TIME: &str = "time";
 const FALLBACK_SINK_TIME: &str = "time";
 const ON_SUCCESS_SINK_TIME: &str = "time";
 
+// reduce specific metrics
+const REDUCE_ACTIVE_WINDOWS: &str = "active_windows";
+const REDUCE_CLOSED_WINDOWS: &str = "closed_windows";
+const REDUCE_WINDOW_PROCESSING_TIME: &str = "window_processing_time";
+const REDUCE_PNF_PROCESS_TIME: &str = "pnf_process_time";
+const REDUCE_WATERMARK_LAG: &str = "watermark_lag";
+const REDUCE_PBQ_WRITE_TOTAL: &str = "pbq_write";
+
 // jetstream isb processing times
 const JETSTREAM_ISB_READ_TIME_TOTAL: &str = "read_time_total";
 const JETSTREAM_ISB_WRITE_TIME_TOTAL: &str = "write_time_total";
@@ -168,6 +177,7 @@ pub(crate) enum ComponentHealthChecks<C: crate::typ::NumaflowTypeConfig> {
 pub(crate) struct MonovertexComponents<C: crate::typ::NumaflowTypeConfig> {
     pub(crate) source: Source<C>,
     pub(crate) sink: SinkWriter,
+    pub(crate) mapper: Option<MapHandle>,
 }
 
 /// PipelineComponents is used to store the all the components required for running pipeline. Transformer
@@ -306,6 +316,8 @@ pub(crate) struct PipelineMetrics {
     pub(crate) sink_forwarder: SinkForwarderMetrics,
     pub(crate) jetstream_isb: JetStreamISBMetrics,
     pub(crate) pending_raw: Family<Vec<(String, String)>, Gauge>,
+    // reduce specific metrics
+    pub(crate) reduce: ReduceMetrics,
 }
 
 /// Family of metrics for the sink
@@ -339,6 +351,39 @@ pub(crate) struct UDFMetrics {
     /// Mapper latency
     pub(crate) time: Family<Vec<(String, String)>, Histogram>,
     pub(crate) errors_total: Family<Vec<(String, String)>, Counter>,
+}
+
+/// Family of metrics for the Reduce vertex
+pub(crate) struct ReduceMetrics {
+    // gauges
+    pub(crate) active_windows: Family<Vec<(String, String)>, Gauge>,
+    pub(crate) closed_windows: Family<Vec<(String, String)>, Gauge>,
+    pub(crate) watermark_lag: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
+    // histograms
+    pub(crate) window_processing_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) pnf_process_time: Family<Vec<(String, String)>, Histogram>,
+    // counters
+    pub(crate) pbq_write_total: Family<Vec<(String, String)>, Counter>,
+}
+
+impl ReduceMetrics {
+    pub(crate) fn new() -> Self {
+        Self {
+            active_windows: Family::<Vec<(String, String)>, Gauge>::default(),
+            closed_windows: Family::<Vec<(String, String)>, Gauge>::default(),
+            watermark_lag: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
+            window_processing_time:
+                Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                    // 1ms to 60 minutes in microseconds
+                    || Histogram::new(exponential_buckets_range(1000.0, 3_600_000_000.0, 10)),
+                ),
+            pnf_process_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                // 1ms to 20 minutes in microseconds
+                || Histogram::new(exponential_buckets_range(1000.0, 1_200_000_000.0, 10)),
+            ),
+            pbq_write_total: Family::<Vec<(String, String)>, Counter>::default(),
+        }
+    }
 }
 
 /// Generic forwarder metrics
@@ -762,6 +807,7 @@ impl PipelineMetrics {
             sink_forwarder: SinkForwarderMetrics::new(),
             jetstream_isb: JetStreamISBMetrics::new(),
             pending_raw: Family::<Vec<(String, String)>, Gauge>::default(),
+            reduce: ReduceMetrics::new(),
         };
         let mut registry = global_registry().registry.lock();
         Self::register_forwarder_metrics(&metrics, &mut registry);
@@ -769,6 +815,7 @@ impl PipelineMetrics {
         Self::register_sink_forwarder_metrics(&metrics, &mut registry);
         Self::register_jetstream_isb_metrics(&metrics, &mut registry);
         Self::register_vertex_metrics(&metrics, &mut registry);
+        Self::register_reduce_metrics(&metrics, &mut registry);
         metrics
     }
 
@@ -1046,6 +1093,40 @@ impl PipelineMetrics {
             metrics.pending_raw.clone(),
         );
     }
+
+    fn register_reduce_metrics(metrics: &Self, registry: &mut Registry) {
+        let reduce_registry = registry.sub_registry_with_prefix(REDUCE_REGISTRY_PREFIX);
+        reduce_registry.register(
+            REDUCE_ACTIVE_WINDOWS,
+            "Number of currently open reduce windows",
+            metrics.reduce.active_windows.clone(),
+        );
+        reduce_registry.register(
+            REDUCE_CLOSED_WINDOWS,
+            "Number of closed reduce windows awaiting GC",
+            metrics.reduce.closed_windows.clone(),
+        );
+        reduce_registry.register(
+            REDUCE_WATERMARK_LAG,
+            "Difference between current wall clock and watermark in milliseconds",
+            metrics.reduce.watermark_lag.clone(),
+        );
+        reduce_registry.register(
+            REDUCE_WINDOW_PROCESSING_TIME,
+            "Time from window open to window close in microseconds (1ms to 60 minutes)",
+            metrics.reduce.window_processing_time.clone(),
+        );
+        reduce_registry.register(
+            REDUCE_PNF_PROCESS_TIME,
+            "Time for UDF reduce function to complete per window in microseconds (1ms to 20 minutes)",
+            metrics.reduce.pnf_process_time.clone(),
+        );
+        reduce_registry.register(
+            REDUCE_PBQ_WRITE_TOTAL,
+            "Total number of messages written to PBQ",
+            metrics.reduce.pbq_write_total.clone(),
+        );
+    }
 }
 
 /// MONOVTX_METRICS is the MonoVtxMetrics object which stores the metrics
@@ -1318,6 +1399,12 @@ async fn sidecar_livez<C: crate::typ::NumaflowTypeConfig>(
                 error!("Monovertex sink client is not ready");
                 return StatusCode::INTERNAL_SERVER_ERROR;
             }
+            if let Some(ref mut mapper) = monovertex_state.mapper
+                && !mapper.ready().await
+            {
+                error!("Monovertex mapper component is not ready");
+                return StatusCode::INTERNAL_SERVER_ERROR;
+            }
         }
         ComponentHealthChecks::Pipeline(pipeline_state) => match *pipeline_state {
             PipelineComponents::Source(mut source) => {
@@ -1542,6 +1629,7 @@ mod tests {
     use std::net::SocketAddr;
 
     use super::*;
+    use crate::mapper::test_utils::MapperTestHandle;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::SourceType;
@@ -1549,9 +1637,10 @@ mod tests {
     use crate::tracker::Tracker;
     use numaflow::shared::ServerExtras;
     use numaflow::source::{Message, Offset, SourceReadRequest};
-    use numaflow::{sink, source, sourcetransform};
+    use numaflow::{map, sink, source, sourcetransform};
     use numaflow_pb::clients::sink::sink_client::SinkClient;
     use numaflow_pb::clients::source::source_client::SourceClient;
+    use numaflow_shared::server_info::MapMode;
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
 
@@ -1594,6 +1683,15 @@ mod tests {
             _input: sourcetransform::SourceTransformRequest,
         ) -> Vec<sourcetransform::Message> {
             vec![]
+        }
+    }
+
+    struct SimpleMapper;
+
+    #[tonic::async_trait]
+    impl map::Mapper for SimpleMapper {
+        async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
+            vec![map::Message::new(input.value).with_keys(input.keys)]
         }
     }
 
@@ -1685,6 +1783,7 @@ mod tests {
             true,
             None,
             None,
+            cln_token.clone(),
             None,
         )
         .await;
@@ -1703,10 +1802,22 @@ mod tests {
         .await
         .expect("failed to create sink writer");
 
+        let mapper_handle = MapperTestHandle::create_mapper(
+            SimpleMapper,
+            tracker,
+            MapMode::Unary,
+            10,
+            Duration::from_millis(1000),
+            Duration::from_millis(100),
+            1,
+        )
+        .await;
+
         let metrics_state: MetricsState<crate::typ::WithoutRateLimiter> = MetricsState {
             health_checks: ComponentHealthChecks::Monovertex(Box::new(MonovertexComponents {
                 source,
                 sink: sink_writer,
+                mapper: Some(mapper_handle.mapper),
             })),
             watermark_fetcher_state: None,
         };

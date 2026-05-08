@@ -37,8 +37,6 @@
 //! [Actor Pattern]: https://ryhl.io/blog/actors-with-tokio/
 
 use crate::config::pipeline::PipelineConfig;
-use crate::config::pipeline::watermark::WatermarkConfig;
-use crate::watermark::source::SourceWatermarkHandle;
 use crate::{config, error, pipeline};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -67,27 +65,11 @@ pub(crate) async fn start_forwarder(
         config::pipeline::VertexConfig::Source(source) => {
             info!("Starting source forwarder");
 
-            // create watermark handle, if watermark is enabled
-            let source_watermark_handle = match &config.watermark_config {
-                Some(WatermarkConfig::Source(source_config)) => Some(
-                    SourceWatermarkHandle::new(
-                        config.read_timeout,
-                        js_context.clone(),
-                        &config.to_vertex_config,
-                        source_config,
-                        cln_token.clone(),
-                    )
-                    .await?,
-                ),
-                _ => None,
-            };
-
             source_forwarder::start_source_forwarder(
                 cln_token,
                 js_context,
                 config.clone(),
                 source.clone(),
-                source_watermark_handle,
             )
             .await?;
         }

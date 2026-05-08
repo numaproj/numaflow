@@ -43,8 +43,12 @@ pub struct KafkaMessage {
     pub value: Bytes,
     /// Key of the message
     pub key: Option<String>,
-    /// The partition number.
+    /// The partition number within the topic.
     pub partition: i32,
+    /// The globally unique partition ID across all configured topics.
+    /// Computed as: topic_index * max_partitions_per_topic + partition,
+    /// where topics are sorted alphabetically for stable ordering.
+    pub global_partition_id: u16,
     /// The offset of the message.
     pub offset: i64,
     /// The headers of the message.
@@ -85,6 +89,17 @@ pub struct KafkaOffset {
     pub offset: i64,
 }
 
+/// Represents partition information for a Kafka source.
+#[derive(Debug, Clone)]
+pub struct KafkaPartitionsInfo {
+    /// The globally unique partition IDs this consumer is actively assigned to.
+    /// Each ID is normalized as: topic_index * max_partitions_per_topic + partition,
+    /// where topics are sorted alphabetically. This ensures uniqueness across topics.
+    pub active_partitions: Vec<u16>,
+    /// The total number of partitions across all configured topics (sum, not max).
+    pub total_partitions: u32,
+}
+
 enum KafkaActorMessage {
     Read {
         respond_to: oneshot::Sender<Option<Result<Vec<KafkaMessage>>>>,
@@ -97,7 +112,7 @@ enum KafkaActorMessage {
         respond_to: oneshot::Sender<Result<Option<usize>>>,
     },
     PartitionsInfo {
-        respond_to: oneshot::Sender<Result<Vec<i32>>>,
+        respond_to: oneshot::Sender<Result<KafkaPartitionsInfo>>,
     },
 }
 
@@ -110,6 +125,16 @@ struct KafkaActor {
     topics: Vec<String>,
     handler_rx: mpsc::Receiver<KafkaActorMessage>,
     cancel_token: CancellationToken,
+    /// Maps each topic to its global partition offset for normalizing partition IDs.
+    /// Computed as: sorted_topic_index * max_partitions_per_topic.
+    /// For example, with topic1 (12 partitions) and topic2 (12 partitions) sorted alphabetically:
+    ///   topic1 -> offset 0  (topic1 partition 0..11 map to global IDs 0..11)
+    ///   topic2 -> offset 12 (topic2 partition 0..11 map to global IDs 12..23)
+    topic_partition_offsets: HashMap<String, u32>,
+    /// Total number of partitions across all topics (sum).
+    total_partitions: u32,
+    /// Timeout used for calls to broker.
+    session_timeout: Duration,
 }
 
 impl KafkaActor {
@@ -170,6 +195,16 @@ impl KafkaActor {
 
         // The consumer.subscribe() will not fail even if the credentials are invalid.
         // To ensure creds/certificates are valid, we make a call to pending_messages() before starting the actor.
+
+        // Build topic partition offsets for global partition ID normalization.
+        let (topic_partition_offsets, total_partitions) =
+            Self::compute_topic_partition_offsets(&consumer, &config.topics)?;
+
+        let session_timeout = client_config
+            .get("session.timeout.ms")
+            .and_then(|v| v.parse().ok())
+            .map_or(Duration::from_millis(45_000), Duration::from_millis);
+
         let mut actor = KafkaActor {
             consumer,
             read_timeout,
@@ -177,6 +212,9 @@ impl KafkaActor {
             topics: config.topics,
             handler_rx,
             cancel_token,
+            topic_partition_offsets,
+            total_partitions,
+            session_timeout,
         };
 
         actor
@@ -245,10 +283,10 @@ impl KafkaActor {
                     .inspect_err(|e| {
                         error!(
                             ?e,
-                            "Failed to send partition count from Kafka actor to main task"
+                            "Failed to send partition info from Kafka actor to main task"
                         );
                     })
-                    .expect("Failed to send partition count from Kafka actor to main task");
+                    .expect("Failed to send partition info from Kafka actor to main task");
             }
         }
     }
@@ -330,12 +368,23 @@ impl KafkaActor {
                     };
 
                     let timestamp = message.timestamp().to_millis();
+                    let topic = message.topic().to_string();
+                    let partition = message.partition();
+                    let topic_offset = self.topic_partition_offsets.get(&topic).copied().unwrap_or_else(|| {
+                        warn!(topic = topic, "Topic not found in partition offset map, defaulting to 0");
+                        0
+                    });
+                    let partition_u32 = u32::try_from(partition)
+                        .expect("Kafka partition id should not be negative");
+                    let global_partition_id = u16::try_from(topic_offset + partition_u32)
+                        .expect("Global partition id overflows u16");
 
                     let message = KafkaMessage {
-                        topic: message.topic().to_string(),
+                        topic,
                         value,
                         key: message.key().map(|k| String::from_utf8_lossy(k).to_string()),
-                        partition: message.partition(),
+                        partition,
+                        global_partition_id,
                         offset: message.offset(),
                         headers,
                         timestamp,
@@ -432,7 +481,7 @@ impl KafkaActor {
     /// The total pending is calculated as the sum of (high watermark - committed offset)
     /// for each partition across all topics.
     async fn pending_messages(&mut self) -> Result<Option<usize>> {
-        let timeout = Duration::from_secs(5);
+        let timeout = self.session_timeout;
         let mut handles = Vec::new();
         for topic in &self.topics {
             let consumer = Arc::clone(&self.consumer);
@@ -487,52 +536,95 @@ impl KafkaActor {
         Ok(Some(total_pending))
     }
 
-    /// Returns the partition IDs of the topic with the maximum number of partitions.
-    /// Since we support specifying multiple topics, this method returns the Vec of partition IDs
-    /// from the topic that has the most partitions among all configured topics.
-    async fn partitions_info(&mut self) -> Result<Vec<i32>> {
+    /// Computes the global partition offset map and total partition count from broker metadata.
+    ///
+    /// Topics are sorted alphabetically for deterministic ordering. Each topic gets an offset
+    /// of `sorted_index * max_partitions_per_topic`, so global IDs never collide across topics
+    /// (e.g. topic1[0..11] -> 0..11, topic2[0..11] -> 12..23).
+    fn compute_topic_partition_offsets(
+        consumer: &NumaflowConsumer,
+        topics: &[String],
+    ) -> Result<(HashMap<String, u32>, u32)> {
         let timeout = Duration::from_secs(5);
-        let mut handles = Vec::new();
-        for topic in &self.topics {
-            let consumer = Arc::clone(&self.consumer);
-            let topic = topic.clone();
+        let mut sorted_topics = topics.to_vec();
+        sorted_topics.sort();
 
-            // fetch_metadata internally calls [rd_kafka_metadata](https://docs.confluent.io/platform/current/clients/librdkafka/html/rdkafka_8h.html#a84bba4a4b13fdb515f1a22d6fd4f7344)
-            // This may be a blocking call, so we spawn a new task to run it.
-            handles.push(tokio::task::spawn_blocking(move || {
-                let metadata = consumer
-                    .fetch_metadata(Some(&topic), timeout)
-                    .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {e}")))?;
-                let Some(topic_metadata) = metadata.topics().first() else {
-                    warn!(topic = topic, "No topic metadata found");
-                    return Ok(Vec::new());
-                };
-                let partitions: Vec<i32> =
-                    topic_metadata.partitions().iter().map(|p| p.id()).collect();
-                Ok(partitions)
-            }));
+        let mut max_per_topic: u32 = 0;
+        let mut per_topic_counts: Vec<(String, u32)> = Vec::new();
+        for topic in &sorted_topics {
+            let metadata = consumer
+                .fetch_metadata(Some(topic), timeout)
+                .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {e}")))?;
+            let count = metadata
+                .topics()
+                .first()
+                .map(|t| t.partitions().len() as u32)
+                .unwrap_or(0);
+            max_per_topic = max_per_topic.max(count);
+            per_topic_counts.push((topic.clone(), count));
         }
-        let mut max_partitions = 0;
-        let mut result: Vec<i32> = Vec::new();
-        for handle in handles {
-            match handle.await {
-                Ok(Ok(partitions)) => {
-                    if partitions.len() > max_partitions {
-                        max_partitions = partitions.len();
-                        result = partitions;
-                    }
-                }
-                Ok(Err(e)) => {
-                    error!(?e, "Error fetching partitions info");
-                    return Err(e);
-                }
-                Err(e) => {
-                    error!(?e, "Tokio task join error fetching partitions info");
-                    return Err(Error::Other(format!("Tokio task join error: {e}")));
-                }
-            }
+
+        let mut offsets: HashMap<String, u32> = HashMap::new();
+        let mut total: u32 = 0;
+        for (i, (topic, count)) in per_topic_counts.iter().enumerate() {
+            offsets.insert(topic.clone(), i as u32 * max_per_topic);
+            total += count;
         }
-        Ok(result)
+        Ok((offsets, total))
+    }
+
+    /// Returns partition information including globally normalized active partition IDs
+    /// and total partitions across all configured topics.
+    ///
+    /// Each (topic, partition) pair is mapped to a unique global ID using
+    /// `topic_partition_offsets`: global_id = topic_offset + partition.
+    ///
+    /// Refreshes the topic partition offset map from broker metadata on each call to
+    /// handle runtime partition count changes (e.g., topic expansion).
+    async fn partitions_info(&mut self) -> Result<KafkaPartitionsInfo> {
+        // Refresh the topic partition offsets from metadata to pick up any
+        // partition count changes since startup.
+        let consumer = Arc::clone(&self.consumer);
+        let topics = self.topics.clone();
+        let (offsets, total) = tokio::task::spawn_blocking(move || {
+            Self::compute_topic_partition_offsets(&consumer, &topics)
+        })
+        .await
+        .map_err(|e| Error::Other(format!("Tokio task join error: {e}")))??;
+        self.topic_partition_offsets = offsets;
+        self.total_partitions = total;
+
+        let active_partitions = self
+            .consumer
+            .assignment()
+            .map_err(|e| Error::Kafka(format!("Failed to get consumer assignment: {e}")))
+            .map(|tpl| {
+                tpl.elements()
+                    .iter()
+                    .map(|elem| {
+                        let topic_offset = self
+                            .topic_partition_offsets
+                            .get(elem.topic())
+                            .copied()
+                            .unwrap_or_else(|| {
+                                warn!(
+                                    topic = elem.topic(),
+                                    "Topic not found in partition offset map, defaulting to 0"
+                                );
+                                0
+                            });
+                        let partition = u32::try_from(elem.partition())
+                            .expect("Kafka partition id should not be negative");
+                        u16::try_from(topic_offset + partition)
+                            .expect("Global partition id overflows u16")
+                    })
+                    .collect::<Vec<u16>>()
+            })?;
+
+        Ok(KafkaPartitionsInfo {
+            active_partitions,
+            total_partitions: self.total_partitions,
+        })
     }
 }
 
@@ -580,7 +672,7 @@ impl KafkaSource {
             .map_err(|_| Error::Other("Actor task terminated".into()))?
     }
 
-    pub async fn partitions_info(&self) -> Result<Vec<i32>> {
+    pub async fn partitions_info(&self) -> Result<KafkaPartitionsInfo> {
         let (tx, rx) = oneshot::channel();
         let msg = KafkaActorMessage::PartitionsInfo { respond_to: tx };
         let _ = self.actor_tx.send(msg).await;

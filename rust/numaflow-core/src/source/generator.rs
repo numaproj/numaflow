@@ -198,7 +198,6 @@ mod stream_generator {
                 // Set default metadata so that metadata is always present.
                 metadata: Some(Arc::new(crate::metadata::Metadata::default())),
                 is_late: false,
-                ack_handle: None,
             }
         }
 
@@ -378,8 +377,11 @@ impl source::SourceReader for GeneratorRead {
         Some(Ok(self.stream_generator.next().await?))
     }
 
-    async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
-        Ok(vec![*get_vertex_replica()])
+    async fn partitions(&mut self) -> crate::error::Result<source::SourcePartitions> {
+        Ok(source::SourcePartitions::new(
+            vec![*get_vertex_replica()],
+            None,
+        ))
     }
 }
 

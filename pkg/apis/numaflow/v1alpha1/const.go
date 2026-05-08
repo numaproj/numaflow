@@ -154,6 +154,8 @@ const (
 	VertexMonitorPortName       = "monitor"
 	VertexHTTPSPort             = 8443
 	VertexHTTPSPortName         = "https"
+	VertexHTTPPort              = 8090
+	VertexHTTPPortName          = "http"
 	DaemonServicePort           = 4327
 	MonoVertexMetricsPort       = 2469
 	MonoVertexMetricsPortName   = "metrics"
@@ -196,12 +198,12 @@ const (
 	PipelineStatusUnhealthy = "unhealthy"
 
 	// MonoVertex health status
-	// TODO - more statuses to be added
 	MonoVertexStatusHealthy   = "healthy"
 	MonoVertexStatusUnhealthy = "unhealthy"
 	MonoVertexStatusUnknown   = "unknown"
 	MonoVertexStatusCritical  = "critical"
 	MonoVertexStatusWarning   = "warning"
+	MonoVertexStatusInactive  = "inactive"
 
 	// DefaultRetryInterval specifies the default initial retry duration in case of exponential backoff.
 	// In case of fixed interval retry strategy, it is the default retry interval.
