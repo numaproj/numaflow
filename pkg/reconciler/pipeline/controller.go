@@ -659,6 +659,18 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 		// Resolve and set the effective ordered config on the vertex
 		// This merges pipeline-level and vertex-level ordered config so the vertex is self-contained
 		resolveOrderedConfig(pl, vCopy)
+		// When ordered processing is enabled on a Map/Sink vertex, force the in-flight cap to 1 so
+		// each partition processes one message at a time. Source and Reduce vertices preserve order
+		// by other means (single-stream-per-replica routing for sources, partition-by-key for
+		// reduce), so we leave their concurrency alone. We override even if the user set
+		// concurrency explicitly: ordered processing without concurrency=1 would silently violate
+		// the FIFO contract.
+		if vCopy.IsOrdered() && (vCopy.IsMapUDF() || vCopy.IsASink()) {
+			if vCopy.Limits == nil {
+				vCopy.Limits = &dfv1.VertexLimits{}
+			}
+			vCopy.Limits.Concurrency = ptr.To[uint64](1)
+		}
 		replicas := int32(1)
 		// If the desired phase is paused, or we are in the middle of pausing we should not start any vertex replicas
 		if isLifecycleChange(pl) {

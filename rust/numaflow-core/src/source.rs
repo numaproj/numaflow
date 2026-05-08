@@ -1067,9 +1067,12 @@ mod tests {
         .unwrap();
 
         let tracker = Tracker::new(None, CancellationToken::new());
+        // Concurrency is large enough to comfortably hold 50 unacked messages plus read-ahead
+        // batches; matches the previous behavior that depended on the now-removed 10000-message
+        // MAX_ACK_PENDING constant.
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,
-            5,
+            10000,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
             tracker.clone(),
             true,
