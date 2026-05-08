@@ -766,6 +766,7 @@ func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.
 		result.ReadBatchSize = vLimits.ReadBatchSize
 		result.ReadTimeout = vLimits.ReadTimeout
 		result.RateLimit = vLimits.RateLimit
+		result.Concurrency = vLimits.Concurrency
 	}
 	if result.ReadBatchSize == nil {
 		result.ReadBatchSize = plLimits.ReadBatchSize
@@ -781,6 +782,9 @@ func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.
 	}
 	if result.RateLimit == nil {
 		result.RateLimit = plLimits.RateLimit
+	}
+	if result.Concurrency == nil {
+		result.Concurrency = plLimits.Concurrency
 	}
 	if result.RateLimit != nil && result.RateLimit.Max == nil {
 		result.RateLimit.Max = plLimits.RateLimit.Max

@@ -4135,6 +4135,10 @@ spec:
                 type: object
               limits:
                 properties:
+                  concurrency:
+                    default: 500
+                    format: int64
+                    type: integer
                   rateLimit:
                     properties:
                       max:
@@ -9931,6 +9935,10 @@ spec:
                   bufferUsageLimit:
                     default: 80
                     format: int32
+                    type: integer
+                  concurrency:
+                    default: 500
+                    format: int64
                     type: integer
                   rateLimit:
                     properties:
@@ -17019,6 +17027,9 @@ spec:
                         bufferUsageLimit:
                           format: int32
                           type: integer
+                        concurrency:
+                          format: int64
+                          type: integer
                         rateLimit:
                           properties:
                             max:
@@ -23057,6 +23068,10 @@ spec:
                       bufferUsageLimit:
                         default: 80
                         format: int32
+                        type: integer
+                      concurrency:
+                        default: 500
+                        format: int64
                         type: integer
                       rateLimit:
                         properties:
@@ -30144,6 +30159,9 @@ spec:
                               type: integer
                             bufferUsageLimit:
                               format: int32
+                              type: integer
+                            concurrency:
+                              format: int64
                               type: integer
                             rateLimit:
                               properties:
@@ -38000,6 +38018,9 @@ spec:
                         bufferUsageLimit:
                           format: int32
                           type: integer
+                        concurrency:
+                          format: int64
+                          type: integer
                         rateLimit:
                           properties:
                             max:
@@ -38253,6 +38274,9 @@ spec:
                           type: integer
                         bufferUsageLimit:
                           format: int32
+                          type: integer
+                        concurrency:
+                          format: int64
                           type: integer
                         rateLimit:
                           properties:
@@ -39463,6 +39487,9 @@ spec:
                     type: integer
                   bufferUsageLimit:
                     format: int32
+                    type: integer
+                  concurrency:
+                    format: int64
                     type: integer
                   rateLimit:
                     properties:
@@ -44121,6 +44148,9 @@ spec:
                         bufferUsageLimit:
                           format: int32
                           type: integer
+                        concurrency:
+                          format: int64
+                          type: integer
                         rateLimit:
                           properties:
                             max:
@@ -44374,6 +44404,9 @@ spec:
                           type: integer
                         bufferUsageLimit:
                           format: int32
+                          type: integer
+                        concurrency:
+                          format: int64
                           type: integer
                         rateLimit:
                           properties:

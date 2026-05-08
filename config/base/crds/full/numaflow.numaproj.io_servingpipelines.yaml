@@ -131,6 +131,10 @@ spec:
                         default: 80
                         format: int32
                         type: integer
+                      concurrency:
+                        default: 500
+                        format: int64
+                        type: integer
                       rateLimit:
                         properties:
                           max:
@@ -7217,6 +7221,9 @@ spec:
                               type: integer
                             bufferUsageLimit:
                               format: int32
+                              type: integer
+                            concurrency:
+                              format: int64
                               type: integer
                             rateLimit:
                               properties:

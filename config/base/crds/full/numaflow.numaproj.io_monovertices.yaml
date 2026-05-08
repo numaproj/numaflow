@@ -2609,6 +2609,10 @@ spec:
                 type: object
               limits:
                 properties:
+                  concurrency:
+                    default: 500
+                    format: int64
+                    type: integer
                   rateLimit:
                     properties:
                       max:

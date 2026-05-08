@@ -431,6 +431,12 @@ func (p Pipeline) GetPipelineLimits() PipelineLimits {
 		if x.RateLimit != nil {
 			limits.RateLimit = x.RateLimit
 		}
+		if x.Concurrency != nil {
+			limits.Concurrency = x.Concurrency
+		}
+	}
+	if limits.Concurrency == nil {
+		limits.Concurrency = limits.ReadBatchSize
 	}
 	return limits
 }
@@ -675,6 +681,8 @@ type Templates struct {
 
 type PipelineLimits struct {
 	// Read batch size for all the vertices in the pipeline, can be overridden by the vertex's limit settings.
+	// ReadBatchSize controls only how many messages are fetched in a single read call from the source/buffer;
+	// it is not a cap on how many messages may be in-flight (use `concurrency` for that).
 	// +kubebuilder:default=500
 	// +optional
 	ReadBatchSize *uint64 `json:"readBatchSize,omitempty" protobuf:"varint,1,opt,name=readBatchSize"`
@@ -700,6 +708,21 @@ type PipelineLimits struct {
 	// Reduce does not support RateLimit.
 	// +optional
 	RateLimit *RateLimit `json:"rateLimit,omitempty" protobuf:"bytes,5,opt,name=rateLimit"`
+	// Concurrency defines the maximum number of messages that can be actively in-flight (read but not
+	// yet acknowledged) at any given time across each vertex of the pipeline. With read-ahead enabled,
+	// the data plane keeps reading new batches from the source/buffer until the number of in-flight
+	// messages reaches `concurrency`; once that ceiling is hit, one more batch may be pre-fetched and
+	// held ready so that completed messages can be replaced immediately. Therefore the maximum
+	// in-flight count per vertex is at most `concurrency + readBatchSize`.
+	// `readBatchSize` controls only the size of an individual read; `concurrency` controls how many
+	// messages can be processed in parallel. By default, read-ahead is disabled on source vertices
+	// (so re-reads on failure stay cheap and source ordering is preserved) and enabled on Map/Sink/
+	// Reduce vertices. To force strictly sequential processing, set `concurrency` to 1 and disable
+	// read-ahead via the `READ_AHEAD` environment variable on the vertex's container template.
+	// Can be overridden by the vertex's limit settings.
+	// +kubebuilder:default=500
+	// +optional
+	Concurrency *uint64 `json:"concurrency,omitempty" protobuf:"varint,6,opt,name=concurrency"`
 }
 
 type PipelineStatus struct {

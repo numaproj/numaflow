@@ -68,7 +68,6 @@ pub(crate) mod test_utils;
 use crate::transformer::Transformer;
 use crate::watermark::source::{SourceWatermarkEntry, SourceWatermarkHandle};
 
-const MAX_ACK_PENDING: usize = 10000;
 const ACK_RETRY_INTERVAL: u64 = 100;
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 const NACK_RETRY_ATTEMPTS: usize = 1200; // 100ms apart, total=2 minutes
@@ -243,6 +242,9 @@ where
 #[derive(Clone)]
 pub(crate) struct Source<C: crate::typ::NumaflowTypeConfig> {
     read_batch_size: usize,
+    /// Cap on in-flight (read-but-not-acked) messages from this source. Sourced from
+    /// `Limits.Concurrency` on the vertex/MonoVertex spec.
+    concurrency: usize,
     sender: mpsc::Sender<ActorMessage>,
     tracker: Tracker,
     read_ahead: bool,
@@ -261,6 +263,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn new(
         batch_size: usize,
+        concurrency: usize,
         src_type: SourceType,
         tracker: Tracker,
         read_ahead: bool,
@@ -368,6 +371,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
         Self {
             read_batch_size: batch_size,
+            concurrency,
             sender,
             tracker,
             read_ahead,
@@ -463,14 +467,20 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         ));
         let mvtx_labels = mvtx_forward_metric_labels();
 
-        info!(?self.read_batch_size, "Started streaming source with batch size");
+        info!(
+            ?self.read_batch_size,
+            ?self.concurrency,
+            ?self.read_ahead,
+            "Started streaming source"
+        );
         let handle = tokio::spawn(async move {
-            // this semaphore is used only if read-ahead is disabled. we hold this semaphore to
-            // make sure we can read only if the current inflight ones are ack'ed. If read ahead
-            // is enabled you can have upto (max_ack_pending / read_batch_size) ack tasks. We
-            // divide by read_batch_size because we do batch acking in source.
+            // The semaphore caps the number of in-flight ack tasks. With read-ahead disabled, we
+            // allow exactly one batch in flight (sequential processing). With read-ahead enabled,
+            // we allow up to `concurrency` in-flight messages, divided by `read_batch_size` because
+            // we do batch acking. We always allow at least one task so a `concurrency` smaller than
+            // `read_batch_size` still makes progress.
             let max_ack_tasks = match &self.read_ahead {
-                true => MAX_ACK_PENDING / self.read_batch_size,
+                true => std::cmp::max(1, self.concurrency / self.read_batch_size.max(1)),
                 false => 1,
             };
             let semaphore = Arc::new(Semaphore::new(max_ack_tasks));
@@ -1058,6 +1068,7 @@ mod tests {
 
         let tracker = Tracker::new(None, CancellationToken::new());
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
+            5,
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
             tracker.clone(),

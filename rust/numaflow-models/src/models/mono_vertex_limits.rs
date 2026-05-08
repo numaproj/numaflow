@@ -18,9 +18,12 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MonoVertexLimits {
+    /// Concurrency defines the maximum number of messages that can be actively in-flight (read but not yet acknowledged) at any given time. With read-ahead enabled, the data plane keeps reading new batches from the source until the number of in-flight messages reaches `concurrency`; once that ceiling is hit, one more batch may be pre-fetched and held ready so that completed messages can be replaced immediately. Therefore the maximum in-flight count is at most `concurrency + readBatchSize`. With read-ahead disabled (the default for MonoVertex, since the MonoVertex always reads from a source), the data plane drains the current batch fully before the next read, so the upper bound becomes `min(concurrency, readBatchSize)`. `readBatchSize` controls only the size of an individual read; `concurrency` controls how many messages can be processed in parallel. To force strictly sequential processing, set `concurrency` to 1 (read-ahead is already off by default for MonoVertex).
+    #[serde(rename = "concurrency", skip_serializing_if = "Option::is_none")]
+    pub concurrency: Option<i64>,
     #[serde(rename = "rateLimit", skip_serializing_if = "Option::is_none")]
     pub rate_limit: Option<Box<crate::models::RateLimit>>,
-    /// Read batch size from the source.
+    /// Read batch size from the source. ReadBatchSize controls only how many messages are fetched in a single read call from the source; it is not a cap on how many messages may be in-flight (use `concurrency` for that).
     #[serde(rename = "readBatchSize", skip_serializing_if = "Option::is_none")]
     pub read_batch_size: Option<i64>,
     #[serde(rename = "readTimeout", skip_serializing_if = "Option::is_none")]
@@ -30,6 +33,7 @@ pub struct MonoVertexLimits {
 impl MonoVertexLimits {
     pub fn new() -> MonoVertexLimits {
         MonoVertexLimits {
+            concurrency: None,
             rate_limit: None,
             read_batch_size: None,
             read_timeout: None,
