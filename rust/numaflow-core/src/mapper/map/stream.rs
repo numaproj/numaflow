@@ -6,19 +6,19 @@ use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
 use crate::{mark_failed, mark_success};
-use numaflow_pb::clients::map::{self, map_client::MapClient, MapRequest, MapResponse};
-use tokio::sync::{mpsc, OwnedSemaphorePermit};
+use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
+use tokio::sync::{OwnedSemaphorePermit, mpsc};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
-use tonic::transport::Channel;
 use tonic::Streaming;
+use tonic::transport::Channel;
 use tracing::{error, info, warn};
 
 use super::{
-    create_response_stream, update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
-    update_udf_write_only_metric, ParentMessageInfo, SharedMapTaskContext,
-    UserDefinedMessage, STREAMING_MAP_RESP_CHANNEL_SIZE,
+    ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
+    create_response_stream, update_udf_error_metric, update_udf_process_time_metric,
+    update_udf_read_metric, update_udf_write_only_metric,
 };
 
 /// Type alias for the stream response - raw results from the UDF
@@ -90,6 +90,9 @@ impl MapStreamTask {
 
         info!(?self.msg_handle.message.id, "Received message id");
 
+        let mut produced_count: u32 = 0;
+        let mut sent_count: u32 = 0;
+
         loop {
             tokio::select! {
                 result = receiver.recv() => {
@@ -106,6 +109,7 @@ impl MapStreamTask {
                                         )
                                         .into();
                                         parent_info.current_index += 1;
+                                        produced_count += 1;
 
                                         update_udf_write_only_metric(self.shared_ctx.is_mono_vertex);
 
@@ -139,23 +143,34 @@ impl MapStreamTask {
                                             msg_handle
                                         };
 
-                                        info!(?msg_handle.message.id, "Sending message id");
+                                        info!(
+                                            parent_id = ?self.msg_handle.message.id,
+                                            child_id = ?msg_handle.message.id,
+                                            "Sending message id"
+                                        );
 
                                         self.shared_ctx
                                             .output_tx
                                             .send(msg_handle)
                                             .await
                                             .expect("failed to send response");
+                                        sent_count += 1;
                                     }
                                 }
                                 // received EOT response, ok to end monitoring the stream
                                 StreamMapResponse::Eot => {
+                                    info!(
+                                        parent_id = ?self.msg_handle.message.id,
+                                        produced = produced_count,
+                                        sent = sent_count,
+                                        "stream complete"
+                                    );
                                     break;
                                 }
                             }
                         }
                         Some(Err(e)) => {
-                            error!(?e, "failed to map message");
+                            error!(parent_id = ?self.msg_handle.message.id, ?e, "failed to map message");
                             mark_failed!(self.msg_handle, &e);
                             let _ = self.shared_ctx.error_tx.send(e).await;
                             return;
@@ -163,7 +178,7 @@ impl MapStreamTask {
                         None => {
                             // Channel closed — stream ended abruptly
                             let e = Error::Mapper("Did not receive EOT from stream receiver task".into());
-                            error!(?e, "failed to map message");
+                            error!(parent_id = ?self.msg_handle.message.id, ?e, "failed to map message");
                             mark_failed!(self.msg_handle, &e);
                             let _ = self.shared_ctx.error_tx.send(e).await;
                             return;
@@ -172,7 +187,7 @@ impl MapStreamTask {
                 }
                 _ = self.shared_ctx.hard_shutdown_token.cancelled() => {
                     let e = Error::Mapper("Map Stream cancelled, current message will be nacked".into());
-                    warn!(?e, "failed to map message");
+                    warn!(parent_id = ?self.msg_handle.message.id, ?e, "failed to map message");
                     mark_failed!(self.msg_handle, &e);
                     return;
                 }
