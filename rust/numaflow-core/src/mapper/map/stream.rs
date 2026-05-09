@@ -6,19 +6,19 @@ use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
 use crate::{mark_failed, mark_success};
-use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
-use tokio::sync::{OwnedSemaphorePermit, mpsc};
+use numaflow_pb::clients::map::{self, map_client::MapClient, MapRequest, MapResponse};
+use tokio::sync::{mpsc, OwnedSemaphorePermit};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
-use tonic::Streaming;
 use tonic::transport::Channel;
+use tonic::Streaming;
 use tracing::{error, info, warn};
 
 use super::{
-    ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
-    create_response_stream, update_udf_error_metric, update_udf_process_time_metric,
-    update_udf_read_metric, update_udf_write_only_metric,
+    create_response_stream, update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
+    update_udf_write_only_metric, ParentMessageInfo, SharedMapTaskContext,
+    UserDefinedMessage, STREAMING_MAP_RESP_CHANNEL_SIZE,
 };
 
 /// Type alias for the stream response - raw results from the UDF
@@ -194,6 +194,12 @@ impl MapStreamTask {
             }
         }
 
+        info!(
+            parent_id = ?self.msg_handle.message.id,
+            produced = produced_count,
+            sent = sent_count,
+            "marking message as successful"
+        );
         // Decrement the original ref_count now that we've accounted for all downstream messages.
         mark_success!(self.msg_handle);
     }
