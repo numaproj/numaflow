@@ -89,78 +89,87 @@ impl MapStreamTask {
             .expect("failed to reset tracker");
 
         loop {
-            let result = receiver.recv().await;
-            match result {
-                Some(Ok(stream_resp)) => {
-                    match stream_resp {
-                        StreamMapResponse::Data(results) => {
-                            // Convert raw results to Messages using parent info
-                            for result in results {
-                                let mapped_message: Message = UserDefinedMessage(
-                                    result,
-                                    &parent_info,
-                                    parent_info.current_index,
-                                )
-                                .into();
-                                parent_info.current_index += 1;
+            tokio::select! {
+                result = receiver.recv() => {
+                    match result {
+                        Some(Ok(stream_resp)) => {
+                            match stream_resp {
+                                StreamMapResponse::Data(results) => {
+                                    // Convert raw results to Messages using parent info
+                                    for result in results {
+                                        let mapped_message: Message = UserDefinedMessage(
+                                            result,
+                                            &parent_info,
+                                            parent_info.current_index,
+                                        )
+                                        .into();
+                                        parent_info.current_index += 1;
 
-                                update_udf_write_only_metric(self.shared_ctx.is_mono_vertex);
+                                        update_udf_write_only_metric(self.shared_ctx.is_mono_vertex);
 
-                                self.shared_ctx
-                                    .tracker
-                                    .serving_append(
-                                        mapped_message.offset.clone(),
-                                        mapped_message.tags.clone(),
-                                    )
-                                    .await
-                                    .expect("failed to update tracker");
+                                        self.shared_ctx
+                                            .tracker
+                                            .serving_append(
+                                                mapped_message.offset.clone(),
+                                                mapped_message.tags.clone(),
+                                            )
+                                            .await
+                                            .expect("failed to update tracker");
 
-                                // Each downstream handle shares the original ack tracking — ACK is
-                                // deferred until all mapped messages are written to ISB/sink.
-                                let msg_handle = self.msg_handle.with_message(mapped_message);
+                                        // Each downstream handle shares the original ack tracking — ACK is
+                                        // deferred until all mapped messages are written to ISB/sink.
+                                        let msg_handle = self.msg_handle.with_message(mapped_message);
 
-                                // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
-                                // If not bypassed, it returns Some(msg_handle) for us to send downstream.
-                                let msg_handle = if let Some(ref bypass_router) =
-                                    self.shared_ctx.bypass_router
-                                {
-                                    match bypass_router
-                                        .try_bypass(msg_handle)
-                                        .await
-                                        .expect("failed to send message to bypass channel")
-                                    {
-                                        Some(msg) => msg,
-                                        None => continue, // Message was bypassed, move to next
+                                        // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
+                                        // If not bypassed, it returns Some(msg_handle) for us to send downstream.
+                                        let msg_handle = if let Some(ref bypass_router) =
+                                            self.shared_ctx.bypass_router
+                                        {
+                                            match bypass_router
+                                                .try_bypass(msg_handle)
+                                                .await
+                                                .expect("failed to send message to bypass channel")
+                                            {
+                                                Some(msg) => msg,
+                                                None => continue, // Message was bypassed, move to next
+                                            }
+                                        } else {
+                                            msg_handle
+                                        };
+
+                                        self.shared_ctx
+                                            .output_tx
+                                            .send(msg_handle)
+                                            .await
+                                            .expect("failed to send response");
                                     }
-                                } else {
-                                    msg_handle
-                                };
-
-                                self.shared_ctx
-                                    .output_tx
-                                    .send(msg_handle)
-                                    .await
-                                    .expect("failed to send response");
+                                }
+                                // received EOT response, ok to end monitoring the stream
+                                StreamMapResponse::Eot => {
+                                    break;
+                                }
                             }
                         }
-                        // received EOT response, ok to end monitoring the stream
-                        StreamMapResponse::Eot => {
-                            break;
+                        Some(Err(e)) => {
+                            error!(?e, "failed to map message");
+                            mark_failed!(self.msg_handle, &e);
+                            let _ = self.shared_ctx.error_tx.send(e).await;
+                            return;
+                        }
+                        None => {
+                            // Channel closed — stream ended abruptly
+                            let e = Error::Mapper("Did not receive EOT from stream receiver task".into());
+                            error!(?e, "failed to map message");
+                            mark_failed!(self.msg_handle, &e);
+                            let _ = self.shared_ctx.error_tx.send(e).await;
+                            return;
                         }
                     }
                 }
-                Some(Err(e)) => {
-                    error!(?e, "failed to map message");
+                _ = self.shared_ctx.hard_shutdown_token.cancelled() => {
+                    let e = Error::Mapper("Map Stream cancelled, current message will be nacked".into());
+                    warn!(?e, "failed to map message");
                     mark_failed!(self.msg_handle, &e);
-                    let _ = self.shared_ctx.error_tx.send(e).await;
-                    return;
-                }
-                None => {
-                    // Channel closed — stream ended abruptly
-                    let e = Error::Mapper("Did not receive EOT from stream receiver task".into());
-                    error!(?e, "failed to map message");
-                    mark_failed!(self.msg_handle, &e);
-                    let _ = self.shared_ctx.error_tx.send(e).await;
                     return;
                 }
             }
@@ -383,6 +392,8 @@ impl UserDefinedStreamMap {
             let _ = tx
                 .send(Err(Error::Mapper("mapper closed".to_string())))
                 .await;
+
+            return rx;
         }
 
         // only insert if we are able to send the message to the server
