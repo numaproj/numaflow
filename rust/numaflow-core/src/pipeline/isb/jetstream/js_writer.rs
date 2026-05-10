@@ -1,17 +1,18 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use async_nats::jetstream::Context;
 use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::context::{PublishAckFuture, PublishErrorKind};
 use async_nats::jetstream::message::PublishMessage;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
-use async_nats::jetstream::Context;
 use bytes::{Bytes, BytesMut};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
 
+use crate::Result;
 use crate::config::pipeline::isb::{BufferWriterConfig, CompressionType, Stream};
 use crate::error::Error;
 use crate::message::Message;
@@ -20,7 +21,6 @@ use crate::metrics::{
 };
 use crate::pipeline::isb::compression;
 use crate::pipeline::isb::error::ISBError;
-use crate::Result;
 
 /// Type alias for metric labels
 type MetricLabels = Arc<Vec<(String, String)>>;
