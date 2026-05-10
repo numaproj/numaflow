@@ -37,7 +37,7 @@ const (
 	healthSlidingWindow = 5 * time.Minute
 
 	// healthTimeStep is the frequency at which the health of a vertex is computed
-	healthTimeStep = 10 * time.Second
+	healthTimeStep = 500 * time.Millisecond
 
 	// healthWindowSize is the number of timeline entries to keep for a given vertex
 	// This is used to compute the health of a vertex
