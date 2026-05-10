@@ -341,7 +341,7 @@ impl UserDefinedStreamMap {
 
             if mapper_closed {
                 let _ = response_sender
-                    .send(Err(Error::Mapper("mapper closed".to_string())))
+                    .send(Err(Error::Mapper("stream mapper closed".to_string())))
                     .await;
                 return Ok(());
             }

@@ -496,6 +496,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         for mut message in batch.drain(..) {
             // Skip WMB control messages
             if let MessageType::WMB = message.typ {
+                // TODO: Ack with retry
                 self.reader.ack(&message.offset).await?;
                 continue;
             }
