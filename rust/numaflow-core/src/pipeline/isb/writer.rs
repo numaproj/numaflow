@@ -835,6 +835,9 @@ mod tests {
             .await
             .unwrap();
 
+        // Wait for background task to update is_full to false (initialized to true)
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
         let mut ack_rxs = vec![];
         // Send some messages
         for i in 0..5 {

@@ -669,6 +669,9 @@ mod tests {
         .await
         .unwrap();
 
+        // Wait for background task to update is_full to false (initialized to true)
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
         let message = Message {
             typ: Default::default(),
             keys: Arc::from(vec!["key_test".to_string()]),
@@ -740,6 +743,9 @@ mod tests {
         )
         .await
         .unwrap();
+
+        // Wait for background task to update is_full to false (initialized to true)
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
         let message = Message {
             typ: Default::default(),
