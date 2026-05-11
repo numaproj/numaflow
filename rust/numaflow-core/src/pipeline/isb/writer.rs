@@ -810,6 +810,17 @@ mod tests {
             .unwrap(),
         );
 
+        // Wait until is_full flips to false — it is initialized to true and the
+        // background task flips it after the first stream poll. Without this,
+        // the orchestrator's retry-on-BufferFull races with cln_token.cancel().
+        tokio::time::timeout(tokio::time::Duration::from_secs(2), async {
+            while writers.get(stream.name).unwrap().is_full() {
+                tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            }
+        })
+        .await
+        .expect("timed out waiting for buffer to become available");
+
         let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
             ISBWriterOrchestratorComponents {
                 config: vec![ToVertexConfig {
@@ -834,9 +845,6 @@ mod tests {
             .streaming_write(messages_stream, cln_token.clone())
             .await
             .unwrap();
-
-        // Wait for background task to update is_full to false (initialized to true)
-        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
         let mut ack_rxs = vec![];
         // Send some messages

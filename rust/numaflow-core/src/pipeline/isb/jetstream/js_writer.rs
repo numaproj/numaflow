@@ -669,9 +669,6 @@ mod tests {
         .await
         .unwrap();
 
-        // Wait for background task to update is_full to false (initialized to true)
-        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-
         let message = Message {
             typ: Default::default(),
             keys: Arc::from(vec!["key_test".to_string()]),
@@ -688,7 +685,20 @@ mod tests {
             ..Default::default()
         };
 
-        let result = writer.async_write(message).await;
+        // Retry on BufferFull until 2s timeout — is_full is initialized to true and
+        // the background task flips it to false after the first stream poll.
+        let result = tokio::time::timeout(tokio::time::Duration::from_secs(2), async {
+            loop {
+                match writer.async_write(message.clone()).await {
+                    Err(WriteError::BufferFull) => {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                    }
+                    other => break other,
+                }
+            }
+        })
+        .await
+        .expect("timed out waiting for buffer to become available");
         assert!(
             result.is_ok(),
             "async_write with compression should succeed"
@@ -744,9 +754,6 @@ mod tests {
         .await
         .unwrap();
 
-        // Wait for background task to update is_full to false (initialized to true)
-        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-
         let message = Message {
             typ: Default::default(),
             keys: Arc::from(vec!["key_test".to_string()]),
@@ -766,7 +773,20 @@ mod tests {
             ..Default::default()
         };
 
-        let result = writer.write(message).await;
+        // Retry on BufferFull until 2s timeout — is_full is initialized to true and
+        // the background task flips it to false after the first stream poll.
+        let result = tokio::time::timeout(tokio::time::Duration::from_secs(2), async {
+            loop {
+                match writer.write(message.clone()).await {
+                    Err(WriteError::BufferFull) => {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                    }
+                    other => break other,
+                }
+            }
+        })
+        .await
+        .expect("timed out waiting for buffer to become available");
         assert!(result.is_ok(), "write with compression should succeed");
 
         // Verify the WriteResult has the expected structure
