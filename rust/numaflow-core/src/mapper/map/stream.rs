@@ -1,5 +1,5 @@
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -7,19 +7,19 @@ use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
 use crate::{mark_failed, mark_success};
-use numaflow_pb::clients::map::{self, map_client::MapClient, MapRequest, MapResponse};
-use tokio::sync::{mpsc, OwnedSemaphorePermit};
+use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
+use tokio::sync::{OwnedSemaphorePermit, mpsc};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
-use tonic::transport::Channel;
 use tonic::Streaming;
+use tonic::transport::Channel;
 use tracing::{error, info, warn};
 
 use super::{
-    create_response_stream, update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
-    update_udf_write_only_metric, ParentMessageInfo, SharedMapTaskContext,
-    UserDefinedMessage, STREAMING_MAP_RESP_CHANNEL_SIZE,
+    ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
+    create_response_stream, update_udf_error_metric, update_udf_process_time_metric,
+    update_udf_read_metric, update_udf_write_only_metric,
 };
 
 /// Type alias for the stream response - raw results from the UDF
