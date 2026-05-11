@@ -65,6 +65,11 @@ pub(crate) struct JetStreamWriter {
 impl JetStreamWriter {
     /// Creates a new JetStreamWriter for a single stream and spawns a background task
     /// to monitor buffer fullness.
+    ///
+    /// The writer starts in a full state (`is_full = true`) and the background task updates
+    /// it after the first stream poll. Callers using `BufferFullStrategy::DiscardLatest`
+    /// should wait for `is_full()` to return `false` before sending messages to avoid
+    /// silent drops during the brief startup window.
     pub(crate) async fn new(
         stream: Stream,
         js_ctx: Context,
