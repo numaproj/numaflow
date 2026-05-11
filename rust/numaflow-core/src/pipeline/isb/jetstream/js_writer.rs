@@ -72,7 +72,7 @@ impl JetStreamWriter {
         compression_type: Option<CompressionType>,
         cln_token: CancellationToken,
     ) -> Result<Self> {
-        let is_full = Arc::new(AtomicBool::new(true));
+        let is_full = Arc::new(AtomicBool::new(false));
 
         // Build metric labels once during initialization
         let buffer_labels = Arc::new(jetstream_isb_metrics_labels(stream.name));
