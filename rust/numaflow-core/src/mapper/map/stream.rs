@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -6,19 +7,19 @@ use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
 use crate::{mark_failed, mark_success};
-use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
-use tokio::sync::{OwnedSemaphorePermit, mpsc};
+use numaflow_pb::clients::map::{self, map_client::MapClient, MapRequest, MapResponse};
+use tokio::sync::{mpsc, OwnedSemaphorePermit};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
-use tonic::Streaming;
 use tonic::transport::Channel;
+use tonic::Streaming;
 use tracing::{error, info, warn};
 
 use super::{
-    ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
-    create_response_stream, update_udf_error_metric, update_udf_process_time_metric,
-    update_udf_read_metric, update_udf_write_only_metric,
+    create_response_stream, update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
+    update_udf_write_only_metric, ParentMessageInfo, SharedMapTaskContext,
+    UserDefinedMessage, STREAMING_MAP_RESP_CHANNEL_SIZE,
 };
 
 /// Type alias for the stream response - raw results from the UDF
@@ -396,28 +397,38 @@ impl UserDefinedStreamMap {
 
         let key = request.id.clone();
 
-        // Move the senders_guard out of the scope to drop the guard before sending the response
+        // Move the senders_guard out of the scope to drop the guard before sending the response.
         // Do this before we send the message to the server to avoid the race condition
         // where the server processes the message faster than the corresponding sender
         // is added to the SenderMap.
-        let mapper_closed = {
+        //
+        // If an entry for `key` already exists, another task is in flight for the same
+        // request id (typically caused by a duplicate source read). We MUST NOT overwrite —
+        // doing so silently destroys the in-flight task's response sender and reroutes its
+        // remaining gRPC frames to this task's channel. Fail fast on this rx instead and
+        // let the caller NAK upstream.
+        let early_error = {
             let mut senders_guard = self
                 .senders
                 .lock()
                 .expect("failed to acquire poisoned lock");
-            if !senders_guard.closed {
-                // Write the sender back to the map, because we need to send
-                // more responses for the same request
-                senders_guard.map.insert(key.clone(), tx.clone());
+            if senders_guard.closed {
+                Some("mapper closed".to_string())
+            } else {
+                match senders_guard.map.entry(key.clone()) {
+                    Entry::Occupied(_) => Some(format!(
+                        "duplicate in-flight request id: {key}; refusing to overwrite existing sender"
+                    )),
+                    Entry::Vacant(slot) => {
+                        slot.insert(tx.clone());
+                        None
+                    }
+                }
             }
-            senders_guard.closed
         };
 
-        if mapper_closed {
-            let _ = tx
-                .send(Err(Error::Mapper("mapper closed".to_string())))
-                .await;
-
+        if let Some(reason) = early_error {
+            let _ = tx.send(Err(Error::Mapper(reason))).await;
             return rx;
         }
 
@@ -760,6 +771,113 @@ mod tests {
         assert!(
             !senders.lock().unwrap().map.contains_key("42"),
             "senders map should be cleaned up on read_tx send failure"
+        );
+    }
+
+    #[tokio::test]
+    async fn stream_method_rejects_duplicate_request_id() {
+        // Regression: two concurrent stream() calls for the same request id used to
+        // silently overwrite each other in `senders.map`. The first task's response
+        // sender was dropped and its in-flight gRPC frames were rerouted to the second
+        // task — leading to duplicate downstream child ids and a partial-ack incident
+        // (see misc/investigations/map-stream-loss.md).
+        //
+        // Expected behavior: the in-flight sender is preserved and the duplicate call
+        // returns an error on its own rx without touching the existing entry.
+
+        let (read_tx, mut read_rx) = mpsc::channel::<MapRequest>(10);
+
+        let dummy_handle = tokio::spawn(async {});
+        let abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+
+        let senders = Arc::new(Mutex::new(StreamSenderMapState::default()));
+        let mapper = UserDefinedStreamMap {
+            read_tx,
+            senders: Arc::clone(&senders),
+            _handle: abort_handle,
+        };
+
+        let make_request = |id: &str| MapRequest {
+            request: Some(numaflow_pb::clients::map::map_request::Request {
+                keys: vec!["k".into()],
+                value: b"v".to_vec(),
+                event_time: None,
+                watermark: None,
+                headers: Default::default(),
+                metadata: None,
+            }),
+            id: id.to_string(),
+            handshake: None,
+            status: None,
+        };
+
+        let cln_token = CancellationToken::new();
+
+        // First stream() call — inserts a sender for "dup-id" and forwards the request
+        // to the server side (here, read_rx). We hold rx_first so the channel stays
+        // alive and the map entry remains.
+        let mut rx_first = mapper
+            .stream(make_request("dup-id"), cln_token.clone())
+            .await;
+        let first_req = read_rx
+            .recv()
+            .await
+            .expect("first request should be forwarded to read_rx");
+        assert_eq!(first_req.id, "dup-id");
+
+        // Snapshot the sender pointer for "dup-id" so we can assert it was NOT replaced.
+        let first_sender_ptr = {
+            let guard = senders.lock().unwrap();
+            let sender = guard
+                .map
+                .get("dup-id")
+                .expect("first sender must be in the map");
+            sender.clone()
+        };
+
+        // Second stream() call with the SAME id — must fast-fail on its own rx without
+        // overwriting the existing entry or forwarding a request to the server.
+        let mut rx_dup = mapper
+            .stream(make_request("dup-id"), cln_token.clone())
+            .await;
+
+        let dup = tokio::time::timeout(Duration::from_millis(500), rx_dup.recv())
+            .await
+            .expect("duplicate rx must yield within 500ms (no hang on collision)")
+            .expect("duplicate rx must yield Some(err)");
+        let err = dup.expect_err("duplicate rx must yield Err variant");
+        assert!(matches!(err, MapError::Mapper(_)));
+        assert!(
+            err.to_string().contains("duplicate in-flight request id"),
+            "unexpected error message: {err}"
+        );
+
+        // The original sender must still be in the map AND must be the same Sender —
+        // not a fresh one inserted by the duplicate call.
+        {
+            let guard = senders.lock().unwrap();
+            let still = guard
+                .map
+                .get("dup-id")
+                .expect("first sender must remain in the map after collision is rejected");
+            assert!(
+                still.same_channel(&first_sender_ptr),
+                "duplicate stream() must not replace the in-flight sender"
+            );
+        }
+
+        // First rx must be untouched — no spurious error pushed onto it by the collision.
+        let no_error = tokio::time::timeout(Duration::from_millis(50), rx_first.recv()).await;
+        assert!(
+            no_error.is_err(),
+            "first rx must not receive anything when a duplicate stream() is rejected"
+        );
+
+        // The duplicate call must NOT have forwarded a request to the server.
+        let no_req = tokio::time::timeout(Duration::from_millis(50), read_rx.recv()).await;
+        assert!(
+            no_req.is_err(),
+            "duplicate stream() must not forward its request to the server"
         );
     }
 }
