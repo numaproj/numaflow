@@ -4,9 +4,9 @@
 
 Numaflow exposes three env vars for controlling log verbosity across its pods:
 
-- `NUMAFLOW_LOG_LEVEL` — sets the log level for all **Go** components (daemon, controller, webhook, UX server, ISB service jobs). Accepts any [zapcore level](https://pkg.go.dev/go.uber.org/zap/zapcore#Level) (`debug`, `info`, `warn`, `error`, etc.). Overrides the level implied by `NUMAFLOW_DEBUG`. Invalid values are silently ignored.
-- `RUST_LOG` — sets the log level for all **Rust** data-plane pods (vertex `numa` container, MonoVertex `numa` container, serving pods). Accepts standard [`tracing-subscriber` EnvFilter syntax](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) (e.g. `warn`, `numaflow_core=debug,info`).
-- `NUMAFLOW_DEBUG` — development shortcut honored by both runtimes; sets level to `debug` and switches log output from JSON to human-readable text. **Note:** the format change may break log shippers expecting JSON — prefer `NUMAFLOW_LOG_LEVEL` or `RUST_LOG` when only the level needs changing.
+- `NUMAFLOW_LOG_LEVEL` — sets the log level (`debug`, `info`, `warn`, `error`) for Numaflow-owned components. Overrides the level implied by `NUMAFLOW_DEBUG`.
+- `RUST_LOG` — advanced override for data-plane pods (vertex `numa` container, MonoVertex `numa` container, serving pods). Accepts standard [`tracing-subscriber` EnvFilter syntax](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) (e.g. `warn`, `numaflow_core=debug,info`) and takes precedence over `NUMAFLOW_LOG_LEVEL`.
+- `NUMAFLOW_DEBUG` — development shortcut; sets level to `debug` and may switch log output from JSON to human-readable text. **Note:** the format change may break log shippers expecting JSON — prefer `NUMAFLOW_LOG_LEVEL` when only the level needs changing.
 
 See [Log Levels](log-levels.md) for a full pod inventory, per-component YAML examples, and common recipes.
 

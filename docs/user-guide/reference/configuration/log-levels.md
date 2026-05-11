@@ -1,36 +1,36 @@
 # Log Levels
 
-Numaflow pods use two separate logging systems depending on whether they run Go or Rust code. This page explains how to control the log level for each.
+Numaflow-owned pods use `NUMAFLOW_LOG_LEVEL` as the standard log-level control. Data-plane pods also support `RUST_LOG` for advanced filtering.
 
 ## Quick reference
 
-| Pod / container | Runtime | Log-level env var | Default level |
-|---|---|---|---|
-| Pipeline daemon | Go | `NUMAFLOW_LOG_LEVEL` | `info` |
-| MonoVertex daemon | Go | `NUMAFLOW_LOG_LEVEL` | `info` |
-| ISB svc create / delete job | Go | `NUMAFLOW_LOG_LEVEL` | `info` |
-| ISB svc validate (init container) | Go | `NUMAFLOW_LOG_LEVEL` | `info` |
-| Controller (`numaflow-controller`) | Go | `NUMAFLOW_LOG_LEVEL` | `info` |
-| Webhook (`numaflow-webhook`) | Go | `NUMAFLOW_LOG_LEVEL` | `info` |
-| UX server (`numaflow-server`) | Go | `NUMAFLOW_LOG_LEVEL` | `info` |
-| Pipeline vertex `numa` container | Rust | `RUST_LOG` | `info` |
-| MonoVertex `numa` container | Rust | `RUST_LOG` | `info` |
-| Serving pod | Rust | `RUST_LOG` | `info` |
-| InterStepBufferService (JetStream / Redis) | upstream image | n/a | n/a |
+| Pod / container | Standard log-level env var | Default level |
+|---|---|---|
+| Pipeline daemon | `NUMAFLOW_LOG_LEVEL` | `info` |
+| MonoVertex daemon | `NUMAFLOW_LOG_LEVEL` | `info` |
+| ISB svc create / delete job | `NUMAFLOW_LOG_LEVEL` | `info` |
+| ISB svc validate (init container) | `NUMAFLOW_LOG_LEVEL` | `info` |
+| Controller (`numaflow-controller`) | `NUMAFLOW_LOG_LEVEL` | `info` |
+| Webhook (`numaflow-webhook`) | `NUMAFLOW_LOG_LEVEL` | `info` |
+| UX server (`numaflow-server`) | `NUMAFLOW_LOG_LEVEL` | `info` |
+| Pipeline vertex `numa` container | `NUMAFLOW_LOG_LEVEL` | `info` |
+| MonoVertex `numa` container | `NUMAFLOW_LOG_LEVEL` | `info` |
+| Serving pod | `NUMAFLOW_LOG_LEVEL` | `info` |
+| InterStepBufferService (JetStream / Redis) | n/a | n/a |
 
-`NUMAFLOW_DEBUG=true` is honored by **both** runtimes but has different effects (see [below](#numaflow_debug-interaction)).
+`NUMAFLOW_DEBUG=true` is also supported as a development shortcut (see [below](#numaflow_debug-interaction)).
 
 ---
 
-## Go components — `NUMAFLOW_LOG_LEVEL`
+## Standard log levels — `NUMAFLOW_LOG_LEVEL`
 
-All Go binaries (daemon, controller, webhook, UX server, ISB service jobs) use the shared `NewLogger()` helper, which reads `NUMAFLOW_LOG_LEVEL` at startup.
+Numaflow-owned components read `NUMAFLOW_LOG_LEVEL` at startup.
 
-**Accepted values:** any level recognized by [go.uber.org/zap/zapcore](https://pkg.go.dev/go.uber.org/zap/zapcore#Level): `debug`, `info`, `warn`, `error`, `dpanic`, `panic`, `fatal`. In practice `debug`, `info`, `warn`, and `error` are the useful operational values.
+**Accepted values:** `debug`, `info`, `warn`, `error`.
 
 **Default:** `info`
 
-**Precedence:** `NUMAFLOW_LOG_LEVEL` overrides the level implied by `NUMAFLOW_DEBUG`. Invalid values are silently ignored and the default level is used instead.
+**Precedence:** `NUMAFLOW_LOG_LEVEL` overrides the level implied by `NUMAFLOW_DEBUG`. Invalid values fall back to the level selected by `NUMAFLOW_DEBUG` or the default. For data-plane pods, `RUST_LOG` takes precedence over `NUMAFLOW_LOG_LEVEL` when set.
 
 ### Pipeline daemon pod
 
@@ -88,11 +88,11 @@ spec:
 
 ---
 
-## Rust components — `RUST_LOG`
+## Pipeline, MonoVertex, and Serving pods
 
-Pipeline vertex pods, MonoVertex pods, and Serving pods run the Numaflow Rust data-plane binary. These use the [`tracing-subscriber`](https://docs.rs/tracing-subscriber) `EnvFilter`, which reads `RUST_LOG` at startup.
+Pipeline vertex pods, MonoVertex pods, and Serving pods use `NUMAFLOW_LOG_LEVEL` for common log-level cases:
 
-**Accepted values:** standard `EnvFilter` syntax — simple level names (`debug`, `info`, `warn`, `error`) or per-crate directives (`numaflow_core=debug,h2=warn,info`).
+**Accepted values:** `debug`, `info`, `warn`, `error`.
 
 **Default:** `info`
 
@@ -106,15 +106,8 @@ spec:
     - name: my-vertex
       containerTemplate:
         env:
-          - name: RUST_LOG
+          - name: NUMAFLOW_LOG_LEVEL
             value: warn
-```
-
-To enable debug logs for a specific crate only:
-
-```yaml
-          - name: RUST_LOG
-            value: "numaflow_core=debug,info"
 ```
 
 ### MonoVertex pod
@@ -125,7 +118,7 @@ kind: MonoVertex
 spec:
   containerTemplate:
     env:
-      - name: RUST_LOG
+      - name: NUMAFLOW_LOG_LEVEL
         value: warn
 ```
 
@@ -138,25 +131,31 @@ spec:
   serving:
     containerTemplate:
       env:
-        - name: RUST_LOG
+        - name: NUMAFLOW_LOG_LEVEL
           value: warn
+```
+
+### Advanced data-plane filtering — `RUST_LOG`
+
+Data-plane pods also support standard [`tracing-subscriber` EnvFilter syntax](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) via `RUST_LOG`. Use this only when you need fine-grained filtering. When `RUST_LOG` is set, it takes precedence over `NUMAFLOW_LOG_LEVEL`.
+
+For example, to enable debug logs for a specific target only:
+
+```yaml
+# Pipeline.spec.vertices[].containerTemplate.env
+- name: RUST_LOG
+  value: "numaflow_core=debug,info"
 ```
 
 ---
 
 ## `NUMAFLOW_DEBUG` interaction
 
-`NUMAFLOW_DEBUG=true` is a development shortcut. Its effects differ by runtime:
+`NUMAFLOW_DEBUG=true` is a development shortcut. It lowers the default log level to `debug` and may switch log output from structured JSON to human-readable text.
 
-| Effect | Go | Rust |
-|---|---|---|
-| Log level | Lowered to `debug` | Lowered to `debug` (plus `h2::codec=info`) |
-| Log format | Switches from JSON to console (human-readable) | Switches from JSON to human-readable text |
-| Stacktraces | Added at `warn`+ (vs `error`+ by default) | n/a |
+**Important:** switching from JSON to text format may break log shippers or aggregators that expect structured JSON. Prefer `NUMAFLOW_LOG_LEVEL=debug` to lower the level without changing the output format.
 
-**Important:** switching from JSON to text format on the Rust side (`NUMAFLOW_DEBUG=true`) may break log shippers or aggregators that expect structured JSON. Prefer `RUST_LOG=debug` to lower the level without changing the output format.
-
-`NUMAFLOW_LOG_LEVEL` overrides the level for Go components regardless of `NUMAFLOW_DEBUG`. There is no equivalent override on the Rust side — use `RUST_LOG` instead.
+`NUMAFLOW_LOG_LEVEL` overrides the level implied by `NUMAFLOW_DEBUG` without changing the format selected by `NUMAFLOW_DEBUG`. For data-plane pods, `RUST_LOG` takes precedence over `NUMAFLOW_LOG_LEVEL` when set.
 
 ---
 
@@ -169,18 +168,18 @@ spec:
   value: warn
 ```
 
-**Enable debug for a single Rust crate without flooding all logs:**
+**Enable debug for a single data-plane target without flooding all logs:**
 ```yaml
 # Pipeline.spec.vertices[].containerTemplate.env
 - name: RUST_LOG
   value: "numaflow_core=debug,info"
 ```
 
-**Enable full debug on a vertex pod (both Go sidecar and Rust data-plane):**
+**Enable full debug on a vertex pod:**
 ```yaml
 # Pipeline.spec.vertices[].containerTemplate.env
 - name: NUMAFLOW_DEBUG
   value: "true"
 # Note: this also switches log output from JSON to text.
-# To keep JSON format while lowering the Rust level, use RUST_LOG=debug instead.
+# To keep JSON format while lowering the level, use NUMAFLOW_LOG_LEVEL=debug instead.
 ```

@@ -7,6 +7,11 @@ use tracing_subscriber::{Layer, filter::EnvFilter, fmt};
 use std::backtrace::{Backtrace, BacktraceStatus};
 use std::panic::PanicHookInfo;
 
+const DEFAULT_LOG_LEVEL: &str = "info";
+const DEBUG_LOG_LEVEL: &str = "debug,h2::codec=info";
+const NUMAFLOW_LOG_LEVEL_ENV: &str = "NUMAFLOW_LOG_LEVEL";
+const RUST_LOG_ENV: &str = "RUST_LOG";
+
 /// Panic hook to send panic info to `tracing` instead of stderr.
 /// Without this, a panic will be logged to stderr as:
 /// ```
@@ -196,19 +201,55 @@ impl Drop for TracerProviderGuard {
     }
 }
 
+fn parse_numaflow_log_level(level: &str) -> Option<&'static str> {
+    match level.trim().to_ascii_lowercase().as_str() {
+        "debug" => Some("debug"),
+        "info" => Some("info"),
+        "warn" => Some("warn"),
+        "error" => Some("error"),
+        _ => None,
+    }
+}
+
+fn default_log_directive(
+    debug_mode: bool,
+    numaflow_log_level: Option<&str>,
+    rust_log_set: bool,
+) -> &'static str {
+    if rust_log_set {
+        return DEFAULT_LOG_LEVEL;
+    }
+
+    if let Some(level) = numaflow_log_level
+        && !level.trim().is_empty()
+    {
+        if let Some(parsed_level) = parse_numaflow_log_level(level) {
+            return parsed_level;
+        }
+        eprintln!(
+            "[setup_tracing] Invalid {NUMAFLOW_LOG_LEVEL_ENV}='{level}', using default log level"
+        );
+    }
+
+    if debug_mode {
+        DEBUG_LOG_LEVEL
+    } else {
+        DEFAULT_LOG_LEVEL
+    }
+}
+
 /// Initialize the tracing subscriber with optional OTLP export.
 /// Returns a `TracerProviderGuard` that will flush buffered spans on drop.
 /// Callers must bind it (e.g., `let _guard = register();`) rather than
 /// discard it, or the provider will shut down immediately.
 pub fn register() -> TracerProviderGuard {
     let debug_mode = std::env::var("NUMAFLOW_DEBUG").is_ok_and(|v| v.to_lowercase() == "true");
-    let default_log_level = if debug_mode {
-        "debug,h2::codec=info" // "h2::codec" is too noisy
-    } else {
-        "info"
-    };
+    let rust_log_set = std::env::var(RUST_LOG_ENV).is_ok_and(|v| !v.trim().is_empty());
+    let numaflow_log_level = std::env::var(NUMAFLOW_LOG_LEVEL_ENV).ok();
+    let default_log_level =
+        default_log_directive(debug_mode, numaflow_log_level.as_deref(), rust_log_set);
 
-    // Build filtering from default directives and allow `RUST_LOG` environment variable to override.
+    // Build filtering from Numaflow defaults and allow `RUST_LOG` to override with EnvFilter syntax.
     let filter = EnvFilter::builder()
         .with_default_directive(default_log_level.parse().unwrap_or(Level::INFO.into()))
         .from_env_lossy();
@@ -301,6 +342,44 @@ mod tests {
             true,
             TraceState::default(),
         ))
+    }
+
+    #[test]
+    fn default_log_directive_uses_info_by_default() {
+        assert_eq!(default_log_directive(false, None, false), "info");
+    }
+
+    #[test]
+    fn default_log_directive_uses_debug_mode_default() {
+        assert_eq!(
+            default_log_directive(true, None, false),
+            "debug,h2::codec=info"
+        );
+    }
+
+    #[test]
+    fn default_log_directive_uses_numaflow_log_level() {
+        assert_eq!(default_log_directive(false, Some("warn"), false), "warn");
+        assert_eq!(default_log_directive(false, Some("ERROR"), false), "error");
+    }
+
+    #[test]
+    fn default_log_directive_numaflow_log_level_overrides_debug() {
+        assert_eq!(default_log_directive(true, Some("warn"), false), "warn");
+    }
+
+    #[test]
+    fn default_log_directive_invalid_numaflow_log_level_falls_back() {
+        assert_eq!(default_log_directive(false, Some("verbose"), false), "info");
+        assert_eq!(
+            default_log_directive(true, Some("verbose"), false),
+            "debug,h2::codec=info"
+        );
+    }
+
+    #[test]
+    fn default_log_directive_rust_log_takes_precedence() {
+        assert_eq!(default_log_directive(true, Some("warn"), true), "info");
     }
 
     #[test]

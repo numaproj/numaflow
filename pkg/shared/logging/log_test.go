@@ -39,6 +39,7 @@ func TestNewLogger_LogLevel(t *testing.T) {
 		{"debug", zapcore.DebugLevel},
 		{"info", zapcore.InfoLevel},
 		{"warn", zapcore.WarnLevel},
+		{"WARN", zapcore.WarnLevel},
 		{"error", zapcore.ErrorLevel},
 	}
 	for _, tt := range tests {
@@ -85,5 +86,15 @@ func TestNewLogger_LogLevelOverridesDebugPreset(t *testing.T) {
 	}
 	if !logger.Level().Enabled(zapcore.WarnLevel) {
 		t.Error("expected warn to be enabled")
+	}
+}
+
+func TestParseLogLevelRejectsRuntimeSpecificLevels(t *testing.T) {
+	for _, level := range []string{"dpanic", "panic", "fatal"} {
+		t.Run(level, func(t *testing.T) {
+			if _, ok := parseLogLevel(level); ok {
+				t.Fatalf("expected %q to be rejected", level)
+			}
+		})
 	}
 }

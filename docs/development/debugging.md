@@ -2,7 +2,7 @@
 
 ## Controlling Log Level
 
-For a full reference on log-level controls — including which pods are affected, YAML snippets for every component, and `RUST_LOG` for Rust data-plane pods — see [Log Levels](../user-guide/reference/configuration/log-levels.md).
+For a full reference on log-level controls — including which pods are affected, YAML snippets for every component, and advanced `RUST_LOG` filtering for data-plane pods — see [Log Levels](../user-guide/reference/configuration/log-levels.md).
 
 ## Debug Logs
 
