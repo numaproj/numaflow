@@ -412,18 +412,6 @@ impl Message {
     }
 }
 
-impl crate::shared::otel::MessageTarget for Message {
-    fn message_mut(&mut self) -> &mut Message {
-        self
-    }
-}
-
-impl crate::shared::otel::MessageTarget for MessageHandle {
-    fn message_mut(&mut self) -> &mut Message {
-        MessageHandle::message_mut(self)
-    }
-}
-
 /// IntOffset is integer based offset enum type.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
 pub(crate) struct IntOffset {

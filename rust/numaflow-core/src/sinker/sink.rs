@@ -297,15 +297,13 @@ impl SinkWriter {
         // Tracing: per-message primary sink stage spans.
         // Span lifetime is scoped to only the primary sink actor call.
         let mut response = {
-            let _span_guard = if tracing_enabled {
-                Some(otel::inject_stage_spans(
-                    &mut messages,
+            let _stage_spans = tracing_enabled.then(|| {
+                otel::inject_stage_spans!(
+                    messages.iter_mut(),
                     otel::TraceTopology::MonoVertex,
                     otel::TraceStage::Sink(otel::SinkStage::Primary),
-                ))
-            } else {
-                None
-            };
+                )
+            });
             self.write_to_primary_sink(messages, cln_token.clone())
                 .await?
         };
@@ -393,15 +391,13 @@ impl SinkWriter {
         // Tracing: per-message on-success sink stage spans.
         // Span lifetime is scoped to only the on-success sink actor call.
         let on_success_response = {
-            let _span_guard = if tracing_enabled && self.on_success_sink_handle.is_some() {
-                Some(otel::inject_stage_spans(
-                    &mut messages,
+            let _stage_spans = (tracing_enabled && self.on_success_sink_handle.is_some()).then(|| {
+                otel::inject_stage_spans!(
+                    messages.iter_mut(),
                     otel::TraceTopology::MonoVertex,
                     otel::TraceStage::Sink(otel::SinkStage::OnSuccess),
-                ))
-            } else {
-                None
-            };
+                )
+            });
             self.write_to_on_success_sink(messages, cln_token.clone())
                 .await?
         };
@@ -452,15 +448,13 @@ impl SinkWriter {
         // Tracing: per-message fallback sink stage spans.
         // Span lifetime is scoped to only the fallback sink actor call.
         let fb_response = {
-            let _span_guard = if tracing_enabled && self.fb_sink_handle.is_some() {
-                Some(otel::inject_stage_spans(
-                    &mut messages,
+            let _stage_spans = (tracing_enabled && self.fb_sink_handle.is_some()).then(|| {
+                otel::inject_stage_spans!(
+                    messages.iter_mut(),
                     otel::TraceTopology::MonoVertex,
                     otel::TraceStage::Sink(otel::SinkStage::Fallback),
-                ))
-            } else {
-                None
-            };
+                )
+            });
             self.write_to_fb_sink(messages, cln_token.clone()).await?
         };
 
@@ -855,12 +849,12 @@ mod tests {
     }
 
     #[test]
-    fn inject_stage_spans_adds_tracing_udf_metadata() {
+    fn inject_stage_span_adds_tracing_udf_metadata() {
         init_test_propagator();
         let mut messages = vec![test_message_with_metadata(1), test_message_with_metadata(2)];
 
-        let _guard = otel::inject_stage_spans(
-            &mut messages,
+        let _stage_spans = otel::inject_stage_spans!(
+            messages.iter_mut(),
             otel::TraceTopology::MonoVertex,
             otel::TraceStage::Sink(otel::SinkStage::Primary),
         );
@@ -876,7 +870,7 @@ mod tests {
     }
 
     #[test]
-    fn inject_stage_spans_preserves_unrelated_metadata() {
+    fn inject_stage_span_preserves_unrelated_metadata() {
         init_test_propagator();
         let mut message = test_message_with_metadata(1);
         Arc::make_mut(message.metadata.as_mut().expect("metadata should exist"))
@@ -889,8 +883,8 @@ mod tests {
             );
         let mut messages = vec![message];
 
-        let _guard = otel::inject_stage_spans(
-            &mut messages,
+        let _stage_spans = otel::inject_stage_spans!(
+            messages.iter_mut(),
             otel::TraceTopology::MonoVertex,
             otel::TraceStage::Sink(otel::SinkStage::Fallback),
         );

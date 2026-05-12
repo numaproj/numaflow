@@ -275,43 +275,13 @@ pub(crate) fn parent_context_from_metadata(metadata: Option<&Metadata>) -> opent
     metadata.map(extract_trace_context).unwrap_or_default()
 }
 
-/// RAII guard that ends all contained OTel spans when dropped.
-pub(crate) struct ContextSpanGuard(Vec<opentelemetry::Context>);
+/// RAII handle for an OTel SDK span. Ends the underlying span when dropped.
+pub(crate) struct StageSpan(opentelemetry::Context);
 
-impl ContextSpanGuard {
-    pub(crate) fn new(contexts: Vec<opentelemetry::Context>) -> Self {
-        Self(contexts)
-    }
-}
-
-impl Drop for ContextSpanGuard {
+impl Drop for StageSpan {
     fn drop(&mut self) {
-        for cx in self.0.drain(..) {
-            cx.span().end();
-        }
+        self.0.span().end();
     }
-}
-
-/// Starts an OTel SDK child span with standard Numaflow attributes.
-pub(crate) fn start_platform_child_span(
-    span_name: &'static str,
-    kind: opentelemetry::trace::SpanKind,
-    parent_cx: &opentelemetry::Context,
-    topology: TraceTopology,
-    operation_name: &'static str,
-    message_id: String,
-) -> opentelemetry::Context {
-    let tracer = opentelemetry::global::tracer("numaflow-core");
-    let span = tracer
-        .span_builder(span_name)
-        .with_kind(kind)
-        .with_attributes(build_platform_attributes(
-            topology,
-            operation_name,
-            message_id,
-        ))
-        .start_with_context(&tracer, parent_cx);
-    opentelemetry::Context::current().with_span(span)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -416,42 +386,57 @@ impl From<(TraceTopology, TraceStage)> for SpanSpec {
     }
 }
 
+/// Starts an OTel SDK child span with standard Numaflow attributes.
 pub(crate) fn start_child_span_from_spec(
     parent_cx: &opentelemetry::Context,
     message_id: String,
     spec: &SpanSpec,
 ) -> opentelemetry::Context {
-    start_platform_child_span(
-        spec.span_name,
-        spec.kind.clone(),
-        parent_cx,
-        spec.topology,
-        spec.operation_name,
-        message_id,
-    )
+    let tracer = opentelemetry::global::tracer("numaflow-core");
+    let span = tracer
+        .span_builder(spec.span_name)
+        .with_kind(spec.kind.clone())
+        .with_attributes(build_platform_attributes(
+            spec.topology,
+            spec.operation_name,
+            message_id,
+        ))
+        .start_with_context(&tracer, parent_cx);
+    opentelemetry::Context::current().with_span(span)
 }
 
-pub(crate) trait MessageTarget {
-    fn message_mut(&mut self) -> &mut Message;
-}
-
-pub(crate) fn inject_stage_spans<T: MessageTarget>(
-    targets: &mut [T],
+/// Starts a per-message stage span as a child of the message's `vertex.process` parent and
+/// injects the new span context into `sys_metadata["tracing_udf"]` so the UDF sees it as parent.
+///
+/// Returns a `StageSpan` whose `Drop` ends the underlying span. Callers keep it alive across
+/// the work they want to measure — typically by collecting into a `Vec<StageSpan>` scoped to the
+/// batch UDF call.
+pub(crate) fn inject_stage_span(
+    message: &mut Message,
     topology: TraceTopology,
     stage: TraceStage,
-) -> ContextSpanGuard {
+) -> StageSpan {
     let spec: SpanSpec = (topology, stage).into();
-    let mut contexts = Vec::with_capacity(targets.len());
-    for target in targets.iter_mut() {
-        let message = target.message_mut();
-        let parent_cx = parent_context_from_metadata(message.metadata.as_deref());
-        let msg_id = message.offset.to_string();
-        let cx = start_child_span_from_spec(&parent_cx, msg_id, &spec);
-        message.inject_tracing_udf(&cx);
-        contexts.push(cx);
-    }
-    ContextSpanGuard::new(contexts)
+    let parent_cx = parent_context_from_metadata(message.metadata.as_deref());
+    let msg_id = message.id.to_string();
+    let cx = start_child_span_from_spec(&parent_cx, msg_id, &spec);
+    message.inject_tracing_udf(&cx);
+    StageSpan(cx)
 }
+
+/// Collects per-message [`StageSpan`]s from an iterator of `&mut Message`.
+///
+/// Expands to a `Vec<StageSpan>` whose drop ends every span together at end of scope.
+/// Use this in stage entry points to keep the call site to one line.
+macro_rules! inject_stage_spans {
+    ($messages:expr, $topology:expr, $stage:expr $(,)?) => {{
+        $messages
+            .map(|m| $crate::shared::otel::inject_stage_span(m, $topology, $stage))
+            .collect::<Vec<$crate::shared::otel::StageSpan>>()
+    }};
+}
+
+pub(crate) use inject_stage_spans;
 
 /// Injects the current `tracing` span context as the UDF parent for a message.
 ///
@@ -761,9 +746,8 @@ mod tests {
     }
 
     #[test]
-    fn context_span_guard_drop_is_safe_for_empty_and_root_contexts() {
-        ContextSpanGuard::new(Vec::new());
-        ContextSpanGuard::new(vec![opentelemetry::Context::new()]);
+    fn stage_span_drop_is_safe_for_root_context() {
+        let _ = StageSpan(opentelemetry::Context::new());
     }
 
     #[test]
