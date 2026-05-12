@@ -881,7 +881,7 @@ mod tests {
                     key_value: HashMap::from([("k".to_string(), "v".into())]),
                 },
             );
-        let mut messages = vec![message];
+        let mut messages = [message];
 
         let _stage_spans = otel::inject_stage_spans!(
             messages.iter_mut(),
