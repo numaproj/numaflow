@@ -530,19 +530,17 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 // Any messages whose dispatch spans are still in the map at end-of-iteration
                 // (e.g., transformer error that breaks the outer loop) have their spans
                 // closed by the RAII guard when the map is dropped.
-                // Note: remove is_mono_vertex check once we implement pipeline tracing.
+                //
                 // When no OTel layer is registered, the span constructors return disabled spans
-                // and noop dispatch contexts — the work below is cheap, no explicit gate needed.
-                let tracing_enabled = is_mono_vertex();
+                // and noop dispatch contexts — the work below is cheap.
+                let topology = otel::TraceTopology::current();
                 let mut dispatch_spans = otel::SourceDispatchSpans::new();
                 // Read-only parent contexts for `source.transform`; `dispatch_spans` remains the
                 // sole owner responsible for ending `source.dispatch`.
-                let mut dispatch_parent_contexts = if tracing_enabled && self.transformer.is_some()
-                {
-                    Some(HashMap::with_capacity(msgs_len))
-                } else {
-                    None
-                };
+                let mut dispatch_parent_contexts = self
+                    .transformer
+                    .is_some()
+                    .then(|| HashMap::with_capacity(msgs_len));
 
                 for message in messages.iter_mut() {
                     Self::record_partition_read_metrics(
@@ -564,20 +562,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     //   source read latency.
                     // - Inject `vertex.process` context into sys_metadata["tracing"] so that map
                     //   and sink become siblings of `source.dispatch` under `vertex.process`.
-                    let platform_span = if tracing_enabled {
-                        let spans = otel::start_source_message_spans(
-                            message,
-                            otel::TraceTopology::MonoVertex,
-                        );
-                        if let Some(ref mut parent_contexts) = dispatch_parent_contexts {
-                            parent_contexts
-                                .insert(message.offset.clone(), spans.dispatch_cx.clone());
-                        }
-                        dispatch_spans.insert(message.offset.clone(), spans.dispatch_cx);
-                        Some(spans.platform_span)
-                    } else {
-                        None
-                    };
+                    let spans = otel::start_source_message_spans(message, topology);
+                    if let Some(ref mut parent_contexts) = dispatch_parent_contexts {
+                        parent_contexts.insert(message.offset.clone(), spans.dispatch_cx.clone());
+                    }
+                    dispatch_spans.insert(message.offset.clone(), spans.dispatch_cx);
                     // insert the message (with offset) into the tracker.
                     self.tracker.insert(message).await?;
 
@@ -585,9 +574,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     // store the ack receiver in the batch to invoke ack later.
                     ack_batch.push((message.offset.clone(), ack_rx));
                     let msg_handle = MessageHandle::new(message.clone(), ack_tx);
-                    if let Some(span) = platform_span {
-                        msg_handle.set_pipeline_span(span);
-                    }
+                    msg_handle.set_pipeline_span(spans.platform_span);
                     msg_handles.push(msg_handle);
                 }
 

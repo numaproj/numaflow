@@ -56,9 +56,6 @@ impl MapBatchTask {
     /// Executes the batch map operation.
     /// Returns an error if any message in the batch fails to be processed.
     pub async fn execute(mut self) -> Result<()> {
-        // Note: remove is_mono_vertex check once we implement pipeline tracing.
-        let tracing_enabled = self.is_mono_vertex;
-
         // Store parent message info for each message before sending to UDF
         let parent_infos: Vec<ParentMessageInfo> = self
             .msg_handles
@@ -75,13 +72,14 @@ impl MapBatchTask {
             //
             // Invariant: tracing_udf is removed from result messages below; on error, input
             // messages are dropped, so tracing_udf never propagates further.
-            let _stage_spans = tracing_enabled.then(|| {
-                otel::inject_stage_spans!(
-                    self.msg_handles.iter_mut().map(MessageHandle::message_mut),
-                    otel::TraceTopology::MonoVertex,
-                    otel::TraceStage::Map,
-                )
-            });
+            //
+            // When no OTel layer is registered, `inject_stage_span` returns non-recording spans
+            // and the sys_metadata copy-on-write is skipped — no need to gate this call.
+            let _stage_spans = otel::inject_stage_spans!(
+                self.msg_handles.iter_mut().map(MessageHandle::message_mut),
+                otel::TraceTopology::current(),
+                otel::TraceStage::Map,
+            );
 
             // Convert Messages to MapRequests
             let requests: Vec<MapRequest> = self
@@ -113,9 +111,8 @@ impl MapBatchTask {
                         .map(|(i, result)| {
                             let mut mapped_msg: Message =
                                 UserDefinedMessage(result, &parent_info, i as i32).into();
-                            if tracing_enabled {
-                                mapped_msg.strip_tracing_udf();
-                            }
+                            // No-op when no `tracing_udf` was injected (noop tracer path).
+                            mapped_msg.strip_tracing_udf();
                             mapped_msg
                         })
                         .collect();

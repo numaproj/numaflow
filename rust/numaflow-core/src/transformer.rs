@@ -215,8 +215,11 @@ impl Transformer {
 
             async move {
                 let offset = read_msg.offset.clone();
-                let source_transform_span =
-                    otel::SourceTransformSpan::new(source_transform_parent, offset.to_string());
+                let source_transform_span = otel::SourceTransformSpan::new(
+                    source_transform_parent,
+                    offset.to_string(),
+                    otel::TraceTopology::current(),
+                );
                 let transformed_messages =
                     Transformer::transform(transform_handle, read_msg, hard_shutdown_token).await?;
                 source_transform_span.record_output_count(transformed_messages.len());
@@ -373,7 +376,11 @@ mod tests {
 
     #[test]
     fn source_transform_span_without_parent_is_inert() {
-        let span = otel::SourceTransformSpan::new(None, "msg-1".to_string());
+        let span = otel::SourceTransformSpan::new(
+            None,
+            "msg-1".to_string(),
+            otel::TraceTopology::MonoVertex,
+        );
         assert!(!span.is_active());
         span.record_output_count(1);
     }

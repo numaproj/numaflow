@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
-use tracing::{Instrument, error, warn};
+use tracing::{error, warn};
 
 use super::{
     ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
@@ -59,38 +59,22 @@ impl MapStreamTask {
     }
 
     /// Executes the stream map operation.
-    /// With tracing enabled, wraps the stream map receive loop in a map span.
-    /// The span covers the full UDF interaction, from sending the input request
-    /// until the UDF response stream closes.
-    async fn execute(self) {
-        // Note: remove is_mono_vertex check once we implement pipeline tracing.
-        // When no OTel layer is registered, `start_map_tracing_span` returns a disabled
-        // span and `.instrument(span)` is a no-op.
-        if is_mono_vertex() {
-            let span = otel::start_map_tracing_span(
-                self.msg_handle.message(),
-                otel::TraceTopology::MonoVertex,
-            );
-            self.execute_inner().instrument(span).await;
-        } else {
-            self.execute_inner().await;
-        }
-    }
-
-    async fn execute_inner(mut self) {
+    ///
+    /// Creates a per-message `numaflow.{topology}.map` span via the OTel SDK API, scoped to the
+    /// full UDF interaction (request send through stream close). The span's context is written
+    /// into `sys_metadata["tracing_udf"]` so the UDF sees it as the parent; result messages have
+    /// the key stripped before leaving the mapper. When no OTel layer is registered, span
+    /// creation and metadata writes are skipped via the noop tracer path.
+    async fn execute(mut self) {
         // Hold the permit until the task completes
         let _permit = self.permit;
-        // `execute()` only wraps us in a real map span on MonoVertex; on Pipeline the current
-        // span is `Span::none()`. A disabled span signals "no OTel layer registered" — skip the
-        // metadata copy-on-write.
-        let tracing_enabled = !tracing::Span::current().is_disabled();
 
-        // Tracing: inject current `map` span context into
-        // sys_metadata["tracing_udf"] so the UDF creates its processing span as a child.
-        // sys_metadata["tracing"] remains unchanged (holds vertex.process).
-        if tracing_enabled {
-            otel::inject_current_span_as_udf_parent(self.msg_handle.message_mut());
-        }
+        // RAII map span: covers the full stream lifecycle. Ends when `execute` returns.
+        let _stage_span = otel::inject_stage_span(
+            self.msg_handle.message_mut(),
+            otel::TraceTopology::current(),
+            otel::TraceStage::Map,
+        );
 
         // Store parent message info before sending to UDF
         // parent_info contains offset, so we don't need to clone it separately
@@ -119,15 +103,14 @@ impl MapStreamTask {
             match result {
                 Some(Ok(results)) => {
                     // Convert raw results to Messages using parent info.
-                    // Remove tracing_udf from each result (map stage is done).
+                    // Strip tracing_udf from each result (map stage is done; no-op when no key
+                    // was injected).
                     for result in results {
                         let mut mapped_message: Message =
                             UserDefinedMessage(result, &parent_info, parent_info.current_index)
                                 .into();
                         parent_info.current_index += 1;
-                        if tracing_enabled {
-                            mapped_message.strip_tracing_udf();
-                        }
+                        mapped_message.strip_tracing_udf();
 
                         update_udf_write_only_metric(self.shared_ctx.is_mono_vertex);
 

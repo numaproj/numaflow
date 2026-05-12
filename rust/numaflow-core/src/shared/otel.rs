@@ -216,11 +216,19 @@ pub const ATTR_NUMAFLOW_VERTEX_NAME: &str = "numaflow.vertex.name";
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum TraceTopology {
     MonoVertex,
-    #[allow(dead_code)]
     Pipeline,
 }
 
 impl TraceTopology {
+    /// Picks the topology label from runtime config.
+    pub(crate) fn current() -> Self {
+        if crate::config::is_mono_vertex() {
+            Self::MonoVertex
+        } else {
+            Self::Pipeline
+        }
+    }
+
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::MonoVertex => "monovertex",
@@ -434,58 +442,6 @@ macro_rules! inject_stage_spans {
 
 pub(crate) use inject_stage_spans;
 
-/// Injects the current `tracing` span context as the UDF parent for a message.
-///
-/// Used by unary and stream map tasks after their async work has been instrumented with the
-/// map span. This keeps the ambient `Span::current()` lookup in the tracing helper module.
-pub(crate) fn inject_current_span_as_udf_parent(message: &mut Message) {
-    use tracing_opentelemetry::OpenTelemetrySpanExt;
-
-    let cx = tracing::Span::current().context();
-    message.inject_tracing_udf(&cx);
-}
-
-/// Builds the per-message `numaflow.{topology}.map` `tracing` span used by unary and stream
-/// mappers. The returned span is a child of the parent context found in `sys_metadata["tracing"]`
-/// (or a fresh root if absent).
-///
-/// Callers wrap their UDF call in `.instrument(span)`. When no OTel layer is registered, the
-/// span is disabled and `.instrument(span)` is a no-op. Topology selection (e.g. mono-vertex
-/// only, until pipeline tracing lands) stays at the call site.
-pub(crate) fn start_map_tracing_span(message: &Message, topology: TraceTopology) -> tracing::Span {
-    let msg_id = message.offset.to_string();
-    let span = match topology {
-        TraceTopology::MonoVertex => tracing::info_span!(
-            "numaflow.monovertex.map",
-            otel.kind = "CLIENT",
-            { ATTR_MESSAGING_SYSTEM } = "numaflow",
-            { ATTR_MESSAGING_OPERATION_NAME } = "map",
-            { ATTR_MESSAGING_MESSAGE_ID } = %msg_id,
-            { ATTR_NUMAFLOW_TOPOLOGY } = TraceTopology::MonoVertex.as_str(),
-            { ATTR_NUMAFLOW_PIPELINE_NAME } = crate::config::get_pipeline_name(),
-            { ATTR_NUMAFLOW_VERTEX_NAME } = crate::config::get_vertex_name(),
-        ),
-        TraceTopology::Pipeline => tracing::info_span!(
-            "numaflow.pipeline.map",
-            otel.kind = "CLIENT",
-            { ATTR_MESSAGING_SYSTEM } = "numaflow",
-            { ATTR_MESSAGING_OPERATION_NAME } = "map",
-            { ATTR_MESSAGING_MESSAGE_ID } = %msg_id,
-            { ATTR_NUMAFLOW_TOPOLOGY } = TraceTopology::Pipeline.as_str(),
-            { ATTR_NUMAFLOW_PIPELINE_NAME } = crate::config::get_pipeline_name(),
-            { ATTR_NUMAFLOW_VERTEX_NAME } = crate::config::get_vertex_name(),
-        ),
-    };
-    // Skip parent-context extraction when the span is disabled (no OTel layer registered).
-    // A disabled span has nothing to attach the parent to; this avoids the metadata read.
-    if !span.is_disabled() {
-        use tracing_opentelemetry::OpenTelemetrySpanExt;
-        let parent_cx = parent_context_from_metadata(message.metadata.as_deref());
-        let _ = span.set_parent(parent_cx);
-    }
-    span
-}
-
 /// Spans created for a single source message.
 ///
 /// `platform_span` is the lifecycle root (`numaflow.vertex.process`) — the source loop hands it to
@@ -648,12 +604,16 @@ impl Drop for SourceDispatchSpans {
 pub(crate) struct SourceTransformSpan(Option<opentelemetry::Context>);
 
 impl SourceTransformSpan {
-    pub(crate) fn new(parent_cx: Option<opentelemetry::Context>, msg_id: String) -> Self {
+    pub(crate) fn new(
+        parent_cx: Option<opentelemetry::Context>,
+        msg_id: String,
+        topology: TraceTopology,
+    ) -> Self {
         let Some(parent_cx) = parent_cx else {
             return Self(None);
         };
 
-        let spec: SpanSpec = (TraceTopology::MonoVertex, TraceStage::SourceTransform).into();
+        let spec: SpanSpec = (topology, TraceStage::SourceTransform).into();
         Self(Some(start_child_span_from_spec(&parent_cx, msg_id, &spec)))
     }
 
@@ -1133,23 +1093,6 @@ mod tests {
                 );
             }
         }
-    }
-
-    #[test]
-    fn start_map_tracing_span_returns_topology_specific_name() {
-        let msg = Message::default();
-
-        let mv = start_map_tracing_span(&msg, TraceTopology::MonoVertex);
-        assert_eq!(
-            mv.metadata().map(|m| m.name()),
-            Some("numaflow.monovertex.map")
-        );
-
-        let pl = start_map_tracing_span(&msg, TraceTopology::Pipeline);
-        assert_eq!(
-            pl.metadata().map(|m| m.name()),
-            Some("numaflow.pipeline.map")
-        );
     }
 
     /// Tests run without an OTel layer registered, so the platform span is disabled
