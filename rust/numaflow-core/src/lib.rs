@@ -117,15 +117,6 @@ pub(crate) mod typ;
 /// [Reduce]:https://numaflow.numaproj.io/user-guide/user-defined-functions/reduce/reduce/
 mod reduce;
 
-/// Enables or disables tracing spans and context propagation.
-///
-/// The binary sets this after OTLP exporter initialization. Keeping the switch in
-/// `numaflow-core` lets code that creates tracing spans skip trace metadata work
-/// entirely when tracing is not configured.
-pub fn set_otel_tracing_enabled(enabled: bool) {
-    shared::otel::set_tracing_enabled(enabled);
-}
-
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();

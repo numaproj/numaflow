@@ -292,7 +292,10 @@ impl SinkWriter {
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();
         // Note: remove is_mono_vertex check once we implement pipeline tracing.
-        let tracing_enabled = is_mono_vertex() && otel::tracing_enabled();
+        // `inject_stage_spans!` is cheap when no OTel layer is registered (the span
+        // returned from `inject_stage_span` is not recording, so the sys_metadata
+        // copy-on-write is skipped).
+        let tracing_enabled = is_mono_vertex();
 
         // Tracing: per-message primary sink stage spans.
         // Span lifetime is scoped to only the primary sink actor call.
@@ -386,7 +389,7 @@ impl SinkWriter {
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();
         // Note: remove is_mono_vertex check once we implement pipeline tracing.
-        let tracing_enabled = is_mono_vertex() && otel::tracing_enabled();
+        let tracing_enabled = is_mono_vertex();
 
         // Tracing: per-message on-success sink stage spans.
         // Span lifetime is scoped to only the on-success sink actor call.
@@ -444,7 +447,7 @@ impl SinkWriter {
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();
         // Note: remove is_mono_vertex check once we implement pipeline tracing.
-        let tracing_enabled = is_mono_vertex() && otel::tracing_enabled();
+        let tracing_enabled = is_mono_vertex();
 
         // Tracing: per-message fallback sink stage spans.
         // Span lifetime is scoped to only the fallback sink actor call.
@@ -826,6 +829,12 @@ mod tests {
         INIT.call_once(|| {
             opentelemetry::global::set_text_map_propagator(
                 opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+            );
+            // Without a real tracer provider, the global tracer is a noop and spans aren't
+            // recording — `inject_stage_span` will skip the sys_metadata write. These tests
+            // verify the write side-effect, so install an SDK provider with no exporter.
+            opentelemetry::global::set_tracer_provider(
+                opentelemetry_sdk::trace::SdkTracerProvider::builder().build(),
             );
         });
     }

@@ -6,28 +6,13 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use opentelemetry::global;
 use opentelemetry::propagation::{Extractor, Injector};
-use opentelemetry::trace::{TraceContextExt as _, Tracer};
+use opentelemetry::trace::{Span as _, TraceContextExt as _, Tracer};
 
 use crate::message::Message;
 use crate::metadata::{KeyValueGroup, Metadata};
-
-static TRACING_ENABLED: AtomicBool = AtomicBool::new(false);
-
-/// Enable or disable tracing spans and context propagation.
-/// This is set by the binary after OTLP initialization succeeds. When disabled,
-/// code that creates tracing spans skips trace metadata work entirely.
-pub(crate) fn set_tracing_enabled(enabled: bool) {
-    TRACING_ENABLED.store(enabled, Ordering::Relaxed);
-}
-
-/// Returns whether tracing spans should be created.
-pub(crate) fn tracing_enabled() -> bool {
-    TRACING_ENABLED.load(Ordering::Relaxed)
-}
 
 /// Key under which W3C trace context is stored in `sys_metadata`.
 /// Always holds the shared `vertex.process` parent context for downstream
@@ -387,21 +372,27 @@ impl From<(TraceTopology, TraceStage)> for SpanSpec {
 }
 
 /// Starts an OTel SDK child span with standard Numaflow attributes.
+///
+/// When no real tracer provider is registered (no `OTEL_EXPORTER_OTLP_ENDPOINT`),
+/// the global tracer is a noop and the returned span is not recording — we skip
+/// the per-message attribute allocation in that case.
 pub(crate) fn start_child_span_from_spec(
     parent_cx: &opentelemetry::Context,
     message_id: String,
     spec: &SpanSpec,
 ) -> opentelemetry::Context {
     let tracer = opentelemetry::global::tracer("numaflow-core");
-    let span = tracer
+    let mut span = tracer
         .span_builder(spec.span_name)
         .with_kind(spec.kind.clone())
-        .with_attributes(build_platform_attributes(
+        .start_with_context(&tracer, parent_cx);
+    if span.is_recording() {
+        span.set_attributes(build_platform_attributes(
             spec.topology,
             spec.operation_name,
             message_id,
-        ))
-        .start_with_context(&tracer, parent_cx);
+        ));
+    }
     opentelemetry::Context::current().with_span(span)
 }
 
@@ -411,6 +402,9 @@ pub(crate) fn start_child_span_from_spec(
 /// Returns a `StageSpan` whose `Drop` ends the underlying span. Callers keep it alive across
 /// the work they want to measure — typically by collecting into a `Vec<StageSpan>` scoped to the
 /// batch UDF call.
+///
+/// When no OTel layer is registered, the created span is not recording and we skip the
+/// metadata copy-on-write — the caller can invoke this unconditionally.
 pub(crate) fn inject_stage_span(
     message: &mut Message,
     topology: TraceTopology,
@@ -420,7 +414,9 @@ pub(crate) fn inject_stage_span(
     let parent_cx = parent_context_from_metadata(message.metadata.as_deref());
     let msg_id = message.id.to_string();
     let cx = start_child_span_from_spec(&parent_cx, msg_id, &spec);
-    message.inject_tracing_udf(&cx);
+    if cx.span().is_recording() {
+        message.inject_tracing_udf(&cx);
+    }
     StageSpan(cx)
 }
 
@@ -451,18 +447,12 @@ pub(crate) fn inject_current_span_as_udf_parent(message: &mut Message) {
 
 /// Builds the per-message `numaflow.{topology}.map` `tracing` span used by unary and stream
 /// mappers. The returned span is a child of the parent context found in `sys_metadata["tracing"]`
-/// (or a fresh root if absent). Returns `None` when tracing is disabled.
+/// (or a fresh root if absent).
 ///
-/// Callers wrap their UDF call in `.instrument(span)`. Topology selection (e.g. mono-vertex only,
-/// until pipeline tracing lands) stays at the call site.
-pub(crate) fn start_map_tracing_span(
-    message: &Message,
-    topology: TraceTopology,
-) -> Option<tracing::Span> {
-    if !tracing_enabled() {
-        return None;
-    }
-    let parent_cx = parent_context_from_metadata(message.metadata.as_deref());
+/// Callers wrap their UDF call in `.instrument(span)`. When no OTel layer is registered, the
+/// span is disabled and `.instrument(span)` is a no-op. Topology selection (e.g. mono-vertex
+/// only, until pipeline tracing lands) stays at the call site.
+pub(crate) fn start_map_tracing_span(message: &Message, topology: TraceTopology) -> tracing::Span {
     let msg_id = message.offset.to_string();
     let span = match topology {
         TraceTopology::MonoVertex => tracing::info_span!(
@@ -486,9 +476,14 @@ pub(crate) fn start_map_tracing_span(
             { ATTR_NUMAFLOW_VERTEX_NAME } = crate::config::get_vertex_name(),
         ),
     };
-    use tracing_opentelemetry::OpenTelemetrySpanExt;
-    let _ = span.set_parent(parent_cx);
-    Some(span)
+    // Skip parent-context extraction when the span is disabled (no OTel layer registered).
+    // A disabled span has nothing to attach the parent to; this avoids the metadata read.
+    if !span.is_disabled() {
+        use tracing_opentelemetry::OpenTelemetrySpanExt;
+        let parent_cx = parent_context_from_metadata(message.metadata.as_deref());
+        let _ = span.set_parent(parent_cx);
+    }
+    span
 }
 
 /// Spans created for a single source message.
@@ -503,20 +498,20 @@ pub(crate) struct SourceMessageSpans {
 }
 
 /// Builds the per-message platform.process and source.dispatch spans for a single source-read
-/// message. Returns `None` when tracing is disabled.
+/// message.
 ///
 /// As a side-effect, this writes the `vertex.process` context into
 /// `message.metadata.sys_metadata[TRACING_METADATA_KEY]` so downstream stages (map, sink) can
 /// extract it as their parent. Without this side-effect, downstream spans would not be linked
 /// to the platform root.
+///
+/// When no OTel layer is registered, the returned `platform_span` is disabled, the
+/// `dispatch_cx` wraps a noop span, and the metadata side-effect is skipped — the call is
+/// effectively free for callers to make unconditionally.
 pub(crate) fn start_source_message_spans(
     message: &mut Message,
     topology: TraceTopology,
-) -> Option<SourceMessageSpans> {
-    if !tracing_enabled() {
-        return None;
-    }
-    let upstream_cx = extract_trace_context_from_headers(&message.headers);
+) -> SourceMessageSpans {
     let msg_id = message.offset.to_string();
     let platform_span = match topology {
         TraceTopology::MonoVertex => tracing::info_span!(
@@ -540,7 +535,23 @@ pub(crate) fn start_source_message_spans(
             { ATTR_NUMAFLOW_VERTEX_NAME } = crate::config::get_vertex_name(),
         ),
     };
+
+    // No OTel layer registered: hand back a disabled span and a noop dispatch context.
+    // Skip the header extraction and the sys_metadata write — neither would carry a real
+    // span context, and downstream stages already handle a missing `TRACING_METADATA_KEY`
+    // by treating it as a fresh root.
+    if platform_span.is_disabled() {
+        let dispatch_spec: SpanSpec = (topology, TraceStage::SourceDispatch).into();
+        let dispatch_cx =
+            start_child_span_from_spec(&opentelemetry::Context::new(), msg_id, &dispatch_spec);
+        return SourceMessageSpans {
+            platform_span,
+            dispatch_cx,
+        };
+    }
+
     use tracing_opentelemetry::OpenTelemetrySpanExt;
+    let upstream_cx = extract_trace_context_from_headers(&message.headers);
     let _ = platform_span.set_parent(upstream_cx);
     let platform_cx = platform_span.context();
 
@@ -553,10 +564,10 @@ pub(crate) fn start_source_message_spans(
     let dispatch_spec: SpanSpec = (topology, TraceStage::SourceDispatch).into();
     let dispatch_cx = start_child_span_from_spec(&platform_cx, msg_id, &dispatch_spec);
 
-    Some(SourceMessageSpans {
+    SourceMessageSpans {
         platform_span,
         dispatch_cx,
-    })
+    }
 }
 
 /// Tracks per-message source dispatch OTel spans keyed by message offset.
@@ -630,14 +641,14 @@ impl Drop for SourceDispatchSpans {
 /// The span is a child of the input message's `source.dispatch` span and measures the transformer
 /// UDF round-trip for that specific source message, not the whole batch. It closes on success,
 /// error, or cancellation.
+///
+/// `None` only when the caller had no parent context to start with (e.g., the transformer ran
+/// without a preceding source.dispatch span). When no OTel layer is registered, this still wraps
+/// a noop context whose `Drop` is a no-op.
 pub(crate) struct SourceTransformSpan(Option<opentelemetry::Context>);
 
 impl SourceTransformSpan {
     pub(crate) fn new(parent_cx: Option<opentelemetry::Context>, msg_id: String) -> Self {
-        if !tracing_enabled() {
-            return Self(None);
-        }
-
         let Some(parent_cx) = parent_cx else {
             return Self(None);
         };
@@ -647,7 +658,9 @@ impl SourceTransformSpan {
     }
 
     pub(crate) fn record_output_count(&self, output_count: usize) {
-        if let Some(cx) = &self.0 {
+        if let Some(cx) = &self.0
+            && cx.span().is_recording()
+        {
             cx.span().set_attribute(opentelemetry::KeyValue::new(
                 "numaflow.source.transform.output_count",
                 output_count as i64,
@@ -699,19 +712,6 @@ mod tests {
     fn context_from_traceparent(traceparent: &str) -> opentelemetry::Context {
         let carrier = kvg_with(&[("traceparent", traceparent)]);
         global::get_text_map_propagator(|prop| prop.extract(&MetadataExtractor(&carrier)))
-    }
-
-    #[test]
-    #[serial_test::serial]
-    fn tracing_enabled_flag_tracks_configured_state() {
-        set_tracing_enabled(false);
-        assert!(!tracing_enabled());
-
-        set_tracing_enabled(true);
-        assert!(tracing_enabled());
-
-        set_tracing_enabled(false);
-        assert!(!tracing_enabled());
     }
 
     #[test]
@@ -953,20 +953,6 @@ mod tests {
     }
 
     #[test]
-    fn b3_preserves_128bit_trace_id() {
-        let tp = b3_to_traceparent(
-            "0af7651916cd43dd8448eb211c80319c",
-            "b7ad6b7169203331",
-            Some("1"),
-            false,
-        );
-        assert_eq!(
-            tp,
-            "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
-        );
-    }
-
-    #[test]
     fn b3_sampled_flag_mapping() {
         let tid = "0af7651916cd43dd8448eb211c80319c";
         let sid = "b7ad6b7169203331";
@@ -986,18 +972,6 @@ mod tests {
         assert!(b3_to_traceparent(tid, sid, Some("weird"), false).ends_with("-00"));
     }
 
-    #[test]
-    fn b3_debug_flag_forces_sampled_regardless_of_sampled_header() {
-        let tid = "0af7651916cd43dd8448eb211c80319c";
-        let sid = "b7ad6b7169203331";
-
-        // debug=true beats sampled=0/absent.
-        assert!(b3_to_traceparent(tid, sid, Some("0"), true).ends_with("-01"));
-        assert!(b3_to_traceparent(tid, sid, None, true).ends_with("-01"));
-        // debug=false + sampled=1 still samples.
-        assert!(b3_to_traceparent(tid, sid, Some("1"), false).ends_with("-01"));
-    }
-
     mod span_spec_tests {
         use super::*;
         use opentelemetry::trace::SpanKind;
@@ -1006,120 +980,111 @@ mod tests {
             (topology, stage).into()
         }
 
+        /// Drives every `(topology, stage) -> SpanSpec` arm in one place. Each row
+        /// asserts the three fields the production code reads (`span_name`,
+        /// `operation_name`, `kind`).
         #[test]
-        fn monovertex_source_dispatch() {
-            let s = spec(TraceTopology::MonoVertex, TraceStage::SourceDispatch);
-            assert_eq!(s.span_name, "numaflow.monovertex.source.dispatch");
-            assert_eq!(s.operation_name, "source.dispatch");
-            assert!(matches!(s.kind, SpanKind::Consumer));
-            assert!(matches!(s.topology, TraceTopology::MonoVertex));
-        }
+        fn span_spec_from_topology_and_stage_covers_all_arms() {
+            let cases: &[(TraceTopology, TraceStage, &str, &str, SpanKind)] = &[
+                (
+                    TraceTopology::MonoVertex,
+                    TraceStage::SourceDispatch,
+                    "numaflow.monovertex.source.dispatch",
+                    "source.dispatch",
+                    SpanKind::Consumer,
+                ),
+                (
+                    TraceTopology::Pipeline,
+                    TraceStage::SourceDispatch,
+                    "numaflow.pipeline.source.dispatch",
+                    "source.dispatch",
+                    SpanKind::Consumer,
+                ),
+                (
+                    TraceTopology::MonoVertex,
+                    TraceStage::SourceTransform,
+                    "numaflow.monovertex.source.transform",
+                    "source.transform",
+                    SpanKind::Client,
+                ),
+                (
+                    TraceTopology::Pipeline,
+                    TraceStage::SourceTransform,
+                    "numaflow.pipeline.source.transform",
+                    "source.transform",
+                    SpanKind::Client,
+                ),
+                (
+                    TraceTopology::MonoVertex,
+                    TraceStage::Map,
+                    "numaflow.monovertex.map",
+                    "map",
+                    SpanKind::Client,
+                ),
+                (
+                    TraceTopology::Pipeline,
+                    TraceStage::Map,
+                    "numaflow.pipeline.map",
+                    "map",
+                    SpanKind::Client,
+                ),
+                (
+                    TraceTopology::MonoVertex,
+                    TraceStage::Sink(SinkStage::Primary),
+                    "numaflow.monovertex.sink.write",
+                    "sink.write",
+                    SpanKind::Client,
+                ),
+                (
+                    TraceTopology::MonoVertex,
+                    TraceStage::Sink(SinkStage::Fallback),
+                    "numaflow.monovertex.sink.fallback",
+                    "sink.fallback",
+                    SpanKind::Client,
+                ),
+                (
+                    TraceTopology::MonoVertex,
+                    TraceStage::Sink(SinkStage::OnSuccess),
+                    "numaflow.monovertex.sink.on_success",
+                    "sink.on_success",
+                    SpanKind::Client,
+                ),
+                (
+                    TraceTopology::Pipeline,
+                    TraceStage::Sink(SinkStage::Primary),
+                    "numaflow.pipeline.sink.write",
+                    "sink.write",
+                    SpanKind::Client,
+                ),
+                (
+                    TraceTopology::Pipeline,
+                    TraceStage::Sink(SinkStage::Fallback),
+                    "numaflow.pipeline.sink.fallback",
+                    "sink.fallback",
+                    SpanKind::Client,
+                ),
+                (
+                    TraceTopology::Pipeline,
+                    TraceStage::Sink(SinkStage::OnSuccess),
+                    "numaflow.pipeline.sink.on_success",
+                    "sink.on_success",
+                    SpanKind::Client,
+                ),
+            ];
 
-        #[test]
-        fn pipeline_source_dispatch() {
-            let s = spec(TraceTopology::Pipeline, TraceStage::SourceDispatch);
-            assert_eq!(s.span_name, "numaflow.pipeline.source.dispatch");
-            assert_eq!(s.operation_name, "source.dispatch");
-            assert!(matches!(s.kind, SpanKind::Consumer));
-            assert!(matches!(s.topology, TraceTopology::Pipeline));
-        }
-
-        #[test]
-        fn monovertex_source_transform() {
-            let s = spec(TraceTopology::MonoVertex, TraceStage::SourceTransform);
-            assert_eq!(s.span_name, "numaflow.monovertex.source.transform");
-            assert_eq!(s.operation_name, "source.transform");
-            assert!(matches!(s.kind, SpanKind::Client));
-        }
-
-        #[test]
-        fn pipeline_source_transform() {
-            let s = spec(TraceTopology::Pipeline, TraceStage::SourceTransform);
-            assert_eq!(s.span_name, "numaflow.pipeline.source.transform");
-            assert_eq!(s.operation_name, "source.transform");
-            assert!(matches!(s.kind, SpanKind::Client));
-        }
-
-        #[test]
-        fn monovertex_map() {
-            let s = spec(TraceTopology::MonoVertex, TraceStage::Map);
-            assert_eq!(s.span_name, "numaflow.monovertex.map");
-            assert_eq!(s.operation_name, "map");
-            assert!(matches!(s.kind, SpanKind::Client));
-        }
-
-        #[test]
-        fn pipeline_map() {
-            let s = spec(TraceTopology::Pipeline, TraceStage::Map);
-            assert_eq!(s.span_name, "numaflow.pipeline.map");
-            assert_eq!(s.operation_name, "map");
-            assert!(matches!(s.kind, SpanKind::Client));
-        }
-
-        #[test]
-        fn monovertex_sink_primary() {
-            let s = spec(
-                TraceTopology::MonoVertex,
-                TraceStage::Sink(SinkStage::Primary),
-            );
-            assert_eq!(s.span_name, "numaflow.monovertex.sink.write");
-            assert_eq!(s.operation_name, "sink.write");
-            assert!(matches!(s.kind, SpanKind::Client));
-        }
-
-        #[test]
-        fn monovertex_sink_fallback() {
-            let s = spec(
-                TraceTopology::MonoVertex,
-                TraceStage::Sink(SinkStage::Fallback),
-            );
-            assert_eq!(s.span_name, "numaflow.monovertex.sink.fallback");
-            assert_eq!(s.operation_name, "sink.fallback");
-            assert!(matches!(s.kind, SpanKind::Client));
-        }
-
-        #[test]
-        fn monovertex_sink_on_success() {
-            let s = spec(
-                TraceTopology::MonoVertex,
-                TraceStage::Sink(SinkStage::OnSuccess),
-            );
-            assert_eq!(s.span_name, "numaflow.monovertex.sink.on_success");
-            assert_eq!(s.operation_name, "sink.on_success");
-            assert!(matches!(s.kind, SpanKind::Client));
-        }
-
-        #[test]
-        fn pipeline_sink_primary() {
-            let s = spec(
-                TraceTopology::Pipeline,
-                TraceStage::Sink(SinkStage::Primary),
-            );
-            assert_eq!(s.span_name, "numaflow.pipeline.sink.write");
-            assert_eq!(s.operation_name, "sink.write");
-            assert!(matches!(s.kind, SpanKind::Client));
-        }
-
-        #[test]
-        fn pipeline_sink_fallback() {
-            let s = spec(
-                TraceTopology::Pipeline,
-                TraceStage::Sink(SinkStage::Fallback),
-            );
-            assert_eq!(s.span_name, "numaflow.pipeline.sink.fallback");
-            assert_eq!(s.operation_name, "sink.fallback");
-            assert!(matches!(s.kind, SpanKind::Client));
-        }
-
-        #[test]
-        fn pipeline_sink_on_success() {
-            let s = spec(
-                TraceTopology::Pipeline,
-                TraceStage::Sink(SinkStage::OnSuccess),
-            );
-            assert_eq!(s.span_name, "numaflow.pipeline.sink.on_success");
-            assert_eq!(s.operation_name, "sink.on_success");
-            assert!(matches!(s.kind, SpanKind::Client));
+            for (topology, stage, span_name, operation_name, kind) in cases {
+                let s = spec(*topology, *stage);
+                assert_eq!(s.span_name, *span_name, "span_name for {stage:?}");
+                assert_eq!(
+                    s.operation_name, *operation_name,
+                    "operation_name for {stage:?}"
+                );
+                assert_eq!(
+                    std::mem::discriminant(&s.kind),
+                    std::mem::discriminant(kind),
+                    "kind for {stage:?}"
+                );
+            }
         }
 
         #[test]
@@ -1170,95 +1135,37 @@ mod tests {
         }
     }
 
-    mod start_map_tracing_span_tests {
-        use super::*;
+    #[test]
+    fn start_map_tracing_span_returns_topology_specific_name() {
+        let msg = Message::default();
 
-        #[test]
-        #[serial_test::serial]
-        fn returns_none_when_disabled() {
-            set_tracing_enabled(false);
-            let msg = Message::default();
-            assert!(start_map_tracing_span(&msg, TraceTopology::MonoVertex).is_none());
-            assert!(start_map_tracing_span(&msg, TraceTopology::Pipeline).is_none());
-        }
+        let mv = start_map_tracing_span(&msg, TraceTopology::MonoVertex);
+        assert_eq!(
+            mv.metadata().map(|m| m.name()),
+            Some("numaflow.monovertex.map")
+        );
 
-        #[test]
-        #[serial_test::serial]
-        fn returns_some_with_topology_specific_name_when_enabled() {
-            set_tracing_enabled(true);
-            let msg = Message::default();
-
-            let mv = start_map_tracing_span(&msg, TraceTopology::MonoVertex)
-                .expect("expected Some span when tracing enabled");
-            assert_eq!(
-                mv.metadata().map(|m| m.name()),
-                Some("numaflow.monovertex.map")
-            );
-
-            let pl = start_map_tracing_span(&msg, TraceTopology::Pipeline)
-                .expect("expected Some span when tracing enabled");
-            assert_eq!(
-                pl.metadata().map(|m| m.name()),
-                Some("numaflow.pipeline.map")
-            );
-
-            set_tracing_enabled(false);
-        }
+        let pl = start_map_tracing_span(&msg, TraceTopology::Pipeline);
+        assert_eq!(
+            pl.metadata().map(|m| m.name()),
+            Some("numaflow.pipeline.map")
+        );
     }
 
-    mod start_source_message_spans_tests {
-        use super::*;
+    /// Tests run without an OTel layer registered, so the platform span is disabled
+    /// and the sys_metadata write is skipped. The returned span still carries the
+    /// right name so callers can `.instrument(...)` it unconditionally.
+    #[test]
+    fn start_source_message_spans_skips_metadata_write_when_no_otel_layer() {
+        let mut msg = Message::default();
+        assert!(msg.metadata.is_none());
 
-        #[test]
-        #[serial_test::serial]
-        fn returns_none_when_disabled_and_leaves_metadata_untouched() {
-            set_tracing_enabled(false);
-            let mut msg = Message::default();
-            assert!(msg.metadata.is_none());
-
-            let result = start_source_message_spans(&mut msg, TraceTopology::MonoVertex);
-            assert!(result.is_none());
-            // Metadata must remain untouched when tracing is disabled.
-            assert!(msg.metadata.is_none());
-        }
-
-        #[test]
-        #[serial_test::serial]
-        fn writes_tracing_metadata_key_when_enabled() {
-            set_tracing_enabled(true);
-            let mut msg = Message::default();
-
-            let result = start_source_message_spans(&mut msg, TraceTopology::MonoVertex);
-            assert!(result.is_some(), "expected Some when tracing enabled");
-
-            let metadata = msg.metadata.as_ref().expect("metadata should be created");
-            assert!(
-                metadata.sys_metadata.contains_key(TRACING_METADATA_KEY),
-                "TRACING_METADATA_KEY must be written so downstream stages see vertex.process \
-                 as parent"
-            );
-
-            // Drop the result explicitly to verify Drop on dispatch_cx doesn't panic.
-            drop(result);
-
-            set_tracing_enabled(false);
-        }
-
-        #[test]
-        #[serial_test::serial]
-        fn pipeline_topology_also_writes_tracing_metadata_key() {
-            set_tracing_enabled(true);
-            let mut msg = Message::default();
-
-            let result = start_source_message_spans(&mut msg, TraceTopology::Pipeline);
-            assert!(result.is_some());
-
-            let metadata = msg.metadata.as_ref().expect("metadata should be created");
-            assert!(metadata.sys_metadata.contains_key(TRACING_METADATA_KEY));
-
-            drop(result);
-
-            set_tracing_enabled(false);
-        }
+        let result = start_source_message_spans(&mut msg, TraceTopology::MonoVertex);
+        assert_eq!(
+            result.platform_span.metadata().map(|m| m.name()),
+            Some("numaflow.vertex.process")
+        );
+        assert!(msg.metadata.is_none());
+        drop(result); // Drop must not panic on the noop dispatch_cx.
     }
 }

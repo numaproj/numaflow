@@ -57,7 +57,7 @@ impl MapBatchTask {
     /// Returns an error if any message in the batch fails to be processed.
     pub async fn execute(mut self) -> Result<()> {
         // Note: remove is_mono_vertex check once we implement pipeline tracing.
-        let tracing_enabled = self.is_mono_vertex && otel::tracing_enabled();
+        let tracing_enabled = self.is_mono_vertex;
 
         // Store parent message info for each message before sending to UDF
         let parent_infos: Vec<ParentMessageInfo> = self

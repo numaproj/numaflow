@@ -64,21 +64,26 @@ impl MapStreamTask {
     /// until the UDF response stream closes.
     async fn execute(self) {
         // Note: remove is_mono_vertex check once we implement pipeline tracing.
-        let map_span = if is_mono_vertex() {
-            otel::start_map_tracing_span(self.msg_handle.message(), otel::TraceTopology::MonoVertex)
+        // When no OTel layer is registered, `start_map_tracing_span` returns a disabled
+        // span and `.instrument(span)` is a no-op.
+        if is_mono_vertex() {
+            let span = otel::start_map_tracing_span(
+                self.msg_handle.message(),
+                otel::TraceTopology::MonoVertex,
+            );
+            self.execute_inner().instrument(span).await;
         } else {
-            None
-        };
-        match map_span {
-            Some(span) => self.execute_inner().instrument(span).await,
-            None => self.execute_inner().await,
+            self.execute_inner().await;
         }
     }
 
     async fn execute_inner(mut self) {
         // Hold the permit until the task completes
         let _permit = self.permit;
-        let tracing_enabled = is_mono_vertex() && otel::tracing_enabled();
+        // `execute()` only wraps us in a real map span on MonoVertex; on Pipeline the current
+        // span is `Span::none()`. A disabled span signals "no OTel layer registered" — skip the
+        // metadata copy-on-write.
+        let tracing_enabled = !tracing::Span::current().is_disabled();
 
         // Tracing: inject current `map` span context into
         // sys_metadata["tracing_udf"] so the UDF creates its processing span as a child.

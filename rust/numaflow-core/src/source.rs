@@ -531,7 +531,9 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 // (e.g., transformer error that breaks the outer loop) have their spans
                 // closed by the RAII guard when the map is dropped.
                 // Note: remove is_mono_vertex check once we implement pipeline tracing.
-                let tracing_enabled = is_mono_vertex() && otel::tracing_enabled();
+                // When no OTel layer is registered, the span constructors return disabled spans
+                // and noop dispatch contexts — the work below is cheap, no explicit gate needed.
+                let tracing_enabled = is_mono_vertex();
                 let mut dispatch_spans = otel::SourceDispatchSpans::new();
                 // Read-only parent contexts for `source.transform`; `dispatch_spans` remains the
                 // sole owner responsible for ending `source.dispatch`.
@@ -563,15 +565,16 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     // - Inject `vertex.process` context into sys_metadata["tracing"] so that map
                     //   and sink become siblings of `source.dispatch` under `vertex.process`.
                     let platform_span = if tracing_enabled {
-                        otel::start_source_message_spans(message, otel::TraceTopology::MonoVertex)
-                            .map(|spans| {
-                                if let Some(ref mut parent_contexts) = dispatch_parent_contexts {
-                                    parent_contexts
-                                        .insert(message.offset.clone(), spans.dispatch_cx.clone());
-                                }
-                                dispatch_spans.insert(message.offset.clone(), spans.dispatch_cx);
-                                spans.platform_span
-                            })
+                        let spans = otel::start_source_message_spans(
+                            message,
+                            otel::TraceTopology::MonoVertex,
+                        );
+                        if let Some(ref mut parent_contexts) = dispatch_parent_contexts {
+                            parent_contexts
+                                .insert(message.offset.clone(), spans.dispatch_cx.clone());
+                        }
+                        dispatch_spans.insert(message.offset.clone(), spans.dispatch_cx);
+                        Some(spans.platform_span)
                     } else {
                         None
                     };
