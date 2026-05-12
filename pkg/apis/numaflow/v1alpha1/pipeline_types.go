@@ -684,6 +684,7 @@ type PipelineLimits struct {
 	// ReadBatchSize controls only how many messages are fetched in a single read call from the source/buffer;
 	// it is not a cap on how many messages may be in-flight (use `concurrency` for that).
 	// +kubebuilder:default=500
+	// +kubebuilder:validation:Minimum=1
 	// +optional
 	ReadBatchSize *uint64 `json:"readBatchSize,omitempty" protobuf:"varint,1,opt,name=readBatchSize"`
 	// BufferMaxLength is used to define the max length of a buffer.
@@ -721,6 +722,7 @@ type PipelineLimits struct {
 	// read-ahead via the `READ_AHEAD` environment variable on the vertex's container template.
 	// Can be overridden by the vertex's limit settings.
 	// +kubebuilder:default=500
+	// +kubebuilder:validation:Minimum=1
 	// +optional
 	Concurrency *uint64 `json:"concurrency,omitempty" protobuf:"varint,6,opt,name=concurrency"`
 }

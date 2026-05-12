@@ -581,6 +581,7 @@ type MonoVertexLimits struct {
 	// ReadBatchSize controls only how many messages are fetched in a single read call from the source;
 	// it is not a cap on how many messages may be in-flight (use `concurrency` for that).
 	// +kubebuilder:default=500
+	// +kubebuilder:validation:Minimum=1
 	// +optional
 	ReadBatchSize *uint64 `json:"readBatchSize,omitempty" protobuf:"varint,1,opt,name=readBatchSize"`
 	// ReadTimeout is the read timeout duration from the source.
@@ -604,6 +605,7 @@ type MonoVertexLimits struct {
 	// messages can be processed in parallel. To force strictly sequential processing, set
 	// `concurrency` to 1 (read-ahead is already off by default for MonoVertex).
 	// +kubebuilder:default=500
+	// +kubebuilder:validation:Minimum=1
 	// +optional
 	Concurrency *uint64 `json:"concurrency,omitempty" protobuf:"varint,4,opt,name=concurrency"`
 }

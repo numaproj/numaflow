@@ -788,6 +788,7 @@ spec:
                           type: integer
                         concurrency:
                           format: int64
+                          minimum: 1
                           type: integer
                         rateLimit:
                           properties:
@@ -1019,6 +1020,7 @@ spec:
                           type: object
                         readBatchSize:
                           format: int64
+                          minimum: 1
                           type: integer
                         readTimeout:
                           type: string
@@ -1045,6 +1047,7 @@ spec:
                           type: integer
                         concurrency:
                           format: int64
+                          minimum: 1
                           type: integer
                         rateLimit:
                           properties:
@@ -1276,6 +1279,7 @@ spec:
                           type: object
                         readBatchSize:
                           format: int64
+                          minimum: 1
                           type: integer
                         readTimeout:
                           type: string
@@ -2258,6 +2262,7 @@ spec:
                     type: integer
                   concurrency:
                     format: int64
+                    minimum: 1
                     type: integer
                   rateLimit:
                     properties:
@@ -2489,6 +2494,7 @@ spec:
                     type: object
                   readBatchSize:
                     format: int64
+                    minimum: 1
                     type: integer
                   readTimeout:
                     type: string
@@ -6918,6 +6924,7 @@ spec:
                           type: integer
                         concurrency:
                           format: int64
+                          minimum: 1
                           type: integer
                         rateLimit:
                           properties:
@@ -7149,6 +7156,7 @@ spec:
                           type: object
                         readBatchSize:
                           format: int64
+                          minimum: 1
                           type: integer
                         readTimeout:
                           type: string
@@ -7175,6 +7183,7 @@ spec:
                           type: integer
                         concurrency:
                           format: int64
+                          minimum: 1
                           type: integer
                         rateLimit:
                           properties:
@@ -7406,6 +7415,7 @@ spec:
                           type: object
                         readBatchSize:
                           format: int64
+                          minimum: 1
                           type: integer
                         readTimeout:
                           type: string

@@ -1041,6 +1041,7 @@ message MonoVertexLimits {
   // ReadBatchSize controls only how many messages are fetched in a single read call from the source;
   // it is not a cap on how many messages may be in-flight (use `concurrency` for that).
   // +kubebuilder:default=500
+  // +kubebuilder:validation:Minimum=1
   // +optional
   optional uint64 readBatchSize = 1;
 
@@ -1067,6 +1068,7 @@ message MonoVertexLimits {
   // messages can be processed in parallel. To force strictly sequential processing, set
   // `concurrency` to 1 (read-ahead is already off by default for MonoVertex).
   // +kubebuilder:default=500
+  // +kubebuilder:validation:Minimum=1
   // +optional
   optional uint64 concurrency = 4;
 }
@@ -1297,6 +1299,7 @@ message PipelineLimits {
   // ReadBatchSize controls only how many messages are fetched in a single read call from the source/buffer;
   // it is not a cap on how many messages may be in-flight (use `concurrency` for that).
   // +kubebuilder:default=500
+  // +kubebuilder:validation:Minimum=1
   // +optional
   optional uint64 readBatchSize = 1;
 
@@ -1339,6 +1342,7 @@ message PipelineLimits {
   // read-ahead via the `READ_AHEAD` environment variable on the vertex's container template.
   // Can be overridden by the vertex's limit settings.
   // +kubebuilder:default=500
+  // +kubebuilder:validation:Minimum=1
   // +optional
   optional uint64 concurrency = 6;
 }
@@ -2267,6 +2271,7 @@ message VertexLimits {
   // It overrides the settings from pipeline limits.
   // ReadBatchSize controls only how many messages are fetched in a single read call from the source/buffer;
   // it is not a cap on how many messages may be in-flight (use `concurrency` for that).
+  // +kubebuilder:validation:Minimum=1
   // +optional
   optional uint64 readBatchSize = 1;
 
@@ -2302,6 +2307,7 @@ message VertexLimits {
   // By default, read-ahead is disabled on source vertices and enabled on Map/Sink/Reduce vertices.
   // To force strictly sequential processing, set `concurrency` to 1 and disable read-ahead via the
   // `READ_AHEAD` environment variable on the vertex's container template.
+  // +kubebuilder:validation:Minimum=1
   // +optional
   optional uint64 concurrency = 6;
 }

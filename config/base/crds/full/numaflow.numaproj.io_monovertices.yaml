@@ -2612,6 +2612,7 @@ spec:
                   concurrency:
                     default: 500
                     format: int64
+                    minimum: 1
                     type: integer
                   rateLimit:
                     properties:
@@ -2844,6 +2845,7 @@ spec:
                   readBatchSize:
                     default: 500
                     format: int64
+                    minimum: 1
                     type: integer
                   readTimeout:
                     default: 1s
