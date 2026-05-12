@@ -65,6 +65,11 @@ pub(crate) struct JetStreamWriter {
 impl JetStreamWriter {
     /// Creates a new JetStreamWriter for a single stream and spawns a background task
     /// to monitor buffer fullness.
+    ///
+    /// The writer starts in a full state (`is_full = true`) and the background task updates
+    /// it after the first stream poll. Callers using `BufferFullStrategy::DiscardLatest`
+    /// should wait for `is_full()` to return `false` before sending messages to avoid
+    /// silent drops during the brief startup window.
     pub(crate) async fn new(
         stream: Stream,
         js_ctx: Context,
@@ -72,7 +77,7 @@ impl JetStreamWriter {
         compression_type: Option<CompressionType>,
         cln_token: CancellationToken,
     ) -> Result<Self> {
-        let is_full = Arc::new(AtomicBool::new(false));
+        let is_full = Arc::new(AtomicBool::new(true));
 
         // Build metric labels once during initialization
         let buffer_labels = Arc::new(jetstream_isb_metrics_labels(stream.name));
@@ -685,7 +690,20 @@ mod tests {
             ..Default::default()
         };
 
-        let result = writer.async_write(message).await;
+        // Retry on BufferFull until 2s timeout — is_full is initialized to true and
+        // the background task flips it to false after the first stream poll.
+        let result = tokio::time::timeout(tokio::time::Duration::from_secs(2), async {
+            loop {
+                match writer.async_write(message.clone()).await {
+                    Err(WriteError::BufferFull) => {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                    }
+                    other => break other,
+                }
+            }
+        })
+        .await
+        .expect("timed out waiting for buffer to become available");
         assert!(
             result.is_ok(),
             "async_write with compression should succeed"
@@ -760,7 +778,20 @@ mod tests {
             ..Default::default()
         };
 
-        let result = writer.write(message).await;
+        // Retry on BufferFull until 2s timeout — is_full is initialized to true and
+        // the background task flips it to false after the first stream poll.
+        let result = tokio::time::timeout(tokio::time::Duration::from_secs(2), async {
+            loop {
+                match writer.write(message.clone()).await {
+                    Err(WriteError::BufferFull) => {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                    }
+                    other => break other,
+                }
+            }
+        })
+        .await
+        .expect("timed out waiting for buffer to become available");
         assert!(result.is_ok(), "write with compression should succeed");
 
         // Verify the WriteResult has the expected structure
