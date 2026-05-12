@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -7,19 +7,19 @@ use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
 use crate::{mark_failed, mark_success};
-use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
-use tokio::sync::{OwnedSemaphorePermit, mpsc};
+use numaflow_pb::clients::map::{self, map_client::MapClient, MapRequest, MapResponse};
+use tokio::sync::{mpsc, OwnedSemaphorePermit};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
-use tonic::Streaming;
 use tonic::transport::Channel;
+use tonic::Streaming;
 use tracing::{error, warn};
 
 use super::{
-    ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
-    create_response_stream, update_udf_error_metric, update_udf_process_time_metric,
-    update_udf_read_metric, update_udf_write_only_metric,
+    create_response_stream, update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
+    update_udf_write_only_metric, ParentMessageInfo, SharedMapTaskContext,
+    UserDefinedMessage, STREAMING_MAP_RESP_CHANNEL_SIZE,
 };
 
 /// Type alias for the stream response - raw results from the UDF
@@ -89,14 +89,14 @@ impl MapStreamTask {
                     self.process_results(&mut parent_info, results).await;
                 }
                 Some(Err(e)) => {
-                    error!(parent_id = ?self.msg_handle.message.id, ?e, "failed to map message");
+                    error!(msg_id = ?self.msg_handle.message.id, ?e, "failed to map message");
                     mark_failed!(self.msg_handle, &e);
                     let _ = self.shared_ctx.error_tx.send(e).await;
                     return;
                 }
                 None => {
-                    // Channel closed — stream ended cleanly
-                    // Fall through to mark_success below.
+                    // Channel closed — stream ended cleanly (e.g., UDF returned empty results or
+                    // finished after sending all results). Fall through to mark_success below.
                     break;
                 }
             }
@@ -106,12 +106,17 @@ impl MapStreamTask {
         mark_success!(self.msg_handle);
     }
 
+    /// Materializes each raw UDF result into a [`Message`] (stamped with a monotonic
+    /// `current_index` for unique child offsets), appends it to the tracker so the
+    /// parent's ACK is deferred until all children are written, then either routes it
+    /// through `bypass_router` (consumed if bypassed) or forwards it to `output_tx`.
+    ///
+    /// `parent_info.current_index` is mutated and persists across calls for the same parent.
     async fn process_results(
         &self,
         parent_info: &mut ParentMessageInfo,
         results: Vec<map::map_response::Result>,
     ) {
-        // Convert raw results to Messages using parent info
         for result in results {
             let mapped_message: Message =
                 UserDefinedMessage(result, parent_info, parent_info.current_index).into();
@@ -253,9 +258,8 @@ impl UserDefinedStreamMap {
                 .remove(&resp.id)
         };
 
-        // once we get eot from UDF, we'll drop the sender to let the
-        // receiver know that we're done processing responses
-        // Safe to drop the sender after this.
+        // once we get eot, we can drop the sender to let the callee
+        // know that we are done sending responses
         if let Some(map::TransmissionStatus { eot: true }) = resp.status {
             update_udf_process_time_metric(is_mono_vertex());
             return Ok(());
