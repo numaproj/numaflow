@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -7,19 +7,19 @@ use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
 use crate::{mark_failed, mark_success};
-use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
-use tokio::sync::{OwnedSemaphorePermit, mpsc};
+use numaflow_pb::clients::map::{self, map_client::MapClient, MapRequest, MapResponse};
+use tokio::sync::{mpsc, OwnedSemaphorePermit};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
-use tonic::Streaming;
 use tonic::transport::Channel;
+use tonic::Streaming;
 use tracing::{error, warn};
 
 use super::{
-    ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
-    create_response_stream, update_udf_error_metric, update_udf_process_time_metric,
-    update_udf_read_metric, update_udf_write_only_metric,
+    create_response_stream, update_udf_error_metric, update_udf_process_time_metric, update_udf_read_metric,
+    update_udf_write_only_metric, ParentMessageInfo, SharedMapTaskContext,
+    UserDefinedMessage, STREAMING_MAP_RESP_CHANNEL_SIZE,
 };
 
 /// Type alias for the stream response - raw results from the UDF
@@ -107,9 +107,10 @@ impl MapStreamTask {
     }
 
     /// Materializes each raw UDF result into a [`Message`] (stamped with a monotonic
-    /// `current_index` for unique child offsets), appends it to the tracker so the
-    /// parent's ACK is deferred until all children are written, then either routes it
-    /// through `bypass_router` (consumed if bypassed) or forwards it to `output_tx`.
+    /// `current_index` for unique child offsets), create a child msg_handle from child
+    /// message and parent msg_handle so the parent's ACK is deferred until all children
+    /// are written, then either routes it through `bypass_router` (consumed if bypassed)
+    /// or forwards it to `output_tx`.
     ///
     /// `parent_info.current_index` is mutated and persists across calls for the same parent.
     async fn process_results(
