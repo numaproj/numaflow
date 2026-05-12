@@ -391,13 +391,14 @@ impl SinkWriter {
         // Tracing: per-message on-success sink stage spans.
         // Span lifetime is scoped to only the on-success sink actor call.
         let on_success_response = {
-            let _stage_spans = (tracing_enabled && self.on_success_sink_handle.is_some()).then(|| {
-                otel::inject_stage_spans!(
-                    messages.iter_mut(),
-                    otel::TraceTopology::MonoVertex,
-                    otel::TraceStage::Sink(otel::SinkStage::OnSuccess),
-                )
-            });
+            let _stage_spans =
+                (tracing_enabled && self.on_success_sink_handle.is_some()).then(|| {
+                    otel::inject_stage_spans!(
+                        messages.iter_mut(),
+                        otel::TraceTopology::MonoVertex,
+                        otel::TraceStage::Sink(otel::SinkStage::OnSuccess),
+                    )
+                });
             self.write_to_on_success_sink(messages, cln_token.clone())
                 .await?
         };
