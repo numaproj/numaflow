@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 use tonic::Streaming;
 use tonic::transport::Channel;
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 
 use super::{
     ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
@@ -23,11 +23,7 @@ use super::{
 };
 
 /// Type alias for the stream response - raw results from the UDF
-#[derive(Debug)]
-pub(in crate::mapper) enum StreamMapResponse {
-    Data(Vec<map::map_response::Result>),
-    Eot,
-}
+pub(in crate::mapper) type StreamMapResponse = Vec<map::map_response::Result>;
 
 /// Type aliases for HashMap used to track the oneshot response sender for each request keyed by
 /// message id.
@@ -48,6 +44,7 @@ pub(in crate::mapper) struct StreamSenderMapState {
 /// MapStreamTask encapsulates all the context needed to execute a stream map operation.
 pub(in crate::mapper) struct MapStreamTask {
     pub mapper: UserDefinedStreamMap,
+    #[allow(dead_code)]
     pub permit: OwnedSemaphorePermit,
     pub msg_handle: MessageHandle,
     pub shared_ctx: Arc<SharedMapTaskContext>,
@@ -64,9 +61,6 @@ impl MapStreamTask {
 
     /// Executes the stream map operation.
     async fn execute(self) {
-        // Hold the permit until the task completes
-        let _permit = self.permit;
-
         // Store parent message info before sending to UDF
         // parent_info contains offset, so we don't need to clone it separately
         let mut parent_info: ParentMessageInfo = self.msg_handle.message().into();
@@ -89,120 +83,73 @@ impl MapStreamTask {
             .await
             .expect("failed to reset tracker");
 
-        info!(?self.msg_handle.message.id, "Received message id");
-
-        let mut produced_count: u32 = 0;
-        let mut sent_count: u32 = 0;
-
         loop {
-            tokio::select! {
-                result = receiver.recv() => {
-                    match result {
-                        Some(Ok(stream_resp)) => {
-                            match stream_resp {
-                                StreamMapResponse::Data(results) => {
-                                    // Convert raw results to Messages using parent info
-                                    for result in results {
-                                        let mapped_message: Message = UserDefinedMessage(
-                                            result,
-                                            &parent_info,
-                                            parent_info.current_index,
-                                        )
-                                        .into();
-                                        parent_info.current_index += 1;
-                                        produced_count += 1;
-
-                                        update_udf_write_only_metric(self.shared_ctx.is_mono_vertex);
-
-                                        self.shared_ctx
-                                            .tracker
-                                            .serving_append(
-                                                mapped_message.offset.clone(),
-                                                mapped_message.tags.clone(),
-                                            )
-                                            .await
-                                            .expect("failed to update tracker");
-
-                                        // Each downstream handle shares the original ack tracking — ACK is
-                                        // deferred until all mapped messages are written to ISB/sink.
-                                        let msg_handle = self.msg_handle.with_message(mapped_message);
-
-                                        // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
-                                        // If not bypassed, it returns Some(msg_handle) for us to send downstream.
-                                        let msg_handle = if let Some(ref bypass_router) =
-                                            self.shared_ctx.bypass_router
-                                        {
-                                            match bypass_router
-                                                .try_bypass(msg_handle)
-                                                .await
-                                                .expect("failed to send message to bypass channel")
-                                            {
-                                                Some(msg) => msg,
-                                                None => continue, // Message was bypassed, move to next
-                                            }
-                                        } else {
-                                            msg_handle
-                                        };
-
-                                        info!(
-                                            parent_id = ?self.msg_handle.message.id,
-                                            child_id = ?msg_handle.message.id,
-                                            "Sending message id"
-                                        );
-
-                                        self.shared_ctx
-                                            .output_tx
-                                            .send(msg_handle)
-                                            .await
-                                            .expect("failed to send response");
-                                        sent_count += 1;
-                                    }
-                                }
-                                // received EOT response, ok to end monitoring the stream
-                                StreamMapResponse::Eot => {
-                                    info!(
-                                        parent_id = ?self.msg_handle.message.id,
-                                        produced = produced_count,
-                                        sent = sent_count,
-                                        "stream complete"
-                                    );
-                                    break;
-                                }
-                            }
-                        }
-                        Some(Err(e)) => {
-                            error!(parent_id = ?self.msg_handle.message.id, ?e, "failed to map message");
-                            mark_failed!(self.msg_handle, &e);
-                            let _ = self.shared_ctx.error_tx.send(e).await;
-                            return;
-                        }
-                        None => {
-                            // Channel closed — stream ended abruptly
-                            let e = Error::Mapper("Did not receive EOT from stream receiver task".into());
-                            error!(parent_id = ?self.msg_handle.message.id, ?e, "failed to map message");
-                            mark_failed!(self.msg_handle, &e);
-                            let _ = self.shared_ctx.error_tx.send(e).await;
-                            return;
-                        }
-                    }
+            match receiver.recv().await {
+                Some(Ok(results)) => {
+                    self.process_results(&mut parent_info, results).await;
                 }
-                _ = self.shared_ctx.hard_shutdown_token.cancelled() => {
-                    let e = Error::Mapper("Map Stream cancelled, current message will be nacked".into());
-                    warn!(parent_id = ?self.msg_handle.message.id, ?e, "failed to map message");
+                Some(Err(e)) => {
+                    error!(parent_id = ?self.msg_handle.message.id, ?e, "failed to map message");
                     mark_failed!(self.msg_handle, &e);
+                    let _ = self.shared_ctx.error_tx.send(e).await;
                     return;
+                }
+                None => {
+                    // Channel closed — stream ended cleanly
+                    // Fall through to mark_success below.
+                    break;
                 }
             }
         }
 
-        info!(
-            parent_id = ?self.msg_handle.message.id,
-            produced = produced_count,
-            sent = sent_count,
-            "marking message as successful"
-        );
         // Decrement the original ref_count now that we've accounted for all downstream messages.
         mark_success!(self.msg_handle);
+    }
+
+    async fn process_results(
+        &self,
+        parent_info: &mut ParentMessageInfo,
+        results: Vec<map::map_response::Result>,
+    ) {
+        // Convert raw results to Messages using parent info
+        for result in results {
+            let mapped_message: Message =
+                UserDefinedMessage(result, parent_info, parent_info.current_index).into();
+            parent_info.current_index += 1;
+
+            update_udf_write_only_metric(self.shared_ctx.is_mono_vertex);
+
+            self.shared_ctx
+                .tracker
+                .serving_append(mapped_message.offset.clone(), mapped_message.tags.clone())
+                .await
+                .expect("failed to update tracker");
+
+            // Each downstream handle shares the original ack tracking — ACK is
+            // deferred until all mapped messages are written to ISB/sink.
+            let msg_handle = self.msg_handle.with_message(mapped_message);
+
+            // Try to bypass the message. If bypassed, try_bypass takes ownership and returns None.
+            // If not bypassed, it returns Some(msg_handle) for us to send downstream.
+            let msg_handle = if let Some(ref bypass_router) = self.shared_ctx.bypass_router {
+                match bypass_router
+                    .try_bypass(msg_handle)
+                    .await
+                    .expect("failed to send message to bypass channel")
+                {
+                    Some(msg) => msg,
+                    None => continue, // Message was bypassed, move to next
+                }
+            } else {
+                msg_handle
+            };
+
+            self.shared_ctx
+                .output_tx
+                .send(msg_handle)
+                .await
+                .expect("failed to send response");
+        }
     }
 }
 
@@ -306,25 +253,15 @@ impl UserDefinedStreamMap {
                 .remove(&resp.id)
         };
 
-        if let Some(response_sender) = response_sender_entry {
-            // once we get eot from UDF, we'll also send an eot to the execute task,
-            // to let the listener know we're done sending responses.
-            // Safe to drop the sender after this
-            if let Some(map::TransmissionStatus { eot: true }) = resp.status {
-                update_udf_process_time_metric(is_mono_vertex());
-                if response_sender
-                    .send(Ok(StreamMapResponse::Eot))
-                    .await
-                    .is_err()
-                {
-                    return Err(Error::Mapper(format!(
-                        "Failed to send EOT to stream task for ID: {:?}",
-                        resp.id
-                    )));
-                };
-                return Ok(());
-            }
+        // once we get eot from UDF, we'll drop the sender to let the
+        // receiver know that we're done processing responses
+        // Safe to drop the sender after this.
+        if let Some(map::TransmissionStatus { eot: true }) = resp.status {
+            update_udf_process_time_metric(is_mono_vertex());
+            return Ok(());
+        }
 
+        if let Some(response_sender) = response_sender_entry {
             // move the senders_guard out of the scope to drop the guard before sending the response
             // Insert the sender back into the SenderMap to avoid yielding back control
             // to the tokio runtime during send on the actual sender
@@ -347,11 +284,7 @@ impl UserDefinedStreamMap {
                 return Ok(());
             }
 
-            if response_sender
-                .send(Ok(StreamMapResponse::Data(resp.results)))
-                .await
-                .is_err()
-            {
+            if response_sender.send(Ok(resp.results)).await.is_err() {
                 {
                     let mut sender_guard =
                         sender_map.lock().expect("failed to acquire poisoned lock");
@@ -543,21 +476,12 @@ mod tests {
         let cln_token = tokio_util::sync::CancellationToken::new();
         let mut rx = client.stream(request, cln_token).await;
 
-        // Collect all response batches until we observe EOT.
+        // Collect all response batches
         let mut all_results = vec![];
-        let mut saw_eot = false;
         while let Some(response) = rx.recv().await {
-            match response? {
-                crate::mapper::map::stream::StreamMapResponse::Data(results) => {
-                    all_results.extend(results);
-                }
-                crate::mapper::map::stream::StreamMapResponse::Eot => {
-                    saw_eot = true;
-                    break;
-                }
-            }
+            let results = response?;
+            all_results.extend(results);
         }
-        assert!(saw_eot, "expected explicit EOT from stream receiver task");
 
         assert_eq!(all_results.len(), 3);
         // convert the bytes value to string and compare
@@ -666,9 +590,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn process_response_forwards_eot_to_response_sender() {
-        use crate::mapper::map::stream::StreamMapResponse;
-
+    async fn process_response_drops_sender_on_eot_without_error() {
         let sender_map = Arc::new(Mutex::new(StreamSenderMapState::default()));
         let (tx, mut rx) = mpsc::channel(1);
         sender_map.lock().unwrap().map.insert("0".to_string(), tx);
@@ -677,18 +599,11 @@ mod tests {
             UserDefinedStreamMap::process_response(&sender_map, make_response("0", true)).await;
         assert!(result.is_ok(), "EOT path should return Ok");
 
-        // EOT must be delivered to the response sender so the consumer loop can
-        // distinguish a clean end-of-stream from an abrupt channel close.
-        let received = rx.recv().await.expect("expected EOT on response channel");
-        let resp = received.expect("EOT delivery should be Ok");
-        assert!(
-            matches!(resp, StreamMapResponse::Eot),
-            "expected StreamMapResponse::Eot, got {resp:?}"
-        );
-
-        // After dropping the EOT payload, the sender goes out of scope and the
-        // channel closes — confirm no further messages arrive.
-        assert!(rx.recv().await.is_none());
+        // EOT does not deliver a payload to the response sender.
+        assert!(matches!(
+            rx.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty | mpsc::error::TryRecvError::Disconnected)
+        ));
 
         // EOT removes the sender from the map (and never re-inserts it),
         // letting the corresponding receiver loop terminate.
