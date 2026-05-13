@@ -44,6 +44,7 @@ pub(in crate::mapper) struct StreamSenderMapState {
 /// MapStreamTask encapsulates all the context needed to execute a stream map operation.
 pub(in crate::mapper) struct MapStreamTask {
     pub mapper: UserDefinedStreamMap,
+    // Held for the lifetime of execute(); dropping self releases the slot back to the semaphore.
     #[allow(dead_code)]
     pub permit: OwnedSemaphorePermit,
     pub msg_handle: MessageHandle,
@@ -351,7 +352,7 @@ impl UserDefinedStreamMap {
                 .lock()
                 .expect("failed to acquire poisoned lock");
             if senders_guard.closed {
-                Some("mapper closed".to_string())
+                Some("stream mapper closed".to_string())
             } else {
                 match senders_guard.map.entry(key.clone()) {
                     Entry::Occupied(_) => Some(format!(
@@ -370,7 +371,7 @@ impl UserDefinedStreamMap {
             return rx;
         }
 
-        // only insert if we are able to send the message to the server
+        // Sender is already registered in the map; forward the request to the UDF server.
         if let Err(e) = self.read_tx.send(request).await {
             error!(?e, "Failed to send message to map stream udf server");
             // We should ideally remove the resp.id from the SenderMap to avoid potential
