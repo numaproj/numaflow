@@ -67,25 +67,19 @@ impl MapStreamTask {
         let map_span = if is_mono_vertex() {
             otel::start_map_tracing_span(self.msg_handle.message(), otel::TraceTopology::MonoVertex)
         } else {
-            None
+            tracing::Span::none()
         };
-        match map_span {
-            Some(span) => self.execute_inner().instrument(span).await,
-            None => self.execute_inner().await,
-        }
+        self.execute_inner().instrument(map_span).await
     }
 
     async fn execute_inner(mut self) {
         // Hold the permit until the task completes
         let _permit = self.permit;
-        let tracing_enabled = is_mono_vertex() && otel::tracing_enabled();
 
         // Tracing: inject current `map` span context into
         // sys_metadata["tracing_udf"] so the UDF creates its processing span as a child.
         // sys_metadata["tracing"] remains unchanged (holds vertex.process).
-        if tracing_enabled {
-            otel::inject_current_span_as_udf_parent(self.msg_handle.message_mut());
-        }
+        otel::inject_current_span_as_udf_parent(self.msg_handle.message_mut());
 
         // Store parent message info before sending to UDF
         // parent_info contains offset, so we don't need to clone it separately
@@ -120,9 +114,7 @@ impl MapStreamTask {
                             UserDefinedMessage(result, &parent_info, parent_info.current_index)
                                 .into();
                         parent_info.current_index += 1;
-                        if tracing_enabled {
-                            mapped_message.strip_tracing_udf();
-                        }
+                        mapped_message.strip_tracing_udf();
 
                         update_udf_write_only_metric(self.shared_ctx.is_mono_vertex);
 

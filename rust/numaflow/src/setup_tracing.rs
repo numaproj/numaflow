@@ -254,14 +254,8 @@ pub fn register() -> TracerProviderGuard {
 
     let service_name = std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "platform".into());
     let (otel_layer, tracer_provider) = match init_otlp_layer(service_name) {
-        Some((layer, provider)) => {
-            numaflow_core::set_otel_tracing_enabled(true);
-            (Some(layer), Some(provider))
-        }
-        None => {
-            numaflow_core::set_otel_tracing_enabled(false);
-            (None, None)
-        }
+        Some((layer, provider)) => (Some(layer), Some(provider)),
+        None => (None, None),
     };
 
     // Only export spans (info_span!, tracing::Span) to the OTel layer, not log

@@ -378,16 +378,6 @@ mod tests {
         span.record_output_count(1);
     }
 
-    #[test]
-    #[serial_test::serial]
-    fn source_transform_span_disabled_tracing_is_inert() {
-        otel::set_tracing_enabled(false);
-        let span =
-            otel::SourceTransformSpan::new(Some(opentelemetry::Context::new()), "msg-1".into());
-        assert!(!span.is_active());
-        span.record_output_count(1);
-    }
-
     #[tokio::test]
     async fn transformer_operations() -> Result<()> {
         let (shutdown_tx, shutdown_rx) = oneshot::channel();

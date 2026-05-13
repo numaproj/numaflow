@@ -6,7 +6,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use opentelemetry::global;
 use opentelemetry::propagation::{Extractor, Injector};
@@ -14,20 +13,6 @@ use opentelemetry::trace::{TraceContextExt as _, Tracer};
 
 use crate::message::Message;
 use crate::metadata::{KeyValueGroup, Metadata};
-
-static TRACING_ENABLED: AtomicBool = AtomicBool::new(false);
-
-/// Enable or disable tracing spans and context propagation.
-/// This is set by the binary after OTLP initialization succeeds. When disabled,
-/// code that creates tracing spans skips trace metadata work entirely.
-pub(crate) fn set_tracing_enabled(enabled: bool) {
-    TRACING_ENABLED.store(enabled, Ordering::Relaxed);
-}
-
-/// Returns whether tracing spans should be created.
-pub(crate) fn tracing_enabled() -> bool {
-    TRACING_ENABLED.load(Ordering::Relaxed)
-}
 
 /// Key under which W3C trace context is stored in `sys_metadata`.
 /// Always holds the shared `vertex.process` parent context for downstream
@@ -470,13 +455,7 @@ pub(crate) fn inject_current_span_as_udf_parent(message: &mut Message) {
 ///
 /// Callers wrap their UDF call in `.instrument(span)`. Topology selection (e.g. mono-vertex only,
 /// until pipeline tracing lands) stays at the call site.
-pub(crate) fn start_map_tracing_span(
-    message: &Message,
-    topology: TraceTopology,
-) -> Option<tracing::Span> {
-    if !tracing_enabled() {
-        return None;
-    }
+pub(crate) fn start_map_tracing_span(message: &Message, topology: TraceTopology) -> tracing::Span {
     let parent_cx = parent_context_from_metadata(message.metadata.as_deref());
     let msg_id = message.offset.to_string();
     let span = match topology {
@@ -503,7 +482,7 @@ pub(crate) fn start_map_tracing_span(
     };
     use tracing_opentelemetry::OpenTelemetrySpanExt;
     let _ = span.set_parent(parent_cx);
-    Some(span)
+    span
 }
 
 /// Spans created for a single source message.
@@ -518,7 +497,7 @@ pub(crate) struct SourceMessageSpans {
 }
 
 /// Builds the per-message platform.process and source.dispatch spans for a single source-read
-/// message. Returns `None` when tracing is disabled.
+/// message.
 ///
 /// As a side-effect, this writes the `vertex.process` context into
 /// `message.metadata.sys_metadata[TRACING_METADATA_KEY]` so downstream stages (map, sink) can
@@ -527,10 +506,7 @@ pub(crate) struct SourceMessageSpans {
 pub(crate) fn start_source_message_spans(
     message: &mut Message,
     topology: TraceTopology,
-) -> Option<SourceMessageSpans> {
-    if !tracing_enabled() {
-        return None;
-    }
+) -> SourceMessageSpans {
     let upstream_cx = extract_trace_context_from_headers(&message.headers);
     let msg_id = message.offset.to_string();
     let platform_span = match topology {
@@ -568,10 +544,10 @@ pub(crate) fn start_source_message_spans(
     let dispatch_spec: SpanSpec = (topology, TraceStage::SourceDispatch).into();
     let dispatch_cx = start_child_span_from_spec(&platform_cx, msg_id, &dispatch_spec);
 
-    Some(SourceMessageSpans {
+    SourceMessageSpans {
         platform_span,
         dispatch_cx,
-    })
+    }
 }
 
 /// Tracks per-message source dispatch OTel spans keyed by message offset.
@@ -649,10 +625,6 @@ pub(crate) struct SourceTransformSpan(Option<opentelemetry::Context>);
 
 impl SourceTransformSpan {
     pub(crate) fn new(parent_cx: Option<opentelemetry::Context>, msg_id: String) -> Self {
-        if !tracing_enabled() {
-            return Self(None);
-        }
-
         let Some(parent_cx) = parent_cx else {
             return Self(None);
         };
@@ -714,19 +686,6 @@ mod tests {
     fn context_from_traceparent(traceparent: &str) -> opentelemetry::Context {
         let carrier = kvg_with(&[("traceparent", traceparent)]);
         global::get_text_map_propagator(|prop| prop.extract(&MetadataExtractor(&carrier)))
-    }
-
-    #[test]
-    #[serial_test::serial]
-    fn tracing_enabled_flag_tracks_configured_state() {
-        set_tracing_enabled(false);
-        assert!(!tracing_enabled());
-
-        set_tracing_enabled(true);
-        assert!(tracing_enabled());
-
-        set_tracing_enabled(false);
-        assert!(!tracing_enabled());
     }
 
     #[test]
@@ -1190,35 +1149,20 @@ mod tests {
         use super::*;
 
         #[test]
-        #[serial_test::serial]
-        fn returns_none_when_disabled() {
-            set_tracing_enabled(false);
-            let msg = Message::default();
-            assert!(start_map_tracing_span(&msg, TraceTopology::MonoVertex).is_none());
-            assert!(start_map_tracing_span(&msg, TraceTopology::Pipeline).is_none());
-        }
-
-        #[test]
-        #[serial_test::serial]
-        fn returns_some_with_topology_specific_name_when_enabled() {
-            set_tracing_enabled(true);
+        fn always_returns_span_with_topology_specific_name() {
             let msg = Message::default();
 
-            let mv = start_map_tracing_span(&msg, TraceTopology::MonoVertex)
-                .expect("expected Some span when tracing enabled");
+            let mv = start_map_tracing_span(&msg, TraceTopology::MonoVertex);
             assert_eq!(
                 mv.metadata().map(|m| m.name()),
                 Some("numaflow.monovertex.map")
             );
 
-            let pl = start_map_tracing_span(&msg, TraceTopology::Pipeline)
-                .expect("expected Some span when tracing enabled");
+            let pl = start_map_tracing_span(&msg, TraceTopology::Pipeline);
             assert_eq!(
                 pl.metadata().map(|m| m.name()),
                 Some("numaflow.pipeline.map")
             );
-
-            set_tracing_enabled(false);
         }
     }
 
@@ -1226,26 +1170,10 @@ mod tests {
         use super::*;
 
         #[test]
-        #[serial_test::serial]
-        fn returns_none_when_disabled_and_leaves_metadata_untouched() {
-            set_tracing_enabled(false);
-            let mut msg = Message::default();
-            assert!(msg.metadata.is_none());
-
-            let result = start_source_message_spans(&mut msg, TraceTopology::MonoVertex);
-            assert!(result.is_none());
-            // Metadata must remain untouched when tracing is disabled.
-            assert!(msg.metadata.is_none());
-        }
-
-        #[test]
-        #[serial_test::serial]
-        fn writes_tracing_metadata_key_when_enabled() {
-            set_tracing_enabled(true);
+        fn always_injects_tracing_metadata_key() {
             let mut msg = Message::default();
 
             let result = start_source_message_spans(&mut msg, TraceTopology::MonoVertex);
-            assert!(result.is_some(), "expected Some when tracing enabled");
 
             let metadata = msg.metadata.as_ref().expect("metadata should be created");
             assert!(
@@ -1256,25 +1184,18 @@ mod tests {
 
             // Drop the result explicitly to verify Drop on dispatch_cx doesn't panic.
             drop(result);
-
-            set_tracing_enabled(false);
         }
 
         #[test]
-        #[serial_test::serial]
         fn pipeline_topology_also_writes_tracing_metadata_key() {
-            set_tracing_enabled(true);
             let mut msg = Message::default();
 
             let result = start_source_message_spans(&mut msg, TraceTopology::Pipeline);
-            assert!(result.is_some());
 
             let metadata = msg.metadata.as_ref().expect("metadata should be created");
             assert!(metadata.sys_metadata.contains_key(TRACING_METADATA_KEY));
 
             drop(result);
-
-            set_tracing_enabled(false);
         }
     }
 }

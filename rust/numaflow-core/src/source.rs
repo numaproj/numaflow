@@ -530,12 +530,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 // Any messages whose dispatch spans are still in the map at end-of-iteration
                 // (e.g., transformer error that breaks the outer loop) have their spans
                 // closed by the RAII guard when the map is dropped.
-                // Note: remove is_mono_vertex check once we implement pipeline tracing.
-                let tracing_enabled = is_mono_vertex() && otel::tracing_enabled();
                 let mut dispatch_spans = otel::SourceDispatchSpans::new();
                 // Read-only parent contexts for `source.transform`; `dispatch_spans` remains the
                 // sole owner responsible for ending `source.dispatch`.
-                let mut dispatch_parent_contexts = if tracing_enabled && self.transformer.is_some()
+                // Note: remove is_mono_vertex check once we implement pipeline tracing.
+                let mut dispatch_parent_contexts = if is_mono_vertex() && self.transformer.is_some()
                 {
                     Some(HashMap::with_capacity(msgs_len))
                 } else {
@@ -562,16 +561,17 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     //   source read latency.
                     // - Inject `vertex.process` context into sys_metadata["tracing"] so that map
                     //   and sink become siblings of `source.dispatch` under `vertex.process`.
-                    let platform_span = if tracing_enabled {
-                        otel::start_source_message_spans(message, otel::TraceTopology::MonoVertex)
-                            .map(|spans| {
-                                if let Some(ref mut parent_contexts) = dispatch_parent_contexts {
-                                    parent_contexts
-                                        .insert(message.offset.clone(), spans.dispatch_cx.clone());
-                                }
-                                dispatch_spans.insert(message.offset.clone(), spans.dispatch_cx);
-                                spans.platform_span
-                            })
+                    let platform_span = if is_mono_vertex() {
+                        let spans = otel::start_source_message_spans(
+                            message,
+                            otel::TraceTopology::MonoVertex,
+                        );
+                        if let Some(ref mut parent_contexts) = dispatch_parent_contexts {
+                            parent_contexts
+                                .insert(message.offset.clone(), spans.dispatch_cx.clone());
+                        }
+                        dispatch_spans.insert(message.offset.clone(), spans.dispatch_cx);
+                        Some(spans.platform_span)
                     } else {
                         None
                     };

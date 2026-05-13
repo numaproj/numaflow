@@ -69,12 +69,9 @@ impl MapUnaryTask {
         let map_span = if is_mono_vertex() {
             otel::start_map_tracing_span(self.msg_handle.message(), otel::TraceTopology::MonoVertex)
         } else {
-            None
+            tracing::Span::none()
         };
-        match map_span {
-            Some(span) => self.execute_inner().instrument(span).await,
-            None => self.execute_inner().await,
-        }
+        self.execute_inner().instrument(map_span).await
     }
 
     /// The core unary map execution. When called under `.instrument(map_span)`, the current
@@ -84,7 +81,6 @@ impl MapUnaryTask {
     async fn execute_inner(mut self) {
         // Hold the permit until the task completes
         let _permit = self.permit;
-        let tracing_enabled = is_mono_vertex() && otel::tracing_enabled();
 
         // Tracing: inject the current `map` span's context into
         // sys_metadata["tracing_udf"] so the UDF creates its processing span as a child.
@@ -92,9 +88,7 @@ impl MapUnaryTask {
         // tracing_udf is written to the input message here and removed from every
         // result message below. On UDF error, we return early without producing result messages,
         // and the input message is dropped — so tracing_udf never propagates downstream.
-        if tracing_enabled {
-            otel::inject_current_span_as_udf_parent(self.msg_handle.message_mut());
-        }
+        otel::inject_current_span_as_udf_parent(self.msg_handle.message_mut());
 
         // Store parent message info before sending to UDF
         // parent_info contains offset, so we don't need to clone it separately
@@ -126,9 +120,7 @@ impl MapUnaryTask {
         let mut mapped_messages: Vec<Message> = Vec::with_capacity(results_len);
         for (i, result) in results.into_iter().enumerate() {
             let mut mapped_msg: Message = UserDefinedMessage(result, &parent_info, i as i32).into();
-            if tracing_enabled {
-                mapped_msg.strip_tracing_udf();
-            }
+            mapped_msg.strip_tracing_udf();
             mapped_messages.push(mapped_msg);
         }
 

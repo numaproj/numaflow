@@ -56,9 +56,6 @@ impl MapBatchTask {
     /// Executes the batch map operation.
     /// Returns an error if any message in the batch fails to be processed.
     pub async fn execute(mut self) -> Result<()> {
-        // Note: remove is_mono_vertex check once we implement pipeline tracing.
-        let tracing_enabled = is_mono_vertex() && otel::tracing_enabled();
-
         // Store parent message info for each message before sending to UDF
         let parent_infos: Vec<ParentMessageInfo> = self
             .msg_handles
@@ -75,7 +72,7 @@ impl MapBatchTask {
             //
             // Invariant: tracing_udf is removed from result messages below; on error, input
             // messages are dropped, so tracing_udf never propagates further.
-            let _span_guard = if tracing_enabled {
+            let _span_guard = if is_mono_vertex() {
                 Some(otel::inject_stage_spans(
                     &mut self.msg_handles,
                     otel::TraceTopology::MonoVertex,
@@ -115,9 +112,7 @@ impl MapBatchTask {
                         .map(|(i, result)| {
                             let mut mapped_msg: Message =
                                 UserDefinedMessage(result, &parent_info, i as i32).into();
-                            if tracing_enabled {
-                                mapped_msg.strip_tracing_udf();
-                            }
+                            mapped_msg.strip_tracing_udf();
                             mapped_msg
                         })
                         .collect();
