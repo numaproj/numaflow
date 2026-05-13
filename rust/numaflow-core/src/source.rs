@@ -531,15 +531,16 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 // (e.g., transformer error that breaks the outer loop) have their spans
                 // closed by the RAII guard when the map is dropped.
                 let mut dispatch_spans = otel::SourceDispatchSpans::new();
+                let platform_spans_enabled = is_mono_vertex() && otel::platform_spans_enabled();
                 // Read-only parent contexts for `source.transform`; `dispatch_spans` remains the
                 // sole owner responsible for ending `source.dispatch`.
                 // Note: remove is_mono_vertex check once we implement pipeline tracing.
-                let mut dispatch_parent_contexts = if is_mono_vertex() && self.transformer.is_some()
-                {
-                    Some(HashMap::with_capacity(msgs_len))
-                } else {
-                    None
-                };
+                let mut dispatch_parent_contexts =
+                    if platform_spans_enabled && self.transformer.is_some() {
+                        Some(HashMap::with_capacity(msgs_len))
+                    } else {
+                        None
+                    };
 
                 for message in messages.iter_mut() {
                     Self::record_partition_read_metrics(
@@ -561,7 +562,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     //   source read latency.
                     // - Inject `vertex.process` context into sys_metadata["tracing"] so that map
                     //   and sink become siblings of `source.dispatch` under `vertex.process`.
-                    let platform_span = if is_mono_vertex() {
+                    let platform_span = if platform_spans_enabled {
                         let spans = otel::start_source_message_spans(
                             message,
                             otel::TraceTopology::MonoVertex,
@@ -1126,8 +1127,8 @@ mod tests {
         let kept = core_offset(1);
         let filtered = core_offset(2);
         let mut spans = SourceDispatchSpans::new();
-        spans.insert(kept.clone(), opentelemetry::Context::new());
-        spans.insert(filtered.clone(), opentelemetry::Context::new());
+        spans.insert_for_test(kept.clone(), opentelemetry::Context::new());
+        spans.insert_for_test(filtered.clone(), opentelemetry::Context::new());
 
         let output_counts = HashMap::from([(kept.clone(), 1)]);
         spans.end_without_outputs(&output_counts);
@@ -1141,7 +1142,7 @@ mod tests {
         let known = core_offset(1);
         let unknown = core_offset(2);
         let mut spans = SourceDispatchSpans::new();
-        spans.insert(known.clone(), opentelemetry::Context::new());
+        spans.insert_for_test(known.clone(), opentelemetry::Context::new());
 
         spans.end(&unknown);
         assert!(spans.contains(&known));

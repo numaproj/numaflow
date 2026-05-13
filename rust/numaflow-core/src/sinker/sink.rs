@@ -851,7 +851,7 @@ mod tests {
         init_test_propagator();
         let mut messages = vec![test_message_with_metadata(1), test_message_with_metadata(2)];
 
-        let _guard = otel::inject_stage_spans(
+        let _guard = otel::inject_stage_spans_enabled(
             &mut messages,
             otel::TraceTopology::MonoVertex,
             otel::TraceStage::Sink(otel::SinkStage::Primary),
@@ -881,7 +881,7 @@ mod tests {
             );
         let mut messages = vec![message];
 
-        let _guard = otel::inject_stage_spans(
+        let _guard = otel::inject_stage_spans_enabled(
             &mut messages,
             otel::TraceTopology::MonoVertex,
             otel::TraceStage::Sink(otel::SinkStage::Fallback),
