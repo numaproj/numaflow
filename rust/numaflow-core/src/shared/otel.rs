@@ -5,14 +5,24 @@
 //! `traceparent` and `tracestate` without knowing about our protobuf types.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use opentelemetry::global;
 use opentelemetry::propagation::{Extractor, Injector};
-use opentelemetry::trace::{TraceContextExt as _, Tracer};
+use opentelemetry::trace::{Span as _, TraceContextExt as _, Tracer};
 
 use crate::message::Message;
 use crate::metadata::{KeyValueGroup, Metadata};
+
+static TRACER: OnceLock<opentelemetry::global::BoxedTracer> = OnceLock::new();
+
+// Initialised on first use. In normal startup, setup_tracing::register() calls
+// global::set_tracer_provider(...) before numaflow_core::run() — so the first span
+// creation (during message processing) sees the real provider. When OTLP is absent
+// the noop provider is cached, which is intentional: this process runs without export.
+fn get_tracer() -> &'static opentelemetry::global::BoxedTracer {
+    TRACER.get_or_init(|| global::tracer("numaflow-core"))
+}
 
 /// Key under which W3C trace context is stored in `sys_metadata`.
 /// Always holds the shared `vertex.process` parent context for downstream
@@ -286,16 +296,22 @@ pub(crate) fn start_platform_child_span(
     operation_name: &'static str,
     message_id: String,
 ) -> opentelemetry::Context {
-    let tracer = opentelemetry::global::tracer("numaflow-core");
-    let span = tracer
+    let tracer = get_tracer();
+    let mut span = tracer
         .span_builder(span_name)
         .with_kind(kind)
-        .with_attributes(build_platform_attributes(
+        .start_with_context(tracer, parent_cx);
+    // Attributes are set after the sampling decision. Numaflow's supported samplers
+    // (traceidratio, parentbased_*) are trace-ID / parent-decision based and do not
+    // inspect span attributes, so this ordering is safe. The guard skips the
+    // Vec<KeyValue> allocation entirely for noop and dropped spans.
+    if span.is_recording() {
+        span.set_attributes(build_platform_attributes(
             topology,
             operation_name,
             message_id,
-        ))
-        .start_with_context(&tracer, parent_cx);
+        ));
+    }
     opentelemetry::Context::current().with_span(span)
 }
 
