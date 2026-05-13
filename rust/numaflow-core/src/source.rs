@@ -536,12 +536,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 let mut dispatch_spans = otel::SourceDispatchSpans::new();
                 // Read-only parent contexts for `source.transform`; `dispatch_spans` remains the
                 // sole owner responsible for ending `source.dispatch`.
+                let should_track_dispatch_parents =
+                    platform_spans_enabled && self.transformer.is_some();
                 let mut dispatch_parent_contexts =
-                    if platform_spans_enabled && self.transformer.is_some() {
-                        Some(HashMap::with_capacity(msgs_len))
-                    } else {
-                        None
-                    };
+                    should_track_dispatch_parents.then(|| HashMap::with_capacity(msgs_len));
 
                 for message in messages.iter_mut() {
                     Self::record_partition_read_metrics(

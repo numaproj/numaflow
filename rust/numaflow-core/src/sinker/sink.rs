@@ -851,16 +851,12 @@ mod tests {
         init_test_propagator();
         let mut messages = vec![test_message_with_metadata(1), test_message_with_metadata(2)];
 
-        let _stage_spans: Vec<_> = messages
-            .iter_mut()
-            .map(|message| {
-                otel::inject_stage_span_enabled(
-                    message,
-                    otel::TraceTopology::MonoVertex,
-                    otel::TraceStage::Sink(otel::SinkStage::Primary),
-                )
-            })
-            .collect();
+        let _stage_spans = otel::inject_stage_spans!(
+            enabled,
+            messages.iter_mut(),
+            otel::TraceTopology::MonoVertex,
+            otel::TraceStage::Sink(otel::SinkStage::Primary),
+        );
 
         for message in messages {
             let metadata = message.metadata.expect("metadata should exist");
@@ -886,16 +882,12 @@ mod tests {
             );
         let mut messages = [message];
 
-        let _stage_spans: Vec<_> = messages
-            .iter_mut()
-            .map(|message| {
-                otel::inject_stage_span_enabled(
-                    message,
-                    otel::TraceTopology::MonoVertex,
-                    otel::TraceStage::Sink(otel::SinkStage::Fallback),
-                )
-            })
-            .collect();
+        let _stage_spans = otel::inject_stage_spans!(
+            enabled,
+            messages.iter_mut(),
+            otel::TraceTopology::MonoVertex,
+            otel::TraceStage::Sink(otel::SinkStage::Fallback),
+        );
 
         let metadata = messages
             .first()

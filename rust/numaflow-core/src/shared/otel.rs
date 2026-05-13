@@ -494,13 +494,16 @@ pub(crate) fn inject_stage_span_enabled(
 /// Expands to a `Vec<StageSpan>` whose drop ends every span together at end of scope.
 /// Use this in stage entry points to keep the call site to one line.
 macro_rules! inject_stage_spans {
+    (enabled, $messages:expr, $topology:expr, $stage:expr $(,)?) => {{
+        $messages
+            .map(|m| $crate::shared::otel::inject_stage_span_enabled(m, $topology, $stage))
+            .collect::<Vec<$crate::shared::otel::StageSpan>>()
+    }};
     ($messages:expr, $topology:expr, $stage:expr $(,)?) => {{
         if !$crate::shared::otel::platform_spans_enabled() {
             Vec::<$crate::shared::otel::StageSpan>::new()
         } else {
-            $messages
-                .map(|m| $crate::shared::otel::inject_stage_span_enabled(m, $topology, $stage))
-                .collect::<Vec<$crate::shared::otel::StageSpan>>()
+            $crate::shared::otel::inject_stage_spans!(enabled, $messages, $topology, $stage)
         }
     }};
 }
