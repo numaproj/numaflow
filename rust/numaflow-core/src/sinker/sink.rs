@@ -653,12 +653,14 @@ impl SinkWriter {
     }
 }
 
-/// Sends count of messages marked for explicit drop by the user
+/// Sends count of messages marked for explicit drop by the user.
+/// For MonoVertex these drops originate in the map UDF (or its bypass router),
+/// so they are accounted under the UDF drop counter.
 /// Currently pub(crate) to allow usage by the bypass_router.
 pub(crate) fn send_drop_metrics(is_mono_vertex: bool, dropped_messages_count: usize) {
     if is_mono_vertex {
         monovertex_metrics()
-            .sink
+            .udf
             .dropped_total
             .get_or_create(mvtx_forward_metric_labels())
             .inc_by(dropped_messages_count as u64);
@@ -1327,7 +1329,7 @@ mod tests {
     #[serial_test::serial]
     fn test_send_drop_metrics_mono_vertex() {
         let before = monovertex_metrics()
-            .sink
+            .udf
             .dropped_total
             .get_or_create(mvtx_forward_metric_labels())
             .get();
@@ -1335,7 +1337,7 @@ mod tests {
         send_drop_metrics(true, 5);
 
         let after = monovertex_metrics()
-            .sink
+            .udf
             .dropped_total
             .get_or_create(mvtx_forward_metric_labels())
             .get();
@@ -1343,7 +1345,7 @@ mod tests {
         assert_eq!(
             after,
             before + 5,
-            "monovertex sink dropped_total should be incremented by 5"
+            "monovertex udf dropped_total should be incremented by 5"
         );
     }
 
