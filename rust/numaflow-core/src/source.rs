@@ -474,8 +474,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 true => MAX_ACK_PENDING / self.read_batch_size,
                 false => 1,
             };
-            let semaphore = Arc::new(Semaphore::new(max_ack_tasks));
 
+            let semaphore = Arc::new(Semaphore::new(max_ack_tasks));
             let mut result = Ok(());
             loop {
                 // Acquire the semaphore permit before reading the next batch to make
@@ -520,7 +520,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 let mut msg_handles = vec![];
                 let mut ack_batch = Vec::with_capacity(msgs_len);
 
-                for message in messages.iter() {
+                for message in messages.into_iter() {
                     Self::record_partition_read_metrics(
                         &pipeline_labels,
                         mvtx_labels,
@@ -529,16 +529,9 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     );
 
                     // Insert into the tracker first. A duplicate in-flight delivery (same
-                    // offset already being processed in this pod) is not forwarded
-                    // downstream; we still nack it back to the source so the SDK sees a
-                    // response for this delivery. The original copy already in the tracker
-                    // drives end-to-end completion; a later ack on the same offset
-                    // supersedes this nack for offset-keyed sources.
-                    //
-                    // FIXME: when `SourceAcker::nack` supports per-message nack options, pass a
-                    // flag indicating this nack is for a redelivered/duplicate message so sources
-                    // can distinguish "processing failed" from "duplicate.
-                    match self.tracker.insert(message).await {
+                    // offset already being processed in this pod) is ignored and not forwarded
+                    // to downstream.
+                    match self.tracker.insert(&message).await {
                         Ok(()) => {}
                         Err(Error::DuplicateInflight(_)) => {
                             warn!(
@@ -546,9 +539,6 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                                 "duplicate delivery from source, nacking duplicate"
                             );
                             Self::record_duplicate_drop(mvtx_labels, message.value.len());
-                            let (ack_tx, ack_rx) = oneshot::channel();
-                            ack_batch.push((message.offset.clone(), ack_rx));
-                            let _ = ack_tx.send(ReadAck::Nak);
                             continue;
                         }
                         Err(e) => return Err(e),
@@ -557,7 +547,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     let (ack_tx, ack_rx) = oneshot::channel();
                     // store the ack receiver in the batch to invoke ack later.
                     ack_batch.push((message.offset.clone(), ack_rx));
-                    msg_handles.push(MessageHandle::new(message.clone(), ack_tx));
+                    msg_handles.push(MessageHandle::new(message, ack_tx));
                 }
 
                 // start a background task to invoke ack on the source for the offsets that are acked.
