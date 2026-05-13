@@ -275,7 +275,10 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 			h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, %s", err.Error()))
 			return
 		}
-		if status == dfv1.PipelineStatusInactive {
+		// Pipelines with inactive, unknown, or deleting status are not actively processing data
+		if status == dfv1.PipelineStatusInactive ||
+			status == dfv1.PipelineStatusUnknown ||
+			status == dfv1.PipelineStatusDeleting {
 			summary.pipelineSummary.Inactive++
 		} else {
 			summary.pipelineSummary.Active.increment(status)
@@ -323,12 +326,11 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 			h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, failed to get the status of the mono vertex %s, %s", monoVertex.Name, err.Error()))
 			return
 		}
-		// if the mono vertex is healthy, increment the active count, otherwise increment the inactive count
-		// TODO - add more status types for mono vertex and update the logic here
-		if status == dfv1.MonoVertexStatusHealthy {
-			summary.monoVertexSummary.Active.increment(status)
-		} else {
+		// MonoVertices with inactive or unknown status are not actively processing data
+		if status == dfv1.MonoVertexStatusInactive || status == dfv1.MonoVertexStatusUnknown {
 			summary.monoVertexSummary.Inactive++
+		} else {
+			summary.monoVertexSummary.Active.increment(status)
 		}
 		namespaceSummaryMap[monoVertex.Namespace] = summary
 	}
@@ -1481,16 +1483,33 @@ func getMonoVertices(h *handler, namespace string) (MonoVertices, error) {
 // TODO(API): Change the Daemon service to return the consolidated status of the pipeline
 // to save on multiple calls to the daemon service
 func getPipelineStatus(pipeline *dfv1.Pipeline) (string, error) {
-	retStatus := dfv1.PipelineStatusHealthy
-	// Check if the pipeline is paused, if so, return inactive status
-	if pipeline.GetDesiredPhase() == dfv1.PipelinePhasePaused {
-		retStatus = dfv1.PipelineStatusInactive
-	} else if pipeline.GetDesiredPhase() == dfv1.PipelinePhaseRunning {
-		retStatus = dfv1.PipelineStatusHealthy
-	} else if pipeline.GetDesiredPhase() == dfv1.PipelinePhaseFailed {
-		retStatus = dfv1.PipelineStatusCritical
+	switch pipeline.Status.Phase {
+	case dfv1.PipelinePhaseUnknown:
+		// Phase not yet set by the controller — reconciliation is pending
+		return dfv1.PipelineStatusUnknown, nil
+	case dfv1.PipelinePhaseFailed:
+		return dfv1.PipelineStatusCritical, nil
+	case dfv1.PipelinePhasePaused:
+		return dfv1.PipelineStatusInactive, nil
+	case dfv1.PipelinePhaseRunning:
+		// Check desired phase to catch the pausing-in-progress case:
+		// the user has requested a pause but the controller has not yet updated Status.Phase
+		if pipeline.GetDesiredPhase() == dfv1.PipelinePhasePaused {
+			return dfv1.PipelineStatusInactive, nil
+		}
+		if !pipeline.Status.IsHealthy() {
+			return dfv1.PipelineStatusWarning, nil
+		}
+		return dfv1.PipelineStatusHealthy, nil
+	case dfv1.PipelinePhasePausing:
+		// Pipeline is draining before pausing — treat as inactive
+		return dfv1.PipelineStatusInactive, nil
+	case dfv1.PipelinePhaseDeleting:
+		return dfv1.PipelineStatusDeleting, nil
+	default:
+		// Unhandled phase — status is not deterministic
+		return dfv1.PipelineStatusUnknown, nil
 	}
-	return retStatus, nil
 }
 
 // getIsbServiceStatus determines the status of a given InterStepBufferService
@@ -1513,8 +1532,28 @@ func getIsbServiceStatus(isbsvc *dfv1.InterStepBufferService) (string, error) {
 }
 
 func getMonoVertexStatus(mvt *dfv1.MonoVertex) (string, error) {
-	// TODO - add more logic to determine the status of a mono vertex
-	return dfv1.MonoVertexStatusHealthy, nil
+	switch mvt.Status.Phase {
+	case dfv1.MonoVertexPhaseUnknown:
+		// Phase not yet set by the controller — reconciliation is pending
+		return dfv1.MonoVertexStatusUnknown, nil
+	case dfv1.MonoVertexPhaseFailed:
+		return dfv1.MonoVertexStatusCritical, nil
+	case dfv1.MonoVertexPhasePaused:
+		return dfv1.MonoVertexStatusInactive, nil
+	case dfv1.MonoVertexPhaseRunning:
+		// Check desired phase to catch the pausing-in-progress case:
+		// the user has requested a pause but the controller has not yet updated Status.Phase
+		if mvt.Spec.Lifecycle.GetDesiredPhase() == dfv1.MonoVertexPhasePaused {
+			return dfv1.MonoVertexStatusInactive, nil
+		}
+		if !mvt.Status.IsHealthy() {
+			return dfv1.MonoVertexStatusWarning, nil
+		}
+		return dfv1.MonoVertexStatusHealthy, nil
+	default:
+		// Unhandled phase (e.g. Pausing, Deleting) — status is not deterministic
+		return dfv1.MonoVertexStatusUnknown, nil
+	}
 }
 
 // validatePipelineSpec is used to validate the pipeline spec during create and update

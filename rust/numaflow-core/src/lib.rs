@@ -140,9 +140,9 @@ pub async fn run() -> Result<()> {
                 // increment the critical error metric
                 critical_error!("", "mvtx_runtime_error");
 
-                if let Error::Grpc(e) = e {
-                    error!(error=?e, "Monovertex failed because of UDF failure");
-                    runtime::persist_application_error(*e);
+                if let Error::Grpc(status) = &e {
+                    error!(error=?status, "Monovertex failed because of UDF failure");
+                    runtime::persist_application_error(status.as_ref().clone());
                 } else {
                     error!(?e, "Error running monovertex");
                     runtime::persist_application_error(Status::with_details(
@@ -155,6 +155,7 @@ pub async fn run() -> Result<()> {
                 if !shutdown_handle.is_finished() {
                     shutdown_handle.abort();
                 }
+                return Err(e);
             }
         }
         CustomResourceType::Pipeline(config) => {
@@ -163,9 +164,9 @@ pub async fn run() -> Result<()> {
             if let Err(e) = forwarder::start_forwarder(cln_token, *config).await {
                 critical_error!(vertex_type, "pipeline_runtime_error");
 
-                if let Error::Grpc(e) = e {
-                    error!(error=?e, "Pipeline failed because of UDF failure");
-                    runtime::persist_application_error(*e);
+                if let Error::Grpc(status) = &e {
+                    error!(error=?status, "Pipeline failed because of UDF failure");
+                    runtime::persist_application_error(status.as_ref().clone());
                 } else {
                     error!(?e, "Error running pipeline");
                     runtime::persist_application_error(Status::with_details(
@@ -178,6 +179,7 @@ pub async fn run() -> Result<()> {
                 if !shutdown_handle.is_finished() {
                     shutdown_handle.abort();
                 }
+                return Err(e);
             }
         }
     }

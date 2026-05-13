@@ -187,6 +187,24 @@ func (s *APISuite) TestAPIsForIsbAndPipelineAndMonoVertex() {
 	var createMonoVertexSuccessExpect = `"data":null`
 	assert.Contains(s.T(), createMonoVertex, createMonoVertexSuccessExpect)
 
+	// getMonoVertexStatus derives status from actual phase and health conditions, not just desired phase.
+	// Poll until the mono vertex reports "healthy" so the cluster summary assertion sees Healthy:1 and not Warning.
+	assert.Eventually(s.T(), func() bool {
+		body := HTTPExpect(s.T(), "https://localhost:8145").GET(fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices/%s", Namespace, testMonoVertex1Name)).
+			Expect().Status(200).Body().Raw()
+		return strings.Contains(body, `"status":"healthy"`)
+	}, 3*time.Minute, 5*time.Second, "mono vertex did not become healthy in time")
+
+	// getPipelineStatus derives status from actual phase and health conditions, not just desired phase.
+	// Poll until both pipelines report "healthy" so the cluster summary assertion sees Healthy:2 and not Warning.
+	assert.Eventually(s.T(), func() bool {
+		body1 := HTTPExpect(s.T(), "https://localhost:8145").GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).
+			Expect().Status(200).Body().Raw()
+		body2 := HTTPExpect(s.T(), "https://localhost:8145").GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, testPipeline2Name)).
+			Expect().Status(200).Body().Raw()
+		return strings.Contains(body1, `"status":"healthy"`) && strings.Contains(body2, `"status":"healthy"`)
+	}, 3*time.Minute, 5*time.Second, "pipelines did not become healthy in time")
+
 	clusterSummaryBody := HTTPExpect(s.T(), "https://localhost:8145").GET("/api/v1/cluster-summary").
 		Expect().
 		Status(200).Body().Raw()

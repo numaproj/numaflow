@@ -29,6 +29,8 @@ struct TrackerEntry {
     serving_callback_info: Option<ServingCallbackInfo>,
     /// Watermark for the message
     watermark: Option<DateTime<Utc>>,
+    /// EventTime for the message
+    event_time: DateTime<Utc>,
 }
 
 /// TrackerState holds the mutable state of the tracker.
@@ -196,6 +198,10 @@ impl Tracker {
     }
 
     /// Inserts a new message into the Tracker with the given offset.
+    ///
+    /// Returns `Err(Error::DuplicateInflight)` if the offset is already being tracked for this
+    /// partition. Callers use this to detect intra-pod redeliveries and drop them before they
+    /// reach downstream components like UDFs or sinks.
     pub(crate) async fn insert(&self, message: &Message) -> Result<()> {
         let offset = message.offset.clone();
         let mut callback_info = None;
@@ -206,11 +212,15 @@ impl Tracker {
         let partition = offset.partition_idx();
         let mut state = self.state.write().await;
         let partition_entries = state.entries.entry(partition).or_default();
+        if partition_entries.contains_key(&offset) {
+            return Err(Error::DuplicateInflight(offset.to_string()));
+        }
         partition_entries.insert(
-            offset.clone(),
+            offset,
             TrackerEntry {
                 serving_callback_info: callback_info,
                 watermark: message.watermark,
+                event_time: message.event_time,
             },
         );
         Ok(())
@@ -335,6 +345,19 @@ impl Tracker {
             })
             .min();
         Ok(watermark.unwrap_or(DateTime::from_timestamp_millis(-1).unwrap()))
+    }
+
+    /// Returns the lowest event_time among all the tracked offsets.
+    pub(crate) async fn lowest_event_time(&self) -> Result<DateTime<Utc>> {
+        let state = self.state.read().await;
+        // Get the lowest event_time across all partitions
+        let event_time = state
+            .entries
+            .values()
+            .flat_map(|partition_entries| partition_entries.values())
+            .map(|entry| entry.event_time)
+            .min();
+        Ok(event_time.unwrap_or(DateTime::from_timestamp_millis(-1).unwrap()))
     }
 
     /// Sets the idle status of the tracker. Setting idle offset to None means the partition is not

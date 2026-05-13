@@ -1,8 +1,8 @@
-use crate::Result;
 use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
 use crate::message::Message;
 use crate::metadata::Metadata;
 use crate::sinker::sink::{ResponseStatusFromSink, Sink};
+use crate::{Error, Result};
 use backoff::strategy::exponential::Exponential;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -87,11 +87,17 @@ where
             // send batch to sink
             let responses = self.sink.sink(messages_to_retry.clone()).await?;
 
-            // Create a map of id to result
-            let mut result_map = responses
-                .into_iter()
-                .map(|resp| (resp.id, resp.status))
-                .collect::<HashMap<_, _>>();
+            // Create a map of id to result. Duplicate response IDs are a data-plane invariant
+            // violation because we cannot safely classify per-message outcomes.
+            let mut result_map = HashMap::with_capacity(responses.len());
+            for resp in responses {
+                if result_map.insert(resp.id.clone(), resp.status).is_some() {
+                    return Err(Error::Sink(format!(
+                        "duplicate response id from sink: {}",
+                        resp.id
+                    )));
+                }
+            }
 
             // Classify messages based on responses, preserving original ordering.
             // Take ownership of the current batch so we can iterate by move and push
@@ -151,8 +157,21 @@ where
                             on_success_messages.push(msg);
                         }
                     }
-                    None => unreachable!("should have response for all messages"),
+                    None => {
+                        return Err(Error::Sink(format!(
+                            "missing response from sink for message id: {msg_id}"
+                        )));
+                    }
                 }
+            }
+
+            if !result_map.is_empty() {
+                let mut ids = result_map.into_keys().collect::<Vec<_>>();
+                ids.sort();
+                return Err(Error::Sink(format!(
+                    "received responses for unknown message ids from sink: {}",
+                    ids.join(", ")
+                )));
             }
 
             if messages_to_retry.is_empty() {
@@ -238,5 +257,76 @@ where
         while let Some(msg) = self.actor_messages.recv().await {
             self.handle_message(msg).await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::message::{Message, MessageID};
+    use crate::sinker::sink::ResponseFromSink;
+
+    struct StaticResponseSink {
+        responses: Vec<ResponseFromSink>,
+    }
+
+    impl Sink for StaticResponseSink {
+        async fn sink(&mut self, _messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
+            Ok(std::mem::take(&mut self.responses))
+        }
+    }
+
+    fn message(id: &str) -> Message {
+        Message {
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: id.to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
+        }
+    }
+
+    fn response(id: &str) -> ResponseFromSink {
+        ResponseFromSink {
+            id: format!("vertex-{id}-0"),
+            status: ResponseStatusFromSink::Success,
+        }
+    }
+
+    async fn write_with_static_responses(
+        messages: Vec<Message>,
+        responses: Vec<ResponseFromSink>,
+    ) -> Result<SinkActorResponse> {
+        let (_tx, rx) = tokio::sync::mpsc::channel(1);
+        let mut actor =
+            SinkActor::new(rx, StaticResponseSink { responses }, RetryConfig::default());
+        actor
+            .write_messages_with_retry(messages, &CancellationToken::new())
+            .await
+    }
+
+    #[tokio::test]
+    async fn duplicate_sink_response_ids_return_error() {
+        let result =
+            write_with_static_responses(vec![message("1")], vec![response("1"), response("1")])
+                .await;
+
+        assert!(matches!(
+            result,
+            Err(Error::Sink(message)) if message.contains("duplicate response id from sink")
+        ));
+    }
+
+    #[tokio::test]
+    async fn missing_sink_response_ids_return_error() {
+        let result =
+            write_with_static_responses(vec![message("1"), message("2")], vec![response("1")])
+                .await;
+
+        assert!(matches!(
+            result,
+            Err(Error::Sink(message)) if message.contains("missing response from sink")
+        ));
     }
 }
