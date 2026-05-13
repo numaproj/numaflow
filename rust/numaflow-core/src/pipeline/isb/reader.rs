@@ -40,8 +40,6 @@ use tracing::{error, info, warn};
 
 const ACK_RETRY_INTERVAL: u64 = 100; // ms
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
-/// Default delay applied when nacking a duplicate in-flight redelivery.
-const DEFAULT_DUPLICATE_REDELIVERY_DELAY: Duration = Duration::from_secs(30);
 
 /// Type alias for metric labels
 type MetricLabels = Arc<Vec<(String, String)>>;
@@ -63,9 +61,6 @@ pub(crate) struct ISBReaderOrchestrator<C: NumaflowTypeConfig> {
     rate_limiter: Option<C::RateLimiter>,
     /// Cached metric labels to avoid repeated allocations
     metric_labels: MetricLabels,
-    /// Delay passed to `nack` on the duplicate-inflight path so the broker holds the
-    /// redelivery while the original copy is still being processed.
-    duplicate_redelivery_delay: Duration,
 }
 
 /// Manual Clone implementation for ISBReaderOrchestrator.
@@ -88,7 +83,6 @@ impl<C: NumaflowTypeConfig> Clone for ISBReaderOrchestrator<C> {
             reader_name: self.reader_name,
             rate_limiter: self.rate_limiter.clone(),
             metric_labels: Arc::clone(&self.metric_labels),
-            duplicate_redelivery_delay: self.duplicate_redelivery_delay,
         }
     }
 }
@@ -122,7 +116,6 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             reader_name,
             rate_limiter,
             metric_labels,
-            duplicate_redelivery_delay: DEFAULT_DUPLICATE_REDELIVERY_DELAY,
         })
     }
 
@@ -517,25 +510,20 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             // Insert into the tracker first, before constructing any AckHandle. A duplicate
             // in-flight delivery is dropped here so downstream components (UDF, sink) never
             // see the redelivery while the original copy is still being processed.
+            //
+            // We do NOT ack or nack the duplicate delivery against the broker. JetStream
+            // tracks by stream_seq (not by delivery), and `offset2jsmsg` holds at most one
+            // handle per offset — the most recent fetch overwrites prior ones. The
+            // original's eventual ack/nack via the current handle resolves the stream_seq
+            // for all deliveries.
             match self.tracker.insert(&message).await {
                 Ok(()) => {}
                 Err(Error::DuplicateInflight(_)) => {
                     warn!(
                         offset = ?message.offset,
-                        "duplicate delivery, nack with delay so broker holds redelivery"
+                        "duplicate delivery, dropping; original copy drives broker ack/nack"
                     );
                     self.publish_duplicate_drop_metric(message.value.len());
-                    if let Err(nak_err) = self
-                        .reader
-                        .nack(&message.offset, Some(self.duplicate_redelivery_delay))
-                        .await
-                    {
-                        warn!(
-                            ?nak_err,
-                            offset = ?message.offset,
-                            "failed to nack duplicate; broker will redeliver after AckWait"
-                        );
-                    }
                     continue;
                 }
                 Err(e) => return Err(e),
@@ -2017,15 +2005,16 @@ mod duplicate_inflight_tests {
     }
 
     /// A batch containing two messages with the same offset should only forward one
-    /// downstream; the duplicate must be nack'd-with-delay on the underlying reader.
+    /// downstream; the duplicate is dropped without any ack or nack against the
+    /// underlying reader. The original copy's eventual ack/nack drives the broker
+    /// outcome.
     #[tokio::test]
-    async fn duplicate_inflight_in_batch_is_nackd_with_delay() {
+    async fn duplicate_inflight_in_batch_is_dropped() {
         let stream = Stream::new("test-dup-stream", "test", 0);
         let cancel = CancellationToken::new();
         let tracker = Tracker::new(None, cancel.clone());
 
         // Two messages with the same offset, one with a distinct offset for control.
-        let dup_offset = Offset::Int(IntOffset::new(7, 0));
         let scripted = ScriptedReader::new(vec![
             make_message(7, 0, "first"),
             make_message(7, 0, "duplicate"),
@@ -2083,18 +2072,13 @@ mod duplicate_inflight_tests {
             "should forward each distinct offset exactly once"
         );
 
-        // Confirm the duplicate triggered exactly one nack with a non-None delay.
+        // The duplicate must NOT trigger any nack against the underlying reader;
+        // the original's eventual ack drives the broker outcome.
         let nacks = scripted_clone.nacks.lock().unwrap().clone();
-        let delayed_nacks: Vec<_> = nacks.iter().filter(|(_, delay)| delay.is_some()).collect();
-        assert_eq!(
-            delayed_nacks.len(),
-            1,
-            "exactly one delayed nack for the duplicate"
+        assert!(
+            nacks.is_empty(),
+            "no nack should fire for the duplicate, got {nacks:?}"
         );
-        let (delayed_offset, _) = delayed_nacks
-            .first()
-            .expect("just asserted there is one delayed nack");
-        assert_eq!(delayed_offset, &dup_offset);
 
         // Ack the legitimate copies so cleanup completes.
         mark_success!(first);
