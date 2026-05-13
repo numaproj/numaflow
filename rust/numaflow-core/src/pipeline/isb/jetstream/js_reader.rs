@@ -233,8 +233,6 @@ impl JetStreamReader {
     }
 
     /// Negatively acknowledge the offset, optionally deferring redelivery by `delay`.
-    /// Used to defer redelivery of duplicate in-flight messages so they don't spin
-    /// against the broker while the original copy is still being processed.
     pub(crate) async fn nack(&self, offset: &Offset, delay: Option<Duration>) -> Result<()> {
         let msg = self
             .get_js_message(offset, true)
