@@ -232,12 +232,14 @@ impl JetStreamReader {
         Ok(())
     }
 
-    /// Negatively acknowledge the offset
-    pub(crate) async fn nack(&self, offset: &Offset) -> Result<()> {
+    /// Negatively acknowledge the offset, optionally deferring redelivery by `delay`.
+    /// Used to defer redelivery of duplicate in-flight messages so they don't spin
+    /// against the broker while the original copy is still being processed.
+    pub(crate) async fn nack(&self, offset: &Offset, delay: Option<Duration>) -> Result<()> {
         let msg = self
             .get_js_message(offset, true)
             .ok_or_else(|| Error::ISB(ISBError::OffsetNotFound(offset.to_string())))?;
-        msg.ack_with(AckKind::Nak(None))
+        msg.ack_with(AckKind::Nak(delay))
             .await
             .map_err(|e| Error::ISB(ISBError::Nack(format!("offset {}: {}", offset, e))))?;
         Ok(())
@@ -281,8 +283,8 @@ impl crate::pipeline::isb::ISBReader for JetStreamReader {
         JetStreamReader::ack(self, offset).await
     }
 
-    async fn nack(&self, offset: &Offset) -> Result<()> {
-        JetStreamReader::nack(self, offset).await
+    async fn nack(&self, offset: &Offset, delay: Option<Duration>) -> Result<()> {
+        JetStreamReader::nack(self, offset, delay).await
     }
 
     async fn pending(&self) -> Result<Option<usize>> {
@@ -426,7 +428,7 @@ mod tests {
         // Test mark_wip, ack, and nack operations
         let offset = message.offset.clone();
         js_reader.mark_wip(&offset).await.unwrap();
-        js_reader.nack(&offset).await.unwrap();
+        js_reader.nack(&offset, None).await.unwrap();
         // pending should be one
         let pending = js_reader.pending().await.unwrap();
         assert_eq!(pending, Some(1));
@@ -541,7 +543,7 @@ mod tests {
 
         // Try to nack an offset that doesn't exist in the tracker
         let missing_offset = Offset::Int(IntOffset::new(999, 0));
-        let result = js_reader.nack(&missing_offset).await;
+        let result = js_reader.nack(&missing_offset, None).await;
 
         assert!(result.is_err());
         if let Err(Error::ISB(ISBError::OffsetNotFound(msg))) = result {

@@ -21,6 +21,7 @@ use crate::mark_success;
 #[cfg(test)]
 use crate::mark_success_batch;
 use crate::message::{IntOffset, Message, MessageHandle, MessageType, Offset, ReadAck};
+use crate::metrics::pipeline_drop_metric_labels;
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
     jetstream_isb_metrics_labels, pipeline_metric_labels, pipeline_metrics,
@@ -39,6 +40,8 @@ use tracing::{error, info, warn};
 
 const ACK_RETRY_INTERVAL: u64 = 100; // ms
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
+/// Default delay applied when nacking a duplicate in-flight redelivery.
+const DEFAULT_DUPLICATE_REDELIVERY_DELAY: Duration = Duration::from_secs(30);
 
 /// Type alias for metric labels
 type MetricLabels = Arc<Vec<(String, String)>>;
@@ -60,6 +63,9 @@ pub(crate) struct ISBReaderOrchestrator<C: NumaflowTypeConfig> {
     rate_limiter: Option<C::RateLimiter>,
     /// Cached metric labels to avoid repeated allocations
     metric_labels: MetricLabels,
+    /// Delay passed to `nack` on the duplicate-inflight path so the broker holds the
+    /// redelivery while the original copy is still being processed.
+    duplicate_redelivery_delay: Duration,
 }
 
 /// Manual Clone implementation for ISBReaderOrchestrator.
@@ -82,6 +88,7 @@ impl<C: NumaflowTypeConfig> Clone for ISBReaderOrchestrator<C> {
             reader_name: self.reader_name,
             rate_limiter: self.rate_limiter.clone(),
             metric_labels: Arc::clone(&self.metric_labels),
+            duplicate_redelivery_delay: self.duplicate_redelivery_delay,
         }
     }
 }
@@ -115,6 +122,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             reader_name,
             rate_limiter,
             metric_labels,
+            duplicate_redelivery_delay: DEFAULT_DUPLICATE_REDELIVERY_DELAY,
         })
     }
 
@@ -285,7 +293,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
         let result = Retry::new(
             interval,
-            async || reader.nack(offset).await,
+            async || reader.nack(offset, None).await,
             |e: &Error| {
                 if cancel.is_cancelled() {
                     error!(
@@ -506,21 +514,47 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                 message.watermark = Some(watermark);
             }
 
+            // Insert into the tracker first, before constructing any AckHandle. A duplicate
+            // in-flight delivery is dropped here so downstream components (UDF, sink) never
+            // see the redelivery while the original copy is still being processed.
+            match self.tracker.insert(&message).await {
+                Ok(()) => {}
+                Err(Error::DuplicateInflight(_)) => {
+                    warn!(
+                        offset = ?message.offset,
+                        "duplicate delivery, nack with delay so broker holds redelivery"
+                    );
+                    self.publish_duplicate_drop_metric(message.value.len());
+                    if let Err(nak_err) = self
+                        .reader
+                        .nack(&message.offset, Some(self.duplicate_redelivery_delay))
+                        .await
+                    {
+                        warn!(
+                            ?nak_err,
+                            offset = ?message.offset,
+                            "failed to nack duplicate; broker will redeliver after AckWait"
+                        );
+                    }
+                    continue;
+                }
+                Err(e) => return Err(e),
+            }
+
             // Publish read metrics
             Self::publish_read_metrics(&self.metric_labels, &message);
 
             let (ack_tx, ack_rx) = oneshot::channel();
             let read_message = MessageHandle::new(message, ack_tx);
 
-            // Start message tracking and WIP loop
-            self.start_message_tracking(
-                read_message.message(),
+            // Spawn the WIP loop that ties the AckHandle to the broker ack/nack.
+            self.spawn_wip_loop(
+                read_message.message().offset.clone(),
                 permits.split(1).expect("Failed to split permit"),
                 cancel.clone(),
                 processing_start,
                 ack_rx,
-            )
-            .await?;
+            );
 
             if tx.send(read_message).await.is_err() {
                 break;
@@ -529,23 +563,22 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         Ok(())
     }
 
-    /// Starts tracking the message by adding it to the tracker and spawning a task to periodically
-    /// mark WIP until ack/nack is received.
-    async fn start_message_tracking(
+    /// Spawns a task to periodically mark WIP until ack/nack is received and then forwards the
+    /// final decision to the underlying reader.
+    fn spawn_wip_loop(
         &self,
-        message: &Message,
+        offset: Offset,
         permit: tokio::sync::OwnedSemaphorePermit,
         cancel: CancellationToken,
         processing_start: Instant,
         ack_rx: oneshot::Receiver<ReadAck>,
-    ) -> Result<()> {
-        self.tracker.insert(message).await?;
+    ) {
         let tick = self.reader.wip_ack_interval();
         let params = WipParams {
             stream_name: self.stream.name,
             labels: Arc::clone(&self.metric_labels),
             reader: Arc::clone(&self.reader),
-            offset: message.offset.clone(),
+            offset,
             ack_rx,
             tick,
             _permit: permit,
@@ -557,8 +590,23 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
         tokio::spawn(async move {
             Self::wip_loop(params).await;
         });
+    }
 
-        Ok(())
+    /// Publishes the drop metric when a duplicate is detected on the ISB read path.
+    /// Pipeline-only path — the ISB reader is not used in monovertex mode, so there
+    /// is no monovertex counterpart to increment here.
+    fn publish_duplicate_drop_metric(&self, bytes: usize) {
+        let labels = pipeline_drop_metric_labels(&self.vertex_type, self.stream.name, "duplicate");
+        pipeline_metrics()
+            .forwarder
+            .drop_total
+            .get_or_create(&labels)
+            .inc();
+        pipeline_metrics()
+            .forwarder
+            .drop_bytes_total
+            .get_or_create(&labels)
+            .inc_by(bytes as u64);
     }
 
     /// Wait until all inflight messages are acked/nacked before shutting down and shutdown the rate
@@ -1870,6 +1918,197 @@ mod simplebuffer_tests {
 
         cancel.cancel();
         result.expect("All ack operations should complete");
+        let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
+    }
+}
+
+/// Tests for the duplicate-inflight read path. These use a hand-rolled mock ISBReader
+/// because SimpleBuffer auto-assigns offsets per write and can't produce two messages
+/// with the same offset in one batch.
+#[cfg(test)]
+mod duplicate_inflight_tests {
+    use super::*;
+    use crate::message::{IntOffset, Message, MessageID};
+    use crate::pipeline::isb::ISBReader;
+    use crate::typ::NumaflowTypeConfig;
+    use bytes::Bytes;
+    use chrono::Utc;
+    use numaflow_throttling::NoOpRateLimiter;
+    use std::sync::Mutex;
+    use std::time::Duration;
+    use tokio::time::sleep;
+    use tokio_stream::StreamExt;
+    use tokio_util::sync::CancellationToken;
+
+    /// Mock ISBReader that returns a pre-scripted batch on the first fetch and an empty
+    /// batch thereafter. Records every ack/nack call (with delay) for assertions.
+    #[derive(Debug, Clone)]
+    struct ScriptedReader {
+        batch: Arc<Mutex<Option<Vec<Message>>>>,
+        acks: Arc<Mutex<Vec<Offset>>>,
+        #[allow(clippy::type_complexity)]
+        nacks: Arc<Mutex<Vec<(Offset, Option<Duration>)>>>,
+    }
+
+    impl ScriptedReader {
+        fn new(batch: Vec<Message>) -> Self {
+            Self {
+                batch: Arc::new(Mutex::new(Some(batch))),
+                acks: Arc::new(Mutex::new(Vec::new())),
+                nacks: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+    }
+
+    impl ISBReader for ScriptedReader {
+        async fn fetch(&self, _max: usize, _timeout: Duration) -> Result<Vec<Message>> {
+            Ok(self.batch.lock().unwrap().take().unwrap_or_default())
+        }
+
+        async fn ack(&self, offset: &Offset) -> Result<()> {
+            self.acks.lock().unwrap().push(offset.clone());
+            Ok(())
+        }
+
+        async fn nack(&self, offset: &Offset, delay: Option<Duration>) -> Result<()> {
+            self.nacks.lock().unwrap().push((offset.clone(), delay));
+            Ok(())
+        }
+
+        async fn pending(&self) -> Result<Option<usize>> {
+            Ok(Some(0))
+        }
+
+        fn name(&self) -> &'static str {
+            "scripted"
+        }
+
+        async fn mark_wip(&self, _offset: &Offset) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    #[derive(Clone)]
+    struct WithScriptedReader;
+    impl NumaflowTypeConfig for WithScriptedReader {
+        type RateLimiter = NoOpRateLimiter;
+        type ISBReader = ScriptedReader;
+        type ISBWriter = crate::pipeline::isb::simplebuffer::SimpleWriterAdapter;
+    }
+
+    fn make_message(seq: i64, partition: u16, payload: &str) -> Message {
+        Message {
+            typ: Default::default(),
+            keys: Arc::new([]),
+            tags: None,
+            value: Bytes::from(payload.to_string()),
+            offset: Offset::Int(IntOffset::new(seq, partition)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "test".into(),
+                index: 0,
+                offset: seq.to_string().into(),
+            },
+            headers: Arc::new(std::collections::HashMap::new()),
+            metadata: None,
+            is_late: false,
+        }
+    }
+
+    /// A batch containing two messages with the same offset should only forward one
+    /// downstream; the duplicate must be nack'd-with-delay on the underlying reader.
+    #[tokio::test]
+    async fn duplicate_inflight_in_batch_is_nackd_with_delay() {
+        let stream = Stream::new("test-dup-stream", "test", 0);
+        let cancel = CancellationToken::new();
+        let tracker = Tracker::new(None, cancel.clone());
+
+        // Two messages with the same offset, one with a distinct offset for control.
+        let dup_offset = Offset::Int(IntOffset::new(7, 0));
+        let scripted = ScriptedReader::new(vec![
+            make_message(7, 0, "first"),
+            make_message(7, 0, "duplicate"),
+            make_message(8, 0, "unique"),
+        ]);
+        let scripted_clone = scripted.clone();
+
+        let components = ISBReaderComponents {
+            vertex_type: "Map".to_string(),
+            stream,
+            config: BufferReaderConfig {
+                streams: vec![],
+                wip_ack_interval: Duration::from_millis(10),
+                max_ack_pending: 100,
+            },
+            tracker: tracker.clone(),
+            batch_size: 3,
+            read_timeout: Duration::from_millis(50),
+            watermark_handle: None,
+            isb_config: None,
+            cln_token: cancel.clone(),
+        };
+
+        let orchestrator: ISBReaderOrchestrator<WithScriptedReader> =
+            ISBReaderOrchestrator::new(components, scripted, None)
+                .await
+                .unwrap();
+
+        let (mut rx, handle) = orchestrator.streaming_read(cancel.clone()).await.unwrap();
+
+        // Only two distinct offsets should be forwarded; the duplicate must be filtered.
+        let first = tokio::time::timeout(Duration::from_secs(1), rx.next())
+            .await
+            .expect("should receive first message")
+            .expect("stream open");
+        let second = tokio::time::timeout(Duration::from_secs(1), rx.next())
+            .await
+            .expect("should receive second message")
+            .expect("stream open");
+
+        let mut forwarded_offsets = vec![
+            first.message().offset.clone(),
+            second.message().offset.clone(),
+        ];
+        forwarded_offsets.sort_by_key(|o| match o {
+            Offset::Int(i) => i.offset,
+            Offset::String(_) => 0,
+        });
+        assert_eq!(
+            forwarded_offsets,
+            vec![
+                Offset::Int(IntOffset::new(7, 0)),
+                Offset::Int(IntOffset::new(8, 0)),
+            ],
+            "should forward each distinct offset exactly once"
+        );
+
+        // Confirm the duplicate triggered exactly one nack with a non-None delay.
+        let nacks = scripted_clone.nacks.lock().unwrap().clone();
+        let delayed_nacks: Vec<_> = nacks.iter().filter(|(_, delay)| delay.is_some()).collect();
+        assert_eq!(
+            delayed_nacks.len(),
+            1,
+            "exactly one delayed nack for the duplicate"
+        );
+        let (delayed_offset, _) = delayed_nacks
+            .first()
+            .expect("just asserted there is one delayed nack");
+        assert_eq!(delayed_offset, &dup_offset);
+
+        // Ack the legitimate copies so cleanup completes.
+        mark_success!(first);
+        mark_success!(second);
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !tracker.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("tracker should drain after acking originals");
+
+        cancel.cancel();
         let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
     }
 }

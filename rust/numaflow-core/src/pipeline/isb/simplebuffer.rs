@@ -155,7 +155,8 @@ impl ISBReader for SimpleReaderAdapter {
         self.inner.ack(&simple_offset).await.map_err(|e| e.into())
     }
 
-    async fn nack(&self, offset: &Offset) -> crate::Result<()> {
+    async fn nack(&self, offset: &Offset, _delay: Option<Duration>) -> crate::Result<()> {
+        // SimpleBuffer has no broker-side delay; the optional `delay` is ignored.
         let simple_offset = offset.into();
         self.inner.nack(&simple_offset).await.map_err(|e| e.into())
     }
@@ -357,7 +358,7 @@ mod tests {
 
         // Nack the message
         reader
-            .nack(&messages[0].offset)
+            .nack(&messages[0].offset, None)
             .await
             .expect("nack should succeed");
 
@@ -450,7 +451,7 @@ mod tests {
 
         // Try to nack an offset that doesn't exist
         let nonexistent_offset = Offset::Int(IntOffset::new(999, 0));
-        let result = reader.nack(&nonexistent_offset).await;
+        let result = reader.nack(&nonexistent_offset, None).await;
 
         assert!(result.is_err());
         // Verify it's an OffsetNotFound error
