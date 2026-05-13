@@ -530,13 +530,14 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
                     // Insert into the tracker first. A duplicate in-flight delivery (same
                     // offset already being processed in this pod) is ignored and not forwarded
-                    // to downstream.
+                    // to downstream. The original copy already in the tracker drives the
+                    // source-side ack/nack for that offset.
                     match self.tracker.insert(&message).await {
                         Ok(()) => {}
                         Err(Error::DuplicateInflight(_)) => {
                             warn!(
                                 offset = ?message.offset,
-                                "duplicate delivery from source, nacking duplicate"
+                                "duplicate delivery from source, dropping"
                             );
                             Self::record_duplicate_drop(mvtx_labels, message.value.len());
                             continue;
@@ -1259,10 +1260,11 @@ mod tests {
     }
 
     /// When a source batch contains two messages with the same offset, only the first
-    /// is forwarded downstream; the duplicate is nack'd back to the source SDK. The
-    /// original is eventually acked.
+    /// is forwarded downstream. The duplicate is dropped without any ack/nack against
+    /// the source SDK — the original copy already in the tracker owns the source-side
+    /// resolution for that offset.
     #[tokio::test]
-    async fn duplicate_inflight_from_source_is_nackd() {
+    async fn duplicate_inflight_from_source_is_dropped() {
         let cln_token = CancellationToken::new();
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
@@ -1337,7 +1339,8 @@ mod tests {
             third.ok().flatten().map(|m| m.message.offset.to_string())
         );
 
-        // Ack the forwarded copies and let the source SDK observe the ack/nack split.
+        // Ack the forwarded copies so the source SDK sees a clean resolution for each
+        // distinct offset.
         mark_success!(first);
         mark_success!(second);
 
