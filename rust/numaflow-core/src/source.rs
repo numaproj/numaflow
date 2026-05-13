@@ -534,6 +534,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     // response for this delivery. The original copy already in the tracker
                     // drives end-to-end completion; a later ack on the same offset
                     // supersedes this nack for offset-keyed sources.
+                    //
+                    // FIXME: when `SourceAcker::nack` supports per-message nack options, pass a
+                    // flag indicating this nack is for a redelivered/duplicate message so sources
+                    // can distinguish "processing failed" from "duplicate.
                     match self.tracker.insert(message).await {
                         Ok(()) => {}
                         Err(Error::DuplicateInflight(_)) => {
