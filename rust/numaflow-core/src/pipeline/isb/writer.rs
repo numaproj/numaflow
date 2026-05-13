@@ -2134,7 +2134,7 @@ mod simple_buffer_tests {
         async fn ack(&self, _offset: &Offset) -> Result<()> {
             Ok(())
         }
-        async fn nack(&self, _offset: &Offset) -> Result<()> {
+        async fn nack(&self, _offset: &Offset, _delay: Option<Duration>) -> Result<()> {
             Ok(())
         }
         async fn pending(&self) -> Result<Option<usize>> {

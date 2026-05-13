@@ -10,7 +10,8 @@ use crate::error::{Error, Result};
 use crate::message::{MessageHandle, ReadAck};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, SOURCE_PARTITION_NAME_LABEL, monovertex_metrics,
-    mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
+    mvtx_forward_metric_labels, pipeline_drop_metric_labels, pipeline_metric_labels,
+    pipeline_metrics,
 };
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::source::http::CoreHttpSource;
@@ -473,8 +474,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 true => MAX_ACK_PENDING / self.read_batch_size,
                 false => 1,
             };
-            let semaphore = Arc::new(Semaphore::new(max_ack_tasks));
 
+            let semaphore = Arc::new(Semaphore::new(max_ack_tasks));
             let mut result = Ok(());
             loop {
                 // Acquire the semaphore permit before reading the next batch to make
@@ -519,7 +520,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 let mut msg_handles = vec![];
                 let mut ack_batch = Vec::with_capacity(msgs_len);
 
-                for message in messages.iter() {
+                for message in messages.into_iter() {
                     Self::record_partition_read_metrics(
                         &pipeline_labels,
                         mvtx_labels,
@@ -527,13 +528,27 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         message.value.len(),
                     );
 
-                    // insert the message (with offset) into the tracker.
-                    self.tracker.insert(message).await?;
+                    // Insert into the tracker first. A duplicate in-flight delivery (same
+                    // offset already being processed in this pod) is ignored and not forwarded
+                    // to downstream. The original copy already in the tracker drives the
+                    // source-side ack/nack for that offset.
+                    match self.tracker.insert(&message).await {
+                        Ok(()) => {}
+                        Err(Error::DuplicateInflight(_)) => {
+                            warn!(
+                                offset = ?message.offset,
+                                "duplicate delivery from source, dropping"
+                            );
+                            Self::record_duplicate_drop(mvtx_labels, message.value.len());
+                            continue;
+                        }
+                        Err(e) => return Err(e),
+                    }
 
                     let (ack_tx, ack_rx) = oneshot::channel();
                     // store the ack receiver in the batch to invoke ack later.
                     ack_batch.push((message.offset.clone(), ack_rx));
-                    msg_handles.push(MessageHandle::new(message.clone(), ack_tx));
+                    msg_handles.push(MessageHandle::new(message, ack_tx));
                 }
 
                 // start a background task to invoke ack on the source for the offsets that are acked.
@@ -832,6 +847,32 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 .inc_by(bytes as u64);
         }
     }
+    /// Records a duplicate drop on the source read path. The source forwarder runs in
+    /// both monovertex and pipeline modes, so increment whichever counter family
+    /// matches the current mode. Monovertex has a single `dropped_total` without a
+    /// reason label; pipeline mode carries `reason="duplicate"` on `forwarder.drop_total`.
+    fn record_duplicate_drop(mvtx_labels: &[(String, String)], bytes: usize) {
+        if is_mono_vertex() {
+            monovertex_metrics()
+                .dropped_total
+                .get_or_create(&mvtx_labels.to_owned())
+                .inc();
+        } else {
+            let labels =
+                pipeline_drop_metric_labels(VERTEX_TYPE_SOURCE, get_vertex_name(), "duplicate");
+            pipeline_metrics()
+                .forwarder
+                .drop_total
+                .get_or_create(&labels)
+                .inc();
+            pipeline_metrics()
+                .forwarder
+                .drop_bytes_total
+                .get_or_create(&labels)
+                .inc_by(bytes as u64);
+        }
+    }
+
     fn send_ack_metrics(e2e_start_time: Instant, n: usize, start: Instant) {
         if is_mono_vertex() {
             let mvtx_labels = mvtx_forward_metric_labels();
@@ -1139,6 +1180,183 @@ mod tests {
         drop(source);
         drop(sender);
 
+        cln_token.cancel();
+        let _ = handle.await.unwrap();
+        let _ = shutdown_tx.send(());
+        server_handle.await.unwrap();
+    }
+
+    /// UD-source that emits a fixed batch on the first read containing a duplicated
+    /// offset, then nothing more. Records acks and nacks so the test can assert which
+    /// offsets resolved how.
+    struct DuplicateSource {
+        served: AtomicUsize,
+        acked: std::sync::RwLock<Vec<String>>,
+        nacked: std::sync::RwLock<Vec<String>>,
+    }
+
+    impl DuplicateSource {
+        fn new() -> Self {
+            Self {
+                served: AtomicUsize::new(0),
+                acked: std::sync::RwLock::new(Vec::new()),
+                nacked: std::sync::RwLock::new(Vec::new()),
+            }
+        }
+
+        fn message(offset_bytes: &[u8]) -> Message {
+            Message {
+                value: b"hi".to_vec(),
+                event_time: Utc::now(),
+                offset: Offset {
+                    offset: offset_bytes.to_vec(),
+                    partition_id: 0,
+                },
+                keys: vec![],
+                headers: Default::default(),
+                user_metadata: None,
+            }
+        }
+    }
+
+    #[tonic::async_trait]
+    impl source::Sourcer for DuplicateSource {
+        async fn read(&self, _req: SourceReadRequest, transmitter: Sender<Message>) {
+            if self.served.fetch_add(1, Ordering::SeqCst) > 0 {
+                // Subsequent reads return nothing so the source quiesces.
+                return;
+            }
+            // Same offset twice (duplicate) plus one unique offset.
+            transmitter.send(Self::message(b"dup")).await.unwrap();
+            transmitter.send(Self::message(b"dup")).await.unwrap();
+            transmitter.send(Self::message(b"unique")).await.unwrap();
+        }
+
+        async fn ack(&self, offsets: Vec<Offset>) {
+            for off in offsets {
+                self.acked
+                    .write()
+                    .unwrap()
+                    .push(String::from_utf8(off.offset).unwrap());
+            }
+        }
+
+        async fn nack(&self, offsets: Vec<Offset>) {
+            for off in offsets {
+                self.nacked
+                    .write()
+                    .unwrap()
+                    .push(String::from_utf8(off.offset).unwrap());
+            }
+        }
+
+        async fn pending(&self) -> Option<usize> {
+            Some(0)
+        }
+
+        async fn partitions(&self) -> Option<Vec<i32>> {
+            Some(vec![0])
+        }
+    }
+
+    /// When a source batch contains two messages with the same offset, only the first
+    /// is forwarded downstream. The duplicate is dropped without any ack/nack against
+    /// the source SDK — the original copy already in the tracker owns the source-side
+    /// resolution for that offset.
+    #[tokio::test]
+    async fn duplicate_inflight_from_source_is_dropped() {
+        let cln_token = CancellationToken::new();
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("dup-source.sock");
+        let server_info_file = tmp_dir.path().join("dup-source-server-info");
+
+        let server_socket = sock_file.clone();
+        let server_info = server_info_file.clone();
+        let server_handle = tokio::spawn(async move {
+            source::Server::new(DuplicateSource::new())
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .unwrap()
+        });
+
+        // Give the server time to bind.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let (src_read, src_ack, lag_reader) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .expect("new_source should succeed");
+
+        let tracker = Tracker::new(None, CancellationToken::new());
+        let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
+            5,
+            SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
+            tracker.clone(),
+            true,
+            None,
+            None,
+            cln_token.clone(),
+            None,
+        )
+        .await;
+
+        let (mut stream, handle) = source
+            .clone()
+            .streaming_read(cln_token.clone(), None)
+            .unwrap();
+
+        // Each distinct offset should be forwarded exactly once.
+        let first = tokio::time::timeout(Duration::from_secs(2), stream.next())
+            .await
+            .expect("first message")
+            .expect("stream open");
+        let second = tokio::time::timeout(Duration::from_secs(2), stream.next())
+            .await
+            .expect("second message")
+            .expect("stream open");
+
+        // Each distinct offset should be forwarded exactly once.
+        assert_ne!(
+            first.message.offset, second.message.offset,
+            "duplicate offset must not be forwarded twice; got {} twice",
+            first.message.offset
+        );
+
+        // A third message should NOT arrive (duplicate was filtered).
+        let third = tokio::time::timeout(Duration::from_millis(200), stream.next()).await;
+        assert!(
+            third.is_err(),
+            "no third message expected, got {:?}",
+            third.ok().flatten().map(|m| m.message.offset.to_string())
+        );
+
+        // Ack the forwarded copies so the source SDK sees a clean resolution for each
+        // distinct offset.
+        mark_success!(first);
+        mark_success!(second);
+
+        // Wait for the ack pipeline to flush.
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if tracker.is_empty().await.unwrap() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("tracker should drain");
+
+        drop(source);
         cln_token.cancel();
         let _ = handle.await.unwrap();
         let _ = shutdown_tx.send(());

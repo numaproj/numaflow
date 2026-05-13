@@ -65,6 +65,9 @@ pub enum Error {
     #[error("Task Error - {0}")]
     Tracker(String),
 
+    #[error("Duplicate inflight offset - {0}")]
+    DuplicateInflight(String),
+
     #[error("Watermark Error - {0}")]
     Watermark(String),
 
