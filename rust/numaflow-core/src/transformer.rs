@@ -215,11 +215,15 @@ impl Transformer {
 
             async move {
                 let offset = read_msg.offset.clone();
-                let source_transform_span = otel::SourceTransformSpan::new(
-                    source_transform_parent,
-                    offset.to_string(),
-                    otel::TraceTopology::current(),
-                );
+                let source_transform_span = if otel::platform_spans_enabled() {
+                    otel::SourceTransformSpan::new(
+                        source_transform_parent,
+                        offset.to_string(),
+                        otel::TraceTopology::current(),
+                    )
+                } else {
+                    otel::SourceTransformSpan::none()
+                };
                 let transformed_messages =
                     Transformer::transform(transform_handle, read_msg, hard_shutdown_token).await?;
                 source_transform_span.record_output_count(transformed_messages.len());

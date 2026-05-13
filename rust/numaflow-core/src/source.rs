@@ -531,16 +531,17 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 // (e.g., transformer error that breaks the outer loop) have their spans
                 // closed by the RAII guard when the map is dropped.
                 //
-                // When no OTel layer is registered, the span constructors return disabled spans
-                // and noop dispatch contexts — the work below is cheap.
                 let topology = otel::TraceTopology::current();
+                let platform_spans_enabled = otel::platform_spans_enabled();
                 let mut dispatch_spans = otel::SourceDispatchSpans::new();
                 // Read-only parent contexts for `source.transform`; `dispatch_spans` remains the
                 // sole owner responsible for ending `source.dispatch`.
-                let mut dispatch_parent_contexts = self
-                    .transformer
-                    .is_some()
-                    .then(|| HashMap::with_capacity(msgs_len));
+                let mut dispatch_parent_contexts =
+                    if platform_spans_enabled && self.transformer.is_some() {
+                        Some(HashMap::with_capacity(msgs_len))
+                    } else {
+                        None
+                    };
 
                 for message in messages.iter_mut() {
                     Self::record_partition_read_metrics(
@@ -562,11 +563,17 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     //   source read latency.
                     // - Inject `vertex.process` context into sys_metadata["tracing"] so that map
                     //   and sink become siblings of `source.dispatch` under `vertex.process`.
-                    let spans = otel::start_source_message_spans(message, topology);
-                    if let Some(ref mut parent_contexts) = dispatch_parent_contexts {
-                        parent_contexts.insert(message.offset.clone(), spans.dispatch_cx.clone());
-                    }
-                    dispatch_spans.insert(message.offset.clone(), spans.dispatch_cx);
+                    let platform_span = if platform_spans_enabled {
+                        let spans = otel::start_source_message_spans(message, topology);
+                        if let Some(ref mut parent_contexts) = dispatch_parent_contexts {
+                            parent_contexts
+                                .insert(message.offset.clone(), spans.dispatch_cx.clone());
+                        }
+                        dispatch_spans.insert(message.offset.clone(), spans.dispatch_cx);
+                        Some(spans.platform_span)
+                    } else {
+                        None
+                    };
                     // insert the message (with offset) into the tracker.
                     self.tracker.insert(message).await?;
 
@@ -574,7 +581,9 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     // store the ack receiver in the batch to invoke ack later.
                     ack_batch.push((message.offset.clone(), ack_rx));
                     let msg_handle = MessageHandle::new(message.clone(), ack_tx);
-                    msg_handle.set_pipeline_span(spans.platform_span);
+                    if let Some(span) = platform_span {
+                        msg_handle.set_pipeline_span(span);
+                    }
                     msg_handles.push(msg_handle);
                 }
 
@@ -1116,8 +1125,8 @@ mod tests {
         let kept = core_offset(1);
         let filtered = core_offset(2);
         let mut spans = SourceDispatchSpans::new();
-        spans.insert(kept.clone(), opentelemetry::Context::new());
-        spans.insert(filtered.clone(), opentelemetry::Context::new());
+        spans.insert_for_test(kept.clone(), opentelemetry::Context::new());
+        spans.insert_for_test(filtered.clone(), opentelemetry::Context::new());
 
         let output_counts = HashMap::from([(kept.clone(), 1)]);
         spans.end_without_outputs(&output_counts);
@@ -1131,7 +1140,7 @@ mod tests {
         let known = core_offset(1);
         let unknown = core_offset(2);
         let mut spans = SourceDispatchSpans::new();
-        spans.insert(known.clone(), opentelemetry::Context::new());
+        spans.insert_for_test(known.clone(), opentelemetry::Context::new());
 
         spans.end(&unknown);
         assert!(spans.contains(&known));
@@ -1144,7 +1153,7 @@ mod tests {
     #[test]
     fn source_dispatch_spans_drop_with_remaining_spans_is_safe() {
         let mut spans = SourceDispatchSpans::new();
-        spans.insert(core_offset(1), opentelemetry::Context::new());
+        spans.insert_for_test(core_offset(1), opentelemetry::Context::new());
     }
 
     #[tokio::test]
