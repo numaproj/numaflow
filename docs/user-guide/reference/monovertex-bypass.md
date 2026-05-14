@@ -61,7 +61,7 @@ spec:
           - tag-b
     sink:
       tags:
-        operator: nor
+        operator: not
         values:
           - tag-c
             ...
