@@ -49,7 +49,7 @@ spec:
         value: "true"
 ```
 
-With read-ahead enabled the upper bound on in-flight messages becomes **`concurrency + readBatchSize`** (the data plane keeps reading until the in-flight count hits `concurrency`, then may pre-fetch one more batch).
+With read-ahead enabled the upper bound on in-flight messages becomes **`min(concurrency, readBatchSize)`**.
 
 ### Strictly sequential processing
 
