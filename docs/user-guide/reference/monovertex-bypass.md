@@ -41,7 +41,7 @@ The bypass spec subsequently allows defining bypass rules for these 3 currently 
 * `fallback` (fallback sink)
 * `onSuccess` (onSuccess sink)
 
-Conditions defined under each sink label follow the same pattern as our conventional conditional forwarding for edges in numaflow pipelines. `operator` defaults to `or` if omitted. Supported values: `and`, `or`, `not`.
+Conditions defined under each sink label follow the same pattern as our conventional conditional forwarding for edges in numaflow pipelines.
 
 Spec for MonoVertex bypass feature:
 
