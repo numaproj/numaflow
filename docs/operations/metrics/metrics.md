@@ -126,6 +126,7 @@ These metrics are emitted by MonoVertex pods. All MonoVertex metrics use the fol
 |--------------------------------|-------------|-----------------------------------------|
 | `monovtx_udf_time`            | Histogram   | Total time taken in UDF, in microseconds |
 | `monovtx_udf_udf_error_total` | Counter     | Total number of UDF errors              |
+| `monovtx_udf_drop_total`      | Counter     | Total number of messages dropped by the user via DROP tag in the map UDF |
 
 ### Sink Metrics
 

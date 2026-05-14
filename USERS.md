@@ -13,3 +13,4 @@ Please add your company name and initial use case (optional) below.
 9. [QualiBooth](https://www.qualibooth.com/) - Accessibility-focused software. It leverages Numaflow pipelines to aggregate real-time data related to web accessibility issues.
 10. [Starboard Maritime Intelligence](https://www.starboardintelligence.com/) - High-throughput data pipelines for processing live telemetry and sensor data with real-time enrichment and validation.
 11. [Playerdata](https://playerdata.com) - Help your athletes build confidence, stay healthy, and work smarter with PlayerData's world-class performance tracking technology.
+12. [Kaseya](https://kaseya.com) - High throughput data ingestion (from 17M+ endpoints and 40+ products) to Data Platform for powering the Intelligence platform (Agentic AI)
