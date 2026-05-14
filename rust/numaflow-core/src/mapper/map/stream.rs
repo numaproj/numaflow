@@ -349,6 +349,7 @@ impl UserDefinedStreamMap {
             let _ = tx
                 .send(Err(Error::Mapper("mapper closed".to_string())))
                 .await;
+            return rx;
         }
 
         // only insert if we are able to send the message to the server
