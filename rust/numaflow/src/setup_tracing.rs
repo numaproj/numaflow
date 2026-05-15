@@ -173,6 +173,10 @@ where
     // (done via `TracerProviderGuard`'s drop) flushes and tears down both.
     opentelemetry::global::set_tracer_provider(tracer_provider.clone());
 
+    // Eagerly populate numaflow-core's cached `BoxedTracer` now that the global provider
+    // is registered, so the first per-message span doesn't accidentally cache a noop tracer.
+    numaflow_core::init_tracer();
+
     // Set W3C Trace Context propagator for context propagation via sys_metadata.
     opentelemetry::global::set_text_map_propagator(
         opentelemetry_sdk::propagation::TraceContextPropagator::new(),

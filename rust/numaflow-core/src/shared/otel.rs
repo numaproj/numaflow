@@ -17,10 +17,17 @@ use crate::metadata::{KeyValueGroup, Metadata};
 static TRACER: OnceLock<opentelemetry::global::BoxedTracer> = OnceLock::new();
 static PLATFORM_SPANS_ENABLED: OnceLock<bool> = OnceLock::new();
 
-// Initialised on first use. In normal startup, setup_tracing::register() calls
-// global::set_tracer_provider(...) before numaflow_core::run() — so the first span
-// creation (during message processing) sees the real provider. When OTLP is absent
-// the noop provider is cached, which is intentional: this process runs without export.
+/// Eagerly populates the cached `BoxedTracer` from the global provider. Call this from the
+/// binary's tracing setup *after* `set_tracer_provider` so the cache binds to the real
+/// provider rather than the noop one.
+///
+/// Lazy fallback in `get_tracer` still works if this is never called — but `OnceLock` is
+/// write-once, so whichever caller wins the race fixes the tracer for the process lifetime.
+/// Calling this from the deterministic init path removes that race.
+pub fn init_tracer() {
+    let _ = TRACER.get_or_init(|| global::tracer("numaflow-core"));
+}
+
 fn get_tracer() -> &'static opentelemetry::global::BoxedTracer {
     TRACER.get_or_init(|| global::tracer("numaflow-core"))
 }
