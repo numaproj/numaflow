@@ -542,7 +542,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 let mut dispatch_parent_contexts =
                     should_track_dispatch_parents.then(|| HashMap::with_capacity(msgs_len));
 
-                for message in messages.iter_mut() {
+                for mut message in messages.drain(..) {
                     Self::record_partition_read_metrics(
                         &pipeline_labels,
                         mvtx_labels,
@@ -554,7 +554,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     // offset already being processed in this pod) is ignored and not forwarded
                     // to downstream. The original copy already in the tracker drives the
                     // source-side ack/nack for that offset.
-                    match self.tracker.insert(message).await {
+                    match self.tracker.insert(&message).await {
                         Ok(()) => {}
                         Err(Error::DuplicateInflight(_)) => {
                             warn!(
@@ -580,7 +580,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     // - Inject `vertex.process` context into sys_metadata["tracing"] so that map
                     //   and sink become siblings of `source.dispatch` under `vertex.process`.
                     let platform_span = if platform_spans_enabled {
-                        let spans = otel::start_source_message_spans(message, topology);
+                        let spans = otel::start_source_message_spans(&mut message, topology);
                         if let Some(ref mut parent_contexts) = dispatch_parent_contexts {
                             parent_contexts
                                 .insert(message.offset.clone(), spans.dispatch_cx.clone());
@@ -594,7 +594,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     let (ack_tx, ack_rx) = oneshot::channel();
                     // store the ack receiver in the batch to invoke ack later.
                     ack_batch.push((message.offset.clone(), ack_rx));
-                    let msg_handle = MessageHandle::new(message.clone(), ack_tx);
+                    let msg_handle = MessageHandle::new(message, ack_tx);
                     if let Some(span) = platform_span {
                         msg_handle.set_pipeline_span(span);
                     }
