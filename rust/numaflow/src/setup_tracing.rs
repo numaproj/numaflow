@@ -59,19 +59,20 @@ fn report_panic(panic_info: &PanicHookInfo<'_>) {
 /// - `OTEL_TRACES_SAMPLER`: sampler type
 /// - `OTEL_TRACES_SAMPLER_ARG`: sampler argument (ratio for `*_traceidratio` samplers)
 ///
-/// Returns `None` when neither env var is set so the caller can fall back to the SDK default
-/// (currently `parentbased_always_on`). Numaflow does not impose a project-specific default;
-/// operators configure sampling via standard OTel env vars.
+/// When neither env var is set, defaults to `parentbased_traceidratio` at 0.1 (10%).
+/// Numaflow emits multiple spans per message, so the SDK's `parentbased_always_on` default
+/// would flood collectors at typical message rates; operators who want full sampling can opt
+/// in via `OTEL_TRACES_SAMPLER=parentbased_always_on`.
 ///
 /// Supported samplers: `always_on`, `always_off`, `traceidratio`,
 /// `parentbased_always_on`, `parentbased_always_off`, `parentbased_traceidratio`.
-fn build_sampler() -> Option<opentelemetry_sdk::trace::Sampler> {
-    let sampler_name = std::env::var("OTEL_TRACES_SAMPLER").ok()?;
-    let sampler_arg_raw = std::env::var("OTEL_TRACES_SAMPLER_ARG").ok();
-    Some(build_sampler_from(
-        &sampler_name,
-        sampler_arg_raw.as_deref(),
-    ))
+fn build_sampler() -> opentelemetry_sdk::trace::Sampler {
+    let sampler_name =
+        std::env::var("OTEL_TRACES_SAMPLER").unwrap_or_else(|_| "parentbased_traceidratio".into());
+    let sampler_arg_raw = std::env::var("OTEL_TRACES_SAMPLER_ARG")
+        .ok()
+        .or_else(|| Some("0.1".into()));
+    build_sampler_from(&sampler_name, sampler_arg_raw.as_deref())
 }
 
 fn build_sampler_from(
@@ -152,17 +153,15 @@ where
         }
     };
 
-    let mut provider_builder = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+    let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
         .with_batch_exporter(exporter)
+        .with_sampler(build_sampler())
         .with_resource(
             opentelemetry_sdk::Resource::builder()
                 .with_service_name(service_name)
                 .build(),
-        );
-    if let Some(sampler) = build_sampler() {
-        provider_builder = provider_builder.with_sampler(sampler);
-    }
-    let tracer_provider = provider_builder.build();
+        )
+        .build();
 
     use opentelemetry::trace::TracerProvider as _;
     let tracer = tracer_provider.tracer("numaflow");
