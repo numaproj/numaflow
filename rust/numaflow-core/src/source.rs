@@ -682,7 +682,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     platform_spans_enabled.then(|| {
                         let mut map = HashMap::with_capacity(msg_handles.len());
                         for msg_handle in &msg_handles {
-                            *map.entry(msg_handle.message().offset.clone()).or_insert(0usize) += 1;
+                            *map.entry(msg_handle.message().offset.clone())
+                                .or_insert(0usize) += 1;
                         }
                         map
                     });
