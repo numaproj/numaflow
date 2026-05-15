@@ -215,11 +215,8 @@ impl Transformer {
 
             async move {
                 let offset = read_msg.offset.clone();
-                let source_transform_span = if otel::platform_spans_enabled() {
-                    otel::SourceTransformSpan::new(source_transform_parent, offset.to_string())
-                } else {
-                    otel::SourceTransformSpan::none()
-                };
+                let source_transform_span =
+                    otel::SourceTransformSpan::new(source_transform_parent, offset.to_string());
                 let transformed_messages =
                     Transformer::transform(transform_handle, read_msg, hard_shutdown_token).await?;
                 source_transform_span.record_output_count(transformed_messages.len());

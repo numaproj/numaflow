@@ -15,7 +15,6 @@ use crate::message::Message;
 use crate::metadata::{KeyValueGroup, Metadata};
 
 static TRACER: OnceLock<opentelemetry::global::BoxedTracer> = OnceLock::new();
-static PLATFORM_SPANS_ENABLED: OnceLock<bool> = OnceLock::new();
 
 // Initialised on first use. In normal startup, setup_tracing::register() calls
 // global::set_tracer_provider(...) before numaflow_core::run() — so the first span
@@ -23,32 +22,6 @@ static PLATFORM_SPANS_ENABLED: OnceLock<bool> = OnceLock::new();
 // the noop provider is cached, which is intentional: this process runs without export.
 fn get_tracer() -> &'static opentelemetry::global::BoxedTracer {
     TRACER.get_or_init(|| global::tracer("numaflow-core"))
-}
-
-pub(crate) fn platform_spans_enabled() -> bool {
-    *PLATFORM_SPANS_ENABLED.get_or_init(|| {
-        platform_spans_enabled_from_env(
-            std::env::var("OTEL_SDK_DISABLED").ok().as_deref(),
-            std::env::var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
-                .ok()
-                .as_deref(),
-            std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").ok().as_deref(),
-        )
-    })
-}
-
-fn platform_spans_enabled_from_env(
-    otel_sdk_disabled: Option<&str>,
-    traces_endpoint: Option<&str>,
-    endpoint: Option<&str>,
-) -> bool {
-    if otel_sdk_disabled.is_some_and(|v| v.eq_ignore_ascii_case("true")) {
-        return false;
-    }
-
-    traces_endpoint
-        .or(endpoint)
-        .is_some_and(|endpoint| !endpoint.trim().is_empty())
 }
 
 /// Key under which W3C trace context is stored in `sys_metadata`.
@@ -323,10 +296,6 @@ pub(crate) fn start_platform_child_span(
     operation_name: &'static str,
     message_id: String,
 ) -> opentelemetry::Context {
-    if !platform_spans_enabled() {
-        return opentelemetry::Context::new();
-    }
-
     start_platform_child_span_enabled(
         span_name,
         kind,
@@ -505,10 +474,6 @@ pub(crate) fn inject_stage_spans<T: MessageTarget>(
     topology: TraceTopology,
     stage: TraceStage,
 ) -> ContextSpanGuard {
-    if !platform_spans_enabled() {
-        return ContextSpanGuard::new(Vec::new());
-    }
-
     inject_stage_spans_enabled(targets, topology, stage)
 }
 
@@ -535,10 +500,6 @@ pub(crate) fn inject_stage_spans_enabled<T: MessageTarget>(
 /// Used by unary and stream map tasks after their async work has been instrumented with the
 /// map span. This keeps the ambient `Span::current()` lookup in the tracing helper module.
 pub(crate) fn inject_current_span_as_udf_parent(message: &mut Message) {
-    if !platform_spans_enabled() {
-        return;
-    }
-
     use tracing_opentelemetry::OpenTelemetrySpanExt;
 
     let cx = tracing::Span::current().context();
@@ -547,15 +508,11 @@ pub(crate) fn inject_current_span_as_udf_parent(message: &mut Message) {
 
 /// Builds the per-message `numaflow.{topology}.map` `tracing` span used by unary and stream
 /// mappers. The returned span is a child of the parent context found in `sys_metadata["tracing"]`
-/// (or a fresh root if absent). Returns `Span::none()` when tracing is disabled.
+/// (or a fresh root if absent).
 ///
 /// Callers wrap their UDF call in `.instrument(span)`. Topology selection (e.g. mono-vertex only,
 /// until pipeline tracing lands) stays at the call site.
 pub(crate) fn start_map_tracing_span(message: &Message, topology: TraceTopology) -> tracing::Span {
-    if !platform_spans_enabled() {
-        return tracing::Span::none();
-    }
-
     start_map_tracing_span_enabled(message, topology)
 }
 
@@ -611,18 +568,7 @@ pub(crate) fn start_source_message_spans(
     message: &mut Message,
     topology: TraceTopology,
 ) -> SourceMessageSpans {
-    if !platform_spans_enabled() {
-        return disabled_source_message_spans();
-    }
-
     start_source_message_spans_enabled(message, topology)
-}
-
-fn disabled_source_message_spans() -> SourceMessageSpans {
-    SourceMessageSpans {
-        platform_span: tracing::Span::none(),
-        dispatch_cx: opentelemetry::Context::new(),
-    }
 }
 
 fn start_source_message_spans_enabled(
@@ -694,10 +640,6 @@ impl SourceDispatchSpans {
     }
 
     pub(crate) fn insert(&mut self, offset: crate::message::Offset, cx: opentelemetry::Context) {
-        if !platform_spans_enabled() {
-            return;
-        }
-
         self.insert_enabled(offset, cx);
     }
 
@@ -763,15 +705,7 @@ impl Drop for SourceDispatchSpans {
 pub(crate) struct SourceTransformSpan(Option<opentelemetry::Context>);
 
 impl SourceTransformSpan {
-    pub(crate) fn none() -> Self {
-        Self(None)
-    }
-
     pub(crate) fn new(parent_cx: Option<opentelemetry::Context>, msg_id: String) -> Self {
-        if !platform_spans_enabled() {
-            return Self(None);
-        }
-
         let Some(parent_cx) = parent_cx else {
             return Self(None);
         };
@@ -864,41 +798,6 @@ mod tests {
         );
         assert!(values.contains_key(ATTR_NUMAFLOW_PIPELINE_NAME));
         assert!(values.contains_key(ATTR_NUMAFLOW_VERTEX_NAME));
-    }
-
-    #[test]
-    fn platform_spans_enabled_requires_otlp_endpoint() {
-        assert!(!platform_spans_enabled_from_env(None, None, None));
-        assert!(!platform_spans_enabled_from_env(None, Some(" "), None));
-        assert!(platform_spans_enabled_from_env(
-            None,
-            Some("http://collector:4317"),
-            None
-        ));
-        assert!(platform_spans_enabled_from_env(
-            None,
-            None,
-            Some("http://collector:4317")
-        ));
-    }
-
-    #[test]
-    fn platform_spans_enabled_respects_otel_sdk_disabled() {
-        assert!(!platform_spans_enabled_from_env(
-            Some("true"),
-            Some("http://collector:4317"),
-            None
-        ));
-        assert!(!platform_spans_enabled_from_env(
-            Some("TRUE"),
-            None,
-            Some("http://collector:4317")
-        ));
-        assert!(platform_spans_enabled_from_env(
-            Some("false"),
-            Some("http://collector:4317"),
-            None
-        ));
     }
 
     #[test]
@@ -1350,17 +1249,6 @@ mod tests {
 
     mod start_source_message_spans_tests {
         use super::*;
-
-        #[test]
-        fn disabled_path_does_not_inject_tracing_metadata_key() {
-            let msg = Message::default();
-
-            let result = disabled_source_message_spans();
-
-            assert!(msg.metadata.is_none());
-            assert!(result.platform_span.metadata().is_none());
-            assert!(!result.dispatch_cx.span().span_context().is_valid());
-        }
 
         #[test]
         fn enabled_path_injects_tracing_metadata_key() {

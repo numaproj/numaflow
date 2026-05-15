@@ -8,7 +8,7 @@ use std::backtrace::{Backtrace, BacktraceStatus};
 use std::panic::PanicHookInfo;
 
 const DEFAULT_TRACES_SAMPLER: &str = "parentbased_traceidratio";
-const DEFAULT_TRACES_SAMPLER_ARG: &str = "0.1";
+const DEFAULT_TRACES_SAMPLER_ARG: &str = "0.0";
 
 /// Panic hook to send panic info to `tracing` instead of stderr.
 /// Without this, a panic will be logged to stderr as:
@@ -60,7 +60,7 @@ fn report_panic(panic_info: &PanicHookInfo<'_>) {
 /// Build a sampler from standard OTel environment variables.
 ///
 /// - `OTEL_TRACES_SAMPLER`: sampler type (default: `parentbased_traceidratio`)
-/// - `OTEL_TRACES_SAMPLER_ARG`: sampler argument (default: `0.1` for 10%)
+/// - `OTEL_TRACES_SAMPLER_ARG`: sampler argument (default: `0.0`)
 ///
 /// Supported samplers: `always_on`, `always_off`, `traceidratio`,
 /// `parentbased_always_on`, `parentbased_always_off`, `parentbased_traceidratio`.
@@ -142,15 +142,17 @@ fn build_sampler_from_inner(
     sampler
 }
 
-/// Initialize the OTLP tracing layer if `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
-/// Returns `None` if tracing is not configured (no env var), in which case
-/// the subscriber runs with logging only.
-fn init_otlp_layer<S>(
+/// Initialize the OTel tracing layer.
+///
+/// An SDK tracer provider is always installed so the default sampler is exercised even when
+/// no OTLP exporter endpoint is configured. If an OTLP endpoint is present, spans that pass
+/// sampling are exported via the batch exporter; otherwise the provider has no exporter.
+fn init_otel_layer<S>(
     service_name: String,
-) -> Option<(
+) -> (
     tracing_opentelemetry::OpenTelemetryLayer<S, opentelemetry_sdk::trace::Tracer>,
     opentelemetry_sdk::trace::SdkTracerProvider,
-)>
+)
 where
     S: tracing::Subscriber + for<'span> tracing_subscriber::registry::LookupSpan<'span>,
 {
@@ -158,34 +160,43 @@ where
 
     let otlp_endpoint = std::env::var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
         .or_else(|_| std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT"))
-        .ok()?;
-
-    eprintln!(
-        "[setup_tracing] Configuring OTLP exporter: endpoint={otlp_endpoint}, service_name={service_name}"
-    );
-
-    let exporter = match opentelemetry_otlp::SpanExporter::builder()
-        .with_tonic()
-        .with_endpoint(&otlp_endpoint)
-        .build()
-    {
-        Ok(e) => e,
-        Err(e) => {
-            eprintln!("[setup_tracing] Failed to create OTLP exporter: {e}");
-            return None;
-        }
-    };
+        .ok();
 
     let sampler = build_sampler();
-    let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-        .with_batch_exporter(exporter)
+    let mut provider_builder = opentelemetry_sdk::trace::SdkTracerProvider::builder()
         .with_sampler(sampler)
         .with_resource(
             opentelemetry_sdk::Resource::builder()
-                .with_service_name(service_name)
+                .with_service_name(service_name.clone())
                 .build(),
-        )
-        .build();
+        );
+
+    if let Some(otlp_endpoint) = otlp_endpoint {
+        eprintln!(
+            "[setup_tracing] Configuring OTLP exporter: endpoint={otlp_endpoint}, service_name={service_name}"
+        );
+
+        match opentelemetry_otlp::SpanExporter::builder()
+            .with_tonic()
+            .with_endpoint(&otlp_endpoint)
+            .build()
+        {
+            Ok(exporter) => {
+                provider_builder = provider_builder.with_batch_exporter(exporter);
+                eprintln!("[setup_tracing] OTLP tracing export ENABLED");
+            }
+            Err(e) => {
+                eprintln!("[setup_tracing] Failed to create OTLP exporter: {e}");
+                eprintln!("[setup_tracing] Continuing with SDK tracer provider and no exporter");
+            }
+        }
+    } else {
+        eprintln!(
+            "[setup_tracing] No OTLP endpoint configured; using SDK tracer provider without exporter"
+        );
+    }
+
+    let tracer_provider = provider_builder.build();
 
     use opentelemetry::trace::TracerProvider as _;
     let tracer = tracer_provider.tracer("numaflow");
@@ -203,9 +214,7 @@ where
     );
     let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
-    eprintln!("[setup_tracing] OTLP tracing ENABLED");
-
-    Some((otel_layer, tracer_provider))
+    (otel_layer, tracer_provider)
 }
 
 /// RAII guard that flushes buffered spans by shutting down the provider
@@ -253,10 +262,7 @@ pub fn register() -> TracerProviderGuard {
     };
 
     let service_name = std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "platform".into());
-    let (otel_layer, tracer_provider) = match init_otlp_layer(service_name) {
-        Some((layer, provider)) => (Some(layer), Some(provider)),
-        None => (None, None),
-    };
+    let (otel_layer, tracer_provider) = init_otel_layer(service_name);
 
     // Only export spans (info_span!, tracing::Span) to the OTel layer, not log
     // events (info!, error!, warn!). Without this filter, every log statement in the
@@ -271,7 +277,7 @@ pub fn register() -> TracerProviderGuard {
 
     std::panic::set_hook(Box::new(report_panic));
 
-    TracerProviderGuard(tracer_provider)
+    TracerProviderGuard(Some(tracer_provider))
 }
 
 #[cfg(test)]
@@ -455,12 +461,12 @@ mod tests {
     }
 
     #[test]
-    fn sampler_env_defaults_to_parentbased_traceidratio_at_ten_percent() {
+    fn sampler_env_defaults_to_parentbased_traceidratio_at_zero_percent() {
         let sampler = build_sampler_from_env(None, None);
         assert!(matches!(&sampler, Sampler::ParentBased(_)));
         assert_eq!(
             sampling_decision(&sampler, None, trace_id_at_probability_boundary(0.1, true)),
-            SamplingDecision::RecordAndSample
+            SamplingDecision::Drop
         );
         assert_eq!(
             sampling_decision(&sampler, None, trace_id_at_probability_boundary(0.1, false)),
@@ -514,8 +520,7 @@ mod tests {
 
     #[test]
     fn tracer_provider_guard_drop_without_provider_is_noop() {
-        // Guard holding None must not panic on drop (the path taken when
-        // OTLP is not configured).
+        // Guard holding None must not panic on drop.
         let guard = TracerProviderGuard(None);
         drop(guard);
     }
