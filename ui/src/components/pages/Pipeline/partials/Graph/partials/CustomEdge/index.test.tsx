@@ -496,7 +496,7 @@ describe("Custom Edge", () => {
         "mono-vertex-bypass-udf-mono-vertex-bypass-onSuccess-bypass"
       );
       expect(edge).toBeInTheDocument();
-      expect(edge).toHaveStyle("stroke: #274C77");
+      expect(edge).toHaveStyle("stroke: var(--mono-vertex-bypass-color)");
       expect(edge).toHaveStyle("stroke-width: 1.2");
       expect(edge).toHaveStyle(
         "animation: monoVertexBypassFlow 0.8s linear infinite"

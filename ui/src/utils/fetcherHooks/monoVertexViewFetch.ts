@@ -429,7 +429,7 @@ export const useMonoVertexViewFetch = (
         type: MarkerType.Arrow,
         width: 6,
         height: 6,
-        color: "#274C77",
+        color: "var(--mono-vertex-bypass-color)",
       };
       const mainStages = [
         "source",

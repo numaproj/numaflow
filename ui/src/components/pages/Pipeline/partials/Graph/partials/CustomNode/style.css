@@ -280,7 +280,7 @@
   display: flex;
   align-items: center;
   gap: 0.2rem;
-  color: #274c77;
+  color: var(--mono-vertex-bypass-color);
   font-family: "IBM Plex Sans", sans-serif;
   font-size: 0.9rem;
   font-weight: 600;
@@ -305,7 +305,7 @@
 
 .mono-vertex-bypass-line {
   fill: none;
-  stroke: #274c77;
+  stroke: var(--mono-vertex-bypass-color);
   stroke-width: 2;
   stroke-dasharray: 4 4;
 }

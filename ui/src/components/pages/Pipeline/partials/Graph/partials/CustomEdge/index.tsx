@@ -199,7 +199,7 @@ const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
       data?.monoVertexInternalEdge || data?.monoVertexBypassEdge;
     return {
       stroke: data?.monoVertexBypassEdge
-        ? "#274C77"
+        ? "var(--mono-vertex-bypass-color)"
         : highlightValues[id]
         ? "black"
         : data?.sideInputEdge
