@@ -181,6 +181,8 @@ impl JetStreamWriter {
         // bookkeeping. The PAF await is handled by the caller and is NOT covered here; it
         // represents broker confirmation latency rather than producer work.
         let publish_result = {
+            // Reuse `id` (already computed above for JetStream dedup) so we don't pay a
+            // second `message.id.to_string()` on this hot path.
             let _isb_write_guard = otel::start_isb_write_span(&message, Some(&id));
             let payload: BytesMut = message
                 .try_into()
@@ -260,6 +262,8 @@ impl JetStreamWriter {
         // plus the JetStream publish call. The PAF await below represents broker confirmation
         // latency rather than producer work and is intentionally not covered.
         let publish_result = {
+            // No formatted dedup id is in hand on this path, so let the helper compute it
+            // (only when tracing is on — disabled path stays allocation-free).
             let _isb_write_guard = otel::start_isb_write_span(&message, None);
             let payload: Bytes = message
                 .try_into()

@@ -693,7 +693,6 @@ fn disabled_isb_read_spans() -> IsbReadSpans {
 
 fn start_vertex_process_from_isb_enabled(message: &mut Message) -> IsbReadSpans {
     let msg_id = message.id.to_string();
-    // ISB hops only exist in Pipeline topology; this helper is never called for MonoVertex.
     let platform_span = tracing::info_span!(
         "numaflow.vertex.process",
         otel.kind = "INTERNAL",
@@ -751,8 +750,12 @@ fn start_vertex_process_from_isb_enabled(message: &mut Message) -> IsbReadSpans 
 /// `sys_metadata[TRACING_METADATA_KEY]` — the writer's `vertex.process` stays in metadata so
 /// the next pod's `start_vertex_process_from_isb` parents to it (not to the producer span).
 ///
+/// `message_id` lets callers that have already formatted the broker dedup id (e.g.
+/// `async_write` which needs it for JetStream's `message_id` header) pass it in to avoid a
+/// second `to_string()` on the hot path. Pass `None` if no formatted id is already in hand.
+///
 /// When platform spans are disabled, returns before extracting parent context or formatting
-/// the span message ID.
+/// the span message ID — the call is effectively free.
 pub(crate) fn start_isb_write_span(message: &Message, message_id: Option<&str>) -> StageSpan {
     if !platform_spans_enabled() {
         return StageSpan(opentelemetry::Context::new());
