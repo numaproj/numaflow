@@ -259,6 +259,23 @@ pub(crate) struct Source<C: crate::typ::NumaflowTypeConfig> {
 /// Interval for refreshing source partitions (10 seconds)
 const PARTITION_REFRESH_INTERVAL: Duration = Duration::from_secs(10);
 
+/// Decrements the per-input remaining-output count and ends the dispatch span once it
+/// reaches zero. `remaining` is `None` when tracing is disabled, in which case this is a no-op.
+fn decrement_remaining_dispatch(
+    remaining: Option<&mut HashMap<Offset, usize>>,
+    dispatch_spans: &mut otel::SourceDispatchSpans,
+    offset: &Offset,
+) {
+    let Some(rem) = remaining else { return };
+    if let Some(count) = rem.get_mut(offset) {
+        *count -= 1;
+        if *count == 0 {
+            rem.remove(offset);
+            dispatch_spans.end(offset);
+        }
+    }
+}
+
 impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     /// Create a new StreamingSource. It starts the read and ack actors in the background.
     #[allow(clippy::too_many_arguments)]
@@ -542,7 +559,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 let mut dispatch_parent_contexts =
                     should_track_dispatch_parents.then(|| HashMap::with_capacity(msgs_len));
 
-                for message in messages.iter_mut() {
+                for mut message in messages.drain(..) {
                     Self::record_partition_read_metrics(
                         &pipeline_labels,
                         mvtx_labels,
@@ -554,7 +571,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     // offset already being processed in this pod) is ignored and not forwarded
                     // to downstream. The original copy already in the tracker drives the
                     // source-side ack/nack for that offset.
-                    match self.tracker.insert(message).await {
+                    match self.tracker.insert(&message).await {
                         Ok(()) => {}
                         Err(Error::DuplicateInflight(_)) => {
                             warn!(
@@ -580,7 +597,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     // - Inject `vertex.process` context into sys_metadata["tracing"] so that map
                     //   and sink become siblings of `source.dispatch` under `vertex.process`.
                     let platform_span = if platform_spans_enabled {
-                        let spans = otel::start_source_message_spans(message, topology);
+                        let spans = otel::start_source_message_spans(&mut message, topology);
                         if let Some(ref mut parent_contexts) = dispatch_parent_contexts {
                             parent_contexts
                                 .insert(message.offset.clone(), spans.dispatch_cx.clone());
@@ -594,7 +611,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     let (ack_tx, ack_rx) = oneshot::channel();
                     // store the ack receiver in the batch to invoke ack later.
                     ack_batch.push((message.offset.clone(), ack_rx));
-                    let msg_handle = MessageHandle::new(message.clone(), ack_tx);
+                    let msg_handle = MessageHandle::new(message, ack_tx);
                     if let Some(span) = platform_span {
                         msg_handle.set_pipeline_span(span);
                     }
@@ -657,17 +674,26 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     },
                 };
 
-                let mut remaining_dispatches = HashMap::with_capacity(msg_handles.len());
-                for msg_handle in &msg_handles {
-                    *remaining_dispatches
-                        .entry(msg_handle.message().offset.clone())
-                        .or_insert(0usize) += 1;
-                }
+                // Per-input-offset countdown driving `dispatch_spans.end()` once the last
+                // downstream message for that input is bypassed or sent. Only built when
+                // tracing is on; otherwise `dispatch_spans` is empty and the bookkeeping
+                // would do no useful work.
+                let mut remaining_dispatches: Option<HashMap<Offset, usize>> =
+                    platform_spans_enabled.then(|| {
+                        let mut map = HashMap::with_capacity(msg_handles.len());
+                        for msg_handle in &msg_handles {
+                            *map.entry(msg_handle.message().offset.clone())
+                                .or_insert(0usize) += 1;
+                        }
+                        map
+                    });
 
                 // If a source input produced no downstream messages (for example, the transformer
                 // filtered it out), close its dispatch span now so it does not stay open for the
                 // rest of the batch's watermark/send work.
-                dispatch_spans.end_without_outputs(&remaining_dispatches);
+                if let Some(ref rem) = remaining_dispatches {
+                    dispatch_spans.end_without_outputs(rem);
+                }
 
                 if let Some(watermark_handle) = self.watermark_handle.as_mut() {
                     let entries: Vec<SourceWatermarkEntry> =
@@ -698,17 +724,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         {
                             Some(msg) => msg,
                             None => {
-                                let should_end_dispatch = remaining_dispatches
-                                    .get_mut(&offset)
-                                    .map(|remaining| {
-                                        *remaining -= 1;
-                                        *remaining == 0
-                                    })
-                                    .unwrap_or(false);
-                                if should_end_dispatch {
-                                    remaining_dispatches.remove(&offset);
-                                    dispatch_spans.end(&offset);
-                                }
+                                decrement_remaining_dispatch(
+                                    remaining_dispatches.as_mut(),
+                                    &mut dispatch_spans,
+                                    &offset,
+                                );
                                 continue;
                             }
                         }
@@ -721,17 +741,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         .await
                         .expect("send should not fail");
 
-                    let should_end_dispatch = remaining_dispatches
-                        .get_mut(&offset)
-                        .map(|remaining| {
-                            *remaining -= 1;
-                            *remaining == 0
-                        })
-                        .unwrap_or(false);
-                    if should_end_dispatch {
-                        remaining_dispatches.remove(&offset);
-                        dispatch_spans.end(&offset);
-                    }
+                    decrement_remaining_dispatch(
+                        remaining_dispatches.as_mut(),
+                        &mut dispatch_spans,
+                        &offset,
+                    );
                 }
                 // dispatch_spans drops here — any remaining (shouldn't happen on success path)
                 // get closed by the RAII Drop impl.

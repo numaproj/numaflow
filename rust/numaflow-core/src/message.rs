@@ -76,10 +76,8 @@ use crate::Error;
 use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;
 use std::fmt;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::OnceLock;
 use std::sync::atomic::AtomicUsize;
+use std::sync::{Arc, OnceLock};
 use tracing::{error, warn};
 
 use crate::metadata::Metadata;
@@ -139,8 +137,9 @@ struct AckHandle {
     /// Uses OnceLock to capture only the first failure reason without locking overhead.
     failure_reason: OnceLock<String>,
     /// Tracing span covering the full message lifecycle (created in source, dropped on ack).
-    /// Interior mutability is used because the span is set after construction.
-    pipeline_span: Mutex<Option<tracing::Span>>,
+    /// Uses OnceLock since the span is set exactly once after construction; subsequent calls
+    /// to `set_pipeline_span` are no-ops.
+    pipeline_span: OnceLock<tracing::Span>,
 }
 
 impl AckHandle {
@@ -149,7 +148,7 @@ impl AckHandle {
             sender: Some(sender),
             ref_count: AtomicUsize::new(1),
             failure_reason: OnceLock::new(),
-            pipeline_span: Mutex::new(None),
+            pipeline_span: OnceLock::new(),
         }
     }
 
@@ -157,9 +156,7 @@ impl AckHandle {
     /// dropped. The span covers the message lifecycle owned by this AckHandle; each topology
     /// decides where that lifecycle starts and ends.
     pub(crate) fn set_pipeline_span(&self, span: tracing::Span) {
-        if let Ok(mut guard) = self.pipeline_span.lock() {
-            *guard = Some(span);
-        }
+        let _ = self.pipeline_span.set(span);
     }
 }
 
@@ -275,7 +272,7 @@ impl From<Message> for MessageHandle {
                 sender: None,
                 ref_count: AtomicUsize::new(0), // Already "success" state
                 failure_reason: OnceLock::new(),
-                pipeline_span: Mutex::new(None),
+                pipeline_span: OnceLock::new(),
             }),
         }
     }
