@@ -28,8 +28,15 @@ pub fn init_tracer() {
     let _ = TRACER.get_or_init(|| global::tracer("numaflow-core"));
 }
 
-fn get_tracer() -> &'static opentelemetry::global::BoxedTracer {
-    TRACER.get_or_init(|| global::tracer("numaflow-core"))
+#[cfg(not(test))]
+fn with_tracer<T>(f: impl FnOnce(&opentelemetry::global::BoxedTracer) -> T) -> T {
+    f(TRACER.get_or_init(|| global::tracer("numaflow-core")))
+}
+
+#[cfg(test)]
+fn with_tracer<T>(f: impl FnOnce(&opentelemetry::global::BoxedTracer) -> T) -> T {
+    let tracer = global::tracer("numaflow-core");
+    f(&tracer)
 }
 
 pub(crate) fn platform_spans_enabled() -> bool {
@@ -476,19 +483,20 @@ fn start_child_span_from_spec_enabled(
     message_id: String,
     spec: &SpanSpec,
 ) -> opentelemetry::Context {
-    let tracer = get_tracer();
-    let mut span = tracer
-        .span_builder(spec.span_name)
-        .with_kind(spec.kind.clone())
-        .start_with_context(tracer, parent_cx);
-    if span.is_recording() {
-        span.set_attributes(build_platform_attributes(
-            spec.topology,
-            spec.operation_name,
-            message_id,
-        ));
-    }
-    opentelemetry::Context::current().with_span(span)
+    with_tracer(|tracer| {
+        let mut span = tracer
+            .span_builder(spec.span_name)
+            .with_kind(spec.kind.clone())
+            .start_with_context(tracer, parent_cx);
+        if span.is_recording() {
+            span.set_attributes(build_platform_attributes(
+                spec.topology,
+                spec.operation_name,
+                message_id,
+            ));
+        }
+        opentelemetry::Context::current().with_span(span)
+    })
 }
 
 /// Starts a per-message stage span as a child of the message's `vertex.process` parent and
