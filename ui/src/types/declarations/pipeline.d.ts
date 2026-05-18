@@ -118,6 +118,8 @@ export interface MonoVertex {
 export interface MonoVertexSpec {
   source: any;
   sink: any;
+  udf?: any;
+  bypass?: any;
   scale: any;
 }
 

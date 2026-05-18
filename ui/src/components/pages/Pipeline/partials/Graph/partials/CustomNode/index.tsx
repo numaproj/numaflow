@@ -219,6 +219,119 @@ const CustomNode: FC<NodeProps> = ({
     );
   }
 
+  if (data?.type === "monoVertexInternal") {
+    const stageDetails = {
+      source: {
+        icon: source,
+        tooltip: "Source Container",
+      },
+      transformer: {
+        icon: transformer,
+        tooltip: "Transformer Container",
+      },
+      udf: {
+        icon: udf,
+        tooltip: "UDF Container",
+      },
+      sink: {
+        icon: sink,
+        tooltip: "Sink Container",
+      },
+      onSuccess: {
+        icon: onSuccess,
+        tooltip: "OnSuccess Sink Container",
+      },
+      fallback: {
+        icon: fallback,
+        tooltip: "Fallback Sink Container",
+      },
+    };
+    const stage = stageDetails[data?.monoVertexStage] || stageDetails.source;
+    const bypassTargets = Array.isArray(data?.bypassTargets)
+      ? data.bypassTargets
+      : [];
+    return (
+      <Tooltip
+        title={<Box className={"node-tooltip"}>{stage.tooltip}</Box>}
+        arrow
+        placement={"bottom"}
+      >
+        <Box
+          className={"mono-vertex-internal-node"}
+          data-testid={data?.name}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Handle
+            type="target"
+            id="in"
+            position={Position.Left}
+            className={`target-handle-${data?.name}`}
+            isConnectable={isConnectable}
+          />
+          <Handle
+            type="target"
+            id="bypass"
+            position={Position.Left}
+            isConnectable={isConnectable}
+          />
+          <Box className={"mono-vertex-internal-node-icon"}>
+            <img src={stage.icon} alt={`${data?.monoVertexStage}-container`} />
+          </Box>
+          {bypassTargets.length > 0 && (
+            <img
+              src={input0}
+              alt={`${data?.monoVertexStage}-bypass`}
+              className={"mono-vertex-bypass-handle"}
+              onMouseOver={(e) => {
+                e.stopPropagation();
+                setHidden((prevState) => {
+                  const updatedState: any = {};
+                  Object.keys(prevState).forEach((key) => {
+                    updatedState[key] = true;
+                  });
+                  bypassTargets.forEach((target: any) => {
+                    updatedState[target.id] = false;
+                  });
+                  return updatedState;
+                });
+                const updatedHighlightedState: any = {};
+                bypassTargets.forEach((target: any) => {
+                  updatedHighlightedState[target.id] = true;
+                });
+                setHighlightValues(updatedHighlightedState);
+              }}
+              onMouseOut={(e) => {
+                e.stopPropagation();
+                setHidden((prevState) => {
+                  const updatedState: any = {};
+                  Object.keys(prevState).forEach((key) => {
+                    updatedState[key] = true;
+                  });
+                  return updatedState;
+                });
+                setHighlightValues({});
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
+          <Handle
+            type="source"
+            id="out"
+            position={Position.Right}
+            className={`source-handle-${data?.name}`}
+            isConnectable={isConnectable}
+          />
+          <Handle
+            type="source"
+            id="bypass"
+            position={Position.Bottom}
+            isConnectable={isConnectable}
+          />
+        </Box>
+      </Tooltip>
+    );
+  }
+
   const handleInputClick = useCallback(
     (e: any) => {
       e.stopPropagation();
@@ -287,17 +400,16 @@ const CustomNode: FC<NodeProps> = ({
     return rate !== undefined && rate >= 0 ? `${rate}/sec` : "Not Available";
   };
 
+  const isMonoVertex = data?.type === "monoVertex";
   const hasBothSinks =
     data?.nodeInfo?.sink?.onSuccess && data?.nodeInfo?.sink?.fallback;
-  const wrapperClass = hasBothSinks
-    ? "mono-vertex-img-wrapper-small"
-    : "mono-vertex-img-wrapper";
-  const imgClass = hasBothSinks ? "mono-vertex-img-small" : "mono-vertex-img";
-  const nodeRateWrapperClass = hasBothSinks ? "node-rate-small" : "node-rate";
-  const nodeRateStyle =
-    data?.type === "monoVertex" && hasBothSinks
-      ? { bottom: "-1rem" }
-      : {};
+  const nodeRateWrapperClass = isMonoVertex
+    ? "node-rate-mono"
+    : hasBothSinks
+    ? "node-rate-small"
+    : "node-rate";
+  const nodeRateStyle = {};
+  const nodePodsClass = isMonoVertex ? "node-pods-mono" : "node-pods";
 
   // Sink container wrappers/images (size adjusts when both onSuccess & fallback are present)
   const pipelineSinkWrapperClass = hasBothSinks
@@ -372,7 +484,10 @@ const CustomNode: FC<NodeProps> = ({
     data?.nodeInfo?.source?.transformer;
 
   let nodeInputClass = "react-flow__node-input";
-  if (isSinkWithContainers) {
+  if (isMonoVertex) {
+    nodeInputClass =
+      "react-flow__node-input react-flow__node-input--mono-vertex";
+  } else if (isSinkWithContainers) {
     nodeInputClass =
       "react-flow__node-input react-flow__node-input--sink-with-containers";
   } else if (isSourceWithContainers) {
@@ -393,191 +508,6 @@ const CustomNode: FC<NodeProps> = ({
         {data?.type === "monoVertex" && (
           <>
             <Box className="node-info-mono">{data?.name}</Box>
-            <Box
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                flex: 1,
-              }}
-            >
-              <Tooltip
-                title={<Box className={"node-tooltip"}>Source Container</Box>}
-                arrow
-                placement={"left"}
-              >
-                <Box className={wrapperClass}>
-                  <img
-                    className={imgClass}
-                    src={source}
-                    alt={"source-container"}
-                  />
-                </Box>
-              </Tooltip>
-              {arrowSvg}
-              {data?.nodeInfo?.source?.transformer && (
-                <Tooltip
-                  title={
-                    <Box className={"node-tooltip"}>Transformer Container</Box>
-                  }
-                  arrow
-                  placement={"bottom"}
-                >
-                  <Box className={wrapperClass}>
-                    <img
-                      className={imgClass}
-                      src={transformer}
-                      alt={"transformer-container"}
-                    />
-                  </Box>
-                </Tooltip>
-              )}
-              {data?.nodeInfo?.source?.transformer && arrowSvg}
-              {data?.nodeInfo?.udf && (
-                <Tooltip
-                  title={
-                    <Box className={"node-tooltip"}>UDF Container</Box>
-                  }
-                  arrow
-                  placement={"bottom"}
-                >
-                  <Box className={wrapperClass}>
-                    <img
-                      className={imgClass}
-                      src={udf}
-                      alt={"udf-container"}
-                    />
-                  </Box>
-                </Tooltip>
-              )}
-              {data?.nodeInfo?.udf && arrowSvg}
-              <Tooltip
-                title={<Box className={"node-tooltip"}>Sink Container</Box>}
-                arrow
-                placement={
-                  data?.nodeInfo?.sink?.fallback ||
-                  data?.nodeInfo?.sink?.onSuccess
-                    ? "bottom"
-                    : "right"
-                }
-              >
-                <Box className={wrapperClass}>
-                  <img
-                    className={imgClass}
-                    src={sink}
-                    alt={"sink-container"}
-                  />
-                </Box>
-              </Tooltip>
-              {(data?.nodeInfo?.sink?.fallback ||
-                data?.nodeInfo?.sink?.onSuccess) && (
-                <Box
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.2rem",
-                  }}
-                >
-                  {data?.nodeInfo?.sink?.onSuccess &&
-                    !data?.nodeInfo?.sink?.fallback && (
-                      <Box style={{ display: "flex", alignItems: "center" }}>
-                        {arrowSvg}
-                        <Tooltip
-                          title={
-                            <Box className={"node-tooltip"}>
-                              OnSuccess Sink Container
-                            </Box>
-                          }
-                          arrow
-                          placement={"right"}
-                        >
-                          <Box className={wrapperClass}>
-                            <img
-                              className={imgClass}
-                              src={onSuccess}
-                              alt={"on-success-sink-container"}
-                            />
-                          </Box>
-                        </Tooltip>
-                      </Box>
-                    )}
-                  {data?.nodeInfo?.sink?.fallback &&
-                    !data?.nodeInfo?.sink?.onSuccess && (
-                      <Box style={{ display: "flex", alignItems: "center" }}>
-                        {arrowSvg}
-                        <Tooltip
-                          title={
-                            <Box className={"node-tooltip"}>
-                              Fallback Sink Container
-                            </Box>
-                          }
-                          arrow
-                          placement={"right"}
-                        >
-                          <Box className={wrapperClass}>
-                            <img
-                              className={imgClass}
-                              src={fallback}
-                              alt={"fallback-sink-container"}
-                            />
-                          </Box>
-                        </Tooltip>
-                      </Box>
-                    )}
-                  {data?.nodeInfo?.sink?.onSuccess &&
-                    data?.nodeInfo?.sink?.fallback && (
-                      <Box
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 0,
-                        }}
-                      >
-                        <Box style={{ display: "flex", alignItems: "center" }}>
-                          {arrowUpSvg}
-                          <Tooltip
-                            title={
-                              <Box className={"node-tooltip"}>
-                                OnSuccess Sink Container
-                              </Box>
-                            }
-                            arrow
-                            placement={"right"}
-                          >
-                            <Box className={wrapperClass}>
-                              <img
-                                className={imgClass}
-                                src={onSuccess}
-                                alt={"on-success-sink-container"}
-                              />
-                            </Box>
-                          </Tooltip>
-                        </Box>
-                        <Box style={{ display: "flex", alignItems: "center" }}>
-                          {arrowDownSvg}
-                          <Tooltip
-                            title={
-                              <Box className={"node-tooltip"}>
-                                Fallback Sink Container
-                              </Box>
-                            }
-                            arrow
-                            placement={"right"}
-                          >
-                            <Box className={wrapperClass}>
-                              <img
-                                className={imgClass}
-                                src={fallback}
-                                alt={"fallback-sink-container"}
-                              />
-                            </Box>
-                          </Tooltip>
-                        </Box>
-                      </Box>
-                    )}
-                </Box>
-              )}
-            </Box>
           </>
         )}
         {data?.type === "sink" &&
@@ -773,7 +703,7 @@ const CustomNode: FC<NodeProps> = ({
           placement={"top-end"}
           arrow
         >
-          <Box className={"node-pods"}>
+          <Box className={nodePodsClass}>
             {data?.type === "source" && (
               <img src={source} alt={"source-vertex"} />
             )}

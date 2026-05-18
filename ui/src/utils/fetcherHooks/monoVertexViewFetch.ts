@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { Node } from "@xyflow/react";
+import { Edge, MarkerType, Node } from "@xyflow/react";
 import { isEqual } from "lodash";
 import { getBaseHref } from "../index";
 import { AppContextProps } from "../../types/declarations/app";
@@ -9,6 +9,100 @@ import {
   MonoVertexSpec,
   MonoVertexMetrics,
 } from "../../types/declarations/pipeline";
+
+const MONO_VERTEX_CONTAINER_WIDTH = 420;
+const MONO_VERTEX_INTERNAL_NODE_WIDTH = 32;
+const MONO_VERTEX_MAX_STAGE_STEP_X = 80;
+const MONO_VERTEX_MIN_SIDE_PADDING = 24;
+const MONO_VERTEX_STAGE_Y = 76;
+const MONO_VERTEX_ONSUCCESS_FAN_OUT_Y = 44;
+const MONO_VERTEX_FALLBACK_FAN_OUT_Y = 106;
+
+export const getMonoVertexInternalStages = (spec: MonoVertexSpec) => {
+  const hasOnSuccess = !!spec?.sink?.onSuccess;
+  const hasFallback = !!spec?.sink?.fallback;
+  const hasOptionalSinkOutput = hasOnSuccess || hasFallback;
+  const shouldFanOutSinkTargets = hasOnSuccess && hasFallback;
+  const columns = [
+    {
+      key: "source",
+      spec: spec.source,
+    },
+    ...(spec?.source?.transformer
+      ? [
+          {
+            key: "transformer",
+            spec: spec.source.transformer,
+          },
+        ]
+      : []),
+    ...(spec?.udf
+      ? [
+          {
+            key: "udf",
+            spec: spec.udf,
+          },
+        ]
+      : []),
+    {
+      key: "sink",
+      spec: spec.sink,
+    },
+    ...(hasOptionalSinkOutput
+      ? [
+          {
+            key: "optionalOutputs",
+            spec: undefined,
+          },
+        ]
+      : []),
+  ];
+  const usableWidth =
+    MONO_VERTEX_CONTAINER_WIDTH -
+    2 * MONO_VERTEX_MIN_SIDE_PADDING -
+    MONO_VERTEX_INTERNAL_NODE_WIDTH;
+  const idealStep =
+    columns.length > 1 ? usableWidth / (columns.length - 1) : 0;
+  const stepX = Math.min(idealStep, MONO_VERTEX_MAX_STAGE_STEP_X);
+  const totalSpan = (columns.length - 1) * stepX;
+  const startX =
+    (MONO_VERTEX_CONTAINER_WIDTH -
+      totalSpan -
+      MONO_VERTEX_INTERNAL_NODE_WIDTH) /
+    2;
+  const stageXByKey = columns.reduce((positions, column, index) => {
+    positions[column.key] = startX + index * stepX;
+    return positions;
+  }, {} as Record<string, number>);
+  const internalStages = columns
+    .filter((column) => column.key !== "optionalOutputs")
+    .map((column) => ({
+      ...column,
+      x: stageXByKey[column.key],
+      y: MONO_VERTEX_STAGE_Y,
+    }));
+  if (hasOnSuccess) {
+    internalStages.push({
+      key: "onSuccess",
+      spec: spec.sink.onSuccess,
+      x: stageXByKey.optionalOutputs,
+      y: shouldFanOutSinkTargets
+        ? MONO_VERTEX_ONSUCCESS_FAN_OUT_Y
+        : MONO_VERTEX_STAGE_Y,
+    });
+  }
+  if (hasFallback) {
+    internalStages.push({
+      key: "fallback",
+      spec: spec.sink.fallback,
+      x: stageXByKey.optionalOutputs,
+      y: shouldFanOutSinkTargets
+        ? MONO_VERTEX_FALLBACK_FAN_OUT_Y
+        : MONO_VERTEX_STAGE_Y,
+    });
+  }
+  return internalStages;
+};
 
 export const useMonoVertexViewFetch = (
   namespaceId: string | undefined,
@@ -245,27 +339,174 @@ export const useMonoVertexViewFetch = (
 
   const vertices = useMemo(() => {
     const newVertices: Node[] = [];
-    // if (spec?.vertices && vertexPods && vertexMetrics) {
     if (spec?.source && spec?.sink && monoVertexMetrics) {
-      const newNode = {} as Node;
       const name = pipelineId ?? "";
+      const newNode = {} as Node;
       newNode.id = name;
       newNode.data = { name: name };
       newNode.data.podnum = replicas ? replicas : 0;
       newNode.position = { x: 0, y: 0 };
-      // change this in the future if you would like to make it draggable
       newNode.draggable = false;
       newNode.type = "custom";
       newNode.data.nodeInfo = spec;
       newNode.data.type = "monoVertex";
-      newNode.data.vertexMetrics = null;
       newNode.data.vertexMetrics = monoVertexMetrics.has(name)
         ? monoVertexMetrics.get(name)
         : null;
+      newNode.selectable = false;
       newVertices.push(newNode);
+
+      const internalStages = getMonoVertexInternalStages(spec);
+      const bypassSourceStages = [
+        ...(spec?.source?.transformer ? ["transformer"] : []),
+        ...(spec?.udf ? ["udf"] : []),
+      ];
+      if (bypassSourceStages.length === 0) {
+        bypassSourceStages.push("source");
+      }
+      const bypassTargetStages = ["sink", "onSuccess", "fallback"].filter(
+        (targetStage) => {
+          const targetExists =
+            targetStage === "sink" ||
+            (targetStage === "onSuccess" && spec?.sink?.onSuccess) ||
+            (targetStage === "fallback" && spec?.sink?.fallback);
+          return spec?.bypass?.[targetStage] && targetExists;
+        }
+      );
+      const bypassTargetsByStage = bypassSourceStages.reduce(
+        (targetsByStage, sourceStage) => {
+          targetsByStage[sourceStage] = bypassTargetStages.map((targetStage) => {
+            const source = `${name}-${sourceStage}`;
+            const target = `${name}-${targetStage}`;
+            const rule = spec?.bypass?.[targetStage];
+            return {
+              id: `${source}-${target}-bypass`,
+              target: targetStage,
+              source: sourceStage,
+              operator: rule?.tags?.operator || "or",
+              values: Array.isArray(rule?.tags?.values)
+                ? rule.tags.values
+                : [],
+            };
+          });
+          return targetsByStage;
+        },
+        {} as Record<string, any[]>
+      );
+      internalStages.forEach((stage) => {
+        const internalNode = {} as Node;
+        internalNode.id = `${name}-${stage.key}`;
+        internalNode.parentId = name;
+        internalNode.extent = "parent";
+        internalNode.data = {
+          name: `${name}-${stage.key}`,
+          nodeInfo: stage.spec,
+          type: "monoVertexInternal",
+          monoVertexStage: stage.key,
+          bypassTargets: bypassTargetsByStage[stage.key] || [],
+        };
+        internalNode.position = { x: stage.x, y: stage.y };
+        internalNode.draggable = false;
+        internalNode.selectable = false;
+        internalNode.type = "custom";
+        newVertices.push(internalNode);
+      });
     }
     return newVertices;
   }, [spec, monoVertexMetrics]);
+
+  const edges = useMemo(() => {
+    const newEdges: Edge[] = [];
+    if (spec?.source && spec?.sink) {
+      const name = pipelineId ?? "";
+      const internalMarkerEnd = {
+        type: MarkerType.Arrow,
+        width: 8,
+        height: 8,
+        color: "#8D9096",
+      };
+      const bypassMarkerEnd = {
+        type: MarkerType.Arrow,
+        width: 6,
+        height: 6,
+        color: "var(--mono-vertex-bypass-color)",
+      };
+      const mainStages = [
+        "source",
+        ...(spec?.source?.transformer ? ["transformer"] : []),
+        ...(spec?.udf ? ["udf"] : []),
+        "sink",
+      ];
+      const pushInternalEdge = (source: string, target: string) => {
+        newEdges.push({
+          id: `${source}-${target}`,
+          source,
+          target,
+          sourceHandle: "out",
+          targetHandle: "in",
+          type: "custom",
+          animated: false,
+          zIndex: 3,
+          markerEnd: internalMarkerEnd,
+          data: {
+            source,
+            target,
+            monoVertexInternalEdge: true,
+          },
+        } as Edge);
+      };
+      mainStages.forEach((stage, idx) => {
+        if (idx === mainStages.length - 1) return;
+        pushInternalEdge(`${name}-${stage}`, `${name}-${mainStages[idx + 1]}`);
+      });
+      if (spec?.sink?.onSuccess) {
+        pushInternalEdge(`${name}-sink`, `${name}-onSuccess`);
+      }
+      if (spec?.sink?.fallback) {
+        pushInternalEdge(`${name}-sink`, `${name}-fallback`);
+      }
+      const bypassSourceStages = [
+        ...(spec?.source?.transformer ? ["transformer"] : []),
+        ...(spec?.udf ? ["udf"] : []),
+      ];
+      if (bypassSourceStages.length === 0) {
+        bypassSourceStages.push("source");
+      }
+      bypassSourceStages.forEach((sourceStage) => {
+        ["sink", "onSuccess", "fallback"].forEach((targetStage) => {
+          const rule = spec?.bypass?.[targetStage];
+          const targetExists =
+            targetStage === "sink" ||
+            (targetStage === "onSuccess" && spec?.sink?.onSuccess) ||
+            (targetStage === "fallback" && spec?.sink?.fallback);
+          if (!rule || !targetExists) return;
+          const bypassSource = `${name}-${sourceStage}`;
+          const target = `${name}-${targetStage}`;
+          newEdges.push({
+            id: `${bypassSource}-${target}-bypass`,
+            source: bypassSource,
+            target,
+            sourceHandle: "bypass",
+            targetHandle: "bypass",
+            type: "custom",
+            animated: true,
+            zIndex: 4,
+            markerEnd: bypassMarkerEnd,
+            data: {
+              source: bypassSource,
+              target,
+              monoVertexBypassEdge: true,
+              bypassSourceStage: sourceStage,
+              bypassTarget: targetStage,
+              operator: rule?.tags?.operator || "or",
+              values: Array.isArray(rule?.tags?.values) ? rule.tags.values : [],
+            },
+          } as Edge);
+        });
+      });
+    }
+    return newEdges;
+  }, [spec, pipelineId]);
 
   //sets loading variable
   useEffect(() => {
@@ -277,6 +518,7 @@ export const useMonoVertexViewFetch = (
   return {
     pipeline,
     vertices,
+    edges,
     pipelineErr,
     loading,
     refresh,
