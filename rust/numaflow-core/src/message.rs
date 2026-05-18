@@ -76,9 +76,8 @@ use crate::Error;
 use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;
 use std::fmt;
-use std::sync::Arc;
-use std::sync::OnceLock;
 use std::sync::atomic::AtomicUsize;
+use std::sync::{Arc, OnceLock};
 use tracing::{error, warn};
 
 use crate::metadata::Metadata;
