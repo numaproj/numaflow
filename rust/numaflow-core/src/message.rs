@@ -137,6 +137,10 @@ struct AckHandle {
     /// Set by mark_failed to record why the message is being nacked.
     /// Uses OnceLock to capture only the first failure reason without locking overhead.
     failure_reason: OnceLock<String>,
+    /// Tracing span covering the full message lifecycle (created in source, dropped on ack).
+    /// Uses OnceLock since the span is set exactly once after construction; subsequent calls
+    /// to `set_pipeline_span` are no-ops.
+    pipeline_span: OnceLock<tracing::Span>,
 }
 
 impl AckHandle {
@@ -145,7 +149,15 @@ impl AckHandle {
             sender: Some(sender),
             ref_count: AtomicUsize::new(1),
             failure_reason: OnceLock::new(),
+            pipeline_span: OnceLock::new(),
         }
+    }
+
+    /// Store the local `vertex.process` tracing span so it is dropped when this AckHandle is
+    /// dropped. The span covers the message lifecycle owned by this AckHandle; each topology
+    /// decides where that lifecycle starts and ends.
+    pub(crate) fn set_pipeline_span(&self, span: tracing::Span) {
+        let _ = self.pipeline_span.set(span);
     }
 }
 
@@ -242,6 +254,11 @@ impl MessageHandle {
     pub(crate) fn message_mut(&mut self) -> &mut Message {
         &mut self.message
     }
+
+    /// Store the per-message platform tracing span so its lifetime follows this message handle.
+    pub(crate) fn set_pipeline_span(&self, span: tracing::Span) {
+        self.ack_handle.set_pipeline_span(span);
+    }
 }
 
 /// Converts a [Message] into a [MessageHandle] without ack tracking.
@@ -256,6 +273,7 @@ impl From<Message> for MessageHandle {
                 sender: None,
                 ref_count: AtomicUsize::new(0), // Already "success" state
                 failure_reason: OnceLock::new(),
+                pipeline_span: OnceLock::new(),
             }),
         }
     }
@@ -371,6 +389,24 @@ impl Message {
         self.tags
             .as_ref()
             .is_some_and(|tags| tags.contains(&DROP.to_string()))
+    }
+
+    pub(crate) fn strip_tracing_udf(&mut self) {
+        if let Some(ref mut metadata) = self.metadata {
+            Arc::make_mut(metadata)
+                .sys_metadata
+                .remove(crate::shared::otel::TRACING_UDF_METADATA_KEY);
+        }
+    }
+
+    pub(crate) fn inject_tracing_udf(&mut self, cx: &opentelemetry::Context) {
+        if let Some(ref mut metadata) = self.metadata {
+            crate::shared::otel::inject_context_into_metadata(
+                Arc::make_mut(metadata),
+                crate::shared::otel::TRACING_UDF_METADATA_KEY,
+                cx,
+            );
+        }
     }
 }
 
@@ -738,5 +774,78 @@ mod tests {
         // Should receive NAK since not all were marked as success
         let result = ack_rx.await.unwrap();
         assert_eq!(result, ReadAck::Nak);
+    }
+
+    fn message_with_metadata() -> Message {
+        Message {
+            metadata: Some(Arc::new(Metadata::default())),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn strip_tracing_udf_removes_key() {
+        use crate::metadata::KeyValueGroup;
+        use crate::shared::otel::TRACING_UDF_METADATA_KEY;
+
+        let mut msg = message_with_metadata();
+        Arc::make_mut(msg.metadata.as_mut().unwrap())
+            .sys_metadata
+            .insert(
+                TRACING_UDF_METADATA_KEY.to_string(),
+                KeyValueGroup {
+                    key_value: HashMap::new(),
+                },
+            );
+        assert!(
+            msg.metadata
+                .as_ref()
+                .unwrap()
+                .sys_metadata
+                .contains_key(TRACING_UDF_METADATA_KEY)
+        );
+
+        msg.strip_tracing_udf();
+
+        assert!(
+            !msg.metadata
+                .as_ref()
+                .unwrap()
+                .sys_metadata
+                .contains_key(TRACING_UDF_METADATA_KEY)
+        );
+    }
+
+    #[test]
+    fn strip_tracing_udf_noop_without_metadata() {
+        let mut msg = Message::default();
+        assert!(msg.metadata.is_none());
+        msg.strip_tracing_udf();
+        assert!(msg.metadata.is_none());
+    }
+
+    #[test]
+    fn inject_tracing_udf_adds_key() {
+        use crate::shared::otel::TRACING_UDF_METADATA_KEY;
+
+        let mut msg = message_with_metadata();
+        assert!(
+            !msg.metadata
+                .as_ref()
+                .unwrap()
+                .sys_metadata
+                .contains_key(TRACING_UDF_METADATA_KEY)
+        );
+
+        let cx = opentelemetry::Context::new();
+        msg.inject_tracing_udf(&cx);
+
+        assert!(
+            msg.metadata
+                .as_ref()
+                .unwrap()
+                .sys_metadata
+                .contains_key(TRACING_UDF_METADATA_KEY)
+        );
     }
 }

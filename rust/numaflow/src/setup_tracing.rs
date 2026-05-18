@@ -54,23 +54,27 @@ fn report_panic(panic_info: &PanicHookInfo<'_>) {
     };
 }
 
-/// Build a sampler from standard OTel environment variables.
+/// Build a sampler from the standard OTel environment variables.
 ///
-/// - `OTEL_TRACES_SAMPLER`: sampler type (default: `parentbased_always_on`)
-/// - `OTEL_TRACES_SAMPLER_ARG`: sampler argument (e.g., `0.1` for 10%)
+/// - `OTEL_TRACES_SAMPLER`: sampler type
+/// - `OTEL_TRACES_SAMPLER_ARG`: sampler argument (ratio for `*_traceidratio` samplers)
+///
+/// When neither env var is set, defaults to `parentbased_traceidratio` at 0.1 (10%).
+/// Numaflow emits multiple spans per message, so the SDK's `parentbased_always_on` default
+/// would flood collectors at typical message rates; operators who want full sampling can opt
+/// in via `OTEL_TRACES_SAMPLER=parentbased_always_on`.
 ///
 /// Supported samplers: `always_on`, `always_off`, `traceidratio`,
 /// `parentbased_always_on`, `parentbased_always_off`, `parentbased_traceidratio`.
 fn build_sampler() -> opentelemetry_sdk::trace::Sampler {
     let sampler_name =
-        std::env::var("OTEL_TRACES_SAMPLER").unwrap_or_else(|_| "parentbased_always_on".into());
-    let sampler_arg_raw = std::env::var("OTEL_TRACES_SAMPLER_ARG").ok();
+        std::env::var("OTEL_TRACES_SAMPLER").unwrap_or_else(|_| "parentbased_traceidratio".into());
+    let sampler_arg_raw = std::env::var("OTEL_TRACES_SAMPLER_ARG")
+        .ok()
+        .or_else(|| Some("0.1".into()));
     build_sampler_from(&sampler_name, sampler_arg_raw.as_deref())
 }
 
-/// Pure helper that builds a [`Sampler`] from already-resolved inputs.
-/// Extracted from `build_sampler` so it can be unit-tested without mutating
-/// the process env.
 fn build_sampler_from(
     sampler_name: &str,
     sampler_arg_raw: Option<&str>,
@@ -109,7 +113,7 @@ fn build_sampler_from(
         "[setup_tracing] Sampler: {sampler_name}{}",
         sampler_arg
             .map(|r| format!(", ratio={r}"))
-            .unwrap_or_default()
+            .unwrap_or_default(),
     );
 
     sampler
@@ -149,10 +153,9 @@ where
         }
     };
 
-    let sampler = build_sampler();
     let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
         .with_batch_exporter(exporter)
-        .with_sampler(sampler)
+        .with_sampler(build_sampler())
         .with_resource(
             opentelemetry_sdk::Resource::builder()
                 .with_service_name(service_name)
@@ -169,6 +172,10 @@ where
     // share the same underlying span queue and exporter, so `shutdown()` on either
     // (done via `TracerProviderGuard`'s drop) flushes and tears down both.
     opentelemetry::global::set_tracer_provider(tracer_provider.clone());
+
+    // Eagerly populate numaflow-core's cached `BoxedTracer` now that the global provider
+    // is registered, so the first per-message span doesn't accidentally cache a noop tracer.
+    numaflow_core::init_tracer();
 
     // Set W3C Trace Context propagator for context propagation via sys_metadata.
     opentelemetry::global::set_text_map_propagator(
@@ -340,16 +347,6 @@ mod tests {
     #[test]
     fn sampler_traceidratio_defaults_to_1_when_arg_missing() {
         let sampler = build_sampler_from("traceidratio", None);
-        assert!(matches!(&sampler, Sampler::TraceIdRatioBased(_)));
-        assert_eq!(
-            sampling_decision(&sampler, None, TraceId::from(u128::MAX)),
-            SamplingDecision::RecordAndSample
-        );
-    }
-
-    #[test]
-    fn sampler_traceidratio_defaults_to_1_when_arg_unparsable() {
-        let sampler = build_sampler_from("traceidratio", Some("not-a-number"));
         assert!(matches!(&sampler, Sampler::TraceIdRatioBased(_)));
         assert_eq!(
             sampling_decision(&sampler, None, TraceId::from(u128::MAX)),

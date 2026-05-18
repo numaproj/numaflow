@@ -7,6 +7,7 @@ use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
+use crate::shared::otel;
 use crate::sinker::actor::{SinkActorMessage, SinkActorResponse};
 use crate::{Result, mark_failed_batch};
 use numaflow_kafka::sink::KafkaSink;
@@ -280,7 +281,7 @@ impl SinkWriter {
     /// Invokes the primary sink actor, handles fallback messages, serving messages, and errors.
     pub(crate) async fn write_to_sink(
         &mut self,
-        messages: Vec<Message>,
+        mut messages: Vec<Message>,
         cln_token: CancellationToken,
     ) -> Result<()> {
         if messages.is_empty() {
@@ -291,10 +292,33 @@ impl SinkWriter {
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();
 
-        // Invoke primary sink to write messages
-        let response = self
-            .write_to_primary_sink(messages, cln_token.clone())
-            .await?;
+        // Tracing: per-message primary sink stage spans, scoped to the primary sink actor call.
+        // When no OTel layer is registered, `inject_stage_span` returns non-recording spans and
+        // the sys_metadata copy-on-write is skipped — no need to gate this call site.
+        let mut response = {
+            let _stage_spans = otel::inject_stage_spans!(
+                messages.iter_mut(),
+                otel::TraceTopology::current(),
+                otel::TraceStage::Sink(otel::SinkStage::Primary),
+            );
+            self.write_to_primary_sink(messages, cln_token.clone())
+                .await?
+        };
+
+        // Strip tracing_udf from response messages so fallback/on_success/serving sinks don't
+        // inherit the primary sink stage span as a parent. No-op when no key was injected.
+        response
+            .fallback
+            .iter_mut()
+            .for_each(|m| m.strip_tracing_udf());
+        response
+            .on_success
+            .iter_mut()
+            .for_each(|m| m.strip_tracing_udf());
+        response
+            .serving
+            .iter_mut()
+            .for_each(|m| m.strip_tracing_udf());
 
         if !response.failed.is_empty() {
             error!(
@@ -346,7 +370,7 @@ impl SinkWriter {
     /// Write messages to the OnSuccess Sink.
     pub(crate) async fn write_to_on_success(
         &mut self,
-        messages: Vec<Message>,
+        mut messages: Vec<Message>,
         cln_token: CancellationToken,
     ) -> Result<()> {
         if messages.is_empty() {
@@ -357,10 +381,20 @@ impl SinkWriter {
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();
 
-        // Invoke on_success sink actor (with retry logic inside)
-        let on_success_response = self
-            .write_to_on_success_sink(messages, cln_token.clone())
-            .await?;
+        // Tracing: per-message on-success sink stage spans, scoped to the on-success sink
+        // actor call. Only emit when an on-success sink is configured; the noop-tracer path
+        // handles the "no OTel layer" case.
+        let on_success_response = {
+            let _stage_spans = self.on_success_sink_handle.is_some().then(|| {
+                otel::inject_stage_spans!(
+                    messages.iter_mut(),
+                    otel::TraceTopology::current(),
+                    otel::TraceStage::Sink(otel::SinkStage::OnSuccess),
+                )
+            });
+            self.write_to_on_success_sink(messages, cln_token.clone())
+                .await?
+        };
 
         // Check if fallback returned fallback or serving status (not allowed)
         if !on_success_response.fallback.is_empty() {
@@ -392,7 +426,7 @@ impl SinkWriter {
     /// Write the messages to the Fallback Sink.
     pub(crate) async fn write_to_fallback(
         &mut self,
-        messages: Vec<Message>,
+        mut messages: Vec<Message>,
         cln_token: CancellationToken,
     ) -> Result<()> {
         if messages.is_empty() {
@@ -403,8 +437,18 @@ impl SinkWriter {
         let messages_count = messages.len();
         let messages_size: usize = messages.iter().map(|msg| msg.value.len()).sum();
 
-        // Invoke fallback sink actor (with retry logic inside)
-        let fb_response = self.write_to_fb_sink(messages, cln_token.clone()).await?;
+        // Tracing: per-message fallback sink stage spans, scoped to the fallback sink actor
+        // call. Only emit when a fallback sink is configured.
+        let fb_response = {
+            let _stage_spans = self.fb_sink_handle.is_some().then(|| {
+                otel::inject_stage_spans!(
+                    messages.iter_mut(),
+                    otel::TraceTopology::current(),
+                    otel::TraceStage::Sink(otel::SinkStage::Fallback),
+                )
+            });
+            self.write_to_fb_sink(messages, cln_token.clone()).await?
+        };
 
         // Check if fallback returned fallback or serving status (not allowed)
         if !fb_response.fallback.is_empty() {
@@ -723,6 +767,7 @@ mod tests {
     use super::*;
     use crate::config::pipeline::NatsStoreConfig;
     use crate::message::{IntOffset, Message, MessageHandle, MessageID, Offset, ReadAck};
+    use crate::metadata::{KeyValueGroup, Metadata};
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::serve::nats::NatsServingStore;
     use crate::tracker::Tracker;
@@ -734,6 +779,7 @@ mod tests {
     use numaflow_pb::clients::sink::{SinkRequest, SinkResponse};
     use std::collections::HashMap;
     use std::sync::Arc;
+    use std::sync::Once;
     use tokio::sync::mpsc::Receiver;
     use tokio::time::{Duration, sleep};
     use tokio_util::sync::CancellationToken;
@@ -766,6 +812,95 @@ mod tests {
             }
             responses
         }
+    }
+
+    fn init_test_propagator() {
+        static INIT: Once = Once::new();
+        INIT.call_once(|| {
+            opentelemetry::global::set_text_map_propagator(
+                opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+            );
+            // Without a real tracer provider, the global tracer is a noop and spans aren't
+            // recording — `inject_stage_span` will skip the sys_metadata write. These tests
+            // verify the write side-effect, so install an SDK provider with no exporter.
+            opentelemetry::global::set_tracer_provider(
+                opentelemetry_sdk::trace::SdkTracerProvider::builder().build(),
+            );
+        });
+    }
+
+    fn test_message_with_metadata(offset: i64) -> Message {
+        Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key".to_string()]),
+            tags: None,
+            value: format!("message {offset}").as_bytes().to_vec().into(),
+            offset: Offset::Int(IntOffset::new(offset, 0)),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: format!("offset_{offset}").into(),
+                index: offset as i32,
+            },
+            metadata: Some(Arc::new(Metadata::default())),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn inject_stage_span_adds_tracing_udf_metadata() {
+        init_test_propagator();
+        let mut messages = vec![test_message_with_metadata(1), test_message_with_metadata(2)];
+
+        let _stage_spans = otel::inject_stage_spans!(
+            enabled,
+            messages.iter_mut(),
+            otel::TraceTopology::MonoVertex,
+            otel::TraceStage::Sink(otel::SinkStage::Primary),
+        );
+
+        for message in messages {
+            let metadata = message.metadata.expect("metadata should exist");
+            assert!(
+                metadata
+                    .sys_metadata
+                    .contains_key(otel::TRACING_UDF_METADATA_KEY)
+            );
+        }
+    }
+
+    #[test]
+    fn inject_stage_span_preserves_unrelated_metadata() {
+        init_test_propagator();
+        let mut message = test_message_with_metadata(1);
+        Arc::make_mut(message.metadata.as_mut().expect("metadata should exist"))
+            .sys_metadata
+            .insert(
+                "unrelated".to_string(),
+                KeyValueGroup {
+                    key_value: HashMap::from([("k".to_string(), "v".into())]),
+                },
+            );
+        let mut messages = [message];
+
+        let _stage_spans = otel::inject_stage_spans!(
+            enabled,
+            messages.iter_mut(),
+            otel::TraceTopology::MonoVertex,
+            otel::TraceStage::Sink(otel::SinkStage::Fallback),
+        );
+
+        let metadata = messages
+            .first()
+            .and_then(|msg| msg.metadata.as_deref())
+            .expect("metadata should exist");
+        assert!(metadata.sys_metadata.contains_key("unrelated"));
+        assert!(
+            metadata
+                .sys_metadata
+                .contains_key(otel::TRACING_UDF_METADATA_KEY)
+        );
     }
 
     #[tokio::test]
@@ -1268,6 +1403,36 @@ mod tests {
         assert_eq!(
             results.first().unwrap().status,
             ResponseStatusFromSink::Success
+        );
+    }
+
+    #[test]
+    fn test_strip_tracing_udf_removes_stage_context() {
+        let mut sys_metadata = HashMap::new();
+        sys_metadata.insert(
+            otel::TRACING_UDF_METADATA_KEY.to_string(),
+            KeyValueGroup {
+                key_value: HashMap::new(),
+            },
+        );
+
+        let mut message = Message {
+            metadata: Some(Arc::new(Metadata {
+                previous_vertex: String::new(),
+                sys_metadata,
+                user_metadata: HashMap::new(),
+            })),
+            ..Default::default()
+        };
+
+        message.strip_tracing_udf();
+
+        let metadata = message.metadata.expect("metadata should still exist");
+        assert!(
+            !metadata
+                .sys_metadata
+                .contains_key(otel::TRACING_UDF_METADATA_KEY),
+            "tracing_udf should be removed from downstream messages"
         );
     }
 
