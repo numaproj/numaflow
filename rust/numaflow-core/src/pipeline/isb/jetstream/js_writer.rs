@@ -177,9 +177,9 @@ impl JetStreamWriter {
 
         // Start the isb.write Producer span as a child of the writer's current vertex.process
         // (read from sys_metadata["tracing"]). The span covers producer-side serialization
-        // (Message -> Bytes) plus the JetStream publish call, and closes before error metrics
-        // bookkeeping. The PAF await is handled by the caller and is NOT covered here; it
-        // represents broker confirmation latency rather than producer work.
+        // (Message -> Bytes) plus submission of the JetStream publish request, and closes
+        // before error metrics bookkeeping. Waiting on the returned PAF is handled by the
+        // caller and is intentionally outside this span because it measures broker ack latency.
         let publish_result = {
             // Reuse `id` (already computed above for JetStream dedup) so we don't pay a
             // second `message.id.to_string()` on this hot path.
@@ -259,8 +259,8 @@ impl JetStreamWriter {
 
         // Start the isb.write Producer span and scope it tightly via a block that closes
         // before `paf.await`. The span covers producer-side serialization (Message -> Bytes)
-        // plus the JetStream publish call. The PAF await below represents broker confirmation
-        // latency rather than producer work and is intentionally not covered.
+        // plus submission of the JetStream publish request. Waiting on the returned PAF
+        // measures broker ack latency, so it is intentionally outside this span.
         let publish_result = {
             // No formatted dedup id is in hand on this path, so let the helper compute it
             // (only when tracing is on — disabled path stays allocation-free).

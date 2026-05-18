@@ -345,10 +345,9 @@ pub(crate) enum TraceStage {
     Map,
     Sink(SinkStage),
     /// ISB producer span emitted just before publishing a message to JetStream.
-    /// Pipeline-only - MonoVertex has no inter-step buffer hop.
     IsbWrite,
     /// ISB consumer span emitted when a downstream vertex pod dequeues a message
-    /// from JetStream and hands it off to its forwarder. Pipeline-only.
+    /// from JetStream and hands it off to its forwarder.
     IsbRead,
 }
 
@@ -761,6 +760,10 @@ pub(crate) fn start_isb_write_span(message: &Message, message_id: Option<&str>) 
         return StageSpan(opentelemetry::Context::new());
     }
 
+    start_isb_write_span_enabled(message, message_id)
+}
+
+fn start_isb_write_span_enabled(message: &Message, message_id: Option<&str>) -> StageSpan {
     let parent_cx = parent_context_from_metadata(message.metadata.as_deref());
     let message_id = message_id
         .map(ToOwned::to_owned)
@@ -919,8 +922,9 @@ mod tests {
     use super::*;
     use bytes::Bytes;
     use opentelemetry::propagation::{Extractor, Injector};
-    use opentelemetry::trace::TraceContextExt;
+    use opentelemetry::trace::{TraceContextExt, TracerProvider as _};
     use std::sync::Once;
+    use tracing_subscriber::layer::SubscriberExt as _;
 
     /// Install the W3C propagator once per test process. Tests that rely on
     /// `extract`/`inject` going through the real propagator must call this.
@@ -944,6 +948,14 @@ mod tests {
     fn context_from_traceparent(traceparent: &str) -> opentelemetry::Context {
         let carrier = kvg_with(&[("traceparent", traceparent)]);
         global::get_text_map_propagator(|prop| prop.extract(&MetadataExtractor(&carrier)))
+    }
+
+    fn with_otel_test_subscriber<T>(f: impl FnOnce() -> T) -> T {
+        let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+        let tracer = provider.tracer("numaflow-core-test");
+        let subscriber =
+            tracing_subscriber::registry().with(tracing_opentelemetry::layer().with_tracer(tracer));
+        tracing::subscriber::with_default(subscriber, f)
     }
 
     #[test]
@@ -1432,6 +1444,44 @@ mod tests {
         drop(result); // Drop must not panic on the noop isb_read_cx.
     }
 
+    #[test]
+    fn start_vertex_process_from_isb_enabled_overwrites_tracing_metadata() {
+        init_propagator();
+        let upstream_cx =
+            context_from_traceparent("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01");
+        let mut metadata = Metadata::default();
+        inject_context_into_metadata(&mut metadata, TRACING_METADATA_KEY, &upstream_cx);
+        let upstream_traceparent = metadata
+            .sys_metadata
+            .get(TRACING_METADATA_KEY)
+            .and_then(|kvg| kvg.key_value.get("traceparent"))
+            .cloned();
+        let mut msg = Message {
+            metadata: Some(Arc::new(metadata)),
+            ..Default::default()
+        };
+
+        with_otel_test_subscriber(|| {
+            let result = start_vertex_process_from_isb_enabled(&mut msg);
+            assert!(!result.platform_span.is_disabled());
+            drop(StageSpan::from_context(result.isb_read_cx));
+            drop(result.platform_span);
+        });
+
+        let local_traceparent = msg
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.sys_metadata.get(TRACING_METADATA_KEY))
+            .and_then(|kvg| kvg.key_value.get("traceparent"))
+            .cloned();
+        assert!(local_traceparent.is_some());
+        assert_ne!(upstream_traceparent, local_traceparent);
+
+        let extracted_cx = parent_context_from_metadata(msg.metadata.as_deref());
+        let extracted_span = extracted_cx.span();
+        assert!(extracted_span.span_context().is_valid());
+    }
+
     /// `start_isb_write_span` is called once per ISB publish; when tracing is
     /// disabled it should return an inert `StageSpan` whose Drop is a no-op.
     #[test]
@@ -1439,5 +1489,41 @@ mod tests {
         let msg = Message::default();
         let guard = start_isb_write_span(&msg, None);
         drop(guard); // No panic, no work.
+    }
+
+    #[test]
+    fn start_isb_write_span_enabled_preserves_tracing_metadata() {
+        init_propagator();
+        let parent_cx =
+            context_from_traceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
+        let mut metadata = Metadata::default();
+        inject_context_into_metadata(&mut metadata, TRACING_METADATA_KEY, &parent_cx);
+        let original_tracing = metadata
+            .sys_metadata
+            .get(TRACING_METADATA_KEY)
+            .expect("parent tracing metadata should be present")
+            .key_value
+            .clone();
+        let msg = Message {
+            metadata: Some(Arc::new(metadata)),
+            ..Default::default()
+        };
+
+        with_otel_test_subscriber(|| {
+            let guard = start_isb_write_span_enabled(&msg, Some("already-formatted"));
+            drop(guard);
+            let guard = start_isb_write_span_enabled(&msg, None);
+            drop(guard);
+        });
+
+        let current_tracing = &msg
+            .metadata
+            .as_ref()
+            .expect("metadata should still be present")
+            .sys_metadata
+            .get(TRACING_METADATA_KEY)
+            .expect("tracing metadata should still be present")
+            .key_value;
+        assert_eq!(current_tracing, &original_tracing);
     }
 }
