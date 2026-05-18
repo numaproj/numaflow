@@ -10,21 +10,29 @@ import {
   MonoVertexMetrics,
 } from "../../types/declarations/pipeline";
 
+const MONO_VERTEX_CONTAINER_WIDTH = 420;
+const MONO_VERTEX_INTERNAL_NODE_WIDTH = 32;
+const MONO_VERTEX_MAX_STAGE_STEP_X = 80;
+const MONO_VERTEX_MIN_SIDE_PADDING = 24;
+const MONO_VERTEX_STAGE_Y = 76;
+const MONO_VERTEX_ONSUCCESS_FAN_OUT_Y = 44;
+const MONO_VERTEX_FALLBACK_FAN_OUT_Y = 106;
+
 export const getMonoVertexInternalStages = (spec: MonoVertexSpec) => {
-  const internalStages = [
+  const hasOnSuccess = !!spec?.sink?.onSuccess;
+  const hasFallback = !!spec?.sink?.fallback;
+  const hasOptionalSinkOutput = hasOnSuccess || hasFallback;
+  const shouldFanOutSinkTargets = hasOnSuccess && hasFallback;
+  const columns = [
     {
       key: "source",
       spec: spec.source,
-      x: 54,
-      y: 76,
     },
     ...(spec?.source?.transformer
       ? [
           {
             key: "transformer",
             spec: spec.source.transformer,
-            x: 116,
-            y: 76,
           },
         ]
       : []),
@@ -33,36 +41,64 @@ export const getMonoVertexInternalStages = (spec: MonoVertexSpec) => {
           {
             key: "udf",
             spec: spec.udf,
-            x: 178,
-            y: 76,
+          },
+        ]
+      : []),
+    {
+      key: "sink",
+      spec: spec.sink,
+    },
+    ...(hasOptionalSinkOutput
+      ? [
+          {
+            key: "optionalOutputs",
+            spec: undefined,
           },
         ]
       : []),
   ];
-  const sinkX = 54 + internalStages.length * 62;
-  internalStages.push({
-    key: "sink",
-    spec: spec.sink,
-    x: sinkX,
-    y: 76,
-  });
-  const hasOnSuccess = !!spec?.sink?.onSuccess;
-  const hasFallback = !!spec?.sink?.fallback;
-  const shouldFanOutSinkTargets = hasOnSuccess && hasFallback;
+  const usableWidth =
+    MONO_VERTEX_CONTAINER_WIDTH -
+    2 * MONO_VERTEX_MIN_SIDE_PADDING -
+    MONO_VERTEX_INTERNAL_NODE_WIDTH;
+  const idealStep =
+    columns.length > 1 ? usableWidth / (columns.length - 1) : 0;
+  const stepX = Math.min(idealStep, MONO_VERTEX_MAX_STAGE_STEP_X);
+  const totalSpan = (columns.length - 1) * stepX;
+  const startX =
+    (MONO_VERTEX_CONTAINER_WIDTH -
+      totalSpan -
+      MONO_VERTEX_INTERNAL_NODE_WIDTH) /
+    2;
+  const stageXByKey = columns.reduce((positions, column, index) => {
+    positions[column.key] = startX + index * stepX;
+    return positions;
+  }, {} as Record<string, number>);
+  const internalStages = columns
+    .filter((column) => column.key !== "optionalOutputs")
+    .map((column) => ({
+      ...column,
+      x: stageXByKey[column.key],
+      y: MONO_VERTEX_STAGE_Y,
+    }));
   if (hasOnSuccess) {
     internalStages.push({
       key: "onSuccess",
       spec: spec.sink.onSuccess,
-      x: sinkX + 68,
-      y: shouldFanOutSinkTargets ? 44 : 76,
+      x: stageXByKey.optionalOutputs,
+      y: shouldFanOutSinkTargets
+        ? MONO_VERTEX_ONSUCCESS_FAN_OUT_Y
+        : MONO_VERTEX_STAGE_Y,
     });
   }
   if (hasFallback) {
     internalStages.push({
       key: "fallback",
       spec: spec.sink.fallback,
-      x: sinkX + 68,
-      y: shouldFanOutSinkTargets ? 106 : 76,
+      x: stageXByKey.optionalOutputs,
+      y: shouldFanOutSinkTargets
+        ? MONO_VERTEX_FALLBACK_FAN_OUT_Y
+        : MONO_VERTEX_STAGE_Y,
     });
   }
   return internalStages;
