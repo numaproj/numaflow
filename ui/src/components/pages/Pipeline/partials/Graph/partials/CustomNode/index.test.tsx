@@ -210,6 +210,85 @@ describe("Graph screen test", () => {
     );
   });
 
+  it("MonoVertex internal vertex with bypass markers", async () => {
+    const setHighlightValues = jest.fn();
+    const setHidden = jest.fn();
+    render(
+      <HighlightContext.Provider
+        value={{
+          highlightValues: {},
+          setHighlightValues,
+          sideInputNodes: new Map(),
+          sideInputEdges: new Map(),
+          setHidden,
+        }}
+      >
+        <ReactFlowProvider>
+          <CustomNode
+            data={{
+              type: "monoVertexInternal",
+              name: "mono-vertex-bypass-udf",
+              monoVertexStage: "udf",
+              bypassTargets: [
+                {
+                  id: "mono-vertex-bypass-udf-mono-vertex-bypass-fallback-bypass",
+                  target: "fallback",
+                  source: "udf",
+                  operator: "or",
+                  values: ["corrupted", "parse-error"],
+                },
+                {
+                  id: "mono-vertex-bypass-udf-mono-vertex-bypass-onSuccess-bypass",
+                  target: "onSuccess",
+                  source: "udf",
+                  operator: "and",
+                  values: ["audit", "high-priority"],
+                },
+              ],
+            }}
+            id={"mono-vertex-bypass-udf"}
+            selected={false}
+            type={""}
+            zIndex={0}
+            isConnectable={false}
+            xPos={0}
+            yPos={0}
+            dragging={false}
+          />
+        </ReactFlowProvider>
+      </HighlightContext.Provider>
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("mono-vertex-bypass-udf")).toBeInTheDocument()
+    );
+    expect(screen.getByAltText("udf-bypass")).toBeInTheDocument();
+    expect(screen.queryByAltText("udf-fallback-bypass")).not.toBeInTheDocument();
+    expect(screen.queryByAltText("udf-onSuccess-bypass")).not.toBeInTheDocument();
+    fireEvent.mouseOver(screen.getByAltText("udf-bypass"));
+    expect(setHidden).toHaveBeenCalled();
+    const updateHidden = setHidden.mock.calls[0][0];
+    expect(
+      updateHidden({
+        "mono-vertex-bypass-udf-mono-vertex-bypass-fallback-bypass": true,
+        "mono-vertex-bypass-udf-mono-vertex-bypass-onSuccess-bypass": true,
+      })
+    ).toEqual({
+      "mono-vertex-bypass-udf-mono-vertex-bypass-fallback-bypass": false,
+      "mono-vertex-bypass-udf-mono-vertex-bypass-onSuccess-bypass": false,
+    });
+    expect(setHighlightValues).toHaveBeenCalledWith({
+      "mono-vertex-bypass-udf-mono-vertex-bypass-fallback-bypass": true,
+      "mono-vertex-bypass-udf-mono-vertex-bypass-onSuccess-bypass": true,
+    });
+    expect(
+      screen.queryByText("Bypass from udf to fallback")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Bypass from udf to onSuccess")
+    ).not.toBeInTheDocument();
+    fireEvent.mouseOut(screen.getByAltText("udf-bypass"));
+  });
+
   it("Source vertex with error", async () => {
     const { container } = render(
       <HighlightContext.Provider

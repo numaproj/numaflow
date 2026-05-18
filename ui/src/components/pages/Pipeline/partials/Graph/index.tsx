@@ -65,6 +65,9 @@ import source from "../../../../../images/source.png";
 import map from "../../../../../images/map.png";
 import reduce from "../../../../../images/reduce.png";
 import sink from "../../../../../images/sink.png";
+import transformer from "../../../../../images/transformer.svg";
+import onSuccess from "../../../../../images/onSuccess.png";
+import fallback from "../../../../../images/fallback.png";
 import monoVertex from "../../../../../images/monoVertex.svg";
 import input from "../../../../../images/input0.svg";
 import generator from "../../../../../images/generator0.svg";
@@ -75,12 +78,23 @@ import "./style.css";
 const nodeWidth = 252;
 const nodeHeight = 72;
 const nodeHeightTall = 112;
+const monoVertexNodeWidth = 420;
+const monoVertexNodeHeight = 170;
 const graphDirection = "LR";
+
+const getNodeLayoutWidth = (node: Node): number => {
+  const d = node?.data as Record<string, any> | undefined;
+  if (d?.type === "monoVertex") return monoVertexNodeWidth;
+  if (d?.type === "monoVertexInternal") return 32;
+  return nodeWidth;
+};
 
 const getNodeLayoutHeight = (node: Node): number => {
   const d = node?.data as Record<string, any> | undefined;
   if (!d) return nodeHeight;
   const nodeInfo = d.nodeInfo as Record<string, any> | undefined;
+  if (d.type === "monoVertex") return monoVertexNodeHeight;
+  if (d.type === "monoVertexInternal") return 32;
   if (d.type === "source" && nodeInfo?.source?.transformer) return nodeHeightTall;
   if (d.type === "sink" && (nodeInfo?.sink?.onSuccess || nodeInfo?.sink?.fallback)) return nodeHeightTall;
   return nodeHeight;
@@ -110,13 +124,19 @@ const getLayoutedElements = (
   dagreGraph.setGraph({ rankdir: direction, ranksep: 240, edgesep: 180 });
 
   nodes.forEach((node) => {
+    if (node?.data?.type === "monoVertexInternal") return;
+    const w = getNodeLayoutWidth(node);
     const h = getNodeLayoutHeight(node);
-    dagreGraph.setNode(node.id, { width: nodeWidth, height: h });
+    dagreGraph.setNode(node.id, { width: w, height: h });
   });
 
   edges.forEach((edge) => {
     // skipping the side input edges to ensure graph alignment without the sideInputs
-    if (!edge?.data?.sideInputEdge)
+    if (
+      !edge?.data?.sideInputEdge &&
+      !edge?.data?.monoVertexInternalEdge &&
+      !edge?.data?.monoVertexBypassEdge
+    )
       dagreGraph.setEdge(edge.source, edge.target);
   });
 
@@ -124,14 +144,24 @@ const getLayoutedElements = (
   // setting nodes excepts generators and assigning generator height after remaining nodes are laid out
   let max_pos = 0;
   nodes.forEach((node) => {
-    if (node?.data?.type !== "sideInput" && node?.data?.type !== "generator") {
+    if (
+      node?.data?.type !== "sideInput" &&
+      node?.data?.type !== "generator" &&
+      node?.data?.type !== "monoVertexInternal"
+    ) {
       const nodeWithPosition = dagreGraph.node(node.id);
       max_pos = Math.max(max_pos, nodeWithPosition.y);
     }
   });
   let cnt = 2;
   nodes.forEach((node) => {
+    if (node?.data?.type === "monoVertexInternal") {
+      node.targetPosition = isHorizontal ? Position.Left : Position.Top;
+      node.sourcePosition = isHorizontal ? Position.Right : Position.Bottom;
+      return;
+    }
     const nodeWithPosition = dagreGraph.node(node.id);
+    const w = getNodeLayoutWidth(node);
     const h = getNodeLayoutHeight(node);
     if (node?.data?.type === "sideInput" || node?.data?.type === "generator") {
       nodeWithPosition.x = nodeWidth;
@@ -142,7 +172,7 @@ const getLayoutedElements = (
     node.sourcePosition = isHorizontal ? Position.Right : Position.Bottom;
 
     node.position = {
-      x: nodeWithPosition.x - nodeWidth / 2,
+      x: nodeWithPosition.x - w / 2,
       y: nodeWithPosition.y - h / 2,
     };
   });
@@ -531,10 +561,40 @@ const Flow = (props: FlowProps) => {
           </AccordionSummary>
           <AccordionDetails>
             {type === "monoVertex" && (
-              <div className={"legend-title"}>
-                <img src={monoVertex} alt={"monoVertex"} />
-                <div className={"legend-text"}>MonoVertex</div>
-              </div>
+              <>
+                <div className={"legend-title"}>
+                  <img src={monoVertex} alt={"monoVertex"} />
+                  <div className={"legend-text"}>MonoVertex</div>
+                </div>
+                <div className={"legend-title"}>
+                  <img src={source} alt={"source"} />
+                  <div className={"legend-text"}>Source</div>
+                </div>
+                <div className={"legend-title"}>
+                  <img src={transformer} alt={"transformer"} />
+                  <div className={"legend-text"}>Transformer</div>
+                </div>
+                <div className={"legend-title"}>
+                  <img src={map} alt={"map"} />
+                  <div className={"legend-text"}>Map</div>
+                </div>
+                <div className={"legend-title"}>
+                  <img src={sink} alt={"sink"} />
+                  <div className={"legend-text"}>Sink</div>
+                </div>
+                <div className={"legend-title"}>
+                  <img src={onSuccess} alt={"onSuccess"} />
+                  <div className={"legend-text"}>OnSuccess</div>
+                </div>
+                <div className={"legend-title"}>
+                  <img src={fallback} alt={"fallback"} />
+                  <div className={"legend-text"}>Fallback</div>
+                </div>
+                <div className={"legend-title"}>
+                  <img src={input} width={22} alt={"bypass"} />
+                  <div className={"legend-text"}>Bypass</div>
+                </div>
+              </>
             )}
             {type === "pipeline" && (
               <div className={"legend-title"}>
@@ -582,6 +642,14 @@ const Flow = (props: FlowProps) => {
 // hides the side input edges
 const hide =
   (hidden: { [x: string]: any }) => (edge: Edge<Record<string, any>>) => {
+    if (edge?.data?.monoVertexBypassEdge) {
+      edge.hidden = hidden[edge.id];
+      return edge;
+    }
+    if (edge?.data?.monoVertexInternalEdge) {
+      edge.hidden = false;
+      return edge;
+    }
     edge.hidden = hidden[edge?.data?.source];
     return edge;
   };
@@ -592,8 +660,28 @@ const getHiddenValue = (edges: Edge<Record<string, any>>[]) => {
     if (edge?.data?.sideInputEdge) {
       hiddenEdges[edge?.data?.source] = true;
     }
+    if (edge?.data?.monoVertexBypassEdge) {
+      hiddenEdges[edge.id] = true;
+    }
   });
   return hiddenEdges;
+};
+
+const isMonoVertexGeneratedEdge = (
+  edge: Edge<Record<string, any>> | undefined
+) => edge?.data?.monoVertexInternalEdge || edge?.data?.monoVertexBypassEdge;
+
+const restoreMonoVertexGeneratedEdges = (
+  currentEdges: Edge<Record<string, any>>[],
+  layoutedEdges: Edge<Record<string, any>>[]
+) => {
+  const currentEdgeIds = new Set(currentEdges.map((edge) => edge.id));
+  const missingGeneratedEdges = layoutedEdges.filter(
+    (edge) => isMonoVertexGeneratedEdge(edge) && !currentEdgeIds.has(edge.id)
+  );
+  return missingGeneratedEdges.length > 0
+    ? [...currentEdges, ...missingGeneratedEdges]
+    : currentEdges;
 };
 
 export default function Graph(props: GraphProps) {
@@ -633,9 +721,11 @@ export default function Graph(props: GraphProps) {
   }, [layoutedEdges]);
 
   useEffect(() => {
+    const updatedHiddenValue = getHiddenValue(layoutedEdges);
     setNodes(layoutedNodes);
-    setEdges(layoutedEdges);
-  }, [data]);
+    setEdges(layoutedEdges.map(hide(updatedHiddenValue)));
+    setHidden(updatedHiddenValue);
+  }, [layoutedNodes, layoutedEdges]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) =>
@@ -645,7 +735,17 @@ export default function Graph(props: GraphProps) {
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) =>
-      setEdges((eds) => applyEdgeChanges(changes, eds)),
+      setEdges((eds) => {
+        const monoVertexGeneratedEdgeIds = new Set(
+          eds.filter(isMonoVertexGeneratedEdge).map((edge) => edge.id)
+        );
+        const safeChanges = changes.filter(
+          (change) =>
+            change.type !== "remove" ||
+            !monoVertexGeneratedEdgeIds.has(change.id)
+        );
+        return applyEdgeChanges(safeChanges, eds);
+      }),
     [setEdges]
   );
 
@@ -679,6 +779,9 @@ export default function Graph(props: GraphProps) {
       const updatedEdgeHighlightValues: any = {};
       updatedEdgeHighlightValues[edge.id] = true;
       setHighlightValues(updatedEdgeHighlightValues);
+      if (edge?.data?.monoVertexInternalEdge || edge?.data?.monoVertexBypassEdge) {
+        return;
+      }
       openEdgeSidebar(edge);
     },
     [setSidebarProps, namespaceId, pipelineId, openEdgeSidebar]
@@ -705,8 +808,10 @@ export default function Graph(props: GraphProps) {
   const [nodeId, setNodeId] = useState<string>();
 
   useEffect(() => {
-    setEdges((eds) => eds.map(hide(hidden)));
-  }, [hidden, data]);
+    setEdges((eds) =>
+      restoreMonoVertexGeneratedEdges(eds, layoutedEdges).map(hide(hidden))
+    );
+  }, [hidden, layoutedEdges]);
 
   const openNodeSidebar = useCallback(
     (node: Node<Record<string, any>>) => {
@@ -755,6 +860,9 @@ export default function Graph(props: GraphProps) {
 
   const handleNodeClick = useCallback(
     (event: MouseEvent | undefined, node: Node) => {
+      if (node?.data?.type === "monoVertexInternal") {
+        return;
+      }
       setNodeId(node.id);
       const target = event?.target as HTMLElement;
       setHidden((prevState) => {
