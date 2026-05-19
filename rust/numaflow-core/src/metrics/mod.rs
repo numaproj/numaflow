@@ -99,6 +99,7 @@ const DROPPED_TOTAL: &str = "dropped";
 const PIPELINE_FORWARDER_DROP_TOTAL: &str = "drop";
 const PIPELINE_FORWARDER_DROP_BYTES_TOTAL: &str = "drop_bytes";
 const UDF_DROP_TOTAL: &str = "ud_drop";
+const MONOVTX_UDF_DROP_TOTAL: &str = "drop";
 
 const FALLBACK_SINK_WRITE_TOTAL: &str = "write";
 const PIPELINE_FALLBACK_SINK_WRITE_TOTAL: &str = "fbsink_write";
@@ -351,6 +352,8 @@ pub(crate) struct UDFMetrics {
     /// Mapper latency
     pub(crate) time: Family<Vec<(String, String)>, Histogram>,
     pub(crate) errors_total: Family<Vec<(String, String)>, Counter>,
+    /// Total messages dropped by the user via DROP tag in the map UDF
+    pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
 }
 
 /// Family of metrics for the Reduce vertex
@@ -638,6 +641,7 @@ impl MonoVtxMetrics {
                     Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                 }),
                 errors_total: Family::<Vec<(String, String)>, Counter>::default(),
+                dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
             },
 
             sink: SinkMetrics {
@@ -746,6 +750,11 @@ impl MonoVtxMetrics {
             UDF_ERROR_TOTAL,
             "Total number of UDF Errors",
             metrics.udf.errors_total.clone(),
+        );
+        udf_registry.register(
+            MONOVTX_UDF_DROP_TOTAL,
+            "Total messages dropped by the user via DROP tag in the map UDF",
+            metrics.udf.dropped_total.clone(),
         );
 
         // Sink metrics
@@ -1968,6 +1977,12 @@ mod tests {
             .get_or_create(&common_labels)
             .inc_by(2);
 
+        metrics
+            .udf
+            .dropped_total
+            .get_or_create(&common_labels)
+            .inc_by(3);
+
         metrics.sink.write_total.get_or_create(&common_labels).inc();
         metrics
             .sink
@@ -2071,6 +2086,7 @@ mod tests {
             r#"monovtx_transformer_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_transformer_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_transformer_dropped_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 2"#,
+            r#"monovtx_udf_drop_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 3"#,
             r#"monovtx_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_sink_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 4.0"#,
             r#"monovtx_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,

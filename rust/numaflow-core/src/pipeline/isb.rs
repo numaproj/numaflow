@@ -57,7 +57,9 @@ pub(crate) trait LocalISBReader: Sync {
     /// Negative acknowledgment - indicates the message should be redelivered.
     ///
     /// The implementation uses the offset to identify which message to nack.
-    async fn nack(&self, offset: &Offset) -> Result<()>;
+    /// Pass `delay = Some(...)` to defer redelivery by that duration when the
+    /// underlying ISB supports it; `None` redelivers as soon as the ISB allows.
+    async fn nack(&self, offset: &Offset, delay: Option<Duration>) -> Result<()>;
 
     /// Returns the number of pending (unprocessed) messages, if available.
     ///
