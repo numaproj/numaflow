@@ -21,6 +21,7 @@ use crate::metrics::{
 };
 use crate::pipeline::isb::compression;
 use crate::pipeline::isb::error::ISBError;
+use crate::shared::otel;
 
 /// Type alias for metric labels
 type MetricLabels = Arc<Vec<(String, String)>>;
@@ -174,21 +175,30 @@ impl JetStreamWriter {
             );
         }
 
-        let payload: BytesMut = message
-            .try_into()
-            .expect("message serialization should not fail");
+        // Start the isb.write Producer span as a child of the writer's current vertex.process
+        // (read from sys_metadata["tracing"]). The span covers producer-side serialization
+        // (Message -> Bytes) plus submission of the JetStream publish request, and closes
+        // before error metrics bookkeeping. Waiting on the returned PAF is handled by the
+        // caller and is intentionally outside this span because it measures broker ack latency.
+        let publish_result = {
+            // Reuse `id` (already computed above for JetStream dedup) so we don't pay a
+            // second `message.id.to_string()` on this hot path.
+            let _isb_write_guard = otel::start_isb_write_span(&message, Some(&id));
+            let payload: BytesMut = message
+                .try_into()
+                .expect("message serialization should not fail");
+            self.js_ctx
+                .send_publish(
+                    self.stream.name,
+                    PublishMessage::build()
+                        .payload(payload.freeze())
+                        .message_id(&id),
+                )
+                .await
+        };
 
         // Try to publish
-        match self
-            .js_ctx
-            .send_publish(
-                self.stream.name,
-                PublishMessage::build()
-                    .payload(payload.freeze())
-                    .message_id(&id),
-            )
-            .await
-        {
+        match publish_result {
             Ok(paf) => Ok(paf),
             Err(e) => {
                 pipeline_metrics()
@@ -247,12 +257,22 @@ impl JetStreamWriter {
             );
         }
 
-        let payload: Bytes = message
-            .try_into()
-            .expect("message serialization should not fail");
+        // Start the isb.write Producer span and scope it tightly via a block that closes
+        // before `paf.await`. The span covers producer-side serialization (Message -> Bytes)
+        // plus submission of the JetStream publish request. Waiting on the returned PAF
+        // measures broker ack latency, so it is intentionally outside this span.
+        let publish_result = {
+            // No formatted dedup id is in hand on this path, so let the helper compute it
+            // (only when tracing is on — disabled path stays allocation-free).
+            let _isb_write_guard = otel::start_isb_write_span(&message, None);
+            let payload: Bytes = message
+                .try_into()
+                .expect("message serialization should not fail");
+            self.js_ctx.publish(self.stream.name, payload).await
+        };
 
         // Publish and await acknowledgment
-        match self.js_ctx.publish(self.stream.name, payload).await {
+        match publish_result {
             Ok(paf) => match paf.await {
                 Ok(ack) => {
                     debug!(

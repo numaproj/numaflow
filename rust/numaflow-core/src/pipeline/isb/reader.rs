@@ -28,6 +28,7 @@ use crate::metrics::{
 };
 use crate::pipeline::isb::ISBReader;
 use crate::pipeline::isb::error::ISBError;
+use crate::shared::otel;
 use crate::tracker::Tracker;
 use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
@@ -532,8 +533,17 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             // Publish read metrics
             Self::publish_read_metrics(&self.metric_labels, &message);
 
+            // Tracing: start this pod's `vertex.process` span as a child of the upstream
+            // vertex's context (carried in sys_metadata["tracing"]) and overwrite that key
+            // with the new context so map/sink stage spans on this pod parent to *this*
+            // pod's vertex.process. The short-lived isb.read span scopes the per-message
+            // handoff into the downstream channel.
+            let (platform_span, _isb_read_guard) =
+                otel::start_vertex_process_from_isb(&mut message).into_parts();
+
             let (ack_tx, ack_rx) = oneshot::channel();
             let read_message = MessageHandle::new(message, ack_tx);
+            read_message.set_pipeline_span(platform_span);
 
             // Spawn the WIP loop that ties the AckHandle to the broker ack/nack.
             self.spawn_wip_loop(
@@ -547,6 +557,8 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             if tx.send(read_message).await.is_err() {
                 break;
             }
+            // _isb_read_guard drops here, ending the isb.read span after the message is
+            // either handed off to the forwarder or the channel send fails.
         }
         Ok(())
     }

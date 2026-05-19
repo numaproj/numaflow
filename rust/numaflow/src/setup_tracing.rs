@@ -59,7 +59,7 @@ fn report_panic(panic_info: &PanicHookInfo<'_>) {
 /// - `OTEL_TRACES_SAMPLER`: sampler type
 /// - `OTEL_TRACES_SAMPLER_ARG`: sampler argument (ratio for `*_traceidratio` samplers)
 ///
-/// When neither env var is set, defaults to `parentbased_traceidratio` at 0.1 (10%).
+/// When neither env var is set, defaults to `parentbased_traceidratio` at 0.001 (0.1%).
 /// Numaflow emits multiple spans per message, so the SDK's `parentbased_always_on` default
 /// would flood collectors at typical message rates; operators who want full sampling can opt
 /// in via `OTEL_TRACES_SAMPLER=parentbased_always_on`.
@@ -71,7 +71,7 @@ fn build_sampler() -> opentelemetry_sdk::trace::Sampler {
         std::env::var("OTEL_TRACES_SAMPLER").unwrap_or_else(|_| "parentbased_traceidratio".into());
     let sampler_arg_raw = std::env::var("OTEL_TRACES_SAMPLER_ARG")
         .ok()
-        .or_else(|| Some("0.1".into()));
+        .or_else(|| Some("0.001".into()));
     build_sampler_from(&sampler_name, sampler_arg_raw.as_deref())
 }
 

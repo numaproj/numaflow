@@ -28,8 +28,15 @@ pub fn init_tracer() {
     let _ = TRACER.get_or_init(|| global::tracer("numaflow-core"));
 }
 
-fn get_tracer() -> &'static opentelemetry::global::BoxedTracer {
-    TRACER.get_or_init(|| global::tracer("numaflow-core"))
+#[cfg(not(test))]
+fn with_tracer<T>(f: impl FnOnce(&opentelemetry::global::BoxedTracer) -> T) -> T {
+    f(TRACER.get_or_init(|| global::tracer("numaflow-core")))
+}
+
+#[cfg(test)]
+fn with_tracer<T>(f: impl FnOnce(&opentelemetry::global::BoxedTracer) -> T) -> T {
+    let tracer = global::tracer("numaflow-core");
+    f(&tracer)
 }
 
 pub(crate) fn platform_spans_enabled() -> bool {
@@ -315,6 +322,16 @@ pub(crate) fn parent_context_from_metadata(metadata: Option<&Metadata>) -> opent
 /// RAII handle for an OTel SDK span. Ends the underlying span when dropped.
 pub(crate) struct StageSpan(opentelemetry::Context);
 
+impl StageSpan {
+    /// Wraps an existing OTel context as a RAII guard that ends the span on drop.
+    /// Use when the span was started by a helper that returned a bare `Context`
+    /// (for example, [`start_vertex_process_from_isb`]) and the caller wants to
+    /// scope its lifetime to a block.
+    pub(crate) fn from_context(cx: opentelemetry::Context) -> Self {
+        Self(cx)
+    }
+}
+
 impl Drop for StageSpan {
     fn drop(&mut self) {
         self.0.span().end();
@@ -334,6 +351,11 @@ pub(crate) enum TraceStage {
     SourceTransform,
     Map,
     Sink(SinkStage),
+    /// ISB producer span emitted just before publishing a message to JetStream.
+    IsbWrite,
+    /// ISB consumer span emitted when a downstream vertex pod dequeues a message
+    /// from JetStream and hands it off to its forwarder.
+    IsbRead,
 }
 
 pub(crate) struct SpanSpec {
@@ -419,6 +441,22 @@ impl From<(TraceTopology, TraceStage)> for SpanSpec {
                 operation_name: "sink.on_success",
                 kind: SpanKind::Client,
             },
+            (TraceTopology::Pipeline, TraceStage::IsbWrite) => SpanSpec {
+                topology,
+                span_name: "numaflow.pipeline.isb.write",
+                operation_name: "isb.write",
+                kind: SpanKind::Producer,
+            },
+            (TraceTopology::Pipeline, TraceStage::IsbRead) => SpanSpec {
+                topology,
+                span_name: "numaflow.pipeline.isb.read",
+                operation_name: "isb.read",
+                kind: SpanKind::Consumer,
+            },
+            // MonoVertex has no ISB hop; these combinations are never constructed.
+            (TraceTopology::MonoVertex, TraceStage::IsbWrite | TraceStage::IsbRead) => {
+                unreachable!("ISB spans are only emitted in Pipeline topology")
+            }
         }
     }
 }
@@ -445,19 +483,20 @@ fn start_child_span_from_spec_enabled(
     message_id: String,
     spec: &SpanSpec,
 ) -> opentelemetry::Context {
-    let tracer = get_tracer();
-    let mut span = tracer
-        .span_builder(spec.span_name)
-        .with_kind(spec.kind.clone())
-        .start_with_context(tracer, parent_cx);
-    if span.is_recording() {
-        span.set_attributes(build_platform_attributes(
-            spec.topology,
-            spec.operation_name,
-            message_id,
-        ));
-    }
-    opentelemetry::Context::current().with_span(span)
+    with_tracer(|tracer| {
+        let mut span = tracer
+            .span_builder(spec.span_name)
+            .with_kind(spec.kind.clone())
+            .start_with_context(tracer, parent_cx);
+        if span.is_recording() {
+            span.set_attributes(build_platform_attributes(
+                spec.topology,
+                spec.operation_name,
+                message_id,
+            ));
+        }
+        opentelemetry::Context::current().with_span(span)
+    })
 }
 
 /// Starts a per-message stage span as a child of the message's `vertex.process` parent and
@@ -622,6 +661,136 @@ fn start_source_message_spans_enabled(
     }
 }
 
+/// Spans created for a single message received from the ISB on a downstream vertex pod.
+///
+/// `platform_span` is the lifecycle root (`numaflow.vertex.process`) for this pod; the ISB
+/// reader hands it to the message's `AckHandle` so it lives until ack.
+/// `isb_read_cx` is the short-lived `numaflow.pipeline.isb.read` span covering the per-message
+/// handoff from the broker into the forwarder pipeline.
+pub(crate) struct IsbReadSpans {
+    pub platform_span: tracing::Span,
+    pub isb_read_cx: opentelemetry::Context,
+}
+
+impl IsbReadSpans {
+    pub(crate) fn into_parts(self) -> (tracing::Span, StageSpan) {
+        (
+            self.platform_span,
+            StageSpan::from_context(self.isb_read_cx),
+        )
+    }
+}
+
+/// Builds the per-message `vertex.process` and `isb.read` spans for a message dequeued from
+/// the ISB on a downstream (non-source) pipeline vertex pod.
+///
+/// As a side-effect, this **overwrites** `sys_metadata[TRACING_METADATA_KEY]` with the new
+/// `vertex.process` context. The upstream pod wrote its own `vertex.process` context there
+/// before publishing, which we use as the parent — but downstream stage spans (map/sink) on
+/// this pod must be children of *this* pod's `vertex.process`, not the upstream's.
+///
+/// When no OTel layer is registered, the returned `platform_span` is disabled, the
+/// `isb_read_cx` wraps a noop span, and the metadata side-effect is skipped — the call is
+/// effectively free for callers to make unconditionally.
+pub(crate) fn start_vertex_process_from_isb(message: &mut Message) -> IsbReadSpans {
+    if !platform_spans_enabled() {
+        return disabled_isb_read_spans();
+    }
+
+    start_vertex_process_from_isb_enabled(message)
+}
+
+fn disabled_isb_read_spans() -> IsbReadSpans {
+    IsbReadSpans {
+        platform_span: tracing::Span::none(),
+        isb_read_cx: opentelemetry::Context::new(),
+    }
+}
+
+fn start_vertex_process_from_isb_enabled(message: &mut Message) -> IsbReadSpans {
+    let msg_id = message.id.to_string();
+    let platform_span = tracing::info_span!(
+        "numaflow.vertex.process",
+        otel.kind = "INTERNAL",
+        { ATTR_MESSAGING_SYSTEM } = "numaflow",
+        { ATTR_MESSAGING_OPERATION_NAME } = TraceTopology::Pipeline.root_operation_name(),
+        { ATTR_MESSAGING_MESSAGE_ID } = %msg_id,
+        { ATTR_NUMAFLOW_TOPOLOGY } = TraceTopology::Pipeline.as_str(),
+        { ATTR_NUMAFLOW_PIPELINE_NAME } = crate::config::get_pipeline_name(),
+        { ATTR_NUMAFLOW_VERTEX_NAME } = crate::config::get_vertex_name(),
+    );
+
+    let isb_read_spec: SpanSpec = (TraceTopology::Pipeline, TraceStage::IsbRead).into();
+
+    // No OTel layer registered: skip the parent extraction and metadata overwrite — neither
+    // would carry a real span context. The returned isb.read context is a noop child.
+    if platform_span.is_disabled() {
+        let isb_read_cx = start_child_span_from_spec_enabled(
+            &opentelemetry::Context::new(),
+            msg_id,
+            &isb_read_spec,
+        );
+        return IsbReadSpans {
+            platform_span,
+            isb_read_cx,
+        };
+    }
+
+    use tracing_opentelemetry::OpenTelemetrySpanExt;
+    // Upstream vertex wrote its vertex.process context here before publishing.
+    let upstream_cx = parent_context_from_metadata(message.metadata.as_deref());
+    let _ = platform_span.set_parent(upstream_cx);
+    let platform_cx = platform_span.context();
+
+    // Overwrite sys_metadata["tracing"] with this pod's vertex.process context so map/sink
+    // stage spans on this pod become children of the local vertex.process, not the upstream's.
+    let metadata = message
+        .metadata
+        .get_or_insert_with(|| Arc::new(Metadata::default()));
+    inject_context_into_metadata(Arc::make_mut(metadata), TRACING_METADATA_KEY, &platform_cx);
+
+    let isb_read_cx = start_child_span_from_spec_enabled(&platform_cx, msg_id, &isb_read_spec);
+
+    IsbReadSpans {
+        platform_span,
+        isb_read_cx,
+    }
+}
+
+/// Starts an `isb.write` Producer span as a child of the writer's current `vertex.process`
+/// context.
+///
+/// The returned [`StageSpan`] ends the underlying span on drop. Callers hold it across the
+/// JetStream publish call to measure broker publish latency. Unlike
+/// [`start_vertex_process_from_isb`], this helper does **not** overwrite
+/// `sys_metadata[TRACING_METADATA_KEY]` — the writer's `vertex.process` stays in metadata so
+/// the next pod's `start_vertex_process_from_isb` parents to it (not to the producer span).
+///
+/// `message_id` lets callers that have already formatted the broker dedup id (e.g.
+/// `async_write` which needs it for JetStream's `message_id` header) pass it in to avoid a
+/// second `to_string()` on the hot path. Pass `None` if no formatted id is already in hand.
+///
+/// When platform spans are disabled, returns before extracting parent context or formatting
+/// the span message ID — the call is effectively free.
+pub(crate) fn start_isb_write_span(message: &Message, message_id: Option<&str>) -> StageSpan {
+    if !platform_spans_enabled() {
+        return StageSpan(opentelemetry::Context::new());
+    }
+
+    start_isb_write_span_enabled(message, message_id)
+}
+
+fn start_isb_write_span_enabled(message: &Message, message_id: Option<&str>) -> StageSpan {
+    let parent_cx = parent_context_from_metadata(message.metadata.as_deref());
+    let message_id = message_id
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| message.id.to_string());
+    let spec: SpanSpec = (TraceTopology::Pipeline, TraceStage::IsbWrite).into();
+    StageSpan(start_child_span_from_spec_enabled(
+        &parent_cx, message_id, &spec,
+    ))
+}
+
 /// Tracks per-message source dispatch OTel spans keyed by message offset.
 ///
 /// The source creates a topology-specific dispatch span per input message before
@@ -705,6 +874,78 @@ impl Drop for SourceDispatchSpans {
     }
 }
 
+/// Source-side tracing state for one read batch.
+///
+/// This keeps the OTel enablement decision and source.dispatch ownership inside the tracing
+/// module. Callers can use it unconditionally; disabled tracing returns inert spans and avoids
+/// building transform parent maps or dispatch countdown state.
+pub(crate) struct SourceTraceState {
+    enabled: bool,
+    topology: TraceTopology,
+    dispatch_spans: SourceDispatchSpans,
+    transform_parents: Option<HashMap<crate::message::Offset, opentelemetry::Context>>,
+}
+
+impl SourceTraceState {
+    pub(crate) fn new(message_count: usize, track_transform_parents: bool) -> Self {
+        let enabled = platform_spans_enabled();
+        let transform_parents =
+            (enabled && track_transform_parents).then(|| HashMap::with_capacity(message_count));
+
+        Self {
+            enabled,
+            topology: TraceTopology::current(),
+            dispatch_spans: SourceDispatchSpans::new(),
+            transform_parents,
+        }
+    }
+
+    pub(crate) fn start_message(&mut self, message: &mut Message) -> tracing::Span {
+        if !self.enabled {
+            return tracing::Span::none();
+        }
+
+        let spans = start_source_message_spans_enabled(message, self.topology);
+        if let Some(ref mut transform_parents) = self.transform_parents {
+            transform_parents.insert(message.offset.clone(), spans.dispatch_cx.clone());
+        }
+        self.dispatch_spans
+            .insert_enabled(message.offset.clone(), spans.dispatch_cx);
+        spans.platform_span
+    }
+
+    pub(crate) fn take_transform_parents(
+        &mut self,
+    ) -> Option<HashMap<crate::message::Offset, opentelemetry::Context>> {
+        self.transform_parents.take()
+    }
+
+    pub(crate) fn remaining_dispatches<'a>(
+        &self,
+        offsets: impl IntoIterator<Item = &'a crate::message::Offset>,
+    ) -> Option<HashMap<crate::message::Offset, usize>> {
+        self.enabled.then(|| {
+            let offsets = offsets.into_iter();
+            let mut map = HashMap::with_capacity(offsets.size_hint().0);
+            for offset in offsets {
+                *map.entry(offset.clone()).or_insert(0usize) += 1;
+            }
+            map
+        })
+    }
+
+    pub(crate) fn end_without_outputs(
+        &mut self,
+        output_counts: &HashMap<crate::message::Offset, usize>,
+    ) {
+        self.dispatch_spans.end_without_outputs(output_counts);
+    }
+
+    pub(crate) fn end(&mut self, offset: &crate::message::Offset) {
+        self.dispatch_spans.end(offset);
+    }
+}
+
 /// RAII guard for the per-input `source.transform` span.
 ///
 /// The span is a child of the input message's `source.dispatch` span and measures the transformer
@@ -717,10 +958,6 @@ impl Drop for SourceDispatchSpans {
 pub(crate) struct SourceTransformSpan(Option<opentelemetry::Context>);
 
 impl SourceTransformSpan {
-    pub(crate) fn none() -> Self {
-        Self(None)
-    }
-
     pub(crate) fn new(
         parent_cx: Option<opentelemetry::Context>,
         msg_id: String,
@@ -770,8 +1007,9 @@ mod tests {
     use super::*;
     use bytes::Bytes;
     use opentelemetry::propagation::{Extractor, Injector};
-    use opentelemetry::trace::TraceContextExt;
+    use opentelemetry::trace::{TraceContextExt, TracerProvider as _};
     use std::sync::Once;
+    use tracing_subscriber::layer::SubscriberExt as _;
 
     /// Install the W3C propagator once per test process. Tests that rely on
     /// `extract`/`inject` going through the real propagator must call this.
@@ -795,6 +1033,14 @@ mod tests {
     fn context_from_traceparent(traceparent: &str) -> opentelemetry::Context {
         let carrier = kvg_with(&[("traceparent", traceparent)]);
         global::get_text_map_propagator(|prop| prop.extract(&MetadataExtractor(&carrier)))
+    }
+
+    fn with_otel_test_subscriber<T>(f: impl FnOnce() -> T) -> T {
+        let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+        let tracer = provider.tracer("numaflow-core-test");
+        let subscriber =
+            tracing_subscriber::registry().with(tracing_opentelemetry::layer().with_tracer(tracer));
+        tracing::subscriber::with_default(subscriber, f)
     }
 
     #[test]
@@ -1174,6 +1420,20 @@ mod tests {
                     "sink.on_success",
                     SpanKind::Client,
                 ),
+                (
+                    TraceTopology::Pipeline,
+                    TraceStage::IsbWrite,
+                    "numaflow.pipeline.isb.write",
+                    "isb.write",
+                    SpanKind::Producer,
+                ),
+                (
+                    TraceTopology::Pipeline,
+                    TraceStage::IsbRead,
+                    "numaflow.pipeline.isb.read",
+                    "isb.read",
+                    SpanKind::Consumer,
+                ),
             ];
 
             for (topology, stage, span_name, operation_name, kind) in cases {
@@ -1251,5 +1511,119 @@ mod tests {
         assert!(result.platform_span.is_disabled());
         assert!(msg.metadata.is_none());
         drop(result); // Drop must not panic on the noop dispatch_cx.
+    }
+
+    #[test]
+    fn source_trace_state_skips_state_when_platform_spans_disabled() {
+        let mut state = SourceTraceState::new(1, true);
+        let mut msg = Message::default();
+
+        assert!(state.start_message(&mut msg).is_disabled());
+        assert!(msg.metadata.is_none());
+        assert!(state.take_transform_parents().is_none());
+        assert!(
+            state
+                .remaining_dispatches(std::iter::empty::<&crate::message::Offset>())
+                .is_none()
+        );
+    }
+
+    /// Without an OTel layer registered the helper must not allocate and must not
+    /// mutate sys_metadata. The disabled early-return covers that.
+    #[test]
+    fn start_vertex_process_from_isb_skips_work_when_platform_spans_disabled() {
+        let mut msg = Message::default();
+        assert!(msg.metadata.is_none());
+
+        let result = start_vertex_process_from_isb(&mut msg);
+        assert!(result.platform_span.is_disabled());
+        assert!(
+            msg.metadata.is_none(),
+            "sys_metadata must not be touched on the disabled path"
+        );
+        drop(result); // Drop must not panic on the noop isb_read_cx.
+    }
+
+    #[test]
+    fn start_vertex_process_from_isb_enabled_overwrites_tracing_metadata() {
+        init_propagator();
+        let upstream_cx =
+            context_from_traceparent("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01");
+        let mut metadata = Metadata::default();
+        inject_context_into_metadata(&mut metadata, TRACING_METADATA_KEY, &upstream_cx);
+        let upstream_traceparent = metadata
+            .sys_metadata
+            .get(TRACING_METADATA_KEY)
+            .and_then(|kvg| kvg.key_value.get("traceparent"))
+            .cloned();
+        let mut msg = Message {
+            metadata: Some(Arc::new(metadata)),
+            ..Default::default()
+        };
+
+        with_otel_test_subscriber(|| {
+            let result = start_vertex_process_from_isb_enabled(&mut msg);
+            assert!(!result.platform_span.is_disabled());
+            drop(StageSpan::from_context(result.isb_read_cx));
+            drop(result.platform_span);
+        });
+
+        let local_traceparent = msg
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.sys_metadata.get(TRACING_METADATA_KEY))
+            .and_then(|kvg| kvg.key_value.get("traceparent"))
+            .cloned();
+        assert!(local_traceparent.is_some());
+        assert_ne!(upstream_traceparent, local_traceparent);
+
+        let extracted_cx = parent_context_from_metadata(msg.metadata.as_deref());
+        let extracted_span = extracted_cx.span();
+        assert!(extracted_span.span_context().is_valid());
+    }
+
+    /// `start_isb_write_span` is called once per ISB publish; when tracing is
+    /// disabled it should return an inert `StageSpan` whose Drop is a no-op.
+    #[test]
+    fn start_isb_write_span_is_inert_when_platform_spans_disabled() {
+        let msg = Message::default();
+        let guard = start_isb_write_span(&msg, None);
+        drop(guard); // No panic, no work.
+    }
+
+    #[test]
+    fn start_isb_write_span_enabled_preserves_tracing_metadata() {
+        init_propagator();
+        let parent_cx =
+            context_from_traceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
+        let mut metadata = Metadata::default();
+        inject_context_into_metadata(&mut metadata, TRACING_METADATA_KEY, &parent_cx);
+        let original_tracing = metadata
+            .sys_metadata
+            .get(TRACING_METADATA_KEY)
+            .expect("parent tracing metadata should be present")
+            .key_value
+            .clone();
+        let msg = Message {
+            metadata: Some(Arc::new(metadata)),
+            ..Default::default()
+        };
+
+        with_otel_test_subscriber(|| {
+            let guard = start_isb_write_span_enabled(&msg, Some("already-formatted"));
+            drop(guard);
+            let guard = start_isb_write_span_enabled(&msg, None);
+            drop(guard);
+        });
+
+        let current_tracing = &msg
+            .metadata
+            .as_ref()
+            .expect("metadata should still be present")
+            .sys_metadata
+            .get(TRACING_METADATA_KEY)
+            .expect("tracing metadata should still be present")
+            .key_value;
+        assert_eq!(current_tracing, &original_tracing);
     }
 }
