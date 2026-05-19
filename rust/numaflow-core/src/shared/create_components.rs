@@ -406,10 +406,13 @@ pub(crate) async fn create_mapper(
     }
 }
 
-/// Creates a source type with rate limiter based on the configuration
+/// Creates a source type with rate limiter based on the configuration.
+/// `concurrency` is the cap on in-flight (read-but-not-acked) messages, sourced from the vertex's
+/// `Limits.Concurrency`.
 #[allow(clippy::too_many_arguments)]
 pub async fn create_source<C: NumaflowTypeConfig>(
     batch_size: usize,
+    concurrency: usize,
     read_timeout: Duration,
     source_config: &SourceConfig,
     tracker: Tracker,
@@ -424,6 +427,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 new_generator(generator_config.clone(), batch_size, cln_token.clone())?;
             Ok(Source::new(
                 batch_size,
+                concurrency,
                 source::SourceType::Generator(generator, generator_ack, generator_lag),
                 tracker,
                 source_config.read_ahead,
@@ -445,6 +449,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             .await?;
             Ok(crate::source::Source::new(
                 batch_size,
+                concurrency,
                 source::SourceType::Pulsar(pulsar),
                 tracker,
                 source_config.read_ahead,
@@ -466,6 +471,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             .await?;
             Ok(Source::new(
                 batch_size,
+                concurrency,
                 source::SourceType::Sqs(sqs),
                 tracker,
                 source_config.read_ahead,
@@ -486,6 +492,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             .await?;
             Ok(Source::new(
                 batch_size,
+                concurrency,
                 source::SourceType::Jetstream(jetstream),
                 tracker,
                 source_config.read_ahead,
@@ -506,6 +513,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             .await?;
             Ok(Source::new(
                 batch_size,
+                concurrency,
                 source::SourceType::Nats(nats),
                 tracker,
                 source_config.read_ahead,
@@ -522,6 +530,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 new_kafka_source(config, batch_size, read_timeout, cln_token.clone()).await?;
             Ok(Source::new(
                 batch_size,
+                concurrency,
                 source::SourceType::Kafka(kafka),
                 tracker,
                 source_config.read_ahead,
@@ -538,6 +547,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                     .await;
             Ok(Source::new(
                 batch_size,
+                concurrency,
                 source::SourceType::Http(CoreHttpSource::new(batch_size, http_source)),
                 tracker,
                 source_config.read_ahead,
@@ -564,6 +574,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
             .await?;
             Ok(Source::new(
                 batch_size,
+                concurrency,
                 source::SourceType::UserDefinedSource(Box::new(ud_read), Box::new(ud_ack), ud_lag),
                 tracker,
                 source_config.read_ahead,

@@ -6626,7 +6626,10 @@ Description
 <em>(Optional)</em>
 <p>
 
-Read batch size from the source.
+Read batch size from the source. ReadBatchSize controls only how many
+messages are fetched in a single read call from the source; it is not a
+cap on how many messages may be in-flight (use <code>concurrency</code>
+for that).
 </p>
 
 </td>
@@ -6671,6 +6674,40 @@ RateLimit for MonoVertex defines how many messages can be read from
 Source. This is computed by number of <code>read</code> calls per second
 multiplied by the <code>readBatchSize</code>. This is how RateLimit is
 calculated for MonoVertex and for Source vertices.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>concurrency</code></br> <em> uint64 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Concurrency defines the maximum number of messages that can be actively
+in-flight (read but not yet acknowledged) at any given time. With
+read-ahead enabled, the data plane keeps reading new batches from the
+source until the number of in-flight messages reaches
+<code>concurrency</code>; once that ceiling is hit, one more batch may
+be pre-fetched and held ready so that completed messages can be replaced
+immediately. Therefore the maximum in-flight count is at most
+<code>concurrency + readBatchSize</code>. With read-ahead disabled (the
+default for MonoVertex, since the MonoVertex always reads from a
+source), the data plane drains the current batch fully before the next
+read, so the upper bound becomes <code>min(concurrency,
+readBatchSize)</code>. <code>readBatchSize</code> controls only the size
+of an individual read; <code>concurrency</code> controls how many
+messages can be processed in parallel. To force strictly sequential
+processing, set <code>concurrency</code> to 1 (read-ahead is already off
+by default for MonoVertex).
 </p>
 
 </td>
@@ -8233,7 +8270,10 @@ Description
 <p>
 
 Read batch size for all the vertices in the pipeline, can be overridden
-by the vertex’s limit settings.
+by the vertex’s limit settings. ReadBatchSize controls only how many
+messages are fetched in a single read call from the source/buffer; it is
+not a cap on how many messages may be in-flight (use
+<code>concurrency</code> for that).
 </p>
 
 </td>
@@ -8324,6 +8364,40 @@ source vertices, it will be set to rate divided by readBatchSize because
 for source vertices, the rate limit is defined by how many times the
 <code>Read</code> is called per second Reduce does not support
 RateLimit.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>concurrency</code></br> <em> uint64 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Concurrency defines the maximum number of messages that can be actively
+in-flight (read but not yet acknowledged) at any given time across each
+vertex of the pipeline. With read-ahead enabled, the data plane keeps
+reading new batches from the source/buffer until the number of in-flight
+messages reaches <code>concurrency</code>; once that ceiling is hit, one
+more batch may be pre-fetched and held ready so that completed messages
+can be replaced immediately. Therefore the maximum in-flight count per
+vertex is at most <code>concurrency + readBatchSize</code>.
+<code>readBatchSize</code> controls only the size of an individual read;
+<code>concurrency</code> controls how many messages can be processed in
+parallel. By default, read-ahead is disabled on source vertices (so
+re-reads on failure stay cheap and source ordering is preserved) and
+enabled on Map/Sink/ Reduce vertices. To force strictly sequential
+processing, set <code>concurrency</code> to 1 and disable read-ahead via
+the <code>READ_AHEAD</code> environment variable on the vertex’s
+container template. Can be overridden by the vertex’s limit settings.
 </p>
 
 </td>
@@ -14347,7 +14421,10 @@ Description
 <p>
 
 Read batch size from the source or buffer. It overrides the settings
-from pipeline limits.
+from pipeline limits. ReadBatchSize controls only how many messages are
+fetched in a single read call from the source/buffer; it is not a cap on
+how many messages may be in-flight (use <code>concurrency</code> for
+that).
 </p>
 
 </td>
@@ -14435,6 +14512,39 @@ the settings from pipeline limits. For Source vertices, the rate limit
 is defined by how many times the <code>Read</code> is called per second
 multiplied by the <code>readBatchSize</code>. Pipeline level rate limit
 is not applied to Source vertices.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>concurrency</code></br> <em> uint64 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Concurrency defines the maximum number of messages that can be actively
+in-flight (read but not yet acknowledged) at any given time. With
+read-ahead enabled, the data plane keeps reading new batches from the
+source/buffer until the number of in-flight messages reaches
+<code>concurrency</code>; once that ceiling is hit, one more batch may
+be pre-fetched and held ready so that completed messages can be replaced
+immediately. Therefore the maximum in-flight count is at most
+<code>concurrency + readBatchSize</code>. <code>readBatchSize</code>
+controls only the size of an individual read; <code>concurrency</code>
+controls how many messages can be processed in parallel. It overrides
+the settings from pipeline limits. By default, read-ahead is disabled on
+source vertices and enabled on Map/Sink/Reduce vertices. To force
+strictly sequential processing, set <code>concurrency</code> to 1 and
+disable read-ahead via the <code>READ_AHEAD</code> environment variable
+on the vertex’s container template.
 </p>
 
 </td>

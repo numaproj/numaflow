@@ -244,6 +244,9 @@ func (v Vertex) simpleCopy() Vertex {
 	if m.Spec.Limits.BufferUsageLimit == nil {
 		m.Spec.Limits.BufferUsageLimit = ptr.To[uint32](100 * DefaultBufferUsageLimit)
 	}
+	if m.Spec.Limits.Concurrency == nil {
+		m.Spec.Limits.Concurrency = ptr.To[uint64](*m.Spec.Limits.ReadBatchSize)
+	}
 	m.Spec.UpdateStrategy = UpdateStrategy{}
 	return m
 }
@@ -256,8 +259,18 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		return nil, errors.New("failed to marshal vertex spec")
 	}
 	encodedVertexSpec := base64.StdEncoding.EncodeToString(vertexBytes)
+	// Read-ahead is disabled by default for source vertices (matching MonoVertex behavior, where
+	// re-reading from the source is comparatively cheap and ordering at the source matters), and
+	// enabled by default for non-source vertices to keep the inter-step buffers fully utilized.
+	// Users can override by setting READ_AHEAD in `containerTemplate.env`; values placed in
+	// `req.Env` win because they are appended last.
+	defaultReadAhead := "true"
+	if v.IsASource() {
+		defaultReadAhead = "false"
+	}
 	envVars := []corev1.EnvVar{
 		{Name: EnvVertexObject, Value: encodedVertexSpec},
+		{Name: EnvReadAhead, Value: defaultReadAhead},
 	}
 
 	envVars = append(envVars, v.commonEnvs()...)
@@ -509,6 +522,16 @@ func (v VertexLimits) GetReadBatchSize() uint64 {
 	return DefaultReadBatchSize
 }
 
+// GetConcurrency returns the maximum number of in-flight (read-but-not-acked) messages allowed
+// at any time. It defaults to the read batch size when unset, which preserves the historical
+// behavior where concurrency was implicitly bounded by the batch size.
+func (v VertexLimits) GetConcurrency() uint64 {
+	if v.Concurrency != nil {
+		return *v.Concurrency
+	}
+	return v.GetReadBatchSize()
+}
+
 func (v Vertex) getReplicas() int {
 	if v.IsReduceUDF() {
 		return v.GetPartitionCount()
@@ -724,6 +747,9 @@ func (av AbstractVertex) OwnedBufferNames(namespace, pipeline string) []string {
 type VertexLimits struct {
 	// Read batch size from the source or buffer.
 	// It overrides the settings from pipeline limits.
+	// ReadBatchSize controls only how many messages are fetched in a single read call from the source/buffer;
+	// it is not a cap on how many messages may be in-flight (use `concurrency` for that).
+	// +kubebuilder:validation:Minimum=1
 	// +optional
 	ReadBatchSize *uint64 `json:"readBatchSize,omitempty" protobuf:"varint,1,opt,name=readBatchSize"`
 	// Read timeout duration from the source or buffer
@@ -743,6 +769,20 @@ type VertexLimits struct {
 	// the `readBatchSize`. Pipeline level rate limit is not applied to Source vertices.
 	// +optional
 	RateLimit *RateLimit `json:"rateLimit,omitempty" protobuf:"bytes,5,opt,name=rateLimit"`
+	// Concurrency defines the maximum number of messages that can be actively in-flight (read but not
+	// yet acknowledged) at any given time. With read-ahead enabled, the data plane keeps reading new
+	// batches from the source/buffer until the number of in-flight messages reaches `concurrency`;
+	// once that ceiling is hit, one more batch may be pre-fetched and held ready so that completed
+	// messages can be replaced immediately. Therefore the maximum in-flight count is at most
+	// `concurrency + readBatchSize`.
+	// `readBatchSize` controls only the size of an individual read; `concurrency` controls how many
+	// messages can be processed in parallel. It overrides the settings from pipeline limits.
+	// By default, read-ahead is disabled on source vertices and enabled on Map/Sink/Reduce vertices.
+	// To force strictly sequential processing, set `concurrency` to 1 and disable read-ahead via the
+	// `READ_AHEAD` environment variable on the vertex's container template.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	Concurrency *uint64 `json:"concurrency,omitempty" protobuf:"varint,6,opt,name=concurrency"`
 }
 
 func (v VertexSpec) getType() containerSupplier {

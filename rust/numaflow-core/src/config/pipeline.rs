@@ -11,7 +11,7 @@ use tracing::info;
 
 use super::{
     DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED,
-    ENV_NUMAFLOW_SERVING_RESPONSE_STORE,
+    ENV_NUMAFLOW_SERVING_RESPONSE_STORE, ENV_READ_AHEAD,
 };
 use crate::Result;
 use crate::config::ENV_NUMAFLOW_SERVING_CALLBACK_STORE;
@@ -40,7 +40,6 @@ const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USE
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
 const ENV_WRITE_CONCURRENCY_SIZE: &str = "WRITE_CONCURRENCY_SIZE";
 const ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS: &str = "NUMAFLOW_GRACEFUL_TIMEOUT_SECS";
-const ENV_MAX_ACK_PENDING: &str = "MAX_ACK_PENDING";
 const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_MAP_SOCKET: &str = "/var/run/numaflow/map.sock";
 pub(crate) const DEFAULT_BATCH_MAP_SOCKET: &str = "/var/run/numaflow/batchmap.sock";
@@ -52,7 +51,6 @@ pub(crate) const VERTEX_TYPE_SOURCE: &str = "Source";
 pub(crate) const VERTEX_TYPE_SINK: &str = "Sink";
 pub(crate) const VERTEX_TYPE_MAP_UDF: &str = "MapUDF";
 pub(crate) const VERTEX_TYPE_REDUCE_UDF: &str = "ReduceUDF";
-pub(crate) const DEFAULT_MAX_ACK_PENDING: usize = 25000;
 
 pub(crate) mod isb;
 pub(crate) mod watermark;
@@ -63,6 +61,9 @@ pub(crate) struct PipelineConfig {
     pub(crate) vertex_name: &'static str,
     pub(crate) replica: u16,
     pub(crate) batch_size: usize,
+    /// Cap on in-flight (read-but-not-acked) messages on this vertex, sourced from
+    /// `spec.limits.concurrency` (with vertex-level overriding pipeline-level).
+    pub(crate) concurrency: usize,
     pub(crate) writer_concurrency: usize,
     pub(crate) read_timeout: Duration,
     pub(crate) graceful_shutdown_time: Duration,
@@ -92,6 +93,7 @@ impl Default for PipelineConfig {
             vertex_name: Default::default(),
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
+            concurrency: DEFAULT_BATCH_SIZE as usize,
             writer_concurrency: DEFAULT_BATCH_SIZE as usize,
             read_timeout: Duration::from_millis(DEFAULT_TIMEOUT_IN_MS as u64),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
@@ -302,7 +304,7 @@ impl PipelineConfig {
                     ENV_NUMAFLOW_SERVING_CALLBACK_STORE,
                     ENV_NUMAFLOW_SERVING_RESPONSE_STORE,
                     ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS,
-                    ENV_MAX_ACK_PENDING,
+                    ENV_READ_AHEAD,
                 ]
                 .contains(&key.as_str())
             })
@@ -342,6 +344,16 @@ impl PipelineConfig {
             .and_then(|limits| limits.read_batch_size.map(|x| x as u64))
             .unwrap_or(DEFAULT_BATCH_SIZE);
 
+        // Concurrency caps the number of in-flight (read-but-not-acked) messages on this vertex.
+        // It is sourced from `spec.limits.concurrency` and falls back to `batch_size` to preserve
+        // historical behavior where concurrency was implicitly bounded by the read batch size.
+        let concurrency = vertex_obj
+            .spec
+            .limits
+            .as_ref()
+            .and_then(|limits| limits.concurrency.map(|x| x as usize))
+            .unwrap_or(batch_size as usize);
+
         let timeout_in_ms = vertex_obj
             .spec
             .limits
@@ -361,7 +373,7 @@ impl PipelineConfig {
             vertex_obj.spec.source
         {
             let transformer_config = source.transformer.as_ref().map(|_| TransformerConfig {
-                concurrency: batch_size as usize, // FIXME: introduce a separate field in the spec
+                concurrency,
                 transformer_type: TransformerType::UserDefined(Default::default()),
             });
 
@@ -371,10 +383,14 @@ impl PipelineConfig {
             (
                 VertexConfig::Source(SourceVtxConfig {
                     source_config: SourceConfig {
-                        read_ahead: env::var("READ_AHEAD")
-                            .unwrap_or("false".to_string())
+                        // Read-ahead defaults to false for source vertices (the controller injects
+                        // this default; we mirror it here for completeness if the env is missing).
+                        read_ahead: env_vars
+                            .get(ENV_READ_AHEAD)
+                            .map(String::as_str)
+                            .unwrap_or("false")
                             .parse()
-                            .unwrap(),
+                            .unwrap_or(false),
                         source_type,
                     },
                     transformer_config,
@@ -470,7 +486,7 @@ impl PipelineConfig {
                 // This is a map vertex
                 (
                     VertexConfig::Map(MapVtxConfig {
-                        concurrency: batch_size as usize,
+                        concurrency,
                         map_type: udf.try_into()?,
                     }),
                     VertexType::MapUDF,
@@ -504,14 +520,6 @@ impl PipelineConfig {
             user: get_var(ENV_NUMAFLOW_SERVING_JETSTREAM_USER).ok(),
             password: get_var(ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD).ok(),
         };
-
-        let max_ack_pending: usize = get_var(ENV_MAX_ACK_PENDING)
-            .and_then(|s| {
-                s.parse().map_err(|e| {
-                    Error::Config(format!("Parsing value of {ENV_MAX_ACK_PENDING}: {e:?}"))
-                })
-            })
-            .unwrap_or(DEFAULT_MAX_ACK_PENDING);
 
         // Determine if ordered processing is enabled for this vertex
         // Logic follows Go's GetEffectiveOrderedConfig():
@@ -563,7 +571,10 @@ impl PipelineConfig {
                 name: Box::leak(edge.from.clone().into_boxed_str()),
                 reader_config: BufferReaderConfig {
                     streams,
-                    max_ack_pending,
+                    // Cap inflight messages on this ISB reader to the vertex's `concurrency`. The
+                    // reader holds a semaphore of this size so that, even with read-ahead, we never
+                    // have more than `concurrency + read_batch_size` messages in flight.
+                    max_ack_pending: concurrency,
                     ..Default::default()
                 },
                 partitions: from_partition_count,
@@ -701,6 +712,7 @@ impl PipelineConfig {
 
         Ok(PipelineConfig {
             batch_size: batch_size as usize,
+            concurrency,
             writer_concurrency: get_var(ENV_WRITE_CONCURRENCY_SIZE)
                 .and_then(|s| {
                     s.parse().map_err(|e| {
@@ -751,6 +763,7 @@ mod tests {
             vertex_name: Default::default(),
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
+            concurrency: DEFAULT_BATCH_SIZE as usize,
             writer_concurrency: DEFAULT_BATCH_SIZE as usize,
             read_timeout: Duration::from_millis(DEFAULT_TIMEOUT_IN_MS as u64),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
@@ -835,6 +848,7 @@ mod tests {
             vertex_name: "out",
             replica: 0,
             batch_size: 500,
+            concurrency: 500,
             writer_concurrency: 500,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
@@ -1006,6 +1020,7 @@ mod tests {
             vertex_name: "in",
             replica: 0,
             batch_size: 1000,
+            concurrency: 1000,
             writer_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
@@ -1064,6 +1079,7 @@ mod tests {
             vertex_name: "in",
             replica: 0,
             batch_size: 50,
+            concurrency: 50,
             writer_concurrency: 50,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
@@ -1171,6 +1187,7 @@ mod tests {
             vertex_name: "map",
             replica: 0,
             batch_size: 500,
+            concurrency: 500,
             writer_concurrency: 500,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),

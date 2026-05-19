@@ -58,8 +58,6 @@ kind: Pipeline
 metadata:
   name: my-pipeline
 spec:
-  limits:
-    readBatchSize: 1        # recommended for strict ordering
   ordered:
     enabled: true           # enable order-preserving processing pipeline-wide
   vertices:
@@ -118,8 +116,9 @@ case.
 - **Source vertices** always preserve input order regardless of the `ordered` setting.
 - **Key-based routing**: ordering is guaranteed per key. Messages with different keys may still be interleaved across
   partitions. Ensure your UDF or SDK sets meaningful message keys to leverage per-key ordering.
-- **`readBatchSize: 1`** is required for strict ordering. With a larger batch size, multiple messages may
-  be in-flight simultaneously within a single pod.
+- **In-flight cap is forced to 1**: when ordered processing is enabled on a Map or Sink vertex, the controller
+  automatically sets `limits.concurrency = 1` so each pod processes one message at a time. You don't need to set
+  `concurrency` or `readBatchSize` yourself — any explicit `concurrency` you set is overridden for ordered vertices.
 - **Throughput trade-off**: ordered processing limits parallelism within a partition. Consider the number of partitions
   carefully to balance ordering guarantees with throughput requirements.
 - **Join vertices (multiple input edges)**: When a vertex receives messages from multiple upstream vertices
@@ -169,8 +168,6 @@ kind: Pipeline
 metadata:
   name: ordered-pipeline
 spec:
-  limits:
-    readBatchSize: 1
   ordered:
     enabled: true
   vertices:
@@ -202,8 +199,8 @@ spec:
 In the example above:
 
 - `ordered.enabled: true` enables order-preserving processing pipeline-wide.
-- `limits.readBatchSize: 1` is required so that each pod processes one message at a time, which is essential for
-strict in-order guarantees.
+- For each ordered Map/Sink vertex the controller automatically forces `limits.concurrency = 1` so each pod processes
+  one message at a time, which is essential for strict in-order guarantees.
 - The `cat` (Map) and `out` (Sink) vertices each have `partitions: 3`, so they will run with exactly 3 replicas.
 - Source vertices (`in-1`, `in-2`) always preserve input order and require no extra configuration.
 - Because `in-1` and `in-2` both feed into `cat` (a join), messages from the two sources are interleaved at `cat`.

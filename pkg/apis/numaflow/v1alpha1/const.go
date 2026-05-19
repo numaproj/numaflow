@@ -145,6 +145,17 @@ const (
 	EnvServingStatusStore               = "NUMAFLOW_SERVING_STATUS_STORE"
 	EnvReadBatchSize                    = "NUMAFLOW_READ_BATCH_SIZE"
 	EnvReadTimeoutMs                    = "NUMAFLOW_READ_TIMEOUT_MS"
+	// EnvReadAhead controls whether the data plane keeps reading the next batch from the source/buffer
+	// while previously read messages are still being processed. With read-ahead enabled, the data plane
+	// allows up to `Limits.Concurrency` messages to be in-flight and additionally pre-fetches one more
+	// batch so that when a slot frees up the next message is already available; the absolute upper
+	// bound on in-flight messages becomes `Concurrency + ReadBatchSize`. Disabling read-ahead forces
+	// the data plane to fully ack the current batch before reading the next one, which (combined with
+	// `Concurrency = 1`) yields strictly sequential processing.
+	// Default: "false" for source vertices (MonoVertex and Pipeline source vertex) so that re-reads
+	// on failure stay cheap and source ordering is preserved; "true" for all other Pipeline vertices
+	// (Map / Sink / Reduce) to keep inter-step buffers fully utilized.
+	EnvReadAhead = "READ_AHEAD"
 
 	NumaflowRustBinary          = "/bin/numaflow-rs"
 	PathVarRun                  = "/var/run/numaflow"

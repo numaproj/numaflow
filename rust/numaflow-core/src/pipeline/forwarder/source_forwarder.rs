@@ -228,6 +228,7 @@ where
 {
     let source = create_components::create_source::<C>(
         context.config.batch_size,
+        context.config.concurrency,
         context.config.read_timeout,
         &source_config.source_config,
         context.tracker.clone(),
@@ -911,6 +912,7 @@ mod tests {
         .unwrap();
 
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
+            5,
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
             tracker.clone(),

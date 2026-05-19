@@ -349,6 +349,9 @@ func (mv MonoVertex) simpleCopy() MonoVertex {
 	if m.Spec.Limits.ReadTimeout == nil {
 		m.Spec.Limits.ReadTimeout = &metav1.Duration{Duration: DefaultReadTimeout}
 	}
+	if m.Spec.Limits.Concurrency == nil {
+		m.Spec.Limits.Concurrency = ptr.To[uint64](*m.Spec.Limits.ReadBatchSize)
+	}
 	m.Spec.UpdateStrategy = UpdateStrategy{}
 	m.Spec.Lifecycle = MonoVertexLifecycle{}
 	return m
@@ -364,6 +367,9 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 	encodedMonoVertexSpec := base64.StdEncoding.EncodeToString(monoVtxBytes)
 	envVars := []corev1.EnvVar{
 		{Name: EnvMonoVertexObject, Value: encodedMonoVertexSpec},
+		// Read-ahead is disabled by default for MonoVertex. Users can override by setting READ_AHEAD
+		// in `containerTemplate.env`; values placed in `req.Env` win because they are appended last.
+		{Name: EnvReadAhead, Value: "false"},
 	}
 	envVars = append(envVars, mv.commonEnvs()...)
 	envVars = append(envVars, req.Env...)
@@ -572,7 +578,10 @@ func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Cont
 
 type MonoVertexLimits struct {
 	// Read batch size from the source.
+	// ReadBatchSize controls only how many messages are fetched in a single read call from the source;
+	// it is not a cap on how many messages may be in-flight (use `concurrency` for that).
 	// +kubebuilder:default=500
+	// +kubebuilder:validation:Minimum=1
 	// +optional
 	ReadBatchSize *uint64 `json:"readBatchSize,omitempty" protobuf:"varint,1,opt,name=readBatchSize"`
 	// ReadTimeout is the read timeout duration from the source.
@@ -584,6 +593,21 @@ type MonoVertexLimits struct {
 	// for Source vertices.
 	// +optional
 	RateLimit *RateLimit `json:"rateLimit,omitempty" protobuf:"bytes,3,opt,name=rateLimit"`
+	// Concurrency defines the maximum number of messages that can be actively in-flight (read but not
+	// yet acknowledged) at any given time. With read-ahead enabled, the data plane keeps reading new
+	// batches from the source until the number of in-flight messages reaches `concurrency`; once that
+	// ceiling is hit, one more batch may be pre-fetched and held ready so that completed messages can
+	// be replaced immediately. Therefore the maximum in-flight count is at most
+	// `concurrency + readBatchSize`. With read-ahead disabled (the default for MonoVertex, since the
+	// MonoVertex always reads from a source), the data plane drains the current batch fully before
+	// the next read, so the upper bound becomes `min(concurrency, readBatchSize)`.
+	// `readBatchSize` controls only the size of an individual read; `concurrency` controls how many
+	// messages can be processed in parallel. To force strictly sequential processing, set
+	// `concurrency` to 1 (read-ahead is already off by default for MonoVertex).
+	// +kubebuilder:default=500
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	Concurrency *uint64 `json:"concurrency,omitempty" protobuf:"varint,4,opt,name=concurrency"`
 }
 
 func (mvl MonoVertexLimits) GetReadBatchSize() uint64 {
@@ -591,6 +615,16 @@ func (mvl MonoVertexLimits) GetReadBatchSize() uint64 {
 		return DefaultReadBatchSize
 	}
 	return *mvl.ReadBatchSize
+}
+
+// GetConcurrency returns the maximum number of in-flight (read-but-not-acked) messages allowed
+// at any time. It defaults to the read batch size when unset, which preserves the historical
+// behavior where concurrency was implicitly bounded by the batch size.
+func (mvl MonoVertexLimits) GetConcurrency() uint64 {
+	if mvl.Concurrency == nil {
+		return mvl.GetReadBatchSize()
+	}
+	return *mvl.Concurrency
 }
 
 func (mvl MonoVertexLimits) GetReadTimeout() time.Duration {

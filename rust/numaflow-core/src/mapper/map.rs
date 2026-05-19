@@ -143,7 +143,8 @@ impl MapHandle {
         bypass_router: Option<MvtxBypassRouter>,
     ) -> error::Result<(ReceiverStream<MessageHandle>, JoinHandle<error::Result<()>>)> {
         let (output_tx, output_rx) = mpsc::channel(self.batch_size);
-        let (error_tx, error_rx) = mpsc::channel(self.batch_size);
+
+        let (error_tx, error_rx) = mpsc::channel(self.concurrency);
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
 
         // we spawn one of the 3 map types
