@@ -156,6 +156,10 @@ impl AckHandle {
     /// dropped. The span covers the message lifecycle owned by this AckHandle; each topology
     /// decides where that lifecycle starts and ends.
     pub(crate) fn set_pipeline_span(&self, span: tracing::Span) {
+        if span.is_disabled() {
+            return;
+        }
+
         let _ = self.pipeline_span.set(span);
     }
 }

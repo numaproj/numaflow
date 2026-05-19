@@ -538,11 +538,8 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
             // with the new context so map/sink stage spans on this pod parent to *this*
             // pod's vertex.process. The short-lived isb.read span scopes the per-message
             // handoff into the downstream channel.
-            let otel::IsbReadSpans {
-                platform_span,
-                isb_read_cx,
-            } = otel::start_vertex_process_from_isb(&mut message);
-            let _isb_read_guard = otel::StageSpan::from_context(isb_read_cx);
+            let (platform_span, _isb_read_guard) =
+                otel::start_vertex_process_from_isb(&mut message).into_parts();
 
             let (ack_tx, ack_rx) = oneshot::channel();
             let read_message = MessageHandle::new(message, ack_tx);

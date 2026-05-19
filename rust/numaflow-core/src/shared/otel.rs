@@ -672,6 +672,15 @@ pub(crate) struct IsbReadSpans {
     pub isb_read_cx: opentelemetry::Context,
 }
 
+impl IsbReadSpans {
+    pub(crate) fn into_parts(self) -> (tracing::Span, StageSpan) {
+        (
+            self.platform_span,
+            StageSpan::from_context(self.isb_read_cx),
+        )
+    }
+}
+
 /// Builds the per-message `vertex.process` and `isb.read` spans for a message dequeued from
 /// the ISB on a downstream (non-source) pipeline vertex pod.
 ///
@@ -865,6 +874,78 @@ impl Drop for SourceDispatchSpans {
     }
 }
 
+/// Source-side tracing state for one read batch.
+///
+/// This keeps the OTel enablement decision and source.dispatch ownership inside the tracing
+/// module. Callers can use it unconditionally; disabled tracing returns inert spans and avoids
+/// building transform parent maps or dispatch countdown state.
+pub(crate) struct SourceTraceState {
+    enabled: bool,
+    topology: TraceTopology,
+    dispatch_spans: SourceDispatchSpans,
+    transform_parents: Option<HashMap<crate::message::Offset, opentelemetry::Context>>,
+}
+
+impl SourceTraceState {
+    pub(crate) fn new(message_count: usize, track_transform_parents: bool) -> Self {
+        let enabled = platform_spans_enabled();
+        let transform_parents =
+            (enabled && track_transform_parents).then(|| HashMap::with_capacity(message_count));
+
+        Self {
+            enabled,
+            topology: TraceTopology::current(),
+            dispatch_spans: SourceDispatchSpans::new(),
+            transform_parents,
+        }
+    }
+
+    pub(crate) fn start_message(&mut self, message: &mut Message) -> tracing::Span {
+        if !self.enabled {
+            return tracing::Span::none();
+        }
+
+        let spans = start_source_message_spans_enabled(message, self.topology);
+        if let Some(ref mut transform_parents) = self.transform_parents {
+            transform_parents.insert(message.offset.clone(), spans.dispatch_cx.clone());
+        }
+        self.dispatch_spans
+            .insert_enabled(message.offset.clone(), spans.dispatch_cx);
+        spans.platform_span
+    }
+
+    pub(crate) fn take_transform_parents(
+        &mut self,
+    ) -> Option<HashMap<crate::message::Offset, opentelemetry::Context>> {
+        self.transform_parents.take()
+    }
+
+    pub(crate) fn remaining_dispatches<'a>(
+        &self,
+        offsets: impl IntoIterator<Item = &'a crate::message::Offset>,
+    ) -> Option<HashMap<crate::message::Offset, usize>> {
+        self.enabled.then(|| {
+            let offsets = offsets.into_iter();
+            let mut map = HashMap::with_capacity(offsets.size_hint().0);
+            for offset in offsets {
+                *map.entry(offset.clone()).or_insert(0usize) += 1;
+            }
+            map
+        })
+    }
+
+    pub(crate) fn end_without_outputs(
+        &mut self,
+        output_counts: &HashMap<crate::message::Offset, usize>,
+    ) {
+        self.dispatch_spans.end_without_outputs(output_counts);
+    }
+
+    pub(crate) fn end(&mut self, offset: &crate::message::Offset) {
+        self.dispatch_spans.end(offset);
+    }
+}
+
 /// RAII guard for the per-input `source.transform` span.
 ///
 /// The span is a child of the input message's `source.dispatch` span and measures the transformer
@@ -877,10 +958,6 @@ impl Drop for SourceDispatchSpans {
 pub(crate) struct SourceTransformSpan(Option<opentelemetry::Context>);
 
 impl SourceTransformSpan {
-    pub(crate) fn none() -> Self {
-        Self(None)
-    }
-
     pub(crate) fn new(
         parent_cx: Option<opentelemetry::Context>,
         msg_id: String,
@@ -1434,6 +1511,21 @@ mod tests {
         assert!(result.platform_span.is_disabled());
         assert!(msg.metadata.is_none());
         drop(result); // Drop must not panic on the noop dispatch_cx.
+    }
+
+    #[test]
+    fn source_trace_state_skips_state_when_platform_spans_disabled() {
+        let mut state = SourceTraceState::new(1, true);
+        let mut msg = Message::default();
+
+        assert!(state.start_message(&mut msg).is_disabled());
+        assert!(msg.metadata.is_none());
+        assert!(state.take_transform_parents().is_none());
+        assert!(
+            state
+                .remaining_dispatches(std::iter::empty::<&crate::message::Offset>())
+                .is_none()
+        );
     }
 
     /// Without an OTel layer registered the helper must not allocate and must not
