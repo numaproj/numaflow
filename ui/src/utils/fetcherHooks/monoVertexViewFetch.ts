@@ -6,9 +6,17 @@ import { AppContextProps } from "../../types/declarations/app";
 import { AppContext } from "../../App";
 import {
   MonoVertex,
+  MonoVertexBypass,
   MonoVertexSpec,
   MonoVertexMetrics,
 } from "../../types/declarations/pipeline";
+
+type MonoVertexBypassTarget = keyof MonoVertexBypass;
+const MONO_VERTEX_BYPASS_TARGETS: MonoVertexBypassTarget[] = [
+  "sink",
+  "onSuccess",
+  "fallback",
+];
 
 const MONO_VERTEX_CONTAINER_WIDTH = 420;
 const MONO_VERTEX_INTERNAL_NODE_WIDTH = 32;
@@ -364,13 +372,14 @@ export const useMonoVertexViewFetch = (
       if (bypassSourceStages.length === 0) {
         bypassSourceStages.push("source");
       }
-      const bypassTargetStages = ["sink", "onSuccess", "fallback"].filter(
+      const bypassTargetStages = MONO_VERTEX_BYPASS_TARGETS.filter(
         (targetStage) => {
+          const rule = spec?.bypass?.[targetStage];
           const targetExists =
             targetStage === "sink" ||
             (targetStage === "onSuccess" && spec?.sink?.onSuccess) ||
             (targetStage === "fallback" && spec?.sink?.fallback);
-          return spec?.bypass?.[targetStage] && targetExists;
+          return !!rule?.tags && targetExists;
         }
       );
       const bypassTargetsByStage = bypassSourceStages.reduce(
@@ -385,7 +394,7 @@ export const useMonoVertexViewFetch = (
               source: sourceStage,
               operator: rule?.tags?.operator || "or",
               values: Array.isArray(rule?.tags?.values)
-                ? rule.tags.values
+                ? rule?.tags?.values
                 : [],
             };
           });
@@ -473,13 +482,13 @@ export const useMonoVertexViewFetch = (
         bypassSourceStages.push("source");
       }
       bypassSourceStages.forEach((sourceStage) => {
-        ["sink", "onSuccess", "fallback"].forEach((targetStage) => {
+        MONO_VERTEX_BYPASS_TARGETS.forEach((targetStage) => {
           const rule = spec?.bypass?.[targetStage];
           const targetExists =
             targetStage === "sink" ||
             (targetStage === "onSuccess" && spec?.sink?.onSuccess) ||
             (targetStage === "fallback" && spec?.sink?.fallback);
-          if (!rule || !targetExists) return;
+          if (!rule?.tags || !targetExists) return;
           const bypassSource = `${name}-${sourceStage}`;
           const target = `${name}-${targetStage}`;
           newEdges.push({
@@ -524,3 +533,4 @@ export const useMonoVertexViewFetch = (
     refresh,
   };
 };
+
