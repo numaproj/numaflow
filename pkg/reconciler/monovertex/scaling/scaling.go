@@ -308,17 +308,31 @@ func (s *Scaler) desiredReplicas(_ context.Context, monoVtx *dfv1.MonoVertex, pr
 		return int32(monoVtx.Status.Replicas)
 	}
 
-	var desired int32
 	// We calculate the time of finishing processing the pending messages,
 	// and then we know how many replicas are needed to get them done in target seconds.
-	desired = int32(math.Round(((float64(pending) / processingRate) / float64(monoVtx.Spec.Scale.GetTargetProcessingSeconds())) * float64(monoVtx.Status.ReadyReplicas)))
+	// Clamp the float64 result before casting to int32 to prevent wraparound when the
+	// intermediate value exceeds math.MaxInt32 (can happen with large pending + near-zero rate).
+	desiredRaw := math.Round(((float64(pending) / processingRate) / float64(monoVtx.Spec.Scale.GetTargetProcessingSeconds())) * float64(monoVtx.Status.ReadyReplicas))
+	if desiredRaw > math.MaxInt32 {
+		desiredRaw = math.MaxInt32
+	}
+	desired := int32(desiredRaw)
 
 	// we only scale down to zero when the pending and rate are both zero.
 	if desired == 0 {
 		desired = 1
 	}
-	if desired > int32(pending) && pending > 0 { // For some corner cases, we don't want to scale up to more than pending.
-		desired = int32(pending)
+	// For some corner cases, we don't want to scale up to more than pending.
+	// pending is int64 (matches the daemon's wrapperspb.Int64Value type), but desired
+	// replicas must fit in int32 per the Kubernetes replica spec, so we guard the cast.
+	if pending > 0 {
+		pendingCap := int32(math.MaxInt32)
+		if pending <= math.MaxInt32 {
+			pendingCap = int32(pending)
+		}
+		if desired > pendingCap {
+			desired = pendingCap
+		}
 	}
 	return desired
 }

@@ -2,6 +2,7 @@ use bytes::Bytes;
 use futures::stream::{self, StreamExt};
 use numaflow_monitor::runtime;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -12,11 +13,12 @@ use tracing::error;
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
-use crate::message::{Message, MessageHandle};
+use crate::message::{Message, MessageHandle, Offset};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_metric_labels, pipeline_metrics,
 };
+use crate::shared::otel;
 use crate::tracker::Tracker;
 use crate::transformer::user_defined::UserDefinedTransformer;
 use crate::{Result, mark_success};
@@ -161,6 +163,7 @@ impl Transformer {
         &self,
         msg_handles: Vec<MessageHandle>,
         cln_token: CancellationToken,
+        dispatch_parent_contexts: Option<&HashMap<Offset, opentelemetry::Context>>,
     ) -> Result<Vec<MessageHandle>> {
         let batch_start_time = tokio::time::Instant::now();
         let transform_handle = self.sender.clone();
@@ -206,15 +209,24 @@ impl Transformer {
             let transform_handle = transform_handle.clone();
             let tracker = tracker.clone();
             let hard_shutdown_token = hard_shutdown_token.clone();
+            let read_msg = msg_handle.message().clone();
+            let source_transform_parent = dispatch_parent_contexts
+                .and_then(|parent_contexts| parent_contexts.get(&read_msg.offset).cloned());
 
             async move {
-                let offset = msg_handle.message().offset.clone();
-                let transformed_messages = Transformer::transform(
-                    transform_handle,
-                    msg_handle.message().clone(),
-                    hard_shutdown_token,
-                )
-                .await?;
+                let offset = read_msg.offset.clone();
+                let source_transform_span = if otel::platform_spans_enabled() {
+                    otel::SourceTransformSpan::new(
+                        source_transform_parent,
+                        offset.to_string(),
+                        otel::TraceTopology::current(),
+                    )
+                } else {
+                    otel::SourceTransformSpan::none()
+                };
+                let transformed_messages =
+                    Transformer::transform(transform_handle, read_msg, hard_shutdown_token).await?;
+                source_transform_span.record_output_count(transformed_messages.len());
 
                 // update the tracker with the number of responses for each message
                 tracker
@@ -366,6 +378,17 @@ mod tests {
         }
     }
 
+    #[test]
+    fn source_transform_span_without_parent_is_inert() {
+        let span = otel::SourceTransformSpan::new(
+            None,
+            "msg-1".to_string(),
+            otel::TraceTopology::MonoVertex,
+        );
+        assert!(!span.is_active());
+        span.record_output_count(1);
+    }
+
     #[tokio::test]
     async fn transformer_operations() -> Result<()> {
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
@@ -489,7 +512,7 @@ mod tests {
         }
 
         let transformed_messages = transformer
-            .transform_batch(messages, CancellationToken::new())
+            .transform_batch(messages, CancellationToken::new(), None)
             .await?;
 
         for (i, transformed_message) in transformed_messages.iter().enumerate() {
@@ -570,6 +593,7 @@ mod tests {
             .transform_batch(
                 vec![MessageHandle::new(message, ack_tx)],
                 CancellationToken::new(),
+                None,
             )
             .await;
         assert!(result.is_err(), "Expected an error due to panic");

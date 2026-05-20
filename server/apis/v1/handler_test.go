@@ -1192,3 +1192,115 @@ func TestGetMonoVertexStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestGetPipelineStatus(t *testing.T) {
+	tests := []struct {
+		name     string
+		pipeline *dfv1.Pipeline
+		expected string
+	}{
+		{
+			name: "running and healthy",
+			pipeline: func() *dfv1.Pipeline {
+				pl := &dfv1.Pipeline{}
+				pl.Status.InitConditions()
+				pl.Status.MarkPhaseRunning()
+				pl.Status.MarkConfigured()
+				pl.Status.MarkDeployed()
+				pl.Status.MarkDaemonServiceHealthy()
+				pl.Status.MarkSideInputsManagersHealthy()
+				pl.Status.MarkVerticesHealthy()
+				return pl
+			}(),
+			expected: dfv1.PipelineStatusHealthy,
+		},
+		{
+			name: "running but vertices unhealthy",
+			pipeline: func() *dfv1.Pipeline {
+				pl := &dfv1.Pipeline{}
+				pl.Status.InitConditions()
+				pl.Status.MarkPhaseRunning()
+				pl.Status.MarkConfigured()
+				pl.Status.MarkDeployed()
+				pl.Status.MarkDaemonServiceHealthy()
+				pl.Status.MarkSideInputsManagersHealthy()
+				pl.Status.MarkVerticesUnHealthy("VertexNotReady", "vertex pod not running")
+				return pl
+			}(),
+			expected: dfv1.PipelineStatusWarning,
+		},
+		{
+			name: "running but pausing in progress",
+			pipeline: func() *dfv1.Pipeline {
+				pl := &dfv1.Pipeline{}
+				pl.Status.InitConditions()
+				pl.Status.MarkPhaseRunning()
+				pl.Status.MarkConfigured()
+				pl.Status.MarkDeployed()
+				pl.Status.MarkDaemonServiceHealthy()
+				pl.Status.MarkSideInputsManagersHealthy()
+				pl.Status.MarkVerticesHealthy()
+				pl.Spec.Lifecycle.DesiredPhase = dfv1.PipelinePhasePaused
+				return pl
+			}(),
+			expected: dfv1.PipelineStatusInactive,
+		},
+		{
+			name: "paused",
+			pipeline: func() *dfv1.Pipeline {
+				pl := &dfv1.Pipeline{}
+				pl.Status.InitConditions()
+				pl.Status.MarkPhasePaused()
+				return pl
+			}(),
+			expected: dfv1.PipelineStatusInactive,
+		},
+		{
+			name: "pausing",
+			pipeline: func() *dfv1.Pipeline {
+				pl := &dfv1.Pipeline{}
+				pl.Status.InitConditions()
+				pl.Status.MarkPhasePausing()
+				return pl
+			}(),
+			expected: dfv1.PipelineStatusInactive,
+		},
+		{
+			name: "failed",
+			pipeline: func() *dfv1.Pipeline {
+				pl := &dfv1.Pipeline{}
+				pl.Status.InitConditions()
+				pl.Status.MarkDeployFailed("DeployFailed", "deployment error")
+				return pl
+			}(),
+			expected: dfv1.PipelineStatusCritical,
+		},
+		{
+			name: "deleting",
+			pipeline: func() *dfv1.Pipeline {
+				pl := &dfv1.Pipeline{}
+				pl.Status.InitConditions()
+				pl.Status.MarkPhaseDeleting()
+				return pl
+			}(),
+			expected: dfv1.PipelineStatusDeleting,
+		},
+		{
+			name: "unknown phase",
+			pipeline: func() *dfv1.Pipeline {
+				pl := &dfv1.Pipeline{}
+				pl.Status.InitConditions()
+				return pl
+			}(),
+			expected: dfv1.PipelineStatusUnknown,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status, err := getPipelineStatus(tt.pipeline)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, status)
+		})
+	}
+}

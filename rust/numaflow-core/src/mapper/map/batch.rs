@@ -7,6 +7,7 @@ use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
 use crate::monovertex::bypass_router::MvtxBypassRouter;
+use crate::shared::otel;
 use crate::tracker::Tracker;
 use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
@@ -54,7 +55,7 @@ pub(in crate::mapper) struct MapBatchTask {
 impl MapBatchTask {
     /// Executes the batch map operation.
     /// Returns an error if any message in the batch fails to be processed.
-    pub async fn execute(self) -> Result<()> {
+    pub async fn execute(mut self) -> Result<()> {
         // Store parent message info for each message before sending to UDF
         let parent_infos: Vec<ParentMessageInfo> = self
             .msg_handles
@@ -62,20 +63,39 @@ impl MapBatchTask {
             .map(|rm| rm.message().into())
             .collect();
 
-        // Convert Messages to MapRequests
-        let requests: Vec<MapRequest> = self
-            .msg_handles
-            .iter()
-            .map(|rm| rm.message().clone().into())
-            .collect();
+        let results = {
+            // Create per-message map spans via the OTel SDK API.
+            // Each span's parent is that message's `vertex.process` context (from
+            // sys_metadata["tracing"]). We inject the map span context into
+            // sys_metadata["tracing_udf"] so the UDF creates its processing span as a child.
+            // Lexical scope ends spans after the batch UDF call.
+            //
+            // Invariant: tracing_udf is removed from result messages below; on error, input
+            // messages are dropped, so tracing_udf never propagates further.
+            //
+            // When no OTel layer is registered, `inject_stage_span` returns non-recording spans
+            // and the sys_metadata copy-on-write is skipped — no need to gate this call.
+            let _stage_spans = otel::inject_stage_spans!(
+                self.msg_handles.iter_mut().map(MessageHandle::message_mut),
+                otel::TraceTopology::current(),
+                otel::TraceStage::Map,
+            );
 
-        // Update read metrics for each request
-        for _ in &requests {
-            update_udf_read_metric(self.is_mono_vertex);
-        }
+            // Convert Messages to MapRequests
+            let requests: Vec<MapRequest> = self
+                .msg_handles
+                .iter()
+                .map(|rm| rm.message().clone().into())
+                .collect();
 
-        // Call the UDF and get results directly
-        let results = self.mapper.batch(requests, self.cln_token).await;
+            // Update read metrics for each request
+            for _ in &requests {
+                update_udf_read_metric(self.is_mono_vertex);
+            }
+
+            // Call the UDF and get results directly
+            self.mapper.batch(requests, self.cln_token).await
+        };
 
         for (result, (msg_handle, parent_info)) in results
             .into_iter()
@@ -83,12 +103,17 @@ impl MapBatchTask {
         {
             match result {
                 Ok(results) => {
-                    // Convert raw results to Messages using parent info
+                    // Convert raw results to Messages using parent info.
+                    // Remove tracing_udf from each result (map stage is done).
                     let mapped_messages: Vec<Message> = results
                         .into_iter()
                         .enumerate()
                         .map(|(i, result)| {
-                            UserDefinedMessage(result, &parent_info, i as i32).into()
+                            let mut mapped_msg: Message =
+                                UserDefinedMessage(result, &parent_info, i as i32).into();
+                            // No-op when no `tracing_udf` was injected (noop tracer path).
+                            mapped_msg.strip_tracing_udf();
+                            mapped_msg
                         })
                         .collect();
 

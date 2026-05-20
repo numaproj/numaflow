@@ -198,6 +198,10 @@ impl Tracker {
     }
 
     /// Inserts a new message into the Tracker with the given offset.
+    ///
+    /// Returns `Err(Error::DuplicateInflight)` if the offset is already being tracked for this
+    /// partition. Callers use this to detect intra-pod redeliveries and drop them before they
+    /// reach downstream components like UDFs or sinks.
     pub(crate) async fn insert(&self, message: &Message) -> Result<()> {
         let offset = message.offset.clone();
         let mut callback_info = None;
@@ -208,8 +212,11 @@ impl Tracker {
         let partition = offset.partition_idx();
         let mut state = self.state.write().await;
         let partition_entries = state.entries.entry(partition).or_default();
+        if partition_entries.contains_key(&offset) {
+            return Err(Error::DuplicateInflight(offset.to_string()));
+        }
         partition_entries.insert(
-            offset.clone(),
+            offset,
             TrackerEntry {
                 serving_callback_info: callback_info,
                 watermark: message.watermark,

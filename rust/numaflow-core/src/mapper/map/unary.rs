@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
+use crate::shared::otel;
 use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
@@ -59,7 +60,13 @@ impl MapUnaryTask {
     }
 
     /// Executes the unary map operation.
-    async fn execute(self) {
+    ///
+    /// Creates a per-message `numaflow.{topology}.map` span via the OTel SDK API, scoped to the
+    /// UDF call. The span's context is written into `sys_metadata["tracing_udf"]` so the UDF
+    /// sees it as the parent; we strip the key from result messages before they leave the mapper.
+    /// When no OTel layer is registered, span creation and metadata writes are skipped via the
+    /// noop tracer path.
+    async fn execute(mut self) {
         // Hold the permit until the task completes
         let _permit = self.permit;
 
@@ -67,30 +74,43 @@ impl MapUnaryTask {
         // parent_info contains offset, so we don't need to clone it separately
         let parent_info: ParentMessageInfo = self.msg_handle.message().into();
 
-        let request: MapRequest = self.msg_handle.message().clone().into();
-        update_udf_read_metric(self.shared_ctx.is_mono_vertex);
+        let results = {
+            // RAII map span: ends when this scope exits.
+            let _stage_span = otel::inject_stage_span(
+                self.msg_handle.message_mut(),
+                otel::TraceTopology::current(),
+                otel::TraceStage::Map,
+            );
 
-        // Call the UDF and get raw results
-        let results = match self
-            .mapper
-            .unary(request, self.shared_ctx.hard_shutdown_token.clone())
-            .await
-        {
-            Ok(results) => results,
-            Err(e) => {
-                error!(?e, offset = ?parent_info.offset, "failed to map message");
-                mark_failed!(self.msg_handle, &e);
-                let _ = self.shared_ctx.error_tx.send(e).await;
-                return;
+            let request: MapRequest = self.msg_handle.message().clone().into();
+            update_udf_read_metric(self.shared_ctx.is_mono_vertex);
+
+            match self
+                .mapper
+                .unary(request, self.shared_ctx.hard_shutdown_token.clone())
+                .await
+            {
+                Ok(results) => results,
+                Err(e) => {
+                    error!(?e, offset = ?parent_info.offset, "failed to map message");
+                    mark_failed!(self.msg_handle, &e);
+                    let _ = self.shared_ctx.error_tx.send(e).await;
+                    return;
+                }
             }
         };
 
-        // Convert raw results to Messages using parent info
-        // Pre-allocate with exact capacity to avoid reallocations
+        // Convert raw results to Messages using parent info.
+        // The UserDefinedMessage -> Message conversion copies sys_metadata from parent (so
+        // vertex.process context stays in "tracing"). We strip tracing_udf here because the map
+        // stage is done — downstream sink will inject its own tracing_udf. No-op when no key
+        // was injected.
         let results_len = results.len();
         let mut mapped_messages: Vec<Message> = Vec::with_capacity(results_len);
         for (i, result) in results.into_iter().enumerate() {
-            mapped_messages.push(UserDefinedMessage(result, &parent_info, i as i32).into());
+            let mut mapped_msg: Message = UserDefinedMessage(result, &parent_info, i as i32).into();
+            mapped_msg.strip_tracing_udf();
+            mapped_messages.push(mapped_msg);
         }
 
         update_udf_write_metric(

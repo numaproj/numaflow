@@ -117,6 +117,10 @@ pub(crate) mod typ;
 /// [Reduce]:https://numaflow.numaproj.io/user-guide/user-defined-functions/reduce/reduce/
 mod reduce;
 
+/// Eagerly populate the cached OTel `BoxedTracer` after the binary has registered its tracer
+/// provider. See [`shared::otel::init_tracer`] for the rationale.
+pub use shared::otel::init_tracer;
+
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();

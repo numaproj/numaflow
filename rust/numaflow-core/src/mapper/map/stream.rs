@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageHandle};
+use crate::shared::otel;
 use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
 use tokio::sync::{OwnedSemaphorePermit, mpsc};
@@ -58,9 +59,22 @@ impl MapStreamTask {
     }
 
     /// Executes the stream map operation.
-    async fn execute(self) {
+    ///
+    /// Creates a per-message `numaflow.{topology}.map` span via the OTel SDK API, scoped to the
+    /// full UDF interaction (request send through stream close). The span's context is written
+    /// into `sys_metadata["tracing_udf"]` so the UDF sees it as the parent; result messages have
+    /// the key stripped before leaving the mapper. When no OTel layer is registered, span
+    /// creation and metadata writes are skipped via the noop tracer path.
+    async fn execute(mut self) {
         // Hold the permit until the task completes
         let _permit = self.permit;
+
+        // RAII map span: covers the full stream lifecycle. Ends when `execute` returns.
+        let _stage_span = otel::inject_stage_span(
+            self.msg_handle.message_mut(),
+            otel::TraceTopology::current(),
+            otel::TraceStage::Map,
+        );
 
         // Store parent message info before sending to UDF
         // parent_info contains offset, so we don't need to clone it separately
@@ -88,12 +102,15 @@ impl MapStreamTask {
             let result = receiver.recv().await;
             match result {
                 Some(Ok(results)) => {
-                    // Convert raw results to Messages using parent info
+                    // Convert raw results to Messages using parent info.
+                    // Strip tracing_udf from each result (map stage is done; no-op when no key
+                    // was injected).
                     for result in results {
-                        let mapped_message: Message =
+                        let mut mapped_message: Message =
                             UserDefinedMessage(result, &parent_info, parent_info.current_index)
                                 .into();
                         parent_info.current_index += 1;
+                        mapped_message.strip_tracing_udf();
 
                         update_udf_write_only_metric(self.shared_ctx.is_mono_vertex);
 
@@ -349,6 +366,7 @@ impl UserDefinedStreamMap {
             let _ = tx
                 .send(Err(Error::Mapper("mapper closed".to_string())))
                 .await;
+            return rx;
         }
 
         // only insert if we are able to send the message to the server

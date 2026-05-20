@@ -1,6 +1,6 @@
 module github.com/numaproj/numaflow
 
-go 1.25.0
+go 1.25.10
 
 require (
 	github.com/IBM/sarama v1.46.3
