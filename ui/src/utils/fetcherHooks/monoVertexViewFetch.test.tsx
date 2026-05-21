@@ -1,5 +1,5 @@
 import React from "react";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { AppContext } from "../../App";
 import {
   getMonoVertexInternalStages,
@@ -94,7 +94,15 @@ const createResponse = (json: any) => ({
   ok: true,
 });
 
-const mockMonoVertexFetch = (spec: MonoVertexSpec) => {
+const mockMonoVertexFetch = (
+  spec: MonoVertexSpec,
+  options: {
+    getMonoVertexName?: () => string;
+    getReplicas?: () => number;
+  } = {}
+) => {
+  const getMonoVertexName = options.getMonoVertexName || (() => MONO_VERTEX_NAME);
+  const getReplicas = options.getReplicas || (() => 1);
   const mockedFetch = jest.fn((url: RequestInfo | URL) => {
     const requestUrl = String(url);
     if (requestUrl.includes("/pods")) {
@@ -103,7 +111,7 @@ const mockMonoVertexFetch = (spec: MonoVertexSpec) => {
           data: [
             {
               metadata: {
-                name: `${MONO_VERTEX_NAME}-0`,
+                name: `${getMonoVertexName()}-0`,
               },
             },
           ],
@@ -114,7 +122,7 @@ const mockMonoVertexFetch = (spec: MonoVertexSpec) => {
       return Promise.resolve(
         createResponse({
           data: {
-            monoVertex: MONO_VERTEX_NAME,
+            monoVertex: getMonoVertexName(),
             processingRates: {
               "1m": 1,
               "5m": 1,
@@ -129,11 +137,11 @@ const mockMonoVertexFetch = (spec: MonoVertexSpec) => {
         data: {
           monoVertex: {
             metadata: {
-              name: MONO_VERTEX_NAME,
+              name: getMonoVertexName(),
             },
             spec,
             status: {
-              replicas: 1,
+              replicas: getReplicas(),
             },
           },
         },
@@ -278,7 +286,7 @@ describe("getMonoVertexInternalStages", () => {
   });
 });
 
-describe("useMonoVertexViewFetch bypass edges", () => {
+describe("useMonoVertexViewFetch", () => {
   let originFetch: any;
 
   beforeEach(() => {
@@ -287,6 +295,57 @@ describe("useMonoVertexViewFetch bypass edges", () => {
 
   afterEach(() => {
     (global as any).fetch = originFetch;
+  });
+
+  it("recomputes vertices when pipelineId and replicas change", async () => {
+    const nextMonoVertexName = `${MONO_VERTEX_NAME}-next`;
+    const monoVertexName = { current: MONO_VERTEX_NAME };
+    const replicas = { current: 1 };
+    mockMonoVertexFetch(createSourceOnlySpec(), {
+      getMonoVertexName: () => monoVertexName.current,
+      getReplicas: () => replicas.current,
+    });
+    const addError = jest.fn();
+
+    const { result, rerender } = renderHook(
+      ({ pipelineId }) =>
+        useMonoVertexViewFetch("default", pipelineId, addError),
+      {
+        initialProps: { pipelineId: MONO_VERTEX_NAME },
+        wrapper,
+      }
+    );
+
+    await waitFor(() => {
+      expect(
+        result.current.vertices.find((node) => node.id === MONO_VERTEX_NAME)
+          ?.data?.podnum
+      ).toBe(1);
+    });
+
+    monoVertexName.current = nextMonoVertexName;
+    rerender({ pipelineId: nextMonoVertexName });
+
+    await waitFor(() => {
+      expect(
+        result.current.vertices.find((node) => node.id === nextMonoVertexName)
+      ).toBeDefined();
+    });
+    expect(
+      result.current.vertices.find((node) => node.id === MONO_VERTEX_NAME)
+    ).toBeUndefined();
+
+    replicas.current = 3;
+    await act(async () => {
+      result.current.refresh();
+    });
+
+    await waitFor(() => {
+      expect(
+        result.current.vertices.find((node) => node.id === nextMonoVertexName)
+          ?.data?.podnum
+      ).toBe(3);
+    });
   });
 
   it("generates transformer and udf bypass edges for the documented bypass flow", async () => {

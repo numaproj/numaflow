@@ -422,7 +422,7 @@ export const useMonoVertexViewFetch = (
       });
     }
     return newVertices;
-  }, [spec, monoVertexMetrics]);
+  }, [spec, monoVertexMetrics, pipelineId, replicas]);
 
   const edges = useMemo(() => {
     const newEdges: Edge[] = [];
