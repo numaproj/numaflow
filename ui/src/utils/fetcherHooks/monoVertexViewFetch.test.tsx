@@ -12,8 +12,10 @@ const getStage = (
   key: string
 ) => {
   const stage = stages.find((s) => s.key === key);
-  expect(stage).toBeDefined();
-  return stage!;
+  if (!stage) {
+    throw new Error(`Expected stage ${key} to be defined`);
+  }
+  return stage;
 };
 
 const baseSpec = {
