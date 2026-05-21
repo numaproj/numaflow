@@ -205,6 +205,10 @@ const Flow = (props: FlowProps) => {
     data,
     type,
   } = props;
+  const fitViewOptions = useMemo(
+    () => (type === "monoVertex" ? { padding: 0.25, maxZoom: 2.5 } : undefined),
+    [type]
+  );
 
   const onIsLockedChange = useCallback(
     () => setIsLocked((prevState) => !prevState),
@@ -214,9 +218,12 @@ const Flow = (props: FlowProps) => {
     () => setIsPanOnScrollLocked((prevState) => !prevState),
     []
   );
-  const onFullScreen = useCallback(() => fitView(), [zoomLevel]);
-  const onZoomIn = useCallback(() => zoomIn({ duration: 500 }), [zoomLevel]);
-  const onZoomOut = useCallback(() => zoomOut({ duration: 500 }), [zoomLevel]);
+  const onFullScreen = useCallback(
+    () => fitView(fitViewOptions),
+    [fitView, fitViewOptions]
+  );
+  const onZoomIn = useCallback(() => zoomIn({ duration: 500 }), [zoomIn]);
+  const onZoomOut = useCallback(() => zoomOut({ duration: 500 }), [zoomOut]);
 
   const [error, setError] = useState<string | undefined>(undefined);
   const [successMessage, setSuccessMessage] = useState<string | undefined>(
@@ -333,6 +340,7 @@ const Flow = (props: FlowProps) => {
       onEdgeMouseEnter={handleEdgeEnter}
       onEdgeMouseLeave={handleEdgeLeave}
       fitView
+      fitViewOptions={fitViewOptions}
       preventScrolling={!isLocked}
       panOnDrag={!isLocked}
       panOnScroll={isPanOnScrollLocked}
@@ -532,7 +540,7 @@ const Flow = (props: FlowProps) => {
               stroke="var(--border-primary)"
             />
             <text x="50%" y="50%" className={"zoom-percent-text"}>
-              {(((zoomLevel - 0.1) / 2) * 100).toFixed(0)}%
+              {(zoomLevel * 100).toFixed(0)}%
             </text>
           </g>
         </svg>

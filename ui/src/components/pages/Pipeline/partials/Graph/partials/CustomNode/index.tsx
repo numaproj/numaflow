@@ -278,41 +278,47 @@ const CustomNode: FC<NodeProps> = ({
             <img src={stage.icon} alt={`${data?.monoVertexStage}-container`} />
           </Box>
           {bypassTargets.length > 0 && (
-            <img
-              src={input0}
-              alt={`${data?.monoVertexStage}-bypass`}
-              className={"mono-vertex-bypass-handle"}
-              onMouseOver={(e) => {
-                e.stopPropagation();
-                setHidden((prevState) => {
-                  const updatedState: any = {};
-                  Object.keys(prevState).forEach((key) => {
-                    updatedState[key] = true;
+            <Tooltip
+              title={<Box className={"node-tooltip"}>Bypass</Box>}
+              arrow
+              placement={"bottom"}
+            >
+              <img
+                src={input0}
+                alt={`${data?.monoVertexStage}-bypass`}
+                className={"mono-vertex-bypass-handle"}
+                onMouseOver={(e) => {
+                  e.stopPropagation();
+                  setHidden((prevState) => {
+                    const updatedState: any = {};
+                    Object.keys(prevState).forEach((key) => {
+                      updatedState[key] = true;
+                    });
+                    bypassTargets.forEach((target: any) => {
+                      updatedState[target.id] = false;
+                    });
+                    return updatedState;
                   });
+                  const updatedHighlightedState: any = {};
                   bypassTargets.forEach((target: any) => {
-                    updatedState[target.id] = false;
+                    updatedHighlightedState[target.id] = true;
                   });
-                  return updatedState;
-                });
-                const updatedHighlightedState: any = {};
-                bypassTargets.forEach((target: any) => {
-                  updatedHighlightedState[target.id] = true;
-                });
-                setHighlightValues(updatedHighlightedState);
-              }}
-              onMouseOut={(e) => {
-                e.stopPropagation();
-                setHidden((prevState) => {
-                  const updatedState: any = {};
-                  Object.keys(prevState).forEach((key) => {
-                    updatedState[key] = true;
+                  setHighlightValues(updatedHighlightedState);
+                }}
+                onMouseOut={(e) => {
+                  e.stopPropagation();
+                  setHidden((prevState) => {
+                    const updatedState: any = {};
+                    Object.keys(prevState).forEach((key) => {
+                      updatedState[key] = true;
+                    });
+                    return updatedState;
                   });
-                  return updatedState;
-                });
-                setHighlightValues({});
-              }}
-              onClick={(e) => e.stopPropagation()}
-            />
+                  setHighlightValues({});
+                }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </Tooltip>
           )}
           <Handle
             type="source"
