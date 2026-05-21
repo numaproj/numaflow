@@ -265,7 +265,7 @@ const PARTITION_REFRESH_INTERVAL: Duration = Duration::from_secs(10);
 /// reaches zero. `remaining` is `None` when tracing is disabled, in which case this is a no-op.
 fn decrement_remaining_dispatch(
     remaining: Option<&mut HashMap<Offset, usize>>,
-    dispatch_spans: &mut otel::SourceDispatchSpans,
+    source_trace: &mut otel::SourceTraceState,
     offset: &Offset,
 ) {
     let Some(rem) = remaining else { return };
@@ -273,7 +273,7 @@ fn decrement_remaining_dispatch(
         *count -= 1;
         if *count == 0 {
             rem.remove(offset);
-            dispatch_spans.end(offset);
+            source_trace.end(offset);
         }
     }
 }
@@ -559,15 +559,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 // (e.g., transformer error that breaks the outer loop) have their spans
                 // closed by the RAII guard when the map is dropped.
                 //
-                let topology = otel::TraceTopology::current();
-                let platform_spans_enabled = otel::platform_spans_enabled();
-                let mut dispatch_spans = otel::SourceDispatchSpans::new();
-                // Read-only parent contexts for `source.transform`; `dispatch_spans` remains the
-                // sole owner responsible for ending `source.dispatch`.
-                let should_track_dispatch_parents =
-                    platform_spans_enabled && self.transformer.is_some();
-                let mut dispatch_parent_contexts =
-                    should_track_dispatch_parents.then(|| HashMap::with_capacity(msgs_len));
+                let mut source_trace =
+                    otel::SourceTraceState::new(msgs_len, self.transformer.is_some());
 
                 for mut message in messages.drain(..) {
                     Self::record_partition_read_metrics(
@@ -606,25 +599,13 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     //   source read latency.
                     // - Inject `vertex.process` context into sys_metadata["tracing"] so that map
                     //   and sink become siblings of `source.dispatch` under `vertex.process`.
-                    let platform_span = if platform_spans_enabled {
-                        let spans = otel::start_source_message_spans(&mut message, topology);
-                        if let Some(ref mut parent_contexts) = dispatch_parent_contexts {
-                            parent_contexts
-                                .insert(message.offset.clone(), spans.dispatch_cx.clone());
-                        }
-                        dispatch_spans.insert(message.offset.clone(), spans.dispatch_cx);
-                        Some(spans.platform_span)
-                    } else {
-                        None
-                    };
+                    let platform_span = source_trace.start_message(&mut message);
 
                     let (ack_tx, ack_rx) = oneshot::channel();
                     // store the ack receiver in the batch to invoke ack later.
                     ack_batch.push((message.offset.clone(), ack_rx));
                     let msg_handle = MessageHandle::new(message, ack_tx);
-                    if let Some(span) = platform_span {
-                        msg_handle.set_pipeline_span(span);
-                    }
+                    msg_handle.set_pipeline_span(platform_span);
                     msg_handles.push(msg_handle);
                 }
 
@@ -661,6 +642,9 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 // be streaming because transformation should be fast operation.
                 // transform_batch accepts MessageHandles and returns MessageHandles with ack
                 // tracking preserved — flatmap outputs share the parent's ack handle.
+                // Move the read-only transform parents out of SourceTraceState; the dispatch span
+                // contexts remain owned by SourceTraceState for lifecycle cleanup.
+                let dispatch_parent_contexts = source_trace.take_transform_parents();
                 let mut msg_handles = match self.transformer.as_mut() {
                     None => msg_handles,
                     Some(transformer) => match transformer
@@ -684,25 +668,18 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     },
                 };
 
-                // Per-input-offset countdown driving `dispatch_spans.end()` once the last
+                // Per-input-offset countdown driving `source.dispatch` end once the last
                 // downstream message for that input is bypassed or sent. Only built when
-                // tracing is on; otherwise `dispatch_spans` is empty and the bookkeeping
-                // would do no useful work.
-                let mut remaining_dispatches: Option<HashMap<Offset, usize>> =
-                    platform_spans_enabled.then(|| {
-                        let mut map = HashMap::with_capacity(msg_handles.len());
-                        for msg_handle in &msg_handles {
-                            *map.entry(msg_handle.message().offset.clone())
-                                .or_insert(0usize) += 1;
-                        }
-                        map
-                    });
+                // tracing is on; otherwise SourceTraceState skips bookkeeping that would
+                // do no useful work.
+                let mut remaining_dispatches = source_trace
+                    .remaining_dispatches(msg_handles.iter().map(|m| &m.message().offset));
 
                 // If a source input produced no downstream messages (for example, the transformer
                 // filtered it out), close its dispatch span now so it does not stay open for the
                 // rest of the batch's watermark/send work.
                 if let Some(ref rem) = remaining_dispatches {
-                    dispatch_spans.end_without_outputs(rem);
+                    source_trace.end_without_outputs(rem);
                 }
 
                 if let Some(watermark_handle) = self.watermark_handle.as_mut() {
@@ -736,7 +713,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                             None => {
                                 decrement_remaining_dispatch(
                                     remaining_dispatches.as_mut(),
-                                    &mut dispatch_spans,
+                                    &mut source_trace,
                                     &offset,
                                 );
                                 continue;
@@ -753,11 +730,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
                     decrement_remaining_dispatch(
                         remaining_dispatches.as_mut(),
-                        &mut dispatch_spans,
+                        &mut source_trace,
                         &offset,
                     );
                 }
-                // dispatch_spans drops here — any remaining (shouldn't happen on success path)
+                // source_trace drops here — any remaining dispatch spans (shouldn't happen on success path)
                 // get closed by the RAII Drop impl.
             }
 
