@@ -7,9 +7,6 @@ spec:
     udsource:
       container:
         image: quay.io/numaio/numaflow-rs/simple-source:stable
-    transformer:
-      container:
-        image: quay.io/numaio/numaflow-rs/source-transformer-now:stable
   udf:
     container:
       image: quay.io/numaio/numaflow-go/map-cat:stable
