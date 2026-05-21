@@ -2,80 +2,45 @@ apiVersion: numaflow.numaproj.io/v1alpha1
 kind: MonoVertex
 metadata:
   name: mono-vertex-bypass
-# Topology (matches docs/assets/mvtx-bypass-bypass-flow.png):
-#
-#                            ┌──> Sink (primary)
-#   Src ──> Trf ──> Map ─────┼──> FB   (fallback)
-#                            └──> ONS  (onSuccess)
-#
-# Either the transformer (Trf) or the map UDF (Map) can attach tags
-# to a message. The bypass router then routes that message directly
-# to one (or more) of the three sinks based on the rules under
-# spec.bypass, skipping any stages in between.
 spec:
   source:
     udsource:
       container:
         image: quay.io/numaio/numaflow-rs/simple-source:stable
-    # Trf — source transformer. May tag messages, e.g. mark a payload
-    # as "corrupted" so it bypasses Map and goes straight to FB.
     transformer:
       container:
         image: quay.io/numaio/numaflow-rs/source-transformer-now:stable
-  # Map — optional map UDF. May also tag messages; tags emitted here
-  # are evaluated by the bypass router before the message reaches
-  # any sink.
   udf:
     container:
       image: quay.io/numaio/numaflow-go/map-cat:stable
       imagePullPolicy: IfNotPresent
   sink:
-    # Sink — primary sink. Must be a user-defined sink for fallback /
-    # onSuccess to be allowed alongside it.
+    # Primary sink with optional fallback and onSuccess sinks.
     udsink:
       container:
         image: quay.io/numaio/numaflow-rs/sink-log:stable
-    # FB — fallback / DLQ sink. Receives messages tagged for fallback,
-    # plus any messages the primary sink fails on after retries are
-    # exhausted.
     fallback:
       udsink:
         container:
           image: quay.io/numaio/numaflow-go/fb-sink-log:stable
-    # ONS — onSuccess sink. Normally invoked after a successful primary
-    # write when the primary udsink response opts in; with bypass it
-    # can also be targeted directly via tags from Trf or Map.
     onSuccess:
       udsink:
         container:
           image: quay.io/numaio/numaflow-go/fb-sink-log:stable
-  # Bypass routing rules. Each entry corresponds to one of the colored
-  # dashed arrows in mvtx-bypass-bypass-flow.png.
-  #
-  # Supported operators: and | or | not   (defaults to "or").
+  # Route tagged messages directly to the matching sink destination.
   bypass:
-    # Red dashed arrow — "fallback bypass".
-    # Trf or Map tags a message "corrupted" or "parse-error" -> FB,
-    # skipping the primary sink entirely.
     fallback:
       tags:
         operator: or
         values:
           - corrupted
           - parse-error
-    # Green dashed arrow — "onSuccess bypass".
-    # Messages tagged with both "audit" AND "high-priority" are
-    # side-written to ONS without waiting for a primary success.
     onSuccess:
       tags:
         operator: and
         values:
           - audit
           - high-priority
-    # Black dashed arrow — "primary sink bypass".
-    # Only write to the primary Sink when the message is NOT tagged
-    # "drop". Messages tagged "drop" that don't match any other rule
-    # are discarded at the primary sink stage.
     sink:
       tags:
         operator: not
