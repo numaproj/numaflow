@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
-use numaflow_monitor::runtime;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 use tokio::sync::mpsc;
@@ -127,23 +126,21 @@ impl Sink for UserDefinedSink {
             if response.status.is_some_and(|s| s.eot) {
                 if responses.len() != num_requests {
                     error!(
-                        "received EOT message before all responses are received, we will wait indefinitely for the remaining responses"
+                        "received EOT message before all responses are received, gracefully exiting"
                     );
                     critical_error!(VERTEX_TYPE_SINK, "eot_received_from_sink");
-                    // persist the error for debugging
-                    runtime::persist_application_error(Status::with_details(
+                    return Err(Error::Grpc(Box::new(Status::with_details(
                         Code::Internal,
                         "UDF_PARTIAL_RESPONSE(udsink)",
                         Bytes::from_static(
-                            b"received End-Of-Transmission (EOT) before all responses are received from the ud-sink,\
-                            we will wait indefinitely for the remaining responses. This indicates that there is a bug \
-                            in the user-code. Please check whether you are accidentally skipping the messages.",
+                            b"received End-Of-Transmission (EOT) before all responses are received from the ud-sink. \
+                            This indicates that there is a bug in the user-code. Please check whether you are accidentally \
+                            skipping the messages.",
                         ),
-                    ));
+                    ))));
                 } else {
                     break;
                 }
-                continue;
             }
             responses.extend(
                 response

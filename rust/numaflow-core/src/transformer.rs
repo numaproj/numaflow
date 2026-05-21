@@ -1,6 +1,5 @@
 use bytes::Bytes;
 use futures::stream::{self, StreamExt};
-use numaflow_monitor::runtime;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -138,19 +137,17 @@ impl Transformer {
         };
 
         if response.is_empty() {
-            error!("received empty response from server (transformer), we will wait indefinitely");
+            error!("received empty response from server (transformer), gracefully exiting");
             critical_error!(VERTEX_TYPE_SOURCE, "eot_received_from_transformer");
-            // persist the error for debugging
-            runtime::persist_application_error(Status::with_details(
+            return Err(Error::Grpc(Box::new(Status::with_details(
                 Code::Internal,
                 "UDF_PARTIAL_RESPONSE(transformer)",
                 Bytes::from_static(
-                    b"received End-Of-Transmission (EOT) before all responses are received from the transformer,\
-                            we will wait indefinitely for the remaining responses. This indicates that there is a bug \
-                            in the user-code. Please check whether you are accidentally skipping the messages.",
+                    b"received End-Of-Transmission (EOT) before all responses are received from the transformer. \
+                    This indicates that there is a bug in the user-code. Please check whether you are accidentally \
+                    skipping the messages.",
                 ),
-            ));
-            futures::future::pending::<()>().await;
+            ))));
         }
 
         Ok(response)

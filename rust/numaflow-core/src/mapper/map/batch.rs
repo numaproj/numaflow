@@ -2,6 +2,7 @@ use super::{
     ParentMessageInfo, UserDefinedMessage, create_response_stream, update_udf_error_metric,
     update_udf_process_time_metric, update_udf_read_metric, update_udf_write_metric,
 };
+use bytes::Bytes;
 use crate::config::is_mono_vertex;
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
@@ -241,8 +242,21 @@ impl UserDefinedBatchMap {
                             .map
                             .is_empty()
                         {
-                            error!("received EOT but not all responses have been received");
+                            error!("received EOT but not all responses have been received, gracefully exiting");
                             critical_error!(VERTEX_TYPE_MAP_UDF, "eot_received_from_map");
+                            Self::broadcast_error(
+                                &sender_map,
+                                tonic::Status::with_details(
+                                    tonic::Code::Internal,
+                                    "UDF_PARTIAL_RESPONSE(batch_map)",
+                                    Bytes::from_static(
+                                        b"received End-Of-Transmission (EOT) before all responses are received from the batch map. \
+                                        This indicates that there is a bug in the user-code. Please check whether you are accidentally \
+                                        skipping the messages.",
+                                    ),
+                                ),
+                            );
+                            return;
                         }
                         update_udf_process_time_metric(is_mono_vertex());
                         continue;
