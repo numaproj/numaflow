@@ -1,4 +1,10 @@
-import { getMonoVertexInternalStages } from "./monoVertexViewFetch";
+import React from "react";
+import { renderHook, waitFor } from "@testing-library/react";
+import { AppContext } from "../../App";
+import {
+  getMonoVertexInternalStages,
+  useMonoVertexViewFetch,
+} from "./monoVertexViewFetch";
 import { MonoVertexSpec } from "../../types/declarations/pipeline";
 
 const getStage = (
@@ -80,6 +86,86 @@ const createUdfOnlySpec = (
     ...createSourceOnlySpec(sinkOverrides),
     udf: baseSpec.udf,
   } as MonoVertexSpec);
+
+const MONO_VERTEX_NAME = "mono-vertex-bypass";
+
+const createResponse = (json: any) => ({
+  json: jest.fn().mockResolvedValue(json),
+  ok: true,
+});
+
+const mockMonoVertexFetch = (spec: MonoVertexSpec) => {
+  const mockedFetch = jest.fn((url: RequestInfo | URL) => {
+    const requestUrl = String(url);
+    if (requestUrl.includes("/pods")) {
+      return Promise.resolve(
+        createResponse({
+          data: [
+            {
+              metadata: {
+                name: `${MONO_VERTEX_NAME}-0`,
+              },
+            },
+          ],
+        }) as any
+      );
+    }
+    if (requestUrl.includes("/metrics")) {
+      return Promise.resolve(
+        createResponse({
+          data: {
+            monoVertex: MONO_VERTEX_NAME,
+            processingRates: {
+              "1m": 1,
+              "5m": 1,
+              "15m": 1,
+            },
+          },
+        }) as any
+      );
+    }
+    return Promise.resolve(
+      createResponse({
+        data: {
+          monoVertex: {
+            metadata: {
+              name: MONO_VERTEX_NAME,
+            },
+            spec,
+            status: {
+              replicas: 1,
+            },
+          },
+        },
+      }) as any
+    );
+  });
+  (global as any).fetch = mockedFetch;
+  return mockedFetch;
+};
+
+const wrapper = ({ children }: { children: React.ReactNode }) => (
+  <AppContext.Provider
+    value={
+      {
+        systemInfo: undefined,
+        systemInfoError: undefined,
+        host: "",
+        namespace: "",
+        isPlugin: false,
+        isReadOnly: false,
+        disableMetricsCharts: false,
+        setSidebarProps: jest.fn(),
+        errors: [],
+        addError: jest.fn(),
+        clearErrors: jest.fn(),
+        setUserInfo: jest.fn(),
+      } as any
+    }
+  >
+    {children}
+  </AppContext.Provider>
+);
 
 describe("getMonoVertexInternalStages", () => {
   it("centers source and sink when there are no optional stages", () => {
@@ -189,5 +275,255 @@ describe("getMonoVertexInternalStages", () => {
     expect(fallback.y).toBe(106);
     expect(onSuccess.y).toBeLessThan(sink.y);
     expect(fallback.y).toBeGreaterThan(sink.y);
+  });
+});
+
+describe("useMonoVertexViewFetch bypass edges", () => {
+  let originFetch: any;
+
+  beforeEach(() => {
+    originFetch = (global as any).fetch;
+  });
+
+  afterEach(() => {
+    (global as any).fetch = originFetch;
+  });
+
+  it("generates transformer and udf bypass edges for the documented bypass flow", async () => {
+    const spec = createSpec(
+      {
+        fallback: {
+          udsink: {
+            container: {
+              image: "fallback-image",
+            },
+          },
+        },
+        onSuccess: {
+          udsink: {
+            container: {
+              image: "on-success-image",
+            },
+          },
+        },
+      },
+      {
+        bypass: {
+          fallback: {
+            tags: {
+              operator: "or",
+              values: ["corrupted", "parse-error"],
+            },
+          },
+          onSuccess: {
+            tags: {
+              operator: "and",
+              values: ["audit", "high-priority"],
+            },
+          },
+          sink: {
+            tags: {
+              operator: "not",
+              values: ["drop"],
+            },
+          },
+        },
+      }
+    );
+    mockMonoVertexFetch(spec);
+
+    const { result } = renderHook(
+      () => useMonoVertexViewFetch("default", MONO_VERTEX_NAME, jest.fn()),
+      { wrapper }
+    );
+
+    await waitFor(() => {
+      expect(
+        result.current.edges.filter((edge) => edge.data?.monoVertexBypassEdge)
+      ).toHaveLength(6);
+    });
+
+    const bypassEdges = result.current.edges.filter(
+      (edge) => edge.data?.monoVertexBypassEdge
+    );
+
+    expect(bypassEdges.map((edge) => edge.id).sort()).toEqual(
+      [
+        `${MONO_VERTEX_NAME}-transformer-${MONO_VERTEX_NAME}-sink-bypass`,
+        `${MONO_VERTEX_NAME}-transformer-${MONO_VERTEX_NAME}-onSuccess-bypass`,
+        `${MONO_VERTEX_NAME}-transformer-${MONO_VERTEX_NAME}-fallback-bypass`,
+        `${MONO_VERTEX_NAME}-udf-${MONO_VERTEX_NAME}-sink-bypass`,
+        `${MONO_VERTEX_NAME}-udf-${MONO_VERTEX_NAME}-onSuccess-bypass`,
+        `${MONO_VERTEX_NAME}-udf-${MONO_VERTEX_NAME}-fallback-bypass`,
+      ].sort()
+    );
+    expect(
+      bypassEdges.some((edge) => edge.data?.bypassSourceStage === "source")
+    ).toBe(false);
+    expect(bypassEdges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: `${MONO_VERTEX_NAME}-transformer-${MONO_VERTEX_NAME}-fallback-bypass`,
+          source: `${MONO_VERTEX_NAME}-transformer`,
+          target: `${MONO_VERTEX_NAME}-fallback`,
+          sourceHandle: "bypass",
+          targetHandle: "bypass",
+          data: expect.objectContaining({
+            monoVertexBypassEdge: true,
+            bypassSourceStage: "transformer",
+            bypassTarget: "fallback",
+            operator: "or",
+            values: ["corrupted", "parse-error"],
+          }),
+        }),
+        expect.objectContaining({
+          id: `${MONO_VERTEX_NAME}-udf-${MONO_VERTEX_NAME}-onSuccess-bypass`,
+          source: `${MONO_VERTEX_NAME}-udf`,
+          target: `${MONO_VERTEX_NAME}-onSuccess`,
+          sourceHandle: "bypass",
+          targetHandle: "bypass",
+          data: expect.objectContaining({
+            monoVertexBypassEdge: true,
+            bypassSourceStage: "udf",
+            bypassTarget: "onSuccess",
+            operator: "and",
+            values: ["audit", "high-priority"],
+          }),
+        }),
+      ])
+    );
+
+    const transformerNode = result.current.vertices.find(
+      (node) => node.id === `${MONO_VERTEX_NAME}-transformer`
+    );
+    const udfNode = result.current.vertices.find(
+      (node) => node.id === `${MONO_VERTEX_NAME}-udf`
+    );
+    const sourceNode = result.current.vertices.find(
+      (node) => node.id === `${MONO_VERTEX_NAME}-source`
+    );
+
+    expect(transformerNode?.data?.bypassTargets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: `${MONO_VERTEX_NAME}-transformer-${MONO_VERTEX_NAME}-fallback-bypass`,
+          source: "transformer",
+          target: "fallback",
+        }),
+        expect.objectContaining({
+          id: `${MONO_VERTEX_NAME}-transformer-${MONO_VERTEX_NAME}-onSuccess-bypass`,
+          source: "transformer",
+          target: "onSuccess",
+        }),
+        expect.objectContaining({
+          id: `${MONO_VERTEX_NAME}-transformer-${MONO_VERTEX_NAME}-sink-bypass`,
+          source: "transformer",
+          target: "sink",
+        }),
+      ])
+    );
+    expect(udfNode?.data?.bypassTargets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: `${MONO_VERTEX_NAME}-udf-${MONO_VERTEX_NAME}-fallback-bypass`,
+          source: "udf",
+          target: "fallback",
+        }),
+        expect.objectContaining({
+          id: `${MONO_VERTEX_NAME}-udf-${MONO_VERTEX_NAME}-onSuccess-bypass`,
+          source: "udf",
+          target: "onSuccess",
+        }),
+        expect.objectContaining({
+          id: `${MONO_VERTEX_NAME}-udf-${MONO_VERTEX_NAME}-sink-bypass`,
+          source: "udf",
+          target: "sink",
+        }),
+      ])
+    );
+    expect(sourceNode?.data?.bypassTargets).toEqual([]);
+  });
+
+  it("generates only source-to-existing-target bypass edge when source is the only source stage", async () => {
+    const spec = {
+      ...createSourceOnlySpec(),
+      bypass: {
+        sink: {
+          tags: {
+            values: ["route-sink"],
+          },
+        },
+        fallback: {
+          tags: {
+            values: ["route-fallback"],
+          },
+        },
+        onSuccess: {
+          tags: {
+            values: ["route-on-success"],
+          },
+        },
+      },
+    } as MonoVertexSpec;
+    mockMonoVertexFetch(spec);
+
+    const { result } = renderHook(
+      () => useMonoVertexViewFetch("default", MONO_VERTEX_NAME, jest.fn()),
+      { wrapper }
+    );
+
+    await waitFor(() => {
+      expect(
+        result.current.edges.filter((edge) => edge.data?.monoVertexBypassEdge)
+      ).toHaveLength(1);
+    });
+
+    const [bypassEdge] = result.current.edges.filter(
+      (edge) => edge.data?.monoVertexBypassEdge
+    );
+
+    expect(bypassEdge).toEqual(
+      expect.objectContaining({
+        id: `${MONO_VERTEX_NAME}-source-${MONO_VERTEX_NAME}-sink-bypass`,
+        source: `${MONO_VERTEX_NAME}-source`,
+        target: `${MONO_VERTEX_NAME}-sink`,
+        sourceHandle: "bypass",
+        targetHandle: "bypass",
+        data: expect.objectContaining({
+          monoVertexBypassEdge: true,
+          bypassSourceStage: "source",
+          bypassTarget: "sink",
+          operator: "or",
+          values: ["route-sink"],
+        }),
+      })
+    );
+    expect(
+      result.current.edges.some(
+        (edge) =>
+          edge.id ===
+          `${MONO_VERTEX_NAME}-source-${MONO_VERTEX_NAME}-fallback-bypass`
+      )
+    ).toBe(false);
+    expect(
+      result.current.edges.some(
+        (edge) =>
+          edge.id ===
+          `${MONO_VERTEX_NAME}-source-${MONO_VERTEX_NAME}-onSuccess-bypass`
+      )
+    ).toBe(false);
+    expect(
+      result.current.vertices.find(
+        (node) => node.id === `${MONO_VERTEX_NAME}-source`
+      )?.data?.bypassTargets
+    ).toEqual([
+      expect.objectContaining({
+        id: `${MONO_VERTEX_NAME}-source-${MONO_VERTEX_NAME}-sink-bypass`,
+        source: "source",
+        target: "sink",
+        operator: "or",
+        values: ["route-sink"],
+      }),
+    ]);
   });
 });
