@@ -721,7 +721,7 @@ impl PipelineConfig {
                         ))
                     })
                 })
-                .unwrap_or(batch_size as usize),
+                .unwrap_or(concurrency),
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
             graceful_shutdown_time: Duration::from_secs(graceful_shutdown_time_secs),
             pipeline_name: Box::leak(pipeline_name.into_boxed_str()),
