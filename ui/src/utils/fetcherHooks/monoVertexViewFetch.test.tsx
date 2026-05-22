@@ -401,7 +401,7 @@ describe("useMonoVertexViewFetch", () => {
     await waitFor(() => {
       expect(
         result.current.edges.filter((edge) => edge.data?.monoVertexBypassEdge)
-      ).toHaveLength(6);
+      ).toHaveLength(5);
     });
 
     const bypassEdges = result.current.edges.filter(
@@ -413,13 +413,18 @@ describe("useMonoVertexViewFetch", () => {
         `${MONO_VERTEX_NAME}-transformer-${MONO_VERTEX_NAME}-sink-bypass`,
         `${MONO_VERTEX_NAME}-transformer-${MONO_VERTEX_NAME}-onSuccess-bypass`,
         `${MONO_VERTEX_NAME}-transformer-${MONO_VERTEX_NAME}-fallback-bypass`,
-        `${MONO_VERTEX_NAME}-udf-${MONO_VERTEX_NAME}-sink-bypass`,
         `${MONO_VERTEX_NAME}-udf-${MONO_VERTEX_NAME}-onSuccess-bypass`,
         `${MONO_VERTEX_NAME}-udf-${MONO_VERTEX_NAME}-fallback-bypass`,
       ].sort()
     );
     expect(
       bypassEdges.some((edge) => edge.data?.bypassSourceStage === "source")
+    ).toBe(false);
+    expect(
+      bypassEdges.some(
+        (edge) =>
+          edge.id === `${MONO_VERTEX_NAME}-udf-${MONO_VERTEX_NAME}-sink-bypass`
+      )
     ).toBe(false);
     expect(bypassEdges).toEqual(
       expect.arrayContaining([
@@ -495,17 +500,18 @@ describe("useMonoVertexViewFetch", () => {
           source: "udf",
           target: "onSuccess",
         }),
-        expect.objectContaining({
-          id: `${MONO_VERTEX_NAME}-udf-${MONO_VERTEX_NAME}-sink-bypass`,
-          source: "udf",
-          target: "sink",
-        }),
       ])
     );
+    expect(
+      udfNode?.data?.bypassTargets?.some(
+        (target: any) =>
+          target.id === `${MONO_VERTEX_NAME}-udf-${MONO_VERTEX_NAME}-sink-bypass`
+      )
+    ).toBe(false);
     expect(sourceNode?.data?.bypassTargets).toEqual([]);
   });
 
-  it("generates only source-to-existing-target bypass edge when source is the only source stage", async () => {
+  it("skips source-to-sink bypass edge when source-to-sink direct edge exists", async () => {
     const spec = {
       ...createSourceOnlySpec(),
       bypass: {
@@ -536,29 +542,15 @@ describe("useMonoVertexViewFetch", () => {
     await waitFor(() => {
       expect(
         result.current.edges.filter((edge) => edge.data?.monoVertexBypassEdge)
-      ).toHaveLength(1);
+      ).toHaveLength(0);
     });
 
-    const [bypassEdge] = result.current.edges.filter(
-      (edge) => edge.data?.monoVertexBypassEdge
-    );
-
-    expect(bypassEdge).toEqual(
-      expect.objectContaining({
-        id: `${MONO_VERTEX_NAME}-source-${MONO_VERTEX_NAME}-sink-bypass`,
-        source: `${MONO_VERTEX_NAME}-source`,
-        target: `${MONO_VERTEX_NAME}-sink`,
-        sourceHandle: "bypass",
-        targetHandle: "bypass",
-        data: expect.objectContaining({
-          monoVertexBypassEdge: true,
-          bypassSourceStage: "source",
-          bypassTarget: "sink",
-          operator: "or",
-          values: ["route-sink"],
-        }),
-      })
-    );
+    expect(
+      result.current.edges.some(
+        (edge) =>
+          edge.id === `${MONO_VERTEX_NAME}-source-${MONO_VERTEX_NAME}-sink-bypass`
+      )
+    ).toBe(false);
     expect(
       result.current.edges.some(
         (edge) =>
@@ -577,14 +569,6 @@ describe("useMonoVertexViewFetch", () => {
       result.current.vertices.find(
         (node) => node.id === `${MONO_VERTEX_NAME}-source`
       )?.data?.bypassTargets
-    ).toEqual([
-      expect.objectContaining({
-        id: `${MONO_VERTEX_NAME}-source-${MONO_VERTEX_NAME}-sink-bypass`,
-        source: "source",
-        target: "sink",
-        operator: "or",
-        values: ["route-sink"],
-      }),
-    ]);
+    ).toEqual([]);
   });
 });

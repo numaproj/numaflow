@@ -26,6 +26,58 @@ const MONO_VERTEX_STAGE_Y = 76;
 const MONO_VERTEX_ONSUCCESS_FAN_OUT_Y = 44;
 const MONO_VERTEX_FALLBACK_FAN_OUT_Y = 106;
 
+const getMonoVertexStageNodeName = (name: string, stage: string) =>
+  `${name}-${stage}`;
+
+const getMonoVertexInternalEdgeKey = (source: string, target: string) =>
+  `${source}->${target}`;
+
+const getMonoVertexMainStages = (spec: MonoVertexSpec) => [
+  "source",
+  ...(spec?.source?.transformer ? ["transformer"] : []),
+  ...(spec?.udf ? ["udf"] : []),
+  "sink",
+];
+
+const getMonoVertexBypassSourceStages = (spec: MonoVertexSpec) => {
+  const bypassSourceStages = [
+    ...(spec?.source?.transformer ? ["transformer"] : []),
+    ...(spec?.udf ? ["udf"] : []),
+  ];
+  if (bypassSourceStages.length === 0) {
+    bypassSourceStages.push("source");
+  }
+  return bypassSourceStages;
+};
+
+const getMonoVertexDirectInternalEdges = (
+  spec: MonoVertexSpec,
+  name: string
+) => {
+  const directInternalEdges = new Set<string>();
+  const addDirectInternalEdge = (sourceStage: string, targetStage: string) => {
+    directInternalEdges.add(
+      getMonoVertexInternalEdgeKey(
+        getMonoVertexStageNodeName(name, sourceStage),
+        getMonoVertexStageNodeName(name, targetStage)
+      )
+    );
+  };
+  const mainStages = getMonoVertexMainStages(spec);
+  mainStages.forEach((stage, idx) => {
+    const targetStage = mainStages[idx + 1];
+    if (!targetStage) return;
+    addDirectInternalEdge(stage, targetStage);
+  });
+  if (spec?.sink?.onSuccess) {
+    addDirectInternalEdge("sink", "onSuccess");
+  }
+  if (spec?.sink?.fallback) {
+    addDirectInternalEdge("sink", "fallback");
+  }
+  return directInternalEdges;
+};
+
 export const getMonoVertexInternalStages = (spec: MonoVertexSpec) => {
   const hasOnSuccess = !!spec?.sink?.onSuccess;
   const hasFallback = !!spec?.sink?.fallback;
@@ -365,13 +417,8 @@ export const useMonoVertexViewFetch = (
       newVertices.push(newNode);
 
       const internalStages = getMonoVertexInternalStages(spec);
-      const bypassSourceStages = [
-        ...(spec?.source?.transformer ? ["transformer"] : []),
-        ...(spec?.udf ? ["udf"] : []),
-      ];
-      if (bypassSourceStages.length === 0) {
-        bypassSourceStages.push("source");
-      }
+      const bypassSourceStages = getMonoVertexBypassSourceStages(spec);
+      const directInternalEdges = getMonoVertexDirectInternalEdges(spec, name);
       const bypassTargetStages = MONO_VERTEX_BYPASS_TARGETS.filter(
         (targetStage) => {
           const rule = spec?.bypass?.[targetStage];
@@ -384,20 +431,28 @@ export const useMonoVertexViewFetch = (
       );
       const bypassTargetsByStage = bypassSourceStages.reduce(
         (targetsByStage, sourceStage) => {
-          targetsByStage[sourceStage] = bypassTargetStages.map((targetStage) => {
-            const source = `${name}-${sourceStage}`;
-            const target = `${name}-${targetStage}`;
-            const rule = spec?.bypass?.[targetStage];
-            return {
-              id: `${source}-${target}-bypass`,
-              target: targetStage,
-              source: sourceStage,
-              operator: rule?.tags?.operator || "or",
-              values: Array.isArray(rule?.tags?.values)
-                ? rule?.tags?.values
-                : [],
-            };
-          });
+          targetsByStage[sourceStage] = bypassTargetStages
+            .filter((targetStage) => {
+              const source = getMonoVertexStageNodeName(name, sourceStage);
+              const target = getMonoVertexStageNodeName(name, targetStage);
+              return !directInternalEdges.has(
+                getMonoVertexInternalEdgeKey(source, target)
+              );
+            })
+            .map((targetStage) => {
+              const source = getMonoVertexStageNodeName(name, sourceStage);
+              const target = getMonoVertexStageNodeName(name, targetStage);
+              const rule = spec?.bypass?.[targetStage];
+              return {
+                id: `${source}-${target}-bypass`,
+                target: targetStage,
+                source: sourceStage,
+                operator: rule?.tags?.operator || "or",
+                values: Array.isArray(rule?.tags?.values)
+                  ? rule?.tags?.values
+                  : [],
+              };
+            });
           return targetsByStage;
         },
         {} as Record<string, any[]>
@@ -440,13 +495,10 @@ export const useMonoVertexViewFetch = (
         height: 6,
         color: "var(--mono-vertex-bypass-color)",
       };
-      const mainStages = [
-        "source",
-        ...(spec?.source?.transformer ? ["transformer"] : []),
-        ...(spec?.udf ? ["udf"] : []),
-        "sink",
-      ];
+      const mainStages = getMonoVertexMainStages(spec);
+      const directInternalEdges = new Set<string>();
       const pushInternalEdge = (source: string, target: string) => {
+        directInternalEdges.add(getMonoVertexInternalEdgeKey(source, target));
         newEdges.push({
           id: `${source}-${target}`,
           source,
@@ -474,13 +526,7 @@ export const useMonoVertexViewFetch = (
       if (spec?.sink?.fallback) {
         pushInternalEdge(`${name}-sink`, `${name}-fallback`);
       }
-      const bypassSourceStages = [
-        ...(spec?.source?.transformer ? ["transformer"] : []),
-        ...(spec?.udf ? ["udf"] : []),
-      ];
-      if (bypassSourceStages.length === 0) {
-        bypassSourceStages.push("source");
-      }
+      const bypassSourceStages = getMonoVertexBypassSourceStages(spec);
       bypassSourceStages.forEach((sourceStage) => {
         MONO_VERTEX_BYPASS_TARGETS.forEach((targetStage) => {
           const rule = spec?.bypass?.[targetStage];
@@ -491,6 +537,12 @@ export const useMonoVertexViewFetch = (
           if (!rule?.tags || !targetExists) return;
           const bypassSource = `${name}-${sourceStage}`;
           const target = `${name}-${targetStage}`;
+          if (
+            directInternalEdges.has(
+              getMonoVertexInternalEdgeKey(bypassSource, target)
+            )
+          )
+            return;
           newEdges.push({
             id: `${bypassSource}-${target}-bypass`,
             source: bypassSource,
