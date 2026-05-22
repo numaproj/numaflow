@@ -17,6 +17,7 @@ import monoVertex from "../../../../../../../images/monoVertex.svg";
 import transformer from "../../../../../../../images/transformer.svg";
 import udf from "../../../../../../../images/map.png";
 import fallback from "../../../../../../../images/fallback.png";
+import bypass from "../../../../../../../images/bypass.svg";
 import input0 from "../../../../../../../images/input0.svg";
 import input1 from "../../../../../../../images/input1.svg";
 import input2 from "../../../../../../../images/input2.svg";
@@ -251,90 +252,90 @@ const CustomNode: FC<NodeProps> = ({
       ? data.bypassTargets
       : [];
     return (
-      <Tooltip
-        title={<Box className={"node-tooltip"}>{stage.tooltip}</Box>}
-        arrow
-        placement={"bottom"}
+      <Box
+        className={"mono-vertex-internal-node"}
+        data-testid={data?.name}
+        onClick={(e) => e.stopPropagation()}
       >
-        <Box
-          className={"mono-vertex-internal-node"}
-          data-testid={data?.name}
-          onClick={(e) => e.stopPropagation()}
+        <Handle
+          type="target"
+          id="in"
+          position={Position.Left}
+          className={`target-handle-${data?.name}`}
+          isConnectable={isConnectable}
+        />
+        <Handle
+          type="target"
+          id="bypass"
+          position={Position.Left}
+          isConnectable={isConnectable}
+        />
+        <Tooltip
+          title={<Box className={"node-tooltip"}>{stage.tooltip}</Box>}
+          arrow
+          placement={"top"}
         >
-          <Handle
-            type="target"
-            id="in"
-            position={Position.Left}
-            className={`target-handle-${data?.name}`}
-            isConnectable={isConnectable}
-          />
-          <Handle
-            type="target"
-            id="bypass"
-            position={Position.Left}
-            isConnectable={isConnectable}
-          />
           <Box className={"mono-vertex-internal-node-icon"}>
             <img src={stage.icon} alt={`${data?.monoVertexStage}-container`} />
           </Box>
-          {bypassTargets.length > 0 && (
-            <Tooltip
-              title={<Box className={"node-tooltip"}>Bypass</Box>}
-              arrow
-              placement={"bottom"}
-            >
-              <img
-                src={input0}
-                alt={`${data?.monoVertexStage}-bypass`}
-                className={"mono-vertex-bypass-handle"}
-                onMouseOver={(e) => {
-                  e.stopPropagation();
-                  setHidden((prevState) => {
-                    const updatedState: any = {};
-                    Object.keys(prevState).forEach((key) => {
-                      updatedState[key] = true;
-                    });
-                    bypassTargets.forEach((target: any) => {
-                      updatedState[target.id] = false;
-                    });
-                    return updatedState;
+        </Tooltip>
+        {bypassTargets.length > 0 && (
+          <Tooltip
+            title={<Box className={"node-tooltip"}>Bypass</Box>}
+            arrow
+            placement={"bottom"}
+          >
+            <img
+              src={bypass}
+              alt={`${data?.monoVertexStage}-bypass`}
+              className={"mono-vertex-bypass-handle"}
+              onMouseOver={(e) => {
+                e.stopPropagation();
+                setHidden((prevState) => {
+                  const updatedState: any = {};
+                  Object.keys(prevState).forEach((key) => {
+                    updatedState[key] = true;
                   });
-                  const updatedHighlightedState: any = {};
                   bypassTargets.forEach((target: any) => {
-                    updatedHighlightedState[target.id] = true;
+                    updatedState[target.id] = false;
                   });
-                  setHighlightValues(updatedHighlightedState);
-                }}
-                onMouseOut={(e) => {
-                  e.stopPropagation();
-                  setHidden((prevState) => {
-                    const updatedState: any = {};
-                    Object.keys(prevState).forEach((key) => {
-                      updatedState[key] = true;
-                    });
-                    return updatedState;
+                  return updatedState;
+                });
+                const updatedHighlightedState: any = {};
+                bypassTargets.forEach((target: any) => {
+                  updatedHighlightedState[target.id] = true;
+                });
+                setHighlightValues(updatedHighlightedState);
+              }}
+              onMouseOut={(e) => {
+                e.stopPropagation();
+                setHidden((prevState) => {
+                  const updatedState: any = {};
+                  Object.keys(prevState).forEach((key) => {
+                    updatedState[key] = true;
                   });
-                  setHighlightValues({});
-                }}
-                onClick={(e) => e.stopPropagation()}
-              />
-            </Tooltip>
-          )}
-          <Handle
-            type="source"
-            id="out"
-            position={Position.Right}
-            className={`source-handle-${data?.name}`}
-            isConnectable={isConnectable}
-          />
-          <Handle
-            type="source"
-            id="bypass"
-            position={Position.Bottom}
-            isConnectable={isConnectable}
-          />
-        </Box>
-      </Tooltip>
+                  return updatedState;
+                });
+                setHighlightValues({});
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </Tooltip>
+        )}
+        <Handle
+          type="source"
+          id="out"
+          position={Position.Right}
+          className={`source-handle-${data?.name}`}
+          isConnectable={isConnectable}
+        />
+        <Handle
+          type="source"
+          id="bypass"
+          position={Position.Bottom}
+          isConnectable={isConnectable}
+        />
+      </Box>
     );
   }
 

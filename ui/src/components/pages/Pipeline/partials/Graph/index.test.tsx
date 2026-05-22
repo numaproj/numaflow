@@ -555,6 +555,7 @@ describe("Graph", () => {
       "Sink",
       "OnSuccess",
       "Fallback",
+      "Bypass",
     ].forEach((legendItem) => {
       expect(screen.getByText(legendItem)).toBeInTheDocument();
     });

@@ -69,6 +69,7 @@ import transformer from "../../../../../images/transformer.svg";
 import onSuccess from "../../../../../images/onSuccess.png";
 import fallback from "../../../../../images/fallback.png";
 import monoVertex from "../../../../../images/monoVertex.svg";
+import bypass from "../../../../../images/bypass.svg";
 import input from "../../../../../images/input0.svg";
 import generator from "../../../../../images/generator0.svg";
 
@@ -599,7 +600,7 @@ const Flow = (props: FlowProps) => {
                   <div className={"legend-text"}>Fallback</div>
                 </div>
                 <div className={"legend-title"}>
-                  <img src={input} width={22} alt={"bypass"} />
+                  <img src={bypass} width={22} alt={"bypass"} />
                   <div className={"legend-text"}>Bypass</div>
                 </div>
               </>
