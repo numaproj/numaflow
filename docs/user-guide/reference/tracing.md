@@ -146,9 +146,8 @@ Supported sampler values:
 Examples:
 
 ```yaml
-# Drop all root traces. Child spans with a remotely sampled parent context
-# are still recorded. To fully disable tracing, unset OTLP endpoints or
-# set OTEL_SDK_DISABLED=true.
+# Drop all traces unconditionally, including child spans with a sampled remote parent.
+# To also disable SDK overhead, unset OTLP endpoints or set OTEL_SDK_DISABLED=true.
 - name: OTEL_TRACES_SAMPLER
   value: "always_off"
 ```
