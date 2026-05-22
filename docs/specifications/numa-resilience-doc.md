@@ -6,7 +6,7 @@
 | Tracking issues | [#3367](https://github.com/numaproj/numaflow/issues/3367) (umbrella), [#3368](https://github.com/numaproj/numaflow/issues/3368) (this proposal) |
 | Related future work | [#3369](https://github.com/numaproj/numaflow/issues/3369), [#3370](https://github.com/numaproj/numaflow/issues/3370), [#3371](https://github.com/numaproj/numaflow/issues/3371) |
 | Reduce vertices | Excluded from automatic reconnect in Phase 1 pending durable-state design. |
-| Target Release | 1.9
+| Target Release | 1.9 |
 
 ## Context
 
@@ -50,7 +50,7 @@ Reconnect reuses the startup flow:
 - Run the typed readiness check.
 - Reopen the BiDi stream and handshake.
 
-Retries use the existing infinite one-second retry pattern and are bounded only by the normal shutdown cancellation token.
+Retries use the existing infinite one-second retry pattern and are bounded only by the normal shutdown cancellation token. A failure of `sdk_server_info` during reconnect is itself retried at the same one-second cadence; the reconnect helper does not surface it as a hard error.
 
 ### Map Clients
 
@@ -107,7 +107,7 @@ Runtime errors continue to be written under `/var/numaflow/runtime/application-e
 Two persistence changes are required:
 
 - Remove the `OnceLock` gate so more than one error per process can be recorded.
-- Replace second-resolution filenames with collision-safe names: `<unix_nanos>-<sequence>-numa.json`, with matching unique temp filenames.
+- Replace second-resolution filenames with collision-safe names: `<unix_nanos>-<sequence>-numa.json`, and switch the per-call temp filename from the shared `current-numa.json` to a matching unique `<unix_nanos>-<sequence>-numa.tmp` so concurrent writers do not race.
 
 The existing ten-file rotation cap remains.
 
@@ -138,7 +138,7 @@ The only conditional case is source NAK reconnect, which depends on the existing
 - Poison messages can loop forever. This is accepted for Phase 1.
 - Reconnect storms are possible during sustained UDF outages. The retry interval stays at the current one-second startup retry cadence.
 - Reduce still restarts. This is an explicit carve-out.
-- SDK NAK behavior must be audited in numaflow-go, numaflow-java, numaflow-python, and numaflow-rs.
+- SDK NAK behavior must be audited in numaflow-go, numaflow-java, numaflow-python, and numaflow-rs **as a pre-merge gate**. Any non-compliant SDK is either remediated first or carved out from the resilience guarantee.
 
 ## Testing
 
