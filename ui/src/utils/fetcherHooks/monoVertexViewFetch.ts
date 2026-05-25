@@ -447,6 +447,8 @@ export const useMonoVertexViewFetch = (
                 id: `${source}-${target}-bypass`,
                 target: targetStage,
                 source: sourceStage,
+                sourceNodeId: source,
+                targetNodeId: target,
                 operator: rule?.tags?.operator || "or",
                 values: Array.isArray(rule?.tags?.values)
                   ? rule?.tags?.values

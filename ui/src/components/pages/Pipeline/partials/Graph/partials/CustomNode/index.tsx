@@ -251,9 +251,14 @@ const CustomNode: FC<NodeProps> = ({
     const bypassTargets = Array.isArray(data?.bypassTargets)
       ? data.bypassTargets
       : [];
+    const monoVertexBypassDimStyle =
+      highlightValues.monoVertexBypass && !highlightValues[data?.name]
+        ? { opacity: 0.35 }
+        : {};
     return (
       <Box
         className={"mono-vertex-internal-node"}
+        style={monoVertexBypassDimStyle}
         data-testid={data?.name}
         onClick={(e) => e.stopPropagation()}
       >
@@ -301,9 +306,18 @@ const CustomNode: FC<NodeProps> = ({
                   });
                   return updatedState;
                 });
-                const updatedHighlightedState: any = {};
+                const updatedHighlightedState: any = {
+                  monoVertexBypass: true,
+                  [data?.name]: true,
+                };
                 bypassTargets.forEach((target: any) => {
                   updatedHighlightedState[target.id] = true;
+                  if (target.sourceNodeId) {
+                    updatedHighlightedState[target.sourceNodeId] = true;
+                  }
+                  if (target.targetNodeId) {
+                    updatedHighlightedState[target.targetNodeId] = true;
+                  }
                 });
                 setHighlightValues(updatedHighlightedState);
               }}

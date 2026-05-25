@@ -475,6 +475,8 @@ describe("useMonoVertexViewFetch", () => {
           id: `${MONO_VERTEX_NAME}-transformer-${MONO_VERTEX_NAME}-fallback-bypass`,
           source: "transformer",
           target: "fallback",
+          sourceNodeId: `${MONO_VERTEX_NAME}-transformer`,
+          targetNodeId: `${MONO_VERTEX_NAME}-fallback`,
         }),
         expect.objectContaining({
           id: `${MONO_VERTEX_NAME}-transformer-${MONO_VERTEX_NAME}-onSuccess-bypass`,
@@ -499,6 +501,8 @@ describe("useMonoVertexViewFetch", () => {
           id: `${MONO_VERTEX_NAME}-udf-${MONO_VERTEX_NAME}-onSuccess-bypass`,
           source: "udf",
           target: "onSuccess",
+          sourceNodeId: `${MONO_VERTEX_NAME}-udf`,
+          targetNodeId: `${MONO_VERTEX_NAME}-onSuccess`,
         }),
       ])
     );

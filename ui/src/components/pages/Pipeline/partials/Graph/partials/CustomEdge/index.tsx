@@ -191,8 +191,15 @@ const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
     ) {
       style["opacity"] = 0.5;
     }
+    if (
+      highlightValues.monoVertexBypass &&
+      (data?.monoVertexInternalEdge || data?.monoVertexBypassEdge) &&
+      !highlightValues[id]
+    ) {
+      style["opacity"] = 0.25;
+    }
     return style;
-  }, [highlightValues, sideInputNodes, sideInputEdges]);
+  }, [highlightValues, sideInputNodes, sideInputEdges, data, id]);
 
   const edgeStyle = useMemo(() => {
     const isMonoVertexEdge =
@@ -207,7 +214,12 @@ const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
         : data?.monoVertexInternalEdge
         ? "#8D9096"
         : getColor,
-      strokeWidth: isMonoVertexEdge ? 1.2 : 2,
+      strokeWidth:
+        data?.monoVertexBypassEdge
+          ? 1.2
+          : isMonoVertexEdge
+          ? 1.2
+          : 2,
       ...(data?.monoVertexBypassEdge
         ? {
             animation: "monoVertexBypassFlow 0.8s linear infinite",
@@ -218,7 +230,7 @@ const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
         : {}),
       ...commonStyle,
     };
-  }, [highlightValues, getColor, data, commonStyle]);
+  }, [highlightValues, getColor, data, commonStyle, id]);
 
   const getMinWM = useMemo(() => {
     if (data?.edgeWatermark?.watermarks) {

@@ -234,6 +234,8 @@ describe("Graph screen test", () => {
                   id: "mono-vertex-bypass-udf-mono-vertex-bypass-fallback-bypass",
                   target: "fallback",
                   source: "udf",
+                  sourceNodeId: "mono-vertex-bypass-udf",
+                  targetNodeId: "mono-vertex-bypass-fallback",
                   operator: "or",
                   values: ["corrupted", "parse-error"],
                 },
@@ -241,6 +243,8 @@ describe("Graph screen test", () => {
                   id: "mono-vertex-bypass-udf-mono-vertex-bypass-onSuccess-bypass",
                   target: "onSuccess",
                   source: "udf",
+                  sourceNodeId: "mono-vertex-bypass-udf",
+                  targetNodeId: "mono-vertex-bypass-onSuccess",
                   operator: "and",
                   values: ["audit", "high-priority"],
                 },
@@ -277,6 +281,10 @@ describe("Graph screen test", () => {
       "mono-vertex-bypass-udf-mono-vertex-bypass-onSuccess-bypass": false,
     });
     expect(setHighlightValues).toHaveBeenCalledWith({
+      monoVertexBypass: true,
+      "mono-vertex-bypass-udf": true,
+      "mono-vertex-bypass-fallback": true,
+      "mono-vertex-bypass-onSuccess": true,
       "mono-vertex-bypass-udf-mono-vertex-bypass-fallback-bypass": true,
       "mono-vertex-bypass-udf-mono-vertex-bypass-onSuccess-bypass": true,
     });
@@ -287,6 +295,45 @@ describe("Graph screen test", () => {
       screen.queryByText("Bypass from udf to onSuccess")
     ).not.toBeInTheDocument();
     fireEvent.mouseOut(screen.getByAltText("udf-bypass"));
+    expect(setHighlightValues).toHaveBeenLastCalledWith({});
+  });
+
+  it("dims unrelated MonoVertex internal vertex during bypass highlight", async () => {
+    render(
+      <HighlightContext.Provider
+        value={{
+          highlightValues: { monoVertexBypass: true },
+          setHighlightValues: jest.fn(),
+          sideInputNodes: new Map(),
+          sideInputEdges: new Map(),
+          setHidden: jest.fn(),
+        }}
+      >
+        <ReactFlowProvider>
+          <CustomNode
+            data={{
+              type: "monoVertexInternal",
+              name: "mono-vertex-bypass-source",
+              monoVertexStage: "source",
+              bypassTargets: [],
+            }}
+            id={"mono-vertex-bypass-source"}
+            selected={false}
+            type={""}
+            zIndex={0}
+            isConnectable={false}
+            xPos={0}
+            yPos={0}
+            dragging={false}
+          />
+        </ReactFlowProvider>
+      </HighlightContext.Provider>
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("mono-vertex-bypass-source")).toHaveStyle(
+        "opacity: 0.35"
+      )
+    );
   });
 
   it("Source vertex with error", async () => {
