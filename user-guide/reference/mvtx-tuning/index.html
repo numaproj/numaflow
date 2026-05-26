@@ -1664,9 +1664,53 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          MonoVertex Tuning
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         MonoVertex Tuning
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#concurrency-and-read-ahead" class="md-nav__link">
+    Concurrency and read-ahead
+  </a>
+  
+    <nav class="md-nav" aria-label="Concurrency and read-ahead">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#strictly-sequential-processing" class="md-nav__link">
+    Strictly sequential processing
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -2692,6 +2736,34 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#concurrency-and-read-ahead" class="md-nav__link">
+    Concurrency and read-ahead
+  </a>
+  
+    <nav class="md-nav" aria-label="Concurrency and read-ahead">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#strictly-sequential-processing" class="md-nav__link">
+    Strictly sequential processing
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2713,8 +2785,9 @@
 <p>Each <a href="../../../core-concepts/monovertex/">MonoVertex</a> keeps running the cycle of reading data from a data source,
 processing the data, and writing to a sink. There are some parameters can be adjusted for this cycle.</p>
 <ul>
-<li><code>readBatchSize</code> - How many messages to read for each cycle, defaults to <code>500</code>. It works together with <code>readTimeout</code> during a read operation, concluding when either limit is reached first.</li>
+<li><code>readBatchSize</code> - How many messages to read for each cycle, defaults to <code>500</code>. It works together with <code>readTimeout</code> during a read operation, concluding when either limit is reached first. <strong><code>readBatchSize</code> controls only how many messages are fetched in a single read call; it is not a cap on how many messages may be in-flight (use <code>concurrency</code> for that).</strong></li>
 <li><code>readTimeout</code> - Read timeout from the source, defaults to <code>1s</code>.</li>
+<li><code>concurrency</code> - Maximum number of messages that can be actively in-flight (read but not yet acknowledged) at any given time. Defaults to the value of <code>readBatchSize</code>. See <a href="#concurrency-and-read-ahead">Concurrency and read-ahead</a> below.</li>
 </ul>
 <p>These parameters can be customized under <code>spec.limits</code> as below.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
@@ -2725,7 +2798,32 @@ processing the data, and writing to a sink. There are some parameters can be adj
 <span class="w">  </span><span class="nt">limits</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">readBatchSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span>
 <span class="w">    </span><span class="nt">readTimeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">500ms</span>
+<span class="w">    </span><span class="nt">concurrency</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">500</span>
 </code></pre></div>
+<h2 id="concurrency-and-read-ahead">Concurrency and read-ahead<a class="headerlink" href="#concurrency-and-read-ahead" title="Permanent link">&para;</a></h2>
+<p>Throughput on a MonoVertex is governed by two independent knobs:</p>
+<ul>
+<li><strong><code>readBatchSize</code></strong> — the size of an individual read from the source. The data plane keeps using this batch size for every read; it does <strong>not</strong> cap how many messages may be in-flight at the same time.</li>
+<li><strong><code>concurrency</code></strong> — the maximum number of messages that may be in-flight (read but not yet acknowledged). With <code>concurrency</code> slots free, the data plane is willing to process that many messages in parallel through the UDF / sink chain.</li>
+</ul>
+<p>Because a MonoVertex always reads from a source, <strong>read-ahead is disabled by default</strong>. This keeps source ordering and the cost of re-reads low: the data plane fully drains the current batch (acks every message) before issuing the next read. The hard upper bound on in-flight messages is therefore <strong><code>min(concurrency, readBatchSize)</code></strong>.</p>
+<p>If you want to overlap reads with processing — at the cost of more in-flight messages and looser ordering at the source — set <code>NUMAFLOW_READ_AHEAD=true</code> on the container template:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MonoVertex</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-mvtx</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">limits</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">readBatchSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span>
+<span class="w">    </span><span class="nt">concurrency</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">500</span>
+<span class="w">  </span><span class="nt">containerTemplate</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">env</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NUMAFLOW_READ_AHEAD</span>
+<span class="w">        </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+</code></pre></div>
+<p>With read-ahead enabled the upper bound on in-flight messages becomes <strong><code>min(concurrency, readBatchSize)</code></strong>.</p>
+<h3 id="strictly-sequential-processing">Strictly sequential processing<a class="headerlink" href="#strictly-sequential-processing" title="Permanent link">&para;</a></h3>
+<p>To force a MonoVertex to process one message at a time in source order, set <code>concurrency: 1</code>. Read-ahead is already off by default, so no other change is required.</p>
 
               
             </article>
