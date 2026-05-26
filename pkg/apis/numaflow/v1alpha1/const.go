@@ -155,7 +155,7 @@ const (
 	// Default: "false" for source vertices (MonoVertex and Pipeline source vertex) so that re-reads
 	// on failure stay cheap and source ordering is preserved; "true" for all other Pipeline vertices
 	// (Map / Sink / Reduce) to keep inter-step buffers fully utilized.
-	EnvReadAhead = "READ_AHEAD"
+	EnvReadAhead = "NUMAFLOW_READ_AHEAD"
 
 	NumaflowRustBinary          = "/bin/numaflow-rs"
 	PathVarRun                  = "/var/run/numaflow"

@@ -32,7 +32,7 @@ Throughput on a MonoVertex is governed by two independent knobs:
 
 Because a MonoVertex always reads from a source, **read-ahead is disabled by default**. This keeps source ordering and the cost of re-reads low: the data plane fully drains the current batch (acks every message) before issuing the next read. The hard upper bound on in-flight messages is therefore **`min(concurrency, readBatchSize)`**.
 
-If you want to overlap reads with processing — at the cost of more in-flight messages and looser ordering at the source — set `READ_AHEAD=true` on the container template:
+If you want to overlap reads with processing — at the cost of more in-flight messages and looser ordering at the source — set `NUMAFLOW_READ_AHEAD=true` on the container template:
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -45,7 +45,7 @@ spec:
     concurrency: 500
   containerTemplate:
     env:
-      - name: READ_AHEAD
+      - name: NUMAFLOW_READ_AHEAD
         value: "true"
 ```
 

@@ -8396,8 +8396,9 @@ parallel. By default, read-ahead is disabled on source vertices (so
 re-reads on failure stay cheap and source ordering is preserved) and
 enabled on Map/Sink/ Reduce vertices. To force strictly sequential
 processing, set <code>concurrency</code> to 1 and disable read-ahead via
-the <code>READ_AHEAD</code> environment variable on the vertex’s
-container template. Can be overridden by the vertex’s limit settings.
+the <code>NUMAFLOW_READ_AHEAD</code> environment variable on the
+vertex’s container template. Can be overridden by the vertex’s limit
+settings.
 </p>
 
 </td>
@@ -14543,8 +14544,8 @@ controls how many messages can be processed in parallel. It overrides
 the settings from pipeline limits. By default, read-ahead is disabled on
 source vertices and enabled on Map/Sink/Reduce vertices. To force
 strictly sequential processing, set <code>concurrency</code> to 1 and
-disable read-ahead via the <code>READ_AHEAD</code> environment variable
-on the vertex’s container template.
+disable read-ahead via the <code>NUMAFLOW_READ_AHEAD</code> environment
+variable on the vertex’s container template.
 </p>
 
 </td>

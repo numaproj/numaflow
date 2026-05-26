@@ -719,7 +719,7 @@ type PipelineLimits struct {
 	// messages can be processed in parallel. By default, read-ahead is disabled on source vertices
 	// (so re-reads on failure stay cheap and source ordering is preserved) and enabled on Map/Sink/
 	// Reduce vertices. To force strictly sequential processing, set `concurrency` to 1 and disable
-	// read-ahead via the `READ_AHEAD` environment variable on the vertex's container template.
+	// read-ahead via the `NUMAFLOW_READ_AHEAD` environment variable on the vertex's container template.
 	// Can be overridden by the vertex's limit settings.
 	// +kubebuilder:default=500
 	// +kubebuilder:validation:Minimum=1

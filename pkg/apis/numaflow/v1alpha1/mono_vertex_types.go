@@ -367,7 +367,7 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 	encodedMonoVertexSpec := base64.StdEncoding.EncodeToString(monoVtxBytes)
 	envVars := []corev1.EnvVar{
 		{Name: EnvMonoVertexObject, Value: encodedMonoVertexSpec},
-		// Read-ahead is disabled by default for MonoVertex. Users can override by setting READ_AHEAD
+		// Read-ahead is disabled by default for MonoVertex. Users can override by setting NUMAFLOW_READ_AHEAD
 		// in `containerTemplate.env`; values placed in `req.Env` win because they are appended last.
 		{Name: EnvReadAhead, Value: "false"},
 	}

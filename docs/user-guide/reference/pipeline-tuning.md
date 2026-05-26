@@ -82,7 +82,7 @@ The data plane runs in one of two modes:
 | Read-ahead **enabled** | Map / Sink / Reduce vertices | The data plane keeps reading new batches until the in-flight count hits `concurrency`. Once full, it may pre-fetch one more batch and hold it ready, so a completed message is replaced immediately. The hard upper bound on in-flight is therefore **`concurrency + readBatchSize`**. |
 | Read-ahead **disabled** | Source vertices (and MonoVertex, which is always source-driven) | The data plane drains the current batch fully before issuing the next read. This keeps source ordering / re-read cost low. The upper bound on in-flight is **`min(concurrency, readBatchSize)`**. |
 
-Read-ahead is controlled by the `READ_AHEAD` environment variable. The controller injects a sensible default per vertex type, but you can override it on a per-vertex basis via the container template:
+Read-ahead is controlled by the `NUMAFLOW_READ_AHEAD` environment variable. The controller injects a sensible default per vertex type, but you can override it on a per-vertex basis via the container template:
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -100,7 +100,7 @@ spec:
         concurrency: 500   # up to 500 messages may be processing in parallel
       containerTemplate:
         env:
-          - name: READ_AHEAD
+          - name: NUMAFLOW_READ_AHEAD
             value: "false" # turn read-ahead off for this Map vertex
 ```
 
@@ -109,7 +109,7 @@ spec:
 To force a vertex to process one message at a time in the order it was read, set:
 
 - `concurrency: 1`, and
-- `READ_AHEAD=false` (already the default for source vertices and MonoVertex).
+- `NUMAFLOW_READ_AHEAD=false` (already the default for source vertices and MonoVertex).
 
 For pipeline-wide ordered processing, see [Ordered Processing](ordered-processing.md).
 

@@ -262,7 +262,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	// Read-ahead is disabled by default for source vertices (matching MonoVertex behavior, where
 	// re-reading from the source is comparatively cheap and ordering at the source matters), and
 	// enabled by default for non-source vertices to keep the inter-step buffers fully utilized.
-	// Users can override by setting READ_AHEAD in `containerTemplate.env`; values placed in
+	// Users can override by setting NUMAFLOW_READ_AHEAD in `containerTemplate.env`; values placed in
 	// `req.Env` win because they are appended last.
 	defaultReadAhead := "true"
 	if v.IsASource() {
@@ -779,7 +779,7 @@ type VertexLimits struct {
 	// messages can be processed in parallel. It overrides the settings from pipeline limits.
 	// By default, read-ahead is disabled on source vertices and enabled on Map/Sink/Reduce vertices.
 	// To force strictly sequential processing, set `concurrency` to 1 and disable read-ahead via the
-	// `READ_AHEAD` environment variable on the vertex's container template.
+	// `NUMAFLOW_READ_AHEAD` environment variable on the vertex's container template.
 	// +kubebuilder:validation:Minimum=1
 	// +optional
 	Concurrency *uint64 `json:"concurrency,omitempty" protobuf:"varint,6,opt,name=concurrency"`

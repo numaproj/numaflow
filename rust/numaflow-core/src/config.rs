@@ -16,11 +16,11 @@ const ENV_CALLBACK_CONCURRENCY: &str = "NUMAFLOW_CALLBACK_CONCURRENCY";
 const ENV_NUMAFLOW_SERVING_SPEC: &str = "NUMAFLOW_SERVING_SPEC";
 const ENV_NUMAFLOW_SERVING_CALLBACK_STORE: &str = "NUMAFLOW_SERVING_CALLBACK_STORE";
 const ENV_NUMAFLOW_SERVING_RESPONSE_STORE: &str = "NUMAFLOW_SERVING_RESPONSE_STORE";
-/// READ_AHEAD controls whether the data plane keeps reading the next batch from the source/buffer
+/// NUMAFLOW_READ_AHEAD controls whether the data plane keeps reading the next batch from the source/buffer
 /// while previously read messages are still being processed. The controller injects a default
 /// (`false` for source vertices, `true` for non-source vertices); operators can override on the
 /// vertex's container template.
-pub(crate) const ENV_READ_AHEAD: &str = "READ_AHEAD";
+pub(crate) const ENV_READ_AHEAD: &str = "NUMAFLOW_READ_AHEAD";
 const DEFAULT_CALLBACK_CONCURRENCY: usize = 100;
 
 /// Building blocks (Source, Sink, Transformer, FallBack, Metrics, etc.) to build a Pipeline or a

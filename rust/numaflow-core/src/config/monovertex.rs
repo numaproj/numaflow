@@ -148,7 +148,7 @@ impl MonovertexConfig {
 
         let source_config = SourceConfig {
             // Read-ahead defaults to false for MonoVertex (it always reads from a source). Operators
-            // can override by setting READ_AHEAD via the container template.
+            // can override by setting NUMAFLOW_READ_AHEAD via the container template.
             read_ahead: env_vars
                 .get(ENV_READ_AHEAD)
                 .map(|val| val.as_str())
