@@ -357,7 +357,7 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 		r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateJobForISBDeletionSuccessful", "Create ISB deletion job successfully")
 	}
 
-	newObjs := buildVertices(pl)
+	newObjs := buildVertices(pl, log)
 	for vertexName, newObj := range newObjs {
 		if oldObj, existing := existingObjs[vertexName]; !existing {
 			if err := r.client.Create(ctx, &newObj); err != nil {
@@ -640,7 +640,7 @@ func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeli
 	return nil
 }
 
-func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
+func buildVertices(pl *dfv1.Pipeline, log *zap.SugaredLogger) map[string]dfv1.Vertex {
 	result := make(map[string]dfv1.Vertex)
 	for _, v := range pl.Spec.Vertices {
 		vertexFullName := pl.Name + "-" + v.Name
@@ -668,6 +668,10 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 		if vCopy.IsOrdered() && (vCopy.IsMapUDF() || vCopy.IsASink()) {
 			if vCopy.Limits == nil {
 				vCopy.Limits = &dfv1.VertexLimits{}
+			}
+			if vCopy.Limits.Concurrency != nil && *vCopy.Limits.Concurrency != 1 {
+				log.Warnw("Overriding concurrency to 1 for ordered vertex; user-set value is ignored to preserve FIFO semantics",
+					zap.String("vertex", v.Name), zap.Uint64("userConcurrency", *vCopy.Limits.Concurrency))
 			}
 			vCopy.Limits.Concurrency = ptr.To[uint64](1)
 		}
