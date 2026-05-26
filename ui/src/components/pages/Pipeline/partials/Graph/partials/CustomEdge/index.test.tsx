@@ -506,7 +506,56 @@ describe("Custom Edge", () => {
       expect(edge).toHaveStyle("stroke-dashoffset: 0");
       expect(edge).toHaveAttribute(
         "d",
-        "M 194 92 C 211.28 92 211.28 36 242 36 C 272.72 36 272.72 60 290 60"
+        "M 194 92 C 211.28 92 211.28 114 242 114 C 272.72 114 272.72 60 290 60"
+      );
+    });
+  });
+  it("MonoVertex fan-out onSuccess bypass edge keeps the upper arc", async () => {
+    render(
+      <HighlightContext.Provider
+        value={{
+          highlightValues: {},
+          setHighlightValues: jest.fn(),
+          sideInputNodes: new Map(),
+          sideInputEdges: new Map(),
+          setHidden: jest.fn(),
+        }}
+      >
+        <ReactFlowProvider>
+          <svg>
+            <CustomEdge
+              id={
+                "mono-vertex-bypass-transformer-mono-vertex-bypass-onSuccess-bypass"
+              }
+              sourceX={132}
+              sourceY={108}
+              targetX={312}
+              targetY={44}
+              sourcePosition={Position.Bottom}
+              targetPosition={Position.Left}
+              data={{
+                source: "mono-vertex-bypass-transformer",
+                target: "mono-vertex-bypass-onSuccess",
+                monoVertexBypassEdge: true,
+                bypassSourceStage: "transformer",
+                bypassTarget: "onSuccess",
+                bypassTargetFanOut: true,
+              }}
+              source={"mono-vertex-bypass-transformer"}
+              target={"mono-vertex-bypass-onSuccess"}
+            />
+          </svg>
+        </ReactFlowProvider>
+      </HighlightContext.Provider>
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByTestId(
+          "mono-vertex-bypass-transformer-mono-vertex-bypass-onSuccess-bypass"
+        )
+      ).toHaveAttribute(
+        "d",
+        "M 132 108 C 164.4 108 164.4 20 222 20 C 279.6 20 279.6 44 312 44"
       );
     });
   });

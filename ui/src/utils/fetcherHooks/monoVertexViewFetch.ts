@@ -78,11 +78,14 @@ const getMonoVertexDirectInternalEdges = (
   return directInternalEdges;
 };
 
+const shouldFanOutMonoVertexSinkTargets = (spec: MonoVertexSpec) =>
+  !!spec?.sink?.onSuccess && !!spec?.sink?.fallback;
+
 export const getMonoVertexInternalStages = (spec: MonoVertexSpec) => {
   const hasOnSuccess = !!spec?.sink?.onSuccess;
   const hasFallback = !!spec?.sink?.fallback;
   const hasOptionalSinkOutput = hasOnSuccess || hasFallback;
-  const shouldFanOutSinkTargets = hasOnSuccess && hasFallback;
+  const shouldFanOutSinkTargets = shouldFanOutMonoVertexSinkTargets(spec);
   const columns = [
     {
       key: "source",
@@ -449,6 +452,7 @@ export const useMonoVertexViewFetch = (
                 source: sourceStage,
                 sourceNodeId: source,
                 targetNodeId: target,
+                bypassTargetFanOut: shouldFanOutMonoVertexSinkTargets(spec),
                 operator: rule?.tags?.operator || "or",
                 values: Array.isArray(rule?.tags?.values)
                   ? rule?.tags?.values
@@ -561,6 +565,7 @@ export const useMonoVertexViewFetch = (
               monoVertexBypassEdge: true,
               bypassSourceStage: sourceStage,
               bypassTarget: targetStage,
+              bypassTargetFanOut: shouldFanOutMonoVertexSinkTargets(spec),
               operator: rule?.tags?.operator || "or",
               values: Array.isArray(rule?.tags?.values) ? rule.tags.values : [],
             },

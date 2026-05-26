@@ -23,12 +23,14 @@ const getMonoVertexBypassPath = ({
   targetX,
   targetY,
   bypassTarget,
+  bypassTargetFanOut,
 }: {
   sourceX: number;
   sourceY: number;
   targetX: number;
   targetY: number;
   bypassTarget?: string;
+  bypassTargetFanOut?: boolean;
 }): [string, number, number] => {
   const direction = targetX >= sourceX ? 1 : -1;
   const distance = Math.abs(targetX - sourceX);
@@ -36,8 +38,10 @@ const getMonoVertexBypassPath = ({
   const midX = (sourceX + targetX) / 2;
   const minY = Math.min(sourceY, targetY);
   const maxY = Math.max(sourceY, targetY);
+  const isUpperFanOutTarget =
+    bypassTarget === "onSuccess" && bypassTargetFanOut;
   const laneY =
-    bypassTarget === "onSuccess"
+    isUpperFanOutTarget
       ? Math.max(minY - 24, 8)
       : bypassTarget === "fallback"
       ? maxY + 28
@@ -77,6 +81,7 @@ const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
       targetX,
       targetY,
       bypassTarget: data?.bypassTarget,
+      bypassTargetFanOut: data?.bypassTargetFanOut,
     });
     edgePath = bypassPath;
     labelRenderer = `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`;
