@@ -285,6 +285,7 @@ pub mod tests {
 
         let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             1,
+            1,
             SourceType::Sqs(sqs_source),
             tracker.clone(),
             true,

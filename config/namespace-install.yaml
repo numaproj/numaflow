@@ -4135,6 +4135,11 @@ spec:
                 type: object
               limits:
                 properties:
+                  concurrency:
+                    default: 500
+                    format: int64
+                    minimum: 1
+                    type: integer
                   rateLimit:
                     properties:
                       max:
@@ -4366,6 +4371,7 @@ spec:
                   readBatchSize:
                     default: 500
                     format: int64
+                    minimum: 1
                     type: integer
                   readTimeout:
                     default: 1s
@@ -9932,6 +9938,11 @@ spec:
                     default: 80
                     format: int32
                     type: integer
+                  concurrency:
+                    default: 500
+                    format: int64
+                    minimum: 1
+                    type: integer
                   rateLimit:
                     properties:
                       max:
@@ -10163,6 +10174,7 @@ spec:
                   readBatchSize:
                     default: 500
                     format: int64
+                    minimum: 1
                     type: integer
                   readTimeout:
                     default: 1s
@@ -17019,6 +17031,10 @@ spec:
                         bufferUsageLimit:
                           format: int32
                           type: integer
+                        concurrency:
+                          format: int64
+                          minimum: 1
+                          type: integer
                         rateLimit:
                           properties:
                             max:
@@ -17249,6 +17265,7 @@ spec:
                           type: object
                         readBatchSize:
                           format: int64
+                          minimum: 1
                           type: integer
                         readTimeout:
                           type: string
@@ -23058,6 +23075,11 @@ spec:
                         default: 80
                         format: int32
                         type: integer
+                      concurrency:
+                        default: 500
+                        format: int64
+                        minimum: 1
+                        type: integer
                       rateLimit:
                         properties:
                           max:
@@ -23289,6 +23311,7 @@ spec:
                       readBatchSize:
                         default: 500
                         format: int64
+                        minimum: 1
                         type: integer
                       readTimeout:
                         default: 1s
@@ -30145,6 +30168,10 @@ spec:
                             bufferUsageLimit:
                               format: int32
                               type: integer
+                            concurrency:
+                              format: int64
+                              minimum: 1
+                              type: integer
                             rateLimit:
                               properties:
                                 max:
@@ -30375,6 +30402,7 @@ spec:
                               type: object
                             readBatchSize:
                               format: int64
+                              minimum: 1
                               type: integer
                             readTimeout:
                               type: string
@@ -38000,6 +38028,10 @@ spec:
                         bufferUsageLimit:
                           format: int32
                           type: integer
+                        concurrency:
+                          format: int64
+                          minimum: 1
+                          type: integer
                         rateLimit:
                           properties:
                             max:
@@ -38230,6 +38262,7 @@ spec:
                           type: object
                         readBatchSize:
                           format: int64
+                          minimum: 1
                           type: integer
                         readTimeout:
                           type: string
@@ -38254,6 +38287,10 @@ spec:
                         bufferUsageLimit:
                           format: int32
                           type: integer
+                        concurrency:
+                          format: int64
+                          minimum: 1
+                          type: integer
                         rateLimit:
                           properties:
                             max:
@@ -38484,6 +38521,7 @@ spec:
                           type: object
                         readBatchSize:
                           format: int64
+                          minimum: 1
                           type: integer
                         readTimeout:
                           type: string
@@ -39464,6 +39502,10 @@ spec:
                   bufferUsageLimit:
                     format: int32
                     type: integer
+                  concurrency:
+                    format: int64
+                    minimum: 1
+                    type: integer
                   rateLimit:
                     properties:
                       max:
@@ -39694,6 +39736,7 @@ spec:
                     type: object
                   readBatchSize:
                     format: int64
+                    minimum: 1
                     type: integer
                   readTimeout:
                     type: string
@@ -44121,6 +44164,10 @@ spec:
                         bufferUsageLimit:
                           format: int32
                           type: integer
+                        concurrency:
+                          format: int64
+                          minimum: 1
+                          type: integer
                         rateLimit:
                           properties:
                             max:
@@ -44351,6 +44398,7 @@ spec:
                           type: object
                         readBatchSize:
                           format: int64
+                          minimum: 1
                           type: integer
                         readTimeout:
                           type: string
@@ -44375,6 +44423,10 @@ spec:
                         bufferUsageLimit:
                           format: int32
                           type: integer
+                        concurrency:
+                          format: int64
+                          minimum: 1
+                          type: integer
                         rateLimit:
                           properties:
                             max:
@@ -44605,6 +44657,7 @@ spec:
                           type: object
                         readBatchSize:
                           format: int64
+                          minimum: 1
                           type: integer
                         readTimeout:
                           type: string

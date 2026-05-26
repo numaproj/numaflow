@@ -4,7 +4,7 @@ use std::time::Duration;
 use super::pipeline::ServingCallbackConfig;
 use super::{
     DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED,
-    ENV_MONO_VERTEX_OBJ, get_namespace, get_pipeline_name,
+    ENV_MONO_VERTEX_OBJ, ENV_READ_AHEAD, get_namespace, get_pipeline_name,
 };
 use crate::Result;
 use crate::config::components::metrics::MetricsConfig;
@@ -34,6 +34,8 @@ const ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS: &str = "NUMAFLOW_GRACEFUL_TIMEOUT_SECS
 pub(crate) struct MonovertexConfig {
     pub(crate) name: String,
     pub(crate) batch_size: usize,
+    /// Cap on in-flight (read-but-not-acked) messages, sourced from `spec.limits.concurrency`.
+    pub(crate) concurrency: usize,
     pub(crate) read_timeout: Duration,
     pub(crate) graceful_shutdown_time: Duration,
     pub(crate) replica: u16,
@@ -54,6 +56,7 @@ impl Default for MonovertexConfig {
         MonovertexConfig {
             name: "".to_string(),
             batch_size: DEFAULT_BATCH_SIZE as usize,
+            concurrency: DEFAULT_BATCH_SIZE as usize,
             read_timeout: Duration::from_millis(DEFAULT_TIMEOUT_IN_MS as u64),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             replica: 0,
@@ -98,6 +101,16 @@ impl MonovertexConfig {
             .and_then(|limits| limits.read_batch_size.map(|x| x as u64))
             .unwrap_or(DEFAULT_BATCH_SIZE);
 
+        // Concurrency caps the number of in-flight (read-but-not-acked) messages. It is sourced from
+        // `spec.limits.concurrency` and falls back to `batch_size` to preserve historical behavior
+        // where concurrency was implicitly bounded by the read batch size.
+        let concurrency = mono_vertex_obj
+            .spec
+            .limits
+            .as_ref()
+            .and_then(|limits| limits.concurrency.map(|x| x as usize))
+            .unwrap_or(batch_size as usize);
+
         let timeout_in_ms = mono_vertex_obj
             .spec
             .limits
@@ -134,12 +147,14 @@ impl MonovertexConfig {
         let source_type: SourceType = source.try_into()?;
 
         let source_config = SourceConfig {
+            // Read-ahead defaults to false for MonoVertex (it always reads from a source). Operators
+            // can override by setting NUMAFLOW_READ_AHEAD via the container template.
             read_ahead: env_vars
-                .get("READ_AHEAD")
+                .get(ENV_READ_AHEAD)
                 .map(|val| val.as_str())
                 .unwrap_or("false")
                 .parse()
-                .unwrap(),
+                .unwrap_or(false),
             source_type,
         };
 
@@ -149,7 +164,7 @@ impl MonovertexConfig {
             .as_ref()
             .and_then(|source| source.transformer.as_ref())
             .map(|_| TransformerConfig {
-                concurrency: batch_size as usize, // FIXME: introduce a new config called udf concurrency in the spec
+                concurrency,
                 transformer_type: TransformerType::UserDefined(UserDefinedConfig::default()),
             });
 
@@ -174,7 +189,7 @@ impl MonovertexConfig {
 
         let map_config = match udf {
             Ok(udf) => Some(MapVtxConfig {
-                concurrency: batch_size as usize,
+                concurrency,
                 map_type: udf.try_into()?,
             }),
             Err(_) => None,
@@ -236,6 +251,7 @@ impl MonovertexConfig {
             name: mono_vertex_name,
             replica: *get_vertex_replica(),
             batch_size: batch_size as usize,
+            concurrency,
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
             graceful_shutdown_time: Duration::from_secs(graceful_shutdown_time_secs),
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),

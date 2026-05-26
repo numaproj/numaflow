@@ -95,6 +95,7 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
 
     let source = create_components::create_source::<C>(
         config.batch_size,
+        config.concurrency,
         config.read_timeout,
         &config.source_config,
         tracker.clone(),

@@ -484,6 +484,7 @@ pub mod tests {
         (
             Source::new(
                 5,
+                5,
                 SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
                 tracker.clone(),
                 true,

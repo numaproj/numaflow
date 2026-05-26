@@ -104,6 +104,7 @@ impl SourceTestHandle<WithSimpleBuffer> {
             Some(ref mut source_transform) => {
                 Source::new(
                     batch_size,
+                    batch_size,
                     SourceType::UserDefinedSource(
                         Box::new(src_read),
                         Box::new(src_ack),
@@ -120,6 +121,7 @@ impl SourceTestHandle<WithSimpleBuffer> {
             }
             None => {
                 Source::new(
+                    batch_size,
                     batch_size,
                     SourceType::UserDefinedSource(
                         Box::new(src_read),
@@ -178,6 +180,7 @@ impl SourceTestHandle<WithSimpleBuffer> {
         let core_http_source = CoreHttpSource::new(batch_size, http_source);
 
         let source = Source::new(
+            batch_size,
             batch_size,
             SourceType::Http(core_http_source),
             tracker,

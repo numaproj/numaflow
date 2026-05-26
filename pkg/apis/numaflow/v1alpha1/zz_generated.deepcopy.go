@@ -1574,6 +1574,11 @@ func (in *MonoVertexLimits) DeepCopyInto(out *MonoVertexLimits) {
 		*out = new(RateLimit)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Concurrency != nil {
+		in, out := &in.Concurrency, &out.Concurrency
+		*out = new(uint64)
+		**out = **in
+	}
 	return
 }
 
@@ -1926,6 +1931,11 @@ func (in *PipelineLimits) DeepCopyInto(out *PipelineLimits) {
 		in, out := &in.RateLimit, &out.RateLimit
 		*out = new(RateLimit)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.Concurrency != nil {
+		in, out := &in.Concurrency, &out.Concurrency
+		*out = new(uint64)
+		**out = **in
 	}
 	return
 }
@@ -3582,6 +3592,11 @@ func (in *VertexLimits) DeepCopyInto(out *VertexLimits) {
 		in, out := &in.RateLimit, &out.RateLimit
 		*out = new(RateLimit)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.Concurrency != nil {
+		in, out := &in.Concurrency, &out.Concurrency
+		*out = new(uint64)
+		**out = **in
 	}
 	return
 }

@@ -357,7 +357,7 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 		r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateJobForISBDeletionSuccessful", "Create ISB deletion job successfully")
 	}
 
-	newObjs := buildVertices(pl)
+	newObjs := buildVertices(pl, log)
 	for vertexName, newObj := range newObjs {
 		if oldObj, existing := existingObjs[vertexName]; !existing {
 			if err := r.client.Create(ctx, &newObj); err != nil {
@@ -640,7 +640,7 @@ func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeli
 	return nil
 }
 
-func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
+func buildVertices(pl *dfv1.Pipeline, log *zap.SugaredLogger) map[string]dfv1.Vertex {
 	result := make(map[string]dfv1.Vertex)
 	for _, v := range pl.Spec.Vertices {
 		vertexFullName := pl.Name + "-" + v.Name
@@ -659,6 +659,22 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 		// Resolve and set the effective ordered config on the vertex
 		// This merges pipeline-level and vertex-level ordered config so the vertex is self-contained
 		resolveOrderedConfig(pl, vCopy)
+		// When ordered processing is enabled on a Map/Sink vertex, force the in-flight cap to 1 so
+		// each partition processes one message at a time. Source and Reduce vertices preserve order
+		// by other means (single-stream-per-replica routing for sources, partition-by-key for
+		// reduce), so we leave their concurrency alone. We override even if the user set
+		// concurrency explicitly: ordered processing without concurrency=1 would silently violate
+		// the FIFO contract.
+		if vCopy.IsOrdered() && (vCopy.IsMapUDF() || vCopy.IsASink()) {
+			if vCopy.Limits == nil {
+				vCopy.Limits = &dfv1.VertexLimits{}
+			}
+			if vCopy.Limits.Concurrency != nil && *vCopy.Limits.Concurrency != 1 {
+				log.Warnw("Overriding concurrency to 1 for ordered vertex; user-set value is ignored to preserve FIFO semantics",
+					zap.String("vertex", v.Name), zap.Uint64("userConcurrency", *vCopy.Limits.Concurrency))
+			}
+			vCopy.Limits.Concurrency = ptr.To[uint64](1)
+		}
 		replicas := int32(1)
 		// If the desired phase is paused, or we are in the middle of pausing we should not start any vertex replicas
 		if isLifecycleChange(pl) {
@@ -766,6 +782,7 @@ func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.
 		result.ReadBatchSize = vLimits.ReadBatchSize
 		result.ReadTimeout = vLimits.ReadTimeout
 		result.RateLimit = vLimits.RateLimit
+		result.Concurrency = vLimits.Concurrency
 	}
 	if result.ReadBatchSize == nil {
 		result.ReadBatchSize = plLimits.ReadBatchSize
@@ -781,6 +798,9 @@ func mergeLimits(plLimits dfv1.PipelineLimits, vLimits *dfv1.VertexLimits) dfv1.
 	}
 	if result.RateLimit == nil {
 		result.RateLimit = plLimits.RateLimit
+	}
+	if result.Concurrency == nil {
+		result.Concurrency = plLimits.Concurrency
 	}
 	if result.RateLimit != nil && result.RateLimit.Max == nil {
 		result.RateLimit.Max = plLimits.RateLimit.Max

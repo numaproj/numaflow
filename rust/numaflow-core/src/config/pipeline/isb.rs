@@ -1,4 +1,3 @@
-use crate::config::pipeline::DEFAULT_MAX_ACK_PENDING;
 /// JetStream ISB related configurations.
 use std::fmt;
 use std::fmt::Display;
@@ -9,6 +8,10 @@ const DEFAULT_MAX_LENGTH: usize = 30000;
 const DEFAULT_USAGE_LIMIT: f64 = 0.8;
 const DEFAULT_BUFFER_FULL_STRATEGY: BufferFullStrategy = BufferFullStrategy::RetryUntilSuccess;
 const DEFAULT_WIP_ACK_INTERVAL_MILLIS: u64 = 1000;
+/// Default cap on in-flight (read-but-not-acked) messages used only when constructing a
+/// [`BufferReaderConfig`] via `Default::default()` (test code paths). The production loader
+/// always overrides this with `Limits.Concurrency` from the vertex spec.
+const DEFAULT_BUFFER_READER_INFLIGHT_CAP: usize = 500;
 
 pub(crate) mod jetstream {
     const DEFAULT_URL: &str = "localhost:4222";
@@ -133,7 +136,7 @@ impl Default for BufferReaderConfig {
         BufferReaderConfig {
             streams: vec![Stream::new("default-0", "default", DEFAULT_PARTITION_IDX)],
             wip_ack_interval: Duration::from_millis(DEFAULT_WIP_ACK_INTERVAL_MILLIS),
-            max_ack_pending: DEFAULT_MAX_ACK_PENDING,
+            max_ack_pending: DEFAULT_BUFFER_READER_INFLIGHT_CAP,
         }
     }
 }

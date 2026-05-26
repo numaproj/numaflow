@@ -3225,7 +3225,7 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexLimits(ref common.ReferenceCall
 				Properties: map[string]spec.Schema{
 					"readBatchSize": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Read batch size from the source.",
+							Description: "Read batch size from the source. ReadBatchSize controls only how many messages are fetched in a single read call from the source; it is not a cap on how many messages may be in-flight (use `concurrency` for that).",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -3240,6 +3240,13 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexLimits(ref common.ReferenceCall
 						SchemaProps: spec.SchemaProps{
 							Description: "RateLimit for MonoVertex defines how many messages can be read from Source. This is computed by number of `read` calls per second multiplied by the `readBatchSize`. This is how RateLimit is calculated for MonoVertex and for Source vertices.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimit"),
+						},
+					},
+					"concurrency": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Concurrency defines the maximum number of messages that can be actively in-flight (read but not yet acknowledged) at any given time. With read-ahead enabled, the data plane keeps reading new batches from the source until the number of in-flight messages reaches `concurrency`; once that ceiling is hit, one more batch may be pre-fetched and held ready so that completed messages can be replaced immediately. Therefore the maximum in-flight count is at most `concurrency + readBatchSize`. With read-ahead disabled (the default for MonoVertex, since the MonoVertex always reads from a source), the data plane drains the current batch fully before the next read, so the upper bound becomes `min(concurrency, readBatchSize)`. `readBatchSize` controls only the size of an individual read; `concurrency` controls how many messages can be processed in parallel. To force strictly sequential processing, set `concurrency` to 1 (read-ahead is already off by default for MonoVertex).",
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 				},
@@ -3923,7 +3930,7 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineLimits(ref common.ReferenceCallba
 				Properties: map[string]spec.Schema{
 					"readBatchSize": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Read batch size for all the vertices in the pipeline, can be overridden by the vertex's limit settings.",
+							Description: "Read batch size for all the vertices in the pipeline, can be overridden by the vertex's limit settings. ReadBatchSize controls only how many messages are fetched in a single read call from the source/buffer; it is not a cap on how many messages may be in-flight (use `concurrency` for that).",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -3952,6 +3959,13 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineLimits(ref common.ReferenceCallba
 						SchemaProps: spec.SchemaProps{
 							Description: "RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the vertex's limit settings. For source vertices, it will be set to rate divided by readBatchSize because for source vertices, the rate limit is defined by how many times the `Read` is called per second Reduce does not support RateLimit.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimit"),
+						},
+					},
+					"concurrency": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Concurrency defines the maximum number of messages that can be actively in-flight (read but not yet acknowledged) at any given time across each vertex of the pipeline. With read-ahead enabled, the data plane keeps reading new batches from the source/buffer until the number of in-flight messages reaches `concurrency`; once that ceiling is hit, one more batch may be pre-fetched and held ready so that completed messages can be replaced immediately. Therefore the maximum in-flight count per vertex is at most `concurrency + readBatchSize`. `readBatchSize` controls only the size of an individual read; `concurrency` controls how many messages can be processed in parallel. By default, read-ahead is disabled on source vertices (so re-reads on failure stay cheap and source ordering is preserved) and enabled on Map/Sink/ Reduce vertices. To force strictly sequential processing, set `concurrency` to 1 and disable read-ahead via the `NUMAFLOW_READ_AHEAD` environment variable on the vertex's container template. Can be overridden by the vertex's limit settings.",
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 				},
@@ -6417,7 +6431,7 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexLimits(ref common.ReferenceCallback
 				Properties: map[string]spec.Schema{
 					"readBatchSize": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Read batch size from the source or buffer. It overrides the settings from pipeline limits.",
+							Description: "Read batch size from the source or buffer. It overrides the settings from pipeline limits. ReadBatchSize controls only how many messages are fetched in a single read call from the source/buffer; it is not a cap on how many messages may be in-flight (use `concurrency` for that).",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -6446,6 +6460,13 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexLimits(ref common.ReferenceCallback
 						SchemaProps: spec.SchemaProps{
 							Description: "RateLimit is used to define the rate limit for the vertex, it overrides the settings from pipeline limits. For Source vertices, the rate limit is defined by how many times the `Read` is called per second multiplied by the `readBatchSize`. Pipeline level rate limit is not applied to Source vertices.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RateLimit"),
+						},
+					},
+					"concurrency": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Concurrency defines the maximum number of messages that can be actively in-flight (read but not yet acknowledged) at any given time. With read-ahead enabled, the data plane keeps reading new batches from the source/buffer until the number of in-flight messages reaches `concurrency`; once that ceiling is hit, one more batch may be pre-fetched and held ready so that completed messages can be replaced immediately. Therefore the maximum in-flight count is at most `concurrency + readBatchSize`. `readBatchSize` controls only the size of an individual read; `concurrency` controls how many messages can be processed in parallel. It overrides the settings from pipeline limits. By default, read-ahead is disabled on source vertices and enabled on Map/Sink/Reduce vertices. To force strictly sequential processing, set `concurrency` to 1 and disable read-ahead via the `NUMAFLOW_READ_AHEAD` environment variable on the vertex's container template.",
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 				},
