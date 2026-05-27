@@ -12,3 +12,12 @@
   font-family: "Avenir", sans-serif;
   cursor: pointer;
 }
+
+@keyframes monoVertexBypassFlow {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -8;
+  }
+}

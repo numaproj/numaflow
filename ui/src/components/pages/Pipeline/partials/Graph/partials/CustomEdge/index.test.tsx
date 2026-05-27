@@ -408,4 +408,359 @@ describe("Custom Edge", () => {
       expect(screen.getByTestId(`first-first`)).toBeInTheDocument()
     );
   });
+  it("MonoVertex internal edge remains solid and thin", async () => {
+    render(
+      <HighlightContext.Provider
+        value={{
+          highlightValues: {},
+          setHighlightValues: jest.fn(),
+          sideInputNodes: new Map(),
+          sideInputEdges: new Map(),
+          setHidden: jest.fn(),
+        }}
+      >
+        <ReactFlowProvider>
+          <svg>
+            <CustomEdge
+              id={"mono-vertex-bypass-source-mono-vertex-bypass-udf"}
+              sourceX={140}
+              sourceY={80}
+              targetX={220}
+              targetY={80}
+              sourcePosition={Position.Right}
+              targetPosition={Position.Left}
+              data={{
+                source: "mono-vertex-bypass-source",
+                target: "mono-vertex-bypass-udf",
+                monoVertexInternalEdge: true,
+              }}
+              source={"mono-vertex-bypass-source"}
+              target={"mono-vertex-bypass-udf"}
+            />
+          </svg>
+        </ReactFlowProvider>
+      </HighlightContext.Provider>
+    );
+    await waitFor(() => {
+      const edge = screen.getByTestId(
+        "mono-vertex-bypass-source-mono-vertex-bypass-udf"
+      );
+      expect(edge).toBeInTheDocument();
+      expect(edge).toHaveStyle("stroke: #8D9096");
+      expect(edge).toHaveStyle("stroke-width: 1.2");
+      expect(edge.getAttribute("style")).not.toContain("stroke-dasharray");
+    });
+  });
+  it("MonoVertex bypass edge remains dotted and bypass-colored when highlighted", async () => {
+    render(
+      <HighlightContext.Provider
+        value={{
+          highlightValues: {
+            "mono-vertex-bypass-udf-mono-vertex-bypass-onSuccess-bypass": true,
+          },
+          setHighlightValues: jest.fn(),
+          sideInputNodes: new Map(),
+          sideInputEdges: new Map(),
+          setHidden: jest.fn(),
+        }}
+      >
+        <ReactFlowProvider>
+          <svg>
+            <CustomEdge
+              id={
+                "mono-vertex-bypass-udf-mono-vertex-bypass-onSuccess-bypass"
+              }
+              sourceX={194}
+              sourceY={92}
+              targetX={290}
+              targetY={60}
+              sourcePosition={Position.Right}
+              targetPosition={Position.Left}
+              data={{
+                source: "mono-vertex-bypass-udf",
+                target: "mono-vertex-bypass-onSuccess",
+                monoVertexBypassEdge: true,
+                bypassTarget: "onSuccess",
+                operator: "and",
+                values: ["audit", "high-priority"],
+              }}
+              source={"mono-vertex-bypass-udf"}
+              target={"mono-vertex-bypass-onSuccess"}
+            />
+          </svg>
+        </ReactFlowProvider>
+      </HighlightContext.Provider>
+    );
+    await waitFor(() => {
+      const edge = screen.getByTestId(
+        "mono-vertex-bypass-udf-mono-vertex-bypass-onSuccess-bypass"
+      );
+      expect(edge).toBeInTheDocument();
+      expect(edge).toHaveStyle("stroke: var(--mono-vertex-bypass-color)");
+      expect(edge).toHaveStyle("stroke-width: 1.2");
+      expect(edge).toHaveStyle(
+        "animation: monoVertexBypassFlow 0.8s linear infinite"
+      );
+      expect(edge).toHaveStyle("pointer-events: none");
+      expect(edge).toHaveStyle("stroke-dasharray: 4 4");
+      expect(edge).toHaveStyle("stroke-dashoffset: 0");
+      expect(edge).toHaveAttribute(
+        "d",
+        "M 194 92 C 211.28 92 211.28 114 242 114 C 272.72 114 272.72 60 290 60"
+      );
+    });
+  });
+  it("MonoVertex fan-out onSuccess bypass edge keeps the upper arc", async () => {
+    render(
+      <HighlightContext.Provider
+        value={{
+          highlightValues: {},
+          setHighlightValues: jest.fn(),
+          sideInputNodes: new Map(),
+          sideInputEdges: new Map(),
+          setHidden: jest.fn(),
+        }}
+      >
+        <ReactFlowProvider>
+          <svg>
+            <CustomEdge
+              id={
+                "mono-vertex-bypass-transformer-mono-vertex-bypass-onSuccess-bypass"
+              }
+              sourceX={132}
+              sourceY={108}
+              targetX={312}
+              targetY={44}
+              sourcePosition={Position.Bottom}
+              targetPosition={Position.Left}
+              data={{
+                source: "mono-vertex-bypass-transformer",
+                target: "mono-vertex-bypass-onSuccess",
+                monoVertexBypassEdge: true,
+                bypassSourceStage: "transformer",
+                bypassTarget: "onSuccess",
+                bypassTargetFanOut: true,
+              }}
+              source={"mono-vertex-bypass-transformer"}
+              target={"mono-vertex-bypass-onSuccess"}
+            />
+          </svg>
+        </ReactFlowProvider>
+      </HighlightContext.Provider>
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByTestId(
+          "mono-vertex-bypass-transformer-mono-vertex-bypass-onSuccess-bypass"
+        )
+      ).toHaveAttribute(
+        "d",
+        "M 132 108 C 164.4 108 164.4 20 222 20 C 279.6 20 279.6 44 312 44"
+      );
+    });
+  });
+  it("dims unrelated MonoVertex internal edge during bypass highlight", async () => {
+    render(
+      <HighlightContext.Provider
+        value={{
+          highlightValues: {
+            monoVertexBypass: true,
+            "mono-vertex-bypass-udf": true,
+          },
+          setHighlightValues: jest.fn(),
+          sideInputNodes: new Map(),
+          sideInputEdges: new Map(),
+          setHidden: jest.fn(),
+        }}
+      >
+        <ReactFlowProvider>
+          <svg>
+            <CustomEdge
+              id={"mono-vertex-bypass-source-mono-vertex-bypass-udf"}
+              sourceX={140}
+              sourceY={80}
+              targetX={220}
+              targetY={80}
+              sourcePosition={Position.Right}
+              targetPosition={Position.Left}
+              data={{
+                source: "mono-vertex-bypass-source",
+                target: "mono-vertex-bypass-udf",
+                monoVertexInternalEdge: true,
+              }}
+              source={"mono-vertex-bypass-source"}
+              target={"mono-vertex-bypass-udf"}
+            />
+          </svg>
+        </ReactFlowProvider>
+      </HighlightContext.Provider>
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("mono-vertex-bypass-source-mono-vertex-bypass-udf")
+      ).toHaveStyle("opacity: 0.25");
+    });
+  });
+  it("does not dim Pipeline edge during MonoVertex bypass highlight", async () => {
+    render(
+      <HighlightContext.Provider
+        value={{
+          highlightValues: { monoVertexBypass: true },
+          setHighlightValues: jest.fn(),
+          sideInputNodes: new Map(),
+          sideInputEdges: new Map(),
+          setHidden: jest.fn(),
+        }}
+      >
+        <ReactFlowProvider>
+          <svg>
+            <CustomEdge
+              id={"first-second"}
+              sourceX={240}
+              sourceY={36}
+              targetX={334}
+              targetY={36}
+              sourcePosition={Position.Right}
+              targetPosition={Position.Left}
+              data={{
+                source: "first",
+                target: "second",
+                fwdEdge: true,
+                fromNodeOutDegree: 1,
+              }}
+              source={"first"}
+              target={"second"}
+            />
+          </svg>
+        </ReactFlowProvider>
+      </HighlightContext.Provider>
+    );
+    await waitFor(() => {
+      const edge = screen.getByTestId("first-second");
+      expect(edge).toBeInTheDocument();
+      expect(edge.getAttribute("style")).not.toContain("opacity");
+    });
+  });
+  it("dims unrelated MonoVertex bypass edge during bypass highlight", async () => {
+    render(
+      <HighlightContext.Provider
+        value={{
+          highlightValues: {
+            monoVertexBypass: true,
+            "mono-vertex-bypass-udf-mono-vertex-bypass-onSuccess-bypass": true,
+          },
+          setHighlightValues: jest.fn(),
+          sideInputNodes: new Map(),
+          sideInputEdges: new Map(),
+          setHidden: jest.fn(),
+        }}
+      >
+        <ReactFlowProvider>
+          <svg>
+            <CustomEdge
+              id={
+                "mono-vertex-bypass-transformer-mono-vertex-bypass-fallback-bypass"
+              }
+              sourceX={132}
+              sourceY={108}
+              targetX={312}
+              targetY={122}
+              sourcePosition={Position.Bottom}
+              targetPosition={Position.Left}
+              data={{
+                source: "mono-vertex-bypass-transformer",
+                target: "mono-vertex-bypass-fallback",
+                monoVertexBypassEdge: true,
+                bypassSourceStage: "transformer",
+                bypassTarget: "fallback",
+              }}
+              source={"mono-vertex-bypass-transformer"}
+              target={"mono-vertex-bypass-fallback"}
+            />
+          </svg>
+        </ReactFlowProvider>
+      </HighlightContext.Provider>
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByTestId(
+          "mono-vertex-bypass-transformer-mono-vertex-bypass-fallback-bypass"
+        )
+      ).toHaveStyle("opacity: 0.25");
+    });
+  });
+  it("MonoVertex bypass edge routes sink and fallback targets in separate arc lanes", async () => {
+    render(
+      <HighlightContext.Provider
+        value={{
+          highlightValues: {},
+          setHighlightValues: jest.fn(),
+          sideInputNodes: new Map(),
+          sideInputEdges: new Map(),
+          setHidden: jest.fn(),
+        }}
+      >
+        <ReactFlowProvider>
+          <svg>
+            <CustomEdge
+              id={"mono-vertex-bypass-transformer-mono-vertex-bypass-sink-bypass"}
+              sourceX={132}
+              sourceY={108}
+              targetX={244}
+              targetY={92}
+              sourcePosition={Position.Bottom}
+              targetPosition={Position.Left}
+              data={{
+                source: "mono-vertex-bypass-transformer",
+                target: "mono-vertex-bypass-sink",
+                monoVertexBypassEdge: true,
+                bypassSourceStage: "transformer",
+                bypassTarget: "sink",
+              }}
+              source={"mono-vertex-bypass-transformer"}
+              target={"mono-vertex-bypass-sink"}
+            />
+            <CustomEdge
+              id={
+                "mono-vertex-bypass-transformer-mono-vertex-bypass-fallback-bypass"
+              }
+              sourceX={132}
+              sourceY={108}
+              targetX={312}
+              targetY={122}
+              sourcePosition={Position.Bottom}
+              targetPosition={Position.Left}
+              data={{
+                source: "mono-vertex-bypass-transformer",
+                target: "mono-vertex-bypass-fallback",
+                monoVertexBypassEdge: true,
+                bypassSourceStage: "transformer",
+                bypassTarget: "fallback",
+              }}
+              source={"mono-vertex-bypass-transformer"}
+              target={"mono-vertex-bypass-fallback"}
+            />
+          </svg>
+        </ReactFlowProvider>
+      </HighlightContext.Provider>
+    );
+    await waitFor(() => {
+      expect(
+        screen.getByTestId(
+          "mono-vertex-bypass-transformer-mono-vertex-bypass-sink-bypass"
+        )
+      ).toHaveAttribute(
+        "d",
+        "M 132 108 C 152.16 108 152.16 130 188 130 C 223.84 130 223.84 92 244 92"
+      );
+      expect(
+        screen.getByTestId(
+          "mono-vertex-bypass-transformer-mono-vertex-bypass-fallback-bypass"
+        )
+      ).toHaveAttribute(
+        "d",
+        "M 132 108 C 164.4 108 164.4 150 222 150 C 279.6 150 279.6 122 312 122"
+      );
+    });
+  });
 });
