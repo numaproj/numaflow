@@ -56,11 +56,11 @@ spec:
             mechanism: PLAIN
             plain:
               userSecret:
-                name: plain-user
-                key: plain-user-key
+                name: kafka-plain-auth
+                key: username
               passwordSecret:
-                name: plain-password
-                key: plain-password-key
+                name: kafka-plain-auth
+                key: password
               handshake: true # Required by the API; ignored by the Rust built-in sink.
           # Optional, flat librdkafka client configuration. Use one `key: value`
           # pair per line.
@@ -72,25 +72,45 @@ spec:
 The `config` field accepts any supported [librdkafka client configuration option](https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html) as a flat `key: value` pair. By default,
 the built-in sink sets `message.timeout.ms: 5000` and `client.id: numaflow-kafka-sink`.
 
-The built-in Kafka sink supports multiple SASL auth mechanisms. To enable SASL, configure one mechanism and include
-only the matching mechanism-specific block.
+### SASL Authentication
 
-### PLAIN
+The built-in Kafka sink supports multiple SASL auth mechanisms. To enable SASL, set `sasl.mechanism` and include only the
+matching mechanism-specific block.
+
+SASL credentials are referenced with Kubernetes Secret selectors. The `name` field is the Kubernetes Secret name, and
+the `key` field is the entry inside that Secret's `data` or `stringData`. Because `SecretKeySelector` does not include a
+namespace, create the Secret in the same namespace as the Pipeline or MonoVertex. The pipeline spec stores only the
+Secret name and key, not the credential value. Numaflow mounts the Secret into the vertex pod, and the built-in Kafka
+sink reads and trims the selected value at startup.
+
+For example, create PLAIN credentials with:
+
+```shell
+kubectl create secret generic kafka-plain-auth \
+  --from-literal=username='<username>' \
+  --from-literal=password='<password>'
+```
+
+#### PLAIN
+
+Use `PLAIN` when your Kafka cluster expects a username and password.
 
 ```yaml
 sasl:
   mechanism: PLAIN
   plain:
     userSecret:
-      name: plain-user
-      key: plain-user-key
+      name: kafka-plain-auth
+      key: username
     passwordSecret:
-      name: plain-password
-      key: plain-password-key
+      name: kafka-plain-auth
+      key: password
     handshake: true # Required by the API; ignored by the Rust built-in sink.
 ```
 
-### SCRAM-SHA-256
+#### SCRAM-SHA-256
+
+Use `SCRAM-SHA-256` when your Kafka cluster uses SCRAM credentials with SHA-256.
 
 ```yaml
 sasl:
@@ -105,7 +125,9 @@ sasl:
     handshake: true # Required by the API; ignored by the Rust built-in sink.
 ```
 
-### SCRAM-SHA-512
+#### SCRAM-SHA-512
+
+Use `SCRAM-SHA-512` when your Kafka cluster uses SCRAM credentials with SHA-512.
 
 ```yaml
 sasl:
@@ -120,7 +142,11 @@ sasl:
     handshake: true # Required by the API; ignored by the Rust built-in sink.
 ```
 
-### GSSAPI
+#### GSSAPI
+
+Use `GSSAPI` for Kerberos. Set `authType` to `KRB5_KEYTAB_AUTH` when using `keytabSecret`, or to `KRB5_USER_AUTH` when
+using `passwordSecret`. `kerberosConfigSecret` is optional; when set, its selected Secret value is passed to librdkafka
+as the Kerberos kinit command.
 
 ```yaml
 sasl:
@@ -140,7 +166,10 @@ sasl:
       key: my-kerberos-config-key
 ```
 
-### OAUTHBEARER
+#### OAUTHBEARER
+
+Use `OAUTHBEARER` for OAuth/OIDC client credentials. `clientID` and `clientSecret` are Kubernetes Secret selectors, while
+`tokenEndpoint` is the token endpoint URL.
 
 ```yaml
 sasl:
