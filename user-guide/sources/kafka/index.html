@@ -712,6 +712,60 @@
     Option 2: Built-in Kafka Source
   </a>
   
+    <nav class="md-nav" aria-label="Option 2: Built-in Kafka Source">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sasl-authentication" class="md-nav__link">
+    SASL Authentication
+  </a>
+  
+    <nav class="md-nav" aria-label="SASL Authentication">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#plain" class="md-nav__link">
+    PLAIN
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scram-sha-256" class="md-nav__link">
+    SCRAM-SHA-256
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scram-sha-512" class="md-nav__link">
+    SCRAM-SHA-512
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gssapi" class="md-nav__link">
+    GSSAPI
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#oauthbearer" class="md-nav__link">
+    OAUTHBEARER
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2768,6 +2822,60 @@
     Option 2: Built-in Kafka Source
   </a>
   
+    <nav class="md-nav" aria-label="Option 2: Built-in Kafka Source">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sasl-authentication" class="md-nav__link">
+    SASL Authentication
+  </a>
+  
+    <nav class="md-nav" aria-label="SASL Authentication">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#plain" class="md-nav__link">
+    PLAIN
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scram-sha-256" class="md-nav__link">
+    SCRAM-SHA-256
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scram-sha-512" class="md-nav__link">
+    SCRAM-SHA-512
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gssapi" class="md-nav__link">
+    GSSAPI
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#oauthbearer" class="md-nav__link">
+    OAUTHBEARER
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2832,99 +2940,139 @@ for integrating Kafka as a data source into your Numaflow pipeline.</p>
 <span class="w">          </span><span class="nt">brokers</span><span class="p">:</span>
 <span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-broker1:19700</span>
 <span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-broker2:19700</span>
-<span class="w">          </span><span class="nt">topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-topic</span><span class="w"> </span><span class="c1"># Use commas to specify multiple topics.</span>
+<span class="w">          </span><span class="nt">topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-topic</span><span class="w"> </span><span class="c1"># Use comma-separated topic names to consume from multiple topics.</span>
 <span class="w">          </span><span class="nt">consumerGroup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-consumer-group</span>
-<span class="w">          </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span><span class="w"> </span><span class="c1"># Optional.</span>
-<span class="w">            </span><span class="no">consumer:</span>
-<span class="w">              </span><span class="no">offsets:</span>
-<span class="w">                </span><span class="no">initial: -2 # -2 for sarama.OffsetOldest, -1 for sarama.OffsetNewest. Default to sarama.OffsetNewest.</span>
+<span class="w">          </span><span class="c1"># Optional, flat librdkafka client configuration. Use one `key: value`</span>
+<span class="w">          </span><span class="c1"># pair per line.</span>
+<span class="w">          </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<span class="w">            </span><span class="no">auto.offset.reset: earliest</span>
+<span class="w">            </span><span class="no">session.timeout.ms: 45000</span>
 <span class="w">          </span><span class="nt">tls</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional.</span>
-<span class="w">            </span><span class="nt">insecureSkipVerify</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, whether to skip TLS verification. Default to false.</span>
-<span class="w">            </span><span class="nt">caCertSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, a secret reference, which contains the CA Cert.</span>
+<span class="w">            </span><span class="nt">insecureSkipVerify</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w"> </span><span class="c1"># Optional, whether to skip TLS verification. Default to false.</span>
+<span class="w">            </span><span class="nt">caCertSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, a secret reference which contains the CA certificate.</span>
 <span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-ca-cert</span>
 <span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-ca-cert-key</span>
-<span class="w">            </span><span class="nt">certSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, pointing to a secret reference which contains the Cert.</span>
+<span class="w">            </span><span class="nt">certSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, a secret reference which contains the client certificate.</span>
 <span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cert</span>
 <span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cert-key</span>
-<span class="w">            </span><span class="nt">keySecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, pointing to a secret reference which contains the Private Key.</span>
+<span class="w">            </span><span class="nt">keySecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Required when certSecret is set; contains the client private key.</span>
 <span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pk</span>
 <span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pk-key</span>
-<span class="w">          </span><span class="nt">sasl</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional</span>
-<span class="w">            </span><span class="nt">mechanism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GSSAPI</span><span class="w"> </span><span class="c1"># PLAIN, GSSAPI, SCRAM-SHA-256 or SCRAM-SHA-512, other mechanisms not supported</span>
-<span class="w">            </span><span class="nt">gssapi</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, for GSSAPI mechanism</span>
-<span class="w">              </span><span class="nt">serviceName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-service</span>
-<span class="w">              </span><span class="nt">realm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-realm</span>
-<span class="w">              </span><span class="c1"># KRB5_USER_AUTH for auth using password</span>
-<span class="w">              </span><span class="c1"># KRB5_KEYTAB_AUTH for auth using keytab</span>
-<span class="w">              </span><span class="nt">authType</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">KRB5_KEYTAB_AUTH</span><span class="w"> </span>
-<span class="w">              </span><span class="nt">usernameSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the username</span>
-<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gssapi-username</span>
-<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gssapi-username-key</span>
-<span class="w">              </span><span class="c1"># Pointing to a secret reference which contains the keytab (authType: KRB5_KEYTAB_AUTH)</span>
-<span class="w">              </span><span class="nt">keytabSecret</span><span class="p">:</span><span class="w"> </span>
-<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gssapi-keytab</span>
-<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gssapi-keytab-key</span>
-<span class="w">              </span><span class="c1"># Pointing to a secret reference which contains the keytab (authType: KRB5_USER_AUTH)</span>
-<span class="w">              </span><span class="nt">passwordSecret</span><span class="p">:</span><span class="w"> </span>
-<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gssapi-password</span>
-<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gssapi-password-key</span>
-<span class="w">              </span><span class="nt">kerberosConfigSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the kerberos config</span>
-<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-kerberos-config</span>
-<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-kerberos-config-key</span>
-<span class="w">            </span><span class="nt">plain</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, for PLAIN mechanism</span>
-<span class="w">              </span><span class="nt">userSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the user</span>
-<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">plain-user</span>
-<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">plain-user-key</span>
-<span class="w">              </span><span class="nt">passwordSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the password</span>
-<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">plain-password</span>
-<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">plain-password-key</span>
-<span class="w">              </span><span class="c1"># Send the Kafka SASL handshake first if enabled (defaults to true)</span>
-<span class="w">              </span><span class="c1"># Set this to false if using a non-Kafka SASL proxy</span>
-<span class="w">              </span><span class="nt">handshake</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span>
-<span class="w">            </span><span class="nt">scramsha256</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, for SCRAM-SHA-256 mechanism</span>
-<span class="w">              </span><span class="nt">userSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the user</span>
-<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scram-sha-256-user</span>
-<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scram-sha-256-user-key</span>
-<span class="w">              </span><span class="nt">passwordSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the password</span>
-<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scram-sha-256-password</span>
-<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scram-sha-256-password-key</span>
-<span class="w">              </span><span class="c1"># Send the Kafka SASL handshake first if enabled (defaults to true)</span>
-<span class="w">              </span><span class="c1"># Set this to false if using a non-Kafka SASL proxy</span>
-<span class="w">              </span><span class="nt">handshake</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span>
-<span class="w">            </span><span class="nt">scramsha512</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, for SCRAM-SHA-512 mechanism</span>
-<span class="w">              </span><span class="nt">userSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the user</span>
-<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scram-sha-512-user</span>
-<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scram-sha-512-user-key</span>
-<span class="w">              </span><span class="nt">passwordSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the password</span>
-<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scram-sha-512-password</span>
-<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scram-sha-512-password-key</span>
-<span class="w">              </span><span class="c1"># Send the Kafka SASL handshake first if enabled (defaults to true)</span>
-<span class="w">              </span><span class="c1"># Set this to false if using a non-Kafka SASL proxy</span>
-<span class="w">              </span><span class="nt">handshake</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-<span class="w">            </span><span class="nt">oauth</span><span class="p">:</span><span class="w">  </span><span class="c1">#Optional, for OAUTHBEARER mechanism</span>
-<span class="w">              </span><span class="nt">clientID</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the client id</span>
-<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka-oauth-client</span>
-<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">clientid</span><span class="w"> </span>
-<span class="w">              </span><span class="nt">clientSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the client secret</span>
-<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka-oauth-client</span>
-<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">clientsecret</span><span class="w"> </span>
-<span class="w">              </span><span class="nt">tokenEndpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://oauth-token.com/v1/token</span>
+<span class="w">          </span><span class="nt">sasl</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional. This example uses PLAIN; other mechanisms are listed below.</span>
+<span class="w">            </span><span class="nt">mechanism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PLAIN</span>
+<span class="w">            </span><span class="nt">plain</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">userSecret</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka-plain-auth</span>
+<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">username</span>
+<span class="w">              </span><span class="nt">passwordSecret</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka-plain-auth</span>
+<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">password</span>
+<span class="w">              </span><span class="nt">handshake</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span><span class="c1"># Required by the API; ignored by the Rust built-in source.</span>
+</code></pre></div>
+<p>The <code>config</code> field accepts any supported <a href="https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html">librdkafka client configuration</a> option as a flat <code>key: value</code> pair. By default,
+the built-in source sets <code>auto.offset.reset: earliest</code>, <code>session.timeout.ms: 45000</code>, <code>heartbeat.interval.ms: 15000</code>,
+<code>enable.partition.eof: false</code>, and <code>enable.auto.commit: false</code>.</p>
+<h3 id="sasl-authentication">SASL Authentication<a class="headerlink" href="#sasl-authentication" title="Permanent link">&para;</a></h3>
+<p>The built-in Kafka source supports multiple SASL auth mechanisms. To enable SASL, set <code>sasl.mechanism</code> and include only
+the matching mechanism-specific block.</p>
+<p>SASL credentials are referenced with Kubernetes Secret selectors. The <code>name</code> field is the Kubernetes Secret name, and
+the <code>key</code> field is the entry inside that Secret's <code>data</code> or <code>stringData</code>. Because <code>SecretKeySelector</code> does not include a
+namespace, create the Secret in the same namespace as the Pipeline or MonoVertex. The pipeline spec stores only the
+Secret name and key, not the credential value. Numaflow mounts the Secret into the vertex pod, and the built-in Kafka
+source reads and trims the selected value at startup.</p>
+<p>For example, create PLAIN credentials with:</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>kafka-plain-auth<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">username</span><span class="o">=</span><span class="s1">&#39;&lt;username&gt;&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">password</span><span class="o">=</span><span class="s1">&#39;&lt;password&gt;&#39;</span>
+</code></pre></div>
+<h4 id="plain">PLAIN<a class="headerlink" href="#plain" title="Permanent link">&para;</a></h4>
+<p>Use <code>PLAIN</code> when your Kafka cluster expects a username and password.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">sasl</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">mechanism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PLAIN</span>
+<span class="w">  </span><span class="nt">plain</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">userSecret</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka-plain-auth</span>
+<span class="w">      </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">username</span>
+<span class="w">    </span><span class="nt">passwordSecret</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka-plain-auth</span>
+<span class="w">      </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">password</span>
+<span class="w">    </span><span class="nt">handshake</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span><span class="c1"># Required by the API; ignored by the Rust built-in source.</span>
+</code></pre></div>
+<h4 id="scram-sha-256">SCRAM-SHA-256<a class="headerlink" href="#scram-sha-256" title="Permanent link">&para;</a></h4>
+<p>Use <code>SCRAM-SHA-256</code> when your Kafka cluster uses SCRAM credentials with SHA-256.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">sasl</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">mechanism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SCRAM-SHA-256</span>
+<span class="w">  </span><span class="nt">scramsha256</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">userSecret</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scram-sha-256-user</span>
+<span class="w">      </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scram-sha-256-user-key</span>
+<span class="w">    </span><span class="nt">passwordSecret</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scram-sha-256-password</span>
+<span class="w">      </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scram-sha-256-password-key</span>
+<span class="w">    </span><span class="nt">handshake</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span><span class="c1"># Required by the API; ignored by the Rust built-in source.</span>
+</code></pre></div>
+<h4 id="scram-sha-512">SCRAM-SHA-512<a class="headerlink" href="#scram-sha-512" title="Permanent link">&para;</a></h4>
+<p>Use <code>SCRAM-SHA-512</code> when your Kafka cluster uses SCRAM credentials with SHA-512.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">sasl</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">mechanism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SCRAM-SHA-512</span>
+<span class="w">  </span><span class="nt">scramsha512</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">userSecret</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scram-sha-512-user</span>
+<span class="w">      </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scram-sha-512-user-key</span>
+<span class="w">    </span><span class="nt">passwordSecret</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scram-sha-512-password</span>
+<span class="w">      </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scram-sha-512-password-key</span>
+<span class="w">    </span><span class="nt">handshake</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span><span class="c1"># Required by the API; ignored by the Rust built-in source.</span>
+</code></pre></div>
+<h4 id="gssapi">GSSAPI<a class="headerlink" href="#gssapi" title="Permanent link">&para;</a></h4>
+<p>Use <code>GSSAPI</code> for Kerberos. Set <code>authType</code> to <code>KRB5_KEYTAB_AUTH</code> when using <code>keytabSecret</code>, or to <code>KRB5_USER_AUTH</code> when
+using <code>passwordSecret</code>. <code>kerberosConfigSecret</code> is optional; when set, its selected Secret value is passed to librdkafka
+as the Kerberos kinit command.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">sasl</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">mechanism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GSSAPI</span>
+<span class="w">  </span><span class="nt">gssapi</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">serviceName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-service</span>
+<span class="w">    </span><span class="nt">realm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-realm</span>
+<span class="w">    </span><span class="nt">authType</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">KRB5_KEYTAB_AUTH</span>
+<span class="w">    </span><span class="nt">usernameSecret</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gssapi-username</span>
+<span class="w">      </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gssapi-username-key</span>
+<span class="w">    </span><span class="nt">keytabSecret</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gssapi-keytab</span>
+<span class="w">      </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gssapi-keytab-key</span>
+<span class="w">    </span><span class="nt">kerberosConfigSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, contains the Kerberos kinit command.</span>
+<span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-kerberos-config</span>
+<span class="w">      </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-kerberos-config-key</span>
+</code></pre></div>
+<h4 id="oauthbearer">OAUTHBEARER<a class="headerlink" href="#oauthbearer" title="Permanent link">&para;</a></h4>
+<p>Use <code>OAUTHBEARER</code> for OAuth/OIDC client credentials. <code>clientID</code> and <code>clientSecret</code> are Kubernetes Secret selectors, while
+<code>tokenEndpoint</code> is the token endpoint URL.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">sasl</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">mechanism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OAUTHBEARER</span><span class="w"> </span><span class="c1"># OAUTH is also accepted.</span>
+<span class="w">  </span><span class="nt">oauth</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">clientID</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka-oauth-client</span>
+<span class="w">      </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">clientid</span>
+<span class="w">    </span><span class="nt">clientSecret</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka-oauth-client</span>
+<span class="w">      </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">clientsecret</span>
+<span class="w">    </span><span class="nt">tokenEndpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://oauth-token.com/v1/token</span>
 </code></pre></div>
 <h2 id="faq">FAQ<a class="headerlink" href="#faq" title="Permanent link">&para;</a></h2>
 <h3 id="how-to-start-the-kafka-source-from-a-specific-offset-based-on-datetime">How to start the Kafka Source from a specific offset based on datetime?<a class="headerlink" href="#how-to-start-the-kafka-source-from-a-specific-offset-based-on-datetime" title="Permanent link">&para;</a></h3>
 <p>In order to start the Kafka Source from a specific offset based on datetime, we need to reset the offset before we start the pipeline.</p>
 <p>For example, we have a topic <code>quickstart-events</code> with 3 partitions and a consumer group <code>console-consumer-94457</code>. This example uses <code>Kafka 3.6.1</code> and localhost.
-<div class="highlight"><pre><span></span><code>➜<span class="w">  </span>kafka_2.13-3.6.1<span class="w"> </span>bin/kafka-topics.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span>--describe<span class="w"> </span>--topic<span class="w"> </span>quickstart-events<span class="w">            </span>
-Topic:<span class="w"> </span>quickstart-events<span class="w">    </span>TopicId:<span class="w"> </span>WqIN6j7hTQqGZUQWdF7AdA<span class="w"> </span>PartitionCount:<span class="w"> </span><span class="m">3</span><span class="w">   </span>ReplicationFactor:<span class="w"> </span><span class="m">1</span><span class="w">    </span>Configs:<span class="w"> </span>
+<div class="highlight"><pre><span></span><code>➜<span class="w">  </span>kafka_2.13-3.6.1<span class="w"> </span>bin/kafka-topics.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span>--describe<span class="w"> </span>--topic<span class="w"> </span>quickstart-events
+Topic:<span class="w"> </span>quickstart-events<span class="w">    </span>TopicId:<span class="w"> </span>WqIN6j7hTQqGZUQWdF7AdA<span class="w"> </span>PartitionCount:<span class="w"> </span><span class="m">3</span><span class="w">   </span>ReplicationFactor:<span class="w"> </span><span class="m">1</span><span class="w">    </span>Configs:
 <span class="w">    </span>Topic:<span class="w"> </span>quickstart-events<span class="w">    </span>Partition:<span class="w"> </span><span class="m">0</span><span class="w">    </span>Leader:<span class="w"> </span><span class="m">0</span><span class="w">   </span>Replicas:<span class="w"> </span><span class="m">0</span><span class="w"> </span>Isr:<span class="w"> </span><span class="m">0</span>
 <span class="w">    </span>Topic:<span class="w"> </span>quickstart-events<span class="w">    </span>Partition:<span class="w"> </span><span class="m">1</span><span class="w">    </span>Leader:<span class="w"> </span><span class="m">0</span><span class="w">   </span>Replicas:<span class="w"> </span><span class="m">0</span><span class="w"> </span>Isr:<span class="w"> </span><span class="m">0</span>
 <span class="w">    </span>Topic:<span class="w"> </span>quickstart-events<span class="w">    </span>Partition:<span class="w"> </span><span class="m">2</span><span class="w">    </span>Leader:<span class="w"> </span><span class="m">0</span><span class="w">   </span>Replicas:<span class="w"> </span><span class="m">0</span><span class="w"> </span>Isr:<span class="w"> </span><span class="m">0</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code>➜<span class="w">  </span>kafka_2.13-3.6.1<span class="w"> </span>bin/kafka-consumer-groups.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span>--list<span class="w"> </span>--all-groups<span class="w">                                                                                                     </span>
+<div class="highlight"><pre><span></span><code>➜<span class="w">  </span>kafka_2.13-3.6.1<span class="w"> </span>bin/kafka-consumer-groups.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span>--list<span class="w"> </span>--all-groups
 console-consumer-94457
 </code></pre></div>
 We have already consumed all the available messages in the topic <code>quickstart-events</code>, but we want to go back to some datetime and re-consume the data from that datetime.
-<div class="highlight"><pre><span></span><code>➜<span class="w">  </span>kafka_2.13-3.6.1<span class="w"> </span>bin/kafka-consumer-groups.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span>--describe<span class="w"> </span>--group<span class="w"> </span>console-consumer-94457<span class="w">                          </span>
+<div class="highlight"><pre><span></span><code>➜<span class="w">  </span>kafka_2.13-3.6.1<span class="w"> </span>bin/kafka-consumer-groups.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span>--describe<span class="w"> </span>--group<span class="w"> </span>console-consumer-94457
 
 GROUP<span class="w">                  </span>TOPIC<span class="w">             </span>PARTITION<span class="w">  </span>CURRENT-OFFSET<span class="w">  </span>LOG-END-OFFSET<span class="w">  </span>LAG<span class="w">             </span>CONSUMER-ID<span class="w">     </span>HOST<span class="w">            </span>CLIENT-ID
 console-consumer-94457<span class="w"> </span>quickstart-events<span class="w"> </span><span class="m">0</span><span class="w">          </span><span class="m">56</span><span class="w">              </span><span class="m">56</span><span class="w">              </span><span class="m">0</span><span class="w">               </span>-<span class="w">               </span>-<span class="w">               </span>-
@@ -2934,10 +3082,10 @@ console-consumer-94457<span class="w"> </span>quickstart-events<span class="w"> 
 To achieve that, before the pipeline start, we need to first stop the consumers in the consumer group <code>console-consumer-94457</code> because offsets can only be reset if the group <code>console-consumer-94457</code> is inactive. Then, reset the offsets using the desired date and time. The example command below uses UTC time.
 <div class="highlight"><pre><span></span><code>➜<span class="w">  </span>kafka_2.13-3.6.1<span class="w"> </span>bin/kafka-consumer-groups.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span>--execute<span class="w"> </span>--reset-offsets<span class="w"> </span>--group<span class="w"> </span>console-consumer-94457<span class="w"> </span>--topic<span class="w"> </span>quickstart-events<span class="w"> </span>--to-datetime<span class="w"> </span><span class="m">2024</span>-01-19T19:26:00.000
 
-GROUP<span class="w">                          </span>TOPIC<span class="w">                          </span>PARTITION<span class="w">  </span>NEW-OFFSET<span class="w">     </span>
-console-consumer-94457<span class="w">         </span>quickstart-events<span class="w">              </span><span class="m">0</span><span class="w">          </span><span class="m">54</span><span class="w">             </span>
-console-consumer-94457<span class="w">         </span>quickstart-events<span class="w">              </span><span class="m">1</span><span class="w">          </span><span class="m">26</span><span class="w">             </span>
-console-consumer-94457<span class="w">         </span>quickstart-events<span class="w">              </span><span class="m">2</span><span class="w">          </span><span class="m">0</span><span class="w"> </span>
+GROUP<span class="w">                          </span>TOPIC<span class="w">                          </span>PARTITION<span class="w">  </span>NEW-OFFSET
+console-consumer-94457<span class="w">         </span>quickstart-events<span class="w">              </span><span class="m">0</span><span class="w">          </span><span class="m">54</span>
+console-consumer-94457<span class="w">         </span>quickstart-events<span class="w">              </span><span class="m">1</span><span class="w">          </span><span class="m">26</span>
+console-consumer-94457<span class="w">         </span>quickstart-events<span class="w">              </span><span class="m">2</span><span class="w">          </span><span class="m">0</span>
 </code></pre></div>
 Now, we can start the pipeline, and the Kafka source will start consuming the topic <code>quickstart-events</code> with consumer group <code>console-consumer-94457</code> from the <code>NEW-OFFSET</code>.</p>
 <p>You may need to create a property file which contains the connectivity details and use it to connect to the clusters. Below are two example <code>config.properties</code> files: <code>SASL/PLAIN</code> and <code>TSL</code>.
