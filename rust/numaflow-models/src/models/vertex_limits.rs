@@ -24,9 +24,12 @@ pub struct VertexLimits {
     /// BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. It overrides the settings from pipeline limits.
     #[serde(rename = "bufferUsageLimit", skip_serializing_if = "Option::is_none")]
     pub buffer_usage_limit: Option<i64>,
+    /// Concurrency defines the maximum number of messages that can be actively in-flight (read but not yet acknowledged) at any given time. With read-ahead enabled, the data plane keeps reading new batches from the source/buffer until the number of in-flight messages reaches `concurrency`; once that ceiling is hit, one more batch may be pre-fetched and held ready so that completed messages can be replaced immediately. Therefore the maximum in-flight count is at most `concurrency + readBatchSize`. `readBatchSize` controls only the size of an individual read; `concurrency` controls how many messages can be processed in parallel. It overrides the settings from pipeline limits. By default, read-ahead is disabled on source vertices and enabled on Map/Sink/Reduce vertices. To force strictly sequential processing, set `concurrency` to 1 and disable read-ahead via the `NUMAFLOW_READ_AHEAD` environment variable on the vertex's container template.
+    #[serde(rename = "concurrency", skip_serializing_if = "Option::is_none")]
+    pub concurrency: Option<i64>,
     #[serde(rename = "rateLimit", skip_serializing_if = "Option::is_none")]
     pub rate_limit: Option<Box<crate::models::RateLimit>>,
-    /// Read batch size from the source or buffer. It overrides the settings from pipeline limits.
+    /// Read batch size from the source or buffer. It overrides the settings from pipeline limits. ReadBatchSize controls only how many messages are fetched in a single read call from the source/buffer; it is not a cap on how many messages may be in-flight (use `concurrency` for that).
     #[serde(rename = "readBatchSize", skip_serializing_if = "Option::is_none")]
     pub read_batch_size: Option<i64>,
     #[serde(rename = "readTimeout", skip_serializing_if = "Option::is_none")]
@@ -38,6 +41,7 @@ impl VertexLimits {
         VertexLimits {
             buffer_max_length: None,
             buffer_usage_limit: None,
+            concurrency: None,
             rate_limit: None,
             read_batch_size: None,
             read_timeout: None,

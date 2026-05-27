@@ -471,7 +471,7 @@ func Test_reconcile(t *testing.T) {
 }
 
 func Test_buildVertices(t *testing.T) {
-	r := buildVertices(testPipeline)
+	r := buildVertices(testPipeline, zaptest.NewLogger(t).Sugar())
 	assert.Equal(t, 3, len(r))
 	_, existing := r[testPipeline.Name+"-"+testPipeline.Spec.Vertices[0].Name]
 	assert.True(t, existing)
@@ -482,7 +482,7 @@ func Test_buildReducesVertices(t *testing.T) {
 	pl := testReducePipeline.DeepCopy()
 	pl.Spec.Vertices[1].UDF.GroupBy.Keyed = true
 	pl.Spec.Vertices[1].Partitions = ptr.To[int32](2)
-	r := buildVertices(pl)
+	r := buildVertices(pl, zaptest.NewLogger(t).Sugar())
 	assert.Equal(t, 6, len(r))
 	_, existing := r[pl.Name+"-"+pl.Spec.Vertices[1].Name]
 	assert.True(t, existing)
