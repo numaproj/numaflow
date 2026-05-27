@@ -216,6 +216,8 @@ func (r *ReduceSuite) testStreamSorter(lang string) {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
+	defer w.StreamVertexPodLogs("accum", "numa").StreamVertexPodLogs("accum", "udf").TerminateAllPodLogs()
+
 	done := make(chan struct{})
 	go func() {
 		// publish out-of-order messages to source vertices
