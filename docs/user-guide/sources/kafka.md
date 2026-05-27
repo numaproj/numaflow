@@ -30,83 +30,150 @@ spec:
           brokers:
             - my-broker1:19700
             - my-broker2:19700
-          topic: my-topic # Use commas to specify multiple topics.
+          topic: my-topic # Use comma-separated topic names to consume from multiple topics.
           consumerGroup: my-consumer-group
-          config: | # Optional.
-            consumer:
-              offsets:
-                initial: -2 # -2 for sarama.OffsetOldest, -1 for sarama.OffsetNewest. Default to sarama.OffsetNewest.
+          # Optional, flat librdkafka client configuration. Use one `key: value`
+          # pair per line.
+          config: |
+            auto.offset.reset: earliest
+            session.timeout.ms: 45000
           tls: # Optional.
-            insecureSkipVerify: # Optional, whether to skip TLS verification. Default to false.
-            caCertSecret: # Optional, a secret reference, which contains the CA Cert.
+            insecureSkipVerify: false # Optional, whether to skip TLS verification. Default to false.
+            caCertSecret: # Optional, a secret reference which contains the CA certificate.
               name: my-ca-cert
               key: my-ca-cert-key
-            certSecret: # Optional, pointing to a secret reference which contains the Cert.
+            certSecret: # Optional, a secret reference which contains the client certificate.
               name: my-cert
               key: my-cert-key
-            keySecret: # Optional, pointing to a secret reference which contains the Private Key.
+            keySecret: # Required when certSecret is set; contains the client private key.
               name: my-pk
               key: my-pk-key
-          sasl: # Optional
-            mechanism: GSSAPI # PLAIN, GSSAPI, SCRAM-SHA-256 or SCRAM-SHA-512, other mechanisms not supported
-            gssapi: # Optional, for GSSAPI mechanism
-              serviceName: my-service
-              realm: my-realm
-              # KRB5_USER_AUTH for auth using password
-              # KRB5_KEYTAB_AUTH for auth using keytab
-              authType: KRB5_KEYTAB_AUTH 
-              usernameSecret: # Pointing to a secret reference which contains the username
-                name: gssapi-username
-                key: gssapi-username-key
-              # Pointing to a secret reference which contains the keytab (authType: KRB5_KEYTAB_AUTH)
-              keytabSecret: 
-                name: gssapi-keytab
-                key: gssapi-keytab-key
-              # Pointing to a secret reference which contains the keytab (authType: KRB5_USER_AUTH)
-              passwordSecret: 
-                name: gssapi-password
-                key: gssapi-password-key
-              kerberosConfigSecret: # Pointing to a secret reference which contains the kerberos config
-                name: my-kerberos-config
-                key: my-kerberos-config-key
-            plain: # Optional, for PLAIN mechanism
-              userSecret: # Pointing to a secret reference which contains the user
-                name: plain-user
-                key: plain-user-key
-              passwordSecret: # Pointing to a secret reference which contains the password
-                name: plain-password
-                key: plain-password-key
-              # Send the Kafka SASL handshake first if enabled (defaults to true)
-              # Set this to false if using a non-Kafka SASL proxy
-              handshake: true 
-            scramsha256: # Optional, for SCRAM-SHA-256 mechanism
-              userSecret: # Pointing to a secret reference which contains the user
-                name: scram-sha-256-user
-                key: scram-sha-256-user-key
-              passwordSecret: # Pointing to a secret reference which contains the password
-                name: scram-sha-256-password
-                key: scram-sha-256-password-key
-              # Send the Kafka SASL handshake first if enabled (defaults to true)
-              # Set this to false if using a non-Kafka SASL proxy
-              handshake: true 
-            scramsha512: # Optional, for SCRAM-SHA-512 mechanism
-              userSecret: # Pointing to a secret reference which contains the user
-                name: scram-sha-512-user
-                key: scram-sha-512-user-key
-              passwordSecret: # Pointing to a secret reference which contains the password
-                name: scram-sha-512-password
-                key: scram-sha-512-password-key
-              # Send the Kafka SASL handshake first if enabled (defaults to true)
-              # Set this to false if using a non-Kafka SASL proxy
-              handshake: true
-            oauth:  #Optional, for OAUTHBEARER mechanism
-              clientID: # Pointing to a secret reference which contains the client id
-                name: kafka-oauth-client
-                key: clientid 
-              clientSecret: # Pointing to a secret reference which contains the client secret
-                name: kafka-oauth-client
-                key: clientsecret 
-              tokenEndpoint: https://oauth-token.com/v1/token
+          sasl: # Optional. This example uses PLAIN; other mechanisms are listed below.
+            mechanism: PLAIN
+            plain:
+              userSecret:
+                name: kafka-plain-auth
+                key: username
+              passwordSecret:
+                name: kafka-plain-auth
+                key: password
+              handshake: true # Required by the API; ignored by the Rust built-in source.
+```
+
+The `config` field accepts any supported [librdkafka client configuration](https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html) option as a flat `key: value` pair. By default,
+the built-in source sets `auto.offset.reset: earliest`, `session.timeout.ms: 45000`, `heartbeat.interval.ms: 15000`,
+`enable.partition.eof: false`, and `enable.auto.commit: false`.
+
+### SASL Authentication
+
+The built-in Kafka source supports multiple SASL auth mechanisms. To enable SASL, set `sasl.mechanism` and include only
+the matching mechanism-specific block.
+
+SASL credentials are referenced with Kubernetes Secret selectors. The `name` field is the Kubernetes Secret name, and
+the `key` field is the entry inside that Secret's `data` or `stringData`. Because `SecretKeySelector` does not include a
+namespace, create the Secret in the same namespace as the Pipeline or MonoVertex. The pipeline spec stores only the
+Secret name and key, not the credential value. Numaflow mounts the Secret into the vertex pod, and the built-in Kafka
+source reads and trims the selected value at startup.
+
+For example, create PLAIN credentials with:
+
+```shell
+kubectl create secret generic kafka-plain-auth \
+  --from-literal=username='<username>' \
+  --from-literal=password='<password>'
+```
+
+#### PLAIN
+
+Use `PLAIN` when your Kafka cluster expects a username and password.
+
+```yaml
+sasl:
+  mechanism: PLAIN
+  plain:
+    userSecret:
+      name: kafka-plain-auth
+      key: username
+    passwordSecret:
+      name: kafka-plain-auth
+      key: password
+    handshake: true # Required by the API; ignored by the Rust built-in source.
+```
+
+#### SCRAM-SHA-256
+
+Use `SCRAM-SHA-256` when your Kafka cluster uses SCRAM credentials with SHA-256.
+
+```yaml
+sasl:
+  mechanism: SCRAM-SHA-256
+  scramsha256:
+    userSecret:
+      name: scram-sha-256-user
+      key: scram-sha-256-user-key
+    passwordSecret:
+      name: scram-sha-256-password
+      key: scram-sha-256-password-key
+    handshake: true # Required by the API; ignored by the Rust built-in source.
+```
+
+#### SCRAM-SHA-512
+
+Use `SCRAM-SHA-512` when your Kafka cluster uses SCRAM credentials with SHA-512.
+
+```yaml
+sasl:
+  mechanism: SCRAM-SHA-512
+  scramsha512:
+    userSecret:
+      name: scram-sha-512-user
+      key: scram-sha-512-user-key
+    passwordSecret:
+      name: scram-sha-512-password
+      key: scram-sha-512-password-key
+    handshake: true # Required by the API; ignored by the Rust built-in source.
+```
+
+#### GSSAPI
+
+Use `GSSAPI` for Kerberos. Set `authType` to `KRB5_KEYTAB_AUTH` when using `keytabSecret`, or to `KRB5_USER_AUTH` when
+using `passwordSecret`. `kerberosConfigSecret` is optional; when set, its selected Secret value is passed to librdkafka
+as the Kerberos kinit command.
+
+```yaml
+sasl:
+  mechanism: GSSAPI
+  gssapi:
+    serviceName: my-service
+    realm: my-realm
+    authType: KRB5_KEYTAB_AUTH
+    usernameSecret:
+      name: gssapi-username
+      key: gssapi-username-key
+    keytabSecret:
+      name: gssapi-keytab
+      key: gssapi-keytab-key
+    kerberosConfigSecret: # Optional, contains the Kerberos kinit command.
+      name: my-kerberos-config
+      key: my-kerberos-config-key
+```
+
+#### OAUTHBEARER
+
+Use `OAUTHBEARER` for OAuth/OIDC client credentials. `clientID` and `clientSecret` are Kubernetes Secret selectors, while
+`tokenEndpoint` is the token endpoint URL.
+
+```yaml
+sasl:
+  mechanism: OAUTHBEARER # OAUTH is also accepted.
+  oauth:
+    clientID:
+      name: kafka-oauth-client
+      key: clientid
+    clientSecret:
+      name: kafka-oauth-client
+      key: clientsecret
+    tokenEndpoint: https://oauth-token.com/v1/token
 ```
 
 ## FAQ
@@ -115,19 +182,19 @@ In order to start the Kafka Source from a specific offset based on datetime, we 
 
 For example, we have a topic `quickstart-events` with 3 partitions and a consumer group `console-consumer-94457`. This example uses `Kafka 3.6.1` and localhost.
 ```shell
-➜  kafka_2.13-3.6.1 bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic quickstart-events            
-Topic: quickstart-events	TopicId: WqIN6j7hTQqGZUQWdF7AdA	PartitionCount: 3	ReplicationFactor: 1	Configs: 
+➜  kafka_2.13-3.6.1 bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic quickstart-events
+Topic: quickstart-events	TopicId: WqIN6j7hTQqGZUQWdF7AdA	PartitionCount: 3	ReplicationFactor: 1	Configs:
 	Topic: quickstart-events	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
 	Topic: quickstart-events	Partition: 1	Leader: 0	Replicas: 0	Isr: 0
 	Topic: quickstart-events	Partition: 2	Leader: 0	Replicas: 0	Isr: 0
 ```
 ```shell
-➜  kafka_2.13-3.6.1 bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list --all-groups                                                                                                     
+➜  kafka_2.13-3.6.1 bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list --all-groups
 console-consumer-94457
 ```
 We have already consumed all the available messages in the topic `quickstart-events`, but we want to go back to some datetime and re-consume the data from that datetime.
 ```shell
-➜  kafka_2.13-3.6.1 bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group console-consumer-94457                          
+➜  kafka_2.13-3.6.1 bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group console-consumer-94457
 
 GROUP                  TOPIC             PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID     HOST            CLIENT-ID
 console-consumer-94457 quickstart-events 0          56              56              0               -               -               -
@@ -138,10 +205,10 @@ To achieve that, before the pipeline start, we need to first stop the consumers 
 ```shell
 ➜  kafka_2.13-3.6.1 bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --execute --reset-offsets --group console-consumer-94457 --topic quickstart-events --to-datetime 2024-01-19T19:26:00.000
 
-GROUP                          TOPIC                          PARTITION  NEW-OFFSET     
-console-consumer-94457         quickstart-events              0          54             
-console-consumer-94457         quickstart-events              1          26             
-console-consumer-94457         quickstart-events              2          0 
+GROUP                          TOPIC                          PARTITION  NEW-OFFSET
+console-consumer-94457         quickstart-events              0          54
+console-consumer-94457         quickstart-events              1          26
+console-consumer-94457         quickstart-events              2          0
 ```
 Now, we can start the pipeline, and the Kafka source will start consuming the topic `quickstart-events` with consumer group `console-consumer-94457` from the `NEW-OFFSET`.
 

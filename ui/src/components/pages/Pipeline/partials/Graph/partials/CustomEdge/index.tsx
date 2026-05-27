@@ -17,6 +17,42 @@ import error from "../../../../../../../images/error.svg";
 import "@xyflow/react/dist/style.css";
 import "./style.css";
 
+const getMonoVertexBypassPath = ({
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  bypassTarget,
+  bypassTargetFanOut,
+}: {
+  sourceX: number;
+  sourceY: number;
+  targetX: number;
+  targetY: number;
+  bypassTarget?: string;
+  bypassTargetFanOut?: boolean;
+}): [string, number, number] => {
+  const direction = targetX >= sourceX ? 1 : -1;
+  const distance = Math.abs(targetX - sourceX);
+  const lead = Math.min(Math.max(distance * 0.18, 16), 34);
+  const midX = (sourceX + targetX) / 2;
+  const minY = Math.min(sourceY, targetY);
+  const maxY = Math.max(sourceY, targetY);
+  const isUpperFanOutTarget =
+    bypassTarget === "onSuccess" && bypassTargetFanOut;
+  const laneY =
+    isUpperFanOutTarget
+      ? Math.max(minY - 24, 8)
+      : bypassTarget === "fallback"
+      ? maxY + 28
+      : maxY + 22;
+  const sourceLeadX = sourceX + direction * lead;
+  const targetLeadX = targetX - direction * lead;
+  const edgePath = `M ${sourceX} ${sourceY} C ${sourceLeadX} ${sourceY} ${sourceLeadX} ${laneY} ${midX} ${laneY} C ${targetLeadX} ${laneY} ${targetLeadX} ${targetY} ${targetX} ${targetY}`;
+
+  return [edgePath, midX, laneY];
+};
+
 const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
   id,
   sourceX,
@@ -29,12 +65,27 @@ const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
   markerEnd,
 }) => {
   const edgeOffset = 50;
-  const useStraightPath = !data?.backEdge && !data?.selfEdge && !data?.sideInputEdge;
+  const useStraightPath =
+    !data?.backEdge &&
+    !data?.selfEdge &&
+    !data?.sideInputEdge &&
+    !data?.monoVertexBypassEdge;
 
   let edgePath: string;
   let labelRenderer = "";
 
-  if (useStraightPath) {
+  if (data?.monoVertexBypassEdge) {
+    const [bypassPath, labelX, labelY] = getMonoVertexBypassPath({
+      sourceX,
+      sourceY,
+      targetX,
+      targetY,
+      bypassTarget: data?.bypassTarget,
+      bypassTargetFanOut: data?.bypassTargetFanOut,
+    });
+    edgePath = bypassPath;
+    labelRenderer = `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`;
+  } else if (useStraightPath) {
     const [path] = getStraightPath({
       sourceX,
       sourceY,
@@ -117,7 +168,7 @@ const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
   }, [data]);
 
   useEffect(() => {
-    if (data?.sideInputEdge) return;
+    if (data?.sideInputEdge || data?.monoVertexBypassEdge) return;
     let sourceClass = `source-handle-${data?.source}`;
     let targetClass = `target-handle-${data?.target}`;
     if (data?.backEdge) {
@@ -145,20 +196,46 @@ const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
     ) {
       style["opacity"] = 0.5;
     }
+    if (
+      highlightValues.monoVertexBypass &&
+      (data?.monoVertexInternalEdge || data?.monoVertexBypassEdge) &&
+      !highlightValues[id]
+    ) {
+      style["opacity"] = 0.25;
+    }
     return style;
-  }, [highlightValues, sideInputNodes, sideInputEdges]);
+  }, [highlightValues, sideInputNodes, sideInputEdges, data, id]);
 
   const edgeStyle = useMemo(() => {
+    const isMonoVertexEdge =
+      data?.monoVertexInternalEdge || data?.monoVertexBypassEdge;
     return {
-      stroke: highlightValues[id]
+      stroke: data?.monoVertexBypassEdge
+        ? "var(--mono-vertex-bypass-color)"
+        : highlightValues[id]
         ? "black"
         : data?.sideInputEdge
         ? "#274C77"
+        : data?.monoVertexInternalEdge
+        ? "#8D9096"
         : getColor,
-      strokeWidth: 2,
+      strokeWidth:
+        data?.monoVertexBypassEdge
+          ? 1.2
+          : isMonoVertexEdge
+          ? 1.2
+          : 2,
+      ...(data?.monoVertexBypassEdge
+        ? {
+            animation: "monoVertexBypassFlow 0.8s linear infinite",
+            pointerEvents: "none",
+            strokeDasharray: "4 4",
+            strokeDashoffset: 0,
+          }
+        : {}),
       ...commonStyle,
     };
-  }, [highlightValues, getColor, data, commonStyle]);
+  }, [highlightValues, getColor, data, commonStyle, id]);
 
   const getMinWM = useMemo(() => {
     if (data?.edgeWatermark?.watermarks) {
@@ -215,7 +292,7 @@ const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
         style={edgeStyle}
         data-testid={id}
         markerEnd={markerEnd}
-        interactionWidth={40}
+        interactionWidth={data?.monoVertexBypassEdge ? 0 : 40}
       />
       <EdgeLabelRenderer>
         <div
@@ -251,31 +328,33 @@ const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
               <div />
             </Tooltip>
           )}
-          <Tooltip
-            title={
-              <div className={"edge-tooltip"}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: "100%",
-                  }}
-                >
-                  {data?.isFull && <img src={error} alt={"error"} />}
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
-                    <span>Pending: {data?.pendingLabel || 0}</span>
-                    <span>AckPending: {data?.ackPendingLabel || 0}</span>
+          {!data?.monoVertexInternalEdge && !data?.monoVertexBypassEdge && (
+            <Tooltip
+              title={
+                <div className={"edge-tooltip"}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "100%",
+                    }}
+                  >
+                    {data?.isFull && <img src={error} alt={"error"} />}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
+                      <span>Pending: {data?.pendingLabel || 0}</span>
+                      <span>AckPending: {data?.ackPendingLabel || 0}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            }
-            arrow
-            placement={sourceY === targetY ? "bottom" : "right"}
-            open={hoveredEdge === id}
-          >
-            <div />
-          </Tooltip>
+              }
+              arrow
+              placement={sourceY === targetY ? "bottom" : "right"}
+              open={hoveredEdge === id}
+            >
+              <div />
+            </Tooltip>
+          )}
         </div>
       </EdgeLabelRenderer>
     </>

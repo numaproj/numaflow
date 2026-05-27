@@ -36,6 +36,25 @@
   right: 8%;
 }
 
+.node-rate-mono {
+  display: flex;
+  min-width: 9.4rem;
+  height: 2.3rem;
+  border-radius: 2rem;
+  background: var(--node-bg);
+  color: var(--node-text);
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 1.35rem;
+  font-style: normal;
+  font-weight: 500;
+  line-height: normal;
+  justify-content: center;
+  align-items: center;
+  position: absolute;
+  bottom: -1.2rem;
+  right: 1.8rem;
+}
+
 .node-pods {
   display: flex;
   width: 10rem;
@@ -58,6 +77,30 @@
 
 .node-pods > img {
   width: 2rem;
+}
+
+.node-pods-mono {
+  display: flex;
+  width: 8.6rem;
+  height: 2.3rem;
+  border-radius: 2rem;
+  background: var(--node-bg);
+  color: var(--node-text);
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 1.35rem;
+  font-style: normal;
+  font-weight: 700;
+  line-height: normal;
+  justify-content: space-evenly;
+  align-items: center;
+  position: absolute;
+  top: -0.9rem;
+  left: 2.4rem;
+  text-transform: lowercase;
+}
+
+.node-pods-mono > img {
+  width: 1.9rem;
 }
 
 .node-status {
@@ -100,6 +143,15 @@
   height: auto;
 }
 
+.react-flow__node-input--mono-vertex {
+  width: 42rem;
+  height: 17rem;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: visible;
+}
+
 .pipeline-sink-container-row,
 .pipeline-source-container-row {
   padding: 0.2rem 0;
@@ -125,8 +177,10 @@
 
 .node-info-mono {
   display: flex;
+  position: relative;
+  top: -1.2rem;
   width: 100%;
-  height: 50%;
+  height: 4.8rem;
   flex-direction: column;
   justify-content: center;
   color: var(--node-text);
@@ -139,6 +193,121 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.mono-vertex-flow {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 0 1.6rem 2rem 1.6rem;
+}
+
+.mono-vertex-main-flow {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 100%;
+}
+
+.mono-vertex-stage-group {
+  display: flex;
+  align-items: center;
+}
+
+.mono-vertex-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-width: 4.6rem;
+  cursor: pointer;
+}
+
+.mono-vertex-stage-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 3.2rem;
+  width: 3.2rem;
+  border-radius: 50%;
+  border: 1px solid var(--border-secondary);
+  background: var(--bg-secondary);
+}
+
+.mono-vertex-stage-icon > img {
+  height: 1.7rem;
+  width: 1.7rem;
+}
+
+.mono-vertex-stage-label {
+  color: var(--node-text);
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.mono-vertex-branch-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-left: 0.2rem;
+}
+
+.mono-vertex-branch-row {
+  display: flex;
+  align-items: center;
+}
+
+.mono-vertex-bypass-markers {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 0.1rem;
+  display: flex;
+  transform: translateX(-50%);
+  gap: 0.8rem;
+}
+
+.mono-vertex-bypass-marker {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--mono-vertex-bypass-color);
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mono-vertex-bypass-marker > img {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.mono-vertex-bypass-lines {
+  position: absolute;
+  z-index: 1;
+  top: 0.6rem;
+  left: 2.4rem;
+  width: 36rem;
+  height: 12rem;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.mono-vertex-bypass-line {
+  fill: none;
+  stroke: var(--mono-vertex-bypass-color);
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
 }
 
 .mono-vertex-img-wrapper {
@@ -169,6 +338,58 @@
 .mono-vertex-img-small {
   height: 0.9rem;
   width: 0.9rem;
+}
+
+.mono-vertex-internal-node {
+  height: 3.2rem;
+  width: 3.2rem;
+  border-radius: 50%;
+  border: 1px solid var(--border-secondary);
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+}
+
+.mono-vertex-internal-node-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mono-vertex-internal-node-icon > img {
+  height: 1.4rem;
+  width: 1.4rem;
+}
+
+.mono-vertex-bypass-handle {
+  position: absolute;
+  bottom: -1rem;
+  left: 50%;
+  width: 1.1rem;
+  height: 1.1rem;
+  cursor: pointer;
+  opacity: 0.85;
+  z-index: 2;
+  transform: translateX(-50%);
+}
+
+.mono-vertex-bypass-handle:hover {
+  opacity: 1;
+}
+
+.mono-vertex-internal-node .react-flow__handle {
+  height: 0.1rem;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  width: 0.1rem;
+}
+
+.react-flow__edge[data-id*="mono-vertex"] {
+  z-index: 4;
 }
 
 /* Pipeline sink/source container icons - slightly larger for visibility */

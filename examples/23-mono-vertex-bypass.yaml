@@ -1,0 +1,45 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: mono-vertex-bypass
+spec:
+  source:
+    udsource:
+      container:
+        image: quay.io/numaio/numaflow-rs/simple-source:stable
+  udf:
+    container:
+      image: quay.io/numaio/numaflow-go/map-cat:stable
+      imagePullPolicy: IfNotPresent
+  sink:
+    # Primary sink with optional fallback and onSuccess sinks.
+    udsink:
+      container:
+        image: quay.io/numaio/numaflow-rs/sink-log:stable
+    fallback:
+      udsink:
+        container:
+          image: quay.io/numaio/numaflow-go/fb-sink-log:stable
+    onSuccess:
+      udsink:
+        container:
+          image: quay.io/numaio/numaflow-go/fb-sink-log:stable
+  # Route tagged messages directly to the matching sink destination.
+  bypass:
+    fallback:
+      tags:
+        operator: or
+        values:
+          - corrupted
+          - parse-error
+    onSuccess:
+      tags:
+        operator: and
+        values:
+          - audit
+          - high-priority
+    sink:
+      tags:
+        operator: not
+        values:
+          - drop
