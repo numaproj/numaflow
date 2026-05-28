@@ -10,6 +10,7 @@
   --accent-primary: #0077C5;
   --node-bg: #d1dee9;
   --node-text: #274c77;
+  --mono-vertex-bypass-color: #274C77;
   --appbar-gradient: linear-gradient(90deg, #00254A 2.77%, #3492EF 105.54%);
 }
 
@@ -25,6 +26,7 @@
   --accent-primary: #38BDF8;
   --node-bg: #3F3F46;
   --node-text: #E4E4E7;
+  --mono-vertex-bypass-color: var(--accent-primary);
   --appbar-gradient: linear-gradient(90deg, #0F172A 2.77%, #1E3A5F 105.54%);
 }
 

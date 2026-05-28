@@ -115,9 +115,24 @@ export interface MonoVertex {
   status?: any;
 }
 
+export interface MonoVertexBypassRule {
+  tags?: {
+    operator?: "and" | "or" | "not";
+    values?: string[];
+  };
+}
+
+export interface MonoVertexBypass {
+  sink?: MonoVertexBypassRule;
+  onSuccess?: MonoVertexBypassRule;
+  fallback?: MonoVertexBypassRule;
+}
+
 export interface MonoVertexSpec {
   source: any;
   sink: any;
+  udf?: any;
+  bypass?: MonoVertexBypass;
   scale: any;
 }
 
@@ -229,3 +244,4 @@ export interface PipelineHealthData {
   resourceHealthMessage: string;
   resourceHealthStatus: string;
 }
+

@@ -525,6 +525,42 @@ describe("Graph", () => {
     });
   });
 
+  it("renders MonoVertex legend with internal stage icons", async () => {
+    render(
+      <AppContext.Provider value={mockContext}>
+        <Graph
+          namespaceId="test"
+          data={{
+            ...mockData,
+            edges: [],
+            vertices: [],
+          }}
+          pipelineId="simple-pipeline"
+          type="monoVertex"
+          refresh={() => {
+            return;
+          }}
+        />
+      </AppContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("graph")).toBeInTheDocument();
+    });
+    [
+      "MonoVertex",
+      "Source",
+      "Transformer",
+      "Map",
+      "Sink",
+      "OnSuccess",
+      "Fallback",
+      "Bypass",
+    ].forEach((legendItem) => {
+      expect(screen.getByText(legendItem)).toBeInTheDocument();
+    });
+  });
+
   it("should not crash if data is null", () => {
     const mockData: GraphData = {
       edges: [],

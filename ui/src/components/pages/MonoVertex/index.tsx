@@ -47,6 +47,7 @@ export function MonoVertex({ namespaceId: nsIdProp }: MonoVertexProps) {
   const {
     pipeline,
     vertices,
+    edges,
     pipelineErr,
     loading,
     refresh: graphRefresh,
@@ -220,7 +221,7 @@ export function MonoVertex({ namespaceId: nsIdProp }: MonoVertexProps) {
       <GeneratorColorContext.Provider value={new Map()}>
         <Graph
           data={{
-            edges: [],
+            edges: edges,
             vertices: vertices,
             pipeline: pipeline,
           }}
@@ -235,6 +236,7 @@ export function MonoVertex({ namespaceId: nsIdProp }: MonoVertexProps) {
     pipelineErr,
     loading,
     vertices,
+    edges,
     pipeline,
     namespaceId,
     pipelineId,
