@@ -604,9 +604,6 @@ type MonoVertexLimits struct {
 	// `readBatchSize` controls only the size of an individual read; `concurrency` controls how many
 	// messages can be processed in parallel. To force strictly sequential processing, set
 	// `concurrency` to 1 (read-ahead is already off by default for MonoVertex).
-	// When unset, the data plane falls back to `readBatchSize` so that in-flight messages remain
-	// implicitly bounded by the batch size — preserving the historical behavior and avoiding
-	// parallel write reordering for ordered output paths.
 	// +kubebuilder:validation:Minimum=1
 	// +optional
 	Concurrency *uint64 `json:"concurrency,omitempty" protobuf:"varint,4,opt,name=concurrency"`

@@ -721,9 +721,6 @@ type PipelineLimits struct {
 	// Reduce vertices. To force strictly sequential processing, set `concurrency` to 1 and disable
 	// read-ahead via the `NUMAFLOW_READ_AHEAD` environment variable on the vertex's container template.
 	// Can be overridden by the vertex's limit settings.
-	// When unset, defaults to the effective `readBatchSize` via `GetPipelineLimits()` so that
-	// in-flight messages remain implicitly bounded by the batch size — preserving the
-	// historical behavior and avoiding parallel write reordering for ordered output paths.
 	// +kubebuilder:validation:Minimum=1
 	// +optional
 	Concurrency *uint64 `json:"concurrency,omitempty" protobuf:"varint,6,opt,name=concurrency"`

@@ -1067,9 +1067,6 @@ message MonoVertexLimits {
   // `readBatchSize` controls only the size of an individual read; `concurrency` controls how many
   // messages can be processed in parallel. To force strictly sequential processing, set
   // `concurrency` to 1 (read-ahead is already off by default for MonoVertex).
-  // When unset, the data plane falls back to `readBatchSize` so that in-flight messages remain
-  // implicitly bounded by the batch size — preserving the historical behavior and avoiding
-  // parallel write reordering for ordered output paths.
   // +kubebuilder:validation:Minimum=1
   // +optional
   optional uint64 concurrency = 4;
@@ -1343,9 +1340,6 @@ message PipelineLimits {
   // Reduce vertices. To force strictly sequential processing, set `concurrency` to 1 and disable
   // read-ahead via the `NUMAFLOW_READ_AHEAD` environment variable on the vertex's container template.
   // Can be overridden by the vertex's limit settings.
-  // When unset, defaults to the effective `readBatchSize` via `GetPipelineLimits()` so that
-  // in-flight messages remain implicitly bounded by the batch size — preserving the
-  // historical behavior and avoiding parallel write reordering for ordered output paths.
   // +kubebuilder:validation:Minimum=1
   // +optional
   optional uint64 concurrency = 6;
