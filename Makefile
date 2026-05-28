@@ -153,10 +153,15 @@ cleanup-e2e:
 	kubectl -n numaflow-system delete po -lnumaflow-e2e=true --ignore-not-found=true
 
 # To run just one of the e2e tests by name (i.e. 'make TestCreateSimplePipeline'):
+# Set SKIP_IMAGE_BUILD=true to skip rebuilding the main image and restarting the
+# controller-manager pod (useful for iterative test runs when only test code changed).
 Test%:
 	$(MAKE) cleanup-e2e
-	$(MAKE) image e2eapi-image
+ifndef SKIP_IMAGE_BUILD
+	$(MAKE) image
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
+endif
+	$(MAKE) e2eapi-image
 	kubectl -n numaflow-system delete po e2e-api-pod  --ignore-not-found=true
 	go generate $(shell find $(shell grep -rl $(*) ./test/*-e2e/*.go))
 	cat test/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
