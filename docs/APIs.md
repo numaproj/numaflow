@@ -6707,7 +6707,10 @@ readBatchSize)</code>. <code>readBatchSize</code> controls only the size
 of an individual read; <code>concurrency</code> controls how many
 messages can be processed in parallel. To force strictly sequential
 processing, set <code>concurrency</code> to 1 (read-ahead is already off
-by default for MonoVertex).
+by default for MonoVertex). When unset, the data plane falls back to
+<code>readBatchSize</code> so that in-flight messages remain implicitly
+bounded by the batch size — preserving the historical behavior and
+avoiding parallel write reordering for ordered output paths.
 </p>
 
 </td>
@@ -8398,7 +8401,11 @@ enabled on Map/Sink/ Reduce vertices. To force strictly sequential
 processing, set <code>concurrency</code> to 1 and disable read-ahead via
 the <code>NUMAFLOW_READ_AHEAD</code> environment variable on the
 vertex’s container template. Can be overridden by the vertex’s limit
-settings.
+settings. When unset, defaults to the effective
+<code>readBatchSize</code> via <code>GetPipelineLimits()</code> so that
+in-flight messages remain implicitly bounded by the batch size —
+preserving the historical behavior and avoiding parallel write
+reordering for ordered output paths.
 </p>
 
 </td>
