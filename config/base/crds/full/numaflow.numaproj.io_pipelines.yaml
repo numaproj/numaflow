@@ -153,7 +153,6 @@ spec:
                     format: int32
                     type: integer
                   concurrency:
-                    default: 500
                     format: int64
                     minimum: 1
                     type: integer

@@ -2610,7 +2610,6 @@ spec:
               limits:
                 properties:
                   concurrency:
-                    default: 500
                     format: int64
                     minimum: 1
                     type: integer
