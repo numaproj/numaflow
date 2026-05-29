@@ -25,6 +25,7 @@ import (
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	mvtdaemonclient "github.com/numaproj/numaflow/pkg/mvtxdaemon/client"
+	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 // ToolDefinition pairs an MCP tool with the handler that serves it.
@@ -75,10 +76,15 @@ func NewRegistry(
 		numaflowClient:   numaflowClient,
 		defaultNamespace: defaultNamespace,
 	}
+	var connector *daemonConnector
+	if restConfig, err := util.K8sRestConfig(); err == nil {
+		connector = newDaemonConnector(restConfig, kubeClient)
+	}
 	dr := daemonRegistry{
 		registry:              base,
 		daemonClientsCache:    daemonCache,
 		mvtDaemonClientsCache: mvtCache,
+		daemonConnector:       connector,
 		daemonProtocol:        daemonProtocol,
 	}
 	return &k8sRegistry{

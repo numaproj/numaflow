@@ -67,6 +67,7 @@ type daemonRegistry struct {
 	registry
 	daemonClientsCache    *lru.Cache[string, daemonclient.DaemonClient]
 	mvtDaemonClientsCache *lru.Cache[string, mvtdaemonclient.MonoVertexDaemonClient]
+	daemonConnector       *daemonConnector
 	daemonProtocol        string
 }
 
@@ -77,7 +78,11 @@ func (r *daemonRegistry) getPipelineDaemonClient(ns, pipeline string) (daemoncli
 	if c, ok := r.daemonClientsCache.Get(addr); ok {
 		return c, nil
 	}
-	c, err := daemonClientFactory(addr, r.daemonProtocol)
+	dialAddr, err := r.daemonConnector.resolve(context.Background(), addr)
+	if err != nil {
+		return nil, err
+	}
+	c, err := daemonClientFactory(dialAddr, r.daemonProtocol)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +97,11 @@ func (r *daemonRegistry) getMonoVertexDaemonClient(ns, monoVertex string) (mvtda
 	if c, ok := r.mvtDaemonClientsCache.Get(addr); ok {
 		return c, nil
 	}
-	c, err := mvtDaemonClientFactory(addr, r.daemonProtocol)
+	dialAddr, err := r.daemonConnector.resolve(context.Background(), addr)
+	if err != nil {
+		return nil, err
+	}
+	c, err := mvtDaemonClientFactory(dialAddr, r.daemonProtocol)
 	if err != nil {
 		return nil, err
 	}
