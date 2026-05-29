@@ -46,4 +46,5 @@ func init() {
 	rootCmd.AddCommand(NewWebhookCommand())
 	rootCmd.AddCommand(NewDexServerInitCommand())
 	rootCmd.AddCommand(NewMonoVtxDaemonServerCommand())
+	rootCmd.AddCommand(NewMCPServerCommand())
 }
