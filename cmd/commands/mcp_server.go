@@ -27,33 +27,81 @@ import (
 
 func NewMCPServerCommand() *cobra.Command {
 	var (
-		kubeconfig string
-		namespace  string
+		kubeconfig     string
+		namespace      string
+		httpMode       bool
+		port           int
+		insecure       bool
+		certFile       string
+		keyFile        string
+		daemonProtocol string
 	)
 
 	command := &cobra.Command{
 		Use:   "mcp-server",
-		Short: "Start the Numaflow MCP server (read-only) over stdio",
-		Long: `Start a read-only Model Context Protocol (MCP) server for Numaflow over stdio.
+		Short: "Start the Numaflow MCP server (read-only)",
+		Long: `Start a read-only Model Context Protocol (MCP) server for Numaflow.
 
-It exposes read-only tools (list/get Pipelines, MonoVertices and
-InterStepBufferServices) backed by the Kubernetes API, using the ambient
-kubeconfig (KUBECONFIG or ~/.kube/config) or the in-cluster config. It performs
-no create, update, delete or patch operations.`,
+Exposes read-only tools (list/get Pipelines, MonoVertices, ISB Services, daemon
+runtime diagnostics, pod info, logs, and events) backed by the Kubernetes API.
+
+By default the server runs over stdio, suitable for local use with Cursor,
+Claude Code, or any MCP client that supports the stdio transport.
+
+Use --http to run as a streamable-HTTP server for in-cluster deployment.
+
+The server performs no create, update, delete or patch operations.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if kubeconfig != "" {
 				if err := os.Setenv("KUBECONFIG", kubeconfig); err != nil {
 					return err
 				}
 			}
-			numaflowClient, err := mcp.NewNumaflowClient()
+			kubeClient, numaflowClient, err := mcp.NewClients()
 			if err != nil {
 				return err
 			}
-			return mcp.ServeStdio(mcp.NewRegistry(numaflowClient, namespace))
+			reg := mcp.NewRegistry(kubeClient, numaflowClient, namespace, daemonProtocol)
+
+			if httpMode {
+				if port == 0 {
+					if insecure {
+						port = 8080
+					} else {
+						port = 8443
+					}
+				}
+				return mcp.ServeHTTP(reg, mcp.HTTPOptions{
+					Port:     port,
+					Insecure: insecure,
+					CertFile: certFile,
+					KeyFile:  keyFile,
+				})
+			}
+			return mcp.ServeStdio(reg)
 		},
 	}
-	command.Flags().StringVar(&kubeconfig, "kubeconfig", "", "Path to the kubeconfig file (defaults to $KUBECONFIG or ~/.kube/config; falls back to in-cluster config).")
-	command.Flags().StringVarP(&namespace, "namespace", "n", sharedutil.LookupEnvStringOr("NAMESPACE", ""), "Default namespace used when a tool call omits one. Empty means all namespaces for list operations.")
+
+	command.Flags().StringVar(&kubeconfig, "kubeconfig", "",
+		"Path to the kubeconfig file (defaults to $KUBECONFIG or ~/.kube/config; falls back to in-cluster config).")
+	command.Flags().StringVarP(&namespace, "namespace", "n",
+		sharedutil.LookupEnvStringOr("NAMESPACE", ""),
+		"Default namespace used when a tool call omits one. Empty means all namespaces for list operations.")
+	command.Flags().BoolVar(&httpMode, "http",
+		sharedutil.LookupEnvStringOr("NUMAFLOW_MCP_HTTP", "") == "true",
+		"Run as a streamable-HTTP server instead of stdio. Suitable for in-cluster deployment.")
+	command.Flags().IntVar(&port, "port", 0,
+		"Port for the HTTP server (default 8443, or 8080 when --insecure). Only used with --http.")
+	command.Flags().BoolVar(&insecure, "insecure",
+		sharedutil.LookupEnvStringOr("NUMAFLOW_MCP_INSECURE", "") == "true",
+		"Disable TLS for the HTTP server. For development only. Only used with --http.")
+	command.Flags().StringVar(&certFile, "tls-cert", "",
+		"Path to TLS certificate file. When omitted a self-signed cert is generated. Only used with --http.")
+	command.Flags().StringVar(&keyFile, "tls-key", "",
+		"Path to TLS key file. When omitted a self-signed cert is generated. Only used with --http.")
+	command.Flags().StringVar(&daemonProtocol, "daemon-client-protocol",
+		sharedutil.LookupEnvStringOr("NUMAFLOW_DAEMON_CLIENT_PROTOCOL", "grpc"),
+		"Protocol for daemon client connections: 'grpc' (default) or 'http'.")
+
 	return command
 }

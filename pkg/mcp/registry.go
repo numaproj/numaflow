@@ -17,10 +17,14 @@ limitations under the License.
 package mcp
 
 import (
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"k8s.io/client-go/kubernetes"
 
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
+	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
+	mvtdaemonclient "github.com/numaproj/numaflow/pkg/mvtxdaemon/client"
 )
 
 // ToolDefinition pairs an MCP tool with the handler that serves it.
@@ -36,9 +40,9 @@ type ToolRegistry interface {
 	Tools() []ToolDefinition
 }
 
-// registry is the read-only Numaflow tool registry, backed by the Numaflow
-// typed clientset. It is read-only by construction: only list and get
-// operations are registered, never create/update/delete/patch.
+// registry is the base read-only registry backed by the Numaflow typed
+// clientset. It is read-only by construction: only list and get operations are
+// registered.
 type registry struct {
 	numaflowClient dfv1clients.NumaflowV1alpha1Interface
 	// defaultNamespace is used when a tool call omits the "namespace" argument.
@@ -46,19 +50,47 @@ type registry struct {
 	defaultNamespace string
 }
 
-// NewRegistry creates a read-only Numaflow tool registry.
-func NewRegistry(numaflowClient dfv1clients.NumaflowV1alpha1Interface, defaultNamespace string) ToolRegistry {
-	return &registry{
+// NewRegistry creates a full read-only Numaflow tool registry including CRD,
+// daemon-backed runtime diagnostic, and Kubernetes-backed tools.
+//
+// kubeClient and numaflowClient are both constructed by NewClients() from the
+// ambient kubeconfig. daemonProtocol selects "grpc" (default) or "http" for
+// daemon transport.
+func NewRegistry(
+	kubeClient kubernetes.Interface,
+	numaflowClient dfv1clients.NumaflowV1alpha1Interface,
+	defaultNamespace string,
+	daemonProtocol string,
+) ToolRegistry {
+	if daemonProtocol == "" {
+		daemonProtocol = "grpc"
+	}
+
+	daemonCache, _ := lru.NewWithEvict[string, daemonclient.DaemonClient](500,
+		func(_ string, c daemonclient.DaemonClient) { _ = c.Close() })
+	mvtCache, _ := lru.NewWithEvict[string, mvtdaemonclient.MonoVertexDaemonClient](500,
+		func(_ string, c mvtdaemonclient.MonoVertexDaemonClient) { _ = c.Close() })
+
+	base := registry{
 		numaflowClient:   numaflowClient,
 		defaultNamespace: defaultNamespace,
 	}
+	dr := daemonRegistry{
+		registry:              base,
+		daemonClientsCache:    daemonCache,
+		mvtDaemonClientsCache: mvtCache,
+		daemonProtocol:        daemonProtocol,
+	}
+	return &k8sRegistry{
+		daemonRegistry: dr,
+		kubeClient:     kubeClient,
+		numaflowClient: numaflowClient,
+	}
 }
 
-var _ ToolRegistry = (*registry)(nil)
+var _ ToolRegistry = (*k8sRegistry)(nil)
 
-// readOnlyTool builds an MCP tool that is annotated as read-only and
-// non-destructive, so clients render and gate it appropriately. Every tool in
-// this registry is read-only, so all of them are constructed via this helper.
+// readOnlyTool builds an MCP tool annotated as read-only and non-destructive.
 func readOnlyTool(name string, opts ...mcp.ToolOption) mcp.Tool {
 	base := []mcp.ToolOption{
 		mcp.WithReadOnlyHintAnnotation(true),
@@ -69,8 +101,20 @@ func readOnlyTool(name string, opts ...mcp.ToolOption) mcp.Tool {
 	return mcp.NewTool(name, append(base, opts...)...)
 }
 
-// Tools returns the read-only tool set, sorted implicitly by registration order.
-func (r *registry) Tools() []ToolDefinition {
+// Tools returns the complete read-only tool set:
+//   - CRD discovery tools (list/get Pipelines, MonoVertices, ISBServices)
+//   - Daemon-backed runtime diagnostic tools
+//   - Kubernetes-backed pod/log/event tools
+func (r *k8sRegistry) Tools() []ToolDefinition {
+	var tools []ToolDefinition
+	tools = append(tools, r.registry.crdToolDefinitions()...)
+	tools = append(tools, r.daemonRegistry.daemonToolDefinitions()...)
+	tools = append(tools, r.k8sToolDefinitions()...)
+	return tools
+}
+
+// crdToolDefinitions returns the CRD list/get tools that were in the original POC.
+func (r *registry) crdToolDefinitions() []ToolDefinition {
 	return []ToolDefinition{
 		{
 			Tool: readOnlyTool("list_pipelines",
@@ -110,4 +154,12 @@ func (r *registry) Tools() []ToolDefinition {
 			Handler: r.listISBServices,
 		},
 	}
+}
+
+// namespace resolves the effective namespace for a tool call.
+func (r *registry) namespace(req mcp.CallToolRequest) string {
+	if ns := req.GetString("namespace", ""); ns != "" {
+		return ns
+	}
+	return r.defaultNamespace
 }

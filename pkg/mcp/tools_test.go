@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	dffake "github.com/numaproj/numaflow/pkg/client/clientset/versioned/fake"
@@ -61,7 +62,8 @@ func newTestRegistry(t *testing.T) ToolRegistry {
 	require.NoError(t, err)
 	_, err = nf.InterStepBufferServices(testNS).Create(ctx, isb, metav1.CreateOptions{})
 	require.NoError(t, err)
-	return NewRegistry(nf, testNS)
+	kubeFake := k8sfake.NewSimpleClientset()
+	return NewRegistry(kubeFake, nf, testNS, "grpc")
 }
 
 func handlerFor(t *testing.T, reg ToolRegistry, name string) server.ToolHandlerFunc {
@@ -99,8 +101,16 @@ func TestRegistry_IsReadOnly(t *testing.T) {
 	for _, td := range reg.Tools() {
 		names[td.Tool.Name] = true
 	}
-	assert.Len(t, names, 5)
-	for _, n := range []string{"list_pipelines", "get_pipeline", "list_monovertices", "get_monovertex", "list_isbservices"} {
+	// 5 CRD tools + 9 daemon tools + 6 K8s tools = 20
+	assert.Len(t, names, 20)
+	for _, n := range []string{
+		"list_pipelines", "get_pipeline", "list_monovertices", "get_monovertex", "list_isbservices",
+		"get_pipeline_status", "get_pipeline_watermarks", "list_buffers", "get_buffer_info",
+		"get_vertex_metrics", "get_vertex_errors",
+		"get_monovertex_status", "get_monovertex_metrics", "get_monovertex_errors",
+		"list_namespaces", "get_cluster_summary", "list_pods", "get_pod_info",
+		"tail_pod_logs", "list_namespace_events",
+	} {
 		assert.Contains(t, names, n)
 	}
 	for n := range names {

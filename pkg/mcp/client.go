@@ -15,33 +15,38 @@ limitations under the License.
 */
 
 // Package mcp implements a read-only Model Context Protocol (MCP) server for
-// Numaflow. It exposes a small set of read-only tools (list/get Pipelines,
-// MonoVertices and InterStepBufferServices) backed by the Kubernetes API so
-// that MCP clients (e.g. Cursor, Claude) can inspect Numaflow resources.
+// Numaflow. It exposes read-only tools (CRD list/get, daemon-backed runtime
+// diagnostics, and Kubernetes pod/log/event tools) so that MCP clients
+// (e.g. Cursor, Claude Code) can inspect Numaflow resources without log scraping.
 //
-// The server performs no create, update, delete or patch operations: it is
-// read-only by construction.
+// The server performs no create, update, delete or patch operations.
 package mcp
 
 import (
 	"fmt"
+
+	"k8s.io/client-go/kubernetes"
 
 	dfv1versiond "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
-// NewNumaflowClient builds a Numaflow typed client from the ambient kubeconfig
-// (KUBECONFIG or ~/.kube/config) or, when running inside a cluster, the
-// in-cluster config.
-func NewNumaflowClient() (dfv1clients.NumaflowV1alpha1Interface, error) {
+// NewClients builds a Kubernetes core client and a Numaflow typed client from
+// the ambient kubeconfig (KUBECONFIG or ~/.kube/config) or, when running
+// inside a cluster, the in-cluster config.
+func NewClients() (kubernetes.Interface, dfv1clients.NumaflowV1alpha1Interface, error) {
 	restConfig, err := util.K8sRestConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get kubernetes rest config: %w", err)
+		return nil, nil, fmt.Errorf("failed to get kubernetes rest config: %w", err)
+	}
+	kubeClient, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 	clientset, err := dfv1versiond.NewForConfig(restConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create numaflow client: %w", err)
+		return nil, nil, fmt.Errorf("failed to create numaflow client: %w", err)
 	}
-	return clientset.NumaflowV1alpha1(), nil
+	return kubeClient, clientset.NumaflowV1alpha1(), nil
 }

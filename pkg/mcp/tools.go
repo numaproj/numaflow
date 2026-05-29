@@ -44,16 +44,6 @@ type objectSummary struct {
 	ReadyReplicas *uint32 `json:"readyReplicas,omitempty"`
 }
 
-// namespace resolves the namespace for a tool call: the explicit "namespace"
-// argument when present, otherwise the server's default namespace. An empty
-// result means "all namespaces" for list operations.
-func (r *registry) namespace(req mcp.CallToolRequest) string {
-	if ns := req.GetString("namespace", ""); ns != "" {
-		return ns
-	}
-	return r.defaultNamespace
-}
-
 func (r *registry) listPipelines(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ns := r.namespace(req)
 	list, err := r.numaflowClient.Pipelines(ns).List(ctx, metav1.ListOptions{})
