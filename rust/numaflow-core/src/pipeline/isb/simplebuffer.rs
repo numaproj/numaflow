@@ -65,6 +65,13 @@ impl SimpleBufferAdapter {
     pub fn in_flight_count(&self) -> usize {
         self.buffer.in_flight_count()
     }
+
+    /// Get the current number of acked messages in the buffer.
+    /// This can be used during testing to identify the count of messages that have been acked.
+    #[allow(dead_code)]
+    pub fn acked_count(&self) -> usize {
+        self.buffer.acked_count()
+    }
 }
 
 /// Adapter that wraps `SimpleReader` and implements the `ISBReader` trait.
