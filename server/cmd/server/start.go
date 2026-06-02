@@ -213,5 +213,32 @@ func CreateAuthRouteMap(baseHref string) authz.RouteMap {
 		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/errors":              authz.NewRouteInfo(authz.ObjectMonoVertex, true),
 		"POST:" + baseHref + "api/v1/metrics-proxy":                                                       authz.NewRouteInfo(authz.ObjectAll, true),
 		"GET:" + baseHref + "api/v1/metrics-discovery/object/:object":                                     authz.NewRouteInfo(authz.ObjectAll, true),
+		// Single-purpose endpoints returning typed DTOs.
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/metrics":        authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pending":        authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/pending":                  authz.NewRouteInfo(authz.ObjectMonoVertex, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/buffers/:buffer":                 authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/buffers/:buffer/pending":         authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/data-health":                     authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/data-health":              authz.NewRouteInfo(authz.ObjectMonoVertex, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/watermark-lag":                   authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/status":                          authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/status":         authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/status":                   authz.NewRouteInfo(authz.ObjectMonoVertex, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/logs":           authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/logs":                     authz.NewRouteInfo(authz.ObjectMonoVertex, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/runtime-errors": authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/runtime-errors":           authz.NewRouteInfo(authz.ObjectMonoVertex, true),
+		// Discovery, correlation, and typed-wrapper endpoints. Scoped events use
+		// the resource object (pipeline/mono-vertex), not ObjectEvents, since each
+		// route is tied to a specific resource.
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/topology":                authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/debug-snapshot":          authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/buffers":                 authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/edge-watermarks":         authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/throughput":       authz.NewRouteInfo(authz.ObjectMonoVertex, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/events":                  authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/events": authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/events":           authz.NewRouteInfo(authz.ObjectMonoVertex, true),
 	}
 }

@@ -186,4 +186,54 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.POST("/metrics-proxy", handler.GetMetricData)
 	// Discover the metrics for a given object type.
 	r.GET("/metrics-discovery/object/:object", handler.DiscoverMetrics)
+
+	// Single-purpose endpoints returning typed DTOs.
+	// Get the metrics for a single named vertex of a pipeline.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/metrics", handler.GetVertexMetrics)
+	// Get the pending counts for a single named vertex of a pipeline.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pending", handler.GetVertexPending)
+	// Get the pending counts for a mono vertex.
+	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/pending", handler.GetMonoVertexPending)
+	// Get the metrics for a single inter-step buffer of a pipeline.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/buffers/:buffer", handler.GetPipelineBufferInfo)
+	// Get the pending counts for a single inter-step buffer of a pipeline.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/buffers/:buffer/pending", handler.GetPipelineBufferPending)
+	// Get the data-plane (criticality) health of a pipeline.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/data-health", handler.GetPipelineDataHealth)
+	// Get the data-plane (criticality) health of a mono vertex.
+	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/data-health", handler.GetMonoVertexDataHealth)
+	// Get the watermark lag of a pipeline.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/watermark-lag", handler.GetPipelineWatermarkLag)
+	// Get the status subresource of a pipeline (no spec).
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/status", handler.GetPipelineStatusInfo)
+	// Get the status subresource of a single vertex (no spec).
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/status", handler.GetVertexStatus)
+	// Get the status subresource of a mono vertex (no spec).
+	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/status", handler.GetMonoVertexStatusInfo)
+	// Get the logs of a pipeline vertex by container, merged across replicas.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/logs", handler.GetVertexLogs)
+	// Get the logs of a mono vertex by container, merged across replicas.
+	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/logs", handler.GetMonoVertexLogs)
+	// Get the runtime errors of a pipeline vertex.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/runtime-errors", handler.GetVertexRuntimeErrors)
+	// Get the runtime errors of a mono vertex.
+	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/runtime-errors", handler.GetMonoVertexRuntimeErrors)
+
+	// Discovery, correlation, and typed-wrapper endpoints.
+	// Get the topology (graph) of a pipeline.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/topology", handler.GetPipelineTopology)
+	// Get a bounded debug snapshot correlating a pipeline's current state.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/debug-snapshot", handler.GetPipelineDebugSnapshot)
+	// Get all inter-step buffers of a pipeline as typed DTOs.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/buffers", handler.GetPipelineBuffers)
+	// Get the per-edge watermarks of a pipeline as typed DTOs.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/edge-watermarks", handler.GetPipelineEdgeWatermarks)
+	// Get the throughput metrics (rates + pending) of a mono vertex as a typed DTO.
+	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/throughput", handler.GetMonoVertexThroughputMetrics)
+	// Get Kubernetes events scoped to a pipeline.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/events", handler.GetPipelineEvents)
+	// Get Kubernetes events scoped to a pipeline vertex.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/events", handler.GetVertexEvents)
+	// Get Kubernetes events scoped to a mono vertex.
+	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/events", handler.GetMonoVertexEvents)
 }

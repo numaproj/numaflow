@@ -101,6 +101,13 @@ type Pipeline struct {
 	Status PipelineStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
 }
 
+// GetVertexFullName returns the generated Vertex CR name for a logical vertex
+// name, which is "<pipeline>-<vertex>". This is the name used for the Vertex
+// object and as the involvedObject name on its Kubernetes events.
+func (p Pipeline) GetVertexFullName(vertexName string) string {
+	return p.Name + "-" + vertexName
+}
+
 // GetVertex is used to find the AbstractVertex info from vertex name.
 func (p Pipeline) GetVertex(vertexName string) *AbstractVertex {
 	for _, v := range p.Spec.Vertices {

@@ -25,12 +25,26 @@ import (
 func TestCreateAuthRouteMap(t *testing.T) {
 	t.Run("empty base", func(t *testing.T) {
 		got := CreateAuthRouteMap("")
-		assert.Equal(t, 36, len(got))
+		assert.Equal(t, 59, len(got))
+		// Assert the new discovery/correlation route keys exist (catches path typos
+		// that a count-only check would miss).
+		for _, key := range []string{
+			"GET:api/v1/namespaces/:namespace/pipelines/:pipeline/topology",
+			"GET:api/v1/namespaces/:namespace/pipelines/:pipeline/debug-snapshot",
+			"GET:api/v1/namespaces/:namespace/pipelines/:pipeline/buffers",
+			"GET:api/v1/namespaces/:namespace/pipelines/:pipeline/edge-watermarks",
+			"GET:api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/throughput",
+			"GET:api/v1/namespaces/:namespace/pipelines/:pipeline/events",
+			"GET:api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/events",
+			"GET:api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/events",
+		} {
+			assert.Contains(t, got, key)
+		}
 	})
 
 	t.Run("customize base", func(t *testing.T) {
 		got := CreateAuthRouteMap("abcdefg")
-		assert.Equal(t, 36, len(got))
+		assert.Equal(t, 59, len(got))
 		for k := range got {
 			assert.Contains(t, k, "abcdefg")
 		}
