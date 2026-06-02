@@ -198,6 +198,12 @@ func (mv MonoVertex) Scalable() bool {
 	return !mv.Spec.Scale.Disabled
 }
 
+// GetStreaming returns true if the streaming mode is explicitly enabled on this MonoVertex.
+// Returns false when the field is nil (off by default).
+func (mv MonoVertex) GetStreaming() bool {
+	return mv.Spec.Streaming != nil && *mv.Spec.Streaming
+}
+
 func (mv MonoVertex) GetDaemonServiceObj() *corev1.Service {
 	labels := map[string]string{
 		KeyPartOf:         Project,
@@ -533,6 +539,13 @@ type MonoVertexSpec struct {
 	// and the next level specifies the conditions to trigger the said bypass.
 	// +optional
 	Bypass *MonoVertexBypassCondition `json:"bypass,omitempty" protobuf:"bytes,15,opt,name=bypass"`
+	// Streaming enables per-message, out-of-order source acknowledgement instead of the default
+	// whole-batch barrier. When true, the source reads continuously bounded by `spec.limits.concurrency`
+	// (in-flight messages) rather than one batch at a time. This is experimental and opt-in; off by default.
+	// Note: built-in Kafka source is not supported with streaming=true (cumulative offset commit is
+	// unsafe under out-of-order ack).
+	// +optional
+	Streaming *bool `json:"streaming,omitempty" protobuf:"varint,16,opt,name=streaming"`
 }
 
 func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
