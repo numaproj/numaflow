@@ -548,16 +548,15 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
                     let msgs_len = messages.len();
 
-                    // TODO(task-005): gate read_time / read_batch_size metrics behind
-                    // `!self.streaming` for the mvtx path; for now record unconditionally to
-                    // keep non-streaming behavior identical. Streaming-specific metrics land in
-                    // task 005.
                     let read_time = read_start_time.elapsed().as_micros() as f64;
+                    // streaming=true: read_time and read_batch_size are skipped on the mvtx
+                    // path (batch semantics are meaningless per-message). Pipeline path unchanged.
                     Self::record_batch_read_metrics(
                         &pipeline_labels,
                         mvtx_labels,
                         read_time,
                         msgs_len,
+                        true,
                     );
 
                     // Pre-compute per-source-offset trace context (same as non-streaming).
@@ -715,6 +714,21 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     // source_trace drops here; RAII closes any remaining dispatch spans
                     // (e.g., messages dropped mid-loop on cancellation).
 
+                    // ── Watermark note ────────────────────────────────────────────────
+                    // The batch watermark-publish step present in the non-streaming branch
+                    // (`watermark_handle.generate_and_publish_source_watermark` + `is_late`
+                    // tagging) is intentionally omitted from the streaming branch.
+                    //
+                    // This is safe today because:
+                    //   1. MonoVertex always passes `watermark_handle = None` to `create_source`
+                    //      (see `monovertex.rs`), so the block would be a no-op regardless.
+                    //   2. Streaming is a MonoVertex-only feature (`streaming` is hardcoded
+                    //      `false` for pipeline source vertices in `source_forwarder.rs`).
+                    //
+                    // If streaming is ever enabled for a watermark-bearing source, watermark
+                    // publishing must be added here — either inline per-message or as a
+                    // per-batch step after the inner for-loop — before enabling that path.
+
                     // If cln_token was cancelled mid-batch, stop the outer loop now.
                     if cln_token.is_cancelled() {
                         break 'outer;
@@ -804,6 +818,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         mvtx_labels,
                         read_time,
                         msgs_len,
+                        false,
                     );
 
                     let mut msg_handles = vec![];
@@ -1069,11 +1084,9 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             Self::nack_with_retry(source_handle, vec![offset], &cancel_token).await
         };
 
-        // TODO(task-005): gate ack_time / e2e_time observes behind `!self.streaming`
-        // for the mvtx path; ack_total counter must still increment (1 per message).
-        // For now keep the full send_ack_metrics call so non-streaming behavior is
-        // provably unchanged — the streaming counter increment is correct (n=1).
-        Self::send_ack_metrics(e2e_start_time, 1, start);
+        // streaming=true: ack_time and e2e_time are skipped on the mvtx path;
+        // ack_total still increments (n=1 per message — valid per-message counter).
+        Self::send_ack_metrics(e2e_start_time, 1, start, true);
 
         // Drop the permit here so the drain barrier sees one fewer in-flight message.
         // The drop happens after ack_with_retry so we never signal "done" before the
@@ -1122,7 +1135,8 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         if !offsets_to_nack.is_empty() {
             Self::nack_with_retry(source_handle, offsets_to_nack, &cancel_token).await?;
         }
-        Self::send_ack_metrics(e2e_start_time, n, start);
+        // Non-streaming path: record all batch-granular metrics (streaming=false).
+        Self::send_ack_metrics(e2e_start_time, n, start, false);
 
         Ok(())
     }
@@ -1192,21 +1206,32 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
     /// Record per-batch read metrics (read_time, read_batch_size).
     /// These metrics are recorded once per batch read operation.
+    ///
+    /// `streaming`: when `true` and `is_mono_vertex()`, the batch-granular `read_time` and
+    /// `read_batch_size` metrics are skipped — their batch semantics are meaningless for
+    /// per-message streaming. The pipeline label path is always recorded unchanged.
     fn record_batch_read_metrics(
         pipeline_labels: &Vec<(String, String)>,
         mvtx_labels: &Vec<(String, String)>,
         read_time: f64,
         batch_size: usize,
+        streaming: bool,
     ) {
         if is_mono_vertex() {
-            monovertex_metrics()
-                .read_time
-                .get_or_create(mvtx_labels)
-                .observe(read_time);
-            monovertex_metrics()
-                .read_batch_size
-                .get_or_create(mvtx_labels)
-                .set(batch_size as i64);
+            // Gate batch-granular metrics off under streaming. read_time would measure
+            // the duration of a read that returns a full batch regardless of how many
+            // messages are actually in flight, and read_batch_size would pin to ~1
+            // (meaningless for per-message throughput monitoring).
+            if !streaming {
+                monovertex_metrics()
+                    .read_time
+                    .get_or_create(mvtx_labels)
+                    .observe(read_time);
+                monovertex_metrics()
+                    .read_batch_size
+                    .get_or_create(mvtx_labels)
+                    .set(batch_size as i64);
+            }
         } else {
             pipeline_metrics()
                 .forwarder
@@ -1290,23 +1315,32 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         }
     }
 
-    fn send_ack_metrics(e2e_start_time: Instant, n: usize, start: Instant) {
+    /// `streaming`: when `true` and `is_mono_vertex()`, `ack_time` and `e2e_time` observes
+    /// are skipped — these batch-granular histograms are meaningless per-message (one sample
+    /// per ack call would misrepresent the aggregate). `ack_total` always increments (n=1
+    /// per message in the streaming path) since it is a valid per-message counter. The
+    /// pipeline label path is always recorded unchanged.
+    fn send_ack_metrics(e2e_start_time: Instant, n: usize, start: Instant, streaming: bool) {
         if is_mono_vertex() {
             let mvtx_labels = mvtx_forward_metric_labels();
-            monovertex_metrics()
-                .ack_time
-                .get_or_create(mvtx_labels)
-                .observe(start.elapsed().as_micros() as f64);
 
+            // Gate batch-granular timing histograms off under streaming.
+            if !streaming {
+                monovertex_metrics()
+                    .ack_time
+                    .get_or_create(mvtx_labels)
+                    .observe(start.elapsed().as_micros() as f64);
+                monovertex_metrics()
+                    .e2e_time
+                    .get_or_create(mvtx_labels)
+                    .observe(e2e_start_time.elapsed().as_micros() as f64);
+            }
+
+            // ack_total is a per-message counter — always valid, never gated.
             monovertex_metrics()
                 .ack_total
                 .get_or_create(mvtx_labels)
                 .inc_by(n as u64);
-
-            monovertex_metrics()
-                .e2e_time
-                .get_or_create(mvtx_labels)
-                .observe(e2e_start_time.elapsed().as_micros() as f64);
         } else {
             let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
             pipeline_labels.push((
