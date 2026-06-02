@@ -505,41 +505,23 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             if self.streaming {
                 // ── STREAMING PATH ─────────────────────────────────────────────────────
                 //
-                // One permit = one in-flight (read-but-not-yet-acked) message.
-                // The semaphore is sized to `concurrency` so at most `concurrency` messages
-                // are simultaneously in flight. Backpressure: when the sink stalls, permits
-                // are not released, and the read loop blocks on permit acquisition.
+                // Acquire-after-read model (009):
+                //   1. Call read() to get a full batch (up to read_batch_size messages).
+                //   2. For EACH returned message, block-acquire ONE permit before inserting
+                //      it into the tracker and dispatching it downstream.
+                //   3. Each message is dispatched inline (one at a time) so that backpressure
+                //      from permit acquisition does not prevent already-tracked messages from
+                //      reaching downstream consumers (which could deadlock when concurrency <
+                //      batch_size).
+                //   4. The permit travels with that message to its per-message ack task and
+                //      is released only when the message is acked or nak'd.
+                //
+                // Transient read buffer: at most one read_batch_size worth of messages can
+                // be waiting on permit acquisition at any time.
                 let semaphore = Arc::new(Semaphore::new(self.concurrency));
                 let mut result = Ok(());
 
                 'outer: loop {
-                    // Determine how many messages we can read in this iteration: at most
-                    // `read_batch_size` but bounded by the currently-available permit headroom
-                    // so we never exceed `concurrency` in-flight messages.
-                    let available = semaphore.available_permits();
-                    if available == 0 {
-                        // No headroom — yield and retry. The semaphore is async, so we
-                        // yield to let ack tasks release permits.
-                        tokio::task::yield_now().await;
-                        continue;
-                    }
-                    let to_acquire = available.min(self.read_batch_size);
-
-                    // Acquire exactly `to_acquire` permits upfront. Each acquired permit will
-                    // be handed to one message's ack task.
-                    let mut permits: Vec<OwnedSemaphorePermit> = Vec::with_capacity(to_acquire);
-                    for _ in 0..to_acquire {
-                        match Arc::clone(&semaphore).try_acquire_owned() {
-                            Ok(p) => permits.push(p),
-                            Err(_) => break, // another task raced; work with what we have
-                        }
-                    }
-
-                    if permits.is_empty() {
-                        tokio::task::yield_now().await;
-                        continue;
-                    }
-
                     // Apply rate limiting before reading if configured.
                     if let Some(ref rate_limiter) = self.rate_limiter
                         && rate_limiter
@@ -547,8 +529,6 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                             .await
                             == 0
                     {
-                        // Rate limit fired — drop unused permits and retry.
-                        drop(permits);
                         continue;
                     }
 
@@ -557,13 +537,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         Some(Ok(messages)) => messages,
                         None => {
                             info!("Source returned None (end of stream). Stopping the source.");
-                            // Drop excess permits back to the semaphore before breaking.
-                            drop(permits);
                             break 'outer;
                         }
                         Some(Err(e)) => {
                             error!("Error while reading messages: {:?}", e);
-                            drop(permits);
                             result = Err(e);
                             break 'outer;
                         }
@@ -583,34 +560,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         msgs_len,
                     );
 
-                    let mut msg_handles = vec![];
-
-                    // Release surplus permits if the source returned fewer messages than
-                    // we acquired permits for.
-                    if msgs_len < permits.len() {
-                        permits.truncate(msgs_len);
-                    }
-                    // If the source returned MORE messages than permits we hold (shouldn't
-                    // happen, but guard anyway), we only process up to `permits.len()`.
-                    let process_count = msgs_len.min(permits.len());
-
+                    // Pre-compute per-source-offset trace context (same as non-streaming).
                     let mut source_trace =
-                        otel::SourceTraceState::new(process_count, self.transformer.is_some());
+                        otel::SourceTraceState::new(msgs_len, self.transformer.is_some());
 
-                    let mut permit_iter = permits.into_iter();
-                    let mut processed = 0usize;
                     for mut message in messages.drain(..) {
-                        if processed >= process_count {
-                            // We have more messages than permits. This should not normally happen
-                            // because we acquired `to_acquire` permits and asked for at most
-                            // `to_acquire` messages. If it does, drop the excess.
-                            warn!(
-                                offset = ?message.offset,
-                                "more messages than permits; dropping excess message"
-                            );
-                            break;
-                        }
-
                         Self::record_partition_read_metrics(
                             &pipeline_labels,
                             mvtx_labels,
@@ -618,6 +572,30 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                             message.value.len(),
                         );
 
+                        // Block-acquire one permit per message BEFORE inserting into the
+                        // tracker. This is the sole backpressure point — no busy-spin.
+                        // When `concurrency` messages are already in flight, this await
+                        // blocks until an ack/nak task releases a permit.
+                        //
+                        // Cancellation: select against cln_token so a cancel while
+                        // waiting on a stalled permit acquisition does not hang forever.
+                        // Messages already read but not yet permitted are dropped here
+                        // (never tracker-inserted) and will be redelivered by the source.
+                        let permit = tokio::select! {
+                            biased;
+                            _ = cln_token.cancelled() => {
+                                // Loop is stopping; remaining messages in this batch are
+                                // dropped without tracker insertion → redelivered by source.
+                                break;
+                            }
+                            p = Arc::clone(&semaphore).acquire_owned() => {
+                                p.expect("semaphore acquire should not fail")
+                            }
+                        };
+
+                        // Insert into the tracker. A duplicate in-flight delivery (same
+                        // offset already being processed) is dropped; its permit is
+                        // released immediately so it doesn't leak or skew the drain.
                         match self.tracker.insert(&message).await {
                             Ok(()) => {}
                             Err(Error::DuplicateInflight(_)) => {
@@ -626,29 +604,26 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                                     "duplicate delivery from source, dropping"
                                 );
                                 Self::record_duplicate_drop(mvtx_labels, message.value.len());
-                                // Return the unused permit to the pool.
-                                let _ = permit_iter.next();
+                                // Drop the just-acquired permit to keep accounting exact.
+                                drop(permit);
                                 continue;
                             }
                             Err(e) => {
-                                // On tracker error, drain remaining permits and abort.
-                                drop(permit_iter);
+                                // Non-duplicate tracker error; drop permit and abort.
+                                drop(permit);
                                 result = Err(e);
                                 break 'outer;
                             }
                         }
 
                         let platform_span = source_trace.start_message(&mut message);
-                        let permit = permit_iter
-                            .next()
-                            .expect("permit must exist — allocated above");
 
                         let (ack_tx, ack_rx) = oneshot::channel();
                         let msg_handle = MessageHandle::new(message, ack_tx);
                         msg_handle.set_pipeline_span(platform_span);
 
-                        // Spawn one ack task per message. The task owns one in-flight permit;
-                        // dropping the permit on completion (ack or nack) frees one slot.
+                        // Spawn one ack task per message. The task owns one in-flight
+                        // permit; dropping the permit on completion frees one slot.
                         tokio::spawn({
                             let sender = self.sender.clone();
                             let tracker = self.tracker.clone();
@@ -675,97 +650,84 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                             }
                         });
 
-                        msg_handles.push(msg_handle);
-                        processed += 1;
-                    }
-
-                    // Transform the batch (same as non-streaming path).
-                    let dispatch_parent_contexts = source_trace.take_transform_parents();
-                    let mut msg_handles = match self.transformer.as_mut() {
-                        None => msg_handles,
-                        Some(transformer) => match transformer
-                            .transform_batch(
-                                msg_handles,
-                                cln_token.clone(),
-                                dispatch_parent_contexts.as_ref(),
-                            )
-                            .await
-                        {
-                            Ok(handles) => handles,
-                            Err(e) => {
-                                error!(
-                                    ?e,
-                                    "Error while transforming messages, sending nack to the batch"
-                                );
-                                result = Err(e);
-                                break 'outer;
-                            }
-                        },
-                    };
-
-                    let mut remaining_dispatches = source_trace
-                        .remaining_dispatches(msg_handles.iter().map(|m| &m.message().offset));
-
-                    if let Some(ref rem) = remaining_dispatches {
-                        source_trace.end_without_outputs(rem);
-                    }
-
-                    if let Some(watermark_handle) = self.watermark_handle.as_mut() {
-                        let entries: Vec<SourceWatermarkEntry> =
-                            msg_handles.iter().map(SourceWatermarkEntry::from).collect();
-                        watermark_handle
-                            .generate_and_publish_source_watermark(&entries)
-                            .await;
-
-                        let watermark = watermark_handle.fetch_source_watermark().await;
-                        for msg_handle in msg_handles.iter_mut() {
-                            if msg_handle.message().event_time < watermark {
-                                msg_handle.message_mut().is_late = true;
-                            }
-                        }
-                    }
-
-                    for read_message in msg_handles.into_iter() {
-                        let offset = read_message.message().offset.clone();
-                        let maybe_read_message = if let Some(ref bypass_router) = bypass_router {
-                            match bypass_router
-                                .try_bypass(read_message)
-                                .await
-                                .expect("failed to send message to bypass channel")
-                            {
-                                Some(msg) => msg,
-                                None => {
-                                    decrement_remaining_dispatch(
-                                        remaining_dispatches.as_mut(),
-                                        &mut source_trace,
-                                        &offset,
-                                    );
-                                    continue;
+                        // ── Inline per-message transform + dispatch ──────────────────
+                        //
+                        // Each message is dispatched to downstream immediately after its
+                        // permit is acquired and ack task is spawned. This prevents a
+                        // deadlock when concurrency < batch_size: without inline dispatch,
+                        // already-ack-tracked messages would not reach downstream consumers,
+                        // preventing acks, preventing permit release, blocking permit
+                        // acquisition for the next message → deadlock.
+                        //
+                        // For the transformer case, transform_batch is called with a
+                        // single-element Vec (per-message transform). This trades batch
+                        // transformer throughput for per-message forward latency, which is
+                        // acceptable in streaming mode.
+                        //
+                        // Note: dispatch_parent_contexts (OTel span parenting for the
+                        // transformer) is passed as None in the streaming path. Per-message
+                        // tracing is task 005.
+                        let transformed_handles = match self.transformer.as_mut() {
+                            None => vec![msg_handle],
+                            Some(transformer) => {
+                                match transformer
+                                    .transform_batch(vec![msg_handle], cln_token.clone(), None)
+                                    .await
+                                {
+                                    Ok(handles) => handles,
+                                    Err(e) => {
+                                        error!(?e, "Error transforming message, sending nack");
+                                        result = Err(e);
+                                        break 'outer;
+                                    }
                                 }
                             }
-                        } else {
-                            read_message
                         };
 
-                        messages_tx
-                            .send(maybe_read_message)
-                            .await
-                            .expect("send should not fail");
+                        // Bypass and downstream send inline for each output handle.
+                        for read_message in transformed_handles.into_iter() {
+                            let offset = read_message.message().offset.clone();
+                            let maybe_read_message = if let Some(ref bypass_router) = bypass_router
+                            {
+                                match bypass_router
+                                    .try_bypass(read_message)
+                                    .await
+                                    .expect("failed to send message to bypass channel")
+                                {
+                                    Some(msg) => msg,
+                                    None => {
+                                        source_trace.end(&offset);
+                                        continue;
+                                    }
+                                }
+                            } else {
+                                read_message
+                            };
 
-                        decrement_remaining_dispatch(
-                            remaining_dispatches.as_mut(),
-                            &mut source_trace,
-                            &offset,
-                        );
+                            messages_tx
+                                .send(maybe_read_message)
+                                .await
+                                .expect("send should not fail");
+
+                            source_trace.end(&offset);
+                        }
                     }
-                    // source_trace drops here; RAII closes any remaining dispatch spans.
+                    // source_trace drops here; RAII closes any remaining dispatch spans
+                    // (e.g., messages dropped mid-loop on cancellation).
+
+                    // If cln_token was cancelled mid-batch, stop the outer loop now.
+                    if cln_token.is_cancelled() {
+                        break 'outer;
+                    }
                 }
 
                 // ── STREAMING DRAIN ────────────────────────────────────────────────────
                 //
-                // Wait for all in-flight per-message ack tasks to complete. Each task drops
-                // one permit on completion; when we can acquire all `concurrency` permits the
-                // semaphore is fully drained and no message is still in flight.
+                // Wait for every in-flight per-message ack task to complete. Each task
+                // releases its permit on ack/nak; once we can acquire all `concurrency`
+                // permits the semaphore is fully drained and no message is still in flight.
+                // Messages that were read but not yet permitted (never tracker-inserted)
+                // are already dropped above and will be redelivered by the source.
                 info!(
                     status = ?result,
                     "Source stopped (streaming), waiting for all in-flight messages to ack/nack"
@@ -1866,5 +1828,301 @@ mod tests {
         let _ = handle.await.unwrap();
         let _ = shutdown_tx.send(());
         server_handle.await.unwrap();
+    }
+
+    // ─── Streaming-path tests ────────────────────────────────────────────────
+    //
+    // These tests cover the acquire-after-read model (009) using a simple
+    // in-process generator source (no gRPC server needed).
+
+    /// Build a generator-backed Source with `streaming = true`.
+    async fn make_streaming_source(
+        batch_size: usize,
+        concurrency: usize,
+        num_messages: usize,
+        tracker: Tracker,
+        cln_token: CancellationToken,
+    ) -> Source<crate::typ::WithoutRateLimiter> {
+        use crate::config::components::source::GeneratorConfig;
+        let cfg = GeneratorConfig {
+            rpu: num_messages,
+            content: bytes::Bytes::from_static(b"payload"),
+            duration: std::time::Duration::from_millis(10),
+            value: None,
+            key_count: 0,
+            msg_size_bytes: 8,
+            jitter: std::time::Duration::ZERO,
+        };
+        let (reader, acker, lag) =
+            crate::source::generator::new_generator(cfg, batch_size, cln_token.clone()).unwrap();
+        Source::new(
+            batch_size,
+            concurrency,
+            SourceType::Generator(reader, acker, lag),
+            tracker,
+            false,
+            None,
+            None,
+            cln_token,
+            None,
+            true, // streaming = true
+        )
+        .await
+    }
+
+    /// Streaming: in-flight count is capped at `concurrency`.
+    ///
+    /// We set `concurrency = 3` and `batch_size = 10`. After reading 3 messages
+    /// without acking them, the 4th permit acquisition must block (concurrency cap).
+    /// Once we ack one message, one more message can be admitted. No message is
+    /// dropped or skipped.
+    #[tokio::test]
+    async fn streaming_inflight_bounded_by_concurrency() {
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        // concurrency=3, batch_size=10, 20 total messages
+        let source = make_streaming_source(10, 3, 20, tracker.clone(), cln_token.clone()).await;
+
+        let (mut stream, handle) = source.streaming_read(cln_token.clone(), None).unwrap();
+
+        // Receive exactly 3 messages without acking — the 4th should not arrive
+        // while these are held (all permits consumed).
+        let msg1 = tokio::time::timeout(Duration::from_secs(2), stream.next())
+            .await
+            .expect("msg1 timeout")
+            .expect("stream open");
+        let msg2 = tokio::time::timeout(Duration::from_secs(2), stream.next())
+            .await
+            .expect("msg2 timeout")
+            .expect("stream open");
+        let msg3 = tokio::time::timeout(Duration::from_secs(2), stream.next())
+            .await
+            .expect("msg3 timeout")
+            .expect("stream open");
+
+        // With concurrency=3 and all 3 permits held, the 4th message should not
+        // be forwarded downstream within 200ms (acquire_owned will block).
+        let no_fourth = tokio::time::timeout(Duration::from_millis(200), stream.next()).await;
+        assert!(
+            no_fourth.is_err(),
+            "4th message must not arrive while concurrency=3 slots are all held"
+        );
+
+        // Ack one — now one permit is released; the 4th message should arrive.
+        mark_success!(msg1);
+        let msg4 = tokio::time::timeout(Duration::from_secs(2), stream.next())
+            .await
+            .expect("msg4 timeout after acking msg1")
+            .expect("stream open");
+
+        // Ack the rest.
+        mark_success!(msg2);
+        mark_success!(msg3);
+        mark_success!(msg4);
+
+        cln_token.cancel();
+        let _ = handle.await.unwrap();
+    }
+
+    /// Streaming: per-message out-of-order ack releases permits individually.
+    ///
+    /// We read exactly 2 messages with concurrency=2 (no more can be in flight).
+    /// Ack msg2 BEFORE msg1 (out of order). Both should succeed individually, and
+    /// after cancellation + drain, the tracker should be empty — no deadlock on
+    /// out-of-order resolution.
+    #[tokio::test]
+    async fn streaming_per_message_out_of_order_ack() {
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        // concurrency=2, batch_size=2: exactly 2 messages in flight at a time.
+        let source = make_streaming_source(2, 2, 10, tracker.clone(), cln_token.clone()).await;
+
+        let (mut stream, handle) = source.streaming_read(cln_token.clone(), None).unwrap();
+
+        let msg1 = tokio::time::timeout(Duration::from_secs(2), stream.next())
+            .await
+            .expect("msg1")
+            .expect("stream open");
+        let msg2 = tokio::time::timeout(Duration::from_secs(2), stream.next())
+            .await
+            .expect("msg2")
+            .expect("stream open");
+
+        // Cancel before acking so no new messages are admitted after we ack.
+        // (The already-in-flight msg1 and msg2 will still be acked.)
+        cln_token.cancel();
+
+        // Ack msg2 BEFORE msg1 (out of order) — per-message ack means each oneshot
+        // fires independently; msg1's ack task does not wait for msg2's.
+        mark_success!(msg2);
+        mark_success!(msg1);
+
+        // Handle must return Ok (drain completes once both permits are released).
+        let result = tokio::time::timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("handle should complete")
+            .expect("handle join");
+        assert!(result.is_ok(), "handle returned error: {:?}", result);
+
+        // Tracker must be empty (both messages acked, no new ones admitted after cancel).
+        assert!(
+            tracker.is_empty().await.unwrap(),
+            "tracker should be empty after out-of-order ack"
+        );
+    }
+
+    /// Streaming duplicate-inflight: the duplicate drops its permit immediately
+    /// and does not stall/panic the drain.
+    ///
+    /// Uses `DuplicateSource` (already defined above). With streaming=true, the
+    /// duplicate's permit must be released so the drain can complete without
+    /// hanging. The one unique message and the first copy of "dup" are acked;
+    /// the duplicate copy is silently dropped.
+    #[tokio::test]
+    async fn streaming_duplicate_inflight_releases_permit_and_drains() {
+        let cln_token = CancellationToken::new();
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("streaming-dup-source.sock");
+        let server_info_file = tmp_dir.path().join("streaming-dup-source-server-info");
+
+        let server_socket = sock_file.clone();
+        let server_info = server_info_file.clone();
+        let server_handle = tokio::spawn(async move {
+            source::Server::new(DuplicateSource::new())
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .unwrap()
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let (src_read, src_ack, lag_reader) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+        )
+        .await
+        .expect("new_source");
+
+        let tracker = Tracker::new(None, cln_token.clone());
+        // concurrency=5 so permits are plentiful; the test is about drain correctness
+        // not about backpressure.
+        let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
+            5,
+            5,
+            SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
+            tracker.clone(),
+            true,
+            None,
+            None,
+            cln_token.clone(),
+            None,
+            true, // streaming = true
+        )
+        .await;
+
+        let (mut stream, handle) = source.streaming_read(cln_token.clone(), None).unwrap();
+
+        // DuplicateSource emits ["dup", "dup", "unique"] — only 2 distinct offsets
+        // forwarded downstream ("dup" once + "unique").
+        let first = tokio::time::timeout(Duration::from_secs(2), stream.next())
+            .await
+            .expect("first")
+            .expect("stream open");
+        let second = tokio::time::timeout(Duration::from_secs(2), stream.next())
+            .await
+            .expect("second")
+            .expect("stream open");
+
+        // The two forwarded offsets must be distinct.
+        assert_ne!(
+            first.message.offset, second.message.offset,
+            "duplicate must not be forwarded twice"
+        );
+
+        // No third message (the duplicate was dropped).
+        let third = tokio::time::timeout(Duration::from_millis(200), stream.next()).await;
+        assert!(third.is_err(), "no third message expected");
+
+        mark_success!(first);
+        mark_success!(second);
+
+        // Tracker must drain (no leaked permit, no hang).
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if tracker.is_empty().await.unwrap() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("tracker should drain — no permit leak from duplicate");
+
+        cln_token.cancel();
+        let _ = handle.await.unwrap();
+        let _ = shutdown_tx.send(());
+        server_handle.await.unwrap();
+    }
+
+    /// Streaming cancellation: already-read-but-not-yet-permitted messages are
+    /// dropped (never tracker-inserted) and eligible for redelivery; the drain
+    /// barrier completes without hanging; handle returns Ok.
+    ///
+    /// We set concurrency=1 so the first message fills the only permit. Then we
+    /// cancel while the second message (already read into the batch) is waiting on
+    /// permit acquisition. It must be dropped (tracker stays at 1 entry for the
+    /// in-flight first message). After we ack the first message the drain completes.
+    #[tokio::test]
+    async fn streaming_cancellation_drops_unpermitted_messages() {
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        // concurrency=1, batch_size=5: 1 message in-flight, rest blocked on permit.
+        let source = make_streaming_source(5, 1, 10, tracker.clone(), cln_token.clone()).await;
+
+        let (mut stream, handle) = source.streaming_read(cln_token.clone(), None).unwrap();
+
+        // Read one message; this fills the sole permit.
+        let msg1 = tokio::time::timeout(Duration::from_secs(2), stream.next())
+            .await
+            .expect("msg1")
+            .expect("stream open");
+
+        // The source should have tracker size = 1 (msg1 in flight).
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                if !tracker.is_empty().await.unwrap() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("tracker should have 1 entry");
+
+        // Cancel while msg1 permit is held. The read loop should unblock, break
+        // out of permit acquisition, and stop.
+        cln_token.cancel();
+
+        // Ack msg1 — its permit is released; the drain barrier can complete.
+        mark_success!(msg1);
+
+        // Handle must return Ok within a generous timeout (no hang).
+        let result = tokio::time::timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("handle should complete after cancel + ack")
+            .expect("handle join");
+        assert!(result.is_ok(), "handle returned error: {:?}", result);
+
+        // Tracker must be empty (msg1 was acked, no other messages were inserted).
+        assert!(
+            tracker.is_empty().await.unwrap(),
+            "tracker should be empty after drain"
+        );
     }
 }
