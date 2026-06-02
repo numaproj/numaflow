@@ -102,17 +102,40 @@ var _ daemonclient.DaemonClient = (*fakeDaemonClient)(nil)
 
 type fakeMvtClient struct {
 	metrics *mvtxdaemon.MonoVertexMetrics
+	status  *mvtxdaemon.MonoVertexStatus
+	errors  []*mvtxdaemon.ReplicaErrors
+	failAll bool
+	// timeoutAll makes every sub-call return context.DeadlineExceeded.
+	timeoutAll bool
 }
 
 func (f *fakeMvtClient) Close() error { return nil }
 func (f *fakeMvtClient) GetMonoVertexMetrics(context.Context) (*mvtxdaemon.MonoVertexMetrics, error) {
+	if f.timeoutAll {
+		return nil, context.DeadlineExceeded
+	}
+	if f.failAll {
+		return nil, fmt.Errorf("boom")
+	}
 	return f.metrics, nil
 }
 func (f *fakeMvtClient) GetMonoVertexStatus(context.Context) (*mvtxdaemon.MonoVertexStatus, error) {
-	return &mvtxdaemon.MonoVertexStatus{}, nil
+	if f.timeoutAll {
+		return nil, context.DeadlineExceeded
+	}
+	if f.failAll {
+		return nil, fmt.Errorf("boom")
+	}
+	return f.status, nil
 }
 func (f *fakeMvtClient) GetMonoVertexErrors(context.Context, string) ([]*mvtxdaemon.ReplicaErrors, error) {
-	return nil, nil
+	if f.timeoutAll {
+		return nil, context.DeadlineExceeded
+	}
+	if f.failAll {
+		return nil, fmt.Errorf("boom")
+	}
+	return f.errors, nil
 }
 
 var _ mvtdaemonclient.MonoVertexDaemonClient = (*fakeMvtClient)(nil)
@@ -158,6 +181,18 @@ func twoVertexPipeline() *dfv1.Pipeline {
 	}
 }
 
+func monoVertex() *dfv1.MonoVertex {
+	mv := &dfv1.MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns1", Name: "mv1"},
+	}
+	mv.Status.InitConditions()
+	mv.Status.MarkDeployed()
+	mv.Status.MarkDaemonHealthy()
+	mv.Status.MarkPodHealthy("Running", "all pods are healthy")
+	mv.Status.MarkPhaseRunning()
+	return mv
+}
+
 func TestHandler_GetPipelineTopology(t *testing.T) {
 	h := &handler{numaflowClient: seedClient(t, twoVertexPipeline()), opts: &handlerOptions{}}
 	c, w := debugTestContext(gin.Params{{Key: "namespace", Value: "ns1"}, {Key: "pipeline", Value: "p1"}})
@@ -191,6 +226,19 @@ func pipelineDaemonHandler(t *testing.T, dc daemonclient.DaemonClient, objs ...r
 		daemonClientsCache: cache,
 		opts:               &handlerOptions{},
 		healthChecker:      NewHealthChecker(context.Background()),
+	}
+}
+
+func monoVertexDaemonHandler(t *testing.T, dc mvtdaemonclient.MonoVertexDaemonClient, objs ...runtime.Object) *handler {
+	t.Helper()
+	cache, _ := lru.New[string, mvtdaemonclient.MonoVertexDaemonClient](10)
+	cache.Add(monoVertexDaemonSvcAddress("ns1", "mv1"), dc)
+	return &handler{
+		numaflowClient:        seedClient(t, objs...),
+		kubeClient:            fakeKube.NewSimpleClientset(),
+		mvtDaemonClientsCache: cache,
+		opts:                  &handlerOptions{},
+		healthChecker:         NewHealthChecker(context.Background()),
 	}
 }
 
@@ -364,6 +412,61 @@ func TestHandler_GetPipelineDebugSnapshot_TotalErrorsCapped(t *testing.T) {
 	}
 	assert.LessOrEqual(t, total, snapshotMaxTotalErrors)
 	assert.Equal(t, snapshotMaxTotalErrors, total) // exactly the budget is consumed
+}
+
+func TestHandler_GetMonoVertexDebugSnapshot_Composes(t *testing.T) {
+	dc := &fakeMvtClient{
+		status:  &mvtxdaemon.MonoVertexStatus{Status: "healthy", Code: "M1"},
+		metrics: &mvtxdaemon.MonoVertexMetrics{ProcessingRates: map[string]*wrapperspb.DoubleValue{"1m": wrapperspb.Double(4.5)}, Pendings: map[string]*wrapperspb.Int64Value{"1m": wrapperspb.Int64(12)}},
+		errors:  []*mvtxdaemon.ReplicaErrors{{Replica: "mv1-0", ContainerErrors: []*mvtxdaemon.ContainerError{{Container: "udsource", Message: "boom"}}}},
+	}
+	h := monoVertexDaemonHandler(t, dc, monoVertex())
+	c, w := debugTestContext(gin.Params{{Key: "namespace", Value: "ns1"}, {Key: "mono-vertex", Value: "mv1"}})
+
+	h.GetMonoVertexDebugSnapshot(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got MonoVertexDebugSnapshotDTO
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.NotEmpty(t, got.ObservedAt)
+	assert.NotNil(t, got.ResourceHealth.Data)
+	assert.NotNil(t, got.DataHealth.Data)
+	assert.Equal(t, "healthy", got.DataHealth.Data.Status)
+	assert.NotNil(t, got.Metrics.Data)
+	assert.Equal(t, 4.5, got.Metrics.Data.ProcessingRates["1m"])
+	assert.Len(t, got.RuntimeErrors.Data, 1)
+	assert.Equal(t, "mv1-0", got.RuntimeErrors.Data[0].Replica)
+}
+
+func TestHandler_GetMonoVertexDebugSnapshot_DegradesGracefully(t *testing.T) {
+	dc := &fakeMvtClient{failAll: true}
+	h := monoVertexDaemonHandler(t, dc, monoVertex())
+	c, w := debugTestContext(gin.Params{{Key: "namespace", Value: "ns1"}, {Key: "mono-vertex", Value: "mv1"}})
+
+	h.GetMonoVertexDebugSnapshot(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got MonoVertexDebugSnapshotDTO
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.NotNil(t, got.ResourceHealth.Data)
+	assert.NotNil(t, got.DataHealth.Error)
+	assert.Equal(t, SnapshotErrCodeDaemonUnavailable, got.DataHealth.Error.Code)
+	assert.NotNil(t, got.Metrics.Error)
+	assert.NotNil(t, got.RuntimeErrors.Error)
+}
+
+func TestHandler_GetMonoVertexDebugSnapshot_TimeoutClassified(t *testing.T) {
+	dc := &fakeMvtClient{timeoutAll: true}
+	h := monoVertexDaemonHandler(t, dc, monoVertex())
+	c, w := debugTestContext(gin.Params{{Key: "namespace", Value: "ns1"}, {Key: "mono-vertex", Value: "mv1"}})
+
+	h.GetMonoVertexDebugSnapshot(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var got MonoVertexDebugSnapshotDTO
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.NotNil(t, got.DataHealth.Error)
+	assert.Equal(t, SnapshotErrCodeTimeout, got.DataHealth.Error.Code)
 }
 
 func TestHandler_GetVertexEvents_PushesFieldSelector(t *testing.T) {

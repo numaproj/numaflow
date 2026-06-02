@@ -143,6 +143,10 @@ func setEventListHeaders(c *gin.Context, meta eventListMetadata) {
 	}
 }
 
+func vertexCRName(pipeline, vertex string) string {
+	return fmt.Sprintf("%s-%s", pipeline, vertex)
+}
+
 // listScopedEvents lists namespace events narrowed by the given filter. The
 // filter is pushed into the Kubernetes API call via a field selector (so noisy
 // namespaces don't load every event), with an in-memory pass as a backstop
@@ -247,8 +251,7 @@ func (h *handler) GetPipelineEvents(c *gin.Context) {
 func (h *handler) GetVertexEvents(c *gin.Context) {
 	ns, pipeline, vertex := c.Param("namespace"), c.Param("pipeline"), c.Param("vertex")
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
-	vertexFullName := dfv1.Pipeline{ObjectMeta: metav1.ObjectMeta{Name: pipeline}}.GetVertexFullName(vertex)
-	events, meta, err := h.listScopedEvents(c, ns, eventFilter{objectKind: dfv1.VertexGroupVersionKind.Kind, objectName: vertexFullName, limit: limit})
+	events, meta, err := h.listScopedEvents(c, ns, eventFilter{objectKind: dfv1.VertexGroupVersionKind.Kind, objectName: vertexCRName(pipeline, vertex), limit: limit})
 	if err != nil {
 		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get events for pipeline %q vertex %q: %v", pipeline, vertex, err))
 		return
@@ -293,6 +296,25 @@ func newSnapshotDaemonError(err error) *SnapshotSectionError {
 		return &SnapshotSectionError{Code: SnapshotErrCodeTimeout, Message: err.Error()}
 	}
 	return &SnapshotSectionError{Code: SnapshotErrCodeDaemonUnavailable, Message: err.Error()}
+}
+
+func capReplicaErrors(replicas []ReplicaErrorDTO, remainingErrors *int) []ReplicaErrorDTO {
+	kept := make([]ReplicaErrorDTO, 0, len(replicas))
+	for i := range replicas {
+		if *remainingErrors <= 0 {
+			break
+		}
+		limit := snapshotMaxErrorsPerVtx
+		if limit > *remainingErrors {
+			limit = *remainingErrors
+		}
+		if len(replicas[i].Errors) > limit {
+			replicas[i].Errors = replicas[i].Errors[:limit]
+		}
+		*remainingErrors -= len(replicas[i].Errors)
+		kept = append(kept, replicas[i])
+	}
+	return kept
 }
 
 // GetPipelineDebugSnapshot returns a bounded, read-only correlation of a
@@ -448,6 +470,99 @@ func (h *handler) GetPipelineDebugSnapshot(c *gin.Context) {
 	warnFilter := eventFilter{
 		objectKind: dfv1.PipelineGroupVersionKind.Kind,
 		objectName: pipeline,
+		eventType:  "Warning",
+		limit:      snapshotMaxWarningEvents,
+	}
+	if events, meta, e := h.listScopedEvents(snapshotCtx, ns, warnFilter); e != nil {
+		snap.WarningEvents.Error = &SnapshotSectionError{Code: SnapshotErrCodeInternal, Message: e.Error()}
+	} else {
+		if meta.limited {
+			snap.Notes = append(snap.Notes, fmt.Sprintf("warning events truncated at %d", snapshotMaxWarningEvents))
+		}
+		if meta.scanCeilingReached {
+			snap.Notes = append(snap.Notes, fmt.Sprintf("warning event scan reached %d event ceiling; most recent warning events may be incomplete", eventScanCeiling))
+		}
+		snap.WarningEvents.Data = events
+	}
+
+	c.JSON(http.StatusOK, snap)
+}
+
+// GetMonoVertexDebugSnapshot returns a bounded, read-only correlation of a mono
+// vertex's current state. Each section is fetched independently; a failed
+// section carries a structured error instead of failing the whole response.
+func (h *handler) GetMonoVertexDebugSnapshot(c *gin.Context) {
+	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
+
+	if _, err := h.numaflowClient.MonoVertices(ns).Get(c, monoVertex, metav1.GetOptions{}); err != nil {
+		h.respondWithStatusError(c, http.StatusNotFound, fmt.Sprintf("failed to fetch mono vertex %q namespace %q: %v", monoVertex, ns, err))
+		return
+	}
+
+	now := func() string { return time.Now().UTC().Format(time.RFC3339) }
+	snap := MonoVertexDebugSnapshotDTO{MonoVertex: monoVertex, Namespace: ns, ObservedAt: now()}
+	snapshotCtx, cancelSnapshot := context.WithTimeout(c.Request.Context(), snapshotOverallTimeout)
+	defer cancelSnapshot()
+
+	snap.ResourceHealth.ObservedAt = now()
+	if rh, rerr := h.healthChecker.getMonoVtxResourceHealth(h, ns, monoVertex); rerr != nil {
+		snap.ResourceHealth.Error = &SnapshotSectionError{Code: SnapshotErrCodeInternal, Message: rerr.Error()}
+	} else {
+		snap.ResourceHealth.Data = &ResourceHealthData{Status: rh.Status, Message: rh.Message, Code: rh.Code}
+	}
+
+	client, derr := h.getMonoVertexDaemonClient(ns, monoVertex)
+	if derr != nil || client == nil {
+		se := &SnapshotSectionError{Code: SnapshotErrCodeDaemonUnavailable, Message: fmt.Sprintf("daemon unavailable: %v", derr)}
+		snap.DataHealth.Error, snap.Metrics.Error, snap.RuntimeErrors.Error = se, se, se
+		snap.DataHealth.ObservedAt, snap.Metrics.ObservedAt, snap.RuntimeErrors.ObservedAt = now(), now(), now()
+	} else {
+		snap.DataHealth.ObservedAt = now()
+		func() {
+			dctx, cancel := snapshotSubCallContext(snapshotCtx)
+			defer cancel()
+			if st, e := client.GetMonoVertexStatus(dctx); e != nil {
+				snap.DataHealth.Error = newSnapshotDaemonError(e)
+			} else if st == nil {
+				snap.DataHealth.Error = &SnapshotSectionError{Code: SnapshotErrCodeInternal, Message: "mono vertex daemon returned nil status"}
+			} else {
+				snap.DataHealth.Data = &DataHealthDTO{Status: st.GetStatus(), Message: st.GetMessage(), Code: st.GetCode()}
+			}
+		}()
+
+		snap.Metrics.ObservedAt = now()
+		func() {
+			dctx, cancel := snapshotSubCallContext(snapshotCtx)
+			defer cancel()
+			if metrics, e := client.GetMonoVertexMetrics(dctx); e != nil {
+				snap.Metrics.Error = newSnapshotDaemonError(e)
+			} else {
+				dto := newMonoVertexMetricsDTO(monoVertex, metrics)
+				snap.Metrics.Data = &dto
+			}
+		}()
+
+		snap.RuntimeErrors.ObservedAt = now()
+		func() {
+			dctx, cancel := snapshotSubCallContext(snapshotCtx)
+			defer cancel()
+			errs, e := client.GetMonoVertexErrors(dctx, monoVertex)
+			if e != nil {
+				snap.RuntimeErrors.Error = newSnapshotDaemonError(e)
+				return
+			}
+			remainingErrors := snapshotMaxTotalErrors
+			snap.RuntimeErrors.Data = capReplicaErrors(newMonoVertexReplicaErrorDTOs(errs), &remainingErrors)
+			if remainingErrors <= 0 {
+				snap.Notes = append(snap.Notes, fmt.Sprintf("runtime errors truncated at %d total", snapshotMaxTotalErrors))
+			}
+		}()
+	}
+
+	snap.WarningEvents.ObservedAt = now()
+	warnFilter := eventFilter{
+		objectKind: dfv1.MonoVertexGroupVersionKind.Kind,
+		objectName: monoVertex,
 		eventType:  "Warning",
 		limit:      snapshotMaxWarningEvents,
 	}

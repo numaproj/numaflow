@@ -234,6 +234,7 @@ func CreateAuthRouteMap(baseHref string) authz.RouteMap {
 		// route is tied to a specific resource.
 		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/topology":                authz.NewRouteInfo(authz.ObjectPipeline, true),
 		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/debug-snapshot":          authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/debug-snapshot":   authz.NewRouteInfo(authz.ObjectMonoVertex, true),
 		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/buffers":                 authz.NewRouteInfo(authz.ObjectPipeline, true),
 		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/edge-watermarks":         authz.NewRouteInfo(authz.ObjectPipeline, true),
 		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/throughput":       authz.NewRouteInfo(authz.ObjectMonoVertex, true),

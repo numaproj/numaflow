@@ -224,6 +224,8 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/topology", handler.GetPipelineTopology)
 	// Get a bounded debug snapshot correlating a pipeline's current state.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/debug-snapshot", handler.GetPipelineDebugSnapshot)
+	// Get a bounded debug snapshot correlating a mono vertex's current state.
+	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/debug-snapshot", handler.GetMonoVertexDebugSnapshot)
 	// Get all inter-step buffers of a pipeline as typed DTOs.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/buffers", handler.GetPipelineBuffers)
 	// Get the per-edge watermarks of a pipeline as typed DTOs.

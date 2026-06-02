@@ -175,8 +175,6 @@ func newMonoVertexMetricsDTO(monoVertex string, m *mvtxdaemon.MonoVertexMetrics)
 	return dto
 }
 
-// --- Debug snapshot ---
-
 // Stable error codes for a debug-snapshot section that failed to populate.
 const (
 	SnapshotErrCodeDaemonUnavailable = "daemon_unavailable"
@@ -195,8 +193,7 @@ type SnapshotSectionError struct {
 // DebugSnapshotDTO is a bounded, read-only correlation of a pipeline's current
 // state, composed from existing single-purpose data sources. Each section is
 // independently fetched; a failed section carries an error rather than failing
-// the whole response. Notes are mechanical fetch facts only (e.g. truncation),
-// never inferred diagnosis.
+// the whole response.
 type DebugSnapshotDTO struct {
 	Pipeline       string                        `json:"pipeline"`
 	Namespace      string                        `json:"namespace"`
@@ -209,6 +206,21 @@ type DebugSnapshotDTO struct {
 	RuntimeErrors  SnapshotRuntimeErrorsSection  `json:"runtimeErrors"`
 	WarningEvents  SnapshotEventsSection         `json:"warningEvents"`
 	Notes          []string                      `json:"notes,omitempty"`
+}
+
+// MonoVertexDebugSnapshotDTO is a bounded, read-only correlation of a mono
+// vertex's current state. It mirrors DebugSnapshotDTO where mono-vertex data
+// sources have parity with pipeline data sources.
+type MonoVertexDebugSnapshotDTO struct {
+	MonoVertex     string                                 `json:"monoVertex"`
+	Namespace      string                                 `json:"namespace"`
+	ObservedAt     string                                 `json:"observedAt"`
+	ResourceHealth SnapshotResourceHealthSection          `json:"resourceHealth"`
+	DataHealth     SnapshotDataHealthSection              `json:"dataHealth"`
+	Metrics        SnapshotMonoVertexMetricsSection       `json:"metrics"`
+	RuntimeErrors  SnapshotMonoVertexRuntimeErrorsSection `json:"runtimeErrors"`
+	WarningEvents  SnapshotEventsSection                  `json:"warningEvents"`
+	Notes          []string                               `json:"notes,omitempty"`
 }
 
 // SnapshotResourceHealthSection carries the pipeline resource health portion of a debug snapshot.
@@ -259,6 +271,13 @@ type SnapshotBuffersSection struct {
 	ObservedAt string                `json:"observedAt"`
 }
 
+// SnapshotMonoVertexMetricsSection carries mono-vertex metrics in a debug snapshot.
+type SnapshotMonoVertexMetricsSection struct {
+	Data       *MonoVertexMetricsDTO `json:"data,omitempty"`
+	Error      *SnapshotSectionError `json:"error,omitempty"`
+	ObservedAt string                `json:"observedAt"`
+}
+
 // SnapshotVertexErrors groups runtime errors under their vertex.
 type SnapshotVertexErrors struct {
 	Vertex string            `json:"vertex"`
@@ -270,6 +289,13 @@ type SnapshotRuntimeErrorsSection struct {
 	Data       []SnapshotVertexErrors `json:"data,omitempty"`
 	Error      *SnapshotSectionError  `json:"error,omitempty"`
 	ObservedAt string                 `json:"observedAt"`
+}
+
+// SnapshotMonoVertexRuntimeErrorsSection carries mono-vertex runtime errors in a debug snapshot.
+type SnapshotMonoVertexRuntimeErrorsSection struct {
+	Data       []ReplicaErrorDTO     `json:"data,omitempty"`
+	Error      *SnapshotSectionError `json:"error,omitempty"`
+	ObservedAt string                `json:"observedAt"`
 }
 
 // SnapshotEventsSection carries recent Kubernetes events in a debug snapshot.
