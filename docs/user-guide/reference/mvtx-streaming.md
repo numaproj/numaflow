@@ -1,14 +1,12 @@
 # MonoVertex Streaming Mode
 
-> **Experimental feature — opt-in, off by default.**
-> Streaming mode is experimental and staged across two PRs. PR1 (this release)
-> makes the **source side** fully per-message. The **sink still micro-batches in
-> PR1**; a follow-up PR will complete the sink side. Treat the feature as
-> experimental until both PRs land.
+> **Opt-in, off by default.**
+> Streaming mode makes the **source side** fully per-message. 
+> The sink still micro-batches, in a follow-up PR will complete the sink side.
 
 ## Overview
 
-By default a MonoVertex advances **one batch at a time**: it reads up to
+By default, a MonoVertex advances **one batch at a time**: it reads up to
 `readBatchSize` messages, waits for the entire batch to finish processing and be
 acknowledged by the sink, then reads the next batch.
 
@@ -27,11 +25,11 @@ before proceeding.
 
 ### What changes in PR1
 
-| Aspect | Default (batch) mode | Streaming mode (PR1) |
-|---|---|---|
-| Source read | Whole batch, then wait | Continuous, per-message |
-| Source ack | One batched ack per batch | Per-message, out-of-order |
-| Sink write | Micro-batched (unchanged in PR1) | Micro-batched (unchanged in PR1) |
+| Aspect        | Default (batch) mode              | Streaming mode            |
+|---------------|-----------------------------------|---------------------------|
+| Source read   | Whole batch, then wait            | Continuous, per-message   |
+| Source ack    | One batched ack per batch         | Per-message, out-of-order |
+| Sink write    | Micro-batched                     | Micro-batched (currently) |
 | In-flight cap | `min(concurrency, readBatchSize)` | `concurrency` (see below) |
 
 ## Enabling streaming mode
@@ -89,14 +87,14 @@ whose ack API commits offsets cumulatively (highest-seen + 1) are **not safe**
 under this model: a crash after acking a later message but before acking an
 earlier one can permanently skip the earlier message.
 
-| Source | Ack model | Compatible with `streaming: true`? |
-|---|---|---|
-| Built-in Kafka | Cumulative commit (`highest_offset + 1`) | **No — rejected at validation time** (see warning below) |
-| Built-in Pulsar | Individual `ack_with_id` | Yes — see [Pulsar constraint](#pulsar-concurrency-constraint) below |
-| Built-in JetStream | Per-message | Yes |
-| Built-in SQS | Per-message | Yes |
-| Built-in Generator | Per-message | Yes |
-| User-defined source | Depends on implementation | **User's responsibility** (see note below) |
+| Source              | Ack model                                | Compatible with `streaming: true`?                                  |
+|---------------------|------------------------------------------|---------------------------------------------------------------------|
+| Built-in Kafka      | Cumulative commit (`highest_offset + 1`) | **No — rejected at validation time** (see warning below)            |
+| Built-in Pulsar     | Individual `ack_with_id`                 | Yes — see [Pulsar constraint](#pulsar-concurrency-constraint) below |
+| Built-in JetStream  | Per-message                              | Yes                                                                 |
+| Built-in SQS        | Per-message                              | Yes                                                                 |
+| Built-in Generator  | Per-message                              | Yes                                                                 |
+| User-defined source | Depends on implementation                | **User's responsibility** (see note below)                          |
 
 > **Note — User-defined sources:** A UD-source that wraps a cumulative-commit
 > system (such as a Kafka consumer library) has the same data-loss risk as the
