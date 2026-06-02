@@ -80,7 +80,7 @@ pub struct MonoVertexSpec {
     pub sink: Option<Box<crate::models::Sink>>,
     #[serde(rename = "source", skip_serializing_if = "Option::is_none")]
     pub source: Option<Box<crate::models::Source>>,
-    /// Streaming enables per-message, out-of-order source acknowledgement instead of the default whole-batch barrier. When true, the source reads continuously bounded by `spec.limits.concurrency` (in-flight messages) rather than one batch at a time. This is experimental and opt-in; off by default. Note: built-in Kafka source is not supported with streaming=true (cumulative offset commit is unsafe under out-of-order ack).
+    /// Streaming enables per-message, out-of-order source acknowledgement instead of the default whole-batch barrier. When true, the source reads continuously bounded by `spec.limits.concurrency` (in-flight messages) rather than one batch at a time. This is off by default.
     #[serde(rename = "streaming", skip_serializing_if = "Option::is_none")]
     pub streaming: Option<bool>,
     /// If specified, the pod's tolerations.

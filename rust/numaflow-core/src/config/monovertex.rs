@@ -3,9 +3,10 @@ use std::time::Duration;
 
 use super::pipeline::ServingCallbackConfig;
 use super::{
-    get_namespace, get_pipeline_name, DEFAULT_CALLBACK_CONCURRENCY,
-    ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED, ENV_MONO_VERTEX_OBJ, ENV_READ_AHEAD,
+    DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED,
+    ENV_MONO_VERTEX_OBJ, ENV_READ_AHEAD, get_namespace, get_pipeline_name,
 };
+use crate::Result;
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::ratelimit::RateLimitConfig;
 use crate::config::components::sink;
@@ -18,9 +19,8 @@ use crate::config::get_vertex_replica;
 use crate::config::monovertex::sink::SinkType;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::error::Error;
-use crate::Result;
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use numaflow_models::models::{ForwardConditions, MonoVertex, MonoVertexBypassCondition};
 use serde_json::from_slice;
 
@@ -299,14 +299,14 @@ mod tests {
     use std::collections::HashMap;
     use std::time::{Duration, SystemTime};
 
-    use base64::prelude::BASE64_STANDARD;
     use base64::Engine;
+    use base64::prelude::BASE64_STANDARD;
 
+    use crate::config::ENV_MONO_VERTEX_OBJ;
     use crate::config::components::sink::SinkType;
     use crate::config::components::source::SourceType;
     use crate::config::components::transformer::TransformerType;
     use crate::config::monovertex::MonovertexConfig;
-    use crate::config::ENV_MONO_VERTEX_OBJ;
     use crate::error::Error;
 
     use numaflow_nats::jetstream::ConsumerDeliverPolicy;

@@ -6396,10 +6396,7 @@ trigger the said bypass.
 Streaming enables per-message, out-of-order source acknowledgement
 instead of the default whole-batch barrier. When true, the source reads
 continuously bounded by <code>spec.limits.concurrency</code> (in-flight
-messages) rather than one batch at a time. This is experimental and
-opt-in; off by default. Note: built-in Kafka source is not supported
-with streaming=true (cumulative offset commit is unsafe under
-out-of-order ack).
+messages) rather than one batch at a time. This is off by default.
 </p>
 
 </td>
@@ -7103,10 +7100,7 @@ trigger the said bypass.
 Streaming enables per-message, out-of-order source acknowledgement
 instead of the default whole-batch barrier. When true, the source reads
 continuously bounded by <code>spec.limits.concurrency</code> (in-flight
-messages) rather than one batch at a time. This is experimental and
-opt-in; off by default. Note: built-in Kafka source is not supported
-with streaming=true (cumulative offset commit is unsafe under
-out-of-order ack).
+messages) rather than one batch at a time. This is off by default.
 </p>
 
 </td>
