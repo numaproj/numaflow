@@ -8,6 +8,10 @@ type PodDetails struct {
 	ContainerDetailsMap map[string]ContainerDetails `json:"containerDetailsMap"`
 	TotalCPU            string                      `json:"totalCPU"`
 	TotalMemory         string                      `json:"totalMemory"`
+	// Node is the name of the node the pod is scheduled on.
+	Node string `json:"node,omitempty"`
+	// CreatedAt is the pod's creation time (RFC3339), useful for age.
+	CreatedAt string `json:"createdAt,omitempty"`
 }
 
 type ContainerDetails struct {
@@ -27,4 +31,8 @@ type ContainerDetails struct {
 	RequestedMemory         string `json:"requestedMemory"`
 	LimitCPU                string `json:"limitCPU"`
 	LimitMemory             string `json:"limitMemory"`
+	// Image is the container image.
+	Image string `json:"image,omitempty"`
+	// Ready reflects the container's readiness.
+	Ready bool `json:"ready"`
 }

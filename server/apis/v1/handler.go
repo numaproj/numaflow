@@ -792,6 +792,265 @@ func (h *handler) respondWithError(c *gin.Context, message string) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(&message, nil))
 }
 
+// respondWithStatusError returns the given HTTP status code with a small typed body,
+// rather than HTTP 200 with an errMsg field as respondWithError does.
+func (h *handler) respondWithStatusError(c *gin.Context, status int, message string) {
+	c.JSON(status, gin.H{"error": message})
+}
+
+// GetVertexMetrics provides the processing rates and pending counts for a single
+// named vertex of a pipeline, broken down per partition.
+func (h *handler) GetVertexMetrics(c *gin.Context) {
+	ns, pipeline, vertex := c.Param("namespace"), c.Param("pipeline"), c.Param("vertex")
+
+	client, err := h.getPipelineDaemonClient(ns, pipeline)
+	if err != nil || client == nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get daemon service client for pipeline %q: %v", pipeline, err))
+		return
+	}
+
+	metrics, err := client.GetVertexMetrics(c, pipeline, vertex)
+	if err != nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get the metrics for pipeline %q vertex %q: %v", pipeline, vertex, err))
+		return
+	}
+	c.JSON(http.StatusOK, newVertexMetricsDTO(pipeline, vertex, metrics))
+}
+
+// GetVertexPending provides the pending (backlog) message counts for a single
+// named vertex of a pipeline, keyed by lookback window.
+func (h *handler) GetVertexPending(c *gin.Context) {
+	ns, pipeline, vertex := c.Param("namespace"), c.Param("pipeline"), c.Param("vertex")
+
+	client, err := h.getPipelineDaemonClient(ns, pipeline)
+	if err != nil || client == nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get daemon service client for pipeline %q: %v", pipeline, err))
+		return
+	}
+
+	metrics, err := client.GetVertexMetrics(c, pipeline, vertex)
+	if err != nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get the pending counts for pipeline %q vertex %q: %v", pipeline, vertex, err))
+		return
+	}
+	c.JSON(http.StatusOK, newVertexPendingDTO(pipeline, vertex, metrics))
+}
+
+// GetMonoVertexPending provides the pending (backlog) message counts for a mono
+// vertex, keyed by lookback window.
+func (h *handler) GetMonoVertexPending(c *gin.Context) {
+	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
+
+	client, err := h.getMonoVertexDaemonClient(ns, monoVertex)
+	if err != nil || client == nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get daemon service client for mono vertex %q: %v", monoVertex, err))
+		return
+	}
+
+	metrics, err := client.GetMonoVertexMetrics(c)
+	if err != nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get the pending counts for mono vertex %q: %v", monoVertex, err))
+		return
+	}
+	c.JSON(http.StatusOK, newMonoVertexPendingDTO(monoVertex, metrics))
+}
+
+// GetPipelineBufferInfo provides the metrics for a single inter-step buffer
+// (pending, ack-pending, total messages, usage, isFull).
+func (h *handler) GetPipelineBufferInfo(c *gin.Context) {
+	ns, pipeline, buffer := c.Param("namespace"), c.Param("pipeline"), c.Param("buffer")
+
+	client, err := h.getPipelineDaemonClient(ns, pipeline)
+	if err != nil || client == nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get daemon service client for pipeline %q: %v", pipeline, err))
+		return
+	}
+
+	info, err := client.GetPipelineBuffer(c, pipeline, buffer)
+	if err != nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get the buffer %q for pipeline %q: %v", buffer, pipeline, err))
+		return
+	}
+	if info == nil {
+		h.respondWithStatusError(c, http.StatusNotFound, fmt.Sprintf("buffer %q not found for pipeline %q", buffer, pipeline))
+		return
+	}
+	c.JSON(http.StatusOK, newBufferDTO(info))
+}
+
+// GetPipelineBufferPending provides the pending (backlog) message counts for a
+// single inter-step buffer of a pipeline.
+func (h *handler) GetPipelineBufferPending(c *gin.Context) {
+	ns, pipeline, buffer := c.Param("namespace"), c.Param("pipeline"), c.Param("buffer")
+
+	client, err := h.getPipelineDaemonClient(ns, pipeline)
+	if err != nil || client == nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get daemon service client for pipeline %q: %v", pipeline, err))
+		return
+	}
+
+	info, err := client.GetPipelineBuffer(c, pipeline, buffer)
+	if err != nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get the buffer %q for pipeline %q: %v", buffer, pipeline, err))
+		return
+	}
+	if info == nil {
+		h.respondWithStatusError(c, http.StatusNotFound, fmt.Sprintf("buffer %q not found for pipeline %q", buffer, pipeline))
+		return
+	}
+	c.JSON(http.StatusOK, newBufferPendingDTO(info))
+}
+
+// GetPipelineDataHealth provides only the data-plane (criticality) health of a
+// pipeline from the daemon, without the resource-health computation.
+func (h *handler) GetPipelineDataHealth(c *gin.Context) {
+	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
+
+	client, err := h.getPipelineDaemonClient(ns, pipeline)
+	if err != nil || client == nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get daemon service client for pipeline %q: %v", pipeline, err))
+		return
+	}
+
+	status, err := client.GetPipelineStatus(c, pipeline)
+	if err != nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get the data health for pipeline %q: %v", pipeline, err))
+		return
+	}
+	c.JSON(http.StatusOK, DataHealthDTO{
+		Status:  status.GetStatus(),
+		Message: status.GetMessage(),
+		Code:    status.GetCode(),
+	})
+}
+
+// GetMonoVertexDataHealth provides only the data-plane (criticality) health of a
+// mono vertex from its daemon, without the resource-health computation.
+func (h *handler) GetMonoVertexDataHealth(c *gin.Context) {
+	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
+
+	client, err := h.getMonoVertexDaemonClient(ns, monoVertex)
+	if err != nil || client == nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get daemon service client for mono vertex %q: %v", monoVertex, err))
+		return
+	}
+
+	status, err := client.GetMonoVertexStatus(c)
+	if err != nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get the data health for mono vertex %q: %v", monoVertex, err))
+		return
+	}
+	c.JSON(http.StatusOK, DataHealthDTO{
+		Status:  status.GetStatus(),
+		Message: status.GetMessage(),
+		Code:    status.GetCode(),
+	})
+}
+
+// GetPipelineWatermarkLag provides the end-to-end watermark lag of a pipeline
+// (max source watermark minus min sink watermark, in milliseconds), without
+// fetching the full pipeline spec as GetPipeline does.
+func (h *handler) GetPipelineWatermarkLag(c *gin.Context) {
+	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
+
+	pl, err := h.numaflowClient.Pipelines(ns).Get(c, pipeline, metav1.GetOptions{})
+	if err != nil {
+		h.respondWithStatusError(c, http.StatusNotFound, fmt.Sprintf("failed to fetch pipeline %q namespace %q: %v", pipeline, ns, err))
+		return
+	}
+
+	client, err := h.getPipelineDaemonClient(ns, pipeline)
+	if err != nil || client == nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get daemon service client for pipeline %q: %v", pipeline, err))
+		return
+	}
+
+	watermarks, err := client.GetPipelineWatermarks(c, pipeline)
+	if err != nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to calculate watermark lag for pipeline %q: %v", pipeline, err))
+		return
+	}
+	c.JSON(http.StatusOK, computePipelineWatermarkLag(pl, watermarks))
+}
+
+// GetPipelineStatusInfo provides only the status subresource of a pipeline
+// (phase, conditions, counts, drainedOnPause) without the spec.
+func (h *handler) GetPipelineStatusInfo(c *gin.Context) {
+	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
+
+	pl, err := h.numaflowClient.Pipelines(ns).Get(c, pipeline, metav1.GetOptions{})
+	if err != nil {
+		h.respondWithStatusError(c, http.StatusNotFound, fmt.Sprintf("failed to fetch pipeline %q namespace %q: %v", pipeline, ns, err))
+		return
+	}
+	c.JSON(http.StatusOK, newPipelineStatusDTO(pl))
+}
+
+// GetVertexStatus provides only the status subresource of a single vertex
+// (phase, replica counts, rolling-update hashes) without the spec.
+func (h *handler) GetVertexStatus(c *gin.Context) {
+	ns, pipeline, vertex := c.Param("namespace"), c.Param("pipeline"), c.Param("vertex")
+
+	vertexName := fmt.Sprintf("%s-%s", pipeline, vertex)
+	v, err := h.numaflowClient.Vertices(ns).Get(c, vertexName, metav1.GetOptions{})
+	if err != nil {
+		h.respondWithStatusError(c, http.StatusNotFound, fmt.Sprintf("failed to fetch vertex %q of pipeline %q namespace %q: %v", vertex, pipeline, ns, err))
+		return
+	}
+	c.JSON(http.StatusOK, newVertexStatusDTO(v))
+}
+
+// GetMonoVertexStatusInfo provides only the status subresource of a mono vertex
+// (phase, replica counts) without the spec.
+func (h *handler) GetMonoVertexStatusInfo(c *gin.Context) {
+	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
+
+	mv, err := h.numaflowClient.MonoVertices(ns).Get(c, monoVertex, metav1.GetOptions{})
+	if err != nil {
+		h.respondWithStatusError(c, http.StatusNotFound, fmt.Sprintf("failed to fetch mono vertex %q namespace %q: %v", monoVertex, ns, err))
+		return
+	}
+	c.JSON(http.StatusOK, newMonoVertexStatusDTO(mv))
+}
+
+// GetVertexRuntimeErrors provides the runtime errors observed on each replica of
+// a pipeline vertex.
+func (h *handler) GetVertexRuntimeErrors(c *gin.Context) {
+	ns, pipeline, vertex := c.Param("namespace"), c.Param("pipeline"), c.Param("vertex")
+
+	client, err := h.getPipelineDaemonClient(ns, pipeline)
+	if err != nil || client == nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get daemon service client for pipeline %q: %v", pipeline, err))
+		return
+	}
+
+	errs, err := client.GetVertexErrors(c, pipeline, vertex)
+	if err != nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get the errors for pipeline %q vertex %q: %v", pipeline, vertex, err))
+		return
+	}
+	c.JSON(http.StatusOK, newReplicaErrorDTOs(errs))
+}
+
+// GetMonoVertexRuntimeErrors provides the runtime errors observed on each replica
+// of a mono vertex.
+func (h *handler) GetMonoVertexRuntimeErrors(c *gin.Context) {
+	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
+
+	client, err := h.getMonoVertexDaemonClient(ns, monoVertex)
+	if err != nil || client == nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get daemon service client for mono vertex %q: %v", monoVertex, err))
+		return
+	}
+
+	errs, err := client.GetMonoVertexErrors(c, monoVertex)
+	if err != nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to get the errors for mono vertex %q: %v", monoVertex, err))
+		return
+	}
+	c.JSON(http.StatusOK, newMonoVertexReplicaErrorDTOs(errs))
+}
+
 // UpdateVertex is used to update the vertex spec
 func (h *handler) UpdateVertex(c *gin.Context) {
 	if h.opts.readonly {
@@ -948,6 +1207,133 @@ func (h *handler) PodLogs(c *gin.Context) {
 	h.streamLogs(c, stream)
 }
 
+// defaultVertexLogTailLines bounds the number of log lines returned per replica
+// by the vertex/mono vertex logs endpoints when the caller does not specify
+// tailLines, so a single call cannot return an unbounded volume.
+const defaultVertexLogTailLines int64 = 200
+
+// GetVertexLogs streams the logs of a pipeline vertex addressed by vertex and
+// container name, fanning out across all of the vertex's replicas. Each line is
+// prefixed with "[<pod>/<container>] ". This avoids the caller having to first
+// list pods and track pod names.
+func (h *handler) GetVertexLogs(c *gin.Context) {
+	ns, pipeline, vertex := c.Param("namespace"), c.Param("pipeline"), c.Param("vertex")
+	selector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipeline, dfv1.KeyVertexName, vertex)
+	h.streamVertexLogs(c, ns, fmt.Sprintf("pipeline %q vertex %q", pipeline, vertex), selector)
+}
+
+// GetMonoVertexLogs streams the logs of a mono vertex addressed by mono vertex
+// and container name, fanning out across all of its replicas.
+func (h *handler) GetMonoVertexLogs(c *gin.Context) {
+	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
+	selector := fmt.Sprintf("%s=%s", dfv1.KeyMonoVertexName, monoVertex)
+	h.streamVertexLogs(c, ns, fmt.Sprintf("mono vertex %q", monoVertex), selector)
+}
+
+// streamVertexLogs lists the pods matching selector and streams their logs,
+// optionally narrowed to a single replica via the "replica" query param. It is
+// shared by GetVertexLogs and GetMonoVertexLogs.
+func (h *handler) streamVertexLogs(c *gin.Context, ns, subject, selector string) {
+	pods, err := h.kubeClient.CoreV1().Pods(ns).List(c, metav1.ListOptions{LabelSelector: selector})
+	if err != nil {
+		h.respondWithStatusError(c, http.StatusBadGateway, fmt.Sprintf("failed to list pods for %s in namespace %q: %v", subject, ns, err))
+		return
+	}
+	if pods == nil || len(pods.Items) == 0 {
+		h.respondWithStatusError(c, http.StatusNotFound, fmt.Sprintf("no pods found for %s in namespace %q", subject, ns))
+		return
+	}
+
+	// Optionally narrow to a single replica.
+	if replica := c.Query("replica"); replica != "" {
+		idx := slices.IndexFunc(pods.Items, func(p corev1.Pod) bool { return p.Name == replica })
+		if idx < 0 {
+			h.respondWithStatusError(c, http.StatusNotFound, fmt.Sprintf("replica %q not found for %s in namespace %q", replica, subject, ns))
+			return
+		}
+		pods.Items = pods.Items[idx : idx+1]
+	}
+
+	// follow streams a single pod indefinitely, so it cannot be merged across
+	// replicas sequentially. Require the caller to pick one replica.
+	follow := c.Query("follow") == "true"
+	if follow && len(pods.Items) > 1 {
+		h.respondWithStatusError(c, http.StatusBadRequest, fmt.Sprintf("follow=true requires a single replica for %s; specify the replica query param (one of %d pods)", subject, len(pods.Items)))
+		return
+	}
+
+	// Validate the requested container against the pods' actual containers.
+	container := c.Query("container")
+	if container != "" {
+		valid := podContainerNames(&pods.Items[0])
+		if !slices.Contains(valid, container) {
+			h.respondWithStatusError(c, http.StatusBadRequest, fmt.Sprintf("container %q not found for %s; valid containers: %s", container, subject, strings.Join(valid, ", ")))
+			return
+		}
+	}
+
+	tailLines := h.parseTailLines(c.Query("tailLines"))
+	if tailLines == nil {
+		tailLines = ptr.To(defaultVertexLogTailLines)
+	}
+	var sinceSeconds *int64
+	if s := c.Query("sinceSeconds"); s != "" {
+		if v, perr := strconv.ParseInt(s, 10, 64); perr == nil && v > 0 {
+			sinceSeconds = ptr.To(v)
+		}
+	}
+	logOptions := &corev1.PodLogOptions{
+		Container:    container,
+		Follow:       follow,
+		TailLines:    tailLines,
+		SinceSeconds: sinceSeconds,
+		Timestamps:   true,
+		Previous:     c.Query("previous") == "true",
+	}
+
+	for i := range pods.Items {
+		pod := pods.Items[i]
+		stream, serr := h.kubeClient.CoreV1().Pods(ns).GetLogs(pod.Name, logOptions).Stream(c)
+		if serr != nil {
+			// Surface the failure inline rather than aborting the whole response;
+			// other replicas may still have useful logs.
+			_, _ = fmt.Fprintf(c.Writer, "[%s/%s] failed to get logs: %v\n", pod.Name, container, serr)
+			c.Writer.Flush()
+			continue
+		}
+		h.streamPrefixedLogs(c, stream, pod.Name, container)
+		_ = stream.Close()
+	}
+}
+
+// streamPrefixedLogs streams the logs from a single pod, prefixing each line with
+// "[<pod>/<container>] " so merged multi-replica output is attributable.
+func (h *handler) streamPrefixedLogs(c *gin.Context, stream io.ReadCloser, pod, container string) {
+	prefix := fmt.Sprintf("[%s/%s] ", pod, container)
+	scanner := bufio.NewScanner(stream)
+	for scanner.Scan() {
+		_, _ = c.Writer.WriteString(prefix)
+		_, _ = c.Writer.Write(scanner.Bytes())
+		_, _ = c.Writer.WriteString("\n")
+		c.Writer.Flush()
+	}
+}
+
+// podContainerNames returns the names of a pod's regular and sidecar (init with
+// Always restart policy) containers.
+func podContainerNames(pod *corev1.Pod) []string {
+	names := make([]string, 0, len(pod.Spec.Containers)+len(pod.Spec.InitContainers))
+	for _, ic := range pod.Spec.InitContainers {
+		if ic.RestartPolicy != nil && *ic.RestartPolicy == corev1.ContainerRestartPolicyAlways {
+			names = append(names, ic.Name)
+		}
+	}
+	for _, ct := range pod.Spec.Containers {
+		names = append(names, ct.Name)
+	}
+	return names
+}
+
 func (h *handler) GetMonoVertexPodsInfo(c *gin.Context) {
 	var response = make([]PodDetails, 0)
 	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
@@ -1027,9 +1413,9 @@ func (h *handler) streamLogs(c *gin.Context, stream io.ReadCloser) {
 // Events are sorted by timestamp in descending order.
 func (h *handler) GetNamespaceEvents(c *gin.Context) {
 	ns := c.Param("namespace")
-	objType := c.DefaultQuery("objectType", "")
-	objName := c.DefaultQuery("objectName", "")
-	if (objType == "" && objName != "") || (objType != "" && objName == "") {
+	objectKind := c.DefaultQuery("objectType", "")
+	objectName := c.DefaultQuery("objectName", "")
+	if (objectKind == "" && objectName != "") || (objectKind != "" && objectName == "") {
 		h.respondWithError(c, fmt.Sprintf("Failed to get a list of events: namespace %q: "+
 			"please either specify both objectType and objectName or not specify.", ns))
 		return
@@ -1052,9 +1438,9 @@ func (h *handler) GetNamespaceEvents(c *gin.Context) {
 		if event.LastTimestamp.Time.Equal(defaultTimeObject) {
 			continue
 		}
-		if (objType == "" && objName == "") ||
-			(strings.EqualFold(event.InvolvedObject.Kind, objType) && strings.EqualFold(event.InvolvedObject.Name, objName)) {
-			newEvent := NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.Type, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
+		if (objectKind == "" && objectName == "") ||
+			(strings.EqualFold(event.InvolvedObject.Kind, objectKind) && strings.EqualFold(event.InvolvedObject.Name, objectName)) {
+			newEvent := NewK8sEventsResponse(event.LastTimestamp.UnixMilli(), event.Type, event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message, event.Count)
 			response = append(response, newEvent)
 		}
 	}
@@ -1699,6 +2085,10 @@ func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
 		Status:  string(pod.Status.Phase),
 		Message: pod.Status.Message,
 		Reason:  pod.Status.Reason,
+		Node:    pod.Spec.NodeName,
+	}
+	if !pod.CreationTimestamp.IsZero() {
+		podDetails.CreatedAt = pod.CreationTimestamp.UTC().Format(time.RFC3339)
 	}
 
 	metricsClient := h.metricsClient
@@ -1758,6 +2148,8 @@ func (h *handler) getContainerDetails(pod corev1.Pod) map[string]ContainerDetail
 			ID:           status.ContainerID,
 			State:        h.getContainerStatus(status.State),
 			RestartCount: status.RestartCount,
+			Image:        status.Image,
+			Ready:        status.Ready,
 		}
 		// Reason the container is not yet running
 		// Message regarding why the container is not yet running

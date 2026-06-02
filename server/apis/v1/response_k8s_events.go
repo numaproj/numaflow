@@ -21,20 +21,32 @@ import "fmt"
 type K8sEventsResponse struct {
 	TimeStamp int64  `json:"timestamp"`
 	Type      string `json:"type"`
-	// Object is in the format of "kind/name", e.g. "Pipeline/simple-pipeline"
-	Object  string `json:"object"`
-	Reason  string `json:"reason"`
-	Message string `json:"message"`
+	// Object is in the format of "kind/name", e.g. "Pipeline/simple-pipeline".
+	// Retained for existing UI callers; prefer InvolvedObjectKind/Name for parsing.
+	Object string `json:"object"`
+	// InvolvedObjectKind and InvolvedObjectName are the split form of Object.
+	InvolvedObjectKind string `json:"involvedObjectKind"`
+	InvolvedObjectName string `json:"involvedObjectName"`
+	Reason             string `json:"reason"`
+	Message            string `json:"message"`
+	// Count is how many times this event has occurred.
+	Count int32 `json:"count"`
 }
 
 // NewK8sEventsResponse creates a new K8sEventsResponse object with the given inputs.
-func NewK8sEventsResponse(timestamp int64, eventType, objectKind, objectName, reason, message string) K8sEventsResponse {
-
+func NewK8sEventsResponse(timestamp int64, eventType, objectKind, objectName, reason, message string, count ...int32) K8sEventsResponse {
+	var eventCount int32
+	if len(count) > 0 {
+		eventCount = count[0]
+	}
 	return K8sEventsResponse{
-		TimeStamp: timestamp,
-		Type:      eventType,
-		Object:    fmt.Sprintf("%s/%s", objectKind, objectName),
-		Reason:    reason,
-		Message:   message,
+		TimeStamp:          timestamp,
+		Type:               eventType,
+		Object:             fmt.Sprintf("%s/%s", objectKind, objectName),
+		InvolvedObjectKind: objectKind,
+		InvolvedObjectName: objectName,
+		Reason:             reason,
+		Message:            message,
+		Count:              eventCount,
 	}
 }
