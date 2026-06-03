@@ -848,11 +848,10 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 true,
             );
 
-            // Pre-compute per-source-offset trace context (same as non-streaming).
-            let mut source_trace =
-                otel::SourceTraceState::new(msgs_len, self.transformer.is_some());
-
             for mut message in messages.drain(..) {
+                // Pre-compute per-source-offset trace context (same as non-streaming).
+                let mut source_trace = otel::SourceTraceState::new(1, self.transformer.is_some());
+
                 Self::record_partition_read_metrics(
                     &pipeline_labels,
                     mvtx_labels,
@@ -944,11 +943,16 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 // transform_batch is called with a single-element Vec (per-message transform).
                 // This trades batch transformer throughput for per-message forward latency,
                 // which is acceptable in streaming mode.
+                let dispatch_parent_contexts = source_trace.take_transform_parents();
                 let mut transformed_handles = match self.transformer.as_mut() {
                     None => vec![msg_handle],
                     Some(transformer) => {
                         match transformer
-                            .transform_batch(vec![msg_handle], cln_token.clone(), None)
+                            .transform_batch(
+                                vec![msg_handle],
+                                cln_token.clone(),
+                                dispatch_parent_contexts.as_ref(),
+                            )
                             .await
                         {
                             Ok(handles) => handles,
