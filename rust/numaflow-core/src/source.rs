@@ -943,6 +943,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 // transform_batch is called with a single-element Vec (per-message transform).
                 // This trades batch transformer throughput for per-message forward latency,
                 // which is acceptable in streaming mode.
+                //
+                // Capture the input offset before msg_handle is consumed by transform_batch.
+                // This is needed to close the dispatch span if the transformer filters the
+                // message to zero outputs (see guard below).
+                let input_offset = msg_handle.message().offset.clone();
                 let dispatch_parent_contexts = source_trace.take_transform_parents();
                 let mut transformed_handles = match self.transformer.as_mut() {
                     None => vec![msg_handle],
@@ -964,6 +969,14 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                         }
                     }
                 };
+
+                // If the transformer filtered this message to zero outputs, close its
+                // dispatch span now. Without this, the span stays open until source_trace
+                // drops at the end of this loop iteration, inflating its duration by all
+                // subsequent per-message work in the same batch.
+                if transformed_handles.is_empty() {
+                    source_trace.end(&input_offset);
+                }
 
                 if let Some(watermark_handle) = self.watermark_handle.as_mut() {
                     let entries: Vec<SourceWatermarkEntry> = transformed_handles
