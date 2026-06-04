@@ -1,12 +1,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use numaflow_pb::clients::source;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::source::{
-    read_request, read_response, AckRequest, AckResponse, NackRequest, ReadRequest, ReadResponse,
+    AckRequest, AckResponse, NackRequest, ReadRequest, ReadResponse, read_request, read_response,
 };
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -19,7 +19,7 @@ use crate::metadata::Metadata;
 use crate::reader::LagReader;
 use crate::shared::grpc::utc_from_timestamp;
 use crate::source::{SourceAcker, SourcePartitions, SourceReader};
-use crate::{config, Error, Result};
+use crate::{Error, Result, config};
 use tracing::warn;
 
 /// User-Defined Source to operative on custom sources.
