@@ -1,7 +1,7 @@
 use crate::config::components::source::GeneratorConfig;
 use crate::config::get_vertex_replica;
 
-use crate::message::{Message, Offset};
+use crate::message::{Message, NackOptions, Offset};
 use crate::reader;
 use crate::source;
 use tokio_stream::StreamExt;
@@ -198,6 +198,7 @@ mod stream_generator {
                 // Set default metadata so that metadata is always present.
                 metadata: Some(Arc::new(crate::metadata::Metadata::default())),
                 is_late: false,
+                nack_options: None,
             }
         }
 
@@ -398,7 +399,11 @@ impl source::SourceAcker for GeneratorAck {
         Ok(())
     }
 
-    async fn nack(&mut self, _: Vec<Offset>) -> crate::error::Result<()> {
+    async fn nack(
+        &mut self,
+        _: Vec<Offset>,
+        _options: Option<NackOptions>,
+    ) -> crate::error::Result<()> {
         // Generator source doesn't support nack - no-op
         Ok(())
     }

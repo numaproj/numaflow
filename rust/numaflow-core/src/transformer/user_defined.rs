@@ -69,6 +69,7 @@ impl From<UserDefinedTransformerMessage<'_>> for Message {
                 Some(Arc::new(metadata))
             },
             is_late: value.1.is_late,
+            nack_options: value.0.nack_options.map(Into::into),
         }
     }
 }

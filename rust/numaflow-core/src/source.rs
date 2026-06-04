@@ -7,7 +7,7 @@
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
-use crate::message::{MessageHandle, ReadAck};
+use crate::message::{MessageHandle, NackOptions, ReadAck};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, SOURCE_PARTITION_NAME_LABEL, monovertex_metrics,
     mvtx_forward_metric_labels, pipeline_drop_metric_labels, pipeline_metric_labels,
@@ -124,7 +124,8 @@ pub(crate) trait LocalSourceAcker {
 
     /// negatively acknowledge an offset. The implementor might choose to do it in an asynchronous way.
     /// For sources that don't support nack, this should be a no-op.
-    async fn nack(&mut self, offsets: Vec<Offset>) -> Result<()>;
+    // TODO: add options for nacking
+    async fn nack(&mut self, offsets: Vec<Offset>, options: Option<NackOptions>) -> Result<()>;
 }
 
 pub(crate) enum SourceType {
@@ -158,9 +159,11 @@ enum ActorMessage {
         respond_to: oneshot::Sender<Result<()>>,
         offsets: Vec<Offset>,
     },
+    // TODO: add options for nacking
     Nack {
         respond_to: oneshot::Sender<Result<()>>,
         offsets: Vec<Offset>,
+        options: Option<NackOptions>,
     },
     Pending {
         respond_to: oneshot::Sender<Result<Option<usize>>>,
@@ -212,8 +215,9 @@ where
             ActorMessage::Nack {
                 respond_to,
                 offsets,
+                options,
             } => {
-                let nack = self.acker.nack(offsets).await;
+                let nack = self.acker.nack(offsets, options).await;
                 let _ = respond_to.send(nack);
             }
             ActorMessage::Pending { respond_to } => {
@@ -433,11 +437,16 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     }
 
     /// nack the offsets by communicating with the nack actor.
-    async fn nack(source_handle: mpsc::Sender<ActorMessage>, offsets: Vec<Offset>) -> Result<()> {
+    async fn nack(
+        source_handle: mpsc::Sender<ActorMessage>,
+        offsets: Vec<Offset>,
+        options: Option<NackOptions>,
+    ) -> Result<()> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Nack {
             respond_to: sender,
             offsets,
+            options,
         };
         // Ignore send errors. If send fails, so does the recv.await below. There's no reason
         // to check for the same failure twice.
@@ -779,9 +788,9 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 Ok(ReadAck::Ack) => {
                     offsets_to_ack.push(offset.clone());
                 }
-                Ok(ReadAck::Nak) => {
+                Ok(ReadAck::Nak(options)) => {
                     warn!(?offset, "Nak received for offset");
-                    offsets_to_nack.push(offset.clone());
+                    offsets_to_nack.push((offset.clone(), options));
                 }
                 Err(e) => {
                     error!(?offset, err=?e, "Error receiving ack for offset");
@@ -798,7 +807,13 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             Self::ack_with_retry(source_handle.clone(), offsets_to_ack, &cancel_token).await?;
         }
         if !offsets_to_nack.is_empty() {
-            Self::nack_with_retry(source_handle, offsets_to_nack, &cancel_token).await?;
+            let mut nack_map: HashMap<Option<NackOptions>, Vec<Offset>> = HashMap::new();
+            offsets_to_nack
+                .into_iter()
+                .for_each(|(offset, option)| nack_map.entry(option).or_default().push(offset));
+            for (option, offsets) in nack_map {
+                Self::nack_with_retry(source_handle.clone(), offsets, option, &cancel_token).await?
+            }
         }
         Self::send_ack_metrics(e2e_start_time, n, start);
 
@@ -840,13 +855,14 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     async fn nack_with_retry(
         source_handle: mpsc::Sender<ActorMessage>,
         offsets: Vec<Offset>,
+        options: Option<NackOptions>,
         cancel_token: &CancellationToken,
     ) -> Result<()> {
         // In practice, this retry should exit early since it is invoked during ISB/map/sink errors, which results in CancellationToken cancellation
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(NACK_RETRY_ATTEMPTS);
         let _ = Retry::new(
             interval,
-            async || Self::nack(source_handle.clone(), offsets.clone()).await,
+            async || Self::nack(source_handle.clone(), offsets.clone(), options.clone()).await,
             |error: &Error| {
                 error!(?error, "Failed to send nack to source, retrying...");
                 // Don't retry non-retryable errors

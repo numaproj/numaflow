@@ -37,8 +37,8 @@ macro_rules! mark_success {
 /// ```
 #[macro_export]
 macro_rules! mark_failed {
-    ($msg:expr, $err:expr) => {{
-        $msg.mark_failed($err);
+    ($msg:expr, $err:expr, $opt:expr) => {{
+        $msg.mark_failed($err, $opt);
     }};
 }
 
@@ -65,9 +65,9 @@ macro_rules! mark_success_batch {
 /// ```
 #[macro_export]
 macro_rules! mark_failed_batch {
-    ($batch:expr, $err:expr) => {{
+    ($batch:expr, $err:expr, $opt:expr) => {{
         for msg in $batch {
-            msg.mark_failed($err);
+            msg.mark_failed($err, $opt);
         }
     }};
 }
@@ -76,8 +76,9 @@ use crate::Error;
 use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::AtomicUsize;
-use std::sync::{Arc, OnceLock};
 use tracing::{error, warn};
 
 use crate::metadata::Metadata;
@@ -89,6 +90,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
 const DROP: &str = "U+005C__DROP__";
+const NACK: &str = "U+005C__NACK__";
 
 /// The message that is passed from the source to the sink.
 /// NOTE: It is cheap to clone.
@@ -119,6 +121,8 @@ pub(crate) struct Message {
     /// is_late is used to indicate if the message is a late data. Late data is data that arrives
     /// after the watermark has passed. This is set only at source.
     pub(crate) is_late: bool,
+    // TODO: Move to using Option<Box<NackOptions>> in a separate PR
+    pub(crate) nack_options: Option<NackOptions>,
 }
 
 /// AckHandle is used to send the ack/nak to the source. It uses a reference count to track
@@ -140,6 +144,8 @@ struct AckHandle {
     /// Uses OnceLock since the span is set exactly once after construction; subsequent calls
     /// to `set_pipeline_span` are no-ops.
     pipeline_span: OnceLock<tracing::Span>,
+    // options for nacking
+    nack_options: OnceLock<Option<NackOptions>>,
 }
 
 impl AckHandle {
@@ -149,6 +155,7 @@ impl AckHandle {
             ref_count: AtomicUsize::new(1),
             failure_reason: OnceLock::new(),
             pipeline_span: OnceLock::new(),
+            nack_options: OnceLock::new(),
         }
     }
 
@@ -172,7 +179,11 @@ impl Drop for AckHandle {
                 if let Some(reason) = self.failure_reason.get() {
                     error!(reason = reason.as_str(), "message nacked due to failure");
                 }
-                ReadAck::Nak
+                if let Some(nack) = self.nack_options.get() {
+                    ReadAck::Nak(nack.clone())
+                } else {
+                    ReadAck::Nak(None)
+                }
             } else {
                 ReadAck::Ack
             };
@@ -231,8 +242,9 @@ impl MessageHandle {
     /// Mark the message as failed (consumes the handle), recording the reason it will be nacked.
     /// ref_count is not decremented, so the message will be NAK'd when the AckHandle is dropped.
     /// The error is logged at NAK time.
-    pub(crate) fn mark_failed(self, reason: impl fmt::Display) {
+    pub(crate) fn mark_failed(self, reason: impl fmt::Display, nack_option: Option<NackOptions>) {
         let _ = self.ack_handle.failure_reason.set(reason.to_string());
+        let _ = self.ack_handle.nack_options.set(nack_option);
     }
 
     /// Creates a new MessageHandle with a different message but sharing this handle's ack tracking.
@@ -277,6 +289,7 @@ impl From<Message> for MessageHandle {
                 ref_count: AtomicUsize::new(0), // Already "success" state
                 failure_reason: OnceLock::new(),
                 pipeline_span: OnceLock::new(),
+                nack_options: OnceLock::new(),
             }),
         }
     }
@@ -335,6 +348,7 @@ impl Default for Message {
             metadata: None,
             typ: Default::default(),
             is_late: false,
+            nack_options: None,
         }
     }
 }
@@ -392,6 +406,13 @@ impl Message {
         self.tags
             .as_ref()
             .is_some_and(|tags| tags.contains(&DROP.to_string()))
+    }
+
+    // Check if the message should be nacked.
+    pub(crate) fn nacked(&self) -> bool {
+        self.tags
+            .as_ref()
+            .is_some_and(|tags| tags.contains(&NACK.to_string()))
     }
 
     pub(crate) fn strip_tracing_udf(&mut self) {
@@ -487,12 +508,39 @@ impl fmt::Display for StringOffset {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub(crate) struct NackOptions {
+    pub(crate) delay: Option<u64>,
+    pub(crate) max_deliveries: Option<u32>,
+    pub(crate) reason: Option<String>,
+}
+
+impl From<NackOptions> for numaflow_pb::common::nack_options::NackOptions {
+    fn from(value: NackOptions) -> Self {
+        Self {
+            reason: value.reason,
+            max_deliveries: value.max_deliveries,
+            delay: value.delay,
+        }
+    }
+}
+
+impl From<numaflow_pb::common::nack_options::NackOptions> for NackOptions {
+    fn from(value: numaflow_pb::common::nack_options::NackOptions) -> Self {
+        Self {
+            reason: value.reason,
+            max_deliveries: value.max_deliveries,
+            delay: value.delay,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub(crate) enum ReadAck {
     /// Message was successfully processed.
     Ack,
     /// Message will not be processed now and processing can move onto the next message, NAK’d message will be retried.
-    Nak,
+    Nak(Option<NackOptions>),
 }
 
 /// Message ID which is used to uniquely identify a message. It cheap to clone this.
@@ -591,13 +639,12 @@ impl TryFrom<Message> for BytesMut {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::error::Result;
     use chrono::TimeZone;
     use numaflow_pb::objects::isb::{
         Body, Header, Message as ProtoMessage, MessageId, MessageInfo,
     };
-
-    use super::*;
-    use crate::error::Result;
 
     #[test]
     fn test_offset_display() {
@@ -721,7 +768,7 @@ mod tests {
 
         // Should receive NAK
         let result = ack_rx.await.unwrap();
-        assert_eq!(result, ReadAck::Nak);
+        assert_eq!(result, ReadAck::Nak(None));
     }
 
     #[tokio::test]
@@ -776,7 +823,7 @@ mod tests {
 
         // Should receive NAK since not all were marked as success
         let result = ack_rx.await.unwrap();
-        assert_eq!(result, ReadAck::Nak);
+        assert_eq!(result, ReadAck::Nak(None));
     }
 
     fn message_with_metadata() -> Message {

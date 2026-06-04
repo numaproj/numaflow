@@ -20,7 +20,9 @@ use crate::error::Error;
 use crate::mark_success;
 #[cfg(test)]
 use crate::mark_success_batch;
-use crate::message::{IntOffset, Message, MessageHandle, MessageType, Offset, ReadAck};
+use crate::message::{
+    IntOffset, Message, MessageHandle, MessageType, NackOptions, Offset, ReadAck,
+};
 use crate::metrics::pipeline_drop_metric_labels;
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
@@ -219,7 +221,7 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                     let _ = params.reader.mark_wip(&params.offset).await;
                 },
                 res = &mut params.ack_rx => {
-                    match res.unwrap_or(ReadAck::Nak) {
+                    match res.unwrap_or(ReadAck::Nak(None)) {
                         ReadAck::Ack => {
                             let ack_start = Instant::now();
                             if let Err(e) = Self::ack_with_retry(&params.reader, &params.offset, &params.cancel).await {
@@ -233,9 +235,9 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
                                 );
                             }
                         },
-                        ReadAck::Nak => {
+                        ReadAck::Nak(option) => {
                             info!(?params.offset, "Nak received for offset");
-                            if let Err(e) = Self::nak_with_retry(&params.reader, &params.offset, &params.cancel).await {
+                            if let Err(e) = Self::nak_with_retry(&params.reader, &params.offset, option, &params.cancel).await {
                                 error!(?e, ?params.offset, "Failed to nack message after retries");
                             }
                         },
@@ -282,12 +284,13 @@ impl<C: NumaflowTypeConfig> ISBReaderOrchestrator<C> {
     async fn nak_with_retry(
         reader: &Arc<C::ISBReader>,
         offset: &Offset,
+        option: Option<NackOptions>,
         cancel: &CancellationToken,
     ) -> Result<()> {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
         let result = Retry::new(
             interval,
-            async || reader.nack(offset, None).await,
+            async || reader.nack(offset, option.clone()).await,
             |e: &Error| {
                 if cancel.is_cancelled() {
                     error!(
@@ -1210,6 +1213,7 @@ mod tests {
         let result = ISBReaderOrchestrator::<crate::typ::WithoutRateLimiter>::nak_with_retry(
             &js_reader,
             &offset,
+            None,
             &cancel_token,
         )
         .await;
@@ -1266,6 +1270,7 @@ mod tests {
         let result = ISBReaderOrchestrator::<crate::typ::WithoutRateLimiter>::nak_with_retry(
             &js_reader,
             &missing_offset,
+            None,
             &cancel_token,
         )
         .await;
@@ -1507,6 +1512,7 @@ mod simplebuffer_tests {
                 headers: Arc::new(HashMap::new()),
                 metadata: None,
                 is_late: false,
+                nack_options: None,
             };
             writer.write(msg).await.expect("write should succeed");
         }
@@ -1657,6 +1663,7 @@ mod simplebuffer_tests {
         let nack_result = ISBReaderOrchestrator::<WithSimpleBuffer>::nak_with_retry(
             &reader,
             &missing_offset,
+            None,
             &cancel,
         )
         .await;
@@ -1947,7 +1954,7 @@ mod duplicate_inflight_tests {
         batch: Arc<Mutex<Option<Vec<Message>>>>,
         acks: Arc<Mutex<Vec<Offset>>>,
         #[allow(clippy::type_complexity)]
-        nacks: Arc<Mutex<Vec<(Offset, Option<Duration>)>>>,
+        nacks: Arc<Mutex<Vec<(Offset, Option<NackOptions>)>>>,
     }
 
     impl ScriptedReader {
@@ -1970,8 +1977,11 @@ mod duplicate_inflight_tests {
             Ok(())
         }
 
-        async fn nack(&self, offset: &Offset, delay: Option<Duration>) -> Result<()> {
-            self.nacks.lock().unwrap().push((offset.clone(), delay));
+        async fn nack(&self, offset: &Offset, nack_options: Option<NackOptions>) -> Result<()> {
+            self.nacks
+                .lock()
+                .unwrap()
+                .push((offset.clone(), nack_options));
             Ok(())
         }
 
@@ -2013,6 +2023,7 @@ mod duplicate_inflight_tests {
             headers: Arc::new(std::collections::HashMap::new()),
             metadata: None,
             is_late: false,
+            nack_options: None,
         }
     }
 

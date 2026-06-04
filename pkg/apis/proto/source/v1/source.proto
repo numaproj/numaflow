@@ -21,6 +21,7 @@ option java_package = "io.numaproj.numaflow.source.v1";
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/empty.proto";
+import "common/nack_options.proto";
 import "metadata.proto";
 
 package source.v1;
@@ -169,6 +170,8 @@ message NackRequest {
   message Request {
     // Required field holding the offset to be nacked
     repeated Offset offsets = 1;
+    // TODO: add options for nacking
+    optional nack_options.NackOptions nack_options = 2;
   }
   // Required field holding the request. The list will be ordered and will have the same order as the original Read response.
   Request request = 1;
