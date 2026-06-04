@@ -101,6 +101,7 @@ type handler struct {
 	dexObj                *DexObject
 	localUsersAuthObject  *LocalUsersAuthObject
 	healthChecker         *HealthChecker
+	mcpToolRegistry       ToolRegistry
 	opts                  *handlerOptions
 }
 
@@ -133,7 +134,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 			opt(o)
 		}
 	}
-	return &handler{
+	h := &handler{
 		kubeClient:            kubeClient,
 		metricsClient:         metricsClient,
 		promQlServiceObj:      promQlServiceObj,
@@ -144,7 +145,13 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 		localUsersAuthObject:  localUsersAuthObject,
 		healthChecker:         NewHealthChecker(ctx),
 		opts:                  o,
-	}, nil
+	}
+	h.mcpToolRegistry = NewMCPToolkit(h)
+	return h, nil
+}
+
+func (h *handler) GetMCPToolRegistry() ToolRegistry {
+	return h.mcpToolRegistry
 }
 
 // AuthInfo loads and returns auth info from cookie

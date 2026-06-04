@@ -25,7 +25,7 @@ import (
 func TestCreateAuthRouteMap(t *testing.T) {
 	t.Run("empty base", func(t *testing.T) {
 		got := CreateAuthRouteMap("")
-		assert.Equal(t, 60, len(got))
+		assert.Equal(t, 63, len(got))
 		// Assert the new discovery/correlation route keys exist (catches path typos
 		// that a count-only check would miss).
 		for _, key := range []string{
@@ -38,6 +38,9 @@ func TestCreateAuthRouteMap(t *testing.T) {
 			"GET:api/v1/namespaces/:namespace/pipelines/:pipeline/events",
 			"GET:api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/events",
 			"GET:api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/events",
+			"GET:api/v1/mcp",
+			"POST:api/v1/mcp",
+			"DELETE:api/v1/mcp",
 		} {
 			assert.Contains(t, got, key)
 		}
@@ -45,7 +48,7 @@ func TestCreateAuthRouteMap(t *testing.T) {
 
 	t.Run("customize base", func(t *testing.T) {
 		got := CreateAuthRouteMap("abcdefg")
-		assert.Equal(t, 60, len(got))
+		assert.Equal(t, 63, len(got))
 		for k := range got {
 			assert.Contains(t, k, "abcdefg")
 		}

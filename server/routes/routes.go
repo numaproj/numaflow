@@ -21,6 +21,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	mcpserver "github.com/mark3labs/mcp-go/server"
 
 	v1 "github.com/numaproj/numaflow/server/apis/v1"
 	"github.com/numaproj/numaflow/server/authz"
@@ -114,6 +115,10 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	if err != nil {
 		panic(err)
 	}
+	mcpHTTPServer := mcpserver.NewStreamableHTTPServer(v1.NewMCPServerFromRegistry(handler.GetMCPToolRegistry()))
+	r.GET("/mcp", gin.WrapH(mcpHTTPServer))
+	r.POST("/mcp", gin.WrapH(mcpHTTPServer))
+	r.DELETE("/mcp", gin.WrapH(mcpHTTPServer))
 	// Handle the authinfo request.
 	r.GET("/authinfo", handler.AuthInfo)
 	// List all namespaces that have Pipeline or InterStepBufferService objects.

@@ -46,6 +46,10 @@ func (w customResponseWriter) WriteString(s string) (int, error) {
 // cleanResponseMiddleware is a Gin middleware to clean up data in the response body.
 func cleanResponseMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if strings.HasSuffix(c.FullPath(), "/mcp") {
+			c.Next()
+			return
+		}
 		// Replace the original response writer with our custom one
 		w := &customResponseWriter{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
 		c.Writer = w

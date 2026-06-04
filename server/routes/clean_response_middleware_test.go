@@ -320,6 +320,25 @@ func TestCleanResponseMiddleware_HandlerChain(t *testing.T) {
 	})
 }
 
+func TestCleanResponseMiddleware_BypassesMCP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(cleanResponseMiddleware())
+	router.POST("/api/v1/mcp", func(c *gin.Context) {
+		c.JSON(http.StatusOK, map[string]interface{}{
+			"jsonrpc":       "2.0",
+			"managedFields": "preserved for JSON-RPC",
+		})
+	})
+
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/mcp", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.JSONEq(t, `{"jsonrpc":"2.0","managedFields":"preserved for JSON-RPC"}`, w.Body.String())
+}
+
 func TestCleanResponseMiddleware_CustomResponseWriter(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
