@@ -221,6 +221,11 @@ pub mod nack_request {
         /// Required field holding the offset to be nacked
         #[prost(message, repeated, tag = "1")]
         pub offsets: ::prost::alloc::vec::Vec<super::Offset>,
+        /// TODO: add options for nacking
+        #[prost(message, optional, tag = "2")]
+        pub nack_options: ::core::option::Option<
+            crate::common::nack_options::NackOptions,
+        >,
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]

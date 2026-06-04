@@ -29,9 +29,9 @@ use tracing::{error, info};
 
 use crate::config::monovertex::BypassConditions;
 use crate::sinker::builder::HealthCheckClients;
-use serve::{ServingStore, StoreEntry};
 // Re-export SinkWriterBuilder for external use
 pub(crate) use crate::sinker::builder::SinkWriterBuilder;
+use serve::{ServingStore, StoreEntry};
 
 /// A [Blackhole] sink which reads but never writes to anywhere, semantic equivalent of `/dev/null`.
 ///
@@ -215,7 +215,7 @@ impl SinkWriter {
                     // We are in shutting down mode, NAK all messages
                     if self.shutting_down_on_err {
                         for msg in read_batch {
-                            msg.mark_failed(self.final_result.as_ref().unwrap_err());
+                            msg.mark_failed(self.final_result.as_ref().unwrap_err(), None);
                         }
                         continue;
                     }
@@ -227,7 +227,7 @@ impl SinkWriter {
                             mark_success_batch!(read_batch);
                         }
                         Err(e) => {
-                            mark_failed_batch!(read_batch, &e);
+                            mark_failed_batch!(read_batch, &e, None);
                             // Critical error, cancel upstream and initiate shutdown
                             error!(?e, "Error writing to sink, initiating shutdown.");
                             cln_token.cancel();
@@ -1067,7 +1067,7 @@ mod tests {
 
         let _ = handle.await.unwrap();
         for ack_rx in ack_rxs {
-            assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak);
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(None));
         }
 
         // check if the tracker is empty

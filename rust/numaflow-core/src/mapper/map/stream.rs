@@ -105,6 +105,9 @@ impl MapStreamTask {
                     // Convert raw results to Messages using parent info.
                     // Strip tracing_udf from each result (map stage is done; no-op when no key
                     // was injected).
+
+                    // TODO: Handle message nacking
+
                     for result in results {
                         let mut mapped_message: Message =
                             UserDefinedMessage(result, &parent_info, parent_info.current_index)
@@ -152,7 +155,7 @@ impl MapStreamTask {
                 }
                 Some(Err(e)) => {
                     error!(?e, "failed to map message");
-                    mark_failed!(self.msg_handle, &e);
+                    mark_failed!(self.msg_handle, &e, None);
                     let _ = self.shared_ctx.error_tx.send(e).await;
                     return;
                 }

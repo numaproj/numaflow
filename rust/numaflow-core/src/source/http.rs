@@ -2,7 +2,7 @@
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Result;
-use crate::message::{Message, MessageID, Offset, StringOffset};
+use crate::message::{Message, MessageID, NackOptions, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::source;
 use crate::source::{SourceAcker, SourceReader};
@@ -41,6 +41,7 @@ impl From<HttpMessage> for Message {
             // Set default metadata so that metadata is always present.
             metadata: Some(Arc::new(Metadata::default())),
             is_late: false,
+            nack_options: None,
         }
     }
 }
@@ -106,7 +107,7 @@ impl SourceAcker for CoreHttpSource {
             .map_err(|e| e.into())
     }
 
-    async fn nack(&mut self, offsets: Vec<Offset>) -> Result<()> {
+    async fn nack(&mut self, offsets: Vec<Offset>, _options: Option<NackOptions>) -> Result<()> {
         // extract the ids from the offsets, id was used to create the offset
         let ids = offsets
             .into_iter()

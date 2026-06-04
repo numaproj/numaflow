@@ -70,6 +70,11 @@ pub mod source_transform_response {
         /// Metadata is the metadata of the message
         #[prost(message, optional, tag = "5")]
         pub metadata: ::core::option::Option<crate::common::metadata::Metadata>,
+        /// TODO: add nack options
+        #[prost(message, optional, tag = "6")]
+        pub nack_options: ::core::option::Option<
+            crate::common::nack_options::NackOptions,
+        >,
     }
 }
 /// *
