@@ -9,9 +9,9 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
 use crate::message::{MessageHandle, NackOptions, ReadAck};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, SOURCE_PARTITION_NAME_LABEL, monovertex_metrics,
-    mvtx_forward_metric_labels, pipeline_drop_metric_labels, pipeline_metric_labels,
-    pipeline_metrics,
+    monovertex_metrics, mvtx_forward_metric_labels, pipeline_drop_metric_labels,
+    pipeline_metric_labels, pipeline_metrics, PIPELINE_PARTITION_NAME_LABEL,
+    SOURCE_PARTITION_NAME_LABEL,
 };
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::shared::otel;
@@ -124,7 +124,6 @@ pub(crate) trait LocalSourceAcker {
 
     /// negatively acknowledge an offset. The implementor might choose to do it in an asynchronous way.
     /// For sources that don't support nack, this should be a no-op.
-    // TODO: add options for nacking
     async fn nack(&mut self, offsets: Vec<Offset>, options: Option<NackOptions>) -> Result<()>;
 }
 
@@ -159,7 +158,6 @@ enum ActorMessage {
         respond_to: oneshot::Sender<Result<()>>,
         offsets: Vec<Offset>,
     },
-    // TODO: add options for nacking
     Nack {
         respond_to: oneshot::Sender<Result<()>>,
         offsets: Vec<Offset>,

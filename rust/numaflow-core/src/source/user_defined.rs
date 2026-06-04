@@ -1,12 +1,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use numaflow_pb::clients::source;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::source::{
-    AckRequest, AckResponse, NackRequest, ReadRequest, ReadResponse, read_request, read_response,
+    read_request, read_response, AckRequest, AckResponse, NackRequest, ReadRequest, ReadResponse,
 };
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -19,7 +19,7 @@ use crate::metadata::Metadata;
 use crate::reader::LagReader;
 use crate::shared::grpc::utc_from_timestamp;
 use crate::source::{SourceAcker, SourcePartitions, SourceReader};
-use crate::{Error, Result, config};
+use crate::{config, Error, Result};
 use tracing::warn;
 
 /// User-Defined Source to operative on custom sources.
@@ -351,7 +351,6 @@ impl SourceAcker for UserDefinedSourceAck {
     /// This method checks if the SDK supports nack functionality using a pre-computed flag.
     /// For older SDK versions (< 0.11), it logs a warning and returns Ok() for backward compatibility.
     /// For newer SDK versions (>= 0.11), it calls the actual nack gRPC method.
-    // TODO: add options for nacking
     async fn nack(&mut self, offsets: Vec<Offset>, options: Option<NackOptions>) -> Result<()> {
         if !self.supports_nack {
             warn!(
