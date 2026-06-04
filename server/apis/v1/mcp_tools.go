@@ -77,12 +77,8 @@ func (tk *mcpToolkit) RegisteredTools() []ToolDefinition {
 		tk.routeTool("list_pipelines", "List pipelines in a namespace", http.MethodGet, "/namespaces/:namespace/pipelines", namespaceArg),
 		tk.routeTool("get_pipeline", "Get a pipeline", http.MethodGet, "/namespaces/:namespace/pipelines/:pipeline", namespaceArg, pipelineArg),
 		tk.routeTool("get_pipeline_health", "Get pipeline health", http.MethodGet, "/namespaces/:namespace/pipelines/:pipeline/health", namespaceArg, pipelineArg),
-		tk.routeTool("get_pipeline_isbs", "Get legacy inter-step buffer information for a pipeline", http.MethodGet, "/namespaces/:namespace/pipelines/:pipeline/isbs", namespaceArg, pipelineArg),
-		tk.routeTool("get_pipeline_watermarks", "Get pipeline watermarks", http.MethodGet, "/namespaces/:namespace/pipelines/:pipeline/watermarks", namespaceArg, pipelineArg),
-		tk.routeTool("get_vertices_metrics", "Get metrics for all vertices in a pipeline", http.MethodGet, "/namespaces/:namespace/pipelines/:pipeline/vertices/metrics", namespaceArg, pipelineArg),
 		tk.routeTool("list_vertex_pods", "List pods for a pipeline vertex", http.MethodGet, "/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods", namespaceArg, pipelineArg, vertexArg),
 		tk.routeTool("get_vertex_pods_info", "Get detailed pod information for a pipeline vertex", http.MethodGet, "/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods-info", namespaceArg, pipelineArg, vertexArg),
-		tk.routeTool("get_vertex_errors", "Get legacy errors for a pipeline vertex", http.MethodGet, "/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/errors", namespaceArg, pipelineArg, vertexArg),
 		tk.routeTool("get_pod_metrics", "Get pod CPU and memory metrics for a namespace", http.MethodGet, "/metrics/namespaces/:namespace/pods", namespaceArg),
 		tk.routeTool("get_pod_logs", "Get bounded recent logs for a pod", http.MethodGet, "/namespaces/:namespace/pods/:pod/logs", namespaceArg, podArg, containerArg, previousArg, tailLinesArg),
 		tk.routeTool("list_isb_services", "List InterStepBufferService objects in a namespace", http.MethodGet, "/namespaces/:namespace/isb-services", namespaceArg),
@@ -90,11 +86,8 @@ func (tk *mcpToolkit) RegisteredTools() []ToolDefinition {
 		tk.routeTool("list_mono_vertices", "List mono-vertices in a namespace", http.MethodGet, "/namespaces/:namespace/mono-vertices", namespaceArg),
 		tk.routeTool("get_mono_vertex", "Get a mono-vertex", http.MethodGet, "/namespaces/:namespace/mono-vertices/:mono-vertex", namespaceArg, monoVertexArg),
 		tk.routeTool("list_mono_vertex_pods", "List pods for a mono-vertex", http.MethodGet, "/namespaces/:namespace/mono-vertices/:mono-vertex/pods", namespaceArg, monoVertexArg),
-		tk.routeTool("get_mono_vertex_metrics", "Get metrics for a mono-vertex", http.MethodGet, "/namespaces/:namespace/mono-vertices/:mono-vertex/metrics", namespaceArg, monoVertexArg),
 		tk.routeTool("get_mono_vertex_health", "Get mono-vertex health", http.MethodGet, "/namespaces/:namespace/mono-vertices/:mono-vertex/health", namespaceArg, monoVertexArg),
-		tk.routeTool("get_mono_vertex_errors", "Get legacy errors for a mono-vertex", http.MethodGet, "/namespaces/:namespace/mono-vertices/:mono-vertex/errors", namespaceArg, monoVertexArg),
 		tk.routeTool("discover_metrics", "Discover configured metrics for an object type", http.MethodGet, "/metrics-discovery/object/:object", objectArg),
-		tk.routeTool("query_metrics", "Query configured metrics through the metrics proxy", http.MethodPost, "/metrics-proxy", metricsQueryArg),
 		tk.routeTool("get_vertex_metrics", "Get metrics for a pipeline vertex", http.MethodGet, "/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/metrics", namespaceArg, pipelineArg, vertexArg),
 		tk.routeTool("get_vertex_pending", "Get pending counts for a pipeline vertex", http.MethodGet, "/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pending", namespaceArg, pipelineArg, vertexArg),
 		tk.routeTool("get_mono_vertex_pending", "Get pending counts for a mono-vertex", http.MethodGet, "/namespaces/:namespace/mono-vertices/:mono-vertex/pending", namespaceArg, monoVertexArg),
@@ -172,7 +165,6 @@ var (
 	previousArg     = toolArg{name: "previous", description: "Read previous terminated container logs", kind: "boolean"}
 	tailLinesArg    = toolArg{name: "tailLines", description: "Number of recent log lines, capped by the server", kind: "number"}
 	eventLimitArg   = toolArg{name: "limit", description: "Maximum events to return, capped by the server", kind: "number"}
-	metricsQueryArg = toolArg{name: "query", description: "Metrics proxy request JSON payload", required: true, kind: "string"}
 )
 
 func (tk *mcpToolkit) routeTool(name, description, method, path string, args ...toolArg) ToolDefinition {

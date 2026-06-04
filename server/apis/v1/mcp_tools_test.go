@@ -49,18 +49,37 @@ func TestMCPToolkitRegisteredTools(t *testing.T) {
 		"list_pipelines",
 		"get_pipeline_topology",
 		"get_pipeline_debug_snapshot",
+		"get_pipeline_buffers",
+		"get_pipeline_buffer",
+		"get_pipeline_buffer_pending",
+		"get_pipeline_edge_watermarks",
+		"get_pipeline_watermark_lag",
+		"get_vertex_metrics",
 		"get_vertex_logs",
 		"get_vertex_runtime_errors",
 		"list_mono_vertices",
 		"get_mono_vertex_debug_snapshot",
+		"get_mono_vertex_throughput",
 		"get_mono_vertex_logs",
 		"get_mono_vertex_runtime_errors",
 		"get_pod_logs",
 		"discover_metrics",
-		"query_metrics",
 	}
 	for _, name := range expected {
 		assert.Truef(t, names[name], "expected MCP tool %q to be registered", name)
+	}
+
+	removed := []string{
+		"get_pipeline_isbs",
+		"get_pipeline_watermarks",
+		"get_vertices_metrics",
+		"get_vertex_errors",
+		"get_mono_vertex_metrics",
+		"get_mono_vertex_errors",
+		"query_metrics",
+	}
+	for _, name := range removed {
+		assert.Falsef(t, names[name], "MCP tool %q should not be registered", name)
 	}
 }
 
@@ -106,7 +125,6 @@ func TestMCPToolkitRequiredSchemas(t *testing.T) {
 	assert.ElementsMatch(t, []string{"namespace", "pipeline", "vertex"}, tools["get_vertex_pending"].InputSchema.Required)
 	assert.ElementsMatch(t, []string{"namespace", "pipeline", "buffer"}, tools["get_pipeline_buffer_pending"].InputSchema.Required)
 	assert.ElementsMatch(t, []string{"namespace", "monoVertex"}, tools["get_mono_vertex_throughput"].InputSchema.Required)
-	assert.ElementsMatch(t, []string{"query"}, tools["query_metrics"].InputSchema.Required)
 }
 
 func TestMCPToolkitRouteHandlerCapsTailAndLimit(t *testing.T) {
