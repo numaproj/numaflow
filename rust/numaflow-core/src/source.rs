@@ -502,6 +502,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             streaming = self.streaming,
             "Started streaming source"
         );
+        if self.streaming && self.read_ahead {
+            warn!(
+                "streaming=true supersedes read_ahead=true; read_ahead is ignored in streaming mode"
+            );
+        }
+
         let handle = tokio::spawn(async move {
             if self.streaming {
                 self.streaming_source(
