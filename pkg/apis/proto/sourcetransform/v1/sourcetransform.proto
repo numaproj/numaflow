@@ -74,7 +74,7 @@ message SourceTransformResponse {
     repeated string tags = 4;
     // Metadata is the metadata of the message
     metadata.Metadata metadata = 5;
-    // TODO: add nack options
+    // Nack options specified while nacking a message
     optional nack_options.NackOptions nack_options = 6;
   }
   repeated Result results = 1;
