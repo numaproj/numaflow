@@ -9,9 +9,9 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
 use crate::message::{MessageHandle, NackOptions, ReadAck};
 use crate::metrics::{
-    monovertex_metrics, mvtx_forward_metric_labels, pipeline_drop_metric_labels,
-    pipeline_metric_labels, pipeline_metrics, PIPELINE_PARTITION_NAME_LABEL,
-    SOURCE_PARTITION_NAME_LABEL,
+    PIPELINE_PARTITION_NAME_LABEL, SOURCE_PARTITION_NAME_LABEL, monovertex_metrics,
+    mvtx_forward_metric_labels, pipeline_drop_metric_labels, pipeline_metric_labels,
+    pipeline_metrics,
 };
 use crate::monovertex::bypass_router::MvtxBypassRouter;
 use crate::shared::otel;
