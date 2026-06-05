@@ -11,13 +11,19 @@ use std::io::Write;
 use std::os::unix::fs::DirBuilderExt as _;
 use std::path::Path;
 use std::str;
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{LazyLock, Mutex};
 use tonic::Status;
 use tonic_types::pb::{DebugInfo, Status as RpcStatus};
 use tracing::error;
 
-static PERSIST_APPLICATION_ERROR_ONCE: OnceLock<()> = OnceLock::new();
-const CURRENT_FILE: &str = "current-numa.json";
+/// Monotonic per-process sequence appended to error filenames so that two errors persisted within
+/// the same nanosecond (or from concurrent writers) produce distinct files. Combined with the
+/// nanosecond `Utc::now().timestamp_nanos_opt()` value, collisions are not observable in practice.
+static PERSIST_ERROR_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+/// Serializes local writers so pruning and atomic renames observe a consistent directory state.
+static PERSIST_ERROR_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 /// Represents a single runtime error entry persisted by the application.
 #[derive(Serialize, Deserialize, Debug)]
@@ -114,8 +120,11 @@ impl From<RuntimeErrorEntry> for String {
 
 /// Persists a gRPC error as a JSON file in the appropriate container directory.
 /// It organizes error files in a directory structure based on container names and ensures that the
-/// number of error files per container (files may be written from udf) does not exceed a specified limit.
-/// If the limit is exceeded, the oldest file is removed to make room for new entry. This function runs only once.
+/// number of error files per container (files may be written from udf) does not exceed a specified
+/// limit. If the limit is exceeded, the oldest file is removed to make room for new entry.
+///
+/// Every call records a fresh file. The filename embeds a nanosecond timestamp plus a per-process
+/// sequence number so concurrent writers cannot overwrite each other's files.
 ///
 /// The persisted error includes comprehensive information from the gRPC Status:
 /// - Error code (e.g., "Internal error", "Unavailable", etc.)
@@ -132,11 +141,7 @@ impl From<RuntimeErrorEntry> for String {
 ///  let grpc_status = tonic::Status::internal("UDF_EXECUTION_ERROR(container-name): Test error");
 ///  runtime::persist_application_error(grpc_status);
 /// ```
-//
 pub fn persist_application_error(grpc_status: Status) {
-    if PERSIST_APPLICATION_ERROR_ONCE.set(()).is_err() {
-        return;
-    }
     persist_application_error_to_file(
         RuntimeInfoConfig::default().app_error_path,
         RuntimeInfoConfig::default().max_error_files_per_container,
@@ -149,9 +154,7 @@ pub(crate) fn persist_application_error_to_file(
     max_error_files_per_container: usize,
     grpc_status: Status,
 ) {
-    // extract the type of container based on the error message
     let container_name = extract_container_name(grpc_status.message());
-    // create a directory for the container if it doesn't exist with permissions to read, write, and execute for all
     let dir_path = Path::new(&application_error_path.clone()).join(&container_name);
     if !dir_path.exists() {
         let mut builder = fs::DirBuilder::new();
@@ -162,68 +165,34 @@ pub(crate) fn persist_application_error_to_file(
             .expect("Failed to create application errors directory");
     }
 
-    // this is to check the number of files in the directory
-    // additional check in place to process only files and ignore directories
-    // ignore files starting with prefix `current`
-    let mut files: Vec<_> = fs::read_dir(&dir_path)
-        .expect("Failed to read application errors directory")
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.path().is_file())
-        .filter(|entry| {
-            entry
-                .file_name()
-                .to_str()
-                .map(|name| !name.starts_with("current"))
-                .unwrap_or(false)
-        })
-        .collect();
+    let now = Utc::now();
+    let timestamp_seconds = now.timestamp();
+    let timestamp_nanos = now
+        .timestamp_nanos_opt()
+        .unwrap_or_else(|| timestamp_seconds.saturating_mul(1_000_000_000));
+    let sequence = PERSIST_ERROR_SEQUENCE.fetch_add(1, Ordering::Relaxed);
 
-    // sort the files based on timestamp
-    files.sort_by_key(|e| {
-        e.file_name()
-            .to_str()
-            .and_then(|name| name.split('-').next())
-            .and_then(|timestamp| timestamp.parse::<i64>().ok())
-    });
-
-    // remove the oldest files until the number of files is within the max limit
-    // this is to ensure that we don't exceed the max limit of files in the container directory
-    while files.len() >= max_error_files_per_container {
-        if let Some(oldest_file) = files.first() {
-            if let Err(e) = fs::remove_file(oldest_file.path()) {
-                error!(
-                    "Failed to remove the oldest application error file: {:?}, error: {:?}",
-                    oldest_file.path(),
-                    e
-                );
-                break;
-            }
-            files.remove(0);
-        }
-    }
-
-    let timestamp = Utc::now().timestamp();
     let runtime_error_entry =
-        RuntimeErrorEntry::from((&grpc_status, container_name.as_str(), timestamp));
+        RuntimeErrorEntry::from((&grpc_status, container_name.as_str(), timestamp_seconds));
     let json_str: String = runtime_error_entry.into();
 
-    // Write the error details to a temporary file and rename it to a
-    // timestamped file once the write operation is complete.
-    // this is to ensure that while reading we skip this file to avoid race condition
-    let current_file_path = dir_path.join(CURRENT_FILE);
-    // append numa to the file name to denote files created by numa container
-    let file_name = format!("{timestamp}-numa.json");
-    let final_file_path = dir_path.join(&file_name);
+    // The temp and final filenames share the same unique tuple, so concurrent writers never share
+    // a temp path and readers only see complete JSON files.
+    let temp_file_path = dir_path.join(format!("{timestamp_nanos}-{sequence}-numa.tmp"));
+    let final_file_path = dir_path.join(format!("{timestamp_nanos}-{sequence}-numa.json"));
 
-    let mut current_file =
-        File::create(&current_file_path).expect("Failed to create current application errors file");
-    current_file
+    let mut temp_file =
+        File::create(&temp_file_path).expect("Failed to create temp application errors file");
+    temp_file
         .write_all(json_str.as_bytes())
-        .expect("Failed to write to current application error file");
+        .expect("Failed to write to temp application error file");
 
-    // rename the current file to the final file name once write operation completes
-    fs::rename(&current_file_path, &final_file_path)
-        .expect("Failed to rename current file to final file name");
+    let _guard = PERSIST_ERROR_LOCK
+        .lock()
+        .expect("application error persist lock poisoned");
+    fs::rename(&temp_file_path, &final_file_path)
+        .expect("Failed to rename temp file to final file name");
+    prune_error_files(&dir_path, max_error_files_per_container);
 }
 
 /// A structure used to represent API responses containing runtime error entries.
@@ -295,13 +264,13 @@ impl Runtime {
             };
 
             for file_entry in file_paths.flatten() {
-                // skip processing if the file name is "current.json"
-                if file_entry
+                // Skip in-flight temp files and legacy temp files left by older writers.
+                let file_name = file_entry
                     .file_name()
                     .to_str()
                     .expect("file name should be valid")
-                    .starts_with("current")
-                {
+                    .to_string();
+                if file_name.ends_with(".tmp") || file_name.starts_with("current") {
                     continue;
                 }
 
@@ -320,6 +289,46 @@ impl Runtime {
         }
 
         Ok(errors)
+    }
+}
+
+fn prune_error_files(dir_path: &Path, max_error_files_per_container: usize) {
+    if max_error_files_per_container == 0 {
+        return;
+    }
+
+    let mut files: Vec<_> = fs::read_dir(dir_path)
+        .expect("Failed to read application errors directory")
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().is_file())
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .map(|name| name.ends_with(".json"))
+                .unwrap_or(false)
+        })
+        .collect();
+
+    files.sort_by_key(|e| {
+        e.file_name()
+            .to_str()
+            .and_then(|name| name.split('-').next())
+            .and_then(|timestamp| timestamp.parse::<i64>().ok())
+    });
+
+    while files.len() > max_error_files_per_container {
+        if let Some(oldest_file) = files.first() {
+            if let Err(e) = fs::remove_file(oldest_file.path()) {
+                error!(
+                    "Failed to remove the oldest application error file: {:?}, error: {:?}",
+                    oldest_file.path(),
+                    e
+                );
+                break;
+            }
+            files.remove(0);
+        }
     }
 }
 
@@ -434,7 +443,9 @@ mod tests {
         let grpc_status = Status::internal("UDF_EXECUTION_ERROR(udsource): Test error message");
 
         // Call the function to test
+        let before = Utc::now().timestamp();
         persist_application_error_to_file(application_error_path.clone(), 5, grpc_status.clone());
+        let after = Utc::now().timestamp();
 
         // Verify that the directory for the container was created
         let container_name = extract_container_name(grpc_status.message());
@@ -456,6 +467,18 @@ mod tests {
             .into_string()
             .unwrap();
         assert!(file_name.ends_with(".json"));
+        let (timestamp_nanos, _sequence, suffix) = parse_error_filename(&file_name);
+        assert!(timestamp_nanos >= before.saturating_mul(1_000_000_000));
+        assert_eq!(suffix, "numa.json");
+
+        let file_path = dir_path.join(file_name);
+        let file_content = fs::read(file_path).unwrap();
+        let entry = RuntimeErrorEntry::try_from(file_content.as_slice()).unwrap();
+        assert!(
+            (before..=after).contains(&entry.timestamp),
+            "persisted timestamp should be Unix seconds, got {}",
+            entry.timestamp
+        );
     }
 
     #[test]
@@ -601,6 +624,156 @@ mod tests {
     }
 
     #[test]
+    fn test_persist_application_error_repeated_calls_are_all_recorded() {
+        let temp_dir = tempdir().unwrap();
+        let app_err_path = temp_dir.path().to_str().unwrap().to_string();
+        for i in 0..3 {
+            let status =
+                Status::internal(format!("UDF_EXECUTION_ERROR(repeated-container): call {i}"));
+            persist_application_error_to_file(app_err_path.clone(), 10, status);
+        }
+        let container_dir = Path::new(&app_err_path).join("repeated-container");
+        let files: Vec<_> = fs::read_dir(&container_dir)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_str()
+                    .map(|name| name.ends_with(".json"))
+                    .unwrap_or(false)
+            })
+            .collect();
+        assert_eq!(
+            files.len(),
+            3,
+            "expected three distinct error files after three persist calls"
+        );
+    }
+
+    #[test]
+    fn test_persist_application_error_concurrent_filenames_are_unique() {
+        let temp_dir = tempdir().unwrap();
+        let app_err_path = temp_dir.path().to_str().unwrap().to_string();
+
+        // Allow up to 100 files so rotation does not mask the collision question we are testing.
+        // Spawn 100 concurrent persists from a thread pool; each call enters
+        // `persist_application_error_to_file` independently.
+        const N: usize = 100;
+        let mut handles = Vec::with_capacity(N);
+        for i in 0..N {
+            let path = app_err_path.clone();
+            handles.push(std::thread::spawn(move || {
+                let status = Status::internal(format!(
+                    "UDF_EXECUTION_ERROR(concurrent-container): writer {i}"
+                ));
+                persist_application_error_to_file(path, N, status);
+            }));
+        }
+        for h in handles {
+            h.join().expect("writer thread panicked");
+        }
+
+        let container_dir = Path::new(&app_err_path).join("concurrent-container");
+        let files: Vec<_> = fs::read_dir(&container_dir)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .collect();
+
+        // No temp file should be left behind — all writes completed and renamed.
+        let temp_files: Vec<_> = files
+            .iter()
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_str()
+                    .map(|name| name.ends_with(".tmp"))
+                    .unwrap_or(false)
+            })
+            .collect();
+        assert!(
+            temp_files.is_empty(),
+            "no `.tmp` files should remain after all writers finish, found {temp_files:?}"
+        );
+
+        // Exactly N final files. If any two concurrent writers had collided on the same final
+        // name, the second rename would have overwritten the first and the count would drop.
+        let final_files: Vec<_> = files
+            .iter()
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_str()
+                    .map(|name| name.ends_with(".json"))
+                    .unwrap_or(false)
+            })
+            .collect();
+        assert_eq!(
+            final_files.len(),
+            N,
+            "expected {N} distinct error files from {N} concurrent writers"
+        );
+    }
+
+    #[test]
+    fn test_persist_application_error_concurrent_writes_respect_file_cap() {
+        const WRITERS: usize = 25;
+        const MAX_FILES: usize = 10;
+
+        let temp_dir = tempdir().unwrap();
+        let app_err_path = temp_dir.path().to_str().unwrap().to_string();
+        let mut handles = Vec::with_capacity(WRITERS);
+        for i in 0..WRITERS {
+            let path = app_err_path.clone();
+            handles.push(std::thread::spawn(move || {
+                let status =
+                    Status::internal(format!("UDF_EXECUTION_ERROR(capped-container): writer {i}"));
+                persist_application_error_to_file(path, MAX_FILES, status);
+            }));
+        }
+        for handle in handles {
+            handle.join().expect("writer thread panicked");
+        }
+
+        let container_dir = Path::new(&app_err_path).join("capped-container");
+        let files: Vec<_> = fs::read_dir(&container_dir)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .collect();
+        let final_files = files
+            .iter()
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_str()
+                    .map(|name| name.ends_with(".json"))
+                    .unwrap_or(false)
+            })
+            .count();
+        let temp_files = files
+            .iter()
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_str()
+                    .map(|name| name.ends_with(".tmp"))
+                    .unwrap_or(false)
+            })
+            .count();
+
+        assert!(final_files <= MAX_FILES);
+        assert_eq!(temp_files, 0);
+    }
+
+    fn parse_error_filename(file_name: &str) -> (i64, u64, &str) {
+        let mut parts = file_name.splitn(3, '-');
+        let timestamp_nanos = parts.next().unwrap().parse().unwrap();
+        let sequence = parts.next().unwrap().parse().unwrap();
+        let suffix = parts.next().unwrap();
+        (timestamp_nanos, sequence, suffix)
+    }
+
+    #[test]
     fn test_runtime_error_entry_with_metadata() {
         use tonic::metadata::MetadataMap;
 
@@ -638,7 +811,7 @@ mod tests {
         assert!(error_entry.details.contains("metadata:"));
         assert!(error_entry.details.contains("error-type=udf-execution"));
         assert!(error_entry.details.contains("retry-count=3"));
-        // Binary metadata should NOT be included as per review feedback
+        // Binary metadata is intentionally skipped because it is not useful in the JSON payload.
         assert!(!error_entry.details.contains("binary-data-bin="));
     }
 }

@@ -30,6 +30,10 @@ use crate::shared::grpc::create_rpc_channel;
 pub(crate) struct TestServerHandle {
     /// The UDS socket path where the server is listening.
     sock_file: PathBuf,
+    /// The server-info file written by the SDK during handshake. Exposed so reconnect-helper
+    /// tests can drive the full `sdk_server_info` + `create_rpc_channel` + `wait_until_*_ready`
+    /// sequence the same way production startup does.
+    server_info_file: PathBuf,
     /// Channel to trigger server shutdown.
     shutdown_tx: Option<oneshot::Sender<()>>,
     /// thread handle for the server runtime.
@@ -43,6 +47,21 @@ impl TestServerHandle {
     /// retry logic, replacing the flaky `sleep(100ms)` pattern.
     pub async fn create_rpc_channel(&self) -> crate::error::Result<Channel> {
         create_rpc_channel(self.sock_file.clone()).await
+    }
+
+    /// Path to the UDS socket the test server is listening on. Use this when a test needs to
+    /// drive the production reconnect helpers (which take the socket path explicitly) rather than
+    /// the convenience [`Self::create_rpc_channel`] above.
+    #[allow(dead_code)]
+    pub fn socket_path(&self) -> PathBuf {
+        self.sock_file.clone()
+    }
+
+    /// Path to the server-info file the SDK wrote during handshake. Companion to
+    /// [`Self::socket_path`] for driving the full reconnect sequence in tests.
+    #[allow(dead_code)]
+    pub fn server_info_path(&self) -> PathBuf {
+        self.server_info_file.clone()
     }
 
     #[allow(dead_code)]
@@ -94,6 +113,7 @@ where
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
 
     let sock = sock_file.clone();
+    let info = server_info_file.clone();
 
     // Why a separate thread and runtime?
     //
@@ -115,12 +135,13 @@ where
                 .enable_all()
                 .build()
                 .expect("failed to build tokio runtime for test server")
-                .block_on(server_fn(sock, server_info_file, shutdown_rx));
+                .block_on(server_fn(sock, info, shutdown_rx));
         })
         .expect("failed to spawn test server thread");
 
     TestServerHandle {
         sock_file,
+        server_info_file,
         shutdown_tx: Some(shutdown_tx),
         thread_handle: Some(thread_handle),
     }
