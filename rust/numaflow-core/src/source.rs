@@ -2184,4 +2184,201 @@ mod tests {
             "tracker should be empty after drain"
         );
     }
+
+    /// Streaming: dropping a MessageHandle without ack/nak triggers the recv-error
+    /// branch in invoke_ack_single (oneshot sender dropped) — the tracker entry is
+    /// deleted and the permit released so the drain completes (no hang/leak).
+    #[tokio::test]
+    async fn streaming_dropped_handle_releases_permit_via_recv_error() {
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+        let source = make_streaming_source(1, 1, 10, tracker.clone(), cln_token.clone()).await;
+        let (mut stream, handle) = source.streaming_read(cln_token.clone(), None).unwrap();
+
+        let msg1 = tokio::time::timeout(Duration::from_secs(2), stream.next())
+            .await
+            .expect("msg1")
+            .expect("stream open");
+
+        cln_token.cancel();
+        drop(msg1); // no ack/nak → ack_rx.await returns Err → recv-error branch
+
+        let result = tokio::time::timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("handle completes")
+            .expect("join");
+        assert!(result.is_ok());
+        assert!(
+            tracker.is_empty().await.unwrap(),
+            "tracker empty after dropped handle"
+        );
+    }
+
+    /// 1->1 passthrough source transformer used to exercise the streaming
+    /// transformer branch (Some(transformer) => Ok) in `streaming_source`.
+    struct PassthroughTransformer;
+
+    #[tonic::async_trait]
+    impl numaflow::sourcetransform::SourceTransformer for PassthroughTransformer {
+        async fn transform(
+            &self,
+            input: numaflow::sourcetransform::SourceTransformRequest,
+        ) -> Vec<numaflow::sourcetransform::Message> {
+            vec![
+                numaflow::sourcetransform::Message::new(input.value, Utc::now())
+                    .with_keys(input.keys),
+            ]
+        }
+    }
+
+    /// Streaming with a transformer present: exercises the
+    /// `Some(transformer) => transform_batch(...)` Ok branch of `streaming_source`.
+    /// A 1->1 passthrough transformer forwards each message downstream; we confirm
+    /// a transformed message arrives and the source drains cleanly on shutdown.
+    #[tokio::test]
+    async fn streaming_with_transformer_forwards_messages() {
+        use crate::config::components::source::GeneratorConfig;
+        use crate::transformer::Transformer;
+        use numaflow::sourcetransform;
+        use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+
+        // Start a UD source-transformer server (1->1 passthrough).
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("streaming-transformer.sock");
+        let server_info_file = tmp_dir.path().join("streaming-transformer-server-info");
+        let server_socket = sock_file.clone();
+        let server_info = server_info_file.clone();
+        let server_handle = tokio::spawn(async move {
+            sourcetransform::Server::new(PassthroughTransformer)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .unwrap();
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let transformer =
+            Transformer::new(10, 10, Duration::from_secs(10), client, tracker.clone())
+                .await
+                .unwrap();
+
+        // Generator source (10 msgs), streaming=true, WITH the transformer.
+        let cfg = GeneratorConfig {
+            rpu: 10,
+            content: bytes::Bytes::from_static(b"payload"),
+            duration: Duration::from_millis(10),
+            value: None,
+            key_count: 0,
+            msg_size_bytes: 8,
+            jitter: Duration::ZERO,
+        };
+        let (reader, acker, lag) =
+            crate::source::generator::new_generator(cfg, 5, cln_token.clone()).unwrap();
+        // concurrency=1, batch_size=5: only one message is in flight at a time; the next
+        // is blocked on permit acquisition, so a cancel cleanly stops admission and the
+        // source never sends into a closed channel (mirrors the streaming_cancellation test).
+        let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
+            5,
+            1,
+            SourceType::Generator(reader, acker, lag),
+            tracker.clone(),
+            false,
+            Some(transformer),
+            None,
+            cln_token.clone(),
+            None,
+            true, // streaming = true
+        )
+        .await;
+
+        let (mut stream, handle) = source.streaming_read(cln_token.clone(), None).unwrap();
+
+        // A transformed message must arrive (the transformer Ok branch produced
+        // output and it was forwarded downstream).
+        let msg = tokio::time::timeout(Duration::from_secs(2), stream.next())
+            .await
+            .expect("transformed message timeout")
+            .expect("stream open");
+
+        // Cancel BEFORE acking so no further message is admitted (the next one is blocked
+        // on permit acquisition and the cancel breaks it); then ack the one in hand so the
+        // drain barrier completes. The stream is kept alive — never dropped mid-send.
+        cln_token.cancel();
+        mark_success!(msg);
+        let result = tokio::time::timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("handle should complete")
+            .expect("handle join");
+        assert!(result.is_ok(), "handle returned error: {:?}", result);
+
+        let _ = shutdown_tx.send(());
+        let _ = server_handle.await;
+    }
+
+    /// Streaming with a bypass router present: exercises the
+    /// `if let Some(ref bypass_router) => try_bypass(...)` branch of `streaming_source`.
+    /// The bypass condition requires a tag the generator never sets, so no message is
+    /// bypassed — every message goes through `try_bypass` and is forwarded downstream
+    /// (the `Ok(Some(msg))` arm), then sent on the channel.
+    #[tokio::test]
+    async fn streaming_with_bypass_router_forwards_unmatched_messages() {
+        use crate::config::monovertex::BypassConditions;
+        use crate::monovertex::bypass_router::{BypassRouterConfig, MvtxBypassRouter};
+        use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
+        use numaflow_models::models::{ForwardConditions, TagConditions};
+
+        let cln_token = CancellationToken::new();
+        let tracker = Tracker::new(None, cln_token.clone());
+
+        // Log sink writer backs the bypass receiver. It is never exercised here
+        // because no message matches the bypass condition.
+        let sink_writer =
+            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
+                .build()
+                .await
+                .unwrap();
+
+        // Sink bypass condition requiring a tag the generator never sets → nothing
+        // is bypassed; messages flow through try_bypass and are forwarded.
+        let conditions = BypassConditions {
+            sink: Some(Box::new(ForwardConditions::new(TagConditions {
+                values: vec!["never-matches".to_string()],
+                operator: Some("or".to_string()),
+            }))),
+            fallback: None,
+            on_success: None,
+        };
+        let config = BypassRouterConfig::new(conditions, 10, Duration::from_millis(1000));
+        let (router, _router_handle) =
+            MvtxBypassRouter::initialize(config, sink_writer, cln_token.clone()).await;
+
+        // concurrency=1, batch_size=5: one message in flight; cancel cleanly stops
+        // admission and the source never sends into a closed channel.
+        let source = make_streaming_source(5, 1, 10, tracker.clone(), cln_token.clone()).await;
+        let (mut stream, handle) = source
+            .streaming_read(cln_token.clone(), Some(router))
+            .unwrap();
+
+        // Generator messages carry no tags → not bypassed → forwarded downstream.
+        let msg = tokio::time::timeout(Duration::from_secs(2), stream.next())
+            .await
+            .expect("forwarded message timeout")
+            .expect("stream open");
+
+        // Cancel before acking (next message is blocked on permit; cancel breaks it),
+        // then ack the one in hand so the drain completes. Stream kept alive.
+        cln_token.cancel();
+        mark_success!(msg);
+        let result = tokio::time::timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("handle should complete")
+            .expect("handle join");
+        assert!(result.is_ok(), "handle returned error: {:?}", result);
+    }
 }
