@@ -19,7 +19,7 @@ use crate::metrics::{
 };
 use crate::shared::otel;
 use crate::tracker::Tracker;
-use crate::transformer::user_defined::UserDefinedTransformer;
+use crate::transformer::user_defined::{ReconnectConfig, UserDefinedTransformer};
 use crate::{Result, mark_success};
 
 /// User-Defined Transformer is a custom transformer that can be built by the user.
@@ -87,11 +87,12 @@ impl Transformer {
         graceful_timeout: Duration,
         client: SourceTransformClient<Channel>,
         tracker: Tracker,
+        reconnect_config: ReconnectConfig,
     ) -> Result<Self> {
         let (sender, receiver) = mpsc::channel(batch_size);
         let transformer_actor = TransformerActor::new(
             receiver,
-            UserDefinedTransformer::new(batch_size, client.clone()).await?,
+            UserDefinedTransformer::new(batch_size, client.clone(), reconnect_config).await?,
         );
 
         tokio::spawn(async move {
@@ -217,8 +218,21 @@ impl Transformer {
                     offset.to_string(),
                     otel::TraceTopology::current(),
                 );
-                let transformed_messages =
-                    Transformer::transform(transform_handle, read_msg, hard_shutdown_token).await?;
+                let transformed_messages = loop {
+                    match Transformer::transform(
+                        transform_handle.clone(),
+                        read_msg.clone(),
+                        hard_shutdown_token.clone(),
+                    )
+                    .await
+                    {
+                        Ok(messages) => break messages,
+                        Err(Error::UdfRedrive(e)) => {
+                            error!(?e, ?offset, "transformer stream redrive requested");
+                        }
+                        Err(e) => return Err(e),
+                    }
+                };
                 source_transform_span.record_output_count(transformed_messages.len());
 
                 // update the tracker with the number of responses for each message
@@ -357,6 +371,8 @@ mod tests {
     use crate::message::{Message, MessageHandle, MessageID, Offset};
     use crate::shared::grpc::create_rpc_channel;
 
+    const TEST_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024;
+
     struct SimpleTransformer;
 
     #[tonic::async_trait]
@@ -404,9 +420,21 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
         let tracker = Tracker::new(None, CancellationToken::new());
 
-        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
-        let transformer =
-            Transformer::new(500, 10, Duration::from_secs(10), client, tracker.clone()).await?;
+        let client = SourceTransformClient::new(create_rpc_channel(sock_file.clone()).await?);
+        let transformer = Transformer::new(
+            500,
+            10,
+            Duration::from_secs(10),
+            client,
+            tracker.clone(),
+            ReconnectConfig::new(
+                sock_file.clone(),
+                server_info_file.clone(),
+                CancellationToken::new(),
+                TEST_GRPC_MAX_MESSAGE_SIZE,
+            ),
+        )
+        .await?;
 
         let message = Message {
             typ: Default::default(),
@@ -479,9 +507,21 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let tracker = Tracker::new(None, CancellationToken::new());
-        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
-        let transformer =
-            Transformer::new(500, 10, Duration::from_secs(10), client, tracker.clone()).await?;
+        let client = SourceTransformClient::new(create_rpc_channel(sock_file.clone()).await?);
+        let transformer = Transformer::new(
+            500,
+            10,
+            Duration::from_secs(10),
+            client,
+            tracker.clone(),
+            ReconnectConfig::new(
+                sock_file.clone(),
+                server_info_file.clone(),
+                CancellationToken::new(),
+                TEST_GRPC_MAX_MESSAGE_SIZE,
+            ),
+        )
+        .await?;
 
         let mut messages = vec![];
         for i in 0..5 {
@@ -561,9 +601,21 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let tracker = Tracker::new(None, CancellationToken::new());
-        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
-        let transformer =
-            Transformer::new(500, 10, Duration::from_secs(10), client, tracker.clone()).await?;
+        let client = SourceTransformClient::new(create_rpc_channel(sock_file.clone()).await?);
+        let transformer = Transformer::new(
+            500,
+            10,
+            Duration::from_secs(10),
+            client,
+            tracker.clone(),
+            ReconnectConfig::new(
+                sock_file.clone(),
+                server_info_file.clone(),
+                CancellationToken::new(),
+                TEST_GRPC_MAX_MESSAGE_SIZE,
+            ),
+        )
+        .await?;
 
         let message = Message {
             typ: Default::default(),

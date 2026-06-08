@@ -1773,13 +1773,20 @@ mod tests {
         // FIXME: we need to have a better way, this is flaky
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let src_client = SourceClient::new(create_rpc_channel(src_sock_file).await.unwrap());
+        let src_client =
+            SourceClient::new(create_rpc_channel(src_sock_file.clone()).await.unwrap());
         let (src_read, src_ack, lag_reader) = new_source(
             src_client,
             5,
             Duration::from_millis(1000),
             cln_token.clone(),
             true,
+            crate::source::user_defined::ReconnectConfig::new(
+                src_sock_file,
+                src_info_file,
+                cln_token.clone(),
+                64 * 1024 * 1024,
+            ),
         )
         .await
         .expect("Failed to create source reader");
@@ -1802,13 +1809,19 @@ mod tests {
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
-            SinkClientType::UserDefined(SinkClient::new(
-                create_rpc_channel(sink_sock_file).await.unwrap(),
-            )),
+            SinkClientType::UserDefined(
+                Box::new(SinkClient::new(
+                    create_rpc_channel(sink_sock_file).await.unwrap(),
+                )),
+                None,
+            ),
         )
-        .fb_sink_client(SinkClientType::UserDefined(SinkClient::new(
-            create_rpc_channel(fb_sink_sock_file).await.unwrap(),
-        )))
+        .fb_sink_client(SinkClientType::UserDefined(
+            Box::new(SinkClient::new(
+                create_rpc_channel(fb_sink_sock_file).await.unwrap(),
+            )),
+            None,
+        ))
         .build()
         .await
         .expect("failed to create sink writer");

@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -12,15 +13,42 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
-use tonic::{Request, Streaming};
+use tonic::{Request, Status, Streaming};
 
+use crate::error::is_udf_transport_failure;
 use crate::message::{Message, MessageID, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::reader::LagReader;
-use crate::shared::grpc::utc_from_timestamp;
+use crate::shared::grpc::{DEFAULT_RECONNECT_INTERVAL, reconnect_source, utc_from_timestamp};
 use crate::source::{SourceAcker, SourcePartitions, SourceReader};
 use crate::{Error, Result, config};
 use tracing::warn;
+
+#[derive(Debug, Clone)]
+pub(crate) struct ReconnectConfig {
+    socket_path: PathBuf,
+    server_info_path: PathBuf,
+    cln_token: CancellationToken,
+    grpc_max_message_size: usize,
+    retry_interval: Duration,
+}
+
+impl ReconnectConfig {
+    pub(crate) fn new(
+        socket_path: impl Into<PathBuf>,
+        server_info_path: impl Into<PathBuf>,
+        cln_token: CancellationToken,
+        grpc_max_message_size: usize,
+    ) -> Self {
+        Self {
+            socket_path: socket_path.into(),
+            server_info_path: server_info_path.into(),
+            cln_token,
+            grpc_max_message_size,
+            retry_interval: DEFAULT_RECONNECT_INTERVAL,
+        }
+    }
+}
 
 /// User-Defined Source to operative on custom sources.
 #[derive(Debug)]
@@ -31,6 +59,7 @@ pub(crate) struct UserDefinedSourceRead {
     timeout: Duration,
     source_client: SourceClient<Channel>,
     cln_token: CancellationToken,
+    reconnect_config: ReconnectConfig,
 }
 
 /// User-Defined Source to operative on custom sources.
@@ -40,6 +69,8 @@ pub(crate) struct UserDefinedSourceAck {
     ack_resp_stream: Streaming<AckResponse>,
     client: SourceClient<Channel>,
     supports_nack: bool,
+    reconnect_config: ReconnectConfig,
+    batch_size: usize,
 }
 
 /// Creates a new User-Defined Source and its corresponding Lag Reader.
@@ -49,15 +80,24 @@ pub(crate) async fn new_source(
     read_timeout: Duration,
     cln_token: CancellationToken,
     supports_nack: bool,
+    reconnect_config: ReconnectConfig,
 ) -> Result<(
     UserDefinedSourceRead,
     UserDefinedSourceAck,
     UserDefinedSourceLagReader,
 )> {
-    let src_read =
-        UserDefinedSourceRead::new(client.clone(), num_records, read_timeout, cln_token).await?;
+    let src_read = UserDefinedSourceRead::new(
+        client.clone(),
+        num_records,
+        read_timeout,
+        cln_token,
+        reconnect_config.clone(),
+    )
+    .await?;
 
-    let src_ack = UserDefinedSourceAck::new(client.clone(), num_records, supports_nack).await?;
+    let src_ack =
+        UserDefinedSourceAck::new(client.clone(), num_records, supports_nack, reconnect_config)
+            .await?;
     let lag_reader = UserDefinedSourceLagReader::new(client);
 
     Ok((src_read, src_ack, lag_reader))
@@ -69,6 +109,7 @@ impl UserDefinedSourceRead {
         batch_size: usize,
         timeout: Duration,
         cln_token: CancellationToken,
+        reconnect_config: ReconnectConfig,
     ) -> Result<Self> {
         let (read_tx, resp_stream) = Self::create_reader(batch_size, &mut client.clone()).await?;
 
@@ -79,6 +120,7 @@ impl UserDefinedSourceRead {
             timeout,
             source_client: client,
             cln_token,
+            reconnect_config,
         })
     }
 
@@ -124,6 +166,22 @@ impl UserDefinedSourceRead {
 
     pub(crate) fn get_source_client(&self) -> SourceClient<Channel> {
         self.source_client.clone()
+    }
+
+    async fn reconnect_reader(&mut self) -> Result<()> {
+        let mut client = reconnect_source(
+            self.reconnect_config.socket_path.clone(),
+            self.reconnect_config.server_info_path.clone(),
+            self.reconnect_config.cln_token.clone(),
+            self.reconnect_config.grpc_max_message_size,
+            self.reconnect_config.retry_interval,
+        )
+        .await?;
+        let (read_tx, resp_stream) = Self::create_reader(self.num_records, &mut client).await?;
+        self.read_tx = read_tx;
+        self.resp_stream = resp_stream;
+        self.source_client = client;
+        Ok(())
     }
 }
 
@@ -221,14 +279,21 @@ impl SourceReader for UserDefinedSourceRead {
         };
 
         if let Err(e) = self.read_tx.send(request).await {
-            return Some(Err(Error::Source(e.to_string())));
+            warn!(?e, "source read stream is closed, reconnecting");
+            return Some(self.reconnect_reader().await.map(|_| Vec::new()));
         }
 
         let mut messages = Vec::with_capacity(self.num_records);
 
         while let Some(response) = match self.resp_stream.message().await {
             Ok(response) => response,
-            Err(e) => return Some(Err(Error::Grpc(Box::new(e)))),
+            Err(e) => {
+                if is_udf_transport_failure(&e) {
+                    warn!(?e, "source read stream failed, reconnecting");
+                    return Some(self.reconnect_reader().await.map(|_| Vec::new()));
+                }
+                return Some(Err(Error::Grpc(Box::new(e))));
+            }
         } {
             if response.status.is_some_and(|status| status.eot) {
                 break;
@@ -269,6 +334,7 @@ impl UserDefinedSourceAck {
         mut client: SourceClient<Channel>,
         batch_size: usize,
         supports_nack: bool,
+        reconnect_config: ReconnectConfig,
     ) -> Result<Self> {
         let (ack_tx, ack_resp_stream) = Self::create_acker(batch_size, &mut client).await?;
 
@@ -277,6 +343,8 @@ impl UserDefinedSourceAck {
             ack_resp_stream,
             client,
             supports_nack,
+            reconnect_config,
+            batch_size,
         })
     }
 
@@ -319,6 +387,27 @@ impl UserDefinedSourceAck {
 
         Ok((ack_tx, ack_resp_stream))
     }
+
+    async fn reconnect_acker(&mut self) -> Result<()> {
+        let mut client = reconnect_source(
+            self.reconnect_config.socket_path.clone(),
+            self.reconnect_config.server_info_path.clone(),
+            self.reconnect_config.cln_token.clone(),
+            self.reconnect_config.grpc_max_message_size,
+            self.reconnect_config.retry_interval,
+        )
+        .await?;
+        let (ack_tx, ack_resp_stream) = Self::create_acker(self.batch_size, &mut client).await?;
+        self.ack_tx = ack_tx;
+        self.ack_resp_stream = ack_resp_stream;
+        self.client = client;
+        Ok(())
+    }
+
+    async fn reconnect_redrive(&mut self, status: Status) -> Result<()> {
+        self.reconnect_acker().await?;
+        Err(Error::UdfRedrive(Box::new(status)))
+    }
 }
 
 impl SourceAcker for UserDefinedSourceAck {
@@ -327,7 +416,8 @@ impl SourceAcker for UserDefinedSourceAck {
             offsets.into_iter().map(TryInto::try_into).collect();
 
         // Sending can only fail if the channel is closed (receiver is dropped, which happens when gRPC stream is closed)
-        self.ack_tx
+        if let Err(e) = self
+            .ack_tx
             .send(AckRequest {
                 request: Some(source::ack_request::Request {
                     offsets: ack_offsets?,
@@ -335,13 +425,26 @@ impl SourceAcker for UserDefinedSourceAck {
                 handshake: None,
             })
             .await
-            .map_err(|e| Error::NonRetryable(e.to_string()))?;
+        {
+            return self
+                .reconnect_redrive(Status::unavailable(format!(
+                    "source ack stream closed: {e}"
+                )))
+                .await;
+        }
 
-        self.ack_resp_stream
-            .message()
-            .await
-            .map_err(|e| Error::Grpc(Box::new(e)))?
-            .ok_or(Error::Source("failed to receive ack response".to_string()))?;
+        match self.ack_resp_stream.message().await {
+            Ok(Some(_)) => {}
+            Ok(None) => {
+                return self
+                    .reconnect_redrive(Status::unavailable("source ack stream closed"))
+                    .await;
+            }
+            Err(e) if is_udf_transport_failure(&e) => {
+                return self.reconnect_redrive(e).await;
+            }
+            Err(e) => return Err(Error::Grpc(Box::new(e))),
+        }
 
         Ok(())
     }
@@ -363,7 +466,7 @@ impl SourceAcker for UserDefinedSourceAck {
         let nack_offsets: Result<Vec<source::Offset>> =
             offsets.into_iter().map(TryInto::try_into).collect();
 
-        let response = self
+        let response = match self
             .client
             .nack_fn(NackRequest {
                 request: Some(source::nack_request::Request {
@@ -371,13 +474,13 @@ impl SourceAcker for UserDefinedSourceAck {
                 }),
             })
             .await
-            .map_err(|e| {
-                if is_stream_closed(&e) {
-                    Error::NonRetryable(e.to_string())
-                } else {
-                    Error::Grpc(Box::new(e))
-                }
-            })?;
+        {
+            Ok(response) => response,
+            Err(e) if is_udf_transport_failure(&e) => {
+                return self.reconnect_redrive(e).await;
+            }
+            Err(e) => return Err(Error::Grpc(Box::new(e))),
+        };
 
         response
             .into_inner()
@@ -386,34 +489,6 @@ impl SourceAcker for UserDefinedSourceAck {
 
         Ok(())
     }
-}
-
-use std::error::Error as StdError;
-use std::io::ErrorKind;
-fn has_io_kind_in_chain(err: &(dyn StdError + 'static), kinds: &[ErrorKind]) -> bool {
-    let mut current: Option<&(dyn StdError + 'static)> = Some(err);
-    while let Some(e) = current {
-        if let Some(ioe) = e.downcast_ref::<std::io::Error>()
-            && kinds.contains(&ioe.kind())
-        {
-            return true;
-        }
-        current = e.source();
-    }
-    false
-}
-
-fn is_stream_closed(status: &tonic::Status) -> bool {
-    // The error log looks like this when the UDF exits before after client invokes a method like nack
-    // {"timestamp":"2026-02-26T03:26:51.057042Z","level":"ERROR","message":"Cancellation token received, stopping the nack retry loop","result":"Err(Grpc(Status { code: Unknown, message: \"transport error\", source: Some(tonic::transport::Error(Transport, hyper::Error(Io, Custom { kind: BrokenPipe, error: \"stream closed because of a broken pipe\" }))) }))","target":"numaflow_core::source"}
-    has_io_kind_in_chain(
-        status,
-        &[
-            ErrorKind::BrokenPipe,
-            ErrorKind::ConnectionReset,
-            ErrorKind::NotConnected,
-        ],
-    )
 }
 
 #[derive(Clone)]
@@ -448,29 +523,11 @@ mod tests {
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;
     use std::collections::{HashMap, HashSet};
-    use std::io::ErrorKind;
     use tokio::sync::mpsc::Sender;
 
     use super::*;
     use crate::message::IntOffset;
     use crate::shared::grpc::{create_rpc_channel, prost_timestamp_from_utc};
-
-    #[test]
-    fn test_has_io_kind_in_chain_direct_match() {
-        let err = std::io::Error::new(ErrorKind::BrokenPipe, "broken pipe");
-        assert!(has_io_kind_in_chain(&err, &[ErrorKind::BrokenPipe]));
-        assert!(has_io_kind_in_chain(
-            &err,
-            &[ErrorKind::ConnectionReset, ErrorKind::BrokenPipe]
-        ));
-    }
-
-    #[test]
-    fn test_has_io_kind_in_chain_direct_no_match() {
-        let err = std::io::Error::new(ErrorKind::BrokenPipe, "broken pipe");
-        assert!(!has_io_kind_in_chain(&err, &[ErrorKind::ConnectionReset]));
-        assert!(!has_io_kind_in_chain(&err, &[]));
-    }
 
     struct SimpleSource {
         num: usize,
@@ -591,13 +648,19 @@ mod tests {
         // TODO: flaky
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let client = SourceClient::new(create_rpc_channel(sock_file.clone()).await.unwrap());
 
-        let (mut src_read, mut src_ack, mut lag_reader) =
-            new_source(client, 5, Duration::from_millis(1000), cln_token, true)
-                .await
-                .map_err(|e| panic!("failed to create source reader: {:?}", e))
-                .unwrap();
+        let (mut src_read, mut src_ack, mut lag_reader) = new_source(
+            client,
+            5,
+            Duration::from_millis(1000),
+            cln_token.clone(),
+            true,
+            ReconnectConfig::new(sock_file, server_info_file, cln_token, 64 * 1024 * 1024),
+        )
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
 
         let messages = src_read.read().await.unwrap().unwrap();
         assert_eq!(messages.len(), 5);

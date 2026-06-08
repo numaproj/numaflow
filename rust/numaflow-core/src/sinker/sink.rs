@@ -71,7 +71,10 @@ pub(crate) enum SinkClientType {
     Log,
     Blackhole,
     Serve,
-    UserDefined(SinkClient<Channel>),
+    UserDefined(
+        Box<SinkClient<Channel>>,
+        Option<crate::sinker::sink::user_defined::ReconnectConfig>,
+    ),
     Sqs(SqsSink),
     Kafka(KafkaSink),
     Pulsar(Box<PulsarSink>),
@@ -227,6 +230,10 @@ impl SinkWriter {
                             mark_success_batch!(read_batch);
                         }
                         Err(e) => {
+                            if matches!(e, Error::UdfRedrive(_)) {
+                                error!(?e, "redrivable sink error");
+                                continue;
+                            }
                             mark_failed_batch!(read_batch, &e);
                             // Critical error, cancel upstream and initiate shutdown
                             error!(?e, "Error writing to sink, initiating shutdown.");
@@ -1015,9 +1022,12 @@ mod tests {
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
-            SinkClientType::UserDefined(SinkClient::new(
-                create_rpc_channel(sock_file).await.unwrap(),
-            )),
+            SinkClientType::UserDefined(
+                Box::new(SinkClient::new(
+                    create_rpc_channel(sock_file).await.unwrap(),
+                )),
+                None,
+            ),
         )
         .build()
         .await
@@ -1103,9 +1113,12 @@ mod tests {
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
-            SinkClientType::UserDefined(SinkClient::new(
-                create_rpc_channel(sock_file).await.unwrap(),
-            )),
+            SinkClientType::UserDefined(
+                Box::new(SinkClient::new(
+                    create_rpc_channel(sock_file).await.unwrap(),
+                )),
+                None,
+            ),
         )
         .fb_sink_client(SinkClientType::Log)
         .build()
@@ -1185,9 +1198,12 @@ mod tests {
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
-            SinkClientType::UserDefined(SinkClient::new(
-                create_rpc_channel(sock_file).await.unwrap(),
-            )),
+            SinkClientType::UserDefined(
+                Box::new(SinkClient::new(
+                    create_rpc_channel(sock_file).await.unwrap(),
+                )),
+                None,
+            ),
         )
         .on_success_sink_client(SinkClientType::Log)
         .build()
@@ -1295,9 +1311,12 @@ mod tests {
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
-            SinkClientType::UserDefined(SinkClient::new(
-                create_rpc_channel(sock_file).await.unwrap(),
-            )),
+            SinkClientType::UserDefined(
+                Box::new(SinkClient::new(
+                    create_rpc_channel(sock_file).await.unwrap(),
+                )),
+                None,
+            ),
         )
         .serving_store(serving_store.clone())
         .build()

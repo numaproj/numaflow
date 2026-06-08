@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use numaflow_pb::clients::sourcetransformer::{
     self, SourceTransformRequest, SourceTransformResponse,
@@ -7,17 +9,46 @@ use numaflow_pb::clients::sourcetransformer::{
 };
 use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
-use tonic::{Request, Streaming};
+use tonic::{Request, Status, Streaming};
 
 use crate::config::get_vertex_name;
-use crate::error::{Error, Result};
+use crate::error::{Error, Result, is_udf_transport_failure};
 use crate::message::{Message, MessageID, Offset};
 use crate::metadata::Metadata;
-use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
+use crate::shared::grpc::{
+    DEFAULT_RECONNECT_INTERVAL, prost_timestamp_from_utc, reconnect_transformer, utc_from_timestamp,
+};
 
 type ResponseSenderMap =
     Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
+
+#[derive(Clone)]
+pub(crate) struct ReconnectConfig {
+    socket_path: PathBuf,
+    server_info_path: PathBuf,
+    cln_token: CancellationToken,
+    grpc_max_message_size: usize,
+    retry_interval: Duration,
+}
+
+impl ReconnectConfig {
+    pub(crate) fn new(
+        socket_path: impl Into<PathBuf>,
+        server_info_path: impl Into<PathBuf>,
+        cln_token: CancellationToken,
+        grpc_max_message_size: usize,
+    ) -> Self {
+        Self {
+            socket_path: socket_path.into(),
+            server_info_path: server_info_path.into(),
+            cln_token,
+            grpc_max_message_size,
+            retry_interval: DEFAULT_RECONNECT_INTERVAL,
+        }
+    }
+}
 
 // fields which will not be changed
 struct ParentMessageInfo {
@@ -78,6 +109,8 @@ pub(super) struct UserDefinedTransformer {
     read_tx: mpsc::Sender<SourceTransformRequest>,
     senders: ResponseSenderMap,
     task_handle: tokio::task::JoinHandle<()>,
+    batch_size: usize,
+    reconnect_config: ReconnectConfig,
 }
 
 /// Aborts the background task when the UserDefinedTransformer is dropped.
@@ -110,7 +143,31 @@ impl UserDefinedTransformer {
     pub(super) async fn new(
         batch_size: usize,
         mut client: SourceTransformClient<Channel>,
+        reconnect_config: ReconnectConfig,
     ) -> Result<Self> {
+        let (read_tx, resp_stream) = Self::create_stream(batch_size, &mut client).await?;
+        let sender_map = Arc::new(Mutex::new(HashMap::new()));
+        let task_handle = tokio::spawn(Self::receive_responses(
+            Arc::clone(&sender_map),
+            resp_stream,
+        ));
+
+        Ok(Self {
+            read_tx,
+            senders: sender_map,
+            task_handle,
+            batch_size,
+            reconnect_config,
+        })
+    }
+
+    async fn create_stream(
+        batch_size: usize,
+        client: &mut SourceTransformClient<Channel>,
+    ) -> Result<(
+        mpsc::Sender<SourceTransformRequest>,
+        Streaming<SourceTransformResponse>,
+    )> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
         let read_stream = ReceiverStream::new(read_rx);
 
@@ -142,23 +199,7 @@ impl UserDefinedTransformer {
             return Err(Error::Transformer("invalid handshake response".to_string()));
         }
 
-        // map to track the oneshot sender for each request along with the message info
-        let sender_map = Arc::new(Mutex::new(HashMap::new()));
-
-        // background task to receive responses from the server and send them to the appropriate
-        // oneshot sender based on the message id
-        let task_handle = tokio::spawn(Self::receive_responses(
-            Arc::clone(&sender_map),
-            resp_stream,
-        ));
-
-        let transformer = Self {
-            read_tx,
-            senders: sender_map,
-            task_handle,
-        };
-
-        Ok(transformer)
+        Ok((read_tx, resp_stream))
     }
 
     // receive responses from the server and gets the corresponding oneshot sender from the map
@@ -170,9 +211,14 @@ impl UserDefinedTransformer {
         while let Some(resp) = match resp_stream.message().await {
             Ok(message) => message,
             Err(e) => {
+                let error = if is_udf_transport_failure(&e) {
+                    Error::UdfRedrive(Box::new(e.clone()))
+                } else {
+                    Error::Grpc(Box::new(e.clone()))
+                };
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
-                    let _ = sender.send(Err(Error::Grpc(Box::new(e.clone()))));
+                    let _ = sender.send(Err(error.clone()));
                 }
                 None
             }
@@ -189,6 +235,32 @@ impl UserDefinedTransformer {
                     .expect("failed to send response");
             }
         }
+
+        let mut senders = sender_map.lock().await;
+        for (_, (_, sender)) in senders.drain() {
+            let _ = sender.send(Err(Error::UdfRedrive(Box::new(Status::unavailable(
+                "source transformer stream closed",
+            )))));
+        }
+    }
+
+    async fn reconnect(&mut self) -> Result<()> {
+        let mut client = reconnect_transformer(
+            self.reconnect_config.socket_path.clone(),
+            self.reconnect_config.server_info_path.clone(),
+            self.reconnect_config.cln_token.clone(),
+            self.reconnect_config.grpc_max_message_size,
+            self.reconnect_config.retry_interval,
+        )
+        .await?;
+        let (read_tx, resp_stream) = Self::create_stream(self.batch_size, &mut client).await?;
+        self.task_handle.abort();
+        self.read_tx = read_tx;
+        self.task_handle = tokio::spawn(Self::receive_responses(
+            Arc::clone(&self.senders),
+            resp_stream,
+        ));
+        Ok(())
     }
 
     /// Handles the incoming message and sends it to the server for transformation.
@@ -206,12 +278,39 @@ impl UserDefinedTransformer {
             metadata: message.metadata.clone(),
         };
 
+        let request: SourceTransformRequest = message.into();
+
         self.senders
             .lock()
             .await
-            .insert(key, (msg_info, respond_to));
+            .insert(key.clone(), (msg_info, respond_to));
 
-        let _ = self.read_tx.send(message.into()).await;
+        if self.read_tx.send(request.clone()).await.is_ok() {
+            return;
+        }
+
+        let Some((msg_info, respond_to)) = self.senders.lock().await.remove(&key) else {
+            return;
+        };
+
+        if let Err(e) = self.reconnect().await {
+            let _ = respond_to.send(Err(e));
+            return;
+        }
+
+        self.senders
+            .lock()
+            .await
+            .insert(key.clone(), (msg_info, respond_to));
+
+        if self.read_tx.send(request).await.is_err() {
+            let Some((_, respond_to)) = self.senders.lock().await.remove(&key) else {
+                return;
+            };
+            let _ = respond_to.send(Err(Error::UdfRedrive(Box::new(Status::unavailable(
+                "source transformer stream closed after reconnect",
+            )))));
+        }
     }
 }
 
@@ -268,7 +367,13 @@ mod tests {
 
         let mut client = UserDefinedTransformer::new(
             500,
-            SourceTransformClient::new(create_rpc_channel(sock_file).await?),
+            SourceTransformClient::new(create_rpc_channel(sock_file.clone()).await?),
+            ReconnectConfig::new(
+                sock_file.clone(),
+                server_info_file.clone(),
+                CancellationToken::new(),
+                64 * 1024 * 1024,
+            ),
         )
         .await?;
 

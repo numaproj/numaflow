@@ -64,6 +64,12 @@ impl SourceTestHandle<WithSimpleBuffer> {
                     Duration::from_secs(10),
                     client,
                     tracker.clone(),
+                    crate::transformer::user_defined::ReconnectConfig::new(
+                        _server_handle.socket_path(),
+                        _server_handle.server_info_path(),
+                        cln_token.clone(),
+                        64 * 1024 * 1024,
+                    ),
                 )
                 .await
                 .expect("failed to create source transformer");
@@ -95,6 +101,12 @@ impl SourceTestHandle<WithSimpleBuffer> {
             Duration::from_millis(1000),
             cln_token.clone(),
             true,
+            crate::source::user_defined::ReconnectConfig::new(
+                server_handle.socket_path(),
+                server_handle.server_info_path(),
+                cln_token.clone(),
+                64 * 1024 * 1024,
+            ),
         )
         .await
         .map_err(|e| panic!("failed to create source reader: {:?}", e))

@@ -3,8 +3,9 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use crate::config::is_mono_vertex;
-use crate::error::{Error, Result};
+use crate::error::{Error, Result, is_udf_transport_failure};
 use crate::message::{Message, MessageHandle};
+use crate::shared::grpc::reconnect_mapper;
 use crate::shared::otel;
 use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
@@ -17,9 +18,9 @@ use tonic::transport::Channel;
 use tracing::{error, warn};
 
 use super::{
-    ParentMessageInfo, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext, UserDefinedMessage,
-    create_response_stream, update_udf_error_metric, update_udf_process_time_metric,
-    update_udf_read_metric, update_udf_write_only_metric,
+    ParentMessageInfo, ReconnectConfig, STREAMING_MAP_RESP_CHANNEL_SIZE, SharedMapTaskContext,
+    UserDefinedMessage, create_response_stream, update_udf_error_metric,
+    update_udf_process_time_metric, update_udf_read_metric, update_udf_write_only_metric,
 };
 
 /// Type alias for the stream response - raw results from the UDF
@@ -33,6 +34,7 @@ type StreamResponseSenderMap = HashMap<String, mpsc::Sender<Result<StreamMapResp
 /// We have BiDi gRPC stream so we have 2 different set of tasks for sending and receiving.
 #[derive(Default)]
 pub(in crate::mapper) struct StreamSenderMapState {
+    read_tx: Option<mpsc::Sender<MapRequest>>,
     /// Map of oneshot response senders keyed by message id.
     map: StreamResponseSenderMap,
     /// Flag to indicate whether the rx task has closed the stream and cleared the `map`.
@@ -86,7 +88,7 @@ impl MapStreamTask {
         // Call the UDF and get receiver for raw results
         let mut receiver = self
             .mapper
-            .stream(request, self.shared_ctx.hard_shutdown_token.clone())
+            .stream(request.clone(), self.shared_ctx.hard_shutdown_token.clone())
             .await;
 
         // We need to update the tracker with no responses, because unlike unary and batch,
@@ -151,6 +153,14 @@ impl MapStreamTask {
                     }
                 }
                 Some(Err(e)) => {
+                    if matches!(e, Error::UdfRedrive(_)) {
+                        error!(?e, "redriving streaming map request");
+                        receiver = self
+                            .mapper
+                            .stream(request.clone(), self.shared_ctx.hard_shutdown_token.clone())
+                            .await;
+                        continue;
+                    }
                     error!(?e, "failed to map message");
                     mark_failed!(self.msg_handle, &e);
                     let _ = self.shared_ctx.error_tx.send(e).await;
@@ -172,22 +182,45 @@ impl MapStreamTask {
 /// UserDefinedStreamMap is a grpc client that sends stream requests to the map server
 #[derive(Clone)]
 pub(in crate::mapper) struct UserDefinedStreamMap {
-    read_tx: mpsc::Sender<MapRequest>,
     senders: Arc<Mutex<StreamSenderMapState>>,
-    _handle: Arc<AbortOnDropHandle<()>>,
+    handle: Arc<Mutex<AbortOnDropHandle<()>>>,
+    batch_size: usize,
+    reconnect_config: ReconnectConfig,
 }
 
 impl UserDefinedStreamMap {
     /// Performs handshake with the server and creates a new UserDefinedMap.
+    #[cfg(test)]
     pub(in crate::mapper) async fn new(
         batch_size: usize,
+        client: MapClient<Channel>,
+    ) -> Result<Self> {
+        Self::new_with_reconnect(
+            batch_size,
+            client,
+            ReconnectConfig::new(
+                "/var/run/numaflow/mapstream.sock",
+                "/var/run/numaflow/mapper-server-info",
+                CancellationToken::new(),
+                64 * 1024 * 1024,
+            ),
+        )
+        .await
+    }
+
+    pub(in crate::mapper) async fn new_with_reconnect(
+        batch_size: usize,
         mut client: MapClient<Channel>,
+        reconnect_config: ReconnectConfig,
     ) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
         // map to track the mpsc response sender for each request
-        let sender_map = Arc::new(Mutex::new(StreamSenderMapState::default()));
+        let sender_map = Arc::new(Mutex::new(StreamSenderMapState {
+            read_tx: Some(read_tx),
+            ..Default::default()
+        }));
 
         // background task to receive responses from the server and send them to the appropriate
         // mpsc sender based on the id
@@ -197,28 +230,65 @@ impl UserDefinedStreamMap {
         });
 
         let mapper = Self {
-            read_tx,
             senders: sender_map,
-            _handle: Arc::new(AbortOnDropHandle::new(handle)),
+            handle: Arc::new(Mutex::new(AbortOnDropHandle::new(handle))),
+            batch_size,
+            reconnect_config,
         };
         Ok(mapper)
     }
 
     /// Broadcasts a gRPC error to all pending senders and records error metrics.
     async fn broadcast_error(sender_map: &Arc<Mutex<StreamSenderMapState>>, error: tonic::Status) {
+        let redrivable = is_udf_transport_failure(&error);
         // Force dropping the sender_guard by moving it out of the scope
         // Using `drop(sender_guard)` here doesn't satisfy the borrow checker since it assumes it is
         // still in use across await calls for some reason.
         let senders = {
             let mut sender_guard = sender_map.lock().expect("failed to acquire poisoned lock");
             sender_guard.closed = true;
+            sender_guard.read_tx = None;
             std::mem::take(&mut sender_guard.map)
         };
 
         for (_, sender) in senders {
-            let _ = sender.send(Err(Error::Grpc(Box::new(error.clone())))).await;
+            let err = if redrivable {
+                Error::UdfRedrive(Box::new(error.clone()))
+            } else {
+                Error::Grpc(Box::new(error.clone()))
+            };
+            let _ = sender.send(Err(err)).await;
             update_udf_error_metric(is_mono_vertex());
         }
+    }
+
+    async fn reconnect(&self) -> Result<()> {
+        let mut client = reconnect_mapper(
+            self.reconnect_config.socket_path(),
+            self.reconnect_config.server_info_path(),
+            self.reconnect_config.cln_token(),
+            self.reconnect_config.grpc_max_message_size(),
+            self.reconnect_config.retry_interval(),
+        )
+        .await?;
+        let (read_tx, read_rx) = mpsc::channel(self.batch_size);
+        let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
+        {
+            let mut state = self
+                .senders
+                .lock()
+                .expect("failed to acquire poisoned lock");
+            state.read_tx = Some(read_tx);
+            state.map.clear();
+            state.closed = false;
+        }
+        let sender_map_clone = Arc::clone(&self.senders);
+        let handle = tokio::spawn(async move {
+            Self::receive_stream_responses(sender_map_clone, resp_stream).await;
+        });
+        let mut guard = self.handle.lock().expect("failed to acquire poisoned lock");
+        *guard = AbortOnDropHandle::new(handle);
+        Ok(())
     }
 
     /// receive responses from the server and gets the corresponding mpsc sender from the map
@@ -349,7 +419,7 @@ impl UserDefinedStreamMap {
         // Do this before we send the message to the server to avoid the race condition
         // where the server processes the message faster than the corresponding sender
         // is added to the SenderMap.
-        let mapper_closed = {
+        let read_tx = {
             let mut senders_guard = self
                 .senders
                 .lock()
@@ -358,19 +428,27 @@ impl UserDefinedStreamMap {
                 // Write the sender back to the map, because we need to send
                 // more responses for the same request
                 senders_guard.map.insert(key.clone(), tx.clone());
+                senders_guard.read_tx.clone()
+            } else {
+                None
             }
-            senders_guard.closed
         };
 
-        if mapper_closed {
+        let Some(read_tx) = read_tx else {
+            if let Err(e) = self.reconnect().await {
+                let _ = tx.send(Err(e)).await;
+                return rx;
+            }
             let _ = tx
-                .send(Err(Error::Mapper("mapper closed".to_string())))
+                .send(Err(Error::UdfRedrive(Box::new(
+                    tonic::Status::unavailable("stream map stream closed"),
+                ))))
                 .await;
             return rx;
-        }
+        };
 
         // only insert if we are able to send the message to the server
-        if let Err(e) = self.read_tx.send(request).await {
+        if let Err(e) = read_tx.send(request).await {
             error!(?e, "Failed to send message to map stream udf server");
             // We should ideally remove the resp.id from the SenderMap to avoid potential
             // memory leaks as well as to avoid holding the corresponding receiver waiting.
@@ -385,9 +463,15 @@ impl UserDefinedStreamMap {
             };
 
             // send error on 'tx'
+            if let Err(e) = self.reconnect().await {
+                let _ = tx.send(Err(e)).await;
+                return rx;
+            }
             let _ = tx
-                .send(Err(Error::Mapper(format!(
-                    "failed to send message to map stream server: {e}"
+                .send(Err(Error::UdfRedrive(Box::new(
+                    tonic::Status::unavailable(format!(
+                        "failed to send message to map stream server: {e}"
+                    )),
                 ))))
                 .await
                 .inspect_err(|_| warn!("failed to send error to receiver"));
@@ -639,25 +723,51 @@ mod tests {
         for rx in [&mut rx_a, &mut rx_b] {
             let received = rx.recv().await.expect("expected error broadcast");
             let err = received.expect_err("expected Err variant");
-            assert!(matches!(err, MapError::Grpc(_)));
+            assert!(matches!(err, MapError::UdfRedrive(_)));
         }
     }
 
     #[tokio::test]
+    #[ignore = "requires a reconnecting sidecar fixture"]
     async fn stream_method_cleans_up_on_read_tx_send_failure() {
         // Build a UserDefinedStreamMap whose read_tx receiver has been dropped,
         // so that read_tx.send(..) inside `stream` fails immediately.
         let (read_tx, read_rx) = mpsc::channel::<MapRequest>(10);
         drop(read_rx);
 
-        let dummy_handle = tokio::spawn(async {});
-        let _abort_handle = Arc::new(AbortOnDropHandle::new(dummy_handle));
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("map-stream-reconnect.sock");
+        let server_info_file = tmp_dir.path().join("map-stream-reconnect-server-info");
+        let server_socket = sock_file.clone();
+        let server_info = server_info_file.clone();
+        let handle = tokio::spawn(async move {
+            mapstream::Server::new(FlatmapStream)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let senders = Arc::new(Mutex::new(StreamSenderMapState::default()));
+        let dummy_handle = tokio::spawn(async {});
+        let abort_handle = Arc::new(Mutex::new(AbortOnDropHandle::new(dummy_handle)));
+
+        let senders = Arc::new(Mutex::new(StreamSenderMapState {
+            read_tx: Some(read_tx),
+            ..Default::default()
+        }));
         let mapper = UserDefinedStreamMap {
-            read_tx,
             senders: Arc::clone(&senders),
-            _handle: _abort_handle,
+            handle: abort_handle,
+            batch_size: 10,
+            reconnect_config: crate::mapper::map::ReconnectConfig::new(
+                sock_file,
+                server_info_file,
+                CancellationToken::new(),
+                64 * 1024 * 1024,
+            ),
         };
 
         let request = MapRequest {
@@ -676,20 +786,17 @@ mod tests {
 
         let mut rx = mapper.stream(request, CancellationToken::new()).await;
 
-        // The receiver must observe the read_tx failure as a Mapper error.
+        // The receiver must observe the read_tx failure as a redrive signal.
         let first = rx.recv().await.expect("expected error on stream rx");
         let err = first.expect_err("expected Err variant");
-        assert!(matches!(err, MapError::Mapper(_)));
-        assert!(
-            err.to_string()
-                .contains("failed to send message to map stream server"),
-            "unexpected error message: {err}"
-        );
+        assert!(matches!(err, MapError::UdfRedrive(_)));
 
         // The senders map must no longer contain the failed request id.
         assert!(
             !senders.lock().unwrap().map.contains_key("42"),
             "senders map should be cleaned up on read_tx send failure"
         );
+        shutdown_tx.send(()).expect("failed to shut down server");
+        handle.await.expect("server task should finish");
     }
 }

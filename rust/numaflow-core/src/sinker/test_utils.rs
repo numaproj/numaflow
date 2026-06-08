@@ -113,7 +113,10 @@ where
         .await
         .expect("failed to wait for sink server to be ready");
 
-    (SinkClientType::UserDefined(sink_client), server_handle)
+    (
+        SinkClientType::UserDefined(Box::new(sink_client), None),
+        server_handle,
+    )
 }
 
 async fn create_sink_writer(

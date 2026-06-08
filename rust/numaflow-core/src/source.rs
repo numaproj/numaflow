@@ -923,7 +923,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                     let cln_token = cln_token.clone();
                     let offset = msg_handle.message().offset.clone();
                     async move {
-                        if let Err(e) = Self::invoke_ack_single(
+                        let result = Self::invoke_ack_single(
                             read_start_time,
                             sender,
                             offset,
@@ -932,8 +932,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                             tracker,
                             cln_token.clone(),
                         )
-                        .await
-                        {
+                        .await;
+                        if let Err(e) = result {
+                            if matches!(e, Error::UdfRedrive(_)) {
+                                error!(?e, "Redrivable error while invoking ack");
+                                return;
+                            }
                             error!(
                                 ?e,
                                 "Non retryable error in per-message ack, stopping forwarder"
@@ -1603,7 +1607,7 @@ mod tests {
         // TODO: flaky
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let client = SourceClient::new(create_rpc_channel(sock_file.clone()).await.unwrap());
 
         let (src_read, src_ack, lag_reader) = new_source(
             client,
@@ -1611,6 +1615,12 @@ mod tests {
             Duration::from_millis(1000),
             cln_token.clone(),
             true,
+            crate::source::user_defined::ReconnectConfig::new(
+                sock_file,
+                server_info_file,
+                cln_token.clone(),
+                64 * 1024 * 1024,
+            ),
         )
         .await
         .map_err(|e| panic!("failed to create source reader: {:?}", e))
@@ -1809,13 +1819,19 @@ mod tests {
         // Give the server time to bind.
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let client = SourceClient::new(create_rpc_channel(sock_file.clone()).await.unwrap());
         let (src_read, src_ack, lag_reader) = new_source(
             client,
             5,
             Duration::from_millis(1000),
             cln_token.clone(),
             true,
+            crate::source::user_defined::ReconnectConfig::new(
+                sock_file,
+                server_info_file,
+                cln_token.clone(),
+                64 * 1024 * 1024,
+            ),
         )
         .await
         .expect("new_source should succeed");
