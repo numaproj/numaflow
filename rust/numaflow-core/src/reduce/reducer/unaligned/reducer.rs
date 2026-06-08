@@ -160,24 +160,23 @@ impl<C: NumaflowTypeConfig> ReduceTask<C> {
                         break;
                     };
 
-                    // Process the response
-                    if response.eof {
-                        continue;
-                    }
-
                     // the response window is monotonic with start-time as 0 and endtime as monotonically
                     // increasing WM. This is because each message is an independent entity since
-                    // accumulator acts like a Global Window.
+                    // accumulator acts like a Global Window. Even when the response is eof it will
+                    // have a window with latest watermark as endtime which triggers the EOF.
                     let window = response.window.clone().expect("Window not set in response");
                     let window : Window = window.into();
-                    // Send to ISB writer (message is converted to MessageHandle via From trait)
-                    let message: Message = response.into();
-                    writer_tx
-                        .send(message.into())
-                        .await
-                        .expect("Failed to send response to writer");
-
                     self.tracked_windows.insert(window.keys.to_vec(), window);
+
+                    // Process the response and send to writer only if it is not EOF
+                    if !response.eof {
+                        // Send to ISB writer (message is converted to MessageHandle via From trait)
+                        let message: Message = response.into();
+                        writer_tx
+                            .send(message.into())
+                            .await
+                            .expect("Failed to send response to writer");
+                    }
                 }
             }
         }
