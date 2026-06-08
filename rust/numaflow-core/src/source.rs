@@ -805,11 +805,9 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             Self::ack_with_retry(source_handle.clone(), offsets_to_ack, &cancel_token).await?;
         }
         if !offsets_to_nack.is_empty() {
-            let mut nack_map: HashMap<Option<NackOptions>, Vec<Offset>> = HashMap::new();
-            offsets_to_nack
-                .into_iter()
-                .for_each(|(offset, option)| nack_map.entry(option).or_default().push(offset));
-            for (option, offsets) in nack_map {
+            // Group offsets by their nack options so each distinct option set results in a
+            // single backend nack call; offsets sharing the same (or no) options are batched.
+            for (option, offsets) in group_offsets_by_nack_options(offsets_to_nack) {
                 Self::nack_with_retry(source_handle.clone(), offsets, option, &cancel_token).await?
             }
         }
@@ -1048,6 +1046,19 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     }
 }
 
+/// Groups nacked offsets by their [`NackOptions`] so that offsets sharing the same options
+/// (including `None`) are nacked in a single backend call. This preserves per-message options
+/// without degrading to one backend round-trip per offset.
+fn group_offsets_by_nack_options(
+    offsets_to_nack: Vec<(Offset, Option<NackOptions>)>,
+) -> HashMap<Option<NackOptions>, Vec<Offset>> {
+    let mut nack_map: HashMap<Option<NackOptions>, Vec<Offset>> = HashMap::new();
+    for (offset, option) in offsets_to_nack {
+        nack_map.entry(option).or_default().push(offset);
+    }
+    nack_map
+}
+
 #[cfg(test)]
 mod tests {
     use crate::mark_success;
@@ -1069,6 +1080,40 @@ mod tests {
     use tokio::sync::mpsc::Sender;
     use tokio_stream::StreamExt;
     use tokio_util::sync::CancellationToken;
+
+    #[test]
+    fn test_group_offsets_by_nack_options() {
+        use crate::message::NackOptions;
+
+        let opts_a = NackOptions {
+            delay: Some(1000),
+            max_deliveries: None,
+            reason: Some("a".to_string()),
+        };
+        let opts_b = NackOptions {
+            delay: Some(2000),
+            max_deliveries: None,
+            reason: Some("b".to_string()),
+        };
+        let offset = |n: i64| CoreOffset::Int(CoreIntOffset::new(n, 0));
+
+        let grouped = super::group_offsets_by_nack_options(vec![
+            (offset(1), Some(opts_a.clone())),
+            (offset(2), None),
+            (offset(3), Some(opts_b.clone())),
+            (offset(4), Some(opts_a.clone())),
+            (offset(5), None),
+        ]);
+
+        // Three distinct buckets: opts_a, opts_b, and None — order preserved within each.
+        assert_eq!(grouped.len(), 3);
+        assert_eq!(
+            grouped.get(&Some(opts_a)).unwrap(),
+            &vec![offset(1), offset(4)]
+        );
+        assert_eq!(grouped.get(&Some(opts_b)).unwrap(), &vec![offset(3)]);
+        assert_eq!(grouped.get(&None).unwrap(), &vec![offset(2), offset(5)]);
+    }
 
     struct SimpleSource {
         num: usize,
