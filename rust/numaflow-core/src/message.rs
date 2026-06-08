@@ -145,7 +145,7 @@ struct AckHandle {
     /// to `set_pipeline_span` are no-ops.
     pipeline_span: OnceLock<tracing::Span>,
     // options for nacking
-    nack_options: OnceLock<Option<NackOptions>>,
+    nack_options: OnceLock<NackOptions>,
 }
 
 impl AckHandle {
@@ -179,11 +179,7 @@ impl Drop for AckHandle {
                 if let Some(reason) = self.failure_reason.get() {
                     error!(reason = reason.as_str(), "message nacked due to failure");
                 }
-                if let Some(nack) = self.nack_options.get() {
-                    ReadAck::Nak(nack.clone())
-                } else {
-                    ReadAck::Nak(None)
-                }
+                ReadAck::Nak(self.nack_options.get().cloned())
             } else {
                 ReadAck::Ack
             };
@@ -244,7 +240,9 @@ impl MessageHandle {
     /// The error is logged at NAK time.
     pub(crate) fn mark_failed(self, reason: impl fmt::Display, nack_option: Option<NackOptions>) {
         let _ = self.ack_handle.failure_reason.set(reason.to_string());
-        let _ = self.ack_handle.nack_options.set(nack_option);
+        if let Some(opt) = nack_option {
+            let _ = self.ack_handle.nack_options.set(opt);
+        }
     }
 
     /// Creates a new MessageHandle with a different message but sharing this handle's ack tracking.

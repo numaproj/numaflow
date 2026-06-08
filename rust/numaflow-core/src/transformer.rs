@@ -275,12 +275,13 @@ impl Transformer {
             .iter()
             .filter(|h| h.message().dropped())
             .count();
-        // let nacked_message_handles = transformed_handles
-        //     .iter()
-        //     .filter(|h| h.message().nacked())
-        //     .collect();
+        let nacked_message_count = transformed_handles
+            .iter()
+            .filter(|h| h.message().nacked())
+            .count();
         let elapsed_time = batch_start_time.elapsed().as_micros() as f64;
-        let write_messages_count = transformed_handles.len() - dropped_messages_count;
+        let write_messages_count =
+            transformed_handles.len() - dropped_messages_count - nacked_message_count;
         // TODO: emit nacked message metrics
         Self::send_transformer_metrics(
             dropped_messages_count,
