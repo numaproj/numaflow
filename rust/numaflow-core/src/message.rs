@@ -824,6 +824,86 @@ mod tests {
         assert_eq!(result, ReadAck::Nak(None));
     }
 
+    #[tokio::test]
+    async fn test_mark_failed_with_nack_options() {
+        // mark_failed with Some(options) must surface those options in the NAK.
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let read_message = MessageHandle::new(Message::default(), ack_tx);
+
+        let opts = NackOptions {
+            delay: Some(5000),
+            max_deliveries: Some(3),
+            reason: Some("downstream unavailable".to_string()),
+        };
+        read_message.mark_failed("nacked by udf", Some(opts.clone()));
+
+        assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(Some(opts)));
+    }
+
+    #[tokio::test]
+    async fn test_mark_failed_without_options_naks_with_none() {
+        // mark_failed with None behaves like the implicit nack (no options).
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let read_message = MessageHandle::new(Message::default(), ack_tx);
+
+        read_message.mark_failed("infra error", None);
+
+        assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(None));
+    }
+
+    #[tokio::test]
+    async fn test_nack_options_some_wins_over_prior_none_on_shared_handle() {
+        // On a shared AckHandle (fan-out), a no-option failure must not squat the slot and
+        // block a later options-bearing failure from being recorded.
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let read_message = MessageHandle::new(Message::default(), ack_tx);
+        let cloned = read_message.clone();
+
+        let opts = NackOptions {
+            delay: Some(1000),
+            max_deliveries: None,
+            reason: Some("retry later".to_string()),
+        };
+        read_message.mark_failed("no opts", None);
+        cloned.mark_failed("with opts", Some(opts.clone()));
+
+        assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(Some(opts)));
+    }
+
+    #[test]
+    fn test_message_nacked_tag_detection() {
+        let mut message = Message::default();
+        assert!(!message.nacked(), "default message must not be nacked");
+
+        message.tags = Some(Arc::from(vec![NACK.to_string()]));
+        assert!(message.nacked(), "message tagged NACK must be nacked");
+
+        message.tags = Some(Arc::from(vec!["some-other-tag".to_string()]));
+        assert!(!message.nacked(), "unrelated tags must not nack");
+    }
+
+    #[test]
+    fn test_nack_options_pb_round_trip() {
+        // Fully populated round-trips losslessly.
+        let opts = NackOptions {
+            delay: Some(7500),
+            max_deliveries: Some(4),
+            reason: Some("rate limited".to_string()),
+        };
+        let pb: numaflow_pb::common::nack_options::NackOptions = opts.clone().into();
+        assert_eq!(NackOptions::from(pb), opts);
+
+        // Partially populated: unset fields stay None (proto3 `optional`), they must NOT
+        // collapse to 0 / "" on the wire.
+        let partial = NackOptions {
+            delay: Some(2000),
+            max_deliveries: None,
+            reason: None,
+        };
+        let pb: numaflow_pb::common::nack_options::NackOptions = partial.clone().into();
+        assert_eq!(NackOptions::from(pb), partial);
+    }
+
     fn message_with_metadata() -> Message {
         Message {
             metadata: Some(Arc::new(Metadata::default())),

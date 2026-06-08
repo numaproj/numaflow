@@ -1225,6 +1225,109 @@ mod tests {
 
         context.delete_stream(stream.name).await.unwrap();
     }
+    /// A message nacked with a `delay` must NOT be redelivered before the delay elapses,
+    /// and MUST be redelivered afterwards. This verifies that the JetStream ISB reader
+    /// honors `NackOptions.delay` via `AckKind::Nak(Some(delay))`.
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_nack_with_delay_defers_redelivery() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_nack_delay", "test", 0);
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // Large ack_wait so the original delivery does not auto-redeliver before our
+        // explicit nack-with-delay drives the redelivery timing.
+        context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ack_wait: Duration::from_secs(60),
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let js_reader = JetStreamReader::new(stream.clone(), context.clone(), None)
+            .await
+            .unwrap();
+
+        // Publish and fetch one message to populate offset2jsmsg.
+        let message = Message {
+            keys: Arc::from(vec!["k".to_string()]),
+            value: Bytes::from("delayed"),
+            offset: Offset::Int(IntOffset::new(1, 0)),
+            event_time: Utc::now(),
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_1".into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+        let message_bytes: BytesMut = message.try_into().unwrap();
+        context
+            .publish(stream.name, message_bytes.into())
+            .await
+            .unwrap();
+
+        let messages = js_reader
+            .fetch(1, Duration::from_millis(1000))
+            .await
+            .unwrap();
+        assert_eq!(messages.len(), 1);
+        let offset = messages.first().unwrap().offset.clone();
+
+        // Nack with a 3s redelivery delay.
+        let opts = NackOptions {
+            delay: Some(3000),
+            max_deliveries: None,
+            reason: Some("retry later".to_string()),
+        };
+        js_reader.nack(&offset, Some(opts)).await.unwrap();
+
+        // Before the delay elapses, the message must NOT be redelivered.
+        let early = js_reader
+            .fetch(1, Duration::from_millis(1000))
+            .await
+            .unwrap();
+        assert!(
+            early.is_empty(),
+            "message was redelivered before the nack delay elapsed"
+        );
+
+        // After the delay elapses, the message must be redelivered.
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        let redelivered = js_reader
+            .fetch(1, Duration::from_millis(2000))
+            .await
+            .unwrap();
+        assert_eq!(
+            redelivered.len(),
+            1,
+            "message was not redelivered after the nack delay elapsed"
+        );
+        assert_eq!(
+            redelivered.first().unwrap().offset.to_string(),
+            offset.to_string()
+        );
+
+        context.delete_stream(stream.name).await.unwrap();
+    }
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -2025,6 +2128,31 @@ mod duplicate_inflight_tests {
             is_late: false,
             nack_options: None,
         }
+    }
+
+    /// nak_with_retry must thread the NackOptions through to ISBReader::nack unchanged.
+    #[tokio::test]
+    async fn nak_with_retry_forwards_nack_options() {
+        let scripted = ScriptedReader::new(vec![]);
+        let reader = Arc::new(scripted.clone());
+        let offset = Offset::Int(IntOffset::new(11, 0));
+        let opts = NackOptions {
+            delay: Some(3000),
+            max_deliveries: Some(2),
+            reason: Some("transient".to_string()),
+        };
+        let cancel = CancellationToken::new();
+
+        ISBReaderOrchestrator::<WithScriptedReader>::nak_with_retry(
+            &reader,
+            &offset,
+            Some(opts.clone()),
+            &cancel,
+        )
+        .await
+        .expect("nack should succeed");
+
+        assert_eq!(*scripted.nacks.lock().unwrap(), vec![(offset, Some(opts))]);
     }
 
     /// A batch containing two messages with the same offset should only forward one
