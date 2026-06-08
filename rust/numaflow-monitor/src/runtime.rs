@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::fs;
 use std::fs::File;
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::os::unix::fs::DirBuilderExt as _;
 use std::path::Path;
 use std::str;
@@ -22,7 +22,8 @@ use tracing::error;
 /// nanosecond `Utc::now().timestamp_nanos_opt()` value, collisions are not observable in practice.
 static PERSIST_ERROR_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
-/// Serializes local writers so pruning and atomic renames observe a consistent directory state.
+/// Serializes atomic renames and pruning while allowing unique temp-file writes to proceed
+/// concurrently.
 static PERSIST_ERROR_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 /// Represents a single runtime error entry persisted by the application.
@@ -156,13 +157,13 @@ pub(crate) fn persist_application_error_to_file(
 ) {
     let container_name = extract_container_name(grpc_status.message());
     let dir_path = Path::new(&application_error_path.clone()).join(&container_name);
-    if !dir_path.exists() {
-        let mut builder = fs::DirBuilder::new();
-        builder.recursive(true);
-        builder.mode(0o777);
-        builder
-            .create(&dir_path)
-            .expect("Failed to create application errors directory");
+    let mut builder = fs::DirBuilder::new();
+    builder.recursive(true);
+    builder.mode(0o777);
+    if let Err(e) = builder.create(&dir_path)
+        && e.kind() != ErrorKind::AlreadyExists
+    {
+        panic!("Failed to create application errors directory: {e:?}");
     }
 
     let now = Utc::now();
@@ -293,6 +294,8 @@ impl Runtime {
 }
 
 fn prune_error_files(dir_path: &Path, max_error_files_per_container: usize) {
+    // Treat zero as unlimited. The default config is positive, and preserving errors is safer than
+    // deleting every just-written file if a zero value is supplied.
     if max_error_files_per_container == 0 {
         return;
     }

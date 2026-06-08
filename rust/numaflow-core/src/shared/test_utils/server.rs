@@ -64,8 +64,8 @@ impl TestServerHandle {
         self.server_info_file.clone()
     }
 
-    #[allow(dead_code)]
     /// Explicitly shut down the server and wait for the thread to finish.
+    #[allow(dead_code)]
     pub fn shutdown(mut self) {
         self.do_shutdown();
     }

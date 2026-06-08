@@ -196,8 +196,9 @@ pub(crate) async fn create_multi_rpc_channel(endpoints: Vec<String>) -> error::R
 
 /// Reconnects to a user-defined source sidecar and returns a fresh, health-checked client.
 ///
-/// The helper mirrors startup: read SDK server-info, create a new UDS-backed channel, apply the
-/// configured gRPC message-size limits, then wait until the typed client reports ready.
+/// The helper creates a new UDS-backed channel, applies the configured gRPC message-size limits,
+/// waits until the typed client reports ready, then re-reads SDK server-info from the running
+/// sidecar.
 #[allow(dead_code)]
 pub(crate) async fn reconnect_source(
     socket_path: PathBuf,
@@ -206,12 +207,12 @@ pub(crate) async fn reconnect_source(
     grpc_max_message_size: usize,
     retry_interval: Duration,
 ) -> error::Result<SourceClient<Channel>> {
-    let _server_info = sdk_server_info(server_info_path, cln_token.clone()).await?;
     let channel = create_rpc_channel_with_interval(socket_path, retry_interval).await?;
     let mut client = SourceClient::new(channel)
         .max_encoding_message_size(grpc_max_message_size)
         .max_decoding_message_size(grpc_max_message_size);
     wait_until_source_ready(&cln_token, &mut client).await?;
+    let _server_info = sdk_server_info(server_info_path, cln_token.clone()).await?;
     Ok(client)
 }
 
@@ -224,12 +225,12 @@ pub(crate) async fn reconnect_sink(
     grpc_max_message_size: usize,
     retry_interval: Duration,
 ) -> error::Result<SinkClient<Channel>> {
-    let _server_info = sdk_server_info(server_info_path, cln_token.clone()).await?;
     let channel = create_rpc_channel_with_interval(socket_path, retry_interval).await?;
     let mut client = SinkClient::new(channel)
         .max_encoding_message_size(grpc_max_message_size)
         .max_decoding_message_size(grpc_max_message_size);
     wait_until_sink_ready(&cln_token, &mut client).await?;
+    let _server_info = sdk_server_info(server_info_path, cln_token.clone()).await?;
     Ok(client)
 }
 
@@ -243,12 +244,12 @@ pub(crate) async fn reconnect_transformer(
     grpc_max_message_size: usize,
     retry_interval: Duration,
 ) -> error::Result<SourceTransformClient<Channel>> {
-    let _server_info = sdk_server_info(server_info_path, cln_token.clone()).await?;
     let channel = create_rpc_channel_with_interval(socket_path, retry_interval).await?;
     let mut client = SourceTransformClient::new(channel)
         .max_encoding_message_size(grpc_max_message_size)
         .max_decoding_message_size(grpc_max_message_size);
     wait_until_transformer_ready(&cln_token, &mut client).await?;
+    let _server_info = sdk_server_info(server_info_path, cln_token.clone()).await?;
     Ok(client)
 }
 
@@ -262,12 +263,12 @@ pub(crate) async fn reconnect_mapper(
     grpc_max_message_size: usize,
     retry_interval: Duration,
 ) -> error::Result<MapClient<Channel>> {
-    let _server_info = sdk_server_info(server_info_path, cln_token.clone()).await?;
     let channel = create_rpc_channel_with_interval(socket_path, retry_interval).await?;
     let mut client = MapClient::new(channel)
         .max_encoding_message_size(grpc_max_message_size)
         .max_decoding_message_size(grpc_max_message_size);
     wait_until_mapper_ready(&cln_token, &mut client).await?;
+    let _server_info = sdk_server_info(server_info_path, cln_token.clone()).await?;
     Ok(client)
 }
 
@@ -302,8 +303,8 @@ macro_rules! jh_abort_guard {
 #[cfg(test)]
 mod tests {
     //! Reconnect-helper unit tests. Each test stands up a real `numaflow` SDK server on a UDS
-    //! socket, then calls the production reconnect helper so the server-info, channel creation,
-    //! client configuration, and readiness sequence is exercised end-to-end.
+    //! socket, then calls the production reconnect helper so channel creation, client
+    //! configuration, readiness, and server-info validation are exercised end-to-end.
     //!
     //! Retries use a 10ms cadence so the "wait for server to come up" branch stays sub-100ms.
     use super::*;

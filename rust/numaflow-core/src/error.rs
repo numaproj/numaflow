@@ -2,6 +2,7 @@ use std::error::Error as StdError;
 use std::io::ErrorKind;
 
 use thiserror::Error;
+use tonic::Code;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -102,29 +103,28 @@ impl From<numaflow_shared::error::Error> for Error {
     }
 }
 
-/// Classifies a `tonic::Status` as a transport-level failure that should trigger UDF reconnect
-/// rather than a fatal exit. Used by every UDF client's receive loop and by ack/nack to decide
-/// whether to convert `Err` into `Error::UdfRedrive` or surface as `Error::Grpc`.
+const UDF_TRANSPORT_IO_ERROR_KINDS: &[ErrorKind] = &[
+    ErrorKind::BrokenPipe,
+    ErrorKind::ConnectionReset,
+    ErrorKind::NotConnected,
+];
+
+/// Classifies whether a `tonic::Status` represents a UDF transport break.
 ///
 /// A status is considered transport-level when:
 /// - its `Code` is `Unavailable`, `Cancelled`, `Aborted`, or `DeadlineExceeded`; or
 /// - its underlying I/O error chain contains a `BrokenPipe`, `ConnectionReset`, or `NotConnected`
 ///   kind. This last case captures `Code::Unknown` / `Code::Internal` wrappers around hyper/h2
 ///   transport errors that don't classify cleanly by status code alone.
+///
+/// Callers can use this to decide when to convert a UDF stream error into [`Error::UdfRedrive`].
+/// It does not classify all UDF application errors that should be handled without exiting `numa`.
 #[allow(dead_code)]
-pub(crate) fn is_transport_failure(status: &tonic::Status) -> bool {
-    use tonic::Code;
+pub(crate) fn is_udf_transport_failure(status: &tonic::Status) -> bool {
     matches!(
         status.code(),
         Code::Unavailable | Code::Cancelled | Code::Aborted | Code::DeadlineExceeded
-    ) || has_io_kind_in_chain(
-        status,
-        &[
-            ErrorKind::BrokenPipe,
-            ErrorKind::ConnectionReset,
-            ErrorKind::NotConnected,
-        ],
-    )
+    ) || has_io_kind_in_chain(status, UDF_TRANSPORT_IO_ERROR_KINDS)
 }
 
 /// Walks the `Error::source` chain looking for a `std::io::Error` whose `kind()` matches any of
@@ -159,7 +159,7 @@ mod tests {
         ] {
             let status = tonic::Status::new(code, "x");
             assert!(
-                is_transport_failure(&status),
+                is_udf_transport_failure(&status),
                 "expected {code:?} to be transport-classified"
             );
         }
@@ -175,7 +175,7 @@ mod tests {
         ] {
             let status = tonic::Status::new(code, "x");
             assert!(
-                !is_transport_failure(&status),
+                !is_udf_transport_failure(&status),
                 "expected {code:?} not to be transport-classified"
             );
         }
@@ -186,5 +186,19 @@ mod tests {
         let io_err = io::Error::new(io::ErrorKind::BrokenPipe, "broken pipe");
         assert!(has_io_kind_in_chain(&io_err, &[ErrorKind::BrokenPipe]));
         assert!(!has_io_kind_in_chain(&io_err, &[ErrorKind::TimedOut]));
+    }
+
+    #[derive(Debug, thiserror::Error)]
+    #[error("wrapped I/O error")]
+    struct WrappedIoError(#[source] io::Error);
+
+    #[test]
+    fn io_kind_in_chain_finds_nested_match() {
+        let io_err = io::Error::new(io::ErrorKind::ConnectionReset, "connection reset");
+        let wrapped = WrappedIoError(io_err);
+        assert!(has_io_kind_in_chain(
+            &wrapped,
+            &[ErrorKind::ConnectionReset]
+        ));
     }
 }
