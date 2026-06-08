@@ -224,6 +224,10 @@ impl SinkWriter {
                     match self.process_batch(messages, cln_token.clone()).await {
                         Ok(()) => {
                             // Batch processed successfully
+
+                            // TODO(per-message-nack): Split the NACK-tagged messages out here
+                            // and mark_failed(.., msg.nack_options)
+                            // instead of mark_success, so the source redelivers them.
                             mark_success_batch!(read_batch);
                         }
                         Err(e) => {
