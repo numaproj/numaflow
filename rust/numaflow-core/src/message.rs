@@ -411,6 +411,15 @@ impl Message {
             );
         }
     }
+
+    /// Records the sink retry attempt count in the message's system metadata so that
+    /// user-defined sinks can observe it. Metadata is created if it is absent.
+    pub(crate) fn set_sink_retry_count(&mut self, count: u64) {
+        let metadata = self
+            .metadata
+            .get_or_insert_with(|| Arc::new(crate::metadata::Metadata::default()));
+        Arc::make_mut(metadata).set_retry_count(count);
+    }
 }
 
 /// IntOffset is integer based offset enum type.
