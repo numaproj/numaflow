@@ -1,18 +1,19 @@
-# Numa Container Resilience to UDF Failures
+# Numa Container Resilience
 
 | | |
 | --- | --- |
 | Status | Proposed |
 | Tracking issues | [#3367](https://github.com/numaproj/numaflow/issues/3367) (umbrella), [#3368](https://github.com/numaproj/numaflow/issues/3368) (this proposal) |
 | Related future work | [#3369](https://github.com/numaproj/numaflow/issues/3369), [#3370](https://github.com/numaproj/numaflow/issues/3370), [#3371](https://github.com/numaproj/numaflow/issues/3371) |
+| Built-in sources | Separate resilience track; not covered by UDF reconnect. |
 | Reduce vertices | Excluded from automatic reconnect in Phase 1 pending durable-state design. |
 | Target Release | 1.9 |
 
 ## Context
 
-Today each vertex and monovertex pod has a `monitor` sidecar, a `numa` container, and UDF sidecars. The monitor sidecar serves runtime errors from the shared emptyDir because the `numa` process exits when it receives a gRPC error from a UDF. While `numa` is restarting, it cannot host the error endpoint.
+Today each vertex and monovertex pod has a `monitor` sidecar, a `numa` container, and UDF sidecars. The monitor sidecar serves runtime errors from the shared emptyDir because the `numa` process exits on runtime failures such as UDF gRPC errors. While `numa` is restarting, it cannot host the error endpoint.
 
-The umbrella goal in #3367 is to remove the monitor sidecar. Phase 1, tracked by #3368, makes that possible by keeping `numa` alive across non-reduce UDF failures.
+The umbrella goal in #3367 is to remove the monitor sidecar. Phase 1, tracked by #3368, makes that possible by keeping `numa` alive across non-reduce UDF failures. Built-in sources are also part of the broader resilience story, but they do not use UDF gRPC streams and need connector-specific follow-up work.
 
 ## Goals
 
@@ -20,6 +21,7 @@ The umbrella goal in #3367 is to remove the monitor sidecar. Phase 1, tracked by
 - `numa` must continue serving metrics and health endpoints during UDF outage and reconnect cycles.
 - UDF errors remain observable through logs, `critical_error_total`, and persisted runtime-error files.
 - Processing resumes automatically once the UDF sidecar is healthy again.
+- Built-in source connectors get a separate resilience track for transient broker or service failures.
 - Reduce vertices keep today's persist-and-exit behavior until durable reduce state is designed and approved.
 
 ## Non-Goals
@@ -28,6 +30,7 @@ The umbrella goal in #3367 is to remove the monitor sidecar. Phase 1, tracked by
 - Changing daemon-server polling or UI-facing APIs; that is Phase 3, #3370.
 - Adding e2e failure coverage; that is Phase 4, #3371.
 - Changing source SDK at-least-once contracts.
+- Implementing built-in source resilience in Phase 1; this document only records the direction and required follow-up.
 - Changing Go controllers, CRDs, UI, or monitor-sidecar code in this phase.
 
 ## Proposed Design
@@ -39,6 +42,8 @@ All non-reduce UDF gRPC failures are handled uniformly. There is no transient vs
 3. Persists the runtime error.
 4. Reconnects to the UDF sidecar.
 5. Redrives the in-flight request without exiting.
+
+Built-in source failures are not handled by this UDF reconnect path. Built-in connectors such as Kafka, Pulsar, NATS, Jetstream, SQS, HTTP, and generator sources are Rust implementations that talk directly to external systems through connector-specific APIs.
 
 ### Reconnect Helper
 
@@ -92,6 +97,17 @@ The user-defined source SDK contract remains unchanged: offsets must not be comm
 
 Reduce vertices retain current behavior: persist the error and exit. Reduce UDFs hold window state in-process, so reconnecting after a crash could drop or double-count aggregates. This carve-out requires issue-owner signoff.
 
+### Built-in Source Resilience Track
+
+Built-in sources need connector-owned retry and classification instead of the UDF `tonic::Status` reconnect path. The follow-up design should:
+
+- Retry transient startup, pending, partition-discovery, read, ack, commit, or delete errors in place when retrying does not advance source state incorrectly.
+- Preserve terminal errors for misconfiguration, invalid credentials, missing permissions, unsupported broker responses, or required resources that cannot recover without operator action.
+- Keep at-least-once behavior explicit per connector: source state must not be advanced until downstream processing completes, and duplicate ack/commit/delete attempts must be safe.
+- Start with connectors that can restart-loop during broker coordination, rebalance, throttling, or timeout states, then audit the remaining built-in sources.
+
+This track complements UDF reconnect work. UDF reconnect does not automatically solve built-in source restart loops.
+
 ## Observability
 
 Reuse `critical_error_total` with new reason strings:
@@ -130,8 +146,9 @@ Safety by path:
 | Source nack reconnect | Conditional on SDK not committing implicit ACKs | Possible extra NAK frame |
 | Map and transformer redrive | None, task holds handle until success or drop | Possible UDF reinvocation |
 | Sink redrive | None, success is gated on sink response | Possible external writes |
+| Built-in source retry | Connector-specific commit/delete/ack contract | Connector-specific; should be none for transient startup probes and idempotent ack retries |
 
-The only conditional case is source NAK reconnect, which depends on the existing user-defined-source SDK contract. Built-in Rust source connectors do not use the UDF-source gRPC path and are out of scope for this reconnect work.
+The only conditional UDF case is source NAK reconnect, which depends on the existing user-defined-source SDK contract. Built-in source safety is connector-specific and must be covered by the built-in source resilience track.
 
 ## Risks
 
@@ -139,6 +156,8 @@ The only conditional case is source NAK reconnect, which depends on the existing
 - Reconnect storms are possible during sustained UDF outages. The retry interval stays at the current one-second startup retry cadence.
 - Reduce still restarts. This is an explicit carve-out.
 - SDK NAK behavior must be audited in numaflow-go, numaflow-java, numaflow-python, and numaflow-rs **as a pre-merge gate**. Any non-compliant SDK is either remediated first or carved out from the resilience guarantee.
+- Built-in source classifiers can hide terminal errors if they are too broad. Each connector follow-up must document retryable and terminal errors.
+- Built-in source startup probes can restart-loop if transient broker states fail fast. Follow-up work should retry those probes in place with cancellation-aware backoff.
 
 ## Testing
 
@@ -155,3 +174,10 @@ Required tests:
 - MessageHandle drop-NAK invariant test during outage.
 - Top-level assertion that non-reduce UDF errors do not make `run()` return `Err`.
 - User-defined-source SDK NAK-preservation test or audit.
+
+Built-in source follow-up tests:
+
+- Startup probe retry tests for transient metadata, pending-message, offset, or partition-discovery failures.
+- Ack/commit/delete retry tests that verify source state is not advanced incorrectly.
+- Terminal error tests for credentials, authorization, unsupported configuration, and permanently missing required resources.
+- At-least-once tests for redelivery before source-state advancement and duplicate-safe retry after source-state advancement.
