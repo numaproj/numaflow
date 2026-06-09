@@ -1,9 +1,31 @@
-import React from "react";
+import React, { useCallback, useContext } from "react";
 import Box from "@mui/material/Box";
 import { GetISBType, UNKNOWN } from "../../../../../utils";
+import { AppContext } from "../../../../../App";
+import { AppContextProps } from "../../../../../types/declarations/app";
+import { SidebarType } from "../../../../common/SlidingSidebar";
+import { ViewType } from "../../../../common/SpecEditor";
 
-export function PipelineISBSummaryStatus({ isbData }: any) {
+export function PipelineISBSummaryStatus({ isbData, namespaceId }: any) {
   const isbType = GetISBType(isbData?.isbService?.spec) || UNKNOWN;
+  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
+
+  const handleViewMoreClick = useCallback(() => {
+    if (!namespaceId || !isbData?.name || !setSidebarProps) {
+      return;
+    }
+    setSidebarProps({
+      type: SidebarType.ISB_UPDATE,
+      specEditorProps: {
+        titleOverride: `ISB Service Details: ${isbData.name}`,
+        initialYaml: isbData.isbService,
+        namespaceId,
+        isbId: isbData.name,
+        viewType: ViewType.READ_ONLY,
+      },
+    });
+  }, [namespaceId, isbData, setSidebarProps]);
+
   return (
     <Box
       sx={{
@@ -71,6 +93,19 @@ export function PipelineISBSummaryStatus({ isbData }: any) {
                   </div>
                 </span>
               </div>
+              {isbData?.name && (
+                <div className="pipeline-summary-text">
+                  <span className="pipeline-summary-subtitle">
+                    <div
+                      className="pipeline-onclick-events"
+                      onClick={handleViewMoreClick}
+                      data-testid="pipeline-isb-view-more"
+                    >
+                      View More
+                    </div>
+                  </span>
+                </div>
+              )}
             </Box>
           </Box>
         </Box>

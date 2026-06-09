@@ -177,6 +177,7 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
         customComponent: (
           <PipelineISBSummaryStatus
             isbData={isbData}
+            namespaceId={namespaceId}
             key={"pipeline-isb-status"}
           />
         ),
