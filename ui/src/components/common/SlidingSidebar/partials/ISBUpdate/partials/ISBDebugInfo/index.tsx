@@ -62,7 +62,15 @@ const HeaderCell = ({
   tooltip?: string;
   testId?: string;
 }) => (
-  <TableCell>
+  <TableCell
+    sx={{
+      backgroundColor: "#F4F4F4",
+      borderBottom: "0.1rem solid #C6C6C6",
+      color: "#393939",
+      fontSize: "1.1rem",
+      fontWeight: 700,
+    }}
+  >
     <Box sx={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
       {label}
       {tooltip && (
@@ -243,8 +251,8 @@ export function ISBDebugInfo({ jetStream, loading, error }: ISBDebugInfoProps) {
             <Table stickyHeader>
               <TableHead>
                 <TableRow>
-                  <TableCell>Pod</TableCell>
-                  <TableCell>Error</TableCell>
+                  <HeaderCell label="Pod" />
+                  <HeaderCell label="Error" />
                 </TableRow>
               </TableHead>
               <TableBody>
