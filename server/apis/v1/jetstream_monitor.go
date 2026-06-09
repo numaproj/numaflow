@@ -34,6 +34,7 @@ import (
 
 const jetStreamMonitorPort = 8222
 
+// GetISBServiceJetStream returns JetStream monitor summary and RAFT meta group information for an ISB service.
 func (h *handler) GetISBServiceJetStream(c *gin.Context) {
 	ns, isbsvcName := c.Param("namespace"), c.Param("isb-service")
 	_, pods, ok := h.getJetStreamISBMonitorPods(c, ns, isbsvcName)
@@ -71,6 +72,7 @@ func (h *handler) GetISBServiceJetStream(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
+// getJetStreamISBMonitorPods validates that the ISB service is JetStream backed and returns running pods with Pod IPs.
 func (h *handler) getJetStreamISBMonitorPods(c *gin.Context, ns, isbsvcName string) (*dfv1.InterStepBufferService, []corev1.Pod, bool) {
 	isbsvc, err := h.numaflowClient.InterStepBufferServices(ns).Get(c, isbsvcName, metav1.GetOptions{})
 	if err != nil {
@@ -108,6 +110,7 @@ func (h *handler) getJetStreamISBMonitorPods(c *gin.Context, ns, isbsvcName stri
 	return isbsvc, runningPods, true
 }
 
+// fetchJetStreamInfo queries the NATS monitor endpoint on a JetStream pod and decodes the /jsz response.
 func (h *handler) fetchJetStreamInfo(ctx context.Context, pod corev1.Pod) (*natsserver.JSInfo, error) {
 	client := h.httpClient
 	if client == nil {
@@ -132,6 +135,7 @@ func (h *handler) fetchJetStreamInfo(ctx context.Context, pod corev1.Pod) (*nats
 	return &jsInfo, nil
 }
 
+// newJetStreamSummaryDTO converts NATS JetStream monitor stats into the API summary payload.
 func newJetStreamSummaryDTO(defaultServer string, jsInfo *natsserver.JSInfo) JetStreamSummaryDTO {
 	clusterName := ""
 	metaLeader := false
@@ -158,6 +162,7 @@ func newJetStreamSummaryDTO(defaultServer string, jsInfo *natsserver.JSInfo) Jet
 	}
 }
 
+// newJetStreamRaftMetaDTOs converts NATS meta cluster peer information into RAFT debug rows.
 func newJetStreamRaftMetaDTOs(jsInfo *natsserver.JSInfo) []JetStreamRaftMetaDTO {
 	if jsInfo.Meta == nil {
 		return nil
@@ -200,6 +205,7 @@ func newJetStreamRaftMetaDTOs(jsInfo *natsserver.JSInfo) []JetStreamRaftMetaDTO 
 	return raftMeta
 }
 
+// dedupeJetStreamRaftMetaDTOs removes duplicate peers reported by multiple JetStream pods.
 func dedupeJetStreamRaftMetaDTOs(items []JetStreamRaftMetaDTO) []JetStreamRaftMetaDTO {
 	deduped := make([]JetStreamRaftMetaDTO, 0, len(items))
 	seen := make(map[string]struct{}, len(items))

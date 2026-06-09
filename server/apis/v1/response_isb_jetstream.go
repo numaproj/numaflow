@@ -16,12 +16,14 @@ limitations under the License.
 
 package v1
 
+// ISBJetStreamDTO is the response payload for JetStream monitor data on an ISB service.
 type ISBJetStreamDTO struct {
 	Summary       []JetStreamSummaryDTO  `json:"summary"`
 	RaftMetaGroup []JetStreamRaftMetaDTO `json:"raftMetaGroup"`
 	Errors        []ISBMonitorErrorDTO   `json:"errors,omitempty"`
 }
 
+// JetStreamSummaryDTO contains per-server JetStream monitor summary metrics.
 type JetStreamSummaryDTO struct {
 	Server       string  `json:"server"`
 	ServerID     string  `json:"serverId,omitempty"`
@@ -36,6 +38,7 @@ type JetStreamSummaryDTO struct {
 	MetaLeader   bool    `json:"metaLeader"`
 }
 
+// JetStreamRaftMetaDTO contains RAFT meta group peer status for a JetStream cluster.
 type JetStreamRaftMetaDTO struct {
 	Name    string `json:"name"`
 	ID      string `json:"id,omitempty"`
@@ -46,6 +49,7 @@ type JetStreamRaftMetaDTO struct {
 	Lag     uint64 `json:"lag"`
 }
 
+// ISBMonitorErrorDTO captures a per-pod JetStream monitor collection error.
 type ISBMonitorErrorDTO struct {
 	Pod     string `json:"pod"`
 	Message string `json:"message"`
