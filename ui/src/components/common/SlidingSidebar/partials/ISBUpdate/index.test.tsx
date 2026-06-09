@@ -261,6 +261,7 @@ describe("ISBUpdate", () => {
               leader: true,
               current: true,
               online: true,
+              active: "450.793757ms",
               lag: 0,
             },
           ],
@@ -291,6 +292,7 @@ describe("ISBUpdate", () => {
               leader: true,
               current: true,
               online: true,
+              active: "450.736306ms",
               lag: 0,
             },
           ],
@@ -330,8 +332,19 @@ describe("ISBUpdate", () => {
       expect(screen.getByText("js-1")).toBeInTheDocument();
       expect(screen.getByText("400,006")).toBeInTheDocument();
       expect(screen.getByText("100,576")).toBeInTheDocument();
-      expect(screen.getByText("12 / 0.018%")).toBeInTheDocument();
-      expect(screen.getByText("12 / 0.012%")).toBeInTheDocument();
+      expect(screen.getByText("12 / 0.02%")).toBeInTheDocument();
+      expect(screen.getByText("12 / 0.01%")).toBeInTheDocument();
+      expect(screen.getByText("Last Active")).toBeInTheDocument();
+      expect(screen.getByText("450.79ms")).toBeInTheDocument();
+      expect(screen.queryByText("ID")).not.toBeInTheDocument();
+      expect(screen.queryByText("server-a")).not.toBeInTheDocument();
+      expect(
+        screen.getByTestId("isb-debug-header-help-api-errors")
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId("isb-debug-header-help-current")
+      ).toBeInTheDocument();
+      expect(screen.getByTestId("isb-debug-header-help-lag")).toBeInTheDocument();
       expect(screen.queryByText("Memory")).not.toBeInTheDocument();
       expect(screen.queryByText("File")).not.toBeInTheDocument();
       expect(screen.queryByText("Stream Information")).not.toBeInTheDocument();
@@ -345,7 +358,7 @@ describe("ISBUpdate", () => {
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledTimes(2);
       expect(screen.getAllByText("300,000")).toHaveLength(2);
-      expect(screen.getAllByText("1 / 0.100%")).toHaveLength(2);
+      expect(screen.getAllByText("1 / 0.10%")).toHaveLength(2);
     });
   });
 });

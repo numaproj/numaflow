@@ -8,6 +8,7 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import { ISBJetStreamResponse } from "../../../../../../../types/declarations/pipeline";
+import { Help } from "../../../../../Help";
 
 interface ISBDebugInfoProps {
   jetStream?: ISBJetStreamResponse;
@@ -16,6 +17,8 @@ interface ISBDebugInfoProps {
 }
 
 const formatNumber = (value?: number) => (value ?? 0).toLocaleString();
+
+const formatDecimal = (value: number) => value.toFixed(2);
 
 const formatBytes = (value?: number) => {
   const bytes = value ?? 0;
@@ -28,13 +31,48 @@ const formatBytes = (value?: number) => {
     units.length - 1
   );
   const scaled = bytes / Math.pow(1024, index);
-  return `${scaled.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+  return `${index === 0 ? formatNumber(scaled) : formatDecimal(scaled)} ${
+    units[index]
+  }`;
 };
 
-const formatPercent = (value?: number) => `${((value ?? 0) * 100).toFixed(3)}%`;
+const formatPercent = (value?: number) =>
+  `${formatDecimal((value ?? 0) * 100)}%`;
 
 const formatApiErrors = (errors?: number, rate?: number) =>
   `${formatNumber(errors)} / ${formatPercent(rate)}`;
+
+const formatDuration = (value?: string) => {
+  if (!value) {
+    return "-";
+  }
+  const match = value.match(/^(-?\d+(?:\.\d+)?)([a-zµμ]+)$/i);
+  if (!match) {
+    return value;
+  }
+  return `${formatDecimal(Number(match[1]))}${match[2]}`;
+};
+
+const HeaderCell = ({
+  label,
+  tooltip,
+  testId,
+}: {
+  label: string;
+  tooltip?: string;
+  testId?: string;
+}) => (
+  <TableCell>
+    <Box sx={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+      {label}
+      {tooltip && (
+        <Box data-testid={testId}>
+          <Help tooltip={tooltip} />
+        </Box>
+      )}
+    </Box>
+  </TableCell>
+);
 
 const DebugSection = ({
   title,
@@ -94,14 +132,18 @@ export function ISBDebugInfo({ jetStream, loading, error }: ISBDebugInfoProps) {
           <Table stickyHeader>
             <TableHead>
               <TableRow>
-                <TableCell>Server</TableCell>
-                <TableCell>Cluster</TableCell>
-                <TableCell>Streams</TableCell>
-                <TableCell>Consumers</TableCell>
-                <TableCell>Messages</TableCell>
-                <TableCell>Bytes</TableCell>
-                <TableCell>API Req</TableCell>
-                <TableCell>API Err</TableCell>
+                <HeaderCell label="Server" />
+                <HeaderCell label="Cluster" />
+                <HeaderCell label="Streams" />
+                <HeaderCell label="Consumers" />
+                <HeaderCell label="Messages" />
+                <HeaderCell label="Bytes" />
+                <HeaderCell label="API Requests" />
+                <HeaderCell
+                  label="API Errors"
+                  tooltip="API error count / API error rate."
+                  testId="isb-debug-header-help-api-errors"
+                />
               </TableRow>
             </TableHead>
             <TableBody>
@@ -158,29 +200,35 @@ export function ISBDebugInfo({ jetStream, loading, error }: ISBDebugInfoProps) {
           <Table stickyHeader>
             <TableHead>
               <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>ID</TableCell>
-                <TableCell>Leader</TableCell>
-                <TableCell>Current</TableCell>
-                <TableCell>Online</TableCell>
-                <TableCell>Active</TableCell>
-                <TableCell>Lag</TableCell>
+                <HeaderCell label="Name" />
+                <HeaderCell label="Leader" />
+                <HeaderCell
+                  label="Current"
+                  tooltip="Whether this peer is caught up with the RAFT meta group leader."
+                  testId="isb-debug-header-help-current"
+                />
+                <HeaderCell label="Online" />
+                <HeaderCell label="Last Active" />
+                <HeaderCell
+                  label="Lag"
+                  tooltip="Number of RAFT log entries this peer is behind the leader."
+                  testId="isb-debug-header-help-lag"
+                />
               </TableRow>
             </TableHead>
             <TableBody>
               {!(jetStream?.raftMetaGroup || []).length && (
                 <TableRow>
-                  <TableCell colSpan={7}>No information found</TableCell>
+                  <TableCell colSpan={6}>No information found</TableCell>
                 </TableRow>
               )}
               {(jetStream?.raftMetaGroup || []).map((item) => (
                 <TableRow key={`${item.name}-${item.id || ""}`}>
                   <TableCell>{item.name}</TableCell>
-                  <TableCell>{item.id || "-"}</TableCell>
                   <TableCell>{item.leader ? "Yes" : "No"}</TableCell>
                   <TableCell>{item.current ? "Yes" : "No"}</TableCell>
                   <TableCell>{item.online ? "Yes" : "No"}</TableCell>
-                  <TableCell>{item.active || "-"}</TableCell>
+                  <TableCell>{formatDuration(item.active)}</TableCell>
                   <TableCell>{formatNumber(item.lag)}</TableCell>
                 </TableRow>
               ))}
