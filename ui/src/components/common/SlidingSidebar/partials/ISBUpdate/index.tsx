@@ -41,7 +41,7 @@ export function ISBUpdate({
     ValidationMessage | undefined
   >();
   const [status, setStatus] = useState<StatusIndicator | undefined>();
-  const [tabValue, setTabValue] = useState(0);
+  const [tabValue, setTabValue] = useState(1);
   const { host } = useContext<AppContextProps>(AppContext);
   const showDebugTabs =
     viewType === ViewType.READ_ONLY && !!initialYaml?.spec?.jetstream;
