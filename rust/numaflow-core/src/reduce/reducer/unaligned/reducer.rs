@@ -974,6 +974,33 @@ mod tests {
         }
     }
 
+    /// Accumulator that consumes all input but never emits any output message. Used to verify that
+    /// windows are still cleaned up (and the WAL gets the GC events) even when the user code never
+    /// produces a response.
+    struct NoOutputAccumulator;
+
+    struct NoOutputAccumulatorCreator {}
+
+    impl accumulator::AccumulatorCreator for NoOutputAccumulatorCreator {
+        type A = NoOutputAccumulator;
+
+        fn create(&self) -> Self::A {
+            NoOutputAccumulator
+        }
+    }
+
+    #[tonic::async_trait]
+    impl accumulator::Accumulator for NoOutputAccumulator {
+        async fn accumulate(
+            &self,
+            mut input: mpsc::Receiver<accumulator::AccumulatorRequest>,
+            _output: mpsc::Sender<accumulator::Message>,
+        ) {
+            // Drain the input without emitting anything.
+            while input.recv().await.is_some() {}
+        }
+    }
+
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_unaligned_session_reducer_basic() -> crate::Result<()> {
@@ -1974,6 +2001,276 @@ mod tests {
             .expect("failed to send shutdown signal");
 
         server_handle.await.expect("server handle failed");
+
+        // Clean up JetStream
+        js_context.delete_stream(stream.name).await.unwrap();
+
+        Ok(())
+    }
+
+    /// Verifies that when the user's accumulator never emits any output, the windows are still
+    /// closed and cleaned up (no leaks) once the watermark advances past the timeout, the GC events
+    /// are written to the WAL, and nothing is written to the ISB.
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_unaligned_accumulator_reducer_no_output_cleans_up() -> crate::Result<()> {
+        use crate::reduce::wal::segment::WalType;
+        use crate::reduce::wal::segment::append::AppendOnlyWal;
+
+        // Set up the accumulator reducer server with an accumulator that emits nothing.
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("accumulator_reduce_no_output.sock");
+        let server_info_file = tmp_dir
+            .path()
+            .join("accumulator_reduce_no_output-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let server_handle = tokio::spawn(async move {
+            accumulator::Server::new(NoOutputAccumulatorCreator {})
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // Wait for the server to start
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Create the accumulator client
+        let accumulator_client = UserDefinedAccumulator::new(
+            numaflow_pb::clients::accumulator::accumulator_client::AccumulatorClient::new(
+                create_rpc_channel(sock_file).await?,
+            ),
+        )
+        .await;
+
+        let client = UserDefinedUnalignedReduce::Accumulator(accumulator_client);
+
+        // Create a simple accumulator window manager with 60s timeout. Keep a clone so that we can
+        // inspect the window counts after the run to verify there are no leaks.
+        let timeout = Duration::from_secs(60);
+        let windower =
+            crate::reduce::reducer::unaligned::windower::accumulator::AccumulatorWindowManager::new(
+                timeout,
+            );
+        let window_manager = UnalignedWindowManager::Accumulator(windower.clone());
+
+        // Set up a GC WAL so that we can verify GC events are written when the windows are cleaned up.
+        let wal_dir = tmp_dir.path().join("gc_wal");
+        tokio::fs::create_dir_all(&wal_dir).await.unwrap();
+        let gc_wal = AppendOnlyWal::new(WalType::Gc, wal_dir.clone(), 1000, 1, 300).await?;
+
+        // Set up JetStream
+        let js_url = "localhost:4222";
+        let nats_client = async_nats::connect(js_url).await.unwrap();
+        let js_context = jetstream::new(nats_client);
+
+        // Create output stream
+        let stream = Stream::new("test_unaligned_accumulator_no_output", "test", 0);
+        // Delete stream if it exists
+        let _ = js_context.delete_stream(stream.name).await;
+
+        let _stream = js_context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // Create consumer
+        let _consumer = js_context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        // Create JetstreamWriter
+        let cln_token = CancellationToken::new();
+        let writer_config = BufferWriterConfig {
+            streams: vec![stream.clone()],
+            ..Default::default()
+        };
+
+        let mut writers = HashMap::new();
+        writers.insert(
+            stream.name,
+            crate::pipeline::isb::jetstream::js_writer::JetStreamWriter::new(
+                stream.clone(),
+                js_context.clone(),
+                writer_config.clone(),
+                None,
+                cln_token.clone(),
+            )
+            .await?,
+        );
+
+        let writer_components: ISBWriterOrchestratorComponents<WithoutRateLimiter> =
+            ISBWriterOrchestratorComponents {
+                config: vec![ToVertexConfig {
+                    name: "test-vertex",
+                    partitions: 1,
+                    writer_config,
+                    conditions: None,
+                    to_vertex_type: VertexType::Sink,
+                    ordered_processing_enabled: false,
+                }],
+                writers,
+                paf_concurrency: 100,
+                watermark_handle: None,
+                vertex_type: VertexType::ReduceUDF,
+            };
+        let isb_writer = ISBWriterOrchestrator::<WithoutRateLimiter>::new(writer_components);
+
+        // Create the UnalignedReducer with the GC WAL configured.
+        let reducer = UnalignedReducer::new(
+            client,
+            window_manager,
+            isb_writer,
+            Duration::from_secs(0), // No allowed lateness for testing
+            Some(gc_wal),
+            Duration::from_millis(50),
+            true,
+        )
+        .await;
+
+        // Create a channel for input messages
+        let (input_tx, input_rx) = mpsc::channel(10);
+        let input_stream = ReceiverStream::new(input_rx);
+
+        // Start the reducer
+        let reducer_handle = reducer.start(input_stream, cln_token.clone()).await?;
+
+        let base_time = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
+
+        // Send a few messages for two keys. The accumulator drains them but never emits a response.
+        for i in 0..6 {
+            for (idx, key) in ["key-1", "key-2"].iter().enumerate() {
+                let msg = Message {
+                    typ: Default::default(),
+                    keys: Arc::from(vec![(*key).into()]),
+                    tags: None,
+                    value: format!("value_{}", i + 1).into(),
+                    offset: Offset::String(StringOffset::new(format!("{i}-{idx}"), i)),
+                    event_time: base_time + chrono::Duration::seconds(((i + 1) * 10) as i64),
+                    watermark: Some(base_time + chrono::Duration::seconds((i * 10) as i64)),
+                    id: MessageID {
+                        vertex_name: "vertex".to_string().into(),
+                        offset: format!("{i}-{idx}").into(),
+                        index: i as i32,
+                    },
+                    ..Default::default()
+                };
+                input_tx.send(msg).await.unwrap();
+            }
+        }
+
+        // Give the windower a moment to assign the windows before we advance the watermark.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Both keys should have an active window and nothing should be closed yet.
+        assert_eq!(
+            windower.active_window_count(),
+            2,
+            "Expected two active windows before closing"
+        );
+        assert_eq!(
+            windower.closed_window_count(),
+            0,
+            "No windows should be closed yet"
+        );
+
+        // Advance the watermark well past max_event_time + timeout via an idle WMB message so that
+        // the windows are closed. The latest event time is base + 60s and the timeout is 60s, so a
+        // watermark of base + 1000s comfortably triggers the close.
+        let wmb = Message {
+            typ: MessageType::WMB,
+            keys: Arc::from(vec![]),
+            tags: None,
+            value: Default::default(),
+            offset: Offset::String(StringOffset::new("wmb".to_string(), 100)),
+            event_time: base_time + chrono::Duration::seconds(1000),
+            watermark: Some(base_time + chrono::Duration::seconds(1000)),
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "wmb".to_string().into(),
+                index: 100,
+            },
+            ..Default::default()
+        };
+        input_tx.send(wmb).await.unwrap();
+
+        // Read from the stream - the accumulator emits nothing, so there should be no result
+        // messages on the ISB.
+        let consumer: PullConsumer = js_context
+            .get_consumer_from_stream(&stream.name, &stream.name)
+            .await
+            .unwrap();
+        let mut messages = consumer
+            .batch()
+            .expires(Duration::from_secs(2))
+            .max_messages(4)
+            .messages()
+            .await
+            .unwrap();
+
+        let mut result_count = 0;
+        while let Some(msg) = messages.next().await {
+            let msg = msg.unwrap();
+            msg.ack().await.unwrap();
+            result_count += 1;
+        }
+        assert_eq!(
+            result_count, 0,
+            "Accumulator emitted nothing, so no messages should be written to the ISB"
+        );
+
+        cln_token.cancel();
+        drop(input_tx);
+
+        // Wait for the reducer to complete
+        reducer_handle.await.expect("reducer handle failed")?;
+
+        // Shutdown the server
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+        server_handle.await.expect("server handle failed");
+
+        // The windows should be fully cleaned up - no leaks in either the active or closed maps.
+        assert_eq!(
+            windower.active_window_count(),
+            0,
+            "All active windows should be cleaned up after close"
+        );
+        assert_eq!(
+            windower.closed_window_count(),
+            0,
+            "All closed windows should be drained and removed (no leaks)"
+        );
+
+        // GC events should have been written to the WAL, proving the WAL can be compacted/cleared.
+        // Give the WAL writer a moment to do its final flush after the GC channel closed.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let mut gc_files = tokio::fs::read_dir(&wal_dir).await.unwrap();
+        let mut total_gc_bytes = 0u64;
+        while let Some(entry) = gc_files.next_entry().await.unwrap() {
+            total_gc_bytes += entry.metadata().await.unwrap().len();
+        }
+        assert!(
+            total_gc_bytes > 0,
+            "Expected GC events to be written to the WAL for the cleaned-up windows"
+        );
 
         // Clean up JetStream
         js_context.delete_stream(stream.name).await.unwrap();

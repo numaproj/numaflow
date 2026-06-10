@@ -204,10 +204,9 @@ impl UnalignedWindowManager {
     }
 
     /// Returns the number of closed windows awaiting GC.
-    /// Accumulator doesn't track closed windows separately, so returns 0.
     pub(crate) fn closed_window_count(&self) -> usize {
         match self {
-            UnalignedWindowManager::Accumulator(_) => 0,
+            UnalignedWindowManager::Accumulator(manager) => manager.closed_window_count(),
             UnalignedWindowManager::Session(manager) => manager.closed_window_count(),
         }
     }
