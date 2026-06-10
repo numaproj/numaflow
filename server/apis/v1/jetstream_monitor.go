@@ -20,8 +20,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -52,7 +54,7 @@ func (h *handler) GetISBServiceJetStream(c *gin.Context) {
 			continue
 		}
 		response.Summary = append(response.Summary, newJetStreamSummaryDTO(pod.Name, jsInfo))
-		response.RaftMetaGroup = append(response.RaftMetaGroup, newJetStreamRaftMetaDTOs(jsInfo)...)
+		response.RaftMetaGroup = append(response.RaftMetaGroup, newJetStreamRaftMetaDTOs(pod.Name, jsInfo)...)
 	}
 	if len(response.Summary) == 0 && len(response.Errors) > 0 {
 		message := fmt.Sprintf("Failed to fetch JetStream monitor data for interstepbuffer service %q namespace %q", isbsvcName, ns)
@@ -116,7 +118,8 @@ func (h *handler) fetchJetStreamInfo(ctx context.Context, pod corev1.Pod) (*nats
 	if client == nil {
 		client = &http.Client{Timeout: 5 * time.Second}
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://%s:%d/jsz?accounts=true&streams=true&consumers=true&config=true", pod.Status.PodIP, jetStreamMonitorPort), nil)
+	hostPort := net.JoinHostPort(pod.Status.PodIP, strconv.Itoa(jetStreamMonitorPort))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://%s/jsz?accounts=true&streams=true&consumers=true&config=true", hostPort), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +127,9 @@ func (h *handler) fetchJetStreamInfo(ctx context.Context, pod corev1.Pod) (*nats
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return nil, fmt.Errorf("JetStream monitor returned status %d", resp.StatusCode)
 	}
@@ -163,10 +168,25 @@ func newJetStreamSummaryDTO(defaultServer string, jsInfo *natsserver.JSInfo) Jet
 }
 
 // newJetStreamRaftMetaDTOs converts NATS meta cluster peer information into RAFT debug rows.
-func newJetStreamRaftMetaDTOs(jsInfo *natsserver.JSInfo) []JetStreamRaftMetaDTO {
+func newJetStreamRaftMetaDTOs(defaultServer string, jsInfo *natsserver.JSInfo) []JetStreamRaftMetaDTO {
 	if jsInfo.Meta == nil {
 		return nil
 	}
+	if len(jsInfo.Meta.Replicas) == 0 {
+		id := jsInfo.ID
+		if id == "" {
+			id = jsInfo.Meta.Peer
+		}
+		return []JetStreamRaftMetaDTO{
+			{
+				Name:   defaultServer,
+				ID:     id,
+				Leader: jsInfo.Meta.Leader == defaultServer || jsInfo.Meta.Leader == jsInfo.ID,
+				Online: true,
+			},
+		}
+	}
+	current := true
 	raftMeta := make([]JetStreamRaftMetaDTO, 0, len(jsInfo.Meta.Replicas)+1)
 	seen := make(map[string]struct{})
 	if jsInfo.Meta.Leader != "" {
@@ -174,7 +194,7 @@ func newJetStreamRaftMetaDTOs(jsInfo *natsserver.JSInfo) []JetStreamRaftMetaDTO 
 			Name:    jsInfo.Meta.Leader,
 			ID:      jsInfo.Meta.Peer,
 			Leader:  true,
-			Current: true,
+			Current: &current,
 			Online:  true,
 		})
 		seen[jsInfo.Meta.Leader] = struct{}{}
@@ -192,14 +212,15 @@ func newJetStreamRaftMetaDTOs(jsInfo *natsserver.JSInfo) []JetStreamRaftMetaDTO 
 		if _, ok := seen[replica.Peer]; ok && replica.Peer != "" {
 			continue
 		}
+		lag := replica.Lag
 		raftMeta = append(raftMeta, JetStreamRaftMetaDTO{
 			Name:    replica.Name,
 			ID:      replica.Peer,
 			Leader:  replica.Name == jsInfo.Meta.Leader || replica.Peer == jsInfo.Meta.Peer,
-			Current: replica.Current,
+			Current: &replica.Current,
 			Online:  !replica.Offline,
 			Active:  replica.Active.String(),
-			Lag:     replica.Lag,
+			Lag:     &lag,
 		})
 	}
 	return raftMeta
@@ -208,20 +229,60 @@ func newJetStreamRaftMetaDTOs(jsInfo *natsserver.JSInfo) []JetStreamRaftMetaDTO 
 // dedupeJetStreamRaftMetaDTOs removes duplicate peers reported by multiple JetStream pods.
 func dedupeJetStreamRaftMetaDTOs(items []JetStreamRaftMetaDTO) []JetStreamRaftMetaDTO {
 	deduped := make([]JetStreamRaftMetaDTO, 0, len(items))
-	seen := make(map[string]struct{}, len(items))
+	seenIDs := make(map[string]int, len(items))
+	seenNames := make(map[string]int, len(items))
 	for _, item := range items {
-		key := item.ID
-		if key == "" {
-			key = item.Name
+		existingIndex := -1
+		if item.ID != "" {
+			if index, ok := seenIDs[item.ID]; ok {
+				existingIndex = index
+			}
 		}
-		if key == "" {
-			key = fmt.Sprintf("%t/%t/%t/%s/%d", item.Leader, item.Current, item.Online, item.Active, item.Lag)
+		if existingIndex == -1 && item.Name != "" {
+			if index, ok := seenNames[item.Name]; ok {
+				existingIndex = index
+			}
 		}
-		if _, ok := seen[key]; ok {
+		if existingIndex != -1 {
+			if isRicherJetStreamRaftMetaDTO(item, deduped[existingIndex]) {
+				deduped[existingIndex] = item
+				if item.ID != "" {
+					seenIDs[item.ID] = existingIndex
+				}
+				if item.Name != "" {
+					seenNames[item.Name] = existingIndex
+				}
+			}
 			continue
 		}
-		seen[key] = struct{}{}
+		if item.ID != "" {
+			seenIDs[item.ID] = len(deduped)
+		}
+		if item.Name != "" {
+			seenNames[item.Name] = len(deduped)
+		}
 		deduped = append(deduped, item)
 	}
 	return deduped
+}
+
+func isRicherJetStreamRaftMetaDTO(candidate, existing JetStreamRaftMetaDTO) bool {
+	return jetStreamRaftMetaDTOScore(candidate) > jetStreamRaftMetaDTOScore(existing)
+}
+
+func jetStreamRaftMetaDTOScore(item JetStreamRaftMetaDTO) int {
+	score := 0
+	if item.ID != "" {
+		score++
+	}
+	if item.Current != nil {
+		score++
+	}
+	if item.Active != "" {
+		score++
+	}
+	if item.Lag != nil {
+		score++
+	}
+	return score
 }

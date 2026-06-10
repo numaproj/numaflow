@@ -6,6 +6,7 @@ import {
   ISBServiceDebugFetchResult,
 } from "../../types/declarations/pipeline";
 import { getBaseHref } from "..";
+import { Options, useFetch } from "./fetch";
 
 export const useISBServiceDebugFetch = ({
   namespaceId,
@@ -17,63 +18,84 @@ export const useISBServiceDebugFetch = ({
   enabled: boolean;
 }): ISBServiceDebugFetchResult => {
   const { host } = useContext<AppContextProps>(AppContext);
-  const [requestKey, setRequestKey] = useState("");
+  const shouldFetch = enabled && !!namespaceId && !!isbId;
+  const [options, setOptions] = useState<Options>({
+    skip: !shouldFetch,
+    requestKey: "",
+  });
   const [data, setData] = useState<
     | {
         jetStream: ISBJetStreamResponse;
       }
     | undefined
   >();
-  const [loading, setLoading] = useState(enabled);
+  const [loading, setLoading] = useState(shouldFetch);
   const [error, setError] = useState<any>(undefined);
 
   const refresh = useCallback(() => {
-    setRequestKey("id" + Math.random().toString(16).slice(2));
-  }, []);
+    setOptions({
+      skip: !shouldFetch,
+      requestKey: "id" + Math.random().toString(16).slice(2),
+    });
+  }, [shouldFetch]);
+
+  const {
+    data: jetStreamData,
+    loading: jetStreamLoading,
+    error: jetStreamError,
+  } = useFetch(
+    `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/isb-services/${isbId}/jetstream`,
+    undefined,
+    options
+  );
 
   useEffect(() => {
-    if (!enabled || !namespaceId || !isbId) {
-      setLoading(false);
+    setOptions((previousOptions) => {
+      if (previousOptions.skip === !shouldFetch) {
+        return previousOptions;
+      }
+      return {
+        ...previousOptions,
+        skip: !shouldFetch,
+      };
+    });
+    if (!shouldFetch) {
       setData(undefined);
       setError(undefined);
+      setLoading(false);
+    }
+  }, [shouldFetch]);
+
+  useEffect(() => {
+    if (!shouldFetch) {
       return;
     }
-
-    let cancelled = false;
-    const fetchData = async () => {
+    if (jetStreamLoading) {
       setLoading(true);
-      try {
-        const response = await fetch(
-          `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/isb-services/${isbId}/jetstream`
-        );
-        const responseJSON = await response.json();
-        const responseError = responseJSON?.errMsg;
-        if (!response.ok || responseError) {
-          throw new Error(responseError || `Response code: ${response.status}`);
-        }
-        if (!cancelled) {
-          setData({
-            jetStream: responseJSON?.data,
-          });
-          setError(undefined);
-        }
-      } catch (e: any) {
-        if (!cancelled) {
-          setError(e.message);
-          setData(undefined);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchData();
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled, namespaceId, isbId, host, requestKey]);
+      return;
+    }
+    if (jetStreamError) {
+      setData(undefined);
+      setError(jetStreamError);
+      setLoading(false);
+      return;
+    }
+    if (jetStreamData?.errMsg) {
+      setData(undefined);
+      setError(jetStreamData.errMsg);
+      setLoading(false);
+      return;
+    }
+    if (jetStreamData?.data) {
+      setData({
+        jetStream: jetStreamData.data,
+      });
+      setError(undefined);
+      setLoading(false);
+      return;
+    }
+    setLoading(false);
+  }, [jetStreamData, jetStreamLoading, jetStreamError, shouldFetch]);
 
   return { data, loading, error, refresh };
 };

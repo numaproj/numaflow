@@ -8,8 +8,14 @@ import {
 } from "@testing-library/react";
 import { ISBUpdate } from "./index";
 import fetch from "jest-fetch-mock";
+import { MemoryRouter, Route, Switch } from "react-router-dom";
 
 import "@testing-library/jest-dom";
+
+const renderISBUpdate = (component: React.ReactElement) =>
+  render(
+    <MemoryRouter initialEntries={["/isb-services"]}>{component}</MemoryRouter>
+  );
 
 // Mock SpecEditor
 jest.mock("../../../SpecEditor", () => {
@@ -65,7 +71,7 @@ describe("ISBUpdate", () => {
 
   it("renders title and spec editor", async () => {
     const mockSetModalOnClose = jest.fn();
-    render(
+    renderISBUpdate(
       <ISBUpdate
         initialYaml="test"
         namespaceId="test-namespace"
@@ -104,7 +110,7 @@ describe("ISBUpdate", () => {
   it("validation success", async () => {
     fetch.mockResponseOnce(JSON.stringify({ data: {} }));
     const mockSetModalOnClose = jest.fn();
-    render(
+    renderISBUpdate(
       <ISBUpdate
         initialYaml="test"
         namespaceId="test-namespace"
@@ -135,7 +141,7 @@ describe("ISBUpdate", () => {
   it("validation failure", async () => {
     fetch.mockResponseOnce(JSON.stringify({ errMsg: "failed" }));
     const mockSetModalOnClose = jest.fn();
-    render(
+    renderISBUpdate(
       <ISBUpdate
         initialYaml="test"
         namespaceId="test-namespace"
@@ -164,7 +170,7 @@ describe("ISBUpdate", () => {
   it("submit success", async () => {
     fetch.mockResponseOnce(JSON.stringify({ data: {} }));
     const mockUpdateComplete = jest.fn();
-    render(
+    renderISBUpdate(
       <ISBUpdate
         initialYaml="test"
         namespaceId="test-namespace"
@@ -198,7 +204,7 @@ describe("ISBUpdate", () => {
   it("submit failure", async () => {
     fetch.mockResponseOnce(JSON.stringify({ errMsg: "failed" }));
     const mockUpdateComplete = jest.fn();
-    render(
+    renderISBUpdate(
       <ISBUpdate
         initialYaml="test"
         namespaceId="test-namespace"
@@ -253,6 +259,18 @@ describe("ISBUpdate", () => {
               apiErrorRate: 0,
               metaLeader: false,
             },
+            {
+              server: "js-2",
+              cluster: "default",
+              streams: 0,
+              consumers: 0,
+              messages: 0,
+              bytes: 0,
+              apiRequests: 149687,
+              apiErrors: 4,
+              apiErrorRate: 0.0000267224,
+              metaLeader: false,
+            },
           ],
           raftMetaGroup: [
             {
@@ -263,6 +281,33 @@ describe("ISBUpdate", () => {
               online: true,
               active: "450.793757ms",
               lag: 0,
+            },
+            {
+              name: "js-1",
+              id: "server-b",
+              leader: false,
+              current: true,
+              online: true,
+              active: "1m30s",
+              lag: 2,
+            },
+            {
+              name: "js-2",
+              id: "server-c",
+              leader: false,
+              current: true,
+              online: true,
+              active: "1h2m3s",
+              lag: 3,
+            },
+            {
+              name: "js-3",
+              id: "server-d",
+              leader: false,
+              current: true,
+              online: true,
+              active: "1.005s",
+              lag: 4,
             },
           ],
         },
@@ -300,7 +345,7 @@ describe("ISBUpdate", () => {
       })
     );
 
-    render(
+    renderISBUpdate(
       <ISBUpdate
         initialYaml={{
           metadata: { name: "test-isb" },
@@ -329,13 +374,17 @@ describe("ISBUpdate", () => {
       expect(screen.getByText("JetStream Summary")).toBeInTheDocument();
       expect(screen.getByText("RAFT Meta Group Information")).toBeInTheDocument();
       expect(screen.getAllByText("js-0").length).toBeGreaterThan(0);
-      expect(screen.getByText("js-1")).toBeInTheDocument();
+      expect(screen.getAllByText("js-1").length).toBeGreaterThan(0);
       expect(screen.getByText("400,006")).toBeInTheDocument();
-      expect(screen.getByText("100,576")).toBeInTheDocument();
-      expect(screen.getByText("12 / 0.02%")).toBeInTheDocument();
-      expect(screen.getByText("12 / 0.01%")).toBeInTheDocument();
+      expect(screen.getByText("250,263")).toBeInTheDocument();
+      expect(screen.getByText("12 / 0.018%")).toBeInTheDocument();
+      expect(screen.getByText("4 / 0.003%")).toBeInTheDocument();
+      expect(screen.getByText("16 / 0.006%")).toBeInTheDocument();
       expect(screen.getByText("Last Active")).toBeInTheDocument();
       expect(screen.getByText("450.79ms")).toBeInTheDocument();
+      expect(screen.getByText("1m 30s")).toBeInTheDocument();
+      expect(screen.getByText("1h 2m 3s")).toBeInTheDocument();
+      expect(screen.getByText("1.01s")).toBeInTheDocument();
       expect(screen.queryByText("ID")).not.toBeInTheDocument();
       expect(screen.queryByText("server-a")).not.toBeInTheDocument();
       expect(
@@ -359,6 +408,40 @@ describe("ISBUpdate", () => {
       expect(fetch).toHaveBeenCalledTimes(2);
       expect(screen.getAllByText("300,000")).toHaveLength(2);
       expect(screen.getAllByText("1 / 0.10%")).toHaveLength(2);
+    });
+  });
+
+  it("redirects to login on JetStream debug 401", async () => {
+    fetch.mockResponseOnce("", { status: 401 });
+
+    render(
+      <MemoryRouter initialEntries={["/isb-services"]}>
+        <Switch>
+          <Route path="/login">
+            <div>Login Page</div>
+          </Route>
+          <Route path="/isb-services">
+            <ISBUpdate
+              initialYaml={{
+                metadata: { name: "test-isb" },
+                spec: { jetstream: {} },
+              }}
+              namespaceId="test-namespace"
+              isbId="test-isb"
+              viewType={0}
+              onUpdateComplete={jest.fn()}
+              setModalOnClose={jest.fn()}
+            />
+          </Route>
+        </Switch>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Login Page")).toBeInTheDocument();
+      expect(
+        screen.queryByText("Error loading JetStream information: Response code: 401")
+      ).not.toBeInTheDocument();
     });
   });
 });

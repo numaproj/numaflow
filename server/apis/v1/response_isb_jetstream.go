@@ -40,13 +40,13 @@ type JetStreamSummaryDTO struct {
 
 // JetStreamRaftMetaDTO contains RAFT meta group peer status for a JetStream cluster.
 type JetStreamRaftMetaDTO struct {
-	Name    string `json:"name"`
-	ID      string `json:"id,omitempty"`
-	Leader  bool   `json:"leader"`
-	Current bool   `json:"current"`
-	Online  bool   `json:"online"`
-	Active  string `json:"active,omitempty"`
-	Lag     uint64 `json:"lag"`
+	Name    string  `json:"name"`
+	ID      string  `json:"id,omitempty"`
+	Leader  bool    `json:"leader"`
+	Current *bool   `json:"current,omitempty"`
+	Online  bool    `json:"online"`
+	Active  string  `json:"active,omitempty"`
+	Lag     *uint64 `json:"lag,omitempty"`
 }
 
 // ISBMonitorErrorDTO captures a per-pod JetStream monitor collection error.

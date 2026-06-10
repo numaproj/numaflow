@@ -16,9 +16,14 @@ interface ISBDebugInfoProps {
   error?: any;
 }
 
-const formatNumber = (value?: number) => (value ?? 0).toLocaleString();
+const formatNumber = (value?: number) => (value ?? 0).toLocaleString("en-US");
 
-const formatDecimal = (value: number) => value.toFixed(2);
+const formatDecimal = (value: number, precision = 2) => {
+  const multiplier = Math.pow(10, precision);
+  return (
+    Math.round((value + Number.EPSILON) * multiplier) / multiplier
+  ).toFixed(precision);
+};
 
 const formatBytes = (value?: number) => {
   const bytes = value ?? 0;
@@ -36,21 +41,52 @@ const formatBytes = (value?: number) => {
   }`;
 };
 
-const formatPercent = (value?: number) =>
-  `${formatDecimal((value ?? 0) * 100)}%`;
+const formatPercent = (value?: number) => {
+  const percent = (value ?? 0) * 100;
+  const precision = percent > 0 && percent < 0.1 ? 3 : 2;
+  return `${formatDecimal(percent, precision)}%`;
+};
 
 const formatApiErrors = (errors?: number, rate?: number) =>
   `${formatNumber(errors)} / ${formatPercent(rate)}`;
+
+const formatDurationNumber = (value: string) => {
+  const numberValue = Number(value);
+  return Number.isInteger(numberValue)
+    ? `${numberValue}`
+    : formatDecimal(numberValue);
+};
 
 const formatDuration = (value?: string) => {
   if (!value) {
     return "-";
   }
-  const match = value.match(/^(-?\d+(?:\.\d+)?)([a-zµμ]+)$/i);
-  if (!match) {
+  const tokenRegex = /(-?\d+(?:\.\d+)?)([a-zµμ]+)/gi;
+  const parts = [];
+  let consumed = "";
+  let match;
+  while ((match = tokenRegex.exec(value)) !== null) {
+    consumed += match[0];
+    parts.push(`${formatDurationNumber(match[1])}${match[2]}`);
+  }
+  if (!parts.length || consumed !== value) {
     return value;
   }
-  return `${formatDecimal(Number(match[1]))}${match[2]}`;
+  return parts.join(" ");
+};
+
+const formatOptionalBoolean = (value?: boolean) => {
+  if (value === undefined) {
+    return "-";
+  }
+  return value ? "Yes" : "No";
+};
+
+const formatOptionalNumber = (value?: number) => {
+  if (value === undefined) {
+    return "-";
+  }
+  return formatNumber(value);
 };
 
 const HeaderCell = ({
@@ -74,7 +110,14 @@ const HeaderCell = ({
     <Box sx={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
       {label}
       {tooltip && (
-        <Box data-testid={testId}>
+        <Box
+          data-testid={testId}
+          sx={{
+            display: "inline-flex",
+            alignItems: "center",
+            lineHeight: 0,
+          }}
+        >
           <Help tooltip={tooltip} />
         </Box>
       )}
@@ -234,10 +277,10 @@ export function ISBDebugInfo({ jetStream, loading, error }: ISBDebugInfoProps) {
                 <TableRow key={`${item.name}-${item.id || ""}`}>
                   <TableCell>{item.name}</TableCell>
                   <TableCell>{item.leader ? "Yes" : "No"}</TableCell>
-                  <TableCell>{item.current ? "Yes" : "No"}</TableCell>
+                  <TableCell>{formatOptionalBoolean(item.current)}</TableCell>
                   <TableCell>{item.online ? "Yes" : "No"}</TableCell>
                   <TableCell>{formatDuration(item.active)}</TableCell>
-                  <TableCell>{formatNumber(item.lag)}</TableCell>
+                  <TableCell>{formatOptionalNumber(item.lag)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

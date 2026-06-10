@@ -108,10 +108,10 @@ export interface ISBJetStreamRaftMeta {
   name: string;
   id?: string;
   leader: boolean;
-  current: boolean;
+  current?: boolean;
   online: boolean;
   active?: string;
-  lag: number;
+  lag?: number;
 }
 
 export interface ISBMonitorError {

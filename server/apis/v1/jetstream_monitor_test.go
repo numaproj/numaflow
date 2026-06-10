@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -74,7 +75,8 @@ func TestGetISBServiceJetStream(t *testing.T) {
 	assert.Equal(t, "js-0", got.Data.RaftMetaGroup[0].Name)
 	assert.True(t, got.Data.RaftMetaGroup[0].Leader)
 	assert.Equal(t, "js-1", got.Data.RaftMetaGroup[1].Name)
-	assert.Equal(t, uint64(2), got.Data.RaftMetaGroup[1].Lag)
+	require.NotNil(t, got.Data.RaftMetaGroup[1].Lag)
+	assert.Equal(t, uint64(2), *got.Data.RaftMetaGroup[1].Lag)
 	require.Empty(t, got.Data.Errors)
 }
 
@@ -98,6 +100,42 @@ func TestGetISBServiceJetStreamPartialFailure(t *testing.T) {
 	require.Len(t, got.Data.RaftMetaGroup, 2)
 	require.Len(t, got.Data.Errors, 1)
 	assert.Equal(t, "js-1", got.Data.Errors[0].Pod)
+}
+
+func TestGetISBServiceJetStreamPartialLeaderFailureUsesFollowerRows(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := newJetStreamMonitorTestHandler(t, map[string]any{
+		"10.0.0.1": errors.New("connection refused"),
+		"10.0.0.2": testJSInfoWithoutReplicas("server-b", "js-0"),
+		"10.0.0.3": testJSInfoWithoutReplicas("server-c", "js-0"),
+	}, []corev1.Pod{
+		testISBPod("js-0", "10.0.0.1"),
+		testISBPod("js-1", "10.0.0.2"),
+		testISBPod("js-2", "10.0.0.3"),
+	}, true)
+	c, w := newISBMonitorTestContext("/api/v1/namespaces/ns/isb-services/default/jetstream")
+
+	h.GetISBServiceJetStream(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var got struct {
+		Data ISBJetStreamDTO `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	require.Len(t, got.Data.Summary, 2)
+	assert.Equal(t, "js-1", got.Data.Summary[0].Server)
+	assert.Equal(t, "js-2", got.Data.Summary[1].Server)
+	require.Len(t, got.Data.Errors, 1)
+	assert.Equal(t, "js-0", got.Data.Errors[0].Pod)
+	require.Len(t, got.Data.RaftMetaGroup, 2)
+	assert.Equal(t, "js-1", got.Data.RaftMetaGroup[0].Name)
+	assert.Equal(t, "server-b", got.Data.RaftMetaGroup[0].ID)
+	assert.False(t, got.Data.RaftMetaGroup[0].Leader)
+	assert.True(t, got.Data.RaftMetaGroup[0].Online)
+	assert.Nil(t, got.Data.RaftMetaGroup[0].Current)
+	assert.Nil(t, got.Data.RaftMetaGroup[0].Lag)
+	assert.Equal(t, "js-2", got.Data.RaftMetaGroup[1].Name)
+	assert.Equal(t, "server-c", got.Data.RaftMetaGroup[1].ID)
 }
 
 func TestGetISBServiceJetStreamAllPodsFail(t *testing.T) {
@@ -139,6 +177,50 @@ func TestGetISBServiceJetStreamNoRunningPods(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
+func TestGetISBServiceJetStreamIPv6PodIP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := newJetStreamMonitorTestHandler(t, map[string]any{
+		"fd00::5": testJSInfo("server-a", "js-0"),
+	}, []corev1.Pod{
+		testISBPod("js-0", "fd00::5"),
+	}, true)
+	c, w := newISBMonitorTestContext("/api/v1/namespaces/ns/isb-services/default/jetstream")
+
+	h.GetISBServiceJetStream(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestDedupeJetStreamRaftMetaDTOsPrefersRicherSameNameRow(t *testing.T) {
+	current := true
+	lag := uint64(0)
+	items := []JetStreamRaftMetaDTO{
+		{
+			Name:   "js-0",
+			ID:     "server-id-from-fallback",
+			Online: true,
+		},
+		{
+			Name:    "js-0",
+			ID:      "peer-id-from-leader",
+			Current: &current,
+			Online:  true,
+			Active:  "698.81ms",
+			Lag:     &lag,
+		},
+	}
+
+	got := dedupeJetStreamRaftMetaDTOs(items)
+
+	require.Len(t, got, 1)
+	assert.Equal(t, "peer-id-from-leader", got[0].ID)
+	require.NotNil(t, got[0].Current)
+	assert.True(t, *got[0].Current)
+	assert.Equal(t, "698.81ms", got[0].Active)
+	require.NotNil(t, got[0].Lag)
+	assert.Equal(t, uint64(0), *got[0].Lag)
+}
+
 func newJetStreamMonitorTestHandler(t *testing.T, responses map[string]any, pods []corev1.Pod, jetStream bool) *handler {
 	t.Helper()
 	isbsvc := &dfv1.InterStepBufferService{
@@ -168,7 +250,12 @@ func newJetStreamMonitorTestHandler(t *testing.T, responses map[string]any, pods
 				assert.Equal(t, "true", req.URL.Query().Get("accounts"))
 				assert.Equal(t, "true", req.URL.Query().Get("streams"))
 				assert.Equal(t, "true", req.URL.Query().Get("consumers"))
-				host := strings.Split(req.URL.Host, ":")[0]
+				host, port, err := net.SplitHostPort(req.URL.Host)
+				require.NoError(t, err)
+				assert.Equal(t, "8222", port)
+				if strings.Contains(host, ":") {
+					assert.Equal(t, "["+host+"]:"+port, req.URL.Host)
+				}
 				value, ok := responses[host]
 				if !ok {
 					return nil, errors.New("unexpected host")
@@ -238,4 +325,10 @@ func testJSInfo(serverID, leader string) natsserver.JSInfo {
 			},
 		},
 	}
+}
+
+func testJSInfoWithoutReplicas(serverID, leader string) natsserver.JSInfo {
+	jsInfo := testJSInfo(serverID, leader)
+	jsInfo.Meta.Replicas = nil
+	return jsInfo
 }
