@@ -366,10 +366,6 @@ describe("ISBUpdate", () => {
       expect(screen.queryByText("KV Stores")).not.toBeInTheDocument();
     });
 
-    act(() => {
-      fireEvent.click(screen.getByText("JetStream"));
-    });
-
     await waitFor(() => {
       expect(screen.getByText("JetStream Summary")).toBeInTheDocument();
       expect(screen.getByText("RAFT Meta Group Information")).toBeInTheDocument();

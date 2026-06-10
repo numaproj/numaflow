@@ -41,7 +41,7 @@ export function ISBUpdate({
     ValidationMessage | undefined
   >();
   const [status, setStatus] = useState<StatusIndicator | undefined>();
-  const [tabValue, setTabValue] = useState(1);
+  const [tabValue, setTabValue] = useState(0);
   const { host } = useContext<AppContextProps>(AppContext);
   const showDebugTabs =
     viewType === ViewType.READ_ONLY && !!initialYaml?.spec?.jetstream;
@@ -277,8 +277,8 @@ export function ISBUpdate({
                 },
               }}
             >
-              <Tab label="Spec" {...a11yProps(0)} />
-              <Tab label="JetStream" {...a11yProps(1)} />
+              <Tab label="JetStream" {...a11yProps(0)} />
+              <Tab label="Spec" {...a11yProps(1)} />
             </Tabs>
             <Button
               variant="outlined"
@@ -295,6 +295,13 @@ export function ISBUpdate({
             </Button>
           </Box>
           <TabPanel value={tabValue} index={0}>
+            <ISBDebugInfo
+              jetStream={debugFetch.data?.jetStream}
+              loading={debugFetch.loading}
+              error={debugFetch.error}
+            />
+          </TabPanel>
+          <TabPanel value={tabValue} index={1}>
             <Box
               sx={{
                 height: "calc(100vh - 20rem)",
@@ -303,13 +310,6 @@ export function ISBUpdate({
             >
               {specEditor}
             </Box>
-          </TabPanel>
-          <TabPanel value={tabValue} index={1}>
-            <ISBDebugInfo
-              jetStream={debugFetch.data?.jetStream}
-              loading={debugFetch.loading}
-              error={debugFetch.error}
-            />
           </TabPanel>
         </Box>
       ) : (
