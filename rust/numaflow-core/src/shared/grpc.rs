@@ -18,6 +18,8 @@ use tonic::transport::{Channel, Endpoint};
 use tower::service_fn;
 use tracing::{info, warn};
 
+use numaflow_shared::server_info::{ServerInfo, sdk_server_info};
+
 use crate::error;
 use crate::error::Error;
 
@@ -120,11 +122,24 @@ pub(crate) fn prost_timestamp_from_utc(t: DateTime<Utc>) -> Timestamp {
     }
 }
 
+/// Default reconnect / startup-retry interval for UDF UDS connections. Tests inject a shorter
+/// `Duration` via [`create_rpc_channel_with_interval`] to keep reconnect-scenario tests sub-100ms.
+pub(crate) const DEFAULT_RECONNECT_INTERVAL: Duration = Duration::from_secs(1);
+
 pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> error::Result<Channel> {
-    const RECONNECT_INTERVAL: u64 = 1000;
+    create_rpc_channel_with_interval(socket_path, DEFAULT_RECONNECT_INTERVAL).await
+}
+
+/// Same as [`create_rpc_channel`] but takes an explicit retry interval. Use this in tests to keep
+/// per-attempt backoff short.
+pub(crate) async fn create_rpc_channel_with_interval(
+    socket_path: PathBuf,
+    retry_interval: Duration,
+) -> error::Result<Channel> {
     const MAX_RECONNECT_ATTEMPTS: usize = usize::MAX;
 
-    let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(MAX_RECONNECT_ATTEMPTS);
+    let interval = fixed::Interval::from_millis(retry_interval.as_millis() as u64)
+        .take(MAX_RECONNECT_ATTEMPTS);
     let channel = Retry::new(
         interval,
         async || match connect_with_uds(socket_path.clone()).await {
@@ -179,6 +194,81 @@ pub(crate) async fn create_multi_rpc_channel(endpoints: Vec<String>) -> error::R
     Ok(channel)
 }
 
+/// Creates a user-defined source client over UDS and returns the SDK server info.
+///
+/// The helper creates a new UDS-backed channel, applies the configured gRPC message-size limits,
+/// waits until the typed client reports ready, then re-reads SDK server-info from the running
+/// sidecar.
+pub(crate) async fn create_source_client(
+    socket_path: PathBuf,
+    server_info_path: PathBuf,
+    cln_token: CancellationToken,
+    grpc_max_message_size: usize,
+    retry_interval: Duration,
+) -> error::Result<(SourceClient<Channel>, ServerInfo)> {
+    let channel = create_rpc_channel_with_interval(socket_path, retry_interval).await?;
+    let mut client = SourceClient::new(channel)
+        .max_encoding_message_size(grpc_max_message_size)
+        .max_decoding_message_size(grpc_max_message_size);
+    wait_until_source_ready(&cln_token, &mut client).await?;
+    let server_info = sdk_server_info(server_info_path, cln_token.clone()).await?;
+    Ok((client, server_info))
+}
+
+/// Creates a user-defined sink client over UDS. See [`create_source_client`] for the setup
+/// sequence.
+pub(crate) async fn create_sink_client(
+    socket_path: PathBuf,
+    server_info_path: PathBuf,
+    cln_token: CancellationToken,
+    grpc_max_message_size: usize,
+    retry_interval: Duration,
+) -> error::Result<(SinkClient<Channel>, ServerInfo)> {
+    let channel = create_rpc_channel_with_interval(socket_path, retry_interval).await?;
+    let mut client = SinkClient::new(channel)
+        .max_encoding_message_size(grpc_max_message_size)
+        .max_decoding_message_size(grpc_max_message_size);
+    wait_until_sink_ready(&cln_token, &mut client).await?;
+    let server_info = sdk_server_info(server_info_path, cln_token.clone()).await?;
+    Ok((client, server_info))
+}
+
+/// Creates a user-defined source transformer client over UDS. See [`create_source_client`] for the
+/// setup sequence.
+pub(crate) async fn create_transformer_client(
+    socket_path: PathBuf,
+    server_info_path: PathBuf,
+    cln_token: CancellationToken,
+    grpc_max_message_size: usize,
+    retry_interval: Duration,
+) -> error::Result<(SourceTransformClient<Channel>, ServerInfo)> {
+    let channel = create_rpc_channel_with_interval(socket_path, retry_interval).await?;
+    let mut client = SourceTransformClient::new(channel)
+        .max_encoding_message_size(grpc_max_message_size)
+        .max_decoding_message_size(grpc_max_message_size);
+    wait_until_transformer_ready(&cln_token, &mut client).await?;
+    let server_info = sdk_server_info(server_info_path, cln_token.clone()).await?;
+    Ok((client, server_info))
+}
+
+/// Creates a user-defined mapper client over UDS. See [`create_source_client`] for the setup
+/// sequence.
+pub(crate) async fn create_mapper_client(
+    socket_path: PathBuf,
+    server_info_path: PathBuf,
+    cln_token: CancellationToken,
+    grpc_max_message_size: usize,
+    retry_interval: Duration,
+) -> error::Result<(MapClient<Channel>, ServerInfo)> {
+    let channel = create_rpc_channel_with_interval(socket_path, retry_interval).await?;
+    let mut client = MapClient::new(channel)
+        .max_encoding_message_size(grpc_max_message_size)
+        .max_decoding_message_size(grpc_max_message_size);
+    wait_until_mapper_ready(&cln_token, &mut client).await?;
+    let server_info = sdk_server_info(server_info_path, cln_token.clone()).await?;
+    Ok((client, server_info))
+}
+
 /// Macro to create a guard that automatically aborts a task handle when dropped.
 #[macro_export]
 macro_rules! jh_abort_guard {
@@ -205,4 +295,240 @@ macro_rules! jh_abort_guard {
 
         AbortGuard::new($handle)
     }};
+}
+
+#[cfg(test)]
+mod tests {
+    //! UDF client creation tests. Each test stands up a real `numaflow` SDK server on a UDS
+    //! socket, then calls the production helper so channel creation, client
+    //! configuration, readiness, and server-info validation are exercised end-to-end.
+    //!
+    //! Retries use a 10ms cadence so the "wait for server to come up" branch stays sub-100ms.
+    use super::*;
+    use crate::shared::test_utils::server::start_server;
+    use numaflow::shared::ServerExtras;
+    use std::time::Duration;
+    use tokio::sync::oneshot;
+    use tokio_util::sync::CancellationToken;
+    use tonic::Request;
+
+    const FAST_RETRY: Duration = Duration::from_millis(10);
+    const CUSTOM_GRPC_MAX_MESSAGE_SIZE: usize = 1024 * 1024;
+
+    struct PassThroughSource;
+    #[tonic::async_trait]
+    impl numaflow::source::Sourcer for PassThroughSource {
+        async fn read(
+            &self,
+            _request: numaflow::source::SourceReadRequest,
+            _tx: tokio::sync::mpsc::Sender<numaflow::source::Message>,
+        ) {
+        }
+        async fn ack(&self, _offsets: Vec<numaflow::source::Offset>) {}
+        async fn nack(&self, _offsets: Vec<numaflow::source::Offset>) {}
+        async fn pending(&self) -> Option<usize> {
+            Some(0)
+        }
+        async fn partitions(&self) -> Option<Vec<i32>> {
+            Some(vec![0])
+        }
+    }
+
+    struct PassThroughMap;
+    #[tonic::async_trait]
+    impl numaflow::map::Mapper for PassThroughMap {
+        async fn map(&self, input: numaflow::map::MapRequest) -> Vec<numaflow::map::Message> {
+            vec![numaflow::map::Message::new(input.value).with_keys(input.keys)]
+        }
+    }
+
+    struct PassThroughSink;
+    #[tonic::async_trait]
+    impl numaflow::sink::Sinker for PassThroughSink {
+        async fn sink(
+            &self,
+            mut input: tokio::sync::mpsc::Receiver<numaflow::sink::SinkRequest>,
+        ) -> Vec<numaflow::sink::Response> {
+            let mut responses = Vec::new();
+            while let Some(req) = input.recv().await {
+                responses.push(numaflow::sink::Response::ok(req.id));
+            }
+            responses
+        }
+    }
+
+    struct PassThroughTransformer;
+    #[tonic::async_trait]
+    impl numaflow::sourcetransform::SourceTransformer for PassThroughTransformer {
+        async fn transform(
+            &self,
+            input: numaflow::sourcetransform::SourceTransformRequest,
+        ) -> Vec<numaflow::sourcetransform::Message> {
+            vec![
+                numaflow::sourcetransform::Message::new(input.value, chrono::Utc::now())
+                    .with_keys(input.keys),
+            ]
+        }
+    }
+
+    /// Confirms the source helper returns a healthy client when the SDK server is up.
+    /// The test uses the shared server primitive so it can pass both the socket and server-info
+    /// paths into the helper.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn create_source_client_returns_healthy_client() {
+        // The server-info filename must end with `<container-type>-server-info` so
+        // `ContainerType::from(&Path)` (numaflow-shared/src/server_info.rs:129) resolves the SDK
+        // version constraint correctly. `start_server` builds the filename from this `name` arg
+        // as `{name}-server-info`, so passing the literal container-type string is what we need.
+        let handle = start_server("sourcer", |sock, info, shutdown_rx| async move {
+            numaflow::source::Server::new(PassThroughSource)
+                .with_socket_file(sock)
+                .with_server_info_file(info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("source server failed");
+        });
+
+        let cln_token = CancellationToken::new();
+        let (mut client, _server_info) = create_source_client(
+            handle.socket_path(),
+            handle.server_info_path(),
+            cln_token.clone(),
+            CUSTOM_GRPC_MAX_MESSAGE_SIZE,
+            FAST_RETRY,
+        )
+        .await
+        .expect("create_source_client should succeed when SDK server is up");
+
+        // Sanity-check the returned client is functional.
+        assert!(client.is_ready(Request::new(())).await.is_ok());
+    }
+
+    /// Same shape for the mapper helper.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn create_mapper_client_returns_healthy_client() {
+        let handle = start_server("mapper", |sock, info, shutdown_rx| async move {
+            numaflow::map::Server::new(PassThroughMap)
+                .with_socket_file(sock)
+                .with_server_info_file(info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("map server failed");
+        });
+
+        let cln_token = CancellationToken::new();
+        let (mut client, _server_info) = create_mapper_client(
+            handle.socket_path(),
+            handle.server_info_path(),
+            cln_token,
+            CUSTOM_GRPC_MAX_MESSAGE_SIZE,
+            FAST_RETRY,
+        )
+        .await
+        .expect("create_mapper_client should succeed when SDK server is up");
+        assert!(client.is_ready(Request::new(())).await.is_ok());
+    }
+
+    /// Same shape for the sink helper.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn create_sink_client_returns_healthy_client() {
+        let handle = start_server("sinker", |sock, info, shutdown_rx| async move {
+            numaflow::sink::Server::new(PassThroughSink)
+                .with_socket_file(sock)
+                .with_server_info_file(info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("sink server failed");
+        });
+
+        let cln_token = CancellationToken::new();
+        let (mut client, _server_info) = create_sink_client(
+            handle.socket_path(),
+            handle.server_info_path(),
+            cln_token,
+            CUSTOM_GRPC_MAX_MESSAGE_SIZE,
+            FAST_RETRY,
+        )
+        .await
+        .expect("create_sink_client should succeed when SDK server is up");
+        assert!(client.is_ready(Request::new(())).await.is_ok());
+    }
+
+    /// Same shape for the transformer helper.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn create_transformer_client_returns_healthy_client() {
+        let handle = start_server("sourcetransformer", |sock, info, shutdown_rx| async move {
+            numaflow::sourcetransform::Server::new(PassThroughTransformer)
+                .with_socket_file(sock)
+                .with_server_info_file(info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("transformer server failed");
+        });
+
+        let cln_token = CancellationToken::new();
+        let (mut client, _server_info) = create_transformer_client(
+            handle.socket_path(),
+            handle.server_info_path(),
+            cln_token,
+            CUSTOM_GRPC_MAX_MESSAGE_SIZE,
+            FAST_RETRY,
+        )
+        .await
+        .expect("create_transformer_client should succeed when SDK server is up");
+        assert!(client.is_ready(Request::new(())).await.is_ok());
+    }
+
+    /// Confirms the helper retries when the socket is missing at first and the SDK server only
+    /// comes up later. This is the production "UDF crashed, restarted, and is now alive again"
+    /// path. The FAST_RETRY cadence keeps the test sub-100ms even with several retry attempts.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn create_source_client_waits_for_socket_to_appear() {
+        // Pre-allocate a TempDir and paths *outside* `start_server` so we can hand them to the
+        // helper before the server comes up. The server is started on a delayed tokio task.
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sourcer.sock");
+        // Filename must end with `<container-type>-server-info` so `ContainerType::from(&Path)`
+        // resolves the SDK version constraint correctly. See the comment in the success-path
+        // test above.
+        let server_info_file = tmp_dir.path().join("sourcer-server-info");
+
+        // The SDK server runs on its own thread / runtime so it doesn't compete with the test's
+        // reconnect retry loop.
+        let sock = sock_file.clone();
+        let info = server_info_file.clone();
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let server_thread = std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            rt.block_on(async move {
+                // Delay the server start so the helper observes a missing socket and exercises
+                // the retry loop.
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                numaflow::source::Server::new(PassThroughSource)
+                    .with_socket_file(sock)
+                    .with_server_info_file(info)
+                    .start_with_shutdown(shutdown_rx)
+                    .await
+                    .expect("delayed source server failed");
+            });
+        });
+
+        let cln_token = CancellationToken::new();
+        let (client, _server_info) = create_source_client(
+            sock_file,
+            server_info_file,
+            cln_token,
+            CUSTOM_GRPC_MAX_MESSAGE_SIZE,
+            FAST_RETRY,
+        )
+        .await
+        .expect("create_source_client should wait through retries and return Ok");
+        drop(client);
+
+        let _ = shutdown_tx.send(());
+        server_thread.join().expect("server thread panicked");
+    }
 }
