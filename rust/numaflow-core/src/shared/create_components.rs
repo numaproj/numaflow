@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::config::components::reduce::UnalignedWindowType;
@@ -19,7 +20,6 @@ use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
 use crate::reduce::reducer::unaligned::user_defined::accumulator::UserDefinedAccumulator;
 use crate::reduce::reducer::unaligned::user_defined::session::UserDefinedSessionReduce;
 use crate::shared::grpc;
-use crate::shared::grpc::{create_rpc_channel, wait_until_source_ready};
 use crate::sinker::sink::serve::ServingStore;
 use crate::sinker::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::Source;
@@ -44,16 +44,9 @@ use numaflow_pb::clients::accumulator::accumulator_client::AccumulatorClient;
 use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
 use numaflow_pb::clients::sessionreduce::session_reduce_client::SessionReduceClient;
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use numaflow_shared::server_info::{
-    ContainerType, Protocol, ServerInfo, sdk_server_info, supports_nack,
-};
+use numaflow_shared::server_info::{ContainerType, Protocol, sdk_server_info, supports_nack};
 use numaflow_sqs::sink::SqsSinkBuilder;
-use std::path::PathBuf;
 use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
 
 /// Creates a sink writer based on the configuration
 #[allow(clippy::too_many_arguments)]
@@ -106,8 +99,14 @@ async fn append_primary_sink_client(
         }
         SinkType::Serve => SinkWriterBuilder::new(batch_size, read_timeout, SinkClientType::Serve),
         SinkType::UserDefined(ud_config) => {
-            let sink_server_info =
-                sdk_server_info(ud_config.server_info_path.clone(), cln_token.clone()).await?;
+            let (sink_grpc_client, sink_server_info) = grpc::create_sink_client(
+                PathBuf::from(ud_config.socket_path.clone()),
+                PathBuf::from(ud_config.server_info_path.clone()),
+                cln_token.clone(),
+                ud_config.grpc_max_message_size,
+                grpc::DEFAULT_RECONNECT_INTERVAL,
+            )
+            .await?;
 
             let metric_labels = metrics::sdk_info_labels(
                 config::get_component_type().to_string(),
@@ -122,12 +121,6 @@ async fn append_primary_sink_client(
                 .get_or_create(&metric_labels)
                 .set(1);
 
-            let mut sink_grpc_client = SinkClient::new(
-                grpc::create_rpc_channel(ud_config.socket_path.clone().into()).await?,
-            )
-            .max_encoding_message_size(ud_config.grpc_max_message_size)
-            .max_decoding_message_size(ud_config.grpc_max_message_size);
-            grpc::wait_until_sink_ready(cln_token, &mut sink_grpc_client).await?;
             SinkWriterBuilder::new(
                 batch_size,
                 read_timeout,
@@ -169,8 +162,14 @@ async fn append_fallback_sink_client(
         SinkType::Serve => sink_writer_builder.fb_sink_client(SinkClientType::Serve),
         SinkType::Blackhole(_) => sink_writer_builder.fb_sink_client(SinkClientType::Blackhole),
         SinkType::UserDefined(ud_config) => {
-            let fb_server_info =
-                sdk_server_info(ud_config.server_info_path.clone(), cln_token.clone()).await?;
+            let (sink_grpc_client, fb_server_info) = grpc::create_sink_client(
+                PathBuf::from(ud_config.socket_path.clone()),
+                PathBuf::from(ud_config.server_info_path.clone()),
+                cln_token.clone(),
+                ud_config.grpc_max_message_size,
+                grpc::DEFAULT_RECONNECT_INTERVAL,
+            )
+            .await?;
 
             let metric_labels = metrics::sdk_info_labels(
                 config::get_component_type().to_string(),
@@ -184,13 +183,6 @@ async fn append_fallback_sink_client(
                 .sdk_info
                 .get_or_create(&metric_labels)
                 .set(1);
-
-            let mut sink_grpc_client = SinkClient::new(
-                grpc::create_rpc_channel(ud_config.socket_path.clone().into()).await?,
-            )
-            .max_encoding_message_size(ud_config.grpc_max_message_size)
-            .max_decoding_message_size(ud_config.grpc_max_message_size);
-            grpc::wait_until_sink_ready(cln_token, &mut sink_grpc_client).await?;
 
             sink_writer_builder
                 .fb_sink_client(SinkClientType::UserDefined(sink_grpc_client.clone()))
@@ -223,8 +215,14 @@ async fn append_ons_sink_client(
             sink_writer_builder.on_success_sink_client(SinkClientType::Blackhole)
         }
         SinkType::UserDefined(ud_config) => {
-            let os_server_info =
-                sdk_server_info(ud_config.server_info_path.clone(), cln_token.clone()).await?;
+            let (sink_grpc_client, os_server_info) = grpc::create_sink_client(
+                PathBuf::from(ud_config.socket_path.clone()),
+                PathBuf::from(ud_config.server_info_path.clone()),
+                cln_token.clone(),
+                ud_config.grpc_max_message_size,
+                grpc::DEFAULT_RECONNECT_INTERVAL,
+            )
+            .await?;
 
             let metric_labels = metrics::sdk_info_labels(
                 config::get_component_type().to_string(),
@@ -238,13 +236,6 @@ async fn append_ons_sink_client(
                 .sdk_info
                 .get_or_create(&metric_labels)
                 .set(1);
-
-            let mut sink_grpc_client = SinkClient::new(
-                grpc::create_rpc_channel(ud_config.socket_path.clone().into()).await?,
-            )
-            .max_encoding_message_size(ud_config.grpc_max_message_size)
-            .max_decoding_message_size(ud_config.grpc_max_message_size);
-            grpc::wait_until_sink_ready(cln_token, &mut sink_grpc_client).await?;
 
             sink_writer_builder
                 .on_success_sink_client(SinkClientType::UserDefined(sink_grpc_client.clone()))
@@ -278,8 +269,14 @@ pub(crate) async fn create_transformer(
         && let config::components::transformer::TransformerType::UserDefined(ud_transformer) =
             &transformer_config.transformer_type
     {
-        let server_info =
-            sdk_server_info(ud_transformer.server_info_path.clone(), cln_token.clone()).await?;
+        let (transformer_grpc_client, server_info) = grpc::create_transformer_client(
+            PathBuf::from(ud_transformer.socket_path.clone()),
+            PathBuf::from(ud_transformer.server_info_path.clone()),
+            cln_token.clone(),
+            ud_transformer.grpc_max_message_size,
+            grpc::DEFAULT_RECONNECT_INTERVAL,
+        )
+        .await?;
         let metric_labels = metrics::sdk_info_labels(
             config::get_component_type().to_string(),
             config::get_vertex_name().to_string(),
@@ -292,12 +289,6 @@ pub(crate) async fn create_transformer(
             .get_or_create(&metric_labels)
             .set(1);
 
-        let mut transformer_grpc_client = SourceTransformClient::new(
-            grpc::create_rpc_channel(ud_transformer.socket_path.clone().into()).await?,
-        )
-        .max_encoding_message_size(ud_transformer.grpc_max_message_size)
-        .max_decoding_message_size(ud_transformer.grpc_max_message_size);
-        grpc::wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
         return Ok(Some(
             Transformer::new(
                 batch_size,
@@ -383,13 +374,14 @@ pub(crate) async fn create_mapper(
                         }
                     };
 
-                    let mut map_grpc_client = MapClient::new(
-                        grpc::create_rpc_channel(config.socket_path.clone().into()).await?,
+                    let (map_grpc_client, _) = grpc::create_mapper_client(
+                        PathBuf::from(config.socket_path.clone()),
+                        PathBuf::from(config.server_info_path.clone()),
+                        cln_token.clone(),
+                        config.grpc_max_message_size,
+                        grpc::DEFAULT_RECONNECT_INTERVAL,
                     )
-                    .max_encoding_message_size(config.grpc_max_message_size)
-                    .max_decoding_message_size(config.grpc_max_message_size);
-
-                    grpc::wait_until_mapper_ready(&cln_token, &mut map_grpc_client).await?;
+                    .await?;
                     Ok(MapHandle::new(
                         server_info.get_map_mode().unwrap_or(MapMode::Unary),
                         batch_size,
@@ -560,8 +552,26 @@ pub async fn create_source<C: NumaflowTypeConfig>(
         }
 
         SourceType::UserDefined(user_defined_config) => {
-            let (source_client, server_info) =
-                create_source_client(user_defined_config, cln_token.clone()).await?;
+            let (source_client, server_info) = grpc::create_source_client(
+                PathBuf::from(user_defined_config.socket_path.clone()),
+                PathBuf::from(user_defined_config.server_info_path.clone()),
+                cln_token.clone(),
+                user_defined_config.grpc_max_message_size,
+                grpc::DEFAULT_RECONNECT_INTERVAL,
+            )
+            .await?;
+            let metric_labels = metrics::sdk_info_labels(
+                config::get_component_type().to_string(),
+                config::get_vertex_name().to_string(),
+                server_info.language.to_string(),
+                server_info.version.clone(),
+                ContainerType::Sourcer.to_string(),
+            );
+            metrics::global_metrics()
+                .sdk_info
+                .get_or_create(&metric_labels)
+                .set(1);
+
             // Check if the SDK version supports nack functionality
             let supports_nack = supports_nack(&server_info.version, server_info.language);
             let (ud_read, ud_ack, ud_lag) = new_source(
@@ -588,37 +598,6 @@ pub async fn create_source<C: NumaflowTypeConfig>(
     }
 }
 
-/// Creates a source client from user-defined config
-/// Returns both the client and server info for version-aware functionality
-async fn create_source_client(
-    user_defined_config: &config::components::source::UserDefinedConfig,
-    cln_token: CancellationToken,
-) -> error::Result<(SourceClient<Channel>, ServerInfo)> {
-    let server_info = sdk_server_info(
-        user_defined_config.server_info_path.clone(),
-        cln_token.clone(),
-    )
-    .await?;
-
-    let metric_labels = metrics::sdk_info_labels(
-        config::get_component_type().to_string(),
-        config::get_vertex_name().to_string(),
-        server_info.language.to_string(),
-        server_info.version.clone(),
-        ContainerType::Sourcer.to_string(),
-    );
-    metrics::global_metrics()
-        .sdk_info
-        .get_or_create(&metric_labels)
-        .set(1);
-
-    let channel =
-        create_rpc_channel(PathBuf::from(user_defined_config.socket_path.clone())).await?;
-    let mut client = SourceClient::new(channel);
-    wait_until_source_ready(&cln_token, &mut client).await?;
-    Ok((client, server_info))
-}
-
 /// Creates a user-defined aligned reducer client
 pub(crate) async fn create_aligned_reducer(
     reducer_config: config::components::reduce::AlignedReducerConfig,
@@ -643,7 +622,8 @@ pub(crate) async fn create_aligned_reducer(
         .set(1);
 
     // Create gRPC channel
-    let channel = create_rpc_channel(reducer_config.user_defined_config.socket_path.into()).await?;
+    let channel =
+        grpc::create_rpc_channel(reducer_config.user_defined_config.socket_path.into()).await?;
 
     // Create client
     let client = UserDefinedAlignedReduce::new(
