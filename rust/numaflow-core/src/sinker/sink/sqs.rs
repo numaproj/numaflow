@@ -495,6 +495,7 @@ pub mod tests {
                 None,
                 cln_token,
                 None,
+                false,
             )
             .await,
             source_handle,

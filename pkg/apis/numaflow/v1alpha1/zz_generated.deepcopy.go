@@ -1693,6 +1693,11 @@ func (in *MonoVertexSpec) DeepCopyInto(out *MonoVertexSpec) {
 		*out = new(MonoVertexBypassCondition)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Streaming != nil {
+		in, out := &in.Streaming, &out.Streaming
+		*out = new(bool)
+		**out = **in
+	}
 	return
 }
 

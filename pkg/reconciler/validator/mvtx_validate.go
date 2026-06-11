@@ -38,6 +38,12 @@ func ValidateMonoVertex(mvtx *dfv1.MonoVertex) error {
 	if mvtx.Spec.Source.Serving != nil {
 		return fmt.Errorf("serving source is not supported with Monovertex yet")
 	}
+	if mvtx.GetStreaming() && mvtx.Spec.Source.Kafka != nil {
+		return fmt.Errorf("built-in Kafka source is not supported with streaming=true: " +
+			"the Kafka source commits offsets cumulatively (highest offset per partition), " +
+			"which is incompatible with streaming's per-message out-of-order acknowledgement and may cause data loss; " +
+			"disable streaming or use a different source")
+	}
 	if err := validateSource(*mvtx.Spec.Source); err != nil {
 		return fmt.Errorf("invalid source: %w", err)
 	}

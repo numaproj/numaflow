@@ -6381,6 +6381,28 @@ trigger the said bypass.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>streaming</code></br> <em> bool </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Streaming enables per-message, out-of-order source acknowledgement
+instead of the default whole-batch barrier. When true, the source reads
+continuously bounded by <code>spec.limits.concurrency</code> (in-flight
+messages) rather than one batch at a time. This is off by default.
+</p>
+
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -7057,6 +7079,28 @@ triggered if the conditions are met at any of the components. The first
 level of the bypass spec specifies the destination to which the message
 will be forwarded to, and the next level specifies the conditions to
 trigger the said bypass.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>streaming</code></br> <em> bool </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Streaming enables per-message, out-of-order source acknowledgement
+instead of the default whole-batch barrier. When true, the source reads
+continuously bounded by <code>spec.limits.concurrency</code> (in-flight
+messages) rather than one batch at a time. This is off by default.
 </p>
 
 </td>

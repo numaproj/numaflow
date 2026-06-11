@@ -171,6 +171,38 @@ func (s *MonoVertexSuite) TestSourceTransformerBypass() {
 	w.Expect().RedisSinkContains("bypass-sink-output", "primary-message")
 }
 
+func (s *MonoVertexSuite) TestStreamingMonoVertex() {
+	w := s.Given().MonoVertex("@testdata/streaming-mono-vertex.yaml").
+		When().CreateMonoVertexAndWait()
+	defer w.DeleteMonoVertexAndWait()
+
+	monoVertexName := "streaming-mono-vertex"
+
+	// wait for all the pods to come up
+	w.Expect().MonoVertexPodsRunning()
+
+	// Send N=5 distinct messages through the HTTP source.
+	// Each message has a unique payload so we can assert individually that
+	// all N reached the sink (at-least-once: count >= 1 per message).
+	messages := []string{
+		"stream-msg-0",
+		"stream-msg-1",
+		"stream-msg-2",
+		"stream-msg-3",
+		"stream-msg-4",
+	}
+	for _, msg := range messages {
+		w.SendMessageToMvTx(monoVertexName, NewHttpPostRequest().WithBody([]byte(msg)))
+	}
+
+	// Assert all N messages reached the sink. The Rust redis-sink stores each
+	// message payload as a hash field (HINCRBY), so count >= 1 confirms
+	// at-least-once delivery even if a message was redelivered.
+	for _, msg := range messages {
+		w.Expect().RedisSinkContains("streaming-mvtx-output", msg)
+	}
+}
+
 func TestMonoVertexSuite(t *testing.T) {
 	suite.Run(t, new(MonoVertexSuite))
 }

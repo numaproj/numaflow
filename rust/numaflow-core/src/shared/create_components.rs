@@ -401,6 +401,7 @@ pub(crate) async fn create_mapper(
 /// Creates a source type with rate limiter based on the configuration.
 /// `concurrency` is the cap on in-flight (read-but-not-acked) messages, sourced from the vertex's
 /// `Limits.Concurrency`.
+/// `streaming` enables per-message, out-of-order source ack instead of the default batch barrier.
 #[allow(clippy::too_many_arguments)]
 pub async fn create_source<C: NumaflowTypeConfig>(
     batch_size: usize,
@@ -412,6 +413,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
     watermark_handle: Option<SourceWatermarkHandle>,
     cln_token: CancellationToken,
     rate_limiter: Option<C::RateLimiter>,
+    streaming: bool,
 ) -> error::Result<Source<C>> {
     match &source_config.source_type {
         SourceType::Generator(generator_config) => {
@@ -427,6 +429,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 watermark_handle,
                 cln_token,
                 rate_limiter,
+                streaming,
             )
             .await)
         }
@@ -449,6 +452,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 watermark_handle,
                 cln_token,
                 rate_limiter,
+                streaming,
             )
             .await)
         }
@@ -471,6 +475,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 watermark_handle,
                 cln_token,
                 rate_limiter,
+                streaming,
             )
             .await)
         }
@@ -492,6 +497,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 watermark_handle,
                 cln_token,
                 rate_limiter,
+                streaming,
             )
             .await)
         }
@@ -513,6 +519,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 watermark_handle,
                 cln_token,
                 rate_limiter,
+                streaming,
             )
             .await)
         }
@@ -530,6 +537,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 watermark_handle,
                 cln_token,
                 rate_limiter,
+                streaming,
             )
             .await)
         }
@@ -547,6 +555,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 watermark_handle,
                 cln_token,
                 rate_limiter,
+                streaming,
             )
             .await)
         }
@@ -592,6 +601,7 @@ pub async fn create_source<C: NumaflowTypeConfig>(
                 watermark_handle,
                 cln_token,
                 rate_limiter,
+                streaming,
             )
             .await)
         }

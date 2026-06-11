@@ -116,6 +116,7 @@ impl SourceTestHandle<WithSimpleBuffer> {
                     None,
                     cln_token.clone(),
                     None,
+                    false,
                 )
                 .await
             }
@@ -134,6 +135,7 @@ impl SourceTestHandle<WithSimpleBuffer> {
                     None,
                     cln_token.clone(),
                     None,
+                    false,
                 )
                 .await
             }
@@ -189,6 +191,7 @@ impl SourceTestHandle<WithSimpleBuffer> {
             None,
             cln_token,
             None,
+            false,
         )
         .await;
 

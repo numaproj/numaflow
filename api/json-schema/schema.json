@@ -21298,6 +21298,10 @@
         "source": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Source"
         },
+        "streaming": {
+          "description": "Streaming enables per-message, out-of-order source acknowledgement instead of the default whole-batch barrier. When true, the source reads continuously bounded by `spec.limits.concurrency` (in-flight messages) rather than one batch at a time. This is off by default.",
+          "type": "boolean"
+        },
         "tolerations": {
           "description": "If specified, the pod's tolerations.",
           "items": {
