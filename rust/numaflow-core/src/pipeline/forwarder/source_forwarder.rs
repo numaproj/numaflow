@@ -226,6 +226,7 @@ where
     C: crate::typ::NumaflowTypeConfig,
     F: crate::pipeline::isb::ISBFactory<Reader = C::ISBReader, Writer = C::ISBWriter>,
 {
+    // Pipeline source vertices do not support streaming mode (MonoVertex-only feature).
     let source = create_components::create_source::<C>(
         context.config.batch_size,
         context.config.concurrency,
@@ -236,6 +237,7 @@ where
         source_watermark_handle.clone(),
         context.cln_token.clone(),
         rate_limiter,
+        false, // streaming is a MonoVertex-only feature
     )
     .await?;
 
@@ -921,6 +923,7 @@ mod tests {
             None,
             cln_token.clone(),
             None,
+            false,
         )
         .await;
 

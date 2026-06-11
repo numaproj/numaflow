@@ -3560,6 +3560,13 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexSpec(ref common.ReferenceCallba
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexBypassCondition"),
 						},
 					},
+					"streaming": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Streaming enables per-message, out-of-order source acknowledgement instead of the default whole-batch barrier. When true, the source reads continuously bounded by `spec.limits.concurrency` (in-flight messages) rather than one batch at a time. This is off by default.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},

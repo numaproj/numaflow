@@ -49,6 +49,10 @@ pub(crate) struct MonovertexConfig {
     pub(crate) metrics_config: MetricsConfig,
     pub(crate) callback_config: Option<ServingCallbackConfig>,
     pub(crate) rate_limit: Option<RateLimitConfig>,
+    /// When true, the source reads continuously bounded by `concurrency` in-flight messages
+    /// (per-message, out-of-order ack) instead of the default one-batch-in-flight barrier.
+    /// Off by default.
+    pub(crate) streaming: bool,
 }
 
 impl Default for MonovertexConfig {
@@ -76,6 +80,7 @@ impl Default for MonovertexConfig {
             metrics_config: MetricsConfig::default(),
             callback_config: None,
             rate_limit: None,
+            streaming: false,
         }
     }
 }
@@ -247,6 +252,8 @@ impl MonovertexConfig {
             });
         }
 
+        let streaming = mono_vertex_obj.spec.streaming.unwrap_or(false);
+
         Ok(MonovertexConfig {
             name: mono_vertex_name,
             replica: *get_vertex_replica(),
@@ -264,6 +271,7 @@ impl MonovertexConfig {
             on_success_sink_config,
             callback_config,
             rate_limit,
+            streaming,
         })
     }
 }
@@ -660,5 +668,80 @@ mod tests {
         };
 
         assert_eq!(config.source_config, expected_source_config);
+    }
+
+    #[test]
+    fn test_load_streaming_true_parses() {
+        let valid_config = r#"
+        {
+            "metadata": {
+                "name": "streaming-test-vertex"
+            },
+            "spec": {
+                "streaming": true,
+                "limits": {
+                    "readBatchSize": 100,
+                    "readTimeout": "1s"
+                },
+                "source": {
+                    "udsource": {
+                        "container": {
+                            "image": "test-source",
+                            "resources": {}
+                        }
+                    }
+                },
+                "sink": {
+                    "log": {}
+                }
+            }
+        }
+        "#;
+        let encoded = BASE64_STANDARD.encode(valid_config);
+        let mut env_vars = HashMap::new();
+        env_vars.insert(ENV_MONO_VERTEX_OBJ.to_string(), encoded);
+
+        let config = MonovertexConfig::load(env_vars).unwrap();
+        assert!(
+            config.streaming,
+            "streaming should be true when spec.streaming=true"
+        );
+    }
+
+    #[test]
+    fn test_load_streaming_defaults_to_false() {
+        let valid_config = r#"
+        {
+            "metadata": {
+                "name": "non-streaming-vertex"
+            },
+            "spec": {
+                "limits": {
+                    "readBatchSize": 100,
+                    "readTimeout": "1s"
+                },
+                "source": {
+                    "udsource": {
+                        "container": {
+                            "image": "test-source",
+                            "resources": {}
+                        }
+                    }
+                },
+                "sink": {
+                    "log": {}
+                }
+            }
+        }
+        "#;
+        let encoded = BASE64_STANDARD.encode(valid_config);
+        let mut env_vars = HashMap::new();
+        env_vars.insert(ENV_MONO_VERTEX_OBJ.to_string(), encoded);
+
+        let config = MonovertexConfig::load(env_vars).unwrap();
+        assert!(
+            !config.streaming,
+            "streaming should default to false when not set in spec"
+        );
     }
 }
