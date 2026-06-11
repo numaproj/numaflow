@@ -1189,30 +1189,6 @@ pub(crate) fn mvtx_forward_metric_labels() -> &'static Vec<(String, String)> {
     })
 }
 
-/// Reason-label values for the `critical_error_total` metric. Adding constants here keeps the
-/// vocabulary consistent across the many call sites of the [`critical_error!`] macro.
-///
-/// The UDF-specific reasons identify client-side reconnect paths separately from residual fatal
-/// `mvtx_runtime_error` / `pipeline_runtime_error` paths in `lib.rs::run()`.
-pub(crate) mod critical_error_reasons {
-    /// Source receive-loop reconnect: `UserDefinedSourceRead::read` / `UserDefinedSourceAck` saw
-    /// a transport-classified error and reconnected. Fires once per outage.
-    #[allow(dead_code)]
-    pub(crate) const SOURCE_RUNTIME_ERROR: &str = "source_runtime_error";
-    /// Source transformer receive-loop reconnect.
-    #[allow(dead_code)]
-    pub(crate) const SOURCE_TRANSFORMER_RUNTIME_ERROR: &str = "source_transformer_runtime_error";
-    /// Map UDF (unary/batch/stream) receive-loop reconnect.
-    #[allow(dead_code)]
-    pub(crate) const UDF_RUNTIME_ERROR: &str = "udf_runtime_error";
-    /// Primary sink UDF reconnect (`UserDefinedSink::sink`).
-    #[allow(dead_code)]
-    pub(crate) const SINK_RUNTIME_ERROR: &str = "sink_runtime_error";
-    /// Fallback sink UDF reconnect.
-    #[allow(dead_code)]
-    pub(crate) const FALLBACK_SINK_RUNTIME_ERROR: &str = "fallback_sink_runtime_error";
-}
-
 pub(crate) fn mvtx_critical_error_metric_labels(reason: &str) -> Vec<(String, String)> {
     let mut labels = mvtx_forward_metric_labels().clone();
     labels.push((CRITICAL_ERROR_REASON.to_string(), reason.to_string()));
