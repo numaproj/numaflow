@@ -21,6 +21,7 @@ import { SpecEditorModalProps } from "../..";
 import { CloseModal } from "../CloseModal";
 import { AppContext } from "../../../../../App";
 import { useErrorsFetch } from "../../../../../utils/fetchWrappers/errorsFetch";
+import { usePipelineISBDebugFetch } from "../../../../../utils/fetchWrappers/pipelineISBDebugFetch";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import {
   ContainerError,
@@ -31,6 +32,7 @@ import sinkIcon from "../../../../../images/sink.png";
 import mapIcon from "../../../../../images/map.png";
 import reduceIcon from "../../../../../images/reduce.png";
 import monoVertexIcon from "../../../../../images/monoVertex.svg";
+import { PipelineISBDebugInfo } from "../PipelineISBDebugInfo";
 
 import "./style.css";
 
@@ -40,6 +42,7 @@ const PROCESSING_RATES_TAB_INDEX = 2;
 const K8S_EVENTS_TAB_INDEX = 3;
 const ERRORS_TAB_INDEX = 4;
 const BUFFERS_TAB_INDEX = 5;
+const ISB_DEBUG_TAB_INDEX = 6;
 
 export enum VertexType {
   SOURCE,
@@ -291,6 +294,18 @@ export function VertexDetails({
     setErrorsCount(filteredDetailsData.length);
   }, [constructedDetails, filterErrorsWithinLast24Hours]);
 
+  const isPipelineVertex = type !== "monoVertex";
+  const {
+    data: isbDebugData,
+    loading: isbDebugLoading,
+    error: isbDebugError,
+  } = usePipelineISBDebugFetch({
+    namespaceId,
+    pipelineId,
+    vertexId,
+    enabled: isPipelineVertex && tabValue === ISB_DEBUG_TAB_INDEX,
+  });
+
   return (
     <VertexDetailsContext.Provider
       value={{
@@ -380,6 +395,17 @@ export function VertexDetails({
                 }
                 label="Buffers"
                 data-testid="buffers-tab"
+              />
+            )}
+            {isPipelineVertex && (
+              <Tab
+                className={
+                  tabValue === ISB_DEBUG_TAB_INDEX
+                    ? "vertex-details-tab-selected"
+                    : "vertex-details-tab"
+                }
+                label="ISB"
+                data-testid="isb-tab"
               />
             )}
           </Tabs>
@@ -473,6 +499,23 @@ export function VertexDetails({
                 pipelineId={pipelineId}
                 vertexId={vertexId}
                 type={type}
+              />
+            )}
+          </div>
+        )}
+        {isPipelineVertex && (
+          <div
+            className="vertex-details-tab-panel"
+            role="tabpanel"
+            hidden={tabValue !== ISB_DEBUG_TAB_INDEX}
+          >
+            {tabValue === ISB_DEBUG_TAB_INDEX && (
+              <PipelineISBDebugInfo
+                streams={isbDebugData?.streams}
+                consumers={isbDebugData?.consumers}
+                kvStores={isbDebugData?.kvStores}
+                loading={isbDebugLoading}
+                error={isbDebugError}
               />
             )}
           </div>

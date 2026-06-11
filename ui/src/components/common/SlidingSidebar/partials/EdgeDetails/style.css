@@ -3,3 +3,23 @@
   font-style: normal;
   font-weight: 500;
 }
+
+.edge-details-tab.MuiTab-root {
+  font-size: 1.4rem !important;
+  font-style: normal !important;
+  font-weight: 600 !important;
+  color: var(--text-tertiary) !important;
+  text-transform: none !important;
+}
+
+.edge-details-tab-selected.MuiTab-root {
+  font-size: 1.4rem !important;
+  font-style: normal !important;
+  font-weight: 600 !important;
+  color: var(--text-primary) !important;
+  text-transform: none !important;
+}
+
+.edge-details-tabs > .MuiTabs-scroller > .MuiTabs-indicator {
+  background-color: #037C8F !important;
+}

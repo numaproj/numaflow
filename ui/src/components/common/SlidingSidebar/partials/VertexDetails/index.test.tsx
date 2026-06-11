@@ -11,6 +11,41 @@ import { BrowserRouter } from "react-router-dom";
 
 import "@testing-library/jest-dom";
 
+jest.mock("../../../../../utils/fetchWrappers/pipelineISBDebugFetch", () => ({
+  usePipelineISBDebugFetch: () => ({
+    data: {
+      streams: {
+        streams: [
+          {
+            namespace: "test-namespace",
+            pipeline: "test-pipeline",
+            vertex: "test-vertex",
+            partition: 0,
+            stream: "test-namespace-test-pipeline-test-vertex-0",
+            subjects: ["test-namespace-test-pipeline-test-vertex-0"],
+            messages: 10,
+            bytes: 1024,
+            consumerCount: 1,
+            firstSeq: 1,
+            lastSeq: 10,
+            storage: "file",
+            replicas: 3,
+            retention: "workqueue",
+            leader: "js-0",
+            scope: "vertex",
+            sharedByInboundEdges: false,
+          },
+        ],
+      },
+      consumers: { consumers: [] },
+      kvStores: { kvStores: [] },
+    },
+    loading: false,
+    error: undefined,
+    refresh: jest.fn(),
+  }),
+}));
+
 jest.mock("./partials/VertexUpdate", () => {
   const originalModule = jest.requireActual("./partials/VertexUpdate");
   // Mock any module exports here
@@ -214,6 +249,16 @@ describe("VertexDetails", () => {
     });
     await waitFor(() => {
       expect(screen.getByText("Mocked buffers")).toBeInTheDocument();
+    });
+    act(() => {
+      const tab = screen.getByTestId("isb-tab");
+      fireEvent.click(tab);
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Stream Information")).toBeInTheDocument();
+      expect(
+        screen.getAllByText("test-namespace-test-pipeline-test-vertex-0").length
+      ).toBeGreaterThan(0);
     });
   });
 
