@@ -1678,6 +1678,20 @@
   
   
     <li class="md-nav__item">
+      <a href="../user-guide/reference/mvtx-streaming/" class="md-nav__link">
+        MonoVertex Streaming Mode
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../user-guide/reference/distributed-throttling/" class="md-nav__link">
         Distributed Throttling
       </a>
@@ -1709,18 +1723,18 @@
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_6_16" type="checkbox" id="__nav_3_6_16" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_6_17" type="checkbox" id="__nav_3_6_17" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_6_16">
+        <label class="md-nav__link" for="__nav_3_6_17">
           Configuration
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Configuration" data-md-level="3">
-        <label class="md-nav__title" for="__nav_3_6_16">
+        <label class="md-nav__title" for="__nav_3_6_17">
           <span class="md-nav__icon md-icon"></span>
           Configuration
         </label>
@@ -9084,6 +9098,28 @@ trigger the said bypass.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>streaming</code></br> <em> bool </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Streaming enables per-message, out-of-order source acknowledgement
+instead of the default whole-batch barrier. When true, the source reads
+continuously bounded by <code>spec.limits.concurrency</code> (in-flight
+messages) rather than one batch at a time. This is off by default.
+</p>
+
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -9760,6 +9796,28 @@ triggered if the conditions are met at any of the components. The first
 level of the bypass spec specifies the destination to which the message
 will be forwarded to, and the next level specifies the conditions to
 trigger the said bypass.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>streaming</code></br> <em> bool </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Streaming enables per-message, out-of-order source acknowledgement
+instead of the default whole-batch barrier. When true, the source reads
+continuously bounded by <code>spec.limits.concurrency</code> (in-flight
+messages) rather than one batch at a time. This is off by default.
 </p>
 
 </td>
