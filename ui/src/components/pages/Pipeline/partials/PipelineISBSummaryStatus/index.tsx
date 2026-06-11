@@ -3,11 +3,29 @@ import Box from "@mui/material/Box";
 import { GetISBType, UNKNOWN } from "../../../../../utils";
 import { AppContext } from "../../../../../App";
 import { AppContextProps } from "../../../../../types/declarations/app";
+import { IsbSummary } from "../../../../../types/declarations/pipeline";
 import { SidebarType } from "../../../../common/SlidingSidebar";
 import { ViewType } from "../../../../common/SpecEditor";
 
-export function PipelineISBSummaryStatus({ isbData, namespaceId }: any) {
-  const isbType = GetISBType(isbData?.isbService?.spec) || UNKNOWN;
+interface PipelineISBSummaryStatusProps {
+  isbData?: IsbSummary | null;
+  namespaceId?: string;
+}
+
+interface IsbSpecWithReplicas {
+  [key: string]: { replicas?: number } | undefined;
+}
+
+export function PipelineISBSummaryStatus({
+  isbData,
+  namespaceId,
+}: PipelineISBSummaryStatusProps) {
+  const isbSpec = isbData?.isbService?.spec as unknown as
+    | IsbSpecWithReplicas
+    | undefined;
+  const isbType = isbData?.isbService?.spec
+    ? GetISBType(isbData.isbService.spec) || UNKNOWN
+    : UNKNOWN;
   const { setSidebarProps } = useContext<AppContextProps>(AppContext);
 
   const handleViewMoreClick = useCallback(() => {
@@ -86,8 +104,8 @@ export function PipelineISBSummaryStatus({ isbData, namespaceId }: any) {
                   <div className="pipeline-summary-text">
                     <span className="pipeline-summary-subtitle">Size: </span>
                     <span>
-                      {isbType && isbData?.isbService?.spec[isbType]
-                        ? isbData?.isbService?.spec[isbType].replicas
+                      {isbType && isbSpec?.[isbType]?.replicas
+                        ? isbSpec[isbType]?.replicas
                         : UNKNOWN}
                     </span>
                   </div>
