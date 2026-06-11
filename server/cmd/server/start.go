@@ -191,6 +191,7 @@ func CreateAuthRouteMap(baseHref string) authz.RouteMap {
 		"POST:" + baseHref + "api/v1/namespaces/:namespace/isb-services":                                  authz.NewRouteInfo(authz.ObjectISBSvc, true),
 		"GET:" + baseHref + "api/v1/namespaces/:namespace/isb-services":                                   authz.NewRouteInfo(authz.ObjectISBSvc, true),
 		"GET:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":                      authz.NewRouteInfo(authz.ObjectISBSvc, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service/jetstream":            authz.NewRouteInfo(authz.ObjectISBSvc, true),
 		"PUT:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":                      authz.NewRouteInfo(authz.ObjectISBSvc, true),
 		"DELETE:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":                   authz.NewRouteInfo(authz.ObjectISBSvc, true),
 		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/isbs":                       authz.NewRouteInfo(authz.ObjectPipeline, true),

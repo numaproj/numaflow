@@ -1,16 +1,27 @@
 import React, { useCallback, useContext, useEffect, useState } from "react";
 import YAML from "yaml";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Tab from "@mui/material/Tab";
+import Tabs from "@mui/material/Tabs";
 import {
   SpecEditor,
   Status,
   StatusIndicator,
   ValidationMessage,
+  ViewType,
 } from "../../../SpecEditor";
+import TabPanel from "../../../Tab-Panel";
 import { SpecEditorSidebarProps } from "../..";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
-import { getAPIResponseError, getBaseHref } from "../../../../../utils";
+import {
+  a11yProps,
+  getAPIResponseError,
+  getBaseHref,
+} from "../../../../../utils";
+import { useISBServiceDebugFetch } from "../../../../../utils/fetchWrappers/isbServiceDebugFetch";
+import { ISBDebugInfo } from "./partials/ISBDebugInfo";
 
 import "./style.css";
 
@@ -30,7 +41,15 @@ export function ISBUpdate({
     ValidationMessage | undefined
   >();
   const [status, setStatus] = useState<StatusIndicator | undefined>();
+  const [tabValue, setTabValue] = useState(0);
   const { host } = useContext<AppContextProps>(AppContext);
+  const showDebugTabs =
+    viewType === ViewType.READ_ONLY && !!initialYaml?.spec?.jetstream;
+  const debugFetch = useISBServiceDebugFetch({
+    namespaceId,
+    isbId,
+    enabled: showDebugTabs,
+  });
 
   // Submit API call
   useEffect(() => {
@@ -200,6 +219,24 @@ export function ISBUpdate({
     [setModalOnClose]
   );
 
+  const handleTabsChange = useCallback((_: any, newValue: any) => {
+    setTabValue(newValue);
+  }, []);
+
+  const specEditor = (
+    <SpecEditor
+      initialYaml={initialYaml}
+      viewType={viewType}
+      loading={loading}
+      onValidate={handleValidate}
+      onSubmit={handleSubmit}
+      onResetApplied={handleReset}
+      onMutatedChange={handleMutationChange}
+      statusIndicator={status}
+      validationMessage={validationMessage}
+    />
+  );
+
   return (
     <Box
       sx={{
@@ -219,17 +256,65 @@ export function ISBUpdate({
           {titleOverride ? titleOverride : `Edit ISB Service: ${isbId}`}
         </span>
       </Box>
-      <SpecEditor
-        initialYaml={initialYaml}
-        viewType={viewType}
-        loading={loading}
-        onValidate={handleValidate}
-        onSubmit={handleSubmit}
-        onResetApplied={handleReset}
-        onMutatedChange={handleMutationChange}
-        statusIndicator={status}
-        validationMessage={validationMessage}
-      />
+      {showDebugTabs ? (
+        <Box>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <Tabs
+              value={tabValue}
+              onChange={handleTabsChange}
+              aria-label="ISB service tabs"
+              sx={{
+                "& .MuiTab-root": {
+                  fontSize: "1.2rem",
+                  fontWeight: 600,
+                  minWidth: "12rem",
+                },
+              }}
+            >
+              <Tab label="JetStream" {...a11yProps(0)} />
+              <Tab label="Spec" {...a11yProps(1)} />
+            </Tabs>
+            <Button
+              variant="outlined"
+              size="medium"
+              onClick={debugFetch.refresh}
+              disabled={debugFetch.loading}
+              sx={{
+                fontSize: "1.2rem",
+                fontWeight: 600,
+                minWidth: "10rem",
+              }}
+            >
+              {debugFetch.loading ? "Refreshing..." : "Refresh"}
+            </Button>
+          </Box>
+          <TabPanel value={tabValue} index={0}>
+            <ISBDebugInfo
+              jetStream={debugFetch.data?.jetStream}
+              loading={debugFetch.loading}
+              error={debugFetch.error}
+            />
+          </TabPanel>
+          <TabPanel value={tabValue} index={1}>
+            <Box
+              sx={{
+                height: "calc(100vh - 20rem)",
+                minHeight: "45rem",
+              }}
+            >
+              {specEditor}
+            </Box>
+          </TabPanel>
+        </Box>
+      ) : (
+        specEditor
+      )}
     </Box>
   );
 }
