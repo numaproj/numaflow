@@ -90,6 +90,50 @@ export interface IsbServiceSpec {
   redis?: Redis;
 }
 
+export interface ISBJetStreamSummary {
+  server: string;
+  serverId?: string;
+  cluster?: string;
+  streams: number;
+  consumers: number;
+  messages: number;
+  bytes: number;
+  apiRequests: number;
+  apiErrors: number;
+  apiErrorRate: number;
+  metaLeader: boolean;
+}
+
+export interface ISBJetStreamRaftMeta {
+  name: string;
+  id?: string;
+  leader: boolean;
+  current?: boolean;
+  online: boolean;
+  active?: string;
+  lag?: number;
+}
+
+export interface ISBMonitorError {
+  pod: string;
+  message: string;
+}
+
+export interface ISBJetStreamResponse {
+  summary: ISBJetStreamSummary[];
+  raftMetaGroup: ISBJetStreamRaftMeta[];
+  errors?: ISBMonitorError[];
+}
+
+export interface ISBServiceDebugFetchResult {
+  data?: {
+    jetStream: ISBJetStreamResponse;
+  };
+  loading: boolean;
+  error: any;
+  refresh: () => void;
+}
+
 export interface PipelineSummary {
   name: string;
   status: string;
