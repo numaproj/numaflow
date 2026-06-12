@@ -65,6 +65,9 @@ const formatSeconds = (value?: number) => {
   return `${formatDecimal(value)}s`;
 };
 
+const ISB_UNAVAILABLE_MESSAGE = "ISB information is not available yet.";
+const PARTIAL_ISB_UNAVAILABLE_MESSAGE = "Some ISB information is not available yet.";
+
 const HeaderCell = ({ label }: { label: string }) => (
   <TableCell
     sx={{
@@ -97,6 +100,12 @@ const DebugSection = ({
 const EmptyRow = ({ colSpan }: { colSpan: number }) => (
   <TableRow>
     <TableCell colSpan={colSpan}>No information found</TableCell>
+  </TableRow>
+);
+
+const UnavailableRow = ({ colSpan }: { colSpan: number }) => (
+  <TableRow>
+    <TableCell colSpan={colSpan}>{ISB_UNAVAILABLE_MESSAGE}</TableCell>
   </TableRow>
 );
 
@@ -196,15 +205,29 @@ export function PipelineISBDebugInfo({
     );
   }
 
-  if (error) {
-    return <Box>{`Error loading ISB information: ${error}`}</Box>;
-  }
-
+  const streamRows = streams?.streams || [];
+  const consumerRows = consumers?.consumers || [];
+  const kvStoreRows = kvStores?.kvStores || [];
   const monitorErrors = collectErrors(streams, consumers, kvStores);
   const showSharedNotice = edgeScoped || hasSharedTargetVertexRows(streams, consumers);
+  const hasAnyInformation =
+    !!streamRows.length ||
+    !!consumerRows.length ||
+    !!kvStoreRows.length ||
+    !!monitorErrors.length;
+  const hasAllResponses = !!streams && !!consumers && !!kvStores;
+
+  if (!hasAnyInformation) {
+    return <Box>{ISB_UNAVAILABLE_MESSAGE}</Box>;
+  }
 
   return (
     <Box>
+      {(error || !hasAllResponses) && (
+        <Box sx={{ marginBottom: "1.6rem", color: "#6B6C72" }}>
+          {PARTIAL_ISB_UNAVAILABLE_MESSAGE}
+        </Box>
+      )}
       {showSharedNotice && (
         <Box sx={{ marginBottom: "1.6rem", color: "#6B6C72" }}>
           Stream and consumer rows on an edge are scoped to the target vertex buffer and may be shared by multiple inbound edges.
@@ -225,7 +248,7 @@ export function PipelineISBDebugInfo({
                 <HeaderCell label="Leader" />
               </TableRow>
             </TableHead>
-            <StreamRows streams={streams?.streams || []} />
+            {streams ? <StreamRows streams={streamRows} /> : <UnavailableRow colSpan={8} />}
           </Table>
         </TableContainer>
       </DebugSection>
@@ -247,7 +270,11 @@ export function PipelineISBDebugInfo({
                 <HeaderCell label="Leader" />
               </TableRow>
             </TableHead>
-            <ConsumerRows consumers={consumers?.consumers || []} />
+            {consumers ? (
+              <ConsumerRows consumers={consumerRows} />
+            ) : (
+              <UnavailableRow colSpan={10} />
+            )}
           </Table>
         </TableContainer>
       </DebugSection>
@@ -270,7 +297,7 @@ export function PipelineISBDebugInfo({
                 <HeaderCell label="Replicas" />
               </TableRow>
             </TableHead>
-            <KVRows kvStores={kvStores?.kvStores || []} />
+            {kvStores ? <KVRows kvStores={kvStoreRows} /> : <UnavailableRow colSpan={11} />}
           </Table>
         </TableContainer>
       </DebugSection>

@@ -220,9 +220,9 @@ export interface PipelineISBKVStoresResponse {
 
 export interface PipelineISBDebugFetchResult {
   data?: {
-    streams: PipelineISBStreamsResponse;
-    consumers: PipelineISBConsumersResponse;
-    kvStores: PipelineISBKVStoresResponse;
+    streams?: PipelineISBStreamsResponse;
+    consumers?: PipelineISBConsumersResponse;
+    kvStores?: PipelineISBKVStoresResponse;
   };
   loading: boolean;
   error: any;

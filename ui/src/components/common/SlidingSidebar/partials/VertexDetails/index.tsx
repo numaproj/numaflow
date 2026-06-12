@@ -58,7 +58,7 @@ export interface VertexDetailsProps {
   vertexId: string;
   vertexSpecs: any;
   vertexMetrics: any;
-  buffers: any[];
+  buffers?: any[] | null;
   type: string;
   setModalOnClose?: (props: SpecEditorModalProps | undefined) => void;
   refresh: () => void;
@@ -340,6 +340,7 @@ export function VertexDetails({
                   ? "vertex-details-tab-selected"
                   : "vertex-details-tab"
               }
+              value={PODS_VIEW_TAB_INDEX}
               label="Pods View"
               data-testid="pods-tab"
             />
@@ -349,6 +350,7 @@ export function VertexDetails({
                   ? "vertex-details-tab-selected"
                   : "vertex-details-tab"
               }
+              value={SPEC_TAB_INDEX}
               label="Spec"
               data-testid="spec-tab"
             />
@@ -358,6 +360,7 @@ export function VertexDetails({
                   ? "vertex-details-tab-selected"
                   : "vertex-details-tab"
               }
+              value={PROCESSING_RATES_TAB_INDEX}
               label="Processing Rates"
               data-testid="pr-tab"
             />
@@ -367,6 +370,7 @@ export function VertexDetails({
                   ? "vertex-details-tab-selected"
                   : "vertex-details-tab"
               }
+              value={K8S_EVENTS_TAB_INDEX}
               label="K8s Events"
               data-testid="events-tab"
             />
@@ -384,6 +388,7 @@ export function VertexDetails({
                   </Box>
                 </Box>
               }
+              value={ERRORS_TAB_INDEX}
               data-testid="errors-tab"
             />
             {buffers && (
@@ -393,6 +398,7 @@ export function VertexDetails({
                     ? "vertex-details-tab-selected"
                     : "vertex-details-tab"
                 }
+                value={BUFFERS_TAB_INDEX}
                 label="Buffers"
                 data-testid="buffers-tab"
               />
@@ -404,6 +410,7 @@ export function VertexDetails({
                     ? "vertex-details-tab-selected"
                     : "vertex-details-tab"
                 }
+                value={ISB_DEBUG_TAB_INDEX}
                 label="ISB"
                 data-testid="isb-tab"
               />

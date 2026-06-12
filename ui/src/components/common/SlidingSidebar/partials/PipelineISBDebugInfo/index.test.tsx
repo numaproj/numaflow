@@ -17,7 +17,27 @@ describe("PipelineISBDebugInfo", () => {
     render(<PipelineISBDebugInfo loading={false} error="boom" />);
 
     await waitFor(() => {
-      expect(screen.getByText("Error loading ISB information: boom")).toBeInTheDocument();
+      expect(
+        screen.getByText("ISB information is not available yet.")
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/boom/)).not.toBeInTheDocument();
+    });
+  });
+
+  it("renders neutral fallback for empty ISB information", async () => {
+    render(
+      <PipelineISBDebugInfo
+        loading={false}
+        streams={{ streams: [] }}
+        consumers={{ consumers: [] }}
+        kvStores={{ kvStores: [] }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("ISB information is not available yet.")
+      ).toBeInTheDocument();
     });
   });
 
@@ -140,10 +160,37 @@ describe("PipelineISBDebugInfo", () => {
   });
 
   it("renders shared edge scope notice", async () => {
-    render(<PipelineISBDebugInfo loading={false} edgeScoped />);
+    render(
+      <PipelineISBDebugInfo
+        loading={false}
+        edgeScoped
+        kvStores={{
+          kvStores: [
+            {
+              namespace: "ns",
+              pipeline: "pl",
+              scope: "edge",
+              from: "in",
+              to: "cat",
+              bucket: "ns-pl-in-cat_OT",
+              stream: "KV_ns-pl-in-cat_OT",
+              values: 2,
+              bytes: 2048,
+            },
+          ],
+        }}
+      />
+    );
 
     await waitFor(() => {
       expect(screen.getByText(/target vertex buffer/)).toBeInTheDocument();
+      expect(
+        screen.getByText("Some ISB information is not available yet.")
+      ).toBeInTheDocument();
+      expect(screen.getByText("ns-pl-in-cat_OT")).toBeInTheDocument();
+      expect(
+        screen.getAllByText("ISB information is not available yet.").length
+      ).toBeGreaterThan(0);
     });
   });
 });

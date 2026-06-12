@@ -37,9 +37,9 @@ export const usePipelineISBDebugFetch = ({
   });
   const [data, setData] = useState<
     | {
-        streams: PipelineISBStreamsResponse;
-        consumers: PipelineISBConsumersResponse;
-        kvStores: PipelineISBKVStoresResponse;
+        streams?: PipelineISBStreamsResponse;
+        consumers?: PipelineISBConsumersResponse;
+        kvStores?: PipelineISBKVStoresResponse;
       }
     | undefined
   >();
@@ -117,26 +117,21 @@ export const usePipelineISBDebugFetch = ({
       return;
     }
     const fetchError = streamsError || consumersError || kvStoresError;
-    if (fetchError) {
-      setData(undefined);
-      setError(fetchError);
-      setLoading(false);
-      return;
-    }
     const apiError = streamsData?.errMsg || consumersData?.errMsg || kvStoresData?.errMsg;
-    if (apiError) {
-      setData(undefined);
-      setError(apiError);
+    const availableData = {
+      ...(streamsData?.data ? { streams: streamsData.data } : {}),
+      ...(consumersData?.data ? { consumers: consumersData.data } : {}),
+      ...(kvStoresData?.data ? { kvStores: kvStoresData.data } : {}),
+    };
+    if (Object.keys(availableData).length) {
+      setData(availableData);
+      setError(fetchError || apiError);
       setLoading(false);
       return;
     }
-    if (streamsData?.data && consumersData?.data && kvStoresData?.data) {
-      setData({
-        streams: streamsData.data,
-        consumers: consumersData.data,
-        kvStores: kvStoresData.data,
-      });
-      setError(undefined);
+    if (fetchError || apiError) {
+      setData(undefined);
+      setError(fetchError || apiError);
       setLoading(false);
       return;
     }

@@ -262,6 +262,40 @@ describe("VertexDetails", () => {
     });
   });
 
+  it("renders ISB tab content when buffers tab is hidden", async () => {
+    render(
+      <VertexDetails
+        namespaceId="test-namespace"
+        pipelineId="test-pipeline"
+        vertexId="test-vertex"
+        vertexSpecs={{}}
+        vertexMetrics={{}}
+        buffers={null}
+        type="source"
+        setModalOnClose={jest.fn()}
+        refresh={jest.fn()}
+      />,
+      { wrapper: BrowserRouter }
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Input Vertex")).toBeInTheDocument();
+      expect(screen.queryByTestId("buffers-tab")).not.toBeInTheDocument();
+    });
+
+    act(() => {
+      const tab = screen.getByTestId("isb-tab");
+      fireEvent.click(tab);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Stream Information")).toBeInTheDocument();
+      expect(
+        screen.getAllByText("test-namespace-test-pipeline-test-vertex-0").length
+      ).toBeGreaterThan(0);
+    });
+  });
+
   it("Update modal opens", async () => {
     render(
       <VertexDetails
