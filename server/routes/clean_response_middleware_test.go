@@ -397,6 +397,31 @@ func TestCustomResponseWriter_Write(t *testing.T) {
 	})
 }
 
+func TestCleanResponseMiddleware_SkipsPodLogsStreaming(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("pod logs route bypasses response buffering", func(t *testing.T) {
+		router := gin.New()
+		router.Use(cleanResponseMiddleware())
+
+		w := httptest.NewRecorder()
+		var bytesReceivedDuringHandler int
+		router.GET("/api/v1/namespaces/:namespace/pods/:pod/logs", func(c *gin.Context) {
+			_, _ = c.Writer.WriteString("log line 1\n")
+			c.Writer.Flush()
+			bytesReceivedDuringHandler = w.Body.Len()
+			_, _ = c.Writer.WriteString("log line 2\n")
+		})
+
+		req, _ := http.NewRequest(http.MethodGet, "/api/v1/namespaces/ns/pods/my-pod/logs?container=numa&follow=true", nil)
+		router.ServeHTTP(w, req)
+
+		assert.Greater(t, bytesReceivedDuringHandler, 0, "logs should reach the client while the handler is still streaming")
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "log line 1\nlog line 2\n", w.Body.String())
+	})
+}
+
 func TestCleanResponseMiddleware_EdgeCases(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

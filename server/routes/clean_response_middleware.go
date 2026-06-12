@@ -46,6 +46,12 @@ func (w customResponseWriter) WriteString(s string) (int, error) {
 // cleanResponseMiddleware is a Gin middleware to clean up data in the response body.
 func cleanResponseMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Skip buffering for streaming endpoints (e.g. pod logs with follow=true),
+		// otherwise the response would never be written to the client.
+		if strings.HasSuffix(c.FullPath(), "/pods/:pod/logs") {
+			c.Next()
+			return
+		}
 		// Replace the original response writer with our custom one
 		w := &customResponseWriter{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
 		c.Writer = w
