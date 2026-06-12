@@ -58,13 +58,6 @@ const formatOptional = (value?: string | number) => {
   return typeof value === "number" ? formatNumber(value) : value;
 };
 
-const formatList = (values?: string[]) => {
-  if (!values?.length) {
-    return "-";
-  }
-  return values.join(", ");
-};
-
 const formatSeconds = (value?: number) => {
   if (!value) {
     return "-";
@@ -130,17 +123,15 @@ const hasSharedTargetVertexRows = (
 
 const StreamRows = ({ streams }: { streams: PipelineISBStream[] }) => (
   <TableBody>
-    {!streams.length && <EmptyRow colSpan={10} />}
+    {!streams.length && <EmptyRow colSpan={8} />}
     {streams.map((stream) => (
       <TableRow key={stream.stream}>
         <TableCell>{stream.stream}</TableCell>
         <TableCell>{stream.vertex}</TableCell>
         <TableCell>{formatNumber(stream.partition)}</TableCell>
-        <TableCell>{formatList(stream.subjects)}</TableCell>
         <TableCell>{formatNumber(stream.messages)}</TableCell>
         <TableCell>{formatBytes(stream.bytes)}</TableCell>
         <TableCell>{formatNumber(stream.consumerCount)}</TableCell>
-        <TableCell>{formatOptional(stream.storage)}</TableCell>
         <TableCell>{formatOptional(stream.replicas)}</TableCell>
         <TableCell>{formatOptional(stream.leader)}</TableCell>
       </TableRow>
@@ -150,15 +141,14 @@ const StreamRows = ({ streams }: { streams: PipelineISBStream[] }) => (
 
 const ConsumerRows = ({ consumers }: { consumers: PipelineISBConsumer[] }) => (
   <TableBody>
-    {!consumers.length && <EmptyRow colSpan={11} />}
+    {!consumers.length && <EmptyRow colSpan={10} />}
     {consumers.map((consumer) => (
       <TableRow key={`${consumer.stream}-${consumer.consumer}`}>
         <TableCell>{consumer.consumer}</TableCell>
         <TableCell>{consumer.stream}</TableCell>
         <TableCell>{consumer.vertex}</TableCell>
         <TableCell>{formatNumber(consumer.partition)}</TableCell>
-        <TableCell>{formatOptional(consumer.durable)}</TableCell>
-        <TableCell>{formatOptional(consumer.filterSubject)}</TableCell>
+        <TableCell>{consumer.durable ? "Yes" : "No"}</TableCell>
         <TableCell>{formatNumber(consumer.numAckPending)}</TableCell>
         <TableCell>{formatNumber(consumer.numRedelivered)}</TableCell>
         <TableCell>{formatNumber(consumer.numPending)}</TableCell>
@@ -171,7 +161,7 @@ const ConsumerRows = ({ consumers }: { consumers: PipelineISBConsumer[] }) => (
 
 const KVRows = ({ kvStores }: { kvStores: PipelineISBKVStore[] }) => (
   <TableBody>
-    {!kvStores.length && <EmptyRow colSpan={12} />}
+    {!kvStores.length && <EmptyRow colSpan={11} />}
     {kvStores.map((kvStore) => (
       <TableRow key={kvStore.stream}>
         <TableCell>{kvStore.bucket}</TableCell>
@@ -185,7 +175,6 @@ const KVRows = ({ kvStores }: { kvStores: PipelineISBKVStore[] }) => (
         <TableCell>{formatOptional(kvStore.history)}</TableCell>
         <TableCell>{formatSeconds(kvStore.ttlSeconds)}</TableCell>
         <TableCell>{formatOptional(kvStore.replicas)}</TableCell>
-        <TableCell>{formatOptional(kvStore.storage)}</TableCell>
       </TableRow>
     ))}
   </TableBody>
@@ -229,11 +218,9 @@ export function PipelineISBDebugInfo({
                 <HeaderCell label="Stream" />
                 <HeaderCell label="Vertex" />
                 <HeaderCell label="Partition" />
-                <HeaderCell label="Subjects" />
                 <HeaderCell label="Messages" />
                 <HeaderCell label="Bytes" />
                 <HeaderCell label="Consumers" />
-                <HeaderCell label="Storage" />
                 <HeaderCell label="Replicas" />
                 <HeaderCell label="Leader" />
               </TableRow>
@@ -253,7 +240,6 @@ export function PipelineISBDebugInfo({
                 <HeaderCell label="Vertex" />
                 <HeaderCell label="Partition" />
                 <HeaderCell label="Durable" />
-                <HeaderCell label="Filter Subject" />
                 <HeaderCell label="Ack Pending" />
                 <HeaderCell label="Redelivered" />
                 <HeaderCell label="Pending" />
@@ -282,7 +268,6 @@ export function PipelineISBDebugInfo({
                 <HeaderCell label="History" />
                 <HeaderCell label="TTL" />
                 <HeaderCell label="Replicas" />
-                <HeaderCell label="Storage" />
               </TableRow>
             </TableHead>
             <KVRows kvStores={kvStores?.kvStores || []} />

@@ -76,6 +76,29 @@ describe("PipelineISBDebugInfo", () => {
               scope: "vertex",
               sharedByInboundEdges: false,
             },
+            {
+              namespace: "ns",
+              pipeline: "pl",
+              vertex: "cat",
+              partition: 1,
+              stream: "ns-pl-cat-1",
+              consumer: "ephemeral-consumer",
+              ackPolicy: "explicit",
+              deliverPolicy: "all",
+              ackWaitSeconds: 30,
+              maxAckPending: 25000,
+              numAckPending: 0,
+              numRedelivered: 0,
+              numWaiting: 0,
+              numPending: 0,
+              deliveredConsumerSeq: 0,
+              deliveredStreamSeq: 0,
+              ackFloorConsumerSeq: 0,
+              ackFloorStreamSeq: 0,
+              leader: "js-0",
+              scope: "vertex",
+              sharedByInboundEdges: false,
+            },
           ],
         }}
         kvStores={{
@@ -105,9 +128,14 @@ describe("PipelineISBDebugInfo", () => {
     await waitFor(() => {
       expect(screen.getByText("Stream Information")).toBeInTheDocument();
       expect(screen.getAllByText("ns-pl-cat-0").length).toBeGreaterThan(1);
+      expect(screen.getByText("Yes")).toBeInTheDocument();
+      expect(screen.getByText("No")).toBeInTheDocument();
       expect(screen.getByText("ns-pl-in-cat_OT")).toBeInTheDocument();
       expect(screen.getByText("connection refused")).toBeInTheDocument();
       expect(screen.getAllByText("1.00 KiB").length).toBeGreaterThan(0);
+      expect(screen.queryByText("Subjects")).not.toBeInTheDocument();
+      expect(screen.queryByText("Filter Subject")).not.toBeInTheDocument();
+      expect(screen.queryByText("Storage")).not.toBeInTheDocument();
     });
   });
 
