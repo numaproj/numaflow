@@ -150,6 +150,9 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/isbs", handler.ListPipelineBuffers)
 	// Get all the watermarks information of a pipeline.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/watermarks", handler.GetPipelineWatermarks)
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/isb/streams", handler.GetPipelineISBStreams)
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/isb/consumers", handler.GetPipelineISBConsumers)
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/isb/kv-stores", handler.GetPipelineISBKVStores)
 	// Update a vertex spec.
 	r.PUT("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex", handler.UpdateVertex)
 	// Get all the vertex metrics of a pipeline.
