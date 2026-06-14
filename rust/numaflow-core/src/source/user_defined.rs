@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
-use crate::message::{Message, MessageID, Offset, StringOffset};
+use crate::message::{Message, MessageID, NackOptions, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::reader::LagReader;
 use crate::shared::grpc::utc_from_timestamp;
@@ -179,6 +179,7 @@ impl TryFrom<read_response::Result> for Message {
                 None => Metadata::default(),
             })),
             is_late: false,
+            nack_options: None,
         })
     }
 }
@@ -350,7 +351,7 @@ impl SourceAcker for UserDefinedSourceAck {
     /// This method checks if the SDK supports nack functionality using a pre-computed flag.
     /// For older SDK versions (< 0.11), it logs a warning and returns Ok() for backward compatibility.
     /// For newer SDK versions (>= 0.11), it calls the actual nack gRPC method.
-    async fn nack(&mut self, offsets: Vec<Offset>) -> Result<()> {
+    async fn nack(&mut self, offsets: Vec<Offset>, options: Option<NackOptions>) -> Result<()> {
         if !self.supports_nack {
             warn!(
                 offset_count = offsets.len(),
@@ -368,6 +369,7 @@ impl SourceAcker for UserDefinedSourceAck {
             .nack_fn(NackRequest {
                 request: Some(source::nack_request::Request {
                     offsets: nack_offsets?,
+                    nack_options: options.map(Into::into),
                 }),
             })
             .await
@@ -618,7 +620,7 @@ mod tests {
 
         // nack the messages
         let response = src_ack
-            .nack(messages.iter().map(|m| m.offset.clone()).collect())
+            .nack(messages.iter().map(|m| m.offset.clone()).collect(), None)
             .await;
         assert!(response.is_ok());
 

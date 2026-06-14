@@ -7,7 +7,7 @@
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
-use crate::message::{MessageHandle, ReadAck};
+use crate::message::{MessageHandle, NackOptions, ReadAck};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, SOURCE_PARTITION_NAME_LABEL, monovertex_metrics,
     mvtx_forward_metric_labels, pipeline_drop_metric_labels, pipeline_metric_labels,
@@ -125,7 +125,7 @@ pub(crate) trait LocalSourceAcker {
 
     /// negatively acknowledge an offset. The implementor might choose to do it in an asynchronous way.
     /// For sources that don't support nack, this should be a no-op.
-    async fn nack(&mut self, offsets: Vec<Offset>) -> Result<()>;
+    async fn nack(&mut self, offsets: Vec<Offset>, options: Option<NackOptions>) -> Result<()>;
 }
 
 pub(crate) enum SourceType {
@@ -162,6 +162,7 @@ enum ActorMessage {
     Nack {
         respond_to: oneshot::Sender<Result<()>>,
         offsets: Vec<Offset>,
+        options: Option<NackOptions>,
     },
     Pending {
         respond_to: oneshot::Sender<Result<Option<usize>>>,
@@ -213,8 +214,9 @@ where
             ActorMessage::Nack {
                 respond_to,
                 offsets,
+                options,
             } => {
-                let nack = self.acker.nack(offsets).await;
+                let nack = self.acker.nack(offsets, options).await;
                 let _ = respond_to.send(nack);
             }
             ActorMessage::Pending { respond_to } => {
@@ -441,11 +443,16 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     }
 
     /// nack the offsets by communicating with the nack actor.
-    async fn nack(source_handle: mpsc::Sender<ActorMessage>, offsets: Vec<Offset>) -> Result<()> {
+    async fn nack(
+        source_handle: mpsc::Sender<ActorMessage>,
+        offsets: Vec<Offset>,
+        options: Option<NackOptions>,
+    ) -> Result<()> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Nack {
             respond_to: sender,
             offsets,
+            options,
         };
         // Ignore send errors. If send fails, so does the recv.await below. There's no reason
         // to check for the same failure twice.
@@ -1139,9 +1146,9 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
                 Ok(ReadAck::Ack) => {
                     offsets_to_ack.push(offset.clone());
                 }
-                Ok(ReadAck::Nak) => {
+                Ok(ReadAck::Nak(options)) => {
                     warn!(?offset, "Nak received for offset");
-                    offsets_to_nack.push(offset.clone());
+                    offsets_to_nack.push((offset.clone(), options));
                 }
                 Err(e) => {
                     error!(?offset, err=?e, "Error receiving ack for offset");
@@ -1158,7 +1165,11 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
             Self::ack_with_retry(source_handle.clone(), offsets_to_ack, &cancel_token).await?;
         }
         if !offsets_to_nack.is_empty() {
-            Self::nack_with_retry(source_handle, offsets_to_nack, &cancel_token).await?;
+            // Group offsets by their nack options so each distinct option set results in a
+            // single backend nack call; offsets sharing the same (or no) options are batched.
+            for (option, offsets) in group_offsets_by_nack_options(offsets_to_nack) {
+                Self::nack_with_retry(source_handle.clone(), offsets, option, &cancel_token).await?
+            }
         }
         // Non-streaming path: record all batch-granular metrics (streaming=false).
         Self::send_ack_metrics(e2e_start_time, n, start, false);
@@ -1201,13 +1212,14 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     async fn nack_with_retry(
         source_handle: mpsc::Sender<ActorMessage>,
         offsets: Vec<Offset>,
+        options: Option<NackOptions>,
         cancel_token: &CancellationToken,
     ) -> Result<()> {
         // In practice, this retry should exit early since it is invoked during ISB/map/sink errors, which results in CancellationToken cancellation
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(NACK_RETRY_ATTEMPTS);
         let _ = Retry::new(
             interval,
-            async || Self::nack(source_handle.clone(), offsets.clone()).await,
+            async || Self::nack(source_handle.clone(), offsets.clone(), options.clone()).await,
             |error: &Error| {
                 error!(?error, "Failed to send nack to source, retrying...");
                 // Don't retry non-retryable errors
@@ -1415,6 +1427,19 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     }
 }
 
+/// Groups nacked offsets by their [`NackOptions`] so that offsets sharing the same options
+/// (including `None`) are nacked in a single backend call. This preserves per-message options
+/// without degrading to one backend round-trip per offset.
+fn group_offsets_by_nack_options(
+    offsets_to_nack: Vec<(Offset, Option<NackOptions>)>,
+) -> HashMap<Option<NackOptions>, Vec<Offset>> {
+    let mut nack_map: HashMap<Option<NackOptions>, Vec<Offset>> = HashMap::new();
+    for (offset, option) in offsets_to_nack {
+        nack_map.entry(option).or_default().push(offset);
+    }
+    nack_map
+}
+
 #[cfg(test)]
 mod tests {
     use crate::mark_success;
@@ -1436,6 +1461,40 @@ mod tests {
     use tokio::sync::mpsc::Sender;
     use tokio_stream::StreamExt;
     use tokio_util::sync::CancellationToken;
+
+    #[test]
+    fn test_group_offsets_by_nack_options() {
+        use crate::message::NackOptions;
+
+        let opts_a = NackOptions {
+            delay: Some(1000),
+            max_deliveries: None,
+            reason: Some("a".to_string()),
+        };
+        let opts_b = NackOptions {
+            delay: Some(2000),
+            max_deliveries: None,
+            reason: Some("b".to_string()),
+        };
+        let offset = |n: i64| CoreOffset::Int(CoreIntOffset::new(n, 0));
+
+        let grouped = super::group_offsets_by_nack_options(vec![
+            (offset(1), Some(opts_a.clone())),
+            (offset(2), None),
+            (offset(3), Some(opts_b.clone())),
+            (offset(4), Some(opts_a.clone())),
+            (offset(5), None),
+        ]);
+
+        // Three distinct buckets: opts_a, opts_b, and None — order preserved within each.
+        assert_eq!(grouped.len(), 3);
+        assert_eq!(
+            grouped.get(&Some(opts_a)).unwrap(),
+            &vec![offset(1), offset(4)]
+        );
+        assert_eq!(grouped.get(&Some(opts_b)).unwrap(), &vec![offset(3)]);
+        assert_eq!(grouped.get(&None).unwrap(), &vec![offset(2), offset(5)]);
+    }
 
     struct SimpleSource {
         num: usize,

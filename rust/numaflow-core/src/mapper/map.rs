@@ -257,7 +257,7 @@ impl MapHandle {
                     // if there are errors then we need to drain the stream and nack
                     if self.shutting_down_on_err {
                         warn!(offset = ?read_msg.message().offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
-                        read_msg.mark_failed(self.final_result.as_ref().unwrap_err());
+                        read_msg.mark_failed(self.final_result.as_ref().unwrap_err(), None);
                     } else {
                         let permit = Arc::clone(&ctx.semaphore).acquire_owned()
                             .await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}")))?;
@@ -310,7 +310,7 @@ impl MapHandle {
             if self.shutting_down_on_err {
                 for read_msg in read_batch {
                     warn!(offset = ?read_msg.message().offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
-                    read_msg.mark_failed(self.final_result.as_ref().unwrap_err());
+                    read_msg.mark_failed(self.final_result.as_ref().unwrap_err(), None);
                 }
                 continue;
             }
@@ -519,6 +519,8 @@ impl From<UserDefinedMessage<'_>> for Message {
                 }
                 Some(Arc::new(metadata))
             },
+            // TODO: update once nack option wiring in map is available
+            nack_options: None,
         }
     }
 }
@@ -1014,7 +1016,7 @@ mod tests {
 
         for ack_rx in ack_rxs {
             let ack = ack_rx.await.unwrap();
-            assert_eq!(ack, ReadAck::Nak);
+            assert_eq!(ack, ReadAck::Nak(None));
         }
 
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -1128,8 +1130,8 @@ mod tests {
 
         let ack1 = ack_rx1.await.unwrap();
         let ack2 = ack_rx2.await.unwrap();
-        assert_eq!(ack1, ReadAck::Nak);
-        assert_eq!(ack2, ReadAck::Nak);
+        assert_eq!(ack1, ReadAck::Nak(None));
+        assert_eq!(ack2, ReadAck::Nak(None));
 
         // Await the join handle and expect an error due to the panic
         let result = map_handle.await.unwrap();
@@ -1237,7 +1239,7 @@ mod tests {
         );
         for ack_rx in ack_rxs {
             let ack = ack_rx.await.unwrap();
-            assert_eq!(ack, ReadAck::Nak);
+            assert_eq!(ack, ReadAck::Nak(None));
         }
 
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -1311,7 +1313,7 @@ mod tests {
 
         for ack_rx in ack_rxs {
             let ack = ack_rx.await.unwrap();
-            assert_eq!(ack, ReadAck::Nak);
+            assert_eq!(ack, ReadAck::Nak(None));
         }
 
         Ok(())
@@ -1393,8 +1395,8 @@ mod tests {
 
         let ack1 = ack_rx1.await.unwrap();
         let ack2 = ack_rx2.await.unwrap();
-        assert_eq!(ack1, ReadAck::Nak);
-        assert_eq!(ack2, ReadAck::Nak);
+        assert_eq!(ack1, ReadAck::Nak(None));
+        assert_eq!(ack2, ReadAck::Nak(None));
 
         // Await the join handle and expect an error due to the panic
         let result = map_handle.await.unwrap();
@@ -1450,7 +1452,7 @@ mod tests {
 
         for ack_rx in ack_rxs {
             let ack = ack_rx.await.expect("Failed to await ack rx");
-            assert_eq!(ack, ReadAck::Nak, "Expected Nak due to panic");
+            assert_eq!(ack, ReadAck::Nak(None), "Expected Nak due to panic");
         }
 
         Ok(())

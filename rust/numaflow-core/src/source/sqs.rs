@@ -1,11 +1,10 @@
+use numaflow_sqs::source::{SqsMessage, SqsSource, SqsSourceBuilder, SqsSourceConfig};
 use std::sync::Arc;
 use std::time::Duration;
 
-use numaflow_sqs::source::{SqsMessage, SqsSource, SqsSourceBuilder, SqsSourceConfig};
-
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
-use crate::message::{Message, MessageID, Offset, StringOffset};
+use crate::message::{Message, MessageID, NackOptions, Offset, StringOffset};
 use crate::source;
 
 use crate::metadata::{KeyValueGroup, Metadata};
@@ -49,6 +48,7 @@ impl TryFrom<SqsMessage> for Message {
             headers: Arc::new(message.system_attributes),
             metadata,
             is_late: false,
+            nack_options: None,
         })
     }
 }
@@ -125,7 +125,11 @@ impl source::SourceAcker for SqsSource {
         self.ack_offsets(sqs_offsets).await.map_err(Into::into)
     }
 
-    async fn nack(&mut self, _offsets: Vec<Offset>) -> crate::error::Result<()> {
+    async fn nack(
+        &mut self,
+        _offsets: Vec<Offset>,
+        _options: Option<NackOptions>,
+    ) -> crate::error::Result<()> {
         // SQS doesn't support nack - no-op
         Ok(())
     }
