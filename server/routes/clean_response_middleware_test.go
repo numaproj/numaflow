@@ -397,16 +397,60 @@ func TestCustomResponseWriter_Write(t *testing.T) {
 	})
 }
 
-func TestCleanResponseMiddleware_SkipsPodLogsStreaming(t *testing.T) {
+func TestCleanResponseMiddleware_SkipsConfiguredStreamingRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	t.Run("pod logs route bypasses response buffering", func(t *testing.T) {
+	t.Run("configured streaming route bypasses response buffering", func(t *testing.T) {
 		router := gin.New()
-		router.Use(cleanResponseMiddleware())
+		router.Use(cleanResponseMiddleware(skipCleanResponseForRoutes("/stream/:name")))
 
 		w := httptest.NewRecorder()
 		var bytesReceivedDuringHandler int
-		router.GET("/api/v1/namespaces/:namespace/pods/:pod/logs", func(c *gin.Context) {
+		router.GET("/stream/:name", func(c *gin.Context) {
+			_, _ = c.Writer.WriteString("log line 1\n")
+			c.Writer.Flush()
+			bytesReceivedDuringHandler = w.Body.Len()
+			_, _ = c.Writer.WriteString("log line 2\n")
+		})
+
+		req, _ := http.NewRequest(http.MethodGet, "/stream/test?follow=true", nil)
+		router.ServeHTTP(w, req)
+
+		assert.Greater(t, bytesReceivedDuringHandler, 0, "configured streaming responses should reach the client while the handler is still streaming")
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "log line 1\nlog line 2\n", w.Body.String())
+	})
+
+	t.Run("unconfigured route still buffers response", func(t *testing.T) {
+		router := gin.New()
+		router.Use(cleanResponseMiddleware(skipCleanResponseForRoutes("/stream/:name")))
+
+		w := httptest.NewRecorder()
+		var bytesReceivedDuringHandler int
+		router.GET("/other-stream/:name", func(c *gin.Context) {
+			_, _ = c.Writer.WriteString("log line 1\n")
+			c.Writer.Flush()
+			bytesReceivedDuringHandler = w.Body.Len()
+			_, _ = c.Writer.WriteString("log line 2\n")
+		})
+
+		req, _ := http.NewRequest(http.MethodGet, "/other-stream/test?follow=true", nil)
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 0, bytesReceivedDuringHandler, "unconfigured routes should keep using response buffering")
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "log line 1\nlog line 2\n", w.Body.String())
+	})
+
+	t.Run("pod logs route can be configured as streaming route", func(t *testing.T) {
+		router := gin.New()
+		apiV1Route := "/api/v1"
+		api := router.Group(apiV1Route)
+		api.Use(cleanResponseMiddleware(skipCleanResponseForRoutes(apiV1Route + podLogsRoute)))
+
+		w := httptest.NewRecorder()
+		var bytesReceivedDuringHandler int
+		api.GET(podLogsRoute, func(c *gin.Context) {
 			_, _ = c.Writer.WriteString("log line 1\n")
 			c.Writer.Flush()
 			bytesReceivedDuringHandler = w.Body.Len()
@@ -416,7 +460,7 @@ func TestCleanResponseMiddleware_SkipsPodLogsStreaming(t *testing.T) {
 		req, _ := http.NewRequest(http.MethodGet, "/api/v1/namespaces/ns/pods/my-pod/logs?container=numa&follow=true", nil)
 		router.ServeHTTP(w, req)
 
-		assert.Greater(t, bytesReceivedDuringHandler, 0, "logs should reach the client while the handler is still streaming")
+		assert.Greater(t, bytesReceivedDuringHandler, 0, "pod logs route should be configurable as a streaming route")
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "log line 1\nlog line 2\n", w.Body.String())
 	})

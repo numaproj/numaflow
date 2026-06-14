@@ -35,6 +35,9 @@ type customResponseWriter struct {
 	body *bytes.Buffer
 }
 
+// cleanResponseSkipper reports whether cleanResponseMiddleware should leave the response writer untouched.
+type cleanResponseSkipper func(*gin.Context) bool
+
 func (w customResponseWriter) Write(b []byte) (int, error) {
 	return w.body.Write(b)
 }
@@ -44,13 +47,15 @@ func (w customResponseWriter) WriteString(s string) (int, error) {
 }
 
 // cleanResponseMiddleware is a Gin middleware to clean up data in the response body.
-func cleanResponseMiddleware() gin.HandlerFunc {
+func cleanResponseMiddleware(skippers ...cleanResponseSkipper) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Skip buffering for streaming endpoints (e.g. pod logs with follow=true),
 		// otherwise the response would never be written to the client.
-		if strings.HasSuffix(c.FullPath(), "/pods/:pod/logs") {
-			c.Next()
-			return
+		for _, skip := range skippers {
+			if skip != nil && skip(c) {
+				c.Next()
+				return
+			}
 		}
 		// Replace the original response writer with our custom one
 		w := &customResponseWriter{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
@@ -80,6 +85,18 @@ func cleanResponseMiddleware() gin.HandlerFunc {
 			}
 		}
 		_, _ = w.ResponseWriter.Write(originalBody)
+	}
+}
+
+// skipCleanResponseForRoutes matches Gin route patterns returned by c.FullPath().
+func skipCleanResponseForRoutes(routes ...string) cleanResponseSkipper {
+	routeSet := make(map[string]struct{}, len(routes))
+	for _, route := range routes {
+		routeSet[route] = struct{}{}
+	}
+	return func(c *gin.Context) bool {
+		_, ok := routeSet[c.FullPath()]
+		return ok
 	}
 }
 
