@@ -75,7 +75,7 @@ macro_rules! mark_failed_batch {
 use crate::Error;
 use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;
-use std::fmt;
+use std::fmt::{self, Write};
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, OnceLock};
 use tracing::{error, warn};
@@ -391,7 +391,7 @@ impl Message {
     pub(crate) fn dropped(&self) -> bool {
         self.tags
             .as_ref()
-            .is_some_and(|tags| tags.contains(&DROP.to_string()))
+            .is_some_and(|tags| tags.iter().any(|tag| tag == DROP))
     }
 
     pub(crate) fn strip_tracing_udf(&mut self) {
@@ -514,6 +514,28 @@ impl Default for MessageID {
     }
 }
 
+impl MessageID {
+    fn vertex_name_str(&self) -> &str {
+        std::str::from_utf8(&self.vertex_name).expect("it should be valid utf-8")
+    }
+
+    fn offset_str(&self) -> &str {
+        std::str::from_utf8(&self.offset).expect("it should be valid utf-8")
+    }
+
+    pub(crate) fn as_string(&self) -> String {
+        let vertex_name = self.vertex_name_str();
+        let offset = self.offset_str();
+        let mut id = String::with_capacity(vertex_name.len() + offset.len() + 13);
+        id.push_str(vertex_name);
+        id.push('-');
+        id.push_str(offset);
+        id.push('-');
+        write!(&mut id, "{}", self.index).expect("writing to String should not fail");
+        id
+    }
+}
+
 impl From<numaflow_pb::objects::isb::MessageId> for MessageID {
     fn from(id: numaflow_pb::objects::isb::MessageId) -> Self {
         Self {
@@ -533,15 +555,14 @@ impl From<MessageID> for numaflow_pb::objects::isb::MessageId {
         }
     }
 }
+
 impl fmt::Display for MessageID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}-{}-{}",
-            std::str::from_utf8(&self.vertex_name).expect("it should be valid utf-8"),
-            std::str::from_utf8(&self.offset).expect("it should be valid utf-8"),
-            self.index
-        )
+        f.write_str(self.vertex_name_str())?;
+        f.write_char('-')?;
+        f.write_str(self.offset_str())?;
+        f.write_char('-')?;
+        write!(f, "{}", self.index)
     }
 }
 

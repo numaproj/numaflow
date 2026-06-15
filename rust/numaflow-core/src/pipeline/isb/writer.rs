@@ -73,10 +73,17 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
     /// Executes the ISB write operation.
     /// Flow: check dropped -> route and write -> resolve PAFs -> publish watermarks -> mark_success
     async fn execute(self) {
-        // Hold the permit until the task completes
-        let _permit = self.permit;
+        let ISBWriteTask {
+            mut orchestrator,
+            permit,
+            msg_handle,
+            cln_token,
+        } = self;
 
-        let message = self.msg_handle.message().clone();
+        // Hold the permit until the task completes
+        let _permit = permit;
+
+        let message = msg_handle.message();
 
         // Handle dropped messages
         if message.dropped() {
@@ -84,19 +91,16 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
             pipeline_metrics()
                 .forwarder
                 .udf_drop_total
-                .get_or_create(pipeline_metric_labels(
-                    self.orchestrator.vertex_type.as_str(),
-                ))
+                .get_or_create(pipeline_metric_labels(orchestrator.vertex_type.as_str()))
                 .inc();
             // Mark as success since dropped messages are intentionally dropped
-            mark_success!(self.msg_handle);
+            mark_success!(msg_handle);
             return;
         }
 
         // Route and write to appropriate streams
-        let write_results = self
-            .orchestrator
-            .route_and_write_message(&message, self.cln_token.clone())
+        let write_results = orchestrator
+            .route_and_write_message(message, cln_token.clone())
             .await;
 
         // Partition outcomes: cancellations must NAK, drops are intentional (ACK), successes proceed.
@@ -116,7 +120,7 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
                 "Shutdown signal received during write retry, message will be NAK'd for redelivery"
             );
             mark_failed!(
-                self.msg_handle,
+                msg_handle,
                 format!(
                     "Token cancelled during ISB write: {cancelled_count} write(s) did not complete"
                 )
@@ -127,9 +131,8 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
         let expected_writes = successes.len();
 
         // Resolve all PAFs
-        let resolved_offsets = self
-            .orchestrator
-            .resolve_all_pafs(successes, &message, self.cln_token.clone())
+        let resolved_offsets = orchestrator
+            .resolve_all_pafs(successes, message, cln_token.clone())
             .await;
 
         // If any of the writes failed, NAK the message
@@ -140,7 +143,7 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
                 "Some writes failed during PAF resolution, message will be NAK'd"
             );
             mark_failed!(
-                self.msg_handle,
+                msg_handle,
                 format!(
                     "PAF resolution failed: {}/{} writes succeeded",
                     resolved_offsets.len(),
@@ -151,13 +154,12 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
         }
 
         // Publish watermarks for successful writes
-        self.orchestrator
-            .clone()
-            .publish_watermarks_for_offsets(resolved_offsets, &message)
+        orchestrator
+            .publish_watermarks_for_offsets(resolved_offsets, message)
             .await;
 
         // All PAFs resolved successfully, mark as success to ACK
-        mark_success!(self.msg_handle);
+        mark_success!(msg_handle);
     }
 }
 
@@ -317,6 +319,15 @@ impl<C: NumaflowTypeConfig> ISBWriterOrchestrator<C> {
     /// When `ordered_processing_enabled` is true and the target vertex is Map or Sink,
     /// uses keys for shuffling to ensure messages with the same keys land on the same partition.
     fn determine_target_stream(message: &Message, vertex: &ToVertexConfig) -> Stream {
+        if vertex.partitions == 1 {
+            return vertex
+                .writer_config
+                .streams
+                .first()
+                .expect("stream should be present")
+                .clone();
+        }
+
         // Determine the shuffle key based on vertex type and ordered processing setting
         let shuffle_key = match vertex.to_vertex_type {
             // For ReduceUDF, always use keys for shuffling (existing behavior)

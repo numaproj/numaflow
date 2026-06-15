@@ -164,7 +164,7 @@ impl JetStreamWriter {
         }
 
         // message id will be used for deduplication
-        let id = message.id.to_string();
+        let id = message.id.as_string();
 
         // Compress the message value if compression is enabled
         let mut message = message;

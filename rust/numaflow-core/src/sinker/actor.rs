@@ -103,7 +103,7 @@ where
             // Take ownership of the current batch so we can iterate by move and push
             // failed messages back into messages_to_retry in their original order.
             for msg in std::mem::take(&mut messages_to_retry) {
-                let msg_id = msg.id.to_string();
+                let msg_id = msg.id.as_string();
                 match result_map.remove(&msg_id) {
                     Some(ResponseStatusFromSink::Success) => {
                         // Message successfully sunk, nothing more to do

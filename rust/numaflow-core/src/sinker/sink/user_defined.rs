@@ -33,7 +33,7 @@ impl From<Message> for SinkRequest {
                 value: message.value.to_vec(),
                 event_time: Some(prost_timestamp_from_utc(message.event_time)),
                 watermark: message.watermark.map(prost_timestamp_from_utc),
-                id: message.id.to_string(),
+                id: message.id.as_string(),
                 headers: Arc::unwrap_or_clone(message.headers),
                 metadata: message.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
             }),

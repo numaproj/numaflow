@@ -479,7 +479,7 @@ impl From<Message> for MapRequest {
                 headers: Arc::unwrap_or_clone(message.headers),
                 metadata: message.metadata.map(|m| Arc::unwrap_or_clone(m).into()),
             }),
-            id: message.id.to_string(),
+            id: message.id.as_string(),
             handshake: None,
             status: None,
         }

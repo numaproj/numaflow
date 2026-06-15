@@ -24,17 +24,16 @@ use tracing::warn;
 /// partition index and the vertex name.
 #[derive(Debug)]
 struct JSWrappedMessage {
-    partition_idx: u16,
-    message: async_nats::jetstream::Message,
+    payload: Bytes,
     vertex_name: &'static str,
     compression_type: Option<CompressionType>,
+    offset: Offset,
 }
 
 impl JSWrappedMessage {
-    async fn into_message(self) -> Result<Message> {
-        let proto_message =
-            numaflow_pb::objects::isb::Message::decode(self.message.payload.clone())
-                .map_err(|e| Error::Proto(e.to_string()))?;
+    fn into_message(self) -> Result<Message> {
+        let proto_message = numaflow_pb::objects::isb::Message::decode(self.payload)
+            .map_err(|e| Error::Proto(e.to_string()))?;
 
         let header = proto_message
             .header
@@ -43,6 +42,7 @@ impl JSWrappedMessage {
         if kind == MessageType::WMB {
             return Ok(Message {
                 typ: kind,
+                offset: self.offset,
                 ..Default::default()
             });
         }
@@ -54,17 +54,6 @@ impl JSWrappedMessage {
             .message_info
             .ok_or(Error::Proto("Missing message_info".to_string()))?;
 
-        let msg_info = self.message.info().map_err(|e| {
-            Error::ISB(ISBError::Decode(format!(
-                "Failed to get message info from JetStream: {e}"
-            )))
-        })?;
-
-        let offset = Offset::Int(IntOffset::new(
-            msg_info.stream_sequence as i64,
-            self.partition_idx,
-        ));
-
         Ok(Message {
             typ: header.kind.into(),
             keys: Arc::from(header.keys.into_boxed_slice()),
@@ -75,14 +64,14 @@ impl JSWrappedMessage {
                     Bytes::from(compression::decompress(compression_type, &body.payload)?)
                 }
             },
-            offset: offset.clone(),
+            offset: self.offset.clone(),
             event_time: message_info
                 .event_time
                 .map(utc_from_timestamp)
                 .expect("event time should be present"),
             id: MessageID {
                 vertex_name: self.vertex_name.into(),
-                offset: offset.to_string().into(),
+                offset: self.offset.to_string().into(),
                 index: 0,
             },
             headers: Arc::new(header.headers),
@@ -106,7 +95,7 @@ pub(crate) struct JetStreamReader {
     compression_type: Option<CompressionType>,
     /// jetstream needs complete message to ack/nack, so we need to keep track of them using the offset
     /// so that we can ack/nack them later using the offset.
-    offset2jsmsg: Arc<RwLock<HashMap<Offset, JetstreamMessage>>>,
+    offset2jsmsg: Arc<RwLock<HashMap<Offset, Arc<JetstreamMessage>>>>,
     /// interval at which we should send wip ack to avoid redelivery.
     wip_ack_interval: Duration,
 }
@@ -187,21 +176,18 @@ impl JetStreamReader {
             ));
 
             // Convert to core Message (including decompression) using existing wrapper
-            let mut message = JSWrappedMessage {
-                partition_idx: self.stream.partition,
-                message: js_msg.clone(),
+            let message = JSWrappedMessage {
+                payload: js_msg.payload.clone(),
                 vertex_name: get_vertex_name(),
                 compression_type: self.compression_type,
+                offset: offset.clone(),
             }
-            .into_message()
-            .await?;
-
-            message.offset = offset.clone();
+            .into_message()?;
 
             // Track the actual message for doing ack/nack/wip by offset
             {
                 let mut map = self.offset2jsmsg.write().expect("handles mutex poisoned");
-                map.insert(offset, js_msg);
+                map.insert(offset, Arc::new(js_msg));
             }
 
             out.push(message);
@@ -244,7 +230,7 @@ impl JetStreamReader {
     }
 
     /// Helper method to get the JetStream message for a given offset, optionally removing it from the map
-    fn get_js_message(&self, offset: &Offset, remove: bool) -> Option<JetstreamMessage> {
+    fn get_js_message(&self, offset: &Offset, remove: bool) -> Option<Arc<JetstreamMessage>> {
         if remove {
             let mut map = self.offset2jsmsg.write().expect("handles mutex poisoned");
             map.remove(offset)
