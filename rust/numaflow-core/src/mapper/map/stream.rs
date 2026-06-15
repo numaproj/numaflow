@@ -155,7 +155,7 @@ impl MapStreamTask {
                 }
                 Some(Err(e)) => {
                     error!(?e, "failed to map message");
-                    mark_failed!(self.msg_handle, &e, None);
+                    mark_failed!(self.msg_handle, &e);
                     let _ = self.shared_ctx.error_tx.send(e).await;
                     return;
                 }

@@ -95,7 +95,7 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
 
         if message.nacked() {
             // TODO: send nacked message metric
-            mark_failed!(self.msg_handle, "message nacked", message.nack_options);
+            mark_failed!(self.msg_handle, "message nacked");
             return;
         }
 
@@ -125,8 +125,7 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
                 self.msg_handle,
                 format!(
                     "Token cancelled during ISB write: {cancelled_count} write(s) did not complete"
-                ),
-                None
+                )
             );
             return;
         }
@@ -152,8 +151,7 @@ impl<C: NumaflowTypeConfig> ISBWriteTask<C> {
                     "PAF resolution failed: {}/{} writes succeeded",
                     resolved_offsets.len(),
                     expected_writes
-                ),
-                None
+                )
             );
             return;
         }

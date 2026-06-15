@@ -166,7 +166,7 @@ impl MapBatchTask {
                 }
                 Err(e) => {
                     error!(err=?e, "failed to map message");
-                    mark_failed!(msg_handle, &e, None);
+                    mark_failed!(msg_handle, &e);
                     return Err(e);
                 }
             }

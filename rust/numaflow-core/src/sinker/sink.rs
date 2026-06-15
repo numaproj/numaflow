@@ -215,7 +215,7 @@ impl SinkWriter {
                     // We are in shutting down mode, NAK all messages
                     if self.shutting_down_on_err {
                         for msg in read_batch {
-                            msg.mark_failed(self.final_result.as_ref().unwrap_err(), None);
+                            msg.mark_failed(self.final_result.as_ref().unwrap_err());
                         }
                         continue;
                     }
@@ -231,7 +231,7 @@ impl SinkWriter {
                             mark_success_batch!(read_batch);
                         }
                         Err(e) => {
-                            mark_failed_batch!(read_batch, &e, None);
+                            mark_failed_batch!(read_batch, &e);
                             // Critical error, cancel upstream and initiate shutdown
                             error!(?e, "Error writing to sink, initiating shutdown.");
                             cln_token.cancel();
