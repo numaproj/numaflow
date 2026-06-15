@@ -1067,7 +1067,6 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
 
         result
     }
-
     /// Per-message ack for the streaming path. Awaits a single message's oneshot, issues
     /// ack or nack for that one offset, then releases the in-flight permit. This runs as an
     /// independent background task per message, enabling out-of-order acknowledgement.
