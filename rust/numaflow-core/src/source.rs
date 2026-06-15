@@ -1082,10 +1082,12 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         tracker: Tracker,
         cancel_token: CancellationToken,
     ) -> Result<()> {
+        let mut nack_option = None;
         let disposition = match ack_rx.await {
             Ok(ReadAck::Ack) => true,
-            Ok(ReadAck::Nak) => {
+            Ok(ReadAck::Nak(option)) => {
                 warn!(?offset, "Nak received for offset (streaming)");
+                nack_option = option;
                 false
             }
             Err(e) => {
@@ -1113,7 +1115,7 @@ impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
         let ack_result = if disposition {
             Self::ack_with_retry(source_handle, vec![offset], &cancel_token).await
         } else {
-            Self::nack_with_retry(source_handle, vec![offset], &cancel_token).await
+            Self::nack_with_retry(source_handle, vec![offset], nack_option, &cancel_token).await
         };
 
         // streaming=true: ack_time and e2e_time are skipped on the mvtx path;
