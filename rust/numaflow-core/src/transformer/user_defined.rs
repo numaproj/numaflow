@@ -175,6 +175,13 @@ impl UserDefinedTransformer {
         Ok((read_tx, resp_stream))
     }
 
+    async fn drain_senders(sender_map: &ResponseSenderMap, error: Error) {
+        let mut senders = sender_map.lock().await;
+        for (_, (_, sender)) in senders.drain() {
+            let _ = sender.send(Err(error.clone()));
+        }
+    }
+
     // receive responses from the server and gets the corresponding oneshot sender from the map
     // and sends the response.
     async fn receive_responses(
@@ -189,10 +196,7 @@ impl UserDefinedTransformer {
                 } else {
                     Error::Grpc(Box::new(e.clone()))
                 };
-                let mut senders = sender_map.lock().await;
-                for (_, (_, sender)) in senders.drain() {
-                    let _ = sender.send(Err(error.clone()));
-                }
+                Self::drain_senders(&sender_map, error).await;
                 None
             }
         } {
@@ -203,18 +207,17 @@ impl UserDefinedTransformer {
                     let message = UserDefinedTransformerMessage(result, &msg_info, i as i32).into();
                     response_messages.push(message);
                 }
-                sender
-                    .send(Ok(response_messages))
-                    .expect("failed to send response");
+                let _ = sender.send(Ok(response_messages));
             }
         }
 
-        let mut senders = sender_map.lock().await;
-        for (_, (_, sender)) in senders.drain() {
-            let _ = sender.send(Err(Error::UdfRedrive(Box::new(Status::unavailable(
+        Self::drain_senders(
+            &sender_map,
+            Error::UdfRedrive(Box::new(Status::unavailable(
                 "source transformer stream closed",
-            )))));
-        }
+            ))),
+        )
+        .await;
     }
 
     async fn reconnect(&mut self) -> Result<()> {
@@ -227,6 +230,13 @@ impl UserDefinedTransformer {
         )
         .await?;
         let (read_tx, resp_stream) = Self::create_stream(self.batch_size, &mut client).await?;
+        Self::drain_senders(
+            &self.senders,
+            Error::UdfRedrive(Box::new(Status::unavailable(
+                "source transformer reconnecting",
+            ))),
+        )
+        .await;
         self.task_handle.abort();
         self.read_tx = read_tx;
         self.task_handle = tokio::spawn(Self::receive_responses(

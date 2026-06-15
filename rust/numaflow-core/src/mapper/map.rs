@@ -18,7 +18,7 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{self, Error};
 use crate::message::{Message, MessageHandle, MessageID, Offset};
 use crate::metadata::Metadata;
-use crate::shared::grpc::{UdfReconnectConfig, prost_timestamp_from_utc};
+use crate::shared::grpc::prost_timestamp_from_utc;
 use crate::tracker::Tracker;
 
 pub(super) mod batch;
@@ -33,8 +33,6 @@ use crate::monovertex::bypass_router::MvtxBypassRouter;
 use batch::{MapBatchTask, UserDefinedBatchMap};
 use stream::{MapStreamTask, UserDefinedStreamMap};
 use unary::{MapUnaryTask, UserDefinedUnaryMap};
-
-pub(crate) type ReconnectConfig = UdfReconnectConfig;
 
 /// ConcurrentMapper represents mappers that process messages concurrently (one task per message).
 /// Both Unary and Stream mappers spawn individual tasks for each message.
@@ -70,7 +68,7 @@ pub(crate) struct MapHandle {
     graceful_shutdown_time: Duration,
     concurrency: usize,
     tracker: Tracker,
-    mapper: Box<MapperType>,
+    mapper: MapperType,
     /// this the final state of the component (any error will set this as Err)
     final_result: crate::Result<()>,
     /// The moment we see an error, we will set this to true.
@@ -84,7 +82,6 @@ const STREAMING_MAP_RESP_CHANNEL_SIZE: usize = 10;
 impl MapHandle {
     /// Creates a new mapper with the given batch size, concurrency, client, and
     /// tracker handle. It creates the appropriate mapper based on the map mode.
-    #[cfg(test)]
     pub(crate) async fn new(
         map_mode: MapMode,
         batch_size: usize,
@@ -94,71 +91,21 @@ impl MapHandle {
         client: MapClient<Channel>,
         tracker: Tracker,
     ) -> error::Result<Self> {
-        let socket_path = match map_mode {
-            MapMode::Unary => "/var/run/numaflow/map.sock",
-            MapMode::Batch => "/var/run/numaflow/batchmap.sock",
-            MapMode::Stream => "/var/run/numaflow/mapstream.sock",
-        };
-        let reconnect_config = ReconnectConfig::new(
-            socket_path,
-            "/var/run/numaflow/mapper-server-info",
-            CancellationToken::new(),
-            crate::config::pipeline::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-        );
-        Self::new_with_reconnect(
-            map_mode,
-            batch_size,
-            read_timeout,
-            graceful_timeout,
-            concurrency,
-            client,
-            tracker,
-            reconnect_config,
-        )
-        .await
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) async fn new_with_reconnect(
-        map_mode: MapMode,
-        batch_size: usize,
-        read_timeout: Duration,
-        graceful_timeout: Duration,
-        concurrency: usize,
-        client: MapClient<Channel>,
-        tracker: Tracker,
-        reconnect_config: ReconnectConfig,
-    ) -> error::Result<Self> {
         // Based on the map mode, create the appropriate mapper
         let mapper = match map_mode {
             MapMode::Unary => MapperType::Concurrent(ConcurrentMapper::Unary(
-                UserDefinedUnaryMap::new_with_reconnect(
-                    batch_size,
-                    client.clone(),
-                    reconnect_config.clone(),
-                )
-                .await?,
+                UserDefinedUnaryMap::new(batch_size, client.clone()).await?,
             )),
             MapMode::Stream => MapperType::Concurrent(ConcurrentMapper::Stream(
-                UserDefinedStreamMap::new_with_reconnect(
-                    batch_size,
-                    client.clone(),
-                    reconnect_config.clone(),
-                )
-                .await?,
+                UserDefinedStreamMap::new(batch_size, client.clone()).await?,
             )),
-            MapMode::Batch => MapperType::Batch(
-                UserDefinedBatchMap::new_with_reconnect(
-                    batch_size,
-                    client.clone(),
-                    reconnect_config.clone(),
-                )
-                .await?,
-            ),
+            MapMode::Batch => {
+                MapperType::Batch(UserDefinedBatchMap::new(batch_size, client.clone()).await?)
+            }
         };
 
         Ok(Self {
-            mapper: Box::new(mapper),
+            mapper,
             batch_size,
             read_timeout,
             graceful_shutdown_time: graceful_timeout,
@@ -222,7 +169,7 @@ impl MapHandle {
             });
 
             // based on the map mode, send the message to the appropriate mapper.
-            match &*self.mapper {
+            match &self.mapper {
                 MapperType::Concurrent(concurrent_mapper) => {
                     let shared_ctx = Arc::new(SharedMapTaskContext {
                         output_tx,
@@ -290,9 +237,6 @@ impl MapHandle {
                 biased;
                 Some(error) = ctx.error_rx.recv() => {
                     error!(?error, "error received while performing map operation");
-                    if matches!(error, Error::UdfRedrive(_)) {
-                        continue;
-                    }
                     // we only cancel when we get the first error
                     if self.final_result.is_ok() {
                         upstream_cln_token.cancel();
@@ -707,7 +651,7 @@ mod tests {
         let (error_tx, mut error_rx) = mpsc::channel(1);
 
         // Extract the mapper from the MapperType enum
-        let unary_mapper = match &*mapper.mapper {
+        let unary_mapper = match &mapper.mapper {
             MapperType::Concurrent(ConcurrentMapper::Unary(m)) => m.clone(),
             _ => panic!("Expected Unary mapper"),
         };

@@ -14,7 +14,6 @@ use crate::config::pipeline::{
 };
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
-use crate::mapper::map::ReconnectConfig as MapReconnectConfig;
 use crate::reduce::reducer::WindowManager;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
@@ -379,14 +378,7 @@ pub(crate) async fn create_mapper(
                     let map_grpc_client = MapClient::new(channel)
                         .max_encoding_message_size(config.grpc_max_message_size)
                         .max_decoding_message_size(config.grpc_max_message_size);
-                    let reconnect_config = MapReconnectConfig::new(
-                        config.socket_path.clone(),
-                        config.server_info_path.clone(),
-                        cln_token.clone(),
-                        config.grpc_max_message_size,
-                    );
-
-                    Ok(MapHandle::new_with_reconnect(
+                    Ok(MapHandle::new(
                         server_info.get_map_mode().unwrap_or(MapMode::Unary),
                         batch_size,
                         read_timeout,
@@ -394,7 +386,6 @@ pub(crate) async fn create_mapper(
                         map_config.concurrency,
                         map_grpc_client.clone(),
                         tracker,
-                        reconnect_config,
                     )
                     .await?)
                 }
@@ -421,13 +412,7 @@ pub(crate) async fn create_mapper(
                         grpc::DEFAULT_RECONNECT_INTERVAL,
                     )
                     .await?;
-                    let reconnect_config = MapReconnectConfig::new(
-                        config.socket_path.clone(),
-                        config.server_info_path.clone(),
-                        cln_token.clone(),
-                        config.grpc_max_message_size,
-                    );
-                    Ok(MapHandle::new_with_reconnect(
+                    Ok(MapHandle::new(
                         server_info.get_map_mode().unwrap_or(MapMode::Unary),
                         batch_size,
                         read_timeout,
@@ -435,7 +420,6 @@ pub(crate) async fn create_mapper(
                         map_config.concurrency,
                         map_grpc_client.clone(),
                         tracker,
-                        reconnect_config,
                     )
                     .await?)
                 }

@@ -265,7 +265,7 @@ impl SourceReader for UserDefinedSourceRead {
             Err(e) => {
                 if is_udf_transport_failure(&e) {
                     warn!(?e, "source read stream failed, reconnecting");
-                    return Some(self.reconnect_reader().await.map(|_| Vec::new()));
+                    return Some(self.reconnect_reader().await.map(|_| messages));
                 }
                 return Some(Err(Error::Grpc(Box::new(e))));
             }
