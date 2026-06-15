@@ -152,7 +152,7 @@ impl SegmentWriteActor {
                     }
                     Err(e) => {
                         error!(?e, "Failed to write message to WAL");
-                        read_message.mark_failed(&e);
+                        read_message.mark_failed(&e, None);
                         Err(e)
                     }
                 }

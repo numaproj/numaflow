@@ -37,8 +37,8 @@ macro_rules! mark_success {
 /// ```
 #[macro_export]
 macro_rules! mark_failed {
-    ($msg:expr, $err:expr) => {{
-        $msg.mark_failed($err);
+    ($msg:expr, $err:expr, $opt:expr) => {{
+        $msg.mark_failed($err, $opt);
     }};
 }
 
@@ -65,9 +65,9 @@ macro_rules! mark_success_batch {
 /// ```
 #[macro_export]
 macro_rules! mark_failed_batch {
-    ($batch:expr, $err:expr) => {{
+    ($batch:expr, $err:expr, $opt:expr) => {{
         for msg in $batch {
-            msg.mark_failed($err);
+            msg.mark_failed($err, $opt);
         }
     }};
 }
@@ -238,11 +238,9 @@ impl MessageHandle {
     /// Mark the message as failed (consumes the handle), recording the reason it will be nacked.
     /// ref_count is not decremented, so the message will be NAK'd when the AckHandle is dropped.
     /// The error is logged at NAK time.
-    pub(crate) fn mark_failed(self, reason: impl fmt::Display) {
+    pub(crate) fn mark_failed(self, reason: impl fmt::Display, nack_option: Option<NackOptions>) {
         let _ = self.ack_handle.failure_reason.set(reason.to_string());
-        if self.message.nacked()
-            && let Some(opt) = self.message.nack_options
-        {
+        if let Some(opt) = nack_option {
             let _ = self.ack_handle.nack_options.set(opt);
         }
     }
@@ -830,20 +828,16 @@ mod tests {
     async fn test_mark_failed_with_nack_options() {
         // mark_failed with Some(options) must surface those options in the NAK.
         let (ack_tx, ack_rx) = oneshot::channel();
-        let mut msg = Message::default();
-        let opts = Some(NackOptions {
+        let read_message = MessageHandle::new(Message::default(), ack_tx);
+
+        let opts = NackOptions {
             delay: Some(5000),
             max_deliveries: Some(3),
             reason: Some("downstream unavailable".to_string()),
-        });
-        msg.tags = Some(Arc::new([NACK.to_string()]));
-        msg.nack_options = opts.clone();
+        };
+        read_message.mark_failed("nacked by udf", Some(opts.clone()));
 
-        let read_message = MessageHandle::new(msg, ack_tx);
-
-        read_message.mark_failed("nacked by udf");
-
-        assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(opts));
+        assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(Some(opts)));
     }
 
     #[tokio::test]
@@ -852,9 +846,28 @@ mod tests {
         let (ack_tx, ack_rx) = oneshot::channel();
         let read_message = MessageHandle::new(Message::default(), ack_tx);
 
-        read_message.mark_failed("infra error");
+        read_message.mark_failed("infra error", None);
 
         assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(None));
+    }
+
+    #[tokio::test]
+    async fn test_nack_options_some_wins_over_prior_none_on_shared_handle() {
+        // On a shared AckHandle (fan-out), a no-option failure must not squat the slot and
+        // block a later options-bearing failure from being recorded.
+        let (ack_tx, ack_rx) = oneshot::channel();
+        let read_message = MessageHandle::new(Message::default(), ack_tx);
+        let cloned = read_message.clone();
+
+        let opts = NackOptions {
+            delay: Some(1000),
+            max_deliveries: None,
+            reason: Some("retry later".to_string()),
+        };
+        read_message.mark_failed("no opts", None);
+        cloned.mark_failed("with opts", Some(opts.clone()));
+
+        assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak(Some(opts)));
     }
 
     #[test]
