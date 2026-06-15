@@ -371,7 +371,8 @@ mod tests {
     use crate::message::{Message, MessageHandle, MessageID, Offset};
     use crate::shared::grpc::create_rpc_channel;
 
-    const TEST_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024;
+    const TEST_GRPC_MAX_MESSAGE_SIZE: usize =
+        crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE;
 
     struct SimpleTransformer;
 

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -19,7 +18,7 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{self, Error};
 use crate::message::{Message, MessageHandle, MessageID, Offset};
 use crate::metadata::Metadata;
-use crate::shared::grpc::{DEFAULT_RECONNECT_INTERVAL, prost_timestamp_from_utc};
+use crate::shared::grpc::{UdfReconnectConfig, prost_timestamp_from_utc};
 use crate::tracker::Tracker;
 
 pub(super) mod batch;
@@ -35,51 +34,7 @@ use batch::{MapBatchTask, UserDefinedBatchMap};
 use stream::{MapStreamTask, UserDefinedStreamMap};
 use unary::{MapUnaryTask, UserDefinedUnaryMap};
 
-#[derive(Clone)]
-pub(crate) struct ReconnectConfig {
-    socket_path: PathBuf,
-    server_info_path: PathBuf,
-    cln_token: CancellationToken,
-    grpc_max_message_size: usize,
-    retry_interval: Duration,
-}
-
-impl ReconnectConfig {
-    pub(crate) fn new(
-        socket_path: impl Into<PathBuf>,
-        server_info_path: impl Into<PathBuf>,
-        cln_token: CancellationToken,
-        grpc_max_message_size: usize,
-    ) -> Self {
-        Self {
-            socket_path: socket_path.into(),
-            server_info_path: server_info_path.into(),
-            cln_token,
-            grpc_max_message_size,
-            retry_interval: DEFAULT_RECONNECT_INTERVAL,
-        }
-    }
-
-    pub(super) fn socket_path(&self) -> PathBuf {
-        self.socket_path.clone()
-    }
-
-    pub(super) fn server_info_path(&self) -> PathBuf {
-        self.server_info_path.clone()
-    }
-
-    pub(super) fn cln_token(&self) -> CancellationToken {
-        self.cln_token.clone()
-    }
-
-    pub(super) fn grpc_max_message_size(&self) -> usize {
-        self.grpc_max_message_size
-    }
-
-    pub(super) fn retry_interval(&self) -> Duration {
-        self.retry_interval
-    }
-}
+pub(crate) type ReconnectConfig = UdfReconnectConfig;
 
 /// ConcurrentMapper represents mappers that process messages concurrently (one task per message).
 /// Both Unary and Stream mappers spawn individual tasks for each message.
@@ -148,7 +103,7 @@ impl MapHandle {
             socket_path,
             "/var/run/numaflow/mapper-server-info",
             CancellationToken::new(),
-            64 * 1024 * 1024,
+            crate::config::pipeline::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
         );
         Self::new_with_reconnect(
             map_mode,

@@ -1,7 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
 use numaflow_pb::clients::sourcetransformer::{
     self, SourceTransformRequest, SourceTransformResponse,
@@ -9,7 +7,6 @@ use numaflow_pb::clients::sourcetransformer::{
 };
 use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::{Request, Status, Streaming};
 
@@ -18,37 +15,13 @@ use crate::error::{Error, Result, is_udf_transport_failure};
 use crate::message::{Message, MessageID, Offset};
 use crate::metadata::Metadata;
 use crate::shared::grpc::{
-    DEFAULT_RECONNECT_INTERVAL, prost_timestamp_from_utc, reconnect_transformer, utc_from_timestamp,
+    UdfReconnectConfig, create_transformer_client, prost_timestamp_from_utc, utc_from_timestamp,
 };
 
 type ResponseSenderMap =
     Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
 
-#[derive(Clone)]
-pub(crate) struct ReconnectConfig {
-    socket_path: PathBuf,
-    server_info_path: PathBuf,
-    cln_token: CancellationToken,
-    grpc_max_message_size: usize,
-    retry_interval: Duration,
-}
-
-impl ReconnectConfig {
-    pub(crate) fn new(
-        socket_path: impl Into<PathBuf>,
-        server_info_path: impl Into<PathBuf>,
-        cln_token: CancellationToken,
-        grpc_max_message_size: usize,
-    ) -> Self {
-        Self {
-            socket_path: socket_path.into(),
-            server_info_path: server_info_path.into(),
-            cln_token,
-            grpc_max_message_size,
-            retry_interval: DEFAULT_RECONNECT_INTERVAL,
-        }
-    }
-}
+pub(crate) type ReconnectConfig = UdfReconnectConfig;
 
 // fields which will not be changed
 struct ParentMessageInfo {
@@ -245,12 +218,12 @@ impl UserDefinedTransformer {
     }
 
     async fn reconnect(&mut self) -> Result<()> {
-        let mut client = reconnect_transformer(
-            self.reconnect_config.socket_path.clone(),
-            self.reconnect_config.server_info_path.clone(),
-            self.reconnect_config.cln_token.clone(),
-            self.reconnect_config.grpc_max_message_size,
-            self.reconnect_config.retry_interval,
+        let (mut client, _) = create_transformer_client(
+            self.reconnect_config.socket_path(),
+            self.reconnect_config.server_info_path(),
+            self.reconnect_config.cln_token(),
+            self.reconnect_config.grpc_max_message_size(),
+            self.reconnect_config.retry_interval(),
         )
         .await?;
         let (read_tx, resp_stream) = Self::create_stream(self.batch_size, &mut client).await?;
@@ -324,6 +297,7 @@ mod tests {
     use numaflow::shared::ServerExtras;
     use numaflow::sourcetransform;
     use tempfile::TempDir;
+    use tokio_util::sync::CancellationToken;
 
     use super::*;
     use crate::message::StringOffset;
@@ -372,7 +346,7 @@ mod tests {
                 sock_file.clone(),
                 server_info_file.clone(),
                 CancellationToken::new(),
-                64 * 1024 * 1024,
+                crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
             ),
         )
         .await?;

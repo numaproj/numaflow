@@ -1638,11 +1638,12 @@ mod tests {
     use std::net::SocketAddr;
 
     use super::*;
+    use crate::config::components::source::DEFAULT_GRPC_MAX_MESSAGE_SIZE;
     use crate::mapper::test_utils::MapperTestHandle;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sinker::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::SourceType;
-    use crate::source::user_defined::new_source;
+    use crate::source::user_defined::{ReconnectConfig, new_source};
     use crate::tracker::Tracker;
     use numaflow::shared::ServerExtras;
     use numaflow::source::{Message, Offset, SourceReadRequest};
@@ -1781,11 +1782,11 @@ mod tests {
             Duration::from_millis(1000),
             cln_token.clone(),
             true,
-            crate::source::user_defined::ReconnectConfig::new(
+            ReconnectConfig::new(
                 src_sock_file,
                 src_info_file,
                 cln_token.clone(),
-                64 * 1024 * 1024,
+                DEFAULT_GRPC_MAX_MESSAGE_SIZE,
             ),
         )
         .await

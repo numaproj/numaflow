@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use crate::config::is_mono_vertex;
 use crate::error::{Error, Result, is_udf_transport_failure};
 use crate::message::{Message, MessageHandle};
-use crate::shared::grpc::reconnect_mapper;
+use crate::shared::grpc::create_mapper_client;
 use crate::shared::otel;
 use crate::{mark_failed, mark_success};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
@@ -202,7 +202,7 @@ impl UserDefinedStreamMap {
                 "/var/run/numaflow/mapstream.sock",
                 "/var/run/numaflow/mapper-server-info",
                 CancellationToken::new(),
-                64 * 1024 * 1024,
+                crate::config::pipeline::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
             ),
         )
         .await
@@ -263,7 +263,7 @@ impl UserDefinedStreamMap {
     }
 
     async fn reconnect(&self) -> Result<()> {
-        let mut client = reconnect_mapper(
+        let (mut client, _) = create_mapper_client(
             self.reconnect_config.socket_path(),
             self.reconnect_config.server_info_path(),
             self.reconnect_config.cln_token(),
@@ -766,7 +766,7 @@ mod tests {
                 sock_file,
                 server_info_file,
                 CancellationToken::new(),
-                64 * 1024 * 1024,
+                crate::config::pipeline::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
             ),
         };
 

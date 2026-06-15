@@ -21,7 +21,7 @@ use super::{
     create_response_stream, update_udf_error_metric, update_udf_read_metric,
     update_udf_write_metric,
 };
-use crate::shared::grpc::reconnect_mapper;
+use crate::shared::grpc::create_mapper_client;
 
 /// Type alias for the response - raw results from the UDF
 pub(in crate::mapper) type UnaryMapResponse = Vec<map::map_response::Result>;
@@ -199,7 +199,7 @@ impl UserDefinedUnaryMap {
                 "/var/run/numaflow/map.sock",
                 "/var/run/numaflow/mapper-server-info",
                 CancellationToken::new(),
-                64 * 1024 * 1024,
+                crate::config::pipeline::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
             ),
         )
         .await
@@ -258,7 +258,7 @@ impl UserDefinedUnaryMap {
     }
 
     async fn reconnect(&self) -> Result<()> {
-        let mut client = reconnect_mapper(
+        let (mut client, _) = create_mapper_client(
             self.reconnect_config.socket_path(),
             self.reconnect_config.server_info_path(),
             self.reconnect_config.cln_token(),
@@ -628,7 +628,7 @@ mod tests {
                 sock_file,
                 server_info_file,
                 CancellationToken::new(),
-                64 * 1024 * 1024,
+                crate::config::pipeline::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
             ),
         };
 

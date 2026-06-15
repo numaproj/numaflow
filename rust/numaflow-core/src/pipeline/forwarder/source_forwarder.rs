@@ -873,7 +873,8 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let client =
+            SourceTransformClient::new(create_rpc_channel(sock_file.clone()).await.unwrap());
         let transformer = Transformer::new(
             10,
             10,
@@ -884,7 +885,7 @@ mod tests {
                 sock_file.clone(),
                 server_info_file.clone(),
                 cln_token.clone(),
-                64 * 1024 * 1024,
+                crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
             ),
         )
         .await
@@ -923,7 +924,7 @@ mod tests {
                 sock_file,
                 server_info_file,
                 cln_token.clone(),
-                64 * 1024 * 1024,
+                crate::config::components::source::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
             ),
         )
         .await

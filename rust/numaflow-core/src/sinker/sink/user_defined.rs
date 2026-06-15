@@ -1,13 +1,10 @@
-use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
 use bytes::Bytes;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::{Code, Request, Status, Streaming};
 use tracing::error;
@@ -17,7 +14,7 @@ use crate::Result;
 use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::error::is_udf_transport_failure;
 use crate::message::Message;
-use crate::shared::grpc::{DEFAULT_RECONNECT_INTERVAL, prost_timestamp_from_utc, reconnect_sink};
+use crate::shared::grpc::{UdfReconnectConfig, create_sink_client, prost_timestamp_from_utc};
 use crate::sinker::sink::{ResponseFromSink, Sink};
 
 const DEFAULT_CHANNEL_SIZE: usize = 1000;
@@ -29,31 +26,7 @@ pub struct UserDefinedSink {
     reconnect_config: Option<ReconnectConfig>,
 }
 
-#[derive(Clone)]
-pub(crate) struct ReconnectConfig {
-    socket_path: PathBuf,
-    server_info_path: PathBuf,
-    cln_token: CancellationToken,
-    grpc_max_message_size: usize,
-    retry_interval: Duration,
-}
-
-impl ReconnectConfig {
-    pub(crate) fn new(
-        socket_path: impl Into<PathBuf>,
-        server_info_path: impl Into<PathBuf>,
-        cln_token: CancellationToken,
-        grpc_max_message_size: usize,
-    ) -> Self {
-        Self {
-            socket_path: socket_path.into(),
-            server_info_path: server_info_path.into(),
-            cln_token,
-            grpc_max_message_size,
-            retry_interval: DEFAULT_RECONNECT_INTERVAL,
-        }
-    }
-}
+pub(crate) type ReconnectConfig = UdfReconnectConfig;
 
 /// Convert [`Message`] to [`proto::SinkRequest`]
 impl From<Message> for SinkRequest {
@@ -134,12 +107,12 @@ impl UserDefinedSink {
                 "sink stream closed",
             ))));
         };
-        let mut client = reconnect_sink(
-            reconnect_config.socket_path.clone(),
-            reconnect_config.server_info_path.clone(),
-            reconnect_config.cln_token.clone(),
-            reconnect_config.grpc_max_message_size,
-            reconnect_config.retry_interval,
+        let (mut client, _) = create_sink_client(
+            reconnect_config.socket_path(),
+            reconnect_config.server_info_path(),
+            reconnect_config.cln_token(),
+            reconnect_config.grpc_max_message_size(),
+            reconnect_config.retry_interval(),
         )
         .await?;
         let (sink_tx, resp_stream) = Self::create_sink_stream(&mut client).await?;

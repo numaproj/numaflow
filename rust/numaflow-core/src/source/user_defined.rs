@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,36 +18,12 @@ use crate::error::is_udf_transport_failure;
 use crate::message::{Message, MessageID, Offset, StringOffset};
 use crate::metadata::Metadata;
 use crate::reader::LagReader;
-use crate::shared::grpc::{DEFAULT_RECONNECT_INTERVAL, reconnect_source, utc_from_timestamp};
+use crate::shared::grpc::{UdfReconnectConfig, create_source_client, utc_from_timestamp};
 use crate::source::{SourceAcker, SourcePartitions, SourceReader};
 use crate::{Error, Result, config};
 use tracing::warn;
 
-#[derive(Debug, Clone)]
-pub(crate) struct ReconnectConfig {
-    socket_path: PathBuf,
-    server_info_path: PathBuf,
-    cln_token: CancellationToken,
-    grpc_max_message_size: usize,
-    retry_interval: Duration,
-}
-
-impl ReconnectConfig {
-    pub(crate) fn new(
-        socket_path: impl Into<PathBuf>,
-        server_info_path: impl Into<PathBuf>,
-        cln_token: CancellationToken,
-        grpc_max_message_size: usize,
-    ) -> Self {
-        Self {
-            socket_path: socket_path.into(),
-            server_info_path: server_info_path.into(),
-            cln_token,
-            grpc_max_message_size,
-            retry_interval: DEFAULT_RECONNECT_INTERVAL,
-        }
-    }
-}
+pub(crate) type ReconnectConfig = UdfReconnectConfig;
 
 /// User-Defined Source to operative on custom sources.
 #[derive(Debug)]
@@ -169,12 +144,12 @@ impl UserDefinedSourceRead {
     }
 
     async fn reconnect_reader(&mut self) -> Result<()> {
-        let mut client = reconnect_source(
-            self.reconnect_config.socket_path.clone(),
-            self.reconnect_config.server_info_path.clone(),
-            self.reconnect_config.cln_token.clone(),
-            self.reconnect_config.grpc_max_message_size,
-            self.reconnect_config.retry_interval,
+        let (mut client, _) = create_source_client(
+            self.reconnect_config.socket_path(),
+            self.reconnect_config.server_info_path(),
+            self.reconnect_config.cln_token(),
+            self.reconnect_config.grpc_max_message_size(),
+            self.reconnect_config.retry_interval(),
         )
         .await?;
         let (read_tx, resp_stream) = Self::create_reader(self.num_records, &mut client).await?;
@@ -389,12 +364,12 @@ impl UserDefinedSourceAck {
     }
 
     async fn reconnect_acker(&mut self) -> Result<()> {
-        let mut client = reconnect_source(
-            self.reconnect_config.socket_path.clone(),
-            self.reconnect_config.server_info_path.clone(),
-            self.reconnect_config.cln_token.clone(),
-            self.reconnect_config.grpc_max_message_size,
-            self.reconnect_config.retry_interval,
+        let (mut client, _) = create_source_client(
+            self.reconnect_config.socket_path(),
+            self.reconnect_config.server_info_path(),
+            self.reconnect_config.cln_token(),
+            self.reconnect_config.grpc_max_message_size(),
+            self.reconnect_config.retry_interval(),
         )
         .await?;
         let (ack_tx, ack_resp_stream) = Self::create_acker(self.batch_size, &mut client).await?;
@@ -656,7 +631,12 @@ mod tests {
             Duration::from_millis(1000),
             cln_token.clone(),
             true,
-            ReconnectConfig::new(sock_file, server_info_file, cln_token, 64 * 1024 * 1024),
+            ReconnectConfig::new(
+                sock_file,
+                server_info_file,
+                cln_token,
+                crate::config::components::source::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+            ),
         )
         .await
         .map_err(|e| panic!("failed to create source reader: {:?}", e))

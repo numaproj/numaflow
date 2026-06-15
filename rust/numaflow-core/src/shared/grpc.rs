@@ -126,6 +126,52 @@ pub(crate) fn prost_timestamp_from_utc(t: DateTime<Utc>) -> Timestamp {
 /// `Duration` via [`create_rpc_channel_with_interval`] to keep reconnect-scenario tests sub-100ms.
 pub(crate) const DEFAULT_RECONNECT_INTERVAL: Duration = Duration::from_secs(1);
 
+#[derive(Clone, Debug)]
+pub(crate) struct UdfReconnectConfig {
+    socket_path: PathBuf,
+    server_info_path: PathBuf,
+    cln_token: CancellationToken,
+    grpc_max_message_size: usize,
+    retry_interval: Duration,
+}
+
+impl UdfReconnectConfig {
+    pub(crate) fn new(
+        socket_path: impl Into<PathBuf>,
+        server_info_path: impl Into<PathBuf>,
+        cln_token: CancellationToken,
+        grpc_max_message_size: usize,
+    ) -> Self {
+        Self {
+            socket_path: socket_path.into(),
+            server_info_path: server_info_path.into(),
+            cln_token,
+            grpc_max_message_size,
+            retry_interval: DEFAULT_RECONNECT_INTERVAL,
+        }
+    }
+
+    pub(crate) fn socket_path(&self) -> PathBuf {
+        self.socket_path.clone()
+    }
+
+    pub(crate) fn server_info_path(&self) -> PathBuf {
+        self.server_info_path.clone()
+    }
+
+    pub(crate) fn cln_token(&self) -> CancellationToken {
+        self.cln_token.clone()
+    }
+
+    pub(crate) fn grpc_max_message_size(&self) -> usize {
+        self.grpc_max_message_size
+    }
+
+    pub(crate) fn retry_interval(&self) -> Duration {
+        self.retry_interval
+    }
+}
+
 pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> error::Result<Channel> {
     create_rpc_channel_with_interval(socket_path, DEFAULT_RECONNECT_INTERVAL).await
 }

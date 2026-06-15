@@ -68,7 +68,7 @@ impl SourceTestHandle<WithSimpleBuffer> {
                         _server_handle.socket_path(),
                         _server_handle.server_info_path(),
                         cln_token.clone(),
-                        64 * 1024 * 1024,
+                        crate::config::components::transformer::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
                     ),
                 )
                 .await
@@ -105,7 +105,7 @@ impl SourceTestHandle<WithSimpleBuffer> {
                 server_handle.socket_path(),
                 server_handle.server_info_path(),
                 cln_token.clone(),
-                64 * 1024 * 1024,
+                crate::config::components::source::DEFAULT_GRPC_MAX_MESSAGE_SIZE,
             ),
         )
         .await
