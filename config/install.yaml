@@ -8512,6 +8512,8 @@ spec:
                     - container
                     type: object
                 type: object
+              streaming:
+                type: boolean
               tolerations:
                 items:
                   properties:

@@ -7,6 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { ISBServiceCard } from "./ISBServiceCard";
 import { AppContext } from "../../../../../../App";
 import { BrowserRouter } from "react-router-dom";
+import { SidebarType } from "../../../../../common/SlidingSidebar";
 
 const mockSetSidebarProps = jest.fn();
 
@@ -251,6 +252,38 @@ describe("ISBServiceCard", () => {
     const editButton = screen.getByTestId("edit-isb");
     expect(editButton).toBeInTheDocument();
     userEvent.click(editButton);
+  });
+
+  it("opens read-only ISB sidebar when service name is clicked", async () => {
+    render(
+      <BrowserRouter>
+        <AppContext.Provider
+          value={{
+            setSidebarProps: mockSetSidebarProps,
+          }}
+        >
+          <ISBServiceCard
+            namespace={mockNamespace}
+            data={mockData}
+            refresh={mockRefresh}
+          />
+        </AppContext.Provider>
+      </BrowserRouter>
+    );
+
+    await userEvent.click(screen.getByTestId("view-isb-name"));
+
+    expect(mockSetSidebarProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: SidebarType.ISB_UPDATE,
+        specEditorProps: expect.objectContaining({
+          titleOverride: "View ISB Service: default",
+          namespaceId: mockNamespace,
+          isbId: "default",
+          viewType: 0,
+        }),
+      })
+    );
   });
 
   it("Tests clicking cancel on the delete confirmation", async () => {

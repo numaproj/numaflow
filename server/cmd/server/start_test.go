@@ -25,12 +25,13 @@ import (
 func TestCreateAuthRouteMap(t *testing.T) {
 	t.Run("empty base", func(t *testing.T) {
 		got := CreateAuthRouteMap("")
-		assert.Equal(t, 36, len(got))
+		assert.Equal(t, 37, len(got))
+		assert.Contains(t, got, "GET:api/v1/namespaces/:namespace/isb-services/:isb-service/jetstream")
 	})
 
 	t.Run("customize base", func(t *testing.T) {
 		got := CreateAuthRouteMap("abcdefg")
-		assert.Equal(t, 36, len(got))
+		assert.Equal(t, 37, len(got))
 		for k := range got {
 			assert.Contains(t, k, "abcdefg")
 		}

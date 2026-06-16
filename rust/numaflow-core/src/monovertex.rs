@@ -103,6 +103,7 @@ async fn run_monovertex_forwarder<C: crate::typ::NumaflowTypeConfig>(
         None,
         cln_token.clone(),
         rate_limiter,
+        config.streaming,
     )
     .await?;
 

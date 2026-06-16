@@ -1,0 +1,20 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: streaming-mono-vertex
+spec:
+  streaming: true
+  scale:
+    min: 1
+  source:
+    http:
+      service: true
+  sink:
+    udsink:
+      container:
+        # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-rs/tree/main/examples/redis-sink
+        image: quay.io/numaio/numaflow-rs/redis-sink:stable
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: SINK_HASH_KEY
+            value: "streaming-mvtx-output"

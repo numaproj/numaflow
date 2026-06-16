@@ -57,7 +57,7 @@ export function ISBServiceCard({
         onUpdateComplete: handleUpdateComplete,
       },
     });
-  }, [setSidebarProps, handleUpdateComplete, data]);
+  }, [setSidebarProps, handleUpdateComplete, data, namespace]);
 
   const handleEditChange = useCallback(() => {
     setSidebarProps({
@@ -132,7 +132,21 @@ export function ISBServiceCard({
               marginLeft: "1.6rem",
             }}
           >
-            <span className="pipeline-card-name">{data?.name}</span>
+            <span
+              className="pipeline-card-name"
+              data-testid="view-isb-name"
+              onClick={handleViewChange}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  handleViewChange();
+                }
+              }}
+              role="button"
+              tabIndex={0}
+            >
+              {data?.name}
+            </span>
           </Box>
         </Box>
 

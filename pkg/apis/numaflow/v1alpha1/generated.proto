@@ -1141,6 +1141,12 @@ message MonoVertexSpec {
   // and the next level specifies the conditions to trigger the said bypass.
   // +optional
   optional MonoVertexBypassCondition bypass = 15;
+
+  // Streaming enables per-message, out-of-order source acknowledgement instead of the default
+  // whole-batch barrier. When true, the source reads continuously bounded by `spec.limits.concurrency`
+  // (in-flight messages) rather than one batch at a time. This is off by default.
+  // +optional
+  optional bool streaming = 16;
 }
 
 message MonoVertexStatus {
